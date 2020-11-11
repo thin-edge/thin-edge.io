@@ -30,3 +30,11 @@ curl --request POST --silent \
   --header "authorization: Basic $HASH" \
   --header 'Content-Type: application/json' \
   --data-raw "$DATA"
+
+CERT=$(cat $CERT_FILE | grep -q -v CERTIFICATE | tr -d '\n')
+if (./list-certificates.sh | grep -q "$CERT")
+then
+   echo "[OK] the device certificate is trusted by c8y"
+else
+   echo "[ERROR] the device certificate has not been uploaded to c8y"
+fi
