@@ -29,18 +29,19 @@ The scripts might be used independently.
 
 ## Pre-requisite
 
-A cumulocity tenant, user and password.
+A cumulocity tenant, user and password, plus an identifier for the device:
+
 * C8Y: the c8y endpoint
-* TENANT: the c8y tenant
+* TENANT: the c8y tenant ID
 * USER: the c8y user
 * PASSWORD: ...
-* __Warning__: for certificate management the latest version of Cumulocity is required (The feature is new in 10.7.0).
-* On the beta release, the 'Trusted Certificates' pannel __must be enabled__ in Cumulocity using the script `enable-trusted-certificates.sh`.
-
-On the device, the scripts assume that mosquitto is install.
-Currently, you also need to give a name to the device
-(TODO use a combination of a name and a MAC address to identify a device).
 * DEVICE: an identifier for the device
+
+Notes:
+
+* __Warning__: for certificate management, is required version 10.7.0 onwards of Cumulocity.
+* On the beta release, the 'Trusted Certificates' pannel __must be enabled__ in Cumulocity using the script `enable-trusted-certificates.sh`.
+* The scripts assume that mosquitto is installed on the devices.
 
 ## Connecting the device to Cumulocity
 
