@@ -19,7 +19,7 @@ Once configured, the bridge:
 The scripts might be used independently.
 * `connect-c8y.sh`: main script
 * `create-mosquitto-conf.s`: creates the mosquitto configuration (can also be used to configure a Docker image for mosquitto).
-* `create-self-signed-certificate.sh`: creates a self-signed certificate (TODO: let the certificate signed by an external authority).
+* `create-self-signed-certificate.sh`: creates a self-signed certificate.
 * `enable-trusted-certificates.sh`: enables the 'Trusted Certificates' pannel in Cumulocity (TEMP: the panel is not enabled yet per default on the latest C8Y).
 * `upload-certificate.sh`: uploads a certificate to be trusted by Cumulocity.
 * `list-certificates.sh`: lists the certificates trusted ny Cumulocity.
@@ -94,8 +94,6 @@ $ mosquitto -c mosquitto.conf
 Pitfalls
 * Ensure no MQTT brocker is already listining on port 1883.
 * This might require to stop the mosquitto daemon with `sudo service mosquitto stop`.
-* TODO: the connect script should push the configuration under `/etc`
-  and restart the mosquitto daemon.
 
 ## Testing the bridge
 
