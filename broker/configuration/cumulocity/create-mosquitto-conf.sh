@@ -67,7 +67,7 @@ max_queued_messages   20  # per client
 # C8Y Bridge
 connection edge_to_c8y
 address mqtt.$C8Y:8883
-bridge_cafile $KEYS/c8y-io-chain.pem
+bridge_cafile $KEYS/c8y-trusted-root-certificates.pem
 remote_clientid $DEVICE
 bridge_certfile $KEYS/edge.crt
 bridge_keyfile $KEYS/edge.key

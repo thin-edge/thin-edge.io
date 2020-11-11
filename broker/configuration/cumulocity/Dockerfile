@@ -6,7 +6,7 @@ EXPOSE 1883/tcp
 EXPOSE 8883/tcp
 
 RUN mkdir -p /keys
-COPY c8y-io-chain.pem /keys/c8y-io-chain.pem
+COPY c8y-trusted-root-certificates.pem /keys/c8y-trusted-root-certificates.pem
 COPY edge.crt /keys/edge.crt
 COPY edge.key /keys/edge.key
 RUN chown mosquitto /keys/*
