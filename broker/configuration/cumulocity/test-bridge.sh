@@ -26,35 +26,3 @@ else
    fi
    exit 1
 fi
-
-#----------------------------------------------
-# Test the device certificate is a PEM file
-#----------------------------------------------
-
-CERT_FILE=edge.crt
-
-if [ -f $CERT_FILE ]
-then
-    if (file $CERT_FILE | grep -q PEM)
-    then
-       echo "[OK] the device certificate is a PEM file"
-    else
-       echo "[ERROR] the device certificate has an un-expected format $(file $CERT_FILE)"
-    fi
-else
-   echo "[ERROR] No device certificate has been created"
-fi
-
-#----------------------------------------------
-# Test the device certificate is trusted by c8y
-#----------------------------------------------
-
-CERT_FILE=edge.crt
-CERT=$(cat $CERT_FILE | grep -q -v CERTIFICATE | tr -d '\n')
-
-if (./list-certificates.sh | grep -q "$CERT")
-then
-   echo "[OK] the device certificate is trusted by c8y"
-else
-   echo "[ERROR] the device certificate is not listed as a trusted certificate"
-fi
