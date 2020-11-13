@@ -28,12 +28,48 @@ pub struct MeasurementRecord {
 
 impl MeasurementRecord {
     /// Read a measurement record from a json input
+    /// ```
+    /// use open_json::MeasurementRecord;
+    ///
+    /// let input = r#"{
+    ///     "temperature": 23,
+    ///     "pressure": 220
+    /// }"#;
+    ///
+    /// let record = MeasurementRecord::from_json(input).unwrap();
+    ///
+    /// assert_eq!(record.measurements(), &vec![
+    ///     ("temperature".into(), 23.0),
+    ///     ("pressure".into(), 220.0),
+    ///]);
+    /// ```
     pub fn from_json(input: &str) -> Result<MeasurementRecord, Error> {
         let json = json::parse(input).map_err(|err| Error::NotJson(err))?;
         match json {
             JsonValue::Object(obj) => MeasurementRecord::from_json_object(obj),
             _ => return Err(Error::NotAnObject),
         }
+    }
+
+    /// Read a measurement record from slice of bytes
+    /// ```
+    /// use open_json::MeasurementRecord;
+    ///
+    /// let input = b"{
+    ///     \"temperature\": 23,
+    ///     \"pressure\": 220
+    /// }";
+    ///
+    /// let record = MeasurementRecord::from_bytes(input).unwrap();
+    ///
+    /// assert_eq!(record.measurements(), &vec![
+    ///     ("temperature".into(), 23.0),
+    ///     ("pressure".into(), 220.0),
+    ///]);
+    /// ```
+    pub fn from_bytes(input: &[u8]) -> Result<MeasurementRecord, Error> {
+        let input = std::str::from_utf8(input).map_err(|err| Error::NotUtf8(err))?;
+        MeasurementRecord::from_json(input)
     }
 
     /// Build a measurement record from a json object
@@ -87,6 +123,7 @@ impl fmt::Display for MeasurementRecord {
 /// Parsing errors
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
+    NotUtf8(std::str::Utf8Error),
     NotJson(json::Error),
     NotAnObject,
     NotANumber,
@@ -95,6 +132,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::NotUtf8(ref err) => write!(f, "Utf8 error: {}", err),
             Error::NotJson(ref err) => write!(f, "Json format error: {}", err),
             Error::NotAnObject => write!(f, "A record of measurement is expected"),
             Error::NotANumber => write!(f, "Only scalar values are expected"),
