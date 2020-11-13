@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 open_json = { path = "../open_json", version = "0.1.0" }
+rumqttc = "0.2.0"

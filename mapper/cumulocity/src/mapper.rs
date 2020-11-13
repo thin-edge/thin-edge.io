@@ -1,4 +1,5 @@
 use open_json::MeasurementRecord;
+use core::fmt;
 
 /// Convert a measurement record into a sequence of SmartRest messages
 ///
@@ -37,6 +38,14 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     UnknownTemplate(String),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::UnknownTemplate(ref t) => write!(f, "Unknown template '{}'", t),
+        }
+    }
 }
 
 #[cfg(test)]
