@@ -1,6 +1,20 @@
-//! Open-edge is a JSON schema to encode a measurement records.
+//! Open-edge is a JSON schema to encode measurement records.
 //!
+//! ```
+//! use open_json::MeasurementRecord;
 //!
+//! let input = r#"{
+//!     "temperature": 23,
+//!     "pressure": 220
+//! }"#;
+//!
+//! let record = MeasurementRecord::from_json(input).unwrap();
+//!
+//! assert_eq!(record.measurements(), &vec![
+//!     ("temperature".into(), 23.0),
+//!     ("pressure".into(), 220.0),
+//!]);
+//! ```
 
 use core::fmt;
 use json::JsonValue;
@@ -36,9 +50,29 @@ impl MeasurementRecord {
         }
         Ok(MeasurementRecord { measurements })
     }
+
+    pub fn measurements(&self) -> &Vec<(String,f64)> {
+        &self.measurements
+    }
 }
 
 impl fmt::Display for MeasurementRecord {
+
+    /// Display a measurement record
+    ///
+    /// ```
+    /// use open_json::MeasurementRecord;
+    ///
+    /// let input = r#"{
+    ///     "temperature": 23,
+    ///     "pressure": 220
+    /// }"#;
+    /// let record = MeasurementRecord::from_json(input).unwrap();
+    ///
+    /// let output = format!("{}", record);
+    ///
+    /// assert_eq!(output, r#"{"temperature": 23, "pressure": 220}"#);
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut sep = "";
         write!(f,"{{")?;
