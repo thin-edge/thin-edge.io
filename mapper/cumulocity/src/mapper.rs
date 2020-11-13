@@ -1,21 +1,26 @@
-use open_json::MeasurementRecord;
 use core::fmt;
+use open_json::MeasurementRecord;
+use rumqttc::{MqttOptions, Client, QoS};
+use rumqttc::Event::Incoming;
+use rumqttc::Packet::Publish;
 
 /// Convert a measurement record into a sequence of SmartRest messages
 ///
 /// ```
+/// use mapper;
+/// use open_json::MeasurementRecord;
+///
 /// let input = r#"{
 ///     "temperature": 23,
 ///     "battery": 99
 /// }"#;
 ///
 /// let record = MeasurementRecord::from_json(input).unwrap();
-///
-/// let smart_rest = into_smart_rest(&record).unwrap();
+/// let smart_rest = mapper::into_smart_rest(&record).unwrap();
 ///
 /// assert_eq!(smart_rest, vec![
-///     "211,23".into(),
-///     "212,99".into(),
+///     "211,23".to_string(),
+///     "212,99".to_string(),
 /// ]);
 /// ```
 pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error> {
@@ -34,16 +39,73 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
     Ok(messages)
 }
 
+/// Run the mapper:
+/// - listening for Open Json measurement records,
+/// - translating these records into SmartRest2 messages,
+/// - forwarding these messages to Cumulocity.
+///
+/// ```no_run
+/// use mapper;
+/// mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", |err| {
+///     eprintln!("{}", err);
+///     Ok(())
+/// }).unwrap();
+/// ```
+pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> Result<(),Error>) -> Result<(),Error> {
+    let mqtt_options = MqttOptions::new(name, "localhost", 1883);
+    let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
+
+    mqtt_client.subscribe(in_topic, QoS::AtLeastOnce).unwrap();
+
+    eprintln!("Translating: {} -> {}", in_topic, out_topic);
+    for notification in connection.iter() {
+        match notification {
+            Ok(Incoming(Publish(input))) if input.topic == in_topic => {
+                let record = match MeasurementRecord::from_bytes(&input.payload) {
+                    Ok(rec) => rec,
+                    Err(err) => {
+                        on_error(Error::BadOpenJson(err))?;
+                        break;
+                    }
+                };
+                let messages = match into_smart_rest(&record) {
+                    Ok(messages) => messages,
+                    Err(err) => {
+                        on_error(err)?;
+                        break;
+                    }
+                };
+                for msg in messages.into_iter() {
+                    if let Some(err) = mqtt_client.publish(out_topic, QoS::AtLeastOnce, false, msg).err() {
+                        on_error(Error::MqttPubFail(format!("{}",err)))?;
+                    }
+                }
+            }
+            Err(err) => {
+                on_error(Error::MqttSubFail(format!("{}",err)))?;
+            }
+            _ => ()
+        }
+    }
+    Ok(())
+}
+
 /// Translation errors
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
+    BadOpenJson(open_json::Error),
     UnknownTemplate(String),
+    MqttPubFail(String),
+    MqttSubFail(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::UnknownTemplate(ref t) => write!(f, "Unknown template '{}'", t),
+            Error::BadOpenJson(ref err) => write!(f, "Open Json error: {}", err),
+            Error::UnknownTemplate(ref t) => write!(f, "Unknown template: '{}'", t),
+            Error::MqttPubFail(ref err) => write!(f, "MQTT error publishing: {}", err),
+            Error::MqttSubFail(ref err) => write!(f, "MQTT error subscribing: {}", err),
         }
     }
 }
