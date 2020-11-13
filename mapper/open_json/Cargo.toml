@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 json = "0.12.4"
+
+[dev-dependencies]
+proptest = "0.10.1"
