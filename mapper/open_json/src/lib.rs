@@ -36,7 +36,18 @@ impl MeasurementRecord {
         }
         Ok(MeasurementRecord { measurements })
     }
+}
 
+impl fmt::Display for MeasurementRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut sep = "";
+        write!(f,"{{")?;
+        for (k,v) in self.measurements.iter() {
+            write!(f, "{}\"{}\": {}", sep, k, v)?;
+            sep = ", "
+        }
+        write!(f,"}}")
+    }
 }
 
 /// Parsing errors
@@ -57,7 +68,6 @@ impl fmt::Display for Error {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +80,38 @@ mod tests {
             ("temperature".into(), 23.0),
             ("pressure".into(), 220.0),
         ]);
+    }
+
+    #[test]
+    fn test_display() {
+        let record = MeasurementRecord {
+            measurements: vec![
+                ("temperature".into(), 23.0),
+                ("pressure".into(), 220.0),
+            ]
+        };
+
+        assert_eq!(format!("{}", record), r#"{"temperature": 23, "pressure": 220}"#);
+    }
+
+    #[test]
+    fn must_reject_non_json_input() {
+        let input = r#"some non-json input"#;
+        let error = MeasurementRecord::from_json(input).err().unwrap();
+        assert_eq!(format!("{}", error), "Json format error: Unexpected character: s at (1:1)");
+    }
+
+    #[test]
+    fn must_reject_non_object_input() {
+        let input = r#"["temperature", 23, "pressure", 220]"#;
+        let error = MeasurementRecord::from_json(input).err().unwrap();
+        assert_eq!(error, Error::NotAnObject);
+    }
+
+    #[test]
+    fn must_reject_non_numeric_measurement() {
+        let input = r#"{"temperature": "hot"}"#;
+        let error = MeasurementRecord::from_json(input).err().unwrap();
+        assert_eq!(error, Error::NotANumber);
     }
 }
