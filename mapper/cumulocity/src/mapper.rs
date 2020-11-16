@@ -52,12 +52,13 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
 /// }).unwrap();
 /// ```
 pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> Result<(),Error>) -> Result<(),Error> {
-    let mqtt_options = MqttOptions::new(name, "localhost", 1883);
+    let mut mqtt_options = MqttOptions::new(name, "localhost", 1883);
+    mqtt_options.set_clean_session(false);
     let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
 
-    mqtt_client.subscribe(in_topic, QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe(in_topic, QoS::ExactlyOnce).unwrap();
 
-    eprintln!("Translating: {} -> {}", in_topic, out_topic);
+    println!("Translating: {} -> {}", in_topic, out_topic);
     for notification in connection.iter() {
         match notification {
             Ok(Incoming(Publish(input))) if input.topic == in_topic => {
@@ -65,24 +66,27 @@ pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> R
                     Ok(rec) => rec,
                     Err(err) => {
                         on_error(Error::BadOpenJson(err))?;
-                        break;
+                        continue;
                     }
                 };
+                println!("    {} ->", record);
                 let messages = match into_smart_rest(&record) {
                     Ok(messages) => messages,
                     Err(err) => {
                         on_error(err)?;
-                        break;
+                        continue;
                     }
                 };
                 for msg in messages.into_iter() {
-                    if let Some(err) = mqtt_client.publish(out_topic, QoS::AtLeastOnce, false, msg).err() {
+                    println!("    -> {}", msg);
+                    if let Some(err) = mqtt_client.publish(out_topic, QoS::ExactlyOnce, false, msg).err() {
                         on_error(Error::MqttPubFail(format!("{}",err)))?;
                     }
                 }
             }
             Err(err) => {
                 on_error(Error::MqttSubFail(format!("{}",err)))?;
+                continue;
             }
             _ => ()
         }
