@@ -3,9 +3,10 @@
 // See [Submodules in Integration Tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests)
 
 use rumqttc::{MqttOptions, Client, QoS};
-use rumqttc::Event::Incoming;
+use rumqttc::Event::{Incoming,Outgoing};
 use rumqttc::Packet::Publish;
 use rumqttc::Packet::PubAck;
+use rumqttc::Packet::PubRel;
 use rumqttc::Packet::PubComp;
 use rumqttc::Packet::SubAck;
 use mapper::Error;
@@ -63,20 +64,28 @@ pub fn expect_message(client_id: &str, topic: &str) -> Option<String> {
     let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
     mqtt_client.subscribe(topic, QoS::ExactlyOnce).unwrap();
 
+    let mut received = None;
+
     println!("{} is listening on {}", client_id, topic);
     for notification in connection.iter() {
         match notification {
             Ok(Incoming(Publish(msg))) if msg.topic == topic => {
                 let payload = std::str::from_utf8(&msg.payload).unwrap();
+                received = Some(payload.to_string());
+            }
+            Ok(Incoming(PubRel(_)))
+            | Ok(Outgoing(rumqttc::Outgoing::PubAck(_)))
+            | Ok(Outgoing(rumqttc::Outgoing::PubComp(_))) => {
                 mqtt_client.disconnect().unwrap();
-                return Some(payload.to_string());
+                break;
             }
             Err(err) => {
                 panic!("MQTT bus: {}", err);
             }
-            e => println!("Got {:?}", e)
+            _ => ()
         }
     }
-    None
+
+    received
 }
 
