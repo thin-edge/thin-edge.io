@@ -79,7 +79,11 @@ impl MeasurementRecord {
             match v {
                 JsonValue::Number(num) => {
                     let value: f64 = (*num).into();
-                    measurements.push((k.into(), value));
+                    if value.is_normal() {
+                        measurements.push((k.into(), value));
+                    } else {
+                        return Err(Error::NumberOutOfRange(format!("{}",num)))
+                    }
                 }
                 _ => return Err(Error::NotANumber),
             }
@@ -127,6 +131,7 @@ pub enum Error {
     NotJson(json::Error),
     NotAnObject,
     NotANumber,
+    NumberOutOfRange(String),
 }
 
 impl fmt::Display for Error {
@@ -136,6 +141,7 @@ impl fmt::Display for Error {
             Error::NotJson(ref err) => write!(f, "Json format error: {}", err),
             Error::NotAnObject => write!(f, "A record of measurement is expected"),
             Error::NotANumber => write!(f, "Only scalar values are expected"),
+            Error::NumberOutOfRange(ref num) => write!(f, "The number {} cannot be represented as float 64", num),
         }
     }
 }
@@ -185,6 +191,20 @@ mod tests {
         let input = r#"{"temperature": "hot"}"#;
         let error = MeasurementRecord::from_json(input).err().unwrap();
         assert_eq!(error, Error::NotANumber);
+    }
+
+    #[test]
+    fn must_reject_gigantic_numbers() {
+        let input = r#"{"temperature": 1.0e+999}"#;
+        let error = MeasurementRecord::from_json(input).err().unwrap();
+        assert_eq!(error, Error::NumberOutOfRange(String::from("1.0e999")));
+    }
+
+    #[test]
+    fn must_reject_infinitesimal_numbers() {
+        let input = r#"{"temperature": 1.0e-999}"#;
+        let error = MeasurementRecord::from_json(input).err().unwrap();
+        assert_eq!(error, Error::NumberOutOfRange(String::from("1.0e-999")));
     }
 
     // See the [PropTest Book](https://altsysrq.github.io/proptest-book/intro.html)
