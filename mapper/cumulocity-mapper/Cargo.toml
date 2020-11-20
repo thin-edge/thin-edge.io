@@ -9,7 +9,6 @@ edition = "2018"
 [lib]
 name = "mapper"
 path = "src/mapper.rs"
-doc = true
 
 [dependencies]
 open_json = { path = "../open_json", version = "0.1.0" }
