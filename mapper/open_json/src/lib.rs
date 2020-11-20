@@ -217,14 +217,14 @@ mod tests {
         }
 
         #[test] // Test Open Edge json with arbitrary whitespaces
-        #[ignore]
-        fn parse_open_edge(s in r#"\s"[a-z]*"\s:\s[1-9][0-9]*\s"#) {
+        #[ignore] // This test fails because JSON rejects several utf8 white-spaces as '\u{2000}'
+        fn parse_open_edge(s in r#"\s*"[a-z]*"\s*:\s[1-9][0-9]*\s*"#) {
              let input = format!("{{{}}}", s); // adding curly braces around s
              MeasurementRecord::from_json(&input).unwrap();
         }
 
         #[test] // Test valid Open Edge json
-        fn parse_valid_open_edge(s in r#"( *"\w" *: *[1-9][0-9]* *,){0,3} *"\w" *: *[1-9][0-9]* *"#) {
+        fn parse_valid_open_edge(s in r#"( *"\w+" *: *[-]?[1-9][0-9]* *,){0,3} *"\w+" *: *[-]?[1-9][0-9]* *"#) {
              let input = format!("{{{}}}", s); // adding curly braces around s
              MeasurementRecord::from_json(&input).unwrap();
         }
