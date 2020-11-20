@@ -13,4 +13,3 @@ fn it_maps_openjson_to_smartrest() {
     let msg = common::expect_message("c8y", "c8y/s/us");
     assert_eq!(msg, Some("211,23".into()));
 }
-

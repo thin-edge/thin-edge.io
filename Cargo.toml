@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "mapper/open_json",
-    "mapper/cumulocity"
+    "mapper/cumulocity-mapper"
 ]

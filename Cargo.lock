@@ -90,7 +90,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cumulocity"
+name = "cumulocity-mapper"
 version = "0.1.0"
 dependencies = [
  "open_json",

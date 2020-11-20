@@ -1,5 +1,5 @@
 [package]
-name = "cumulocity"
+name = "cumulocity-mapper"
 version = "0.1.0"
 authors = ["diw"]
 edition = "2018"
