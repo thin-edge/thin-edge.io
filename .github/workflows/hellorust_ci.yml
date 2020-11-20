@@ -2,9 +2,9 @@ name: HelloRust
 
 on:
   push:
-    branches: [ main ]
+    branches: [ pradeep_test ]
   pull_request:
-    branches: [ main ]
+    branches: [ pradeep_test ]
 
 env:
   CARGO_TERM_COLOR: always
