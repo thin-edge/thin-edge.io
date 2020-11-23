@@ -1,10 +1,10 @@
-name: HelloRust
+name: testlib-ci 
 
 on:
   push:
-    branches: [ pradeep_test ]
+    branches: [ main ]
   pull_request:
-    branches: [ pradeep_test ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,10 +13,20 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    #runs-on: self-hosted
 
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
+    -name: Format
+      run: cargo fmt
+    -name: Lint Checking
+      run: cargo clippy  
+    -name: Run tests
       run: cargo test --verbose
+    -name: Build
+      run: cargo build --release
+    -name: 'Upload Artifact'
+      uses: actions/upload-artifact@v2
+      with:
+          name:libtestlib.rlib 
+          path:tests/testlib/target/release/libtestlib.rlib 
