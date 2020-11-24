@@ -1,4 +1,4 @@
-name: testlib-ci 
+name: testlib_ci 
 
 on:
   push:
