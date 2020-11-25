@@ -46,17 +46,15 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
 ///
 /// ```no_run
 /// use mapper;
-/// mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", |err| {
-///     eprintln!("{}", err);
-///     Ok(())
-/// }).unwrap();
+/// mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", "tegde/errors").unwrap();
 /// ```
-pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> Result<(),Error>) -> Result<(),Error> {
+pub fn run(name: &str, in_topic: &str, out_topic: &str, err_topic: &str) -> Result<(),Error> {
     let mut mqtt_options = MqttOptions::new(name, "localhost", 1883);
     mqtt_options.set_clean_session(false);
     let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
+    let qos = QoS::ExactlyOnce;
 
-    mqtt_client.subscribe(in_topic, QoS::ExactlyOnce).unwrap();
+    mqtt_client.subscribe(in_topic, qos).unwrap();
 
     println!("Translating: {} -> {}", in_topic, out_topic);
     for notification in connection.iter() {
@@ -65,7 +63,10 @@ pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> R
                 let record = match MeasurementRecord::from_bytes(&input.payload) {
                     Ok(rec) => rec,
                     Err(err) => {
-                        on_error(Error::BadOpenJson(err))?;
+                        let err_msg = format!("{}",Error::BadOpenJson(err));
+                        if let Some(err) = mqtt_client.publish(err_topic, qos, false, err_msg).err() {
+                            eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
+                        }
                         continue;
                     }
                 };
@@ -73,19 +74,22 @@ pub fn run(name: &str, in_topic: &str, out_topic: &str, on_error: fn(Error) -> R
                 let messages = match into_smart_rest(&record) {
                     Ok(messages) => messages,
                     Err(err) => {
-                        on_error(err)?;
+                        let err_msg = format!("{}",err);
+                        if let Some(err) = mqtt_client.publish(err_topic, qos, false, err_msg).err() {
+                            eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
+                        }
                         continue;
                     }
                 };
                 for msg in messages.into_iter() {
                     println!("    -> {}", msg);
-                    if let Some(err) = mqtt_client.publish(out_topic, QoS::ExactlyOnce, false, msg).err() {
-                        on_error(Error::MqttPubFail(format!("{}",err)))?;
+                    if let Some(err) = mqtt_client.publish(out_topic, qos, false, msg).err() {
+                        eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
                     }
                 }
             }
             Err(err) => {
-                on_error(Error::MqttSubFail(format!("{}",err)))?;
+                eprintln!("ERROR: {}", Error::MqttSubFail(format!("{}",err)));
                 continue;
             }
             _ => ()

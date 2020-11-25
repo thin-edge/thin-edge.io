@@ -12,11 +12,7 @@ use rumqttc::Packet::SubAck;
 use mapper::Error;
 
 pub fn launch_mapper() -> Result<(), Error> {
-    mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", exit)
-}
-
-fn exit(err: mapper::Error) ->  Result<(),mapper::Error> {
-    Err(err)
+    mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", "tegde/errors")
 }
 
 pub fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
@@ -88,4 +84,3 @@ pub fn expect_message(client_id: &str, topic: &str) -> Option<String> {
 
     received
 }
-
