@@ -39,6 +39,34 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
     Ok(messages)
 }
 
+/// The configuration of mapper
+///
+/// ```
+/// let default_config = mapper::Configuration::default();
+///
+/// assert_eq!(default_config.name, "c8y-mapper");
+/// assert_eq!(default_config.in_topic, "tedge/measurements");
+/// assert_eq!(default_config.out_topic, "c8y/s/us");
+/// assert_eq!(default_config.err_topic, "tegde/errors");
+/// ```
+pub struct Configuration {
+    pub name: String,
+    pub in_topic: String,
+    pub out_topic: String,
+    pub err_topic: String,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Configuration {
+            name: "c8y-mapper".to_string(),
+            in_topic: "tedge/measurements".to_string(),
+            out_topic: "c8y/s/us".to_string(),
+            err_topic: "tegde/errors".to_string()
+        }
+    }
+}
+
 /// Run the mapper:
 /// - listening for Open Json measurement records,
 /// - translating these records into SmartRest2 messages,
@@ -46,25 +74,25 @@ pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error>
 ///
 /// ```no_run
 /// use mapper;
-/// mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", "tegde/errors").unwrap();
+/// mapper::run(mapper::Configuration::default()).unwrap();
 /// ```
-pub fn run(name: &str, in_topic: &str, out_topic: &str, err_topic: &str) -> Result<(),Error> {
-    let mut mqtt_options = MqttOptions::new(name, "localhost", 1883);
+pub fn run(conf: Configuration) -> Result<(),Error> {
+    let mut mqtt_options = MqttOptions::new(conf.name, "localhost", 1883);
     mqtt_options.set_clean_session(false);
     let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
     let qos = QoS::ExactlyOnce;
 
-    mqtt_client.subscribe(in_topic, qos).unwrap();
+    mqtt_client.subscribe(&conf.in_topic, qos).unwrap();
 
-    println!("Translating: {} -> {}", in_topic, out_topic);
+    println!("Translating: {} -> {}", &conf.in_topic, &conf.out_topic);
     for notification in connection.iter() {
         match notification {
-            Ok(Incoming(Publish(input))) if input.topic == in_topic => {
+            Ok(Incoming(Publish(input))) if &input.topic == &conf.in_topic => {
                 let record = match MeasurementRecord::from_bytes(&input.payload) {
                     Ok(rec) => rec,
                     Err(err) => {
                         let err_msg = format!("{}",Error::BadOpenJson(err));
-                        if let Some(err) = mqtt_client.publish(err_topic, qos, false, err_msg).err() {
+                        if let Some(err) = mqtt_client.publish(&conf.err_topic, qos, false, err_msg).err() {
                             eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
                         }
                         continue;
@@ -75,7 +103,7 @@ pub fn run(name: &str, in_topic: &str, out_topic: &str, err_topic: &str) -> Resu
                     Ok(messages) => messages,
                     Err(err) => {
                         let err_msg = format!("{}",err);
-                        if let Some(err) = mqtt_client.publish(err_topic, qos, false, err_msg).err() {
+                        if let Some(err) = mqtt_client.publish(&conf.err_topic, qos, false, err_msg).err() {
                             eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
                         }
                         continue;
@@ -83,7 +111,7 @@ pub fn run(name: &str, in_topic: &str, out_topic: &str, err_topic: &str) -> Resu
                 };
                 for msg in messages.into_iter() {
                     println!("    -> {}", msg);
-                    if let Some(err) = mqtt_client.publish(out_topic, qos, false, msg).err() {
+                    if let Some(err) = mqtt_client.publish(&conf.out_topic, qos, false, msg).err() {
                         eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
                     }
                 }

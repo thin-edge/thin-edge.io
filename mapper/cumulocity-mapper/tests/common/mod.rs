@@ -9,10 +9,10 @@ use rumqttc::Packet::PubAck;
 use rumqttc::Packet::PubRel;
 use rumqttc::Packet::PubComp;
 use rumqttc::Packet::SubAck;
-use mapper::Error;
+use mapper::{Error, Configuration};
 
 pub fn launch_mapper() -> Result<(), Error> {
-    mapper::run("c8y-mapper", "tedge/measurements", "c8y/s/us", "tegde/errors")
+    mapper::run(Configuration::default())
 }
 
 pub fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
