@@ -1,8 +1,8 @@
 use core::fmt;
 use open_json::MeasurementRecord;
-use rumqttc::{MqttOptions, Client, QoS};
 use rumqttc::Event::Incoming;
 use rumqttc::Packet::Publish;
+use rumqttc::{Client, MqttOptions, QoS};
 
 /// Convert a measurement record into a sequence of SmartRest messages
 ///
@@ -25,14 +25,12 @@ use rumqttc::Packet::Publish;
 /// ```
 pub fn into_smart_rest(record: &MeasurementRecord) -> Result<Vec<String>, Error> {
     let mut messages = Vec::new();
-    for (k,v) in record.measurements().iter() {
+    for (k, v) in record.measurements().iter() {
         if k == "temperature" {
             messages.push(format!("211,{}", v));
-        }
-        else if k == "battery" {
+        } else if k == "battery" {
             messages.push(format!("212,{}", v));
-        }
-        else {
+        } else {
             return Err(Error::UnknownTemplate(k.clone()));
         }
     }
@@ -62,68 +60,100 @@ impl Default for Configuration {
             name: "c8y-mapper".to_string(),
             in_topic: "tedge/measurements".to_string(),
             out_topic: "c8y/s/us".to_string(),
-            err_topic: "tegde/errors".to_string()
+            err_topic: "tegde/errors".to_string(),
         }
     }
 }
 
-/// Run the mapper:
-/// - listening for Open Json measurement records,
-/// - translating these records into SmartRest2 messages,
-/// - forwarding these messages to Cumulocity.
+/// A mapper event loop,
+/// - listening for ThinEdge measurement messages,
+/// - translating these messages into SmartRest2 messages,
+/// - forwarding the translated messages to Cumulocity.
 ///
 /// ```no_run
-/// use mapper;
-/// mapper::run(mapper::Configuration::default()).unwrap();
+/// let config = mapper::Configuration::default();
+/// let mut mapper = mapper::EventLoop::new(config).unwrap();
+/// mapper.run();
 /// ```
-pub fn run(conf: Configuration) -> Result<(),Error> {
-    let mut mqtt_options = MqttOptions::new(conf.name, "localhost", 1883);
-    mqtt_options.set_clean_session(false);
-    let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
-    let qos = QoS::ExactlyOnce;
+pub struct EventLoop {
+    conf: Configuration,
+    mqtt_client: rumqttc::Client,
+    connection: rumqttc::Connection,
+}
 
-    mqtt_client.subscribe(&conf.in_topic, qos).unwrap();
+impl EventLoop {
+    /// Create a new mapper event-loop for a configuration
+    pub fn new(conf: Configuration) -> Result<EventLoop, Error> {
+        let mut mqtt_options = MqttOptions::new(&conf.name, "localhost", 1883);
+        mqtt_options.set_clean_session(false);
+        let (mqtt_client, connection) = Client::new(mqtt_options, 10);
+        Ok(EventLoop {
+            conf,
+            mqtt_client,
+            connection,
+        })
+    }
 
-    println!("Translating: {} -> {}", &conf.in_topic, &conf.out_topic);
-    for notification in connection.iter() {
-        match notification {
-            Ok(Incoming(Publish(input))) if &input.topic == &conf.in_topic => {
-                let record = match MeasurementRecord::from_bytes(&input.payload) {
-                    Ok(rec) => rec,
-                    Err(err) => {
-                        let err_msg = format!("{}",Error::BadOpenJson(err));
-                        if let Some(err) = mqtt_client.publish(&conf.err_topic, qos, false, err_msg).err() {
-                            eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
+    /// Run the mapper event loop:
+    /// - listening for Open Json measurement records,
+    /// - translating these records into SmartRest2 messages,
+    /// - forwarding these messages to Cumulocity.
+    pub fn run(&mut self) -> Result<(), Error> {
+        let conf = &self.conf;
+        let connection = &mut self.connection;
+        let mqtt_client = &mut self.mqtt_client;
+
+        let qos = QoS::ExactlyOnce;
+
+        mqtt_client
+            .subscribe(&conf.in_topic, qos)
+            .map_err(|err| Error::MqttSubFail(format!("{}", err)))?;
+
+        println!("Translating: {} -> {}", &conf.in_topic, &conf.out_topic);
+        for notification in connection.iter() {
+            match notification {
+                Ok(Incoming(Publish(input))) if &input.topic == &conf.in_topic => {
+                    let record = match MeasurementRecord::from_bytes(&input.payload) {
+                        Ok(rec) => rec,
+                        Err(err) => {
+                            let err_msg = format!("{}", Error::BadOpenJson(err));
+                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg);
+                            continue;
                         }
-                        continue;
-                    }
-                };
-                println!("    {} ->", record);
-                let messages = match into_smart_rest(&record) {
-                    Ok(messages) => messages,
-                    Err(err) => {
-                        let err_msg = format!("{}",err);
-                        if let Some(err) = mqtt_client.publish(&conf.err_topic, qos, false, err_msg).err() {
-                            eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
+                    };
+                    println!("    {} ->", record);
+                    let messages = match into_smart_rest(&record) {
+                        Ok(messages) => messages,
+                        Err(err) => {
+                            let err_msg = format!("{}", err);
+                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg);
+                            continue;
                         }
-                        continue;
-                    }
-                };
-                for msg in messages.into_iter() {
-                    println!("    -> {}", msg);
-                    if let Some(err) = mqtt_client.publish(&conf.out_topic, qos, false, msg).err() {
-                        eprintln!("ERROR: {}", Error::MqttPubFail(format!("{}",err)));
+                    };
+                    for msg in messages.into_iter() {
+                        println!("    -> {}", msg);
+                        Self::publish(mqtt_client, &conf.out_topic, qos, msg);
                     }
                 }
+                Err(err) => {
+                    Self::log(Error::MqttSubFail(format!("{}", err)));
+                    continue;
+                }
+                _ => (),
             }
-            Err(err) => {
-                eprintln!("ERROR: {}", Error::MqttSubFail(format!("{}",err)));
-                continue;
-            }
-            _ => ()
+        }
+        Ok(())
+    }
+
+    fn publish(mqtt_client: &mut rumqttc::Client, topic: &String, qos: QoS, msg: String) {
+        if let Some(err) = mqtt_client.publish(topic, qos, false, msg).err() {
+            Self::log(Error::MqttPubFail(format!("{}", err)));
         }
     }
-    Ok(())
+
+    fn log(err: Error) {
+        eprintln!("ERROR: {}", err);
+    }
 }
 
 /// Translation errors
@@ -153,7 +183,7 @@ mod tests {
     #[test]
     fn map_temperature() {
         let input = r#"{"temperature": 23}"#;
-        let expected= vec!["211,23".into()];
+        let expected = vec!["211,23".into()];
         let record = MeasurementRecord::from_json(input).unwrap();
         assert_eq!(Ok(expected), into_smart_rest(&record))
     }
@@ -161,7 +191,7 @@ mod tests {
     #[test]
     fn map_battery() {
         let input = r#"{"battery": 99}"#;
-        let expected= vec!["212,99".into()];
+        let expected = vec!["212,99".into()];
         let record = MeasurementRecord::from_json(input).unwrap();
         assert_eq!(Ok(expected), into_smart_rest(&record))
     }
@@ -169,7 +199,7 @@ mod tests {
     #[test]
     fn map_record() {
         let input = r#"{"temperature": 23, "battery": 99}"#;
-        let expected= vec!["211,23".into(), "212,99".into()];
+        let expected = vec!["211,23".into(), "212,99".into()];
         let record = MeasurementRecord::from_json(input).unwrap();
         assert_eq!(Ok(expected), into_smart_rest(&record))
     }
@@ -178,6 +208,9 @@ mod tests {
     fn unknown_template() {
         let input = r#"{"pressure": 20}"#;
         let record = MeasurementRecord::from_json(input).unwrap();
-        assert_eq!(Err(Error::UnknownTemplate("pressure".into())), into_smart_rest(&record))
+        assert_eq!(
+            Err(Error::UnknownTemplate("pressure".into())),
+            into_smart_rest(&record)
+        )
     }
 }

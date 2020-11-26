@@ -2,34 +2,38 @@
 // using `use common`.
 // See [Submodules in Integration Tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests)
 
-use rumqttc::{MqttOptions, Client, QoS};
-use rumqttc::Event::{Incoming,Outgoing};
-use rumqttc::Packet::Publish;
+use mapper::Error;
+use rumqttc::Event::{Incoming, Outgoing};
 use rumqttc::Packet::PubAck;
-use rumqttc::Packet::PubRel;
 use rumqttc::Packet::PubComp;
+use rumqttc::Packet::PubRel;
+use rumqttc::Packet::Publish;
 use rumqttc::Packet::SubAck;
-use mapper::{Error, Configuration};
+use rumqttc::{Client, MqttOptions, QoS};
 
 pub fn launch_mapper() -> Result<(), Error> {
-    mapper::run(Configuration::default())
+    let configuration = mapper::Configuration::default();
+    let mut mapper = mapper::EventLoop::new(configuration)?;
+    mapper.run()
 }
 
 pub fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
     let mqtt_options = MqttOptions::new(client_id, "localhost", 1883);
     let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
-    mqtt_client.publish(topic, QoS::ExactlyOnce, false, payload).unwrap();
+    mqtt_client
+        .publish(topic, QoS::ExactlyOnce, false, payload)
+        .unwrap();
 
     for notification in connection.iter() {
         match notification {
             Ok(Incoming(PubAck(_))) | Ok(Incoming(PubComp(_))) => {
                 mqtt_client.disconnect().unwrap();
                 break;
-            },
+            }
             Err(err) => {
                 panic!("MQTT bus: {}", err);
             }
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -49,7 +53,7 @@ pub fn subscribe(client_id: &str, topic: &str) {
             Err(err) => {
                 panic!("MQTT bus: {}", err);
             }
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -78,7 +82,7 @@ pub fn expect_message(client_id: &str, topic: &str) -> Option<String> {
             Err(err) => {
                 panic!("MQTT bus: {}", err);
             }
-            _ => ()
+            _ => (),
         }
     }
 
