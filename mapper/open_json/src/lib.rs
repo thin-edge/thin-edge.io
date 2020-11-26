@@ -23,7 +23,7 @@ use json::JsonValue;
 /// each defined by a name and a numeric value.
 #[derive(Debug)]
 pub struct MeasurementRecord {
-    measurements: Vec<(String,f64)>,
+    measurements: Vec<(String, f64)>,
 }
 
 impl MeasurementRecord {
@@ -82,7 +82,7 @@ impl MeasurementRecord {
                     if value.is_normal() {
                         measurements.push((k.into(), value));
                     } else {
-                        return Err(Error::NumberOutOfRange(format!("{}",num)))
+                        return Err(Error::NumberOutOfRange(format!("{}", num)));
                     }
                 }
                 _ => return Err(Error::NotANumber),
@@ -91,13 +91,12 @@ impl MeasurementRecord {
         Ok(MeasurementRecord { measurements })
     }
 
-    pub fn measurements(&self) -> &Vec<(String,f64)> {
+    pub fn measurements(&self) -> &Vec<(String, f64)> {
         &self.measurements
     }
 }
 
 impl fmt::Display for MeasurementRecord {
-
     /// Display a measurement record
     ///
     /// ```
@@ -115,12 +114,12 @@ impl fmt::Display for MeasurementRecord {
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut sep = "";
-        write!(f,"{{")?;
-        for (k,v) in self.measurements.iter() {
+        write!(f, "{{")?;
+        for (k, v) in self.measurements.iter() {
             write!(f, "{}\"{}\": {}", sep, k, v)?;
             sep = ", "
         }
-        write!(f,"}}")
+        write!(f, "}}")
     }
 }
 
@@ -141,7 +140,9 @@ impl fmt::Display for Error {
             Error::NotJson(ref err) => write!(f, "Json format error: {}", err),
             Error::NotAnObject => write!(f, "A record of measurement is expected"),
             Error::NotANumber => write!(f, "Only scalar values are expected"),
-            Error::NumberOutOfRange(ref num) => write!(f, "The number {} cannot be represented as float 64", num),
+            Error::NumberOutOfRange(ref num) => {
+                write!(f, "The number {} cannot be represented as float 64", num)
+            }
         }
     }
 }
@@ -154,29 +155,32 @@ mod tests {
     fn it_works() {
         let input = r#"{"temperature": 23, "pressure": 220}"#;
         let record = MeasurementRecord::from_json(input).unwrap();
-        assert_eq!(record.measurements, vec![
-            ("temperature".into(), 23.0),
-            ("pressure".into(), 220.0),
-        ]);
+        assert_eq!(
+            record.measurements,
+            vec![("temperature".into(), 23.0), ("pressure".into(), 220.0),]
+        );
     }
 
     #[test]
     fn test_display() {
         let record = MeasurementRecord {
-            measurements: vec![
-                ("temperature".into(), 23.0),
-                ("pressure".into(), 220.0),
-            ]
+            measurements: vec![("temperature".into(), 23.0), ("pressure".into(), 220.0)],
         };
 
-        assert_eq!(format!("{}", record), r#"{"temperature": 23, "pressure": 220}"#);
+        assert_eq!(
+            format!("{}", record),
+            r#"{"temperature": 23, "pressure": 220}"#
+        );
     }
 
     #[test]
     fn must_reject_non_json_input() {
         let input = r#"some non-json input"#;
         let error = MeasurementRecord::from_json(input).err().unwrap();
-        assert_eq!(format!("{}", error), "Json format error: Unexpected character: s at (1:1)");
+        assert_eq!(
+            format!("{}", error),
+            "Json format error: Unexpected character: s at (1:1)"
+        );
     }
 
     #[test]
