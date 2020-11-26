@@ -6,10 +6,13 @@ mod common;
 #[test]
 fn it_maps_openjson_to_smartrest() {
     let scenario = async {
-        common::subscribe("c8y", "c8y/s/us").await;
-        common::publish_message("app", "tedge/measurements", b"{\"temperature\": 23}").await;
+        let mut c8y = common::MqttClient::new("c8y");
+        let mut app = common::MqttClient::new("app");
 
-        let msg = common::expect_message("c8y", "c8y/s/us").await;
+        c8y.subscribe("c8y/s/us").await;
+        app.publish("tedge/measurements", b"{\"temperature\": 23}").await;
+
+        let msg = c8y.expect_message("c8y/s/us").await;
         msg == Some("211,23".into())
     };
 
