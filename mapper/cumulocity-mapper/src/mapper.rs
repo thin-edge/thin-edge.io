@@ -2,7 +2,9 @@ use core::fmt;
 use open_json::MeasurementRecord;
 use rumqttc::Event::Incoming;
 use rumqttc::Packet::Publish;
-use rumqttc::{Client, MqttOptions, QoS};
+use rumqttc::Packet::Disconnect;
+use rumqttc::QoS;
+use tokio_compat_02::FutureExt;
 
 /// Convert a measurement record into a sequence of SmartRest messages
 ///
@@ -72,52 +74,57 @@ impl Default for Configuration {
 ///
 /// ```no_run
 /// let config = mapper::Configuration::default();
-/// let mut mapper = mapper::EventLoop::new(config).unwrap();
+/// let mut mapper = mapper::EventLoop::new(config);
 /// mapper.run();
 /// ```
 pub struct EventLoop {
     conf: Configuration,
-    mqtt_client: rumqttc::Client,
-    connection: rumqttc::Connection,
+    mqtt_client: rumqttc::AsyncClient,
+    eventloop: rumqttc::EventLoop,
 }
 
 impl EventLoop {
     /// Create a new mapper event-loop for a configuration
-    pub fn new(conf: Configuration) -> Result<EventLoop, Error> {
-        let mut mqtt_options = MqttOptions::new(&conf.name, "localhost", 1883);
+    pub fn new(conf: Configuration) -> EventLoop {
+        let mut mqtt_options = rumqttc::MqttOptions::new(&conf.name, "localhost", 1883);
         mqtt_options.set_clean_session(false);
-        let (mqtt_client, connection) = Client::new(mqtt_options, 10);
-        Ok(EventLoop {
+        let (mqtt_client, eventloop) = rumqttc::AsyncClient::new(mqtt_options, 10);
+
+        EventLoop {
             conf,
             mqtt_client,
-            connection,
-        })
+            eventloop,
+        }
     }
 
     /// Run the mapper event loop:
     /// - listening for Open Json measurement records,
     /// - translating these records into SmartRest2 messages,
     /// - forwarding these messages to Cumulocity.
-    pub fn run(&mut self) -> Result<(), Error> {
+    pub async fn run(&mut self) -> Result<(), Error> {
         let conf = &self.conf;
-        let connection = &mut self.connection;
+        let eventloop = &mut self.eventloop;
         let mqtt_client = &mut self.mqtt_client;
 
         let qos = QoS::ExactlyOnce;
 
         mqtt_client
             .subscribe(&conf.in_topic, qos)
+            .compat()
+            .await
             .map_err(|err| Error::MqttSubFail(format!("{}", err)))?;
 
         println!("Translating: {} -> {}", &conf.in_topic, &conf.out_topic);
-        for notification in connection.iter() {
-            match notification {
+        loop {
+            match eventloop.poll().compat().await {
+                Ok(Incoming(Disconnect)) => break,
+
                 Ok(Incoming(Publish(input))) if &input.topic == &conf.in_topic => {
                     let record = match MeasurementRecord::from_bytes(&input.payload) {
                         Ok(rec) => rec,
                         Err(err) => {
                             let err_msg = format!("{}", Error::BadOpenJson(err));
-                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg);
+                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg).await;
                             continue;
                         }
                     };
@@ -126,27 +133,30 @@ impl EventLoop {
                         Ok(messages) => messages,
                         Err(err) => {
                             let err_msg = format!("{}", err);
-                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg);
+                            Self::publish(mqtt_client, &conf.err_topic, qos, err_msg).await;
                             continue;
                         }
                     };
                     for msg in messages.into_iter() {
                         println!("    -> {}", msg);
-                        Self::publish(mqtt_client, &conf.out_topic, qos, msg);
+                        Self::publish(mqtt_client, &conf.out_topic, qos, msg).await;
                     }
                 }
+
                 Err(err) => {
                     Self::log(Error::MqttSubFail(format!("{}", err)));
                     continue;
+
                 }
+
                 _ => (),
             }
         }
         Ok(())
     }
 
-    fn publish(mqtt_client: &mut rumqttc::Client, topic: &String, qos: QoS, msg: String) {
-        if let Some(err) = mqtt_client.publish(topic, qos, false, msg).err() {
+    async fn publish(mqtt_client: &mut rumqttc::AsyncClient, topic: &String, qos: QoS, msg: String) {
+        if let Some(err) = mqtt_client.publish(topic, qos, false, msg).compat().await.err() {
             Self::log(Error::MqttPubFail(format!("{}", err)));
         }
     }

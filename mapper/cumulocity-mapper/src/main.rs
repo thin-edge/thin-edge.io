@@ -1,7 +1,10 @@
 mod mapper;
 
-fn main() {
-    let configuration = mapper::Configuration::default();
-    let mut mapper = mapper::EventLoop::new(configuration).unwrap();
-    mapper.run().unwrap();
+#[tokio::main]
+pub async fn main() -> std::result::Result<(),mapper::Error> {
+    let configuration
+        = mapper::Configuration::default();
+    let mut mapper = mapper::EventLoop::new(configuration);
+
+    mapper.run().await
 }

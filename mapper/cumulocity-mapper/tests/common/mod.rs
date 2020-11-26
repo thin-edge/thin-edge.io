@@ -8,25 +8,28 @@ use rumqttc::Packet::PubComp;
 use rumqttc::Packet::PubRel;
 use rumqttc::Packet::Publish;
 use rumqttc::Packet::SubAck;
-use rumqttc::{Client, MqttOptions, QoS};
+use rumqttc::{AsyncClient, MqttOptions, QoS};
+use tokio_compat_02::FutureExt;
 
-pub fn launch_mapper() -> Result<(), mapper::Error> {
+pub async fn launch_mapper() -> Result<(), mapper::Error> {
     let configuration = mapper::Configuration::default();
-    let mut mapper = mapper::EventLoop::new(configuration)?;
-    mapper.run()
+    let mut mapper = mapper::EventLoop::new(configuration);
+    mapper.run().await
 }
 
-pub fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
+pub async fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
     let mqtt_options = MqttOptions::new(client_id, "localhost", 1883);
-    let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
+    let (mqtt_client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
     mqtt_client
         .publish(topic, QoS::ExactlyOnce, false, payload)
+        .compat()
+        .await
         .unwrap();
 
-    for notification in connection.iter() {
-        match notification {
+    loop {
+        match eventloop.poll().compat().await {
             Ok(Incoming(PubAck(_))) | Ok(Incoming(PubComp(_))) => {
-                mqtt_client.disconnect().unwrap();
+                mqtt_client.disconnect().compat().await.unwrap();
                 break;
             }
             Err(err) => {
@@ -37,16 +40,16 @@ pub fn publish_message(client_id: &str, topic: &str, payload: &[u8]) {
     }
 }
 
-pub fn subscribe(client_id: &str, topic: &str) {
+pub async fn subscribe(client_id: &str, topic: &str) {
     let mut mqtt_options = MqttOptions::new(client_id, "localhost", 1883);
     mqtt_options.set_clean_session(false);
-    let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
-    mqtt_client.subscribe(topic, QoS::ExactlyOnce).unwrap();
+    let (mqtt_client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
+    mqtt_client.subscribe(topic, QoS::ExactlyOnce).compat().await.unwrap();
 
-    for notification in connection.iter() {
-        match notification {
+    loop {
+        match eventloop.poll().compat().await {
             Ok(Incoming(SubAck(_))) => {
-                mqtt_client.disconnect().unwrap();
+                mqtt_client.disconnect().compat().await.unwrap();
                 break;
             }
             Err(err) => {
@@ -57,17 +60,17 @@ pub fn subscribe(client_id: &str, topic: &str) {
     }
 }
 
-pub fn expect_message(client_id: &str, topic: &str) -> Option<String> {
+pub async fn expect_message(client_id: &str, topic: &str) -> Option<String> {
     let mut mqtt_options = MqttOptions::new(client_id, "localhost", 1883);
     mqtt_options.set_clean_session(false);
-    let (mut mqtt_client, mut connection) = Client::new(mqtt_options, 10);
-    mqtt_client.subscribe(topic, QoS::ExactlyOnce).unwrap();
+    let (mqtt_client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
+    mqtt_client.subscribe(topic, QoS::ExactlyOnce).compat().await.unwrap();
 
     let mut received = None;
 
     println!("{} is listening on {}", client_id, topic);
-    for notification in connection.iter() {
-        match notification {
+    loop {
+        match eventloop.poll().compat().await {
             Ok(Incoming(Publish(msg))) if msg.topic == topic => {
                 let payload = std::str::from_utf8(&msg.payload).unwrap();
                 received = Some(payload.to_string());
@@ -75,7 +78,7 @@ pub fn expect_message(client_id: &str, topic: &str) -> Option<String> {
             Ok(Incoming(PubRel(_)))
             | Ok(Outgoing(rumqttc::Outgoing::PubAck(_)))
             | Ok(Outgoing(rumqttc::Outgoing::PubComp(_))) => {
-                mqtt_client.disconnect().unwrap();
+                mqtt_client.disconnect().compat().await.unwrap();
                 break;
             }
             Err(err) => {
