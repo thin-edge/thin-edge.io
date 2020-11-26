@@ -1,0 +1,33 @@
+name: thinedge_ci 
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+     runs-on: ${{ matrix.os}}
+
+     strategy:
+       matrix:
+                          
+         include:
+          - os: ubuntu-latest
+                                             
+          - os: self-hosted             
+
+     steps:
+      - uses: actions/checkout@v2
+      - name: Format
+        run: cargo fmt
+      - name: Lint Checking
+        run: cargo clippy  
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Build
+        run: cargo build --release

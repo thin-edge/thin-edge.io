@@ -16,3 +16,4 @@ The Software AG Thin Edge
     - /firmware
     - /configuration
     - /monitoring
+  - /tests
