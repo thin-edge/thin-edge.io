@@ -67,7 +67,7 @@ impl MeasurementRecord {
     ///     ("pressure".into(), 220.0),
     ///]);
     /// ```
-    pub fn from_bytes(input: &[u8]) -> Result<MeasurementRecord, Error> {
+    pub fn from_bytes(input: &[u8]) -> Result<MeasurementRecord, crate::Error> {
         let input = std::str::from_utf8(input).map_err(|err| Error::NotUtf8(err))?;
         MeasurementRecord::from_json(input)
     }
@@ -222,14 +222,12 @@ mod tests {
 
         #[test] // Test Open Edge json with arbitrary whitespaces
         #[ignore] // This test fails because JSON rejects several utf8 white-spaces as '\u{2000}'
-        fn parse_open_edge(s in r#"\s*"[a-z]*"\s*:\s[1-9][0-9]*\s*"#) {
-             let input = format!("{{{}}}", s); // adding curly braces around s
+        fn parse_open_edge(input in r#"\{\s*"[a-z]*"\s*:\s[1-9][0-9]*\s*\}"#) {
              MeasurementRecord::from_json(&input).unwrap();
         }
 
         #[test] // Test valid Open Edge json
-        fn parse_valid_open_edge(s in r#"( *"\w+" *: *[-]?[1-9][0-9]* *,){0,3} *"\w+" *: *[-]?[1-9][0-9]* *"#) {
-             let input = format!("{{{}}}", s); // adding curly braces around s
+        fn parse_valid_open_edge(input in r#"\{( *"\w+" *: *[-]?[1-9][0-9]* *,){0,3} *"\w+" *: *[-]?[1-9][0-9]* *\}"#) {
              MeasurementRecord::from_json(&input).unwrap();
         }
     }

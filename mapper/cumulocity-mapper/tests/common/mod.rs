@@ -2,7 +2,6 @@
 // using `use common`.
 // See [Submodules in Integration Tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests)
 
-use mapper::Error;
 use rumqttc::Event::{Incoming, Outgoing};
 use rumqttc::Packet::PubAck;
 use rumqttc::Packet::PubComp;
@@ -11,7 +10,7 @@ use rumqttc::Packet::Publish;
 use rumqttc::Packet::SubAck;
 use rumqttc::{Client, MqttOptions, QoS};
 
-pub fn launch_mapper() -> Result<(), Error> {
+pub fn launch_mapper() -> Result<(), mapper::Error> {
     let configuration = mapper::Configuration::default();
     let mut mapper = mapper::EventLoop::new(configuration)?;
     mapper.run()
