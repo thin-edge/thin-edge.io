@@ -2,6 +2,7 @@
 
 members = [
     "tedge",
+    "mqtt/mqtt_client",
     "tests/testlib",
 ]
 

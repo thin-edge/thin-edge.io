@@ -1,4 +1,3 @@
-use tokio::stream::StreamExt;
 use mqtt_client::{Client,Topic,Message};
 
 #[tokio::main]
