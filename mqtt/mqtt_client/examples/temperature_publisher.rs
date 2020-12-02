@@ -1,7 +1,6 @@
 use std::time::Duration;
 use rand::prelude::*;
 use tokio::time::sleep;
-use tokio::stream::StreamExt;
 use mqtt_client::{Client,Topic,Message};
 
 const C8Y_TPL_RESTART: &str = "511";
