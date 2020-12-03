@@ -8,7 +8,8 @@ use tokio_compat_02::FutureExt;
 pub struct Client {
     pub name: String,
     mqtt_client: rumqttc::AsyncClient,
-    sender: broadcast::Sender<Message>,
+    message_sender: broadcast::Sender<Message>,
+    error_sender: broadcast::Sender<Error>,
 }
 
 impl Client {
@@ -19,14 +20,20 @@ impl Client {
 
         let in_flight = 10;
         let (mqtt_client, event_loop) = rumqttc::AsyncClient::new(mqtt_options, in_flight);
-        let (sender, _) = broadcast::channel(in_flight);
+        let (message_sender, _) = broadcast::channel(in_flight);
+        let (error_sender, _) = broadcast::channel(in_flight);
 
-        tokio::spawn(Client::bg_process(event_loop, sender.clone()));
+        tokio::spawn(Client::bg_process(
+            event_loop,
+            message_sender.clone(),
+            error_sender.clone(),
+        ));
 
         Ok(Client {
             name,
             mqtt_client,
-            sender,
+            message_sender,
+            error_sender,
         })
     }
 
@@ -48,7 +55,15 @@ impl Client {
             .await
             .map_err(Error::client_error)?;
 
-        Ok(MessageStream::new(topic.clone(), self.sender.subscribe()))
+        Ok(MessageStream::new(
+            topic.clone(),
+            self.message_sender.subscribe(),
+            self.error_sender.clone(),
+        ))
+    }
+
+    pub fn subscribe_errors(&self) -> ErrorStream {
+        ErrorStream::new(self.error_sender.subscribe())
     }
 
     pub async fn disconnect(self) -> Result<(), Error> {
@@ -59,16 +74,22 @@ impl Client {
             .map_err(Error::client_error)
     }
 
-    async fn bg_process(mut event_loop: rumqttc::EventLoop, sender: broadcast::Sender<Message>) {
+    async fn bg_process(
+        mut event_loop: rumqttc::EventLoop,
+        message_sender: broadcast::Sender<Message>,
+        error_sender: broadcast::Sender<Error>,
+    ) {
         loop {
             match event_loop.poll().compat().await {
                 Err(err) => {
-                    eprintln!("MQTT error: {}", err);
+                    // The sender can only fail if there is no listener
+                    // So we simply discard any sender error
+                    let _ = error_sender.send(Error::connection_error(err));
                 }
                 Ok(Incoming(Publish(msg))) => {
                     // The sender can only fail if there is no listener
-                    // So we simply discard the error
-                    let _ = sender.send(Message {
+                    // So we simply discard any sender error
+                    let _ = message_sender.send(Message {
                         topic: Topic::new(&msg.topic),
                         payload: msg.payload.to_vec(),
                     });
@@ -112,11 +133,20 @@ impl Message {
 pub struct MessageStream {
     filter: Topic,
     receiver: broadcast::Receiver<Message>,
+    error_sender: broadcast::Sender<Error>,
 }
 
 impl MessageStream {
-    fn new(filter: Topic, receiver: broadcast::Receiver<Message>) -> MessageStream {
-        MessageStream { filter, receiver }
+    fn new(
+        filter: Topic,
+        receiver: broadcast::Receiver<Message>,
+        error_sender: broadcast::Sender<Error>,
+    ) -> MessageStream {
+        MessageStream {
+            filter,
+            receiver,
+            error_sender,
+        }
     }
 
     fn accept(&self, message: &Message) -> bool {
@@ -129,8 +159,10 @@ impl MessageStream {
                 Err(broadcast::error::RecvError::Closed) => return None,
                 Ok(message) if self.accept(&message) => return Some(message),
                 Ok(_) => continue,
-                Err(broadcast::error::RecvError::Lagged(lag)) => {
-                    eprintln!("ERROR consumer behind producer by {} messages", lag);
+                Err(err) => {
+                    // The sender can only fail if there is no listener
+                    // So we simply discard any sender error
+                    let _ = self.error_sender.send(Error::stream_error(err));
                     continue;
                 }
             }
@@ -138,15 +170,45 @@ impl MessageStream {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+pub struct ErrorStream {
+    receiver: broadcast::Receiver<Error>,
+}
+
+impl ErrorStream {
+    fn new(receiver: broadcast::Receiver<Error>) -> ErrorStream {
+        ErrorStream { receiver }
+    }
+
+    pub async fn next(&mut self) -> Option<Error> {
+        loop {
+            match self.receiver.recv().await {
+                Err(broadcast::error::RecvError::Closed) => return None,
+                Ok(error) => return Some(error),
+                Err(broadcast::error::RecvError::Lagged(lag)) => {
+                    eprintln!(
+                        "ERROR the error stream is not consumed fast enough: lag of {} messages",
+                        lag
+                    );
+                    continue;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     ClientError(String),
+    ConnectionError(String),
+    StreamError(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::ClientError(ref err) => write!(f, "MQTT error: {}", err),
+            Error::ClientError(ref err) => write!(f, "MQTT client error: {}", err),
+            Error::ConnectionError(ref err) => write!(f, "MQTT connection error: {}", err),
+            Error::StreamError(ref err) => write!(f, "Stream error: {}", err),
         }
     }
 }
@@ -154,5 +216,13 @@ impl fmt::Display for Error {
 impl Error {
     fn client_error(err: rumqttc::ClientError) -> Error {
         Error::ClientError(format!("{}", err))
+    }
+
+    fn connection_error(err: rumqttc::ConnectionError) -> Error {
+        Error::ConnectionError(format!("{}", err))
+    }
+
+    fn stream_error(err: broadcast::error::RecvError) -> Error {
+        Error::ConnectionError(format!("{}", err))
     }
 }
