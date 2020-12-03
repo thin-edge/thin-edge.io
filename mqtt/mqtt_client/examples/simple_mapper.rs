@@ -8,6 +8,12 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     let err_topic = Topic::new("tegde/errors");
 
     let mqtt = Client::connect(name).await?;
+    let mut errors = mqtt.subscribe_errors();
+    tokio::spawn(async move {
+        while let Some(error) = errors.next().await {
+            eprintln!("ERROR: {}", error);
+        }
+    });
 
     let mut messages = mqtt.subscribe(&in_topic).await?;
     while let Some(message) = messages.next().await {

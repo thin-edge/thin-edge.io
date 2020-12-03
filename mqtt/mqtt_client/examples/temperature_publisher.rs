@@ -13,8 +13,14 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     let c8y_cmd = Topic::new("c8y/s/ds");
     let c8y_err = Topic::new("c8y/s/e");
 
-    let mut messages = mqtt.subscribe(&c8y_cmd).await?;
+    let mut errors = mqtt.subscribe_errors();
+    tokio::spawn(async move {
+        while let Some(error) = errors.next().await {
+            eprintln!("ERROR: {}", error);
+        }
+    });
 
+    let mut messages = mqtt.subscribe(&c8y_cmd).await?;
     tokio::spawn(async move {
         while let Some(message) = messages.next().await {
             if message.topic == c8y_cmd {
