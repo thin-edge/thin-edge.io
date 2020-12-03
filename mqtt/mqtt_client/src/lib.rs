@@ -1,9 +1,9 @@
 use core::fmt;
+use rumqttc::Event::Incoming;
+use rumqttc::Packet::Publish;
+use rumqttc::QoS;
 use tokio::sync::broadcast;
 use tokio_compat_02::FutureExt;
-use rumqttc::QoS;
-use rumqttc::Packet::Publish;
-use rumqttc::Event::Incoming;
 
 pub struct Client {
     pub name: String,
@@ -23,7 +23,11 @@ impl Client {
 
         tokio::spawn(Client::bg_process(event_loop, sender.clone()));
 
-        Ok(Client{name, mqtt_client, sender})
+        Ok(Client {
+            name,
+            mqtt_client,
+            sender,
+        })
     }
 
     pub async fn publish(&self, message: Message) -> Result<(), Error> {
@@ -83,7 +87,7 @@ pub struct Topic {
 impl Topic {
     pub fn new(name: &str) -> Topic {
         let name = String::from(name);
-        Topic {name}
+        Topic { name }
     }
 }
 
@@ -95,10 +99,10 @@ pub struct Message {
 
 impl Message {
     pub fn new<B>(topic: &Topic, payload: B) -> Message
-        where
-            B: Into<Vec<u8>>,
+    where
+        B: Into<Vec<u8>>,
     {
-        Message{
+        Message {
             topic: topic.clone(),
             payload: payload.into(),
         }
@@ -112,7 +116,7 @@ pub struct MessageStream {
 
 impl MessageStream {
     fn new(filter: Topic, receiver: broadcast::Receiver<Message>) -> MessageStream {
-        MessageStream{filter, receiver}
+        MessageStream { filter, receiver }
     }
 
     fn accept(&self, message: &Message) -> bool {
@@ -127,7 +131,7 @@ impl MessageStream {
                 Ok(_) => continue,
                 Err(broadcast::error::RecvError::Lagged(lag)) => {
                     eprintln!("ERROR consumer behind producer by {} messages", lag);
-                    continue
+                    continue;
                 }
             }
         }
@@ -149,6 +153,6 @@ impl fmt::Display for Error {
 
 impl Error {
     fn client_error(err: rumqttc::ClientError) -> Error {
-        Error::ClientError(format!("{}",err))
+        Error::ClientError(format!("{}", err))
     }
 }
