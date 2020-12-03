@@ -1,4 +1,4 @@
-use mqtt_client::{Client,Topic,Message};
+use mqtt_client::{Client, Message, Topic};
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
@@ -12,12 +12,8 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     let mut messages = mqtt.subscribe(&in_topic).await?;
     while let Some(message) = messages.next().await {
         match translate(&message.payload) {
-            Ok(translation) => {
-                mqtt.publish(Message::new(&out_topic, translation)).await?
-            }
-            Err(error) => {
-                mqtt.publish(Message::new(&err_topic, error)).await?
-            }
+            Ok(translation) => mqtt.publish(Message::new(&out_topic, translation)).await?,
+            Err(error) => mqtt.publish(Message::new(&err_topic, error)).await?,
         }
     }
 
@@ -37,7 +33,7 @@ fn translate(input: &Vec<u8>) -> Result<Vec<u8>, String> {
         JsonValue::Object(obj) => {
             for (k, v) in obj.iter() {
                 if k != "temperature" {
-                    return Err(format!("ERROR: unknown measurement '{}'", k))
+                    return Err(format!("ERROR: unknown measurement '{}'", k));
                 }
                 match v {
                     JsonValue::Number(num) => {
