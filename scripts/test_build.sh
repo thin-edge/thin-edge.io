@@ -1,11 +1,22 @@
 #!/usr/bin/bash
 
-#check the format of the rust code 
-cargo fmt -- --check
+#check the format of the rust code
+if ! cargo fmt -- --check;
+then
+   exit 1
+fi
 # Lint Checking
-cargo clippy
+if ! cargo clippy;
+then
+   exit 1
+fi
 # Run tests
-cargo test --verbose
+if ! cargo test --verbose;
+then
+  exit 1
+fi
 # Build
-cargo build --release
-
+if ! cargo build --release;
+then
+  exit 1
+fi  
