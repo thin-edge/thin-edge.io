@@ -13,7 +13,7 @@ mod tests {
 
     #[test]
     fn test_divide() {
-        assert_eq!(divide_non_zero_result(10, 2), 6);
+        assert_eq!(divide_non_zero_result(10, 2), 5);
     }
 
     #[test]
