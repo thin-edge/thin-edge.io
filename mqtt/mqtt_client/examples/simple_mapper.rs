@@ -3,9 +3,9 @@ use mqtt_client::{Client, Message, Topic};
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
     let name = "c8y_mapper";
-    let in_topic = Topic::new("tedge/measurements");
-    let out_topic = Topic::new("c8y/s/us");
-    let err_topic = Topic::new("tegde/errors");
+    let in_topic = Topic::new("tedge/measurements")?;
+    let out_topic = Topic::new("c8y/s/us")?;
+    let err_topic = Topic::new("tegde/errors")?;
 
     let mqtt = Client::connect(name).await?;
     let mut errors = mqtt.subscribe_errors();
@@ -15,7 +15,7 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
         }
     });
 
-    let mut messages = mqtt.subscribe(&in_topic).await?;
+    let mut messages = mqtt.subscribe(in_topic.filter()).await?;
     while let Some(message) = messages.next().await {
         match translate(&message.payload) {
             Ok(translation) => mqtt.publish(Message::new(&out_topic, translation)).await?,
