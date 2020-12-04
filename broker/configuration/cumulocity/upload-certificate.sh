@@ -1,11 +1,12 @@
-CERT_FILE=$1
-C8Y=$2
-TENANT=$3
-USER=$4
+DEVICE=$1
+CERT_FILE=$2
+C8Y=$3
+TENANT=$4
+USER=$5
 
-if [ -z "$CERT_FILE" -o -z "$C8Y" -o -z "$TENANT" -o -z "$USER" -o "$#" -ne 4 ]
+if [ -z "$DEVICE" -o -z "$CERT_FILE" -o -z "$C8Y" -o -z "$TENANT" -o -z "$USER" -o "$#" -ne 5 ]
 then
-    echo usage: $0 CERT_FILE C8Y_URL TENANT USER
+    echo usage: $0 DEVICE_ID CERT_FILE C8Y_URL TENANT USER
     echo
     echo Upload the certificate CERT_FILE to c8y.
     exit 1
@@ -29,7 +30,6 @@ read PASSWORD
 stty echo
 echo
 HASH=$(echo -n $TENANT/$USER:$PASSWORD | base64)
-
 
 ### Upload request
 
