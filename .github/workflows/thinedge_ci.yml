@@ -19,15 +19,11 @@ jobs:
          include:
           - os: ubuntu-latest
                                              
-          - os: self-hosted             
+          - os: Raspbian32            
+
+          - os: Ubuntu20.04  
 
      steps:
       - uses: actions/checkout@v2
-      - name: Format
-        run: cargo fmt
-      - name: Lint Checking
-        run: cargo clippy  
-      - name: Run tests
-        run: cargo test --verbose
-      - name: Build
-        run: cargo build --release
+      - name: Test and Build script 
+        run:  bash  ./scripts/test_build.sh
