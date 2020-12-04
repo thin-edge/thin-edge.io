@@ -74,6 +74,9 @@ impl Client {
             .map_err(Error::client_error)
     }
 
+    /// Process all the MQTT events
+    /// - broadcasting the incoming messages to the message sender,
+    /// - broadcasting the errors to the error sender.
     async fn bg_process(
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
@@ -82,12 +85,12 @@ impl Client {
         loop {
             match event_loop.poll().compat().await {
                 Err(err) => {
-                    // The sender can only fail if there is no listener
+                    // The message sender can only fail if there is no listener
                     // So we simply discard any sender error
                     let _ = error_sender.send(Error::connection_error(err));
                 }
                 Ok(Incoming(Publish(msg))) => {
-                    // The sender can only fail if there is no listener
+                    // The message sender can only fail if there is no listener
                     // So we simply discard any sender error
                     let _ = message_sender.send(Message {
                         topic: Topic::new(&msg.topic),
@@ -153,16 +156,22 @@ impl MessageStream {
         rumqttc::matches(&message.topic.name, &self.filter.name)
     }
 
+    /// Return the next message received from MQTT for that subscription, if any.
+    /// - Return None when the MQTT connection has been closed
+    /// - If too many messages have been received since the previous call to `next()`
+    ///   these messages are discarded, and an `Error::MessagesSkipped{lag}`
+    ///   is broadcast to the error stream.
     pub async fn next(&mut self) -> Option<Message> {
         loop {
             match self.receiver.recv().await {
-                Err(broadcast::error::RecvError::Closed) => return None,
                 Ok(message) if self.accept(&message) => return Some(message),
                 Ok(_) => continue,
-                Err(err) => {
-                    // The sender can only fail if there is no listener
+                Err(broadcast::error::RecvError::Closed) => return None,
+                Err(broadcast::error::RecvError::Lagged(lag)) => {
+                    // The error is forwarded to the client.
+                    // The error sender can only fail if there is no listener
                     // So we simply discard any sender error
-                    let _ = self.error_sender.send(Error::stream_error(err));
+                    let _ = self.error_sender.send(Error::messages_skipped(lag));
                     continue;
                 }
             }
@@ -179,19 +188,16 @@ impl ErrorStream {
         ErrorStream { receiver }
     }
 
+    /// Return the next MQTT error, if any
+    /// - Return None when the MQTT connection has been closed
+    /// - Return an `Error::ErrorsSkipped{lag}`
+    ///   if too many errors have been received since the previous call to `next()`
+    ///   and have been discarded.
     pub async fn next(&mut self) -> Option<Error> {
-        loop {
-            match self.receiver.recv().await {
-                Err(broadcast::error::RecvError::Closed) => return None,
-                Ok(error) => return Some(error),
-                Err(broadcast::error::RecvError::Lagged(lag)) => {
-                    eprintln!(
-                        "ERROR the error stream is not consumed fast enough: lag of {} messages",
-                        lag
-                    );
-                    continue;
-                }
-            }
+        match self.receiver.recv().await {
+            Ok(error) => Some(error),
+            Err(broadcast::error::RecvError::Closed) => None,
+            Err(broadcast::error::RecvError::Lagged(lag)) => Some(Error::errors_skipped(lag)),
         }
     }
 }
@@ -200,7 +206,8 @@ impl ErrorStream {
 pub enum Error {
     ClientError(String),
     ConnectionError(String),
-    StreamError(String),
+    MessagesSkipped { lag: u64 },
+    ErrorsSkipped { lag: u64 },
 }
 
 impl fmt::Display for Error {
@@ -208,7 +215,16 @@ impl fmt::Display for Error {
         match *self {
             Error::ClientError(ref err) => write!(f, "MQTT client error: {}", err),
             Error::ConnectionError(ref err) => write!(f, "MQTT connection error: {}", err),
-            Error::StreamError(ref err) => write!(f, "Stream error: {}", err),
+            Error::MessagesSkipped { lag } => write!(
+                f,
+                "The receiver lagged too far behind : {} messages skipped",
+                lag
+            ),
+            Error::ErrorsSkipped { lag } => write!(
+                f,
+                "The error receiver lagged too far behind : {} errors skipped",
+                lag
+            ),
         }
     }
 }
@@ -222,7 +238,10 @@ impl Error {
         Error::ConnectionError(format!("{}", err))
     }
 
-    fn stream_error(err: broadcast::error::RecvError) -> Error {
-        Error::ConnectionError(format!("{}", err))
+    fn messages_skipped(lag: u64) -> Error {
+        Error::MessagesSkipped { lag }
+    }
+    fn errors_skipped(lag: u64) -> Error {
+        Error::ErrorsSkipped { lag }
     }
 }
