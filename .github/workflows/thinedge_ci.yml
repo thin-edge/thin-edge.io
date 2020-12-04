@@ -19,7 +19,9 @@ jobs:
          include:
           - os: ubuntu-latest
                                              
-          - os: self-hosted             
+          - os: Raspbian32            
+
+          - os: Ubuntu20.04  
 
      steps:
       - uses: actions/checkout@v2
