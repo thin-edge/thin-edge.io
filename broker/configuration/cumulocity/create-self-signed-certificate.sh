@@ -49,13 +49,7 @@ openssl req -config <(echo "$CONFIG") -new -nodes -x509 -days 365 -extensions v3
 
 if [ -f $CER_PATH ]
 then
-    if (file $CER_PATH | grep -q PEM)
-    then
-       echo "[OK] The device certificate is stored in $CER_PATH"
-    else
-       echo "[ERROR] The file $CER_PATH is not a certificate: $(file $CER_PATH)"
-       exit 1
-    fi
+    echo "[OK] The device certificate is stored in $CER_PATH"
 else
    echo "[ERROR] No device certificate has been created"
    exit 1
