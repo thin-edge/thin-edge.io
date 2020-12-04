@@ -49,16 +49,16 @@ impl Client {
             .map_err(Error::client_error)
     }
 
-    pub async fn subscribe(&self, topic: &Topic) -> Result<MessageStream, Error> {
+    pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
         let qos = QoS::AtLeastOnce;
         self.mqtt_client
-            .subscribe(&topic.name, qos)
+            .subscribe(&filter.pattern, qos)
             .compat() // required because rumqtt uses tokio 0.2, not 0.3 as we do
             .await
             .map_err(Error::client_error)?;
 
         Ok(MessageStream::new(
-            topic.clone(),
+            filter,
             self.message_sender.subscribe(),
             self.error_sender.clone(),
         ))
@@ -95,11 +95,12 @@ impl Client {
                     // The message sender can only fail if there is no listener
                     // So we simply discard any sender error
                     let _ = message_sender.send(Message {
-                        topic: Topic::new(&msg.topic),
+                        topic: Topic::incoming(&msg.topic),
                         payload: msg.payload.to_vec(),
                     });
                 }
-                Ok(Event::Incoming(Incoming::Disconnect)) | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                Ok(Event::Incoming(Incoming::Disconnect))
+                | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
                     break;
                 }
                 _ => (),
@@ -114,9 +115,48 @@ pub struct Topic {
 }
 
 impl Topic {
-    pub fn new(name: &str) -> Topic {
+    /// Check if the topic name is valid and build a new topic.
+    pub fn new(name: &str) -> Result<Topic, Error> {
+        let name = String::from(name);
+        if rumqttc::valid_topic(&name) {
+            Ok(Topic { name })
+        } else {
+            Err(Error::InvalidTopic { name })
+        }
+    }
+
+    /// Build a new topic, assuming the name is valid since received from mqtt.
+    fn incoming(name: &str) -> Topic {
         let name = String::from(name);
         Topic { name }
+    }
+
+    pub fn filter(&self) -> TopicFilter {
+        TopicFilter {
+            pattern: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TopicFilter {
+    pub pattern: String,
+}
+
+impl TopicFilter {
+    /// Check if the pattern is valid and build a new topic filter.
+    pub fn new(pattern: &str) -> Result<TopicFilter, Error> {
+        let pattern = String::from(pattern);
+        if rumqttc::valid_filter(&pattern) {
+            Ok(TopicFilter { pattern })
+        } else {
+            Err(Error::InvalidFilter { pattern })
+        }
+    }
+
+    /// Check if the given topic matches this filter pattern.
+    fn accept(&self, topic: &Topic) -> bool {
+        rumqttc::matches(&topic.name, &self.pattern)
     }
 }
 
@@ -139,14 +179,14 @@ impl Message {
 }
 
 pub struct MessageStream {
-    filter: Topic,
+    filter: TopicFilter,
     receiver: broadcast::Receiver<Message>,
     error_sender: broadcast::Sender<Error>,
 }
 
 impl MessageStream {
     fn new(
-        filter: Topic,
+        filter: TopicFilter,
         receiver: broadcast::Receiver<Message>,
         error_sender: broadcast::Sender<Error>,
     ) -> MessageStream {
@@ -157,10 +197,6 @@ impl MessageStream {
         }
     }
 
-    fn accept(&self, message: &Message) -> bool {
-        rumqttc::matches(&message.topic.name, &self.filter.name)
-    }
-
     /// Return the next message received from MQTT for that subscription, if any.
     /// - Return None when the MQTT connection has been closed
     /// - If too many messages have been received since the previous call to `next()`
@@ -169,7 +205,7 @@ impl MessageStream {
     pub async fn next(&mut self) -> Option<Message> {
         loop {
             match self.receiver.recv().await {
-                Ok(message) if self.accept(&message) => return Some(message),
+                Ok(message) if self.filter.accept(&message.topic) => return Some(message),
                 Ok(_) => continue,
                 Err(broadcast::error::RecvError::Closed) => return None,
                 Err(broadcast::error::RecvError::Lagged(lag)) => {
@@ -209,6 +245,8 @@ impl ErrorStream {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
+    InvalidTopic { name: String },
+    InvalidFilter { pattern: String },
     ClientError(String),
     ConnectionError(String),
     MessagesSkipped { lag: u64 },
@@ -218,6 +256,8 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::InvalidTopic { ref name } => write!(f, "Invalid topic name: {}", name),
+            Error::InvalidFilter { ref pattern } => write!(f, "Invalid topic filter: {}", pattern),
             Error::ClientError(ref err) => write!(f, "MQTT client error: {}", err),
             Error::ConnectionError(ref err) => write!(f, "MQTT connection error: {}", err),
             Error::MessagesSkipped { lag } => write!(
@@ -248,5 +288,37 @@ impl Error {
     }
     fn errors_skipped(lag: u64) -> Error {
         Error::ErrorsSkipped { lag }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_valid_topic() {
+        assert_eq!(Topic::new("temp").err(), None);
+        assert_eq!(Topic::new("temp/device-12").err(), None);
+    }
+
+    #[test]
+    fn check_invalid_topic() {
+        assert_eq!(Topic::new("/temp/+").ok(), None);
+        assert_eq!(Topic::new("/temp/#").ok(), None);
+    }
+
+    #[test]
+    fn check_valid_topic_filter() {
+        assert_eq!(TopicFilter::new("a/b/c").err(), None);
+        assert_eq!(TopicFilter::new("a/b/#").err(), None);
+        assert_eq!(TopicFilter::new("a/b/+").err(), None);
+        assert_eq!(TopicFilter::new("a/+/b").err(), None);
+    }
+
+    #[test]
+    fn check_invalid_topic_filter() {
+        assert_eq!(TopicFilter::new("").ok(), None);
+        assert_eq!(TopicFilter::new("/a/#/b").ok(), None);
+        assert_eq!(TopicFilter::new("/a/#/+").ok(), None);
     }
 }

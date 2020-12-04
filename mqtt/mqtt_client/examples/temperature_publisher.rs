@@ -9,9 +9,9 @@ const C8Y_TPL_TEMPERATURE: &str = "211";
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
     let mqtt = Client::connect("temperature").await?;
-    let c8y_msg = Topic::new("c8y/s/us");
-    let c8y_cmd = Topic::new("c8y/s/ds");
-    let c8y_err = Topic::new("c8y/s/e");
+    let c8y_msg = Topic::new("c8y/s/us")?;
+    let c8y_cmd = Topic::new("c8y/s/ds")?;
+    let c8y_err = Topic::new("c8y/s/e")?;
 
     let mut errors = mqtt.subscribe_errors();
     tokio::spawn(async move {
@@ -20,7 +20,7 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
         }
     });
 
-    let mut messages = mqtt.subscribe(&c8y_cmd).await?;
+    let mut messages = mqtt.subscribe(c8y_cmd.filter()).await?;
     tokio::spawn(async move {
         while let Some(message) = messages.next().await {
             if message.topic == c8y_cmd {
