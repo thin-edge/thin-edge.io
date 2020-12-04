@@ -1,7 +1,6 @@
 . get-credentials.sh
 
 DEVICE=$1
-DOCKER=no
 
 if [ -z "$DEVICE" ]
 then
@@ -24,22 +23,13 @@ fi
 ln -f $DEVICE.key edge.key 
 ln -f $DEVICE.crt edge.crt 
 
-if [ $DOCKER = "yes" ]
-then
-    LOG="file /app/mosquitto.log"
-    KEYS=/keys
-    APP=/app
-    BIND_ADDRESS="# bind_address 127.0.0.1 is set on 'docker run' with '-p 127.0.0.1:1883:1883'"
-else
-    LOG=stderr
-    KEYS=$PWD
-    APP=/tmp
-    BIND_ADDRESS="bind_address 127.0.0.1"
-fi
+LOG=stderr
+KEYS=$PWD
+APP=/tmp
 
 cat >mosquitto.conf <<EOF
 # Only local connections are accepted. No authentication is required.
-$BIND_ADDRESS
+bind_address 127.0.0.1
 allow_anonymous true
 
 # Logs

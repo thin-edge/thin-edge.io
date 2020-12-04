@@ -18,7 +18,7 @@ Once configured, the bridge:
 
 The scripts might be used independently.
 * `connect-c8y.sh`: main script
-* `create-mosquitto-conf.s`: creates the mosquitto configuration (can also be used to configure a Docker image for mosquitto).
+* `create-mosquitto-conf.s`: creates the mosquitto configuration.
 * `create-self-signed-certificate.sh`: creates a self-signed certificate.
 * `enable-trusted-certificates.sh`: enables the 'Trusted Certificates' pannel in Cumulocity (TEMP: the panel is not enabled yet per default on the latest C8Y).
 * `upload-certificate.sh`: uploads a certificate to be trusted by Cumulocity.
