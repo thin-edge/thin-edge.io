@@ -1,31 +1,40 @@
-. get-credentials.sh
+C8Y_URL=$1
+DEVICE_ID=$2
+DEVICE_CERT=$3
+DEVICE_KEY=$4
 
-DEVICE=$1
-
-if [ -z "$DEVICE" ]
+if [ -z "$C8Y_URL" -o -z "$DEVICE_ID" -o -z "$DEVICE_CERT" -o -z "$DEVICE_KEY" -o "$#" -ne 4 ]
 then
-    echo usage: $0 device-identifier
+    echo usage: $0 C8Y_URL DEVICE_ID DEVICE_CERT DEVICE_KEY
     echo
-    echo Configure mosquitto to use this device certificate.
-    exit 1
-fi
-if [ ! -f $DEVICE.crt ]
-then
-    echo Certificate file $DEVICE.crt not found.
-    exit 1
-fi
-if [ ! -f $DEVICE.key ]
-then
-    echo Private key file $DEVICE.key not found.
+    echo Configure mosquitto to use the given certificate to connect c8y.
     exit 1
 fi
 
-ln -f $DEVICE.key edge.key 
-ln -f $DEVICE.crt edge.crt 
+if [ ! -f $DEVICE_CERT ]
+then
+    echo Certificate file $DEVICE_CERT not found.
+    exit 1
+fi
+if [ ! -f $DEVICE_KEY ]
+then
+    echo Private key file $DEVICE_KEY not found.
+    exit 1
+fi
+if ! (file $DEVICE_CERT | grep -q PEM)
+then
+    echo "[ERROR] The file $DEVICE_CERT is not a certificate: $(file $DEVICE_CERT)"
+    exit 1
+fi
+if !(openssl x509 -in $DEVICE_CERT -noout -subject | grep -q $DEVICE_ID)
+then
+    echo "The certificate $DEVICE_CERT doesn't match the identifier $DEVICE_ID."
+    exit 1
+fi
 
-LOG=stderr
-KEYS=$PWD
-APP=/tmp
+C8Y_CERT=$PWD/c8y-trusted-root-certificates.pem
+LOG=stdout
+DATA=/tmp
 
 cat >mosquitto.conf <<EOF
 # Only local connections are accepted. No authentication is required.
@@ -43,9 +52,9 @@ log_type subscribe         # log subscriptions
 log_type unsubscribe
 connection_messages true   # log connections and disconnections
 
-# Connection, subscription and message data are written to the disk in $APP/mosquitto.db
+# Connection, subscription and message data are written to the disk in $DATA/mosquitto.db
 persistence true
-persistence_location $APP/
+persistence_location $DATA/
 persistence_file mosquitto.db
 autosave_interval 60          # saved every minute
 
@@ -56,11 +65,11 @@ max_queued_messages   20  # per client
 
 # C8Y Bridge
 connection edge_to_c8y
-address mqtt.$C8Y:8883
-bridge_cafile $KEYS/c8y-trusted-root-certificates.pem
-remote_clientid $DEVICE
-bridge_certfile $KEYS/edge.crt
-bridge_keyfile $KEYS/edge.key
+address mqtt.$C8Y_URL:8883
+bridge_cafile $C8Y_CERT
+remote_clientid $DEVICE_ID
+bridge_certfile $DEVICE_CERT
+bridge_keyfile $DEVICE_KEY
 try_private false
 start_type automatic
 
