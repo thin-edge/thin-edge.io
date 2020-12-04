@@ -1,11 +1,28 @@
 DEVICE=$1
+KEY_PATH=$2
+CER_PATH=$3
 
-if [ -z "$DEVICE" ]
+if [ -z "$DEVICE" -o -z "$KEY_PATH" -o -z "$CER_PATH" -o "$#" -ne 3 ]
 then
-    echo usage: $0 device-identifier
+    echo usage: $0 IDENTIFIER KEY-PATH CERT-PATH
     echo
-    echo Generates a self signed certificate for the device
-    echo using the device identifier as its common name.
+    echo Generates a self signed certificate
+    echo using the given IDENTIFIER as common name.
+    echo
+    echo The certificate is stored in CERT-PATH
+    echo The private key is stored in KEY-PATH
+    exit 1
+fi
+
+if [ -f $CER_PATH ]
+then
+    echo "[ERROR] The file $CER_PATH already exists"
+    exit 1
+fi
+
+if [ -f $KEY_PATH ]
+then
+    echo "[ERROR] The file $KEY_PATH already exists"
     exit 1
 fi
 
@@ -21,11 +38,25 @@ prompt = no
 
 [ dist_name ]
 commonName = $DEVICE
-organizationName = 'SAG C8Y'
-organizationalUnitName	= 'Thin Edge'
+organizationName = 'Thin Edge'
+organizationalUnitName	= 'Test Device'
 
 [ v3_ca ]
 basicConstraints = CA:true
 "
 
-openssl req -config <(echo "$CONFIG") -new -nodes -x509 -days 365 -extensions v3_ca -keyout $DEVICE.key -out $DEVICE.crt
+openssl req -config <(echo "$CONFIG") -new -nodes -x509 -days 365 -extensions v3_ca -keyout $KEY_PATH -out $CER_PATH
+
+if [ -f $CER_PATH ]
+then
+    if (file $CER_PATH | grep -q PEM)
+    then
+       echo "[OK] The device certificate is stored in $CER_PATH"
+    else
+       echo "[ERROR] The file $CER_PATH is not a certificate: $(file $CER_PATH)"
+       exit 1
+    fi
+else
+   echo "[ERROR] No device certificate has been created"
+   exit 1
+fi
