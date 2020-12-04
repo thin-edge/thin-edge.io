@@ -1,5 +1,7 @@
 use core::fmt;
-use rumqttc::Event::Incoming;
+use rumqttc::Event;
+use rumqttc::Incoming;
+use rumqttc::Outgoing;
 use rumqttc::Packet::Publish;
 use rumqttc::QoS;
 use tokio::sync::broadcast;
@@ -89,13 +91,16 @@ impl Client {
                     // So we simply discard any sender error
                     let _ = error_sender.send(Error::connection_error(err));
                 }
-                Ok(Incoming(Publish(msg))) => {
+                Ok(Event::Incoming(Publish(msg))) => {
                     // The message sender can only fail if there is no listener
                     // So we simply discard any sender error
                     let _ = message_sender.send(Message {
                         topic: Topic::new(&msg.topic),
                         payload: msg.payload.to_vec(),
                     });
+                }
+                Ok(Event::Incoming(Incoming::Disconnect)) | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                    break;
                 }
                 _ => (),
             }
