@@ -2,34 +2,51 @@
 
 Here is a set of scripts to configure a MQTT channel between a device and Cumulocity.
 
-The main script `connect-c8y.sh`:
-* generates a PEM certificate for the device,
-* ensures that this certificate is trusted by Cumulocity,
-* configures the mosquitto MQTT broker to establish a secured bridge from the device to Cumulocity.
+If you have no certificate for you device, you can create one for testing purpose:
+
+```
+./create-self-signed-certificate.sh device-xyz xyz.crt xyz.key
+```
+
+Since a test certificate is self signed, you need to upload it on Cumulocity to be trusted:
+
+```
+./upload-certificate.sh device-xyz xyz.crt latest.stage.c8y.io t398942 alice
+```
+
+The certificate is then used to configure a secured bridge between the local MQTT broker and the Cumulocity MQTT endpoint.
+
+```
+./create-mosquitto-conf.sh latest.stage.c8y.io device-xyz xyz.crt xyz.key
+```
+
+You have then to run mosquitto with that configuration:
+
+```
+mosquitto -c mosquitto.conf 
+```
+
+The bridge can be tested with:
+```
+./test-bridge.sh
+```
 
 Once configured, the bridge:
 * ensures that the cloud tenant is authenticated each time the bridge is open,
-* uses the device certificate to authenticate the device
-  (a password is required during the initialisation but is never used for MQTT),
+* uses the device certificate to authenticate the device,
 * let any local client connects without any authentication,
 * forwards the measurements, events, alarms and templates published on `c8y/#` topics to Cumulocity IoT.
 * forwards the responses and operations received from Cumulocity to the corresponding `c8y/#` topics. 
 * let the local clients use the non-Cumulocity topics as local communication channels.
 
-The scripts might be used independently.
-* `connect-c8y.sh`: main script
-* `create-mosquitto-conf.s`: creates the mosquitto configuration.
-* `create-self-signed-certificate.sh`: creates a self-signed certificate.
-* `upload-certificate.sh`: uploads a certificate to be trusted by Cumulocity.
-* `test-bridge.sh`: is the bridge working properly?
-* `get-credentials.sh`: kind of hack to pass the C8Y credentials from one script to another
-  (WARNING: your credentials are cached in the file `.credentials` using http basic authentication).
+
+See [Device integration using MQTT](https://cumulocity.com/guides/10.7.0-beta/device-sdk/mqtt/#device-certificates)
 
 ## Pre-requisite
 
 A cumulocity tenant, user and password, plus an identifier for the device:
 
-* C8Y: the c8y endpoint
+* C8Y: the c8y domain
 * TENANT: the c8y tenant ID
 * USER: the c8y user
 * PASSWORD: ...
@@ -37,30 +54,10 @@ A cumulocity tenant, user and password, plus an identifier for the device:
 
 Notes:
 
-* __Warning__: for certificate management, is required version 10.7.0 onwards of Cumulocity.
-* The scripts assume that mosquitto is installed on the devices.
-
-## Connecting the device to Cumulocity
-
-The script `connect-c8y.sh` requires the device identifier as a single argument.
-It asks for the connection information unless previously cached in the `.credentials` file.
-
-```
-$ ./connect-c8y.sh my-edge-device
-C8Y:latest.stage.c8y.io    
-TENANT:t40270236
-USER:didier
-PASSWORD:
-Creating the certificate
-Creating mosquitto.conf
-Uploading the certificate on Cumulocity
-```
-
-Should have been created:
-* a device certificate, named after the device identifier (here `my-edge-device.crt`),
-* a device private key (here `my-edge-device.key`),
-* a trusted certificate on Cumulocity (using the device identifier),
-* a `mosquitto.conf` configuration file using the freshly created certificate to authenticate the device.
+* Cumulocity version 10.7.0 onwards is required for certificate management.
+* The scripts assume that mosquitto is installed on the device.
+* The user and password are only used when a test certificate is generated,
+  this certificate having to be uploaded on Cumulocity.
 
 ## Running the bridge
 
