@@ -1,10 +1,10 @@
 DEVICE=$1
-KEY_PATH=$2
-CER_PATH=$3
+CER_PATH=$2
+KEY_PATH=$3
 
-if [ -z "$DEVICE" -o -z "$KEY_PATH" -o -z "$CER_PATH" -o "$#" -ne 3 ]
+if [ -z "$DEVICE" -o -z "$CER_PATH" -o -z "$KEY_PATH" -o "$#" -ne 3 ]
 then
-    echo usage: $0 IDENTIFIER KEY-PATH CERT-PATH
+    echo usage: $0 IDENTIFIER CERT-PATH KEY-PATH
     echo
     echo Generates a self signed certificate
     echo using the given IDENTIFIER as common name.
