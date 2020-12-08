@@ -1,3 +1,17 @@
+//! A library to connect the local MQTT bus, publish messages and subscribe topics.
+//!
+//! ```
+//! use mqtt_client::{Client,Message,Topic};
+//!
+//! #[tokio::main]
+//! async fn main (){
+//!     let mqtt = Client::connect("temperature").await.unwrap();
+//!     let c8y_msg = Topic::new("c8y/s/us").unwrap();
+//!     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
+//!     mqtt.disconnect().await.unwrap();
+//! }
+//! ```
+
 use core::fmt;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -7,6 +21,21 @@ use rumqttc::QoS;
 use tokio::sync::broadcast;
 use tokio_compat_02::FutureExt;
 
+/// A connection to the local MQTT bus.
+///
+/// The host and port are implied: a connection can only be open on the localhost, port 1883.
+///
+/// ```
+/// use mqtt_client::{Client,Message,Topic};
+///
+/// #[tokio::main]
+/// async fn main () {
+///     let mqtt = Client::connect("temperature").await.unwrap();
+///     let c8y_msg = Topic::new("c8y/s/us").unwrap();
+///     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
+///     mqtt.disconnect().await.unwrap();
+/// }
+/// ```
 pub struct Client {
     pub name: String,
     mqtt_client: rumqttc::AsyncClient,
@@ -15,6 +44,31 @@ pub struct Client {
 }
 
 impl Client {
+    /// Open a connection to the local MQTT bus, using the given name to register an MQTT session.
+    ///
+    /// Reusing the same session name on each connection allows a client
+    /// to have its subscriptions persisted by the broker
+    /// so messages sent while the client is disconnected
+    /// will be resent on its re-connection.
+    ///
+    /// ```
+    /// use mqtt_client::{Client,Topic};
+    ///
+    /// #[tokio::main]
+    /// async fn main () {
+    ///     let c8y_cmd = Topic::new("c8y/s/ds").unwrap();
+    ///
+    ///     let mqtt = Client::connect("temperature").await.unwrap();
+    ///     let mut commands = mqtt.subscribe(c8y_cmd.filter()).await.unwrap();
+    ///     // process some commands and disconnect
+    ///     mqtt.disconnect().await.unwrap();
+    ///
+    ///     // wait a while and reconnect
+    ///     let mqtt = Client::connect("temperature").await.unwrap();
+    ///     let mut commands = mqtt.subscribe(c8y_cmd.filter()).await.unwrap();
+    ///     // process the messages even those sent during the pause
+    /// }
+    /// ```
     pub async fn connect(name: &str) -> Result<Client, Error> {
         let name = String::from(name);
         let mut mqtt_options = rumqttc::MqttOptions::new(&name, "localhost", 1883);
@@ -39,6 +93,8 @@ impl Client {
         })
     }
 
+    /// Publish a message on the local MQTT bus.
+    ///
     pub async fn publish(&self, message: Message) -> Result<(), Error> {
         let qos = QoS::AtLeastOnce;
         let retain = false;
@@ -49,6 +105,7 @@ impl Client {
             .map_err(Error::client_error)
     }
 
+    /// Subscribe to the messages published on the given topics
     pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
         let qos = QoS::AtLeastOnce;
         self.mqtt_client
@@ -64,10 +121,26 @@ impl Client {
         ))
     }
 
+    /// Subscribe to the errors raised asynchronously.
+    ///
+    /// These errors include connection errors.
+    /// When the system fails to establish an MQTT connection with the local broker,
+    /// or when the current connection is lost, the system tries in the background to reconnect.
+    /// the client. Each connection error is forwarded to the `ErrorStream` returned by `subscribe_errors()`.
+    ///
+    /// These errors also include internal client errors.
+    /// Such errors are related to unread messages on the subscription channels.
+    /// If a client subscribes to a topic but fails to consume the received messages,
+    /// these messages will be dropped and an `Error::MessagesSkipped{lag}` will be published
+    /// in the `ErrorStream` returned by `subscribe_errors()`.
+    ///
+    /// If the `ErrorStream` itself is not read fast enough (i.e there are too many in-flight error messages)
+    /// these error messages will be dropped and replaced by an `Error::ErrorsSkipped{lag}`.
     pub fn subscribe_errors(&self) -> ErrorStream {
         ErrorStream::new(self.error_sender.subscribe())
     }
 
+    /// Disconnect the client and drop it.
     pub async fn disconnect(self) -> Result<(), Error> {
         self.mqtt_client
             .disconnect()
@@ -109,6 +182,7 @@ impl Client {
     }
 }
 
+/// An MQTT topic
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Topic {
     pub name: String,
@@ -131,6 +205,7 @@ impl Topic {
         Topic { name }
     }
 
+    /// Build a topic filter filtering only that topic
     pub fn filter(&self) -> TopicFilter {
         TopicFilter {
             pattern: self.name.clone(),
@@ -138,6 +213,7 @@ impl Topic {
     }
 }
 
+/// An MQTT topic filter
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TopicFilter {
     pub pattern: String,
@@ -160,6 +236,7 @@ impl TopicFilter {
     }
 }
 
+/// A message to be sent to or received from MQTT
 #[derive(Debug, Clone)]
 pub struct Message {
     pub topic: Topic,
@@ -178,6 +255,7 @@ impl Message {
     }
 }
 
+/// A stream of messages matching a topic filter
 pub struct MessageStream {
     filter: TopicFilter,
     receiver: broadcast::Receiver<Message>,
@@ -220,6 +298,7 @@ impl MessageStream {
     }
 }
 
+/// A stream of errors received asynchronously by the MQTT connection
 pub struct ErrorStream {
     receiver: broadcast::Receiver<Error>,
 }
@@ -243,6 +322,7 @@ impl ErrorStream {
     }
 }
 
+/// An MQTT related error
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     InvalidTopic { name: String },
