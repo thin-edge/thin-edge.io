@@ -11,7 +11,7 @@ repository = "https://github.com/tedge"
 license-file = "LICENCE.txt"
 
 [dependencies]
-clap = "~2.33.3"
+clap = "^2.33.3"
 
 [profile.release]
 lto = true
