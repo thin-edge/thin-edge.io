@@ -12,5 +12,7 @@ rumqttc = "0.2.0"
 tokio-compat-02 = "0.1.2"  # Required because rumqttc use tokio 0.2
 
 [dev-dependencies]
+tokio-test = "0.3.0"
+#rumqttd = "0.1.0"
 rand = "0.7.3"
 json = "0.12.4"
