@@ -237,7 +237,7 @@ impl TopicFilter {
 }
 
 /// A message to be sent to or received from MQTT
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
     pub payload: Vec<u8>,
@@ -355,6 +355,10 @@ impl fmt::Display for Error {
 }
 
 impl Error {
+    pub fn into_string(self) -> String {
+        format!("{}", self)
+    }
+
     fn client_error(err: rumqttc::ClientError) -> Error {
         Error::ClientError(format!("{}", err))
     }
