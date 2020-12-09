@@ -1,0 +1,17 @@
+[package]
+name = "tedge"
+version = "0.1.0"
+authors = ["lw <lukasz.woznicki@softwareage.com>"]
+edition = "2018"
+
+readme = "README.md"
+homepage = "https://tedge"
+repository = "https://github.com/tedge"
+
+license-file = "LICENCE.txt"
+
+[dependencies]
+clap = "~2.33.3"
+
+[profile.release]
+lto = true
