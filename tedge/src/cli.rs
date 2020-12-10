@@ -12,7 +12,7 @@ use structopt::StructOpt;
 pub struct Opt {
     // The number of occurrences of the `v/verbose` flag
     /// Verbose mode (-v, -vv, -vvv, etc.)
-    #[structopt(short, long, parse(from_occurrences))]
+    #[structopt(short, parse(from_occurrences))]
     verbose: u8,
 
     /// Use given config file
@@ -20,29 +20,29 @@ pub struct Opt {
     config: PathBuf,
 
     #[structopt(subcommand)]
-    config_command: Config,
+    subcommand: Subcommand,
 }
 
 #[derive(StructOpt, Debug)]
-enum Config {
+enum Subcommand {
     /// Configure Thin Edge.
-    config {
+    Config {
         #[structopt(subcommand)]
-        list: ConfigSubcommands,
+        list: ConfigSubcommand,
     },
 }
 
 #[derive(StructOpt, Debug)]
-enum ConfigSubcommands {
+enum ConfigSubcommand {
     /// List all.
-    list,
+    List,
 
     /// Add a new variable (overwrite the value if the key exists).
-    set,
+    Set,
 
     /// Remove a variable.
-    remove,
+    Remove,
 
     /// Get value.
-    get,
+    Get,
 }
