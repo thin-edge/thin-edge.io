@@ -1,21 +1,47 @@
-mod cli;
+use structopt::StructOpt;
 
-use crate::cli::Options;
+mod cli;
 
 /**
 tedge 0.1.0
+
+
 USAGE:
-    tedge [FLAGS] [SUBCOMMAND]
+    tedge [FLAGS] --config <config> <SUBCOMMAND>
+
 FLAGS:
     -h, --help       Prints help information
-    -v               Increases the level of verbosity (the max level is -vvv)
     -V, --version    Prints version information
+    -v, --verbose    Verbose mode (-v, -vv, -vvv, etc.)
+
+OPTIONS:
+    -c, --config <config>    Use given config file
+
 SUBCOMMANDS:
-    certificate    Initialize all Thin Edge cert related configuration only by one command.
-    help           Prints this message or the help of the given subcommand(s)
+    config    Configure Thin Edge
+    help      Prints this message or the help of the given subcommand(s)
+
+
+
+tedge-config 0.1.0
+Configure Thin Edge
+
+USAGE:
+    tedge --config <config> config <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+SUBCOMMANDS:
+    get       Get value
+    help      Prints this message or the help of the given subcommand(s)
+    list      List all
+    remove    Remove a variable
+    set       Add a new variable (overwrite the value if the key exists)
+
 */
 
 fn main() {
-    // Load command line options.
-    let options = Options::new();
+    let opt = cli::Opt::from_args();
 }

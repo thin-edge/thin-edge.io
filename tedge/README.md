@@ -1,21 +1,22 @@
 # thin-edge-cli
 
-
-
 tedge 0.1.0
-
 
 USAGE:
 
-    tedge [FLAGS] [SUBCOMMAND]
+        tedge [FLAGS] --config <config> <SUBCOMMAND>
 
 FLAGS:
 
-    -h, --help       Prints help information
-    -v               Increases the level of verbosity (the max level is -vvv)
-    -V, --version    Prints version information
+        -h, --help Prints help information
+        -V, --version Prints version information
+        -v, --verbose Verbose mode (-v, -vv, -vvv, etc.)
+
+OPTIONS:
+
+        -c, --config <config> Use given config file
 
 SUBCOMMANDS:
 
-    demo    It is to show how to use this cli
-    help    Prints this message or the help of the given subcommand(s)
+        config Configure Thin Edge
+        help Prints this message or the help of the given subcommand(s)
