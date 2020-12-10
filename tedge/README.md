@@ -20,3 +20,8 @@ SUBCOMMANDS:
 
         config Configure Thin Edge
         help Prints this message or the help of the given subcommand(s)
+
+Examples:
+
+        tedge --help
+        tedge config --help
