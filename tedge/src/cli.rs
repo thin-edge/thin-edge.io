@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use structopt::clap;
 use structopt::StructOpt;
 
@@ -15,34 +13,27 @@ pub struct Opt {
     #[structopt(short, parse(from_occurrences))]
     verbose: u8,
 
-    /// Use given config file
-    #[structopt(short, long, parse(from_os_str))]
-    config: PathBuf,
-
     #[structopt(subcommand)]
-    subcommand: Subcommand,
+    tedge_cmd: TEdgeCmd,
 }
 
 #[derive(StructOpt, Debug)]
-enum Subcommand {
+enum TEdgeCmd {
     /// Configure Thin Edge.
-    Config {
-        #[structopt(subcommand)]
-        list: ConfigSubcommand,
-    },
+    Config(ConfigCmd),
 }
 
 #[derive(StructOpt, Debug)]
-enum ConfigSubcommand {
+enum ConfigCmd {
     /// List all.
     List,
 
-    /// Add a new variable (overwrite the value if the key exists).
-    Set,
+    /// Add new value (overwrite the value if the key exists).
+    Set { key: String, value: String },
 
-    /// Remove a variable.
-    Remove,
+    /// Remove value.
+    Remove { key: String },
 
     /// Get value.
-    Get,
+    Get { key: String },
 }

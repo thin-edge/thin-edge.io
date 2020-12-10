@@ -4,17 +4,13 @@ tedge 0.1.0
 
 USAGE:
 
-        tedge [FLAGS] --config <config> <SUBCOMMAND>
+        tedge [FLAGS] <SUBCOMMAND>
 
 FLAGS:
 
         -h, --help Prints help information
         -V, --version Prints version information
         -v, --verbose Verbose mode (-v, -vv, -vvv, etc.)
-
-OPTIONS:
-
-        -c, --config <config> Use given config file
 
 SUBCOMMANDS:
 
