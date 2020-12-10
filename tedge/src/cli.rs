@@ -1,12 +1,13 @@
 use std::path::PathBuf;
-use structopt::clap::{crate_description, crate_name, crate_version};
+
+use structopt::clap;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = crate_name!(),
-    version = crate_version!(),
-    about = crate_description!()
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!()
 )]
 pub struct Opt {
     // The number of occurrences of the `v/verbose` flag
