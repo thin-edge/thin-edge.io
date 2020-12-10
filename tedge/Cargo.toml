@@ -2,15 +2,10 @@
 name = "tedge"
 version = "0.1.0"
 edition = "2018"
-
 readme = "README.md"
 
-repository = "https://github.com/software/tedge"
-
-license = "Apache-2.0"
-
 [dependencies]
-structopt = "0.3"
+structopt = "0.3.21"
 
 [profile.release]
 lto = true
