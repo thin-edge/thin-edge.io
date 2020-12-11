@@ -70,7 +70,7 @@ impl Client {
     ///     // process the messages even those sent during the pause
     /// }
     /// ```
-    pub async fn connect(name: &str, config:&Config) -> Result<Client, Error> {
+    pub async fn connect(name: &str, config: &Config) -> Result<Client, Error> {
         let name = String::from(name);
         let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
         mqtt_options.set_clean_session(false);
@@ -194,7 +194,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             host: String::from("localhost"),
-            port: 1883
+            port: 1883,
         }
     }
 }

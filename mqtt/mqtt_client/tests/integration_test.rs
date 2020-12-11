@@ -1,12 +1,14 @@
-use mqtt_client::{Config,Message,Topic};
+use mqtt_client::{Config, Message, Topic};
 use std::time::Duration;
 use tokio::time::sleep;
 
 #[test]
 fn sending_and_receiving_a_message() {
-
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::Error> {
-        let test_broker = Config { host: String::from("test.mosquitto.org"), port: 1883 };
+        let test_broker = Config {
+            host: String::from("test.mosquitto.org"),
+            port: 1883,
+        };
 
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = test_broker.connect("subscriber").await?;
@@ -22,7 +24,7 @@ fn sending_and_receiving_a_message() {
         }
     };
 
-    let payload= String::from("Hello there!");
+    let payload = String::from("Hello there!");
     match tokio_test::block_on(scenario(payload.clone())) {
         Ok(Some(rcv_message)) => assert_eq!(rcv_message.payload, payload.as_bytes()),
         Ok(None) => panic!("Got no message after 1s"),
