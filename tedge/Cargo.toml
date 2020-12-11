@@ -1,0 +1,12 @@
+[package]
+name = "tedge"
+version = "0.1.0"
+edition = "2018"
+readme = "README.md"
+
+[dependencies]
+structopt = "0.3.21"
+
+[dev-dependencies]
+assert_cmd = "1.0.2"
+predicates = "1.0.5"

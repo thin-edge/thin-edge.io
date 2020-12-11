@@ -1,5 +1,9 @@
 [workspace]
 
 members = [
+    "tedge",
     "tests/testlib",
 ]
+
+[profile.release]
+lto = true
