@@ -6,23 +6,23 @@ DEVICE_KEY=$4
 
 if [ -z "$C8Y_URL" -o -z "$DEVICE_ID" -o -z "$DEVICE_CERT" -o -z "$DEVICE_KEY" -o "$#" -ne 4 ]
 then
-    echo usage: $0 C8Y_URL DEVICE_ID DEVICE_CERT DEVICE_KEY
+    echo "usage: $0 C8Y_URL DEVICE_ID DEVICE_CERT DEVICE_KEY"
     echo
-    echo Configure mosquitto to use the given certificate to connect c8y.
+    echo "Configure mosquitto to use the given certificate to connect c8y."
     exit 1
 fi
 
-if [ ! -f $DEVICE_CERT ]
+if [ ! -f "$DEVICE_CERT" ]
 then
-    echo Certificate file $DEVICE_CERT not found.
+    echo "Certificate file $DEVICE_CERT not found."
     exit 1
 fi
-if [ ! -f $DEVICE_KEY ]
+if [ ! -f "$DEVICE_KEY" ]
 then
-    echo Private key file $DEVICE_KEY not found.
+    echo "Private key file $DEVICE_KEY not found."
     exit 1
 fi
-if ! (file $DEVICE_CERT | grep -q PEM)
+if ! (file "$DEVICE_CERT" | grep -q PEM)
 then
     echo "[ERROR] The file $DEVICE_CERT is not a certificate: $(file $DEVICE_CERT)"
     exit 1

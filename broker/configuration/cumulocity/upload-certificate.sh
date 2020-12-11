@@ -7,19 +7,19 @@ USER=$5
 
 if [ -z "$DEVICE" -o -z "$CERT_FILE" -o -z "$C8Y" -o -z "$TENANT" -o -z "$USER" -o "$#" -ne 5 ]
 then
-    echo usage: $0 DEVICE_ID CERT_FILE C8Y_URL TENANT USER
+    echo "usage: $0 DEVICE_ID CERT_FILE C8Y_URL TENANT USER"
     echo
-    echo Upload the certificate CERT_FILE to c8y.
+    echo "Upload the certificate CERT_FILE to c8y."
     exit 1
 fi
 
-if [ ! -f $CERT_FILE ]
+if [ ! -f "$CERT_FILE" ]
 then
     echo "File not found: $CERT_FILE"
     exit 1
 fi
 
-if ! (file $CERT_FILE | grep -q PEM)
+if ! (file "$CERT_FILE" | grep -q PEM)
 then
     echo "[ERROR] The file $CERT_FILE is not a certificate: $(file $CERT_FILE)"
     exit 1
@@ -30,7 +30,7 @@ stty -echo
 read PASSWORD
 stty echo
 echo
-HASH=$(echo -n $TENANT/$USER:$PASSWORD | base64)
+HASH=$(echo -n "$TENANT/$USER:$PASSWORD" | base64)
 
 ### Upload request
 

@@ -5,23 +5,23 @@ KEY_PATH=$3
 
 if [ -z "$DEVICE" -o -z "$CER_PATH" -o -z "$KEY_PATH" -o "$#" -ne 3 ]
 then
-    echo usage: $0 IDENTIFIER CERT-PATH KEY-PATH
+    echo "usage: $0 IDENTIFIER CERT-PATH KEY-PATH"
     echo
-    echo Generates a self signed certificate
-    echo using the given IDENTIFIER as common name.
+    echo "Generates a self signed certificate"
+    echo "using the given IDENTIFIER as common name."
     echo
-    echo The certificate is stored in CERT-PATH
-    echo The private key is stored in KEY-PATH
+    echo "The certificate is stored in CERT-PATH"
+    echo "The private key is stored in KEY-PATH"
     exit 1
 fi
 
-if [ -f $CER_PATH ]
+if [ -f "$CER_PATH" ]
 then
     echo "[ERROR] The file $CER_PATH already exists"
     exit 1
 fi
 
-if [ -f $KEY_PATH ]
+if [ -f "$KEY_PATH" ]
 then
     echo "[ERROR] The file $KEY_PATH already exists"
     exit 1
@@ -52,6 +52,6 @@ if [ -f $CER_PATH ]
 then
     echo "[OK] The device certificate is stored in $CER_PATH"
 else
-   echo "[ERROR] No device certificate has been created"
-   exit 1
+    echo "[ERROR] No device certificate has been created"
+    exit 1
 fi
