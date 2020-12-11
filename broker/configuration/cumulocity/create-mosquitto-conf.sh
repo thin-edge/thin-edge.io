@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
 C8Y_URL=$1
 DEVICE_ID=$2
-DEVICE_CERT=$3
-DEVICE_KEY=$4
+CERT_PATH=$3
+KEY_PATH=$4
 
-if [ -z "$C8Y_URL" -o -z "$DEVICE_ID" -o -z "$DEVICE_CERT" -o -z "$DEVICE_KEY" -o "$#" -ne 4 ]
+if [ -z "$C8Y_URL" -o -z "$DEVICE_ID" -o -z "$CERT_PATH" -o -z "$KEY_PATH" -o "$#" -ne 4 ]
 then
-    echo "usage: $0 C8Y_URL DEVICE_ID DEVICE_CERT DEVICE_KEY"
+    echo "usage: $0 C8Y_URL DEVICE_ID CERT_PATH KEY_PATH"
     echo
     echo "Configure mosquitto to use the given certificate to connect c8y."
     exit 1
 fi
 
-if [ ! -f "$DEVICE_CERT" ]
+if [ ! -f "$CERT_PATH" ]
 then
-    echo "Certificate file $DEVICE_CERT not found."
+    echo "Certificate file $CERT_PATH not found."
     exit 1
 fi
-if [ ! -f "$DEVICE_KEY" ]
+if [ ! -f "$KEY_PATH" ]
 then
-    echo "Private key file $DEVICE_KEY not found."
+    echo "Private key file $KEY_PATH not found."
     exit 1
 fi
-if ! (file "$DEVICE_CERT" | grep -q PEM)
+if ! (file "$CERT_PATH" | grep -q PEM)
 then
-    echo "[ERROR] The file $DEVICE_CERT is not a certificate: $(file $DEVICE_CERT)"
+    echo "[ERROR] The file $CERT_PATH is not a certificate: $(file $CERT_PATH)"
     exit 1
 fi
-if !(openssl x509 -in $DEVICE_CERT -noout -subject | grep -q "subject=CN = $DEVICE_ID,")
+if !(openssl x509 -in $CERT_PATH -noout -subject | grep -q "subject=CN = $DEVICE_ID,")
 then
-    echo "The certificate $DEVICE_CERT doesn't match the identifier $DEVICE_ID."
+    echo "The certificate $CERT_PATH doesn't match the identifier $DEVICE_ID."
     exit 1
 fi
 
@@ -69,8 +69,8 @@ connection edge_to_c8y
 address mqtt.$C8Y_URL:8883
 bridge_cafile $C8Y_CERT
 remote_clientid $DEVICE_ID
-bridge_certfile $DEVICE_CERT
-bridge_keyfile $DEVICE_KEY
+bridge_certfile $CERT_PATH
+bridge_keyfile $KEY_PATH
 try_private false
 start_type automatic
 

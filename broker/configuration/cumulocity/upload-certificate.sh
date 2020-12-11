@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 DEVICE=$1
-CERT_FILE=$2
+CERT_PATH=$2
 C8Y=$3
 TENANT=$4
 USER=$5
 
-if [ -z "$DEVICE" -o -z "$CERT_FILE" -o -z "$C8Y" -o -z "$TENANT" -o -z "$USER" -o "$#" -ne 5 ]
+if [ -z "$DEVICE" -o -z "$CERT_PATH" -o -z "$C8Y" -o -z "$TENANT" -o -z "$USER" -o "$#" -ne 5 ]
 then
-    echo "usage: $0 DEVICE_ID CERT_FILE C8Y_URL TENANT USER"
+    echo "usage: $0 DEVICE_ID CERT_PATH C8Y_URL TENANT USER"
     echo
-    echo "Upload the certificate CERT_FILE to c8y."
+    echo "Upload the certificate CERT_PATH to c8y."
     exit 1
 fi
 
-if [ ! -f "$CERT_FILE" ]
+if [ ! -f "$CERT_PATH" ]
 then
-    echo "File not found: $CERT_FILE"
+    echo "File not found: $CERT_PATH"
     exit 1
 fi
 
-if ! (file "$CERT_FILE" | grep -q PEM)
+if ! (file "$CERT_PATH" | grep -q PEM)
 then
-    echo "[ERROR] The file $CERT_FILE is not a certificate: $(file $CERT_FILE)"
+    echo "[ERROR] The file $CERT_PATH is not a certificate: $(file $CERT_PATH)"
     exit 1
 fi
 
@@ -34,7 +34,7 @@ HASH=$(echo -n "$TENANT/$USER:$PASSWORD" | base64)
 
 ### Upload request
 
-CERT=$(cat $CERT_FILE | tr -d '\n')
+CERT=$(cat $CERT_PATH | tr -d '\n')
 DATA=$(cat <<EOF
 { "name": "$DEVICE",
   "certInPemFormat":"$CERT",
@@ -56,7 +56,7 @@ fi
 
 ### Test request
 
-CERT_ID=$(cat $CERT_FILE | grep -v CERTIFICATE | tr -d '\n')
+CERT_ID=$(cat $CERT_PATH | grep -v CERTIFICATE | tr -d '\n')
 
 if (curl --request GET --silent \
   --url https://$TENANT.$C8Y/tenant/tenants/$TENANT/trusted-certificates/ \
