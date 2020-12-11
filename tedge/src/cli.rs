@@ -8,7 +8,7 @@ use structopt::StructOpt;
     about = clap::crate_description!()
 )]
 pub struct Opt {
-    // The number of occurrences of the `v/verbose` flag
+    // The number of occurrences of the `v` flag
     /// Verbose mode (-v, -vv, -vvv, etc.)
     #[structopt(short, parse(from_occurrences))]
     verbose: u8,
@@ -32,7 +32,7 @@ enum ConfigCmd {
     Set { key: String, value: String },
 
     /// Remove value.
-    Remove { key: String },
+    Unset { key: String },
 
     /// Get value.
     Get { key: String },
