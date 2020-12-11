@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #----------------------------------------------------------------
 # Test a bi-directionel chanel is established with c8y over MQTT
 #----------------------------------------------

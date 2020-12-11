@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 DEVICE=$1
 CERT_FILE=$2
 C8Y=$3

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 DEVICE=$1
 CER_PATH=$2
 KEY_PATH=$3

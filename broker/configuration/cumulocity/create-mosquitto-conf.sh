@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 C8Y_URL=$1
 DEVICE_ID=$2
 DEVICE_CERT=$3
