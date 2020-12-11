@@ -2,7 +2,7 @@
 
 Here is a set of scripts to configure a MQTT channel between a device and Cumulocity.
 
-If you have no certificate for you device, you can create one for testing purpose:
+If you have no certificate for your device, you can create one for testing purpose:
 
 ```
 ./create-self-signed-certificate.sh device-xyz xyz.crt xyz.key
