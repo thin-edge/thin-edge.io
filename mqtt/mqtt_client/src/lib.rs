@@ -1,11 +1,11 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```
-//! use mqtt_client::{Client,Message,Topic};
+//! use mqtt_client::{Config,Message,Topic};
 //!
 //! #[tokio::main]
 //! async fn main (){
-//!     let mqtt = Client::connect("temperature").await.unwrap();
+//!     let mqtt = Config::default().connect("temperature").await.unwrap();
 //!     let c8y_msg = Topic::new("c8y/s/us").unwrap();
 //!     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
 //!     mqtt.disconnect().await.unwrap();
@@ -26,11 +26,11 @@ use tokio_compat_02::FutureExt;
 /// The host and port are implied: a connection can only be open on the localhost, port 1883.
 ///
 /// ```
-/// use mqtt_client::{Client,Message,Topic};
+/// use mqtt_client::{Config,Message,Topic};
 ///
 /// #[tokio::main]
 /// async fn main () {
-///     let mqtt = Client::connect("temperature").await.unwrap();
+///     let mqtt = Config::default().connect("temperature").await.unwrap();
 ///     let c8y_msg = Topic::new("c8y/s/us").unwrap();
 ///     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
 ///     mqtt.disconnect().await.unwrap();
@@ -52,26 +52,27 @@ impl Client {
     /// will be resent on its re-connection.
     ///
     /// ```
-    /// use mqtt_client::{Client,Topic};
+    /// use mqtt_client::{Config,Client,Topic};
     ///
     /// #[tokio::main]
     /// async fn main () {
     ///     let c8y_cmd = Topic::new("c8y/s/ds").unwrap();
+    ///     let config = Config::default();
     ///
-    ///     let mqtt = Client::connect("temperature").await.unwrap();
+    ///     let mqtt = Client::connect("temperature", &config).await.unwrap();
     ///     let mut commands = mqtt.subscribe(c8y_cmd.filter()).await.unwrap();
     ///     // process some commands and disconnect
     ///     mqtt.disconnect().await.unwrap();
     ///
     ///     // wait a while and reconnect
-    ///     let mqtt = Client::connect("temperature").await.unwrap();
+    ///     let mqtt = Client::connect("temperature", &config).await.unwrap();
     ///     let mut commands = mqtt.subscribe(c8y_cmd.filter()).await.unwrap();
     ///     // process the messages even those sent during the pause
     /// }
     /// ```
-    pub async fn connect(name: &str) -> Result<Client, Error> {
+    pub async fn connect(name: &str, config:&Config) -> Result<Client, Error> {
         let name = String::from(name);
-        let mut mqtt_options = rumqttc::MqttOptions::new(&name, "localhost", 1883);
+        let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
         mqtt_options.set_clean_session(false);
 
         let in_flight = 10;
@@ -179,6 +180,29 @@ impl Client {
                 _ => (),
             }
         }
+    }
+}
+
+/// Configuration of the connection to the MQTT broker.
+pub struct Config {
+    pub host: String,
+    pub port: u16,
+}
+
+/// By default a client connects the local MQTT broker.
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            host: String::from("localhost"),
+            port: 1883
+        }
+    }
+}
+
+impl Config {
+    /// Use this config to connect a MQTT client
+    pub async fn connect(&self, name: &str) -> Result<Client, Error> {
+        Client::connect(name, self).await
     }
 }
 

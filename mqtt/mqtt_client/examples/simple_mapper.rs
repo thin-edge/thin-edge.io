@@ -1,4 +1,4 @@
-use mqtt_client::{Client, Message, Topic};
+use mqtt_client::{Client, Config, Message, Topic};
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
@@ -7,7 +7,7 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     let out_topic = Topic::new("c8y/s/us")?;
     let err_topic = Topic::new("tegde/errors")?;
 
-    let mqtt = Client::connect(name).await?;
+    let mqtt = Client::connect(name, &Config::default()).await?;
     let mut errors = mqtt.subscribe_errors();
     tokio::spawn(async move {
         while let Some(error) = errors.next().await {

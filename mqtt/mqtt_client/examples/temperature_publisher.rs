@@ -1,4 +1,4 @@
-use mqtt_client::{Client, Message, Topic};
+use mqtt_client::{Client, Config, Message, Topic};
 use rand::prelude::*;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -8,7 +8,7 @@ const C8Y_TPL_TEMPERATURE: &str = "211";
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
-    let mqtt = Client::connect("temperature").await?;
+    let mqtt = Client::connect("temperature", &Config::default()).await?;
     let c8y_msg = Topic::new("c8y/s/us")?;
     let c8y_cmd = Topic::new("c8y/s/ds")?;
     let c8y_err = Topic::new("c8y/s/e")?;
