@@ -27,7 +27,7 @@ then
     echo "[ERROR] The file $DEVICE_CERT is not a certificate: $(file $DEVICE_CERT)"
     exit 1
 fi
-if !(openssl x509 -in $DEVICE_CERT -noout -subject | grep -q $DEVICE_ID)
+if !(openssl x509 -in $DEVICE_CERT -noout -subject | grep -q "subject=CN = $DEVICE_ID,")
 then
     echo "The certificate $DEVICE_CERT doesn't match the identifier $DEVICE_ID."
     exit 1
