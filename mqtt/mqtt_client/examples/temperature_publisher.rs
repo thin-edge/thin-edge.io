@@ -47,7 +47,9 @@ async fn listen_command(mqtt: &Client, c8y_cmd: Topic) -> Result<(), mqtt_client
         println!("C8Y command: {:?}", message.payload);
         if let Some(cmd) = std::str::from_utf8(&message.payload).ok() {
             if cmd.contains(C8Y_TPL_RESTART) {
-                println!("Stopping on remote request ... should be restarted by the daemon monitor.");
+                println!(
+                    "Stopping on remote request ... should be restarted by the daemon monitor."
+                );
                 break;
             }
         }
