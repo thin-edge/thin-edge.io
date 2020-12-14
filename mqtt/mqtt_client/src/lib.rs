@@ -19,7 +19,6 @@ use rumqttc::Outgoing;
 use rumqttc::Packet::Publish;
 use rumqttc::QoS;
 use tokio::sync::broadcast;
-use tokio_compat_02::FutureExt;
 
 /// A connection to the local MQTT bus.
 ///
@@ -101,7 +100,6 @@ impl Client {
         let retain = false;
         self.mqtt_client
             .publish(&message.topic.name, qos, retain, message.payload)
-            .compat() // required because rumqtt uses tokio 0.2, not 0.3 as we do
             .await
             .map_err(Error::client_error)
     }
@@ -111,7 +109,6 @@ impl Client {
         let qos = QoS::AtLeastOnce;
         self.mqtt_client
             .subscribe(&filter.pattern, qos)
-            .compat() // required because rumqtt uses tokio 0.2, not 0.3 as we do
             .await
             .map_err(Error::client_error)?;
 
@@ -145,7 +142,6 @@ impl Client {
     pub async fn disconnect(self) -> Result<(), Error> {
         self.mqtt_client
             .disconnect()
-            .compat() // required because rumqtt uses tokio 0.2, not 0.3 as we do
             .await
             .map_err(Error::client_error)
     }
@@ -159,7 +155,7 @@ impl Client {
         error_sender: broadcast::Sender<Error>,
     ) {
         loop {
-            match event_loop.poll().compat().await {
+            match event_loop.poll().await {
                 Err(err) => {
                     // The message sender can only fail if there is no listener
                     // So we simply discard any sender error

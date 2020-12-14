@@ -8,8 +8,7 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "0.3", features = ["full"] }
-rumqttc = "0.2.0"
-tokio-compat-02 = "0.1.2"  # Required because rumqttc use tokio 0.2
+rumqttc = "0.3.0"
 
 [dev-dependencies]
 tokio-test = "0.3.0"
