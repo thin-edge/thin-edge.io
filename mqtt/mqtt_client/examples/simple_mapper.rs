@@ -1,5 +1,5 @@
+use log::{debug, error, info};
 use mqtt_client::{Client, Config, Message, Topic};
-use log::{info,error,debug};
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
