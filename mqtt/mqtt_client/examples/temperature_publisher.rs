@@ -1,8 +1,8 @@
+use log::{debug, error, info};
 use mqtt_client::{Client, Config, Message, Topic};
 use rand::prelude::*;
 use std::time::Duration;
 use tokio::time::sleep;
-use log::{error,info,debug};
 
 const C8Y_TPL_RESTART: &str = "511";
 const C8Y_TPL_TEMPERATURE: &str = "211";
@@ -52,9 +52,7 @@ async fn listen_command(mqtt: &Client, c8y_cmd: Topic) -> Result<(), mqtt_client
         debug!("C8Y command: {:?}", message.payload);
         if let Some(cmd) = std::str::from_utf8(&message.payload).ok() {
             if cmd.contains(C8Y_TPL_RESTART) {
-                info!(
-                    "Stopping on remote request ... should be restarted by the daemon monitor."
-                );
+                info!("Stopping on remote request ... should be restarted by the daemon monitor.");
                 break;
             }
         }
