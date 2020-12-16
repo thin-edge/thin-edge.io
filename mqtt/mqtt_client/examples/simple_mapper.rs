@@ -24,7 +24,10 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
         debug!("Mapping {:?}", message);
         match translate(&message.payload) {
             Ok(translation) => mqtt.publish(Message::new(&out_topic, translation)).await?,
-            Err(error) => mqtt.publish(Message::new(&err_topic, error)).await?,
+            Err(error) => {
+                debug!("Translation error: {}", error);
+                mqtt.publish(Message::new(&err_topic, error)).await?
+            },
         }
     }
 
