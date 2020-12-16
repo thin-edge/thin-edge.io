@@ -4,7 +4,7 @@ use rand::prelude::*;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const C8Y_TPL_RESTART: &str = "511";
+const C8Y_TPL_RESTART: &str = "510";
 const C8Y_TPL_TEMPERATURE: &str = "211";
 
 #[tokio::main]
@@ -37,7 +37,7 @@ async fn publish_temperature(mqtt: &Client, c8y_msg: Topic) -> Result<(), mqtt_c
 
         let payload = format!("{},{}", C8Y_TPL_TEMPERATURE, temperature);
         debug!("{}", payload);
-        mqtt.publish(Message::new(&c8y_msg, payload)).await.unwrap();
+        mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
         sleep(Duration::from_millis(1000)).await;
     }
