@@ -6,7 +6,7 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     let name = "c8y_mapper";
     let in_topic = Topic::new("tedge/measurements")?;
     let out_topic = Topic::new("c8y/s/us")?;
-    let err_topic = Topic::new("tegde/errors")?;
+    let err_topic = Topic::new("tedge/errors")?;
 
     env_logger::init();
 
@@ -44,7 +44,7 @@ fn translate(input: &Vec<u8>) -> Result<Vec<u8>, String> {
         JsonValue::Object(obj) => {
             for (k, v) in obj.iter() {
                 if k != "temperature" {
-                    return Err(format!("ERROR: unknown measurement '{}'", k));
+                    return Err(format!("ERROR: unknown measurement type '{}'", k));
                 }
                 match v {
                     JsonValue::Number(num) => {
@@ -55,11 +55,11 @@ fn translate(input: &Vec<u8>) -> Result<Vec<u8>, String> {
                             return Err(format!("ERROR: value out of range '{}'", v));
                         }
                     }
-                    _ => return Err(format!("ERROR: expect a number '{}'", v)),
+                    _ => return Err(format!("ERROR: expected a number, not '{}'", v)),
                 }
             }
             Err(String::from("ERROR: empty measurement"))
         }
-        _ => return Err(String::from("ERROR: expect a JSON object")),
+        _ => return Err(format!("ERROR: expected a JSON object, not {}", json)),
     }
 }
