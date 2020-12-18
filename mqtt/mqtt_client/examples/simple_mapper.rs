@@ -1,5 +1,11 @@
-use log::{debug, error, info};
-use mqtt_client::{Client, Config, Message, Topic};
+use json::JsonValue;
+use log::debug;
+use log::error;
+use log::info;
+use mqtt_client::Client;
+use mqtt_client::Config;
+use mqtt_client::Message;
+use mqtt_client::Topic;
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
@@ -27,14 +33,13 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
             Err(error) => {
                 debug!("Translation error: {}", error);
                 mqtt.publish(Message::new(&err_topic, error)).await?
-            },
+            }
         }
     }
 
     Ok(())
 }
 
-use json::JsonValue;
 const C8Y_TPL_TEMPERATURE: &str = "211";
 
 /// Naive mapper which extracts the temperature field from a ThinEdge Json value.
