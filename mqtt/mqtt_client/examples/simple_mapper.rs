@@ -40,7 +40,7 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
     Ok(())
 }
 
-const C8Y_TPL_TEMPERATURE: &str = "211";
+const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 /// Naive mapper which extracts the temperature field from a ThinEdge Json value.
 ///
@@ -58,7 +58,7 @@ fn translate(raw_input: &Vec<u8>) -> Result<Vec<u8>, String> {
                     JsonValue::Number(num) => {
                         let value: f64 = (*num).into();
                         if value == 0.0 || value.is_normal() {
-                            return Ok(format!("{},{}", C8Y_TPL_TEMPERATURE, value).into_bytes());
+                            return Ok(format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, value).into_bytes());
                         } else {
                             return Err(format!("ERROR: value out of range '{}'", v));
                         }
