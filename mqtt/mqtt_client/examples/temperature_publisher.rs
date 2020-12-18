@@ -1,3 +1,5 @@
+use futures::future::FutureExt;
+use futures::select;
 use log::debug;
 use log::error;
 use log::info;
@@ -21,11 +23,11 @@ pub async fn main() -> Result<(), mqtt_client::Error> {
 
     init_logger();
 
-    tokio::select! {
-        _ = publish_temperature(&mqtt, c8y_msg) => (),
-        _ = listen_command(&mqtt, c8y_cmd) => (),
-        _ = listen_c8y_error(&mqtt, c8y_err) => (),
-        _ = listen_error(&mqtt) => (),
+    select! {
+        _ = publish_temperature(&mqtt, c8y_msg).fuse() => (),
+        _ = listen_command(&mqtt, c8y_cmd).fuse() => (),
+        _ = listen_c8y_error(&mqtt, c8y_err).fuse() => (),
+        _ = listen_error(&mqtt).fuse() => (),
     }
 
     mqtt.disconnect().await
