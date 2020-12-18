@@ -1,5 +1,10 @@
-use log::{debug, error, info};
-use mqtt_client::{Client, Config, Message, Topic};
+use log::debug;
+use log::error;
+use log::info;
+use mqtt_client::Client;
+use mqtt_client::Config;
+use mqtt_client::Message;
+use mqtt_client::Topic;
 use rand::prelude::*;
 use std::time::Duration;
 use tokio::time::sleep;
