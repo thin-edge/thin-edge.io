@@ -91,7 +91,7 @@ fn init_logger() {
     let logger = env_logger::Logger::from_default_env();
     let task_id = 1;
 
-    async_log::Logger::wrap(logger, || task_id)
+    async_log::Logger::wrap(logger, move || task_id)
         .start(log::LevelFilter::Trace)
         .unwrap();
 }
