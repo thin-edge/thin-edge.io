@@ -89,7 +89,9 @@ async fn listen_error(mut errors: ErrorStream) {
 
 fn init_logger() {
     let logger = env_logger::Logger::from_default_env();
-    async_log::Logger::wrap(logger, || 12)
+    let task_id = 1;
+
+    async_log::Logger::wrap(logger, || task_id)
         .start(log::LevelFilter::Trace)
         .unwrap();
 }
