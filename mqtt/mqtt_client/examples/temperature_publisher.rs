@@ -11,8 +11,8 @@ use rand::prelude::*;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const C8Y_TPL_RESTART: &str = "510";
-const C8Y_TPL_TEMPERATURE: &str = "211";
+const C8Y_TEMPLATE_RESTART: &str = "510";
+const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
@@ -42,7 +42,7 @@ async fn publish_temperature(mqtt: &Client, c8y_msg: Topic) -> Result<(), mqtt_c
         let delta = rng.gen_range(-1, 2);
         temperature = temperature + delta;
 
-        let payload = format!("{},{}", C8Y_TPL_TEMPERATURE, temperature);
+        let payload = format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, temperature);
         debug!("{}", payload);
         mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
@@ -58,7 +58,7 @@ async fn listen_command(mqtt: &Client, c8y_cmd: Topic) -> Result<(), mqtt_client
     while let Some(message) = messages.next().await {
         debug!("C8Y command: {:?}", message.payload);
         if let Some(cmd) = std::str::from_utf8(&message.payload).ok() {
-            if cmd.contains(C8Y_TPL_RESTART) {
+            if cmd.contains(C8Y_TEMPLATE_RESTART) {
                 info!("Stopping on remote request ... should be restarted by the daemon monitor.");
                 break;
             }
