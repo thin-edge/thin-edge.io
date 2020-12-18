@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "translator/c8y_json_translator",
     "tedge",
     "tests/testlib",
 ]
