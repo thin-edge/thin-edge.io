@@ -4,10 +4,10 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_client::Client;
 use mqtt_client::Config;
 use mqtt_client::Message;
 use mqtt_client::Topic;
+use mqtt_client::{Client, ErrorStream, MessageStream};
 use rand::prelude::*;
 use std::time::Duration;
 
@@ -16,30 +16,35 @@ const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 #[tokio::main]
 pub async fn main() -> Result<(), mqtt_client::Error> {
-    let mqtt = Client::connect("temperature", &Config::default()).await?;
     let c8y_msg = Topic::new("c8y/s/us")?;
     let c8y_cmd = Topic::new("c8y/s/ds")?;
     let c8y_err = Topic::new("c8y/s/e")?;
 
     init_logger();
 
+    let mqtt = Client::connect("temperature", &Config::default()).await?;
+
+    let commands = mqtt.subscribe(c8y_cmd.filter()).await?;
+    let c8y_errors = mqtt.subscribe(c8y_err.filter()).await?;
+    let errors = mqtt.subscribe_errors();
+
+    tokio::spawn(publish_temperature(mqtt, c8y_msg));
+
     select! {
-        _ = publish_temperature(&mqtt, c8y_msg).fuse() => (),
-        _ = listen_command(&mqtt, c8y_cmd).fuse() => (),
-        _ = listen_c8y_error(&mqtt, c8y_err).fuse() => (),
-        _ = listen_error(&mqtt).fuse() => (),
+        _ = listen_command(commands).fuse() => (),
+        _ = listen_c8y_error(c8y_errors).fuse() => (),
+        _ = listen_error(errors).fuse() => (),
     }
 
-    mqtt.disconnect().await
+    Ok(())
 }
 
-async fn publish_temperature(mqtt: &Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
-    let mut rng = thread_rng();
-    let mut temperature: i32 = rng.gen_range(-10, 20);
+async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
+    let mut temperature: i32 = random_in_range(-10, 20);
 
     info!("Publishing temperature measurements");
     for _ in 1..10 {
-        let delta = rng.gen_range(-1, 2);
+        let delta = random_in_range(-1, 2);
         temperature = temperature + delta;
 
         let payload = format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, temperature);
@@ -49,12 +54,16 @@ async fn publish_temperature(mqtt: &Client, c8y_msg: Topic) -> Result<(), mqtt_c
         Delay::new(Duration::from_millis(1000)).await;
     }
 
+    mqtt.disconnect().await?;
     Ok(())
 }
 
-async fn listen_command(mqtt: &Client, c8y_cmd: Topic) -> Result<(), mqtt_client::Error> {
-    let mut messages = mqtt.subscribe(c8y_cmd.filter()).await?;
+fn random_in_range(low: i32, high: i32) -> i32 {
+    let mut rng = thread_rng();
+    rng.gen_range(low, high)
+}
 
+async fn listen_command(mut messages: MessageStream) {
     while let Some(message) = messages.next().await {
         debug!("C8Y command: {:?}", message.payload);
         if let Some(cmd) = std::str::from_utf8(&message.payload).ok() {
@@ -64,23 +73,15 @@ async fn listen_command(mqtt: &Client, c8y_cmd: Topic) -> Result<(), mqtt_client
             }
         }
     }
-
-    Ok(())
 }
 
-async fn listen_c8y_error(mqtt: &Client, c8y_err: Topic) -> Result<(), mqtt_client::Error> {
-    let mut messages = mqtt.subscribe(c8y_err.filter()).await?;
-
+async fn listen_c8y_error(mut messages: MessageStream) {
     while let Some(message) = messages.next().await {
         error!("C8Y error: {:?}", message.payload);
     }
-
-    Ok(())
 }
 
-async fn listen_error(mqtt: &Client) {
-    let mut errors = mqtt.subscribe_errors();
-
+async fn listen_error(mut errors: ErrorStream) {
     while let Some(error) = errors.next().await {
         error!("System error: {}", error);
     }
