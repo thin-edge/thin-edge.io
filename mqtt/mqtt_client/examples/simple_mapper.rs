@@ -45,8 +45,8 @@ const C8Y_TPL_TEMPERATURE: &str = "211";
 /// Naive mapper which extracts the temperature field from a ThinEdge Json value.
 ///
 /// `{ "temperature": 12.4 }` is translated into `"211,12.4"`
-fn translate(input: &Vec<u8>) -> Result<Vec<u8>, String> {
-    let input = std::str::from_utf8(input).map_err(|err| format!("ERROR: {}", err))?;
+fn translate(raw_input: &Vec<u8>) -> Result<Vec<u8>, String> {
+    let input = std::str::from_utf8(raw_input).map_err(|err| format!("ERROR: {}", err))?;
     let json = json::parse(input).map_err(|err| format!("ERROR: {}", err))?;
     match json {
         JsonValue::Object(obj) => {
