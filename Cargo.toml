@@ -2,6 +2,7 @@
 
 members = [
     "tedge",
+    "tedge-mapper",
     "tests/testlib",
 ]
 
