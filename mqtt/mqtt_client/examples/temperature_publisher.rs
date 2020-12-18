@@ -1,5 +1,6 @@
 use futures::future::FutureExt;
 use futures::select;
+use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
@@ -9,7 +10,6 @@ use mqtt_client::Message;
 use mqtt_client::Topic;
 use rand::prelude::*;
 use std::time::Duration;
-use tokio::time::sleep;
 
 const C8Y_TEMPLATE_RESTART: &str = "510";
 const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
@@ -46,7 +46,7 @@ async fn publish_temperature(mqtt: &Client, c8y_msg: Topic) -> Result<(), mqtt_c
         debug!("{}", payload);
         mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
-        sleep(Duration::from_millis(1000)).await;
+        Delay::new(Duration::from_millis(1000)).await;
     }
 
     Ok(())
