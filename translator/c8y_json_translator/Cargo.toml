@@ -7,4 +7,9 @@ edition = "2018"
 
 [dependencies]
 json = "0.12.4"
+chrono = "0.4.19"
+
+[dev-dependencies]
 pretty_assertions = "0.6.1"
+
+

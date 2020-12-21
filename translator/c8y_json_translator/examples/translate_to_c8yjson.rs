@@ -1,4 +1,5 @@
 use c8y_json_translator::ThinEdgeJson;
+use chrono::prelude::*;
 
 fn single_value_translation() {
     let single_value_thinedge_json = r#"{
@@ -6,7 +7,7 @@ fn single_value_translation() {
                   "pressure": 220
                }"#;
 
-    let time = "2020-06-22T17:03:14.000+02:00";
+    let time: DateTime<Utc> = Utc::now();
     let msg_type = "SingleValueThinEdgeMeasurement";
 
     println!("Tedge_Json: {:#}", single_value_thinedge_json);
@@ -20,7 +21,7 @@ fn single_value_translation() {
 }
 
 fn multi_value_translation() {
-    let time = "2020-06-22T17:03:14.000+02:00";
+    let time: DateTime<Utc> = Utc::now();
     let msg_type = "SingleValueThinEdgeMeasurement";
 
     let input = r#"{
