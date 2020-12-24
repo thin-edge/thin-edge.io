@@ -23,8 +23,14 @@ pub struct ThinEdgeJson {
 }
 
 enum ThinEdgeValue {
+    TimeStamp(TimeStamp),
     Single(SingleValueMeasurement),
     Multi(MultiValueMeasurement),
+}
+
+pub struct TimeStamp {
+    name: String,
+    value: String,
 }
 
 pub struct SingleValueMeasurement {
@@ -72,6 +78,24 @@ impl ThinEdgeJson {
                                 create_multi_val_thin_edge_struct(k, multi_value_thin_edge_object)?;
                             measurements.push(multi_value_measurement)
                         }
+                        JsonValue::String(timestamp) => {
+                            let given_time_stamp =
+                                create_time_stamp_thin_edge_struct(k, timestamp)?;
+                            measurements.push(given_time_stamp);
+                        }
+                        JsonValue::Short(timestamp) => {
+                            let given_time_stamp =
+                                create_time_stamp_thin_edge_struct(k, timestamp)?;
+                            measurements.push(given_time_stamp);
+                            println!("..........TimeStamp short..................");
+                        }
+                        JsonValue::Array(_timestamp) => {
+                            println!("..........TimeStamp array..................");
+                        }
+                        JsonValue::Null => {
+                            println!("..........TimeStamp null..................");
+                        }
+
                         _ => {
                             return Err(JsonError::InvalidThinEdgeJson {
                                 name: String::from(k),
@@ -113,6 +137,14 @@ impl ThinEdgeJson {
                         translate_multi_value_object(multi_value_measurement),
                     );
                 }
+                ThinEdgeValue::TimeStamp(given_time_stamp) => {
+                    c8y_object.c8y_json.remove(&given_time_stamp.name);
+                    insert_into_json_object(
+                        &mut c8y_object.c8y_json,
+                        &given_time_stamp.name,
+                        given_time_stamp.value.clone().into(),
+                    ); //translate_time_stamp(given_time_stamp);
+                }
             }
         }
         c8y_object
@@ -130,6 +162,20 @@ fn create_single_val_thinedge_struct(
             value,
         };
         Ok(ThinEdgeValue::Single(single_value))
+    } else {
+        Err(JsonError::InvalidThinEdgeJsonValue {
+            name: String::from(name),
+        })
+    }
+}
+
+fn create_time_stamp_thin_edge_struct(name: &str, value: &str) -> Result<ThinEdgeValue, JsonError> {
+    if (name == "time" || name == "type") && !value.is_empty() {
+        let time_stamp = TimeStamp {
+            name: String::from(name),
+            value: String::from(value),
+        };
+        Ok(ThinEdgeValue::TimeStamp(time_stamp))
     } else {
         Err(JsonError::InvalidThinEdgeJsonValue {
             name: String::from(name),
@@ -199,6 +245,14 @@ fn translate_single_value_object(single: &SingleValueMeasurement) -> JsonValue {
     );
     single_value_object
 }
+
+/*
+fn translate_time_stamp(given_time_stamp: &TimeStamp) -> JsonValue {
+    let mut time_stamp_object = JsonValue::new_object();
+    insert_into_json_object(&mut time_stamp_object, &given_time_stamp.name, given_time_stamp.value.clone().into());
+    time_stamp_object
+}
+*/
 
 fn create_value_object_and_insert_into_jsonobj(
     key: &str,
@@ -318,6 +372,45 @@ mod tests {
             utc_time_now.to_rfc3339(),
             body_of_message
         );
+        let output =
+            ThinEdgeJson::from_utf8(&String::from(single_value_thin_edge_json).into_bytes())
+                .unwrap()
+                .into_cumulocity_json(utc_time_now, msg_type)
+                .to_string();
+
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            output.split_whitespace().collect::<String>()
+        );
+    }
+
+    #[test]
+    fn thin_edge_translation_with_time_stamp() {
+        let single_value_thin_edge_json = r#"{
+                  "type": "ThinEdgeWithTimeStamp",
+                  "time" : "2013-06-22T17:03:14.000+02:00",
+                  "temperature": 23,
+                  "pressure": 220
+               }"#;
+
+        let utc_time_now: DateTime<Utc> = Utc::now();
+        let msg_type = "SingleValueThinEdgeMeasurementWithTimeStamp";
+
+        let expected_output = r#"{
+                     "type": "ThinEdgeWithTimeStamp",
+                     "time": "2013-06-22T17:03:14.000+02:00",
+                     "temperature": {
+                         "temperature": {
+                               "value": 23
+                         }
+                    }, 
+                    "pressure" : {
+                       "pressure": {
+                          "value" : 220
+                          }
+                       }
+                  }"#;
+
         let output =
             ThinEdgeJson::from_utf8(&String::from(single_value_thin_edge_json).into_bytes())
                 .unwrap()
