@@ -78,24 +78,12 @@ impl ThinEdgeJson {
                                 create_multi_val_thin_edge_struct(k, multi_value_thin_edge_object)?;
                             measurements.push(multi_value_measurement)
                         }
-                        JsonValue::String(timestamp) => {
-                            let given_time_stamp =
-                                create_time_stamp_thin_edge_struct(k, timestamp)?;
-                            measurements.push(given_time_stamp);
+                        //String value object
+                        JsonValue::Short(short_value) => {
+                            let short_value_measurement =
+                                create_type_and_time_stamp_thin_edge_struct(k, short_value)?;
+                            measurements.push(short_value_measurement);
                         }
-                        JsonValue::Short(timestamp) => {
-                            let given_time_stamp =
-                                create_time_stamp_thin_edge_struct(k, timestamp)?;
-                            measurements.push(given_time_stamp);
-                            println!("..........TimeStamp short..................");
-                        }
-                        JsonValue::Array(_timestamp) => {
-                            println!("..........TimeStamp array..................");
-                        }
-                        JsonValue::Null => {
-                            println!("..........TimeStamp null..................");
-                        }
-
                         _ => {
                             return Err(JsonError::InvalidThinEdgeJson {
                                 name: String::from(k),
@@ -169,7 +157,10 @@ fn create_single_val_thinedge_struct(
     }
 }
 
-fn create_time_stamp_thin_edge_struct(name: &str, value: &str) -> Result<ThinEdgeValue, JsonError> {
+fn create_type_and_time_stamp_thin_edge_struct(
+    name: &str,
+    value: &str,
+) -> Result<ThinEdgeValue, JsonError> {
     if (name == "time" || name == "type") && !value.is_empty() {
         let time_stamp = TimeStamp {
             name: String::from(name),
