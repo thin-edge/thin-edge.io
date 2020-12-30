@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "mqtt/mqtt_client",
     "tedge",
     "tedge-mapper",
     "tests/testlib",
