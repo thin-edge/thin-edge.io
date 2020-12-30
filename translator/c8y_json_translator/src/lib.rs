@@ -50,17 +50,17 @@ pub struct CumulocityJson {
 
 impl ThinEdgeJson {
     ///From array of bytes->to str->convert then to json
-    pub fn from_utf8(input: &[u8]) -> Result<ThinEdgeJson, JsonError> {
+    pub fn from_utf8(input: &[u8]) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let json_string = std::str::from_utf8(input)?;
         match json::parse(&json_string) {
             //Check the object for the thin -edge json template 2 level
             Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj),
-            Err(err) => Err(JsonError::InvalidJson(err)),
+            Err(err) => Err(ThinEdgeJsonError::InvalidJson(err)),
         }
     }
 
     ///Confirms that the json is in thin-edge json format or not
-    pub fn from_json(input: json::JsonValue) -> Result<ThinEdgeJson, JsonError> {
+    pub fn from_json(input: json::JsonValue) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let mut measurements = vec![];
         match &input {
             JsonValue::Object(thin_edge_obj) => {
@@ -69,23 +69,32 @@ impl ThinEdgeJson {
                         //Single Value object
                         JsonValue::Number(num) => {
                             let single_value_measurement =
-                                create_single_val_thinedge_struct(k, (*num).into())?;
+                                ThinEdgeValue::create_single_val_thin_edge_struct(
+                                    k,
+                                    (*num).into(),
+                                )?;
                             measurements.push(single_value_measurement)
                         }
                         //Multi value object
                         JsonValue::Object(multi_value_thin_edge_object) => {
                             let multi_value_measurement =
-                                create_multi_val_thin_edge_struct(k, multi_value_thin_edge_object)?;
+                                ThinEdgeValue::create_multi_val_thin_edge_struct(
+                                    k,
+                                    multi_value_thin_edge_object,
+                                )?;
                             measurements.push(multi_value_measurement)
                         }
-                        //String value object
+                        //Short String value object
                         JsonValue::Short(short_value) => {
                             let short_value_measurement =
-                                create_string_value_thin_edge_struct(k, short_value)?;
+                                ThinEdgeValue::create_string_value_thin_edge_struct(
+                                    k,
+                                    short_value,
+                                )?;
                             measurements.push(short_value_measurement);
                         }
                         _ => {
-                            return Err(JsonError::InvalidThinEdgeJson {
+                            return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
                                 name: String::from(k),
                             });
                         }
@@ -95,7 +104,7 @@ impl ThinEdgeJson {
                     values: measurements,
                 })
             }
-            _ => Err(JsonError::InvalidThinEdgeJson {
+            _ => Err(ThinEdgeJsonError::InvalidThinEdgeJson {
                 name: input.to_string(),
             }),
         }
@@ -107,22 +116,26 @@ impl ThinEdgeJson {
         timestamp: DateTime<Utc>,
         c8y_msg_type: &str,
     ) -> CumulocityJson {
-        let mut c8y_object = create_c8y_json_object(timestamp, c8y_msg_type);
+        let mut c8y_object = CumulocityJson::new(timestamp, c8y_msg_type);
 
         for v in self.values.iter() {
             match v {
-                ThinEdgeValue::Single(single_value_measurement) => {
+                ThinEdgeValue::Single(thin_edge_single_value_measurement) => {
                     insert_into_json_object(
                         &mut c8y_object.c8y_json,
-                        &single_value_measurement.name,
-                        translate_single_value_object(single_value_measurement),
+                        &thin_edge_single_value_measurement.name,
+                        CumulocityJson::translate_into_c8y_single_value_object(
+                            thin_edge_single_value_measurement,
+                        ),
                     );
                 }
-                ThinEdgeValue::Multi(multi_value_measurement) => {
+                ThinEdgeValue::Multi(thin_edge_multi_value_measurement) => {
                     insert_into_json_object(
                         &mut c8y_object.c8y_json,
-                        &multi_value_measurement.name,
-                        translate_multi_value_object(multi_value_measurement),
+                        &thin_edge_multi_value_measurement.name,
+                        CumulocityJson::translate_into_c8y_multi_value_object(
+                            thin_edge_multi_value_measurement,
+                        ),
                     );
                 }
                 ThinEdgeValue::TimeStamp(given_time_stamp) => {
@@ -139,92 +152,111 @@ impl ThinEdgeJson {
     }
 }
 
-fn create_single_val_thinedge_struct(name: &str, value: f64) -> Result<ThinEdgeValue, JsonError> {
-    if value == 0.0 || value.is_normal() {
-        let single_value = SingleValueMeasurement {
-            name: String::from(name),
-            value,
-        };
-        Ok(ThinEdgeValue::Single(single_value))
-    } else {
-        Err(JsonError::InvalidThinEdgeJsonValue {
-            name: String::from(name),
-        })
-    }
-}
-
-fn create_string_value_thin_edge_struct(
-    name: &str,
-    value: &str,
-) -> Result<ThinEdgeValue, JsonError> {
-    if value.ne("time") && value.ne("type") && !value.is_empty() {
-        if name.eq("time") || name.eq("type") {
-            let time_stamp = TimeStamp {
+impl ThinEdgeValue {
+    fn create_single_val_thin_edge_struct(
+        name: &str,
+        value: f64,
+    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
+        if value == 0.0 || value.is_normal() {
+            let single_value = SingleValueMeasurement {
                 name: String::from(name),
-                value: String::from(value),
+                value,
             };
-            Ok(ThinEdgeValue::TimeStamp(time_stamp))
+            Ok(ThinEdgeValue::Single(single_value))
         } else {
-            Err(JsonError::InvalidThinEdgeJsonValue {
+            Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
                 name: String::from(name),
             })
         }
-    } else {
-        Err(JsonError::ThinEdgeReservedWordError {
-            value: String::from(value),
-        })
     }
-}
 
-fn create_multi_val_thin_edge_struct(
-    name: &str,
-    multi_value_obj: &json::object::Object,
-) -> Result<ThinEdgeValue, JsonError> {
-    let mut single_values = vec![];
-
-    for (k, v) in multi_value_obj.iter() {
-        match v {
-            JsonValue::Number(num) => {
-                //Single Value object
-                match create_single_val_thinedge_struct(k, (*num).into()) {
-                    Ok(single_value_measurement) => {
-                        if let ThinEdgeValue::Single(single_value_measurement) =
-                            single_value_measurement
-                        {
-                            single_values.push(single_value_measurement)
-                        }
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-            _ => {
-                return Err(JsonError::InvalidThinEdgeJsonValue {
+    fn create_string_value_thin_edge_struct(
+        name: &str,
+        value: &str,
+    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
+        if value.ne("time") && value.ne("type") && !value.is_empty() {
+            if name.eq("time") || name.eq("type") {
+                let time_stamp = TimeStamp {
+                    name: String::from(name),
+                    value: String::from(value),
+                };
+                Ok(ThinEdgeValue::TimeStamp(time_stamp))
+            } else {
+                Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
                     name: String::from(name),
                 })
             }
+        } else {
+            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
+                value: String::from(value),
+            })
         }
     }
-    Ok(ThinEdgeValue::Multi(MultiValueMeasurement {
-        name: String::from(name),
-        values: single_values,
-    }))
+
+    fn create_multi_val_thin_edge_struct(
+        name: &str,
+        multi_value_obj: &json::object::Object,
+    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
+        let mut single_values = vec![];
+
+        for (k, v) in multi_value_obj.iter() {
+            match v {
+                JsonValue::Number(num) => {
+                    //Single Value object
+                    let single_value_measurement =
+                        ThinEdgeValue::create_single_val_thin_edge_struct(k, (*num).into())?;
+                    if let ThinEdgeValue::Single(single_value_measurement) =
+                        single_value_measurement
+                    {
+                        single_values.push(single_value_measurement);
+                    }
+                }
+                _ => {
+                    return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
+                        name: String::from(name),
+                    })
+                }
+            }
+        }
+        Ok(ThinEdgeValue::Multi(MultiValueMeasurement {
+            name: String::from(name),
+            values: single_values,
+        }))
+    }
 }
 
-fn translate_multi_value_object(multi: &MultiValueMeasurement) -> JsonValue {
-    let mut multi_value_object: JsonValue = JsonValue::new_object();
-    for s in multi.values.iter() {
-        create_value_object_and_insert_into_jsonobj(
-            &s.name,
-            s.value.into(),
-            &mut multi_value_object,
-        );
-        insert_into_json_object(
-            &mut multi_value_object,
-            &s.name,
-            create_value_object(s.value.into()),
-        );
+impl CumulocityJson {
+    pub fn new(timestamp: DateTime<Utc>, c8y_msg_type: &str) -> CumulocityJson {
+        let mut c8y_object: JsonValue = JsonValue::new_object();
+        insert_into_json_object(&mut c8y_object, "type", c8y_msg_type.into());
+        insert_into_json_object(&mut c8y_object, "time", timestamp.to_rfc3339().into());
+        CumulocityJson {
+            c8y_json: c8y_object,
+        }
     }
-    multi_value_object
+
+    pub fn translate_into_c8y_single_value_object(single: &SingleValueMeasurement) -> JsonValue {
+        let mut single_value_c8y_object: JsonValue = JsonValue::new_object();
+        insert_into_json_object(
+            &mut single_value_c8y_object,
+            &single.name,
+            create_value_object(single.value.into()),
+        );
+        single_value_c8y_object
+    }
+
+    pub fn translate_into_c8y_multi_value_object(multi: &MultiValueMeasurement) -> JsonValue {
+        let mut multi_value_c8y_object: JsonValue = JsonValue::new_object();
+        for s in multi.values.iter() {
+            insert_into_json_object(&mut multi_value_c8y_object, &s.name, s.value.into());
+            insert_into_json_object(
+                &mut multi_value_c8y_object,
+                &s.name,
+                create_value_object(s.value.into()),
+            );
+        }
+        multi_value_c8y_object
+    }
 }
 
 ///We can not avoid the unwrap() call here, its sure that the insert call will not fail
@@ -233,37 +265,10 @@ fn insert_into_json_object(json_object: &mut JsonValue, name: &str, value: JsonV
     json_object.insert(name, value).unwrap();
 }
 
-fn translate_single_value_object(single: &SingleValueMeasurement) -> JsonValue {
-    let mut single_value_object: JsonValue = JsonValue::new_object();
-    insert_into_json_object(
-        &mut single_value_object,
-        &single.name,
-        create_value_object(single.value.into()),
-    );
-    single_value_object
-}
-
-fn create_value_object_and_insert_into_jsonobj(
-    key: &str,
-    num: json::number::Number,
-    json_object: &mut JsonValue,
-) {
-    insert_into_json_object(json_object, key, num.into());
-}
-
 fn create_value_object(value: JsonValue) -> JsonValue {
     let mut value_object = JsonValue::new_object();
     insert_into_json_object(&mut value_object, "value", value);
     value_object
-}
-
-fn create_c8y_json_object(timestamp: DateTime<Utc>, c8y_msg_type: &str) -> CumulocityJson {
-    let mut c8y_object: JsonValue = JsonValue::new_object();
-    insert_into_json_object(&mut c8y_object, "type", c8y_msg_type.into());
-    insert_into_json_object(&mut c8y_object, "time", timestamp.to_rfc3339().into());
-    CumulocityJson {
-        c8y_json: c8y_object,
-    }
 }
 
 impl fmt::Display for CumulocityJson {
@@ -273,7 +278,7 @@ impl fmt::Display for CumulocityJson {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum JsonError {
+pub enum ThinEdgeJsonError {
     InvalidUTF8(std::str::Utf8Error),
     InvalidJson(json::Error),
     InvalidThinEdgeJson { name: String },
@@ -281,20 +286,20 @@ pub enum JsonError {
     ThinEdgeReservedWordError { value: String },
 }
 
-impl error::Error for JsonError {
+impl error::Error for ThinEdgeJsonError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            JsonError::InvalidJson(ref e) => Some(e),
-            JsonError::InvalidUTF8(ref e) => Some(e),
-            JsonError::InvalidThinEdgeJson { ref name } => {
+            ThinEdgeJsonError::InvalidJson(ref e) => Some(e),
+            ThinEdgeJsonError::InvalidUTF8(ref e) => Some(e),
+            ThinEdgeJsonError::InvalidThinEdgeJson { ref name } => {
                 eprintln!("InvalidThinEdgeJson {}", name);
                 None
             }
-            JsonError::InvalidThinEdgeJsonValue { ref name } => {
+            ThinEdgeJsonError::InvalidThinEdgeJsonValue { ref name } => {
                 eprintln!("InvalidThinEdgeJsonValue {}", name);
                 None
             }
-            JsonError::ThinEdgeReservedWordError { ref value } => {
+            ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
                 eprintln!("{} is a reserved word", value);
                 None
             }
@@ -302,30 +307,30 @@ impl error::Error for JsonError {
     }
 }
 
-impl From<std::str::Utf8Error> for JsonError {
+impl From<std::str::Utf8Error> for ThinEdgeJsonError {
     fn from(error: std::str::Utf8Error) -> Self {
-        JsonError::InvalidUTF8(error)
+        ThinEdgeJsonError::InvalidUTF8(error)
     }
 }
 
-impl From<json::Error> for JsonError {
+impl From<json::Error> for ThinEdgeJsonError {
     fn from(error: json::Error) -> Self {
-        JsonError::InvalidJson(error)
+        ThinEdgeJsonError::InvalidJson(error)
     }
 }
 
-impl fmt::Display for JsonError {
+impl fmt::Display for ThinEdgeJsonError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            JsonError::InvalidUTF8(..) => write!(f, "InvalidUTF8 Error"),
-            JsonError::InvalidJson(..) => write!(f, "InvalidJson Error"),
-            JsonError::InvalidThinEdgeJson { ref name } => {
+            ThinEdgeJsonError::InvalidUTF8(..) => write!(f, "InvalidUTF8 Error"),
+            ThinEdgeJsonError::InvalidJson(..) => write!(f, "InvalidJson Error"),
+            ThinEdgeJsonError::InvalidThinEdgeJson { ref name } => {
                 write!(f, "InvalidThinEdgeJson {}", name)
             }
-            JsonError::InvalidThinEdgeJsonValue { ref name } => {
+            ThinEdgeJsonError::InvalidThinEdgeJsonValue { ref name } => {
                 write!(f, "InvalidThinEdgeJsonValue {}", name)
             }
-            JsonError::ThinEdgeReservedWordError { ref value } => {
+            ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
                 write!(f, "{} is a reserved word", value)
             }
         }
