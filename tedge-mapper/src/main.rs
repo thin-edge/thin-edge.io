@@ -9,11 +9,8 @@ use std::net::TcpStream;
 mod mapper;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
-
 const EX_NOHOST: i32 = 68;
-
 const NAME: &str = "tedge_mapper";
-
 const MQTT_PORT: u16 = 1883;
 const MQTT_URL: &str = "localhost";
 
@@ -41,6 +38,8 @@ async fn main() -> Result<(), mqtt_client::Error> {
     Ok(())
 }
 
+/// A simple function to check if port we are trying to connect to is available.
+/// This should be part of the client to try to connect and report on connection if an error ocurred.
 fn scan_port(port: u16) -> bool {
     match TcpStream::connect(("localhost", port)) {
         Ok(_) => true,
