@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "translator/c8y_json_translator",
     "mqtt/mqtt_client",
     "tedge",
     "tedge-mapper",
