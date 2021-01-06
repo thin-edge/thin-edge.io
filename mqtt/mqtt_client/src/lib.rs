@@ -364,10 +364,6 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn into_string(self) -> String {
-        format!("{}", self)
-    }
-
     fn client_error(err: rumqttc::ClientError) -> Error {
         Error::ClientError(format!("{}", err))
     }
