@@ -6,12 +6,13 @@
 //!                  "temperature": 23,
 //!                  "pressure": 220
 //!               }"#;
-//!        let time = "2020-06-22T17:03:14.000+02:00";
-//!        let msg_type = "ThinEdgeMeasurement";
-//!        let c8y_json = ThinEdgeJson::from_utf8(&String::from(single_value_thin_edge_json)
-//!                                                         .into_bytes())
-//!                                                         .unwrap()
-//!                                                         .into_cumulocity_json(time, msg_type);
+//!       let time = "2020-06-22T17:03:14.000+02:00";
+//!       let msg_type = "ThinEdgeMeasurement";
+//!       let output = CumulocityJson::from_thin_edge_json(
+//!              &(ThinEdgeJson::from_utf8(&String::from(input).into_bytes()).unwrap()),
+//!              time,
+//!              msg_type,
+//!            ).into_cumulocity_json(time, msg_type);
 
 use chrono::prelude::*;
 use json::JsonValue;
@@ -87,7 +88,7 @@ impl ThinEdgeJson {
                         //Short String value object
                         JsonValue::Short(short_value) => {
                             let short_value_measurement =
-                                TimeStamp::create_string_value_thin_edge_struct(k, short_value)?;
+                                TimeStamp::create_timestamp_thin_edge_struct(k, short_value)?;
                             measurements.push(short_value_measurement);
                         }
                         _ => {
@@ -128,12 +129,14 @@ impl SingleValueMeasurement {
 }
 
 impl TimeStamp {
-    fn create_string_value_thin_edge_struct(
+    fn create_timestamp_thin_edge_struct(
         name: &str,
         value: &str,
     ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
         if value.ne("time") && value.ne("type") && !value.is_empty() {
-            if name.eq("time") || name.eq("type") {
+            if name.eq("time") {
+                //check timestamp for iso8601 complaint, parse fails if not complaint
+                DateTime::parse_from_rfc3339(&value).unwrap();
                 let time_stamp = TimeStamp {
                     name: String::from(name),
                     value: String::from(value),
@@ -400,7 +403,6 @@ mod tests {
     #[test]
     fn thin_edge_translation_with_time_stamp() {
         let single_value_thin_edge_json = r#"{
-                  "type": "ThinEdgeMeasurement",
                   "time" : "2013-06-22T17:03:14.000+02:00",
                   "temperature": 23,
                   "pressure": 220
