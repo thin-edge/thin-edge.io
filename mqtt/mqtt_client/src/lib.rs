@@ -343,7 +343,7 @@ impl ErrorStream {
 }
 
 /// An MQTT related error
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     InvalidTopic { name: String },
     InvalidFilter { pattern: String },
