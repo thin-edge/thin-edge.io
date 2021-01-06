@@ -1,5 +1,4 @@
 use c8y_json_translator::CumulocityJson;
-use c8y_json_translator::ThinEdgeJson;
 use chrono::prelude::*;
 
 fn single_value_translation() {
@@ -14,10 +13,9 @@ fn single_value_translation() {
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
 
     println!(
-        "\nc8yjson: \n {:#}",
+        "\nc8yjson: \n {}",
         CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(&String::from(single_value_thin_edge_json).into_bytes())
-                .unwrap(),
+            &String::from(single_value_thin_edge_json).into_bytes(),
             time,
             msg_type
         )
@@ -40,10 +38,9 @@ fn multi_value_translation() {
 
     println!("\nThin_Edge_Json: \n{:#}", multi_value_thin_edge_json);
     println!(
-        "\nc8yjson: \n {:#}",
+        "\nc8yjson: \n {}",
         CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(&String::from(multi_value_thin_edge_json).into_bytes())
-                .unwrap(),
+            &String::from(multi_value_thin_edge_json).into_bytes(),
             time,
             msg_type
         )
@@ -52,7 +49,6 @@ fn multi_value_translation() {
 
 fn thin_edge_translation_with_type_and_time_stamp() {
     let single_value_thin_edge_json_with_type_and_time = r#"   {
-     "type": "ThinEdgeMeasurement",
      "time" : "2013-06-22T17:03:14.000+02:00",
      "temperature": 23,
      "pressure": 220
@@ -66,12 +62,9 @@ fn thin_edge_translation_with_type_and_time_stamp() {
         single_value_thin_edge_json_with_type_and_time
     );
     println!(
-        "\nc8yjson: \n {:#}",
+        "\nc8yjson: \n {}",
         CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(
-                &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes()
-            )
-            .unwrap(),
+            &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes(),
             time,
             msg_type
         )
