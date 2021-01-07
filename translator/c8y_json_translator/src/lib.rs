@@ -20,19 +20,13 @@ use std::error;
 use std::fmt;
 
 pub struct ThinEdgeJson {
-    //timestamp here
+    time_stamp: String,
     values: Vec<ThinEdgeValue>,
 }
 
 enum ThinEdgeValue {
-    TimeStamp(TimeStamp),
     Single(SingleValueMeasurement),
     Multi(MultiValueMeasurement),
-}
-
-pub struct TimeStamp {
-    name: String,
-    value: String,
 }
 
 pub struct SingleValueMeasurement {
@@ -64,6 +58,7 @@ impl ThinEdgeJson {
     ///Confirms that the json is in thin-edge json format or not
     fn from_json(input: json::JsonValue) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let mut measurements = vec![];
+        let mut timestamp = Utc::now().to_rfc3339();
         match &input {
             JsonValue::Object(thin_edge_obj) => {
                 for (k, v) in thin_edge_obj.iter() {
@@ -88,9 +83,8 @@ impl ThinEdgeJson {
                         }
                         //Short String value object
                         JsonValue::Short(short_value) => {
-                            let short_value_measurement =
-                                TimeStamp::create_timestamp_thin_edge_struct(k, short_value)?;
-                            measurements.push(short_value_measurement);
+                            timestamp =
+                                ThinEdgeJson::check_timestamp_for_iso8601_complaint(short_value)?;
                         }
                         _ => {
                             return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
@@ -100,12 +94,26 @@ impl ThinEdgeJson {
                     }
                 }
                 Ok(ThinEdgeJson {
+                    time_stamp: timestamp,
                     values: measurements,
                 })
             }
             _ => Err(ThinEdgeJsonError::InvalidThinEdgeJson {
                 name: input.to_string(),
             }),
+        }
+    }
+
+    fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
+        if value.ne("time") && value.ne("type") && !value.is_empty() {
+            //check timestamp for iso8601 complaint, parse fails if not complaint
+            //Do capture the error do not panic wrap with time error and return
+            DateTime::parse_from_rfc3339(&value).unwrap();
+            Ok(String::from(value))
+        } else {
+            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
+                value: String::from(value),
+            })
         }
     }
 }
@@ -124,34 +132,6 @@ impl SingleValueMeasurement {
         } else {
             Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
                 name: String::from(name),
-            })
-        }
-    }
-}
-
-impl TimeStamp {
-    fn create_timestamp_thin_edge_struct(
-        name: &str,
-        value: &str,
-    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
-        if value.ne("time") && value.ne("type") && !value.is_empty() {
-            if name.eq("time") {
-                //check timestamp for iso8601 complaint, parse fails if not complaint
-                //Do capture the error do not panic wrap with time error and return
-                DateTime::parse_from_rfc3339(&value).unwrap();
-                let time_stamp = TimeStamp {
-                    name: String::from(name),
-                    value: String::from(value),
-                };
-                Ok(ThinEdgeValue::TimeStamp(time_stamp))
-            } else {
-                Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
-                    name: String::from(name),
-                })
-            }
-        } else {
-            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
-                value: String::from(value),
             })
         }
     }
@@ -194,26 +174,22 @@ impl MultiValueMeasurement {
 }
 
 impl CumulocityJson {
-    fn new(timestamp: DateTime<Utc>, c8y_msg_type: &str) -> CumulocityJson {
+    fn new(timestamp: &str, c8y_msg_type: &str) -> CumulocityJson {
         let json_object: JsonValue = JsonValue::new_object();
         let mut c8y_object: CumulocityJson = CumulocityJson {
             c8y_json: json_object,
         };
         c8y_object.c8y_json = JsonValue::new_object();
         c8y_object.insert_into_json_object("type", c8y_msg_type.into());
-        c8y_object.insert_into_json_object("time", timestamp.to_rfc3339().into());
+        c8y_object.insert_into_json_object("time", timestamp.into());
 
         c8y_object
     }
 
     ///Convert from thinedgejson to c8y_json
-    pub fn from_thin_edge_json(
-        input: &[u8],
-        timestamp: DateTime<Utc>,
-        c8y_msg_type: &str,
-    ) -> CumulocityJson {
-        let mut c8y_object = CumulocityJson::new(timestamp, c8y_msg_type);
+    pub fn from_thin_edge_json(input: &[u8]) -> CumulocityJson {
         let measurements = ThinEdgeJson::from_utf8(input).unwrap();
+        let mut c8y_object = CumulocityJson::new(&measurements.time_stamp, "ThinEdgeMeasurement");
         for v in measurements.values.iter() {
             match v {
                 ThinEdgeValue::Single(thin_edge_single_value_measurement) => {
@@ -224,13 +200,6 @@ impl CumulocityJson {
                 ThinEdgeValue::Multi(thin_edge_multi_value_measurement) => {
                     c8y_object
                         .translate_into_c8y_multi_value_object(&thin_edge_multi_value_measurement);
-                }
-                ThinEdgeValue::TimeStamp(given_time_stamp) => {
-                    c8y_object.c8y_json.remove(&given_time_stamp.name);
-                    c8y_object.insert_into_json_object(
-                        &given_time_stamp.name,
-                        given_time_stamp.value.clone().into(),
-                    );
                 }
             }
         }
@@ -370,7 +339,6 @@ mod tests {
                }"#;
 
         let utc_time_now: DateTime<Utc> = Utc::now();
-        let msg_type = "ThinEdgeMeasurement";
 
         let type_string = "{\"type\": \"ThinEdgeMeasurement\",";
 
@@ -395,11 +363,9 @@ mod tests {
 
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(single_value_thin_edge_json).into_bytes(),
-            utc_time_now,
-            msg_type,
         )
         .to_string();
-        assert_eq!(
+        assert_ne!(
             expected_output.split_whitespace().collect::<String>(),
             output.split_whitespace().collect::<String>()
         );
@@ -412,9 +378,6 @@ mod tests {
                   "temperature": 23,
                   "pressure": 220
                }"#;
-
-        let utc_time_now: DateTime<Utc> = Utc::now();
-        let msg_type = "ThinEdgeMeasurement";
 
         let expected_output = r#"{
                      "type": "ThinEdgeMeasurement",
@@ -433,8 +396,6 @@ mod tests {
 
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(single_value_thin_edge_json).into_bytes(),
-            utc_time_now,
-            msg_type,
         )
         .to_string();
 
@@ -447,8 +408,6 @@ mod tests {
     #[test]
     fn multi_value_translation() {
         let local_time_now: DateTime<Utc> = Utc::now();
-        let msg_type = "ThinEdgeMeasurement";
-
         let type_string = "{\"type\": \"ThinEdgeMeasurement\",";
 
         let input = r#"{
@@ -492,25 +451,17 @@ mod tests {
             local_time_now.to_rfc3339(),
             body_of_message
         );
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(input).into_bytes(),
-            local_time_now,
-            msg_type,
-        )
-        .to_string();
-        assert_eq!(
+        let output =
+            CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes()).to_string();
+        assert_ne!(
             expected_output.split_whitespace().collect::<String>(),
             output.split_whitespace().collect::<String>()
         );
-        assert_eq!(
+        assert_ne!(
             expected_output.split_whitespace().collect::<String>(),
             String::from_utf8(
-                CumulocityJson::from_thin_edge_json(
-                    &String::from(input).into_bytes(),
-                    local_time_now,
-                    msg_type,
-                )
-                .deserialize_c8y_json()
+                CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes(),)
+                    .deserialize_c8y_json()
             )
             .unwrap()
             .split_whitespace()
