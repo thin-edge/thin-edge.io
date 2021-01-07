@@ -12,7 +12,6 @@
 //! }
 //! ```
 
-use core::fmt;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
@@ -343,42 +342,28 @@ impl ErrorStream {
 }
 
 /// An MQTT related error
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum Error {
+    #[error("Invalid topic name: {name:?}")]
     InvalidTopic { name: String },
+
+    #[error("Invalid topic filter: {pattern:?}")]
     InvalidFilter { pattern: String },
+
+    #[error("MQTT client error: {0}")]
     ClientError(String),
+
+    #[error("MQTT connection error: {0}")]
     ConnectionError(String),
+
+    #[error("The receiver lagged too far behind : {lag:?} messages skipped")]
     MessagesSkipped { lag: u64 },
+
+    #[error("The error lagged too far behind : {lag:?} errors skipped")]
     ErrorsSkipped { lag: u64 },
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::InvalidTopic { ref name } => write!(f, "Invalid topic name: {}", name),
-            Error::InvalidFilter { ref pattern } => write!(f, "Invalid topic filter: {}", pattern),
-            Error::ClientError(ref err) => write!(f, "MQTT client error: {}", err),
-            Error::ConnectionError(ref err) => write!(f, "MQTT connection error: {}", err),
-            Error::MessagesSkipped { lag } => write!(
-                f,
-                "The receiver lagged too far behind : {} messages skipped",
-                lag
-            ),
-            Error::ErrorsSkipped { lag } => write!(
-                f,
-                "The error receiver lagged too far behind : {} errors skipped",
-                lag
-            ),
-        }
-    }
-}
-
 impl Error {
-    pub fn into_string(self) -> String {
-        format!("{}", self)
-    }
-
     fn client_error(err: rumqttc::ClientError) -> Error {
         Error::ClientError(format!("{}", err))
     }
