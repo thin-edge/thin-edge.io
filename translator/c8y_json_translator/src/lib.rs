@@ -14,12 +14,14 @@
 //!            msg_type,
 //!      )
 
+use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
 use std::error;
 use std::fmt;
 
 pub struct ThinEdgeJson {
+    //Here time stamp will be kept as string because json does not understand DateTime format
     time_stamp: String,
     values: Vec<ThinEdgeValue>,
 }
@@ -105,16 +107,10 @@ impl ThinEdgeJson {
     }
 
     fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
-        if value.ne("time") && value.ne("type") && !value.is_empty() {
-            //check timestamp for iso8601 complaint, parse fails if not complaint
-            //Do capture the error do not panic wrap with time error and return
-            DateTime::parse_from_rfc3339(&value).unwrap();
-            Ok(String::from(value))
-        } else {
-            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
-                value: String::from(value),
-            })
-        }
+        //check timestamp for iso8601 complaint, parse fails if not complaint
+        //Do capture the error do not panic wrap with time error and return
+        DateTime::parse_from_rfc3339(&value)?;
+        Ok(String::from(value))
     }
 }
 
@@ -271,6 +267,7 @@ pub enum ThinEdgeJsonError {
     InvalidThinEdgeJson { name: String },
     InvalidThinEdgeJsonValue { name: String },
     ThinEdgeReservedWordError { value: String },
+    InvalidTimeStamp(ParseError),
 }
 
 impl error::Error for ThinEdgeJsonError {
@@ -290,6 +287,7 @@ impl error::Error for ThinEdgeJsonError {
                 eprintln!("{} is a reserved word", value);
                 None
             }
+            ThinEdgeJsonError::InvalidTimeStamp(ref e) => Some(e),
         }
     }
 }
@@ -306,11 +304,18 @@ impl From<json::Error> for ThinEdgeJsonError {
     }
 }
 
+impl From<chrono::format::ParseError> for ThinEdgeJsonError {
+    fn from(error: chrono::format::ParseError) -> Self {
+        ThinEdgeJsonError::InvalidTimeStamp(error)
+    }
+}
+
 impl fmt::Display for ThinEdgeJsonError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ThinEdgeJsonError::InvalidUTF8(..) => write!(f, "InvalidUTF8 Error"),
             ThinEdgeJsonError::InvalidJson(..) => write!(f, "InvalidJson Error"),
+            ThinEdgeJsonError::InvalidTimeStamp(..) => write!(f, "InvalidTimeStamp Error"),
             ThinEdgeJsonError::InvalidThinEdgeJson { ref name } => {
                 write!(f, "InvalidThinEdgeJson {}", name)
             }
