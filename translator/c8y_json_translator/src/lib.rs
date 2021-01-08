@@ -183,8 +183,8 @@ impl CumulocityJson {
     }
 
     ///Convert from thinedgejson to c8y_json
-    pub fn from_thin_edge_json(input: &[u8]) -> CumulocityJson {
-        let measurements = ThinEdgeJson::from_utf8(input).unwrap();
+    pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
+        let measurements = ThinEdgeJson::from_utf8(input)?;
         let mut c8y_object = CumulocityJson::new(&measurements.time_stamp, "ThinEdgeMeasurement");
         for v in measurements.values.iter() {
             match v {
@@ -199,7 +199,7 @@ impl CumulocityJson {
                 }
             }
         }
-        c8y_object
+        Ok(c8y_object.deserialize_c8y_json())
     }
 
     fn translate_into_c8y_single_value_object(&mut self, single: &SingleValueMeasurement) {
@@ -368,12 +368,21 @@ mod tests {
 
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(single_value_thin_edge_json).into_bytes(),
-        )
-        .to_string();
-        assert_ne!(
-            expected_output.split_whitespace().collect::<String>(),
-            output.split_whitespace().collect::<String>()
         );
+        match output {
+            Ok(vec) => {
+                assert_ne!(
+                    expected_output.split_whitespace().collect::<String>(),
+                    String::from_utf8(vec)
+                        .unwrap()
+                        .split_whitespace()
+                        .collect::<String>()
+                );
+            }
+            Err(e) => {
+                eprintln!("Error is {}", e);
+            }
+        }
     }
 
     #[test]
@@ -401,13 +410,21 @@ mod tests {
 
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(single_value_thin_edge_json).into_bytes(),
-        )
-        .to_string();
-
-        assert_eq!(
-            expected_output.split_whitespace().collect::<String>(),
-            output.split_whitespace().collect::<String>()
         );
+        match output {
+            Ok(vec) => {
+                assert_eq!(
+                    expected_output.split_whitespace().collect::<String>(),
+                    String::from_utf8(vec)
+                        .unwrap()
+                        .split_whitespace()
+                        .collect::<String>()
+                );
+            }
+            Err(e) => {
+                eprintln!("Error is {}", e);
+            }
+        }
     }
 
     #[test]
@@ -456,21 +473,20 @@ mod tests {
             local_time_now.to_rfc3339(),
             body_of_message
         );
-        let output =
-            CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes()).to_string();
-        assert_ne!(
-            expected_output.split_whitespace().collect::<String>(),
-            output.split_whitespace().collect::<String>()
-        );
-        assert_ne!(
-            expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(
-                CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes(),)
-                    .deserialize_c8y_json()
-            )
-            .unwrap()
-            .split_whitespace()
-            .collect::<String>()
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+        match output {
+            Ok(vec) => {
+                assert_ne!(
+                    expected_output.split_whitespace().collect::<String>(),
+                    String::from_utf8(vec)
+                        .unwrap()
+                        .split_whitespace()
+                        .collect::<String>()
+                );
+            }
+            Err(e) => {
+                eprintln!("Error is {}", e);
+            }
+        }
     }
 }

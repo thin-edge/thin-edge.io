@@ -8,12 +8,17 @@ fn single_value_translation() {
 
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
 
-    println!(
-        "\nc8yjson: \n {}",
-        CumulocityJson::from_thin_edge_json(
-            &String::from(single_value_thin_edge_json).into_bytes(),
-        )
+    let output = CumulocityJson::from_thin_edge_json(
+        &String::from(single_value_thin_edge_json).into_bytes(),
     );
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error is {}", e);
+        }
+    }
 }
 
 fn multi_value_translation() {
@@ -28,10 +33,16 @@ fn multi_value_translation() {
    }"#;
 
     println!("\nThin_Edge_Json: \n{:#}", multi_value_thin_edge_json);
-    println!(
-        "\nc8yjson: \n {}",
-        CumulocityJson::from_thin_edge_json(&String::from(multi_value_thin_edge_json).into_bytes(),)
-    );
+    let output =
+        CumulocityJson::from_thin_edge_json(&String::from(multi_value_thin_edge_json).into_bytes());
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error is {}", e);
+        }
+    }
 }
 
 fn thin_edge_translation_with_type_and_time_stamp() {
@@ -45,12 +56,17 @@ fn thin_edge_translation_with_type_and_time_stamp() {
         "\nThin_Edge_Json: \n{:#}",
         single_value_thin_edge_json_with_type_and_time
     );
-    println!(
-        "\nc8yjson: \n {}",
-        CumulocityJson::from_thin_edge_json(
-            &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes(),
-        )
+    let output = CumulocityJson::from_thin_edge_json(
+        &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes(),
     );
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error is {}", e);
+        }
+    }
 }
 
 pub fn main() {
