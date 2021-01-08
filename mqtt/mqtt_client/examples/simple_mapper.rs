@@ -8,7 +8,7 @@ use mqtt_client::Message;
 use mqtt_client::Topic;
 
 #[tokio::main]
-pub async fn main() -> Result<(), mqtt_client::Error> {
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let name = "c8y_mapper";
     let in_topic = Topic::new("tedge/measurements")?;
     let out_topic = Topic::new("c8y/s/us")?;
