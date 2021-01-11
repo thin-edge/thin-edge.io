@@ -126,15 +126,21 @@ impl SingleValueMeasurement {
         name: &str,
         value: f64,
     ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
-        if value == 0.0 || value.is_normal() {
-            let single_value = SingleValueMeasurement {
-                name: String::from(name),
-                value,
-            };
-            Ok(ThinEdgeValue::Single(single_value))
+        if name.ne("time") && name.ne("type") {
+            if value == 0.0 || value.is_normal() {
+                let single_value = SingleValueMeasurement {
+                    name: String::from(name),
+                    value,
+                };
+                Ok(ThinEdgeValue::Single(single_value))
+            } else {
+                Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
+                    name: String::from(name),
+                })
+            }
         } else {
-            Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
-                name: String::from(name),
+            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
+                value: String::from(name),
             })
         }
     }
@@ -291,7 +297,7 @@ impl error::Error for ThinEdgeJsonError {
                 None
             }
             ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
-                eprintln!("{} is a reserved word", value);
+                eprintln!("ThinEdgeReservedWordError: {} is a reserved word", value);
                 None
             }
             ThinEdgeJsonError::InvalidTimeStamp(ref e) => Some(e),
@@ -330,7 +336,7 @@ impl fmt::Display for ThinEdgeJsonError {
                 write!(f, "InvalidThinEdgeJsonValue {}", name)
             }
             ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
-                write!(f, "{} is a reserved word", value)
+                write!(f, "{} is a reserved word, takes only string value", value)
             }
         }
     }
