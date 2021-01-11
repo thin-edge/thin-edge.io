@@ -10,44 +10,28 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-armv7:
-    name:
+  build:
+    name: tedge-cross
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - armv7-unknown-linux-gnueabihf
+          - arm-unknown-linux-gnueabihf
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: armv7-unknown-linux-gnueabihf
+          target: ${{ matrix.target }}
           override: true
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: test
-          args: --target armv7-unknown-linux-gnueabihf --verbose
+          args: --verbose --target=${{ matrix.target }}
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --target armv7-unknown-linux-gnueabihf --release
-
-  build-arm:
-    name:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: arm-unknown-linux-gnueabihf
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: test
-          args: --target arm-unknown-linux-gnueabihf --verbose
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target arm-unknown-linux-gnueabihf --release
+          args: --release --target=${{ matrix.target }}
