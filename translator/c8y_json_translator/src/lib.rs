@@ -1,18 +1,16 @@
 //! A library to translate the ThinEdgeJson into C8yJson
+//! Takes thin_edge_json bytes and returns c8y json bytes
 //!
-//! use c8y_json_translator::ThinEdgeJson;
-//!fn main() {
-//!let single_value_thin_edge_json = r#"{
-//!                  "temperature": 23,
-//!                  "pressure": 220
-//!               }"#;
-//!       let time = "2020-06-22T17:03:14.000+02:00";
-//!       let msg_type = "ThinEdgeMeasurement";
-//!       let output = CumulocityJson::from_thin_edge_json(
-//!            &String::from(input).into_bytes(),
-//!            local_time_now,
-//!            msg_type,
-//!      )
+//! ```
+//! use c8y_json_translator::CumulocityJson;
+//! let single_value_thin_edge_json = r#"{
+//!        "time": "2020-06-22T17:03:14.000+02:00",
+//!        "temperature": 23,
+//!        "pressure": 220
+//!     }"#;
+//! let output = CumulocityJson::from_thin_edge_json(
+//!             &String::from(single_value_thin_edge_json).into_bytes());
+//! ```
 
 use chrono::format::ParseError;
 use chrono::prelude::*;
@@ -47,11 +45,9 @@ pub struct CumulocityJson {
 }
 
 impl ThinEdgeJson {
-    ///From array of bytes->to str->convert then to json
     pub fn from_utf8(input: &[u8]) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let json_string = std::str::from_utf8(input)?;
         match json::parse(&json_string) {
-            //Check the object for the thin -edge json template 2 level
             Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj),
             Err(err) => Err(ThinEdgeJsonError::InvalidJson(err)),
         }
@@ -114,8 +110,7 @@ impl ThinEdgeJson {
     }
 
     fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
-        //check timestamp for iso8601 complaint, parse fails if not complaint
-        //Do capture the error do not panic wrap with time error and return
+        //Parse fails if timestamp is not is8601 complaint
         DateTime::parse_from_rfc3339(&value)?;
         Ok(String::from(value))
     }
@@ -217,7 +212,6 @@ impl CumulocityJson {
 
     fn translate_into_c8y_single_value_object(&mut self, single: &SingleValueMeasurement) {
         let single_value_object: JsonValue = JsonValue::new_object();
-        //intermediate c8y object
         let mut single_value_c8y_object: CumulocityJson = CumulocityJson {
             c8y_json: single_value_object,
         };
@@ -231,7 +225,6 @@ impl CumulocityJson {
 
     fn translate_into_c8y_multi_value_object(&mut self, multi: &MultiValueMeasurement) {
         let multi_value_object: JsonValue = JsonValue::new_object();
-        //intermediate c8y object
         let mut multi_value_c8y_object: CumulocityJson = CumulocityJson {
             c8y_json: multi_value_object,
         };
