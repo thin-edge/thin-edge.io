@@ -6,6 +6,8 @@ readme = "README.md"
 
 [dependencies]
 structopt = "0.3.21"
+rcgen = "0.8.9"
+chrono = "0.4.19"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
