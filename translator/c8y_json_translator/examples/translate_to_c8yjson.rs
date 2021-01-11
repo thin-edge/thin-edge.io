@@ -3,7 +3,7 @@ use c8y_json_translator::CumulocityJson;
 fn single_value_translation() {
     let single_value_thin_edge_json = r#"  {
     "temperature": 23,
-    "pressure": 220,
+    "pressure": 220
    }"#;
 
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
