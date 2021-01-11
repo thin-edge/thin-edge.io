@@ -1,4 +1,4 @@
-name: cross-arm
+name: tedge-cross-arm
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --target armv7-unknown-linux-gnueabihf
+          args: --target armv7-unknown-linux-gnueabihf --verbose
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
@@ -45,7 +45,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --target arm-unknown-linux-gnueabihf
+          args: --target arm-unknown-linux-gnueabihf --verbose
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
