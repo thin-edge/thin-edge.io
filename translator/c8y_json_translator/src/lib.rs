@@ -85,8 +85,15 @@ impl ThinEdgeJson {
                         }
                         //Short String value object
                         JsonValue::Short(short_value) => {
-                            timestamp =
-                                ThinEdgeJson::check_timestamp_for_iso8601_complaint(short_value)?;
+                            if k.eq("time") {
+                                timestamp = ThinEdgeJson::check_timestamp_for_iso8601_complaint(
+                                    short_value,
+                                )?;
+                            } else {
+                                return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
+                                    name: String::from(k),
+                                });
+                            }
                         }
                         _ => {
                             return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
