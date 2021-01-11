@@ -64,20 +64,14 @@ impl ThinEdgeJson {
                         //Single Value object
                         JsonValue::Number(num) => {
                             let single_value_measurement =
-                                SingleValueMeasurement::create_single_val_thin_edge_struct(
-                                    k,
-                                    (*num).into(),
-                                )?;
-                            measurements.push(single_value_measurement)
+                                SingleValueMeasurement::new(k, (*num).into())?;
+                            measurements.push(ThinEdgeValue::Single(single_value_measurement));
                         }
                         //Multi value object
                         JsonValue::Object(multi_value_thin_edge_object) => {
                             let multi_value_measurement =
-                                MultiValueMeasurement::create_multi_val_thin_edge_struct(
-                                    k,
-                                    multi_value_thin_edge_object,
-                                )?;
-                            measurements.push(multi_value_measurement)
+                                MultiValueMeasurement::new(k, multi_value_thin_edge_object)?;
+                            measurements.push(ThinEdgeValue::Multi(multi_value_measurement));
                         }
                         //Short String value object
                         JsonValue::Short(short_value) => {
@@ -117,17 +111,14 @@ impl ThinEdgeJson {
 }
 
 impl SingleValueMeasurement {
-    fn create_single_val_thin_edge_struct(
-        name: &str,
-        value: f64,
-    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
+    fn new(name: &str, value: f64) -> Result<Self, ThinEdgeJsonError> {
         if name.ne("time") && name.ne("type") {
             if value == 0.0 || value.is_normal() {
                 let single_value = SingleValueMeasurement {
                     name: String::from(name),
                     value,
                 };
-                Ok(ThinEdgeValue::Single(single_value))
+                Ok(single_value)
             } else {
                 Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
                     name: String::from(name),
@@ -142,26 +133,15 @@ impl SingleValueMeasurement {
 }
 
 impl MultiValueMeasurement {
-    fn create_multi_val_thin_edge_struct(
-        name: &str,
-        multi_value_obj: &json::object::Object,
-    ) -> Result<ThinEdgeValue, ThinEdgeJsonError> {
+    fn new(name: &str, multi_value_obj: &json::object::Object) -> Result<Self, ThinEdgeJsonError> {
         let mut single_values = vec![];
 
         for (k, v) in multi_value_obj.iter() {
             match v {
                 JsonValue::Number(num) => {
                     //Single Value object
-                    let single_value_measurement =
-                        SingleValueMeasurement::create_single_val_thin_edge_struct(
-                            k,
-                            (*num).into(),
-                        )?;
-                    if let ThinEdgeValue::Single(single_value_measurement) =
-                        single_value_measurement
-                    {
-                        single_values.push(single_value_measurement);
-                    }
+                    let single_value_measurement = SingleValueMeasurement::new(k, (*num).into())?;
+                    single_values.push(single_value_measurement);
                 }
                 _ => {
                     return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
@@ -170,10 +150,10 @@ impl MultiValueMeasurement {
                 }
             }
         }
-        Ok(ThinEdgeValue::Multi(MultiValueMeasurement {
+        Ok(MultiValueMeasurement {
             name: String::from(name),
             values: single_values,
-        }))
+        })
     }
 }
 
