@@ -21,6 +21,9 @@ pub struct Opt {
 enum TEdgeCmd {
     /// Configure Thin Edge.
     Config(ConfigCmd),
+
+    /// Create and manage device certificate
+    Cert(super::certificate::CertCmd),
 }
 
 #[derive(StructOpt, Debug)]
