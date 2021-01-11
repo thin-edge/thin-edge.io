@@ -1,3 +1,5 @@
+use super::command::Cmd;
+use std::error::Error;
 use structopt::clap;
 use structopt::StructOpt;
 
@@ -39,4 +41,32 @@ enum ConfigCmd {
 
     /// Get value.
     Get { key: String },
+}
+
+impl ToString for Opt {
+    fn to_string(&self) -> String {
+        format!("{:?}", self.tedge_cmd)
+    }
+}
+
+impl Opt {
+    pub fn run(&self) -> Result<(), Box<dyn Error>> {
+        self.tedge_cmd.run(self.verbose)
+    }
+}
+
+impl Cmd for TEdgeCmd {
+    fn run(&self, verbose: u8) -> Result<(), Box<dyn Error>> {
+        match self {
+            TEdgeCmd::Config(ref cmd) => cmd.run(verbose),
+            TEdgeCmd::Cert(ref cmd) => cmd.run(verbose),
+        }
+    }
+}
+
+impl Cmd for ConfigCmd {
+    fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
+        println!("{:?}", self);
+        Ok(())
+    }
 }
