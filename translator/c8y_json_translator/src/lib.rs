@@ -18,8 +18,11 @@ use json::JsonValue;
 use std::error;
 use std::fmt;
 
+/// ThinEdgeJson is represented in this struct
+/// Since json does not understand DateTime format, the time stamp is represented as a string
+/// Before populating the struct members the thinedge json values and names will be validated
+
 pub struct ThinEdgeJson {
-    //Here time stamp will be kept as string because json does not understand DateTime format
     time_stamp: String,
     values: Vec<ThinEdgeValue>,
 }
@@ -224,9 +227,7 @@ impl CumulocityJson {
         self.insert_into_json_object(&multi.name, multi_value_c8y_object.c8y_json);
     }
 
-    ///We can not avoid the unwrap() call here, its sure that the insert call will not fail
-    ///and panic
-
+    ///We are sure that the insert call will not fail and panic
     fn insert_into_json_object(&mut self, name: &str, value: JsonValue) {
         self.c8y_json.insert(name, value).unwrap();
     }
