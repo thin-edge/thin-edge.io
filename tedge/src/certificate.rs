@@ -1,4 +1,4 @@
-use super::command::Cmd;
+use super::command::Command;
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::CertificateParams;
@@ -58,7 +58,19 @@ impl From<std::io::Error> for CertError {
     }
 }
 
-impl Cmd for CertCmd {
+impl Command for CertCmd {
+    fn to_string(&self) -> String {
+        match self {
+            CertCmd::Create {
+                id,
+                cert_path: _,
+                key_path: _,
+            } => format!("create a test certificate for the device {}.", id),
+            CertCmd::Show => format!("show the device certificate"),
+            CertCmd::Remove => format!("remove the device certificate"),
+        }
+    }
+
     fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
         match self {
             CertCmd::Create {

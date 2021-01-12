@@ -1,4 +1,4 @@
-use super::command::Cmd;
+use super::command::Command;
 use std::error::Error;
 use structopt::clap;
 use structopt::StructOpt;
@@ -45,7 +45,7 @@ enum ConfigCmd {
 
 impl ToString for Opt {
     fn to_string(&self) -> String {
-        format!("{:?}", self.tedge_cmd)
+        self.tedge_cmd.to_string()
     }
 }
 
@@ -55,18 +55,32 @@ impl Opt {
     }
 }
 
-impl Cmd for TEdgeCmd {
-    fn run(&self, verbose: u8) -> Result<(), Box<dyn Error>> {
+impl TEdgeCmd {
+    fn sub_command(&self) -> &dyn Command {
         match self {
-            TEdgeCmd::Config(ref cmd) => cmd.run(verbose),
-            TEdgeCmd::Cert(ref cmd) => cmd.run(verbose),
+            TEdgeCmd::Config(ref cmd) => cmd,
+            TEdgeCmd::Cert(ref cmd) => cmd,
         }
     }
 }
 
-impl Cmd for ConfigCmd {
+impl Command for TEdgeCmd {
+    fn to_string(&self) -> String {
+        self.sub_command().to_string()
+    }
+
+    fn run(&self, verbose: u8) -> Result<(), Box<dyn Error>> {
+        self.sub_command().run(verbose)
+    }
+}
+
+impl Command for ConfigCmd {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+
     fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
-        println!("{:?}", self);
+        println!("Not implemented {:?}", self);
         Ok(())
     }
 }
