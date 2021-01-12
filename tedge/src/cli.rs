@@ -1,6 +1,8 @@
 use structopt::clap;
 use structopt::StructOpt;
 
+mod mqtt;
+
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = clap::crate_name!(),
@@ -18,13 +20,16 @@ pub struct Opt {
 }
 
 #[derive(StructOpt, Debug)]
-enum TEdgeCmd {
+pub enum TEdgeCmd {
     /// Configure Thin Edge.
     Config(ConfigCmd),
+
+    /// Publish a message on a topic and subscribe a topic.
+    Mqtt(MqttCmd),
 }
 
 #[derive(StructOpt, Debug)]
-enum ConfigCmd {
+pub enum ConfigCmd {
     /// List all.
     List,
 
@@ -36,4 +41,27 @@ enum ConfigCmd {
 
     /// Get value.
     Get { key: String },
+}
+
+#[derive(StructOpt, Debug)]
+pub enum MqttCmd {
+    /// Publish a MQTT message on a topic.
+    Pub {
+        /// Topic to publish
+        topic: String,
+        /// Message to publish
+        message: String,
+        ///  QoS level (0, 1, 2)
+        #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
+        qos: rumqttc::QoS,
+    },
+
+    /// Subscribe a MQTT topic.
+    Sub {
+        /// Topic to publish
+        topic: String,
+        /// QoS level (0, 1, 2)
+        #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
+        qos: rumqttc::QoS,
+    },
 }
