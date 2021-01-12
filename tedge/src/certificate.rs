@@ -41,7 +41,7 @@ impl Cmd for CertCmd {
                 key_path,
             } => create_test_certificate(id, cert_path, key_path),
             _ => {
-                println!("{:?}", self);
+                println!("Not implemented {:?}", self);
                 Ok(())
             }
         }
@@ -59,8 +59,9 @@ fn create_test_certificate(
     distinguished_name.push(rcgen::DnType::OrganizationName, "Thin Edge");
     distinguished_name.push(rcgen::DnType::OrganizationalUnitName, "Test Device");
 
-    let not_before = Utc::now();
-    let not_after = not_before + Duration::days(90);
+    let today = Utc::now();
+    let not_before = today - Duration::days(1); // Ensure the certificate is valid today
+    let not_after = today + Duration::days(90);
 
     let mut params = CertificateParams::default();
     params.distinguished_name = distinguished_name;
