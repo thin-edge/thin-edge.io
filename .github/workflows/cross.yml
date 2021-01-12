@@ -17,7 +17,6 @@ jobs:
       matrix:
         target:
           - armv7-unknown-linux-gnueabihf
-          - arm-unknown-linux-gnueabihf
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
