@@ -137,11 +137,17 @@ impl MultiValueMeasurement {
         let mut single_values = vec![];
 
         for (k, v) in multi_value_obj.iter() {
+            println!("k: {}", k);
             match v {
                 JsonValue::Number(num) => {
                     //Single Value object
                     let single_value_measurement = SingleValueMeasurement::new(k, (*num).into())?;
                     single_values.push(single_value_measurement);
+                }
+                JsonValue::Object(_object) => {
+                    return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy {
+                        name: String::from(name),
+                    })
                 }
                 _ => {
                     return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
@@ -254,6 +260,7 @@ pub enum ThinEdgeJsonError {
     InvalidThinEdgeJsonValue { name: String },
     ThinEdgeReservedWordError { value: String },
     InvalidTimeStamp(ParseError),
+    InvalidThinEdgeHierarchy { name: String },
 }
 
 impl error::Error for ThinEdgeJsonError {
@@ -273,6 +280,11 @@ impl error::Error for ThinEdgeJsonError {
                 eprintln!("ThinEdgeReservedWordError: {} is a reserved word", value);
                 None
             }
+            ThinEdgeJsonError::InvalidThinEdgeHierarchy { ref name } => {
+                eprintln!("ThinEdgeHierarchy Error: {} is a reserved word", name);
+                None
+            }
+
             ThinEdgeJsonError::InvalidTimeStamp(ref e) => Some(e),
         }
     }
@@ -310,6 +322,9 @@ impl fmt::Display for ThinEdgeJsonError {
             }
             ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
                 write!(f, "{} is a reserved word, takes only string value", value)
+            }
+            ThinEdgeJsonError::InvalidThinEdgeHierarchy { ref name } => {
+                write!(f, "InvalidThinEdgeHierarchy, at {}", name)
             }
         }
     }
@@ -524,19 +539,18 @@ mod tests {
     //Thin-edge-json supports one level of heirarchy
     fn check_thin_edge_with_more_than_1_level_heirarchy() {
         let multi_level_heirarchy = r#"{
-                "temperature": 25 ,
                 "location": {
                       "latitude": 32.54,
                       "longitude": -117.67,
                       "altitude": 98.6,
-                      "location":{
-                         "latitude": 32.54,
-                         "longitude": -117.67
-                      },
+                      "area": {
+                         "breadth": 32.54,
+                         "depth": 117.67
+                      }
                   },
                 "pressure": 98
         }"#;
-        let expected_output = "InvalidJson Error";
+        let expected_output = "InvalidThinEdgeHierarchy, at location";
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
 
