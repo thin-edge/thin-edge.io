@@ -1,4 +1,4 @@
-name: thinedge_ci 
+name: tedge-self-hosted
 
 on:
   push:
@@ -15,15 +15,12 @@ jobs:
 
      strategy:
        matrix:
-                          
-         include:
-          - os: ubuntu-latest
-                                             
-          - os: Raspbian32            
 
-          - os: Ubuntu20.04  
+         include:
+
+          - os: Raspbian32
 
      steps:
       - uses: actions/checkout@v2
-      - name: Test and Build script 
+      - name: Test and Build script
         run:  bash  ./scripts/test_build.sh

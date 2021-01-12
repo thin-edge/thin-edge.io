@@ -15,7 +15,7 @@ const C8Y_TEMPLATE_RESTART: &str = "510";
 const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 #[tokio::main]
-pub async fn main() -> Result<(), mqtt_client::Error> {
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let c8y_msg = Topic::new("c8y/s/us")?;
     let c8y_cmd = Topic::new("c8y/s/ds")?;
     let c8y_err = Topic::new("c8y/s/e")?;

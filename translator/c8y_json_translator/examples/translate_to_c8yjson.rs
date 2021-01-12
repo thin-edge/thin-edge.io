@@ -1,6 +1,4 @@
 use c8y_json_translator::CumulocityJson;
-use c8y_json_translator::ThinEdgeJson;
-use chrono::prelude::*;
 
 fn single_value_translation() {
     let single_value_thin_edge_json = r#"  {
@@ -8,26 +6,22 @@ fn single_value_translation() {
     "pressure": 220
    }"#;
 
-    let time: DateTime<Utc> = Utc::now();
-    let msg_type = "ThinEdgeMeasurement";
-
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
 
-    println!(
-        "\nc8yjson: \n {:#}",
-        CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(&String::from(single_value_thin_edge_json).into_bytes())
-                .unwrap(),
-            time,
-            msg_type
-        )
+    let output = CumulocityJson::from_thin_edge_json(
+        &String::from(single_value_thin_edge_json).into_bytes(),
     );
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
 }
 
 fn multi_value_translation() {
-    let time: DateTime<Utc> = Utc::now();
-    let msg_type = "ThinEdgeMeasurement";
-
     let multi_value_thin_edge_json = r#"   {
       "temperature": 0 ,
       "location": {
@@ -39,43 +33,40 @@ fn multi_value_translation() {
    }"#;
 
     println!("\nThin_Edge_Json: \n{:#}", multi_value_thin_edge_json);
-    println!(
-        "\nc8yjson: \n {:#}",
-        CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(&String::from(multi_value_thin_edge_json).into_bytes())
-                .unwrap(),
-            time,
-            msg_type
-        )
-    );
+    let output =
+        CumulocityJson::from_thin_edge_json(&String::from(multi_value_thin_edge_json).into_bytes());
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
 }
 
 fn thin_edge_translation_with_type_and_time_stamp() {
     let single_value_thin_edge_json_with_type_and_time = r#"   {
-     "type": "ThinEdgeMeasurement",
      "time" : "2013-06-22T17:03:14.000+02:00",
      "temperature": 23,
      "pressure": 220
     }"#;
 
-    let time: DateTime<Utc> = Utc::now();
-    let msg_type = "ThinEdgeMeasurement";
-
     println!(
         "\nThin_Edge_Json: \n{:#}",
         single_value_thin_edge_json_with_type_and_time
     );
-    println!(
-        "\nc8yjson: \n {:#}",
-        CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(
-                &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes()
-            )
-            .unwrap(),
-            time,
-            msg_type
-        )
+    let output = CumulocityJson::from_thin_edge_json(
+        &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes(),
     );
+    match output {
+        Ok(vec) => {
+            println!("{}", String::from_utf8(vec).unwrap());
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
 }
 
 pub fn main() {
