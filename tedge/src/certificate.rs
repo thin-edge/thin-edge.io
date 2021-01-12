@@ -67,6 +67,7 @@ fn create_test_certificate(
     params.not_before = not_before;
     params.not_after = not_after;
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+    params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
     let cert = Certificate::from_params(params)?;
 
