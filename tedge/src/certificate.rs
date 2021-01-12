@@ -1,10 +1,11 @@
 use super::command::Cmd;
 use chrono::offset::Utc;
 use chrono::Duration;
-use rcgen::Certificate;
 use rcgen::CertificateParams;
+use rcgen::{Certificate, RcgenError};
 use std::error::Error;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
 
@@ -32,6 +33,31 @@ pub enum CertCmd {
     Remove,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum CertError {
+    #[error(
+        r#"A certificate already exists and would be overwritten.
+       Run `tegde cert remove` first to generate a new certificate.
+    "#
+    )]
+    AlreadyExists,
+
+    #[error("I/O error")]
+    IoError(std::io::Error),
+
+    #[error("Cryptography related error")]
+    PemError(#[from] RcgenError),
+}
+
+impl From<std::io::Error> for CertError {
+    fn from(err: std::io::Error) -> Self {
+        match err.kind() {
+            std::io::ErrorKind::AlreadyExists => CertError::AlreadyExists,
+            _ => CertError::IoError(err),
+        }
+    }
+}
+
 impl Cmd for CertCmd {
     fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
         match self {
@@ -39,21 +65,39 @@ impl Cmd for CertCmd {
                 id,
                 cert_path,
                 key_path,
-            } => create_test_certificate(id, cert_path, key_path),
+            } => create_test_certificate(id, cert_path, key_path)?,
             _ => {
                 println!("Not implemented {:?}", self);
-                Ok(())
             }
         }
+        Ok(())
     }
 }
 
-fn create_test_certificate(
-    id: &str,
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(), Box<dyn Error>> {
+fn create_test_certificate(id: &str, cert_path: &str, key_path: &str) -> Result<(), CertError> {
+    let mut cert_file = create_new_file(cert_path)?;
+    let mut key_file = create_new_file(key_path)?;
 
+    let cert = new_selfsigned_certificate(id)?;
+
+    let cert_pem = cert.serialize_pem()?;
+    cert_file.write_all(cert_pem.as_bytes())?;
+
+    let cert_key = cert.serialize_private_key_pem();
+    key_file.write_all(cert_key.as_bytes())?;
+
+    Ok(())
+}
+
+fn create_new_file(path: &str) -> Result<File, CertError> {
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|err| err.into())
+}
+
+fn new_selfsigned_certificate(id: &str) -> Result<Certificate, RcgenError> {
     let mut distinguished_name = rcgen::DistinguishedName::new();
     distinguished_name.push(rcgen::DnType::CommonName, id);
     distinguished_name.push(rcgen::DnType::OrganizationName, "Thin Edge");
@@ -70,15 +114,5 @@ fn create_test_certificate(
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
-    let cert = Certificate::from_params(params)?;
-
-    let cert_pem = cert.serialize_pem()?;
-    let mut cert_file = File::create(cert_path)?;
-    cert_file.write_all(cert_pem.as_bytes())?;
-
-    let cert_key = cert.serialize_private_key_pem();
-    let mut key_file = File::create(key_path)?;
-    key_file.write_all(cert_key.as_bytes())?;
-
-    Ok(())
+    Certificate::from_params(params)
 }

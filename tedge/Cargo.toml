@@ -5,9 +5,10 @@ edition = "2018"
 readme = "README.md"
 
 [dependencies]
-structopt = "0.3.21"
-rcgen = "0.8.9"
 chrono = "0.4.19"
+rcgen = "0.8.9"
+structopt = "0.3.21"
+thiserror = "1.0"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
