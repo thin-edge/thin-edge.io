@@ -74,7 +74,7 @@ impl Mapper {
     pub async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
         self.subsribe_errors();
         let mut messages = self.client.subscribe(self.in_topic.filter()).await?;
-        Ok(while let Some(message) = messages.next().await {
+        while let Some(message) = messages.next().await {
             log::debug!("Mapping {:?}", message);
             match Mapper::map(&message.payload) {
                 Ok(mapped) => {
@@ -92,11 +92,12 @@ impl Mapper {
                         .await?
                 }
             }
-        })
+        }
+        Ok(())
     }
 
     fn map(input: &Vec<u8>) -> Result<Vec<u8>, c8y_json_translator::ThinEdgeJsonError> {
-        Ok(CumulocityJson::from_thin_edge_json(&input[..])?)
+        CumulocityJson::from_thin_edge_json(&input[..])
     }
 }
 
