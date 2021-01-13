@@ -1,11 +1,12 @@
+use mqtt_client::{Config, Message, Topic};
 use structopt::StructOpt;
-
 mod cli;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cmd = cli::TEdgeCmd::from_args();
     match cmd {
-        cli::TEdgeCmd::Mqtt(mqtt) => mqtt.exec().unwrap(), // unwrap is not good, but don't know whatelse I can use.
+        cli::TEdgeCmd::Mqtt(mqtt) => mqtt.exec().await.expect("tedge mqtt error"),
         _ => println!("{:#?}", cmd),
     }
 }

@@ -1,6 +1,6 @@
+use mqtt_client::QoS;
 use structopt::clap;
 use structopt::StructOpt;
-
 mod mqtt;
 
 #[derive(StructOpt, Debug)]
@@ -53,7 +53,7 @@ pub enum MqttCmd {
         message: String,
         ///  QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
-        qos: rumqttc::QoS,
+        qos: QoS,
     },
 
     /// Subscribe a MQTT topic.
@@ -62,6 +62,6 @@ pub enum MqttCmd {
         topic: String,
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
-        qos: rumqttc::QoS,
+        qos: QoS,
     },
 }

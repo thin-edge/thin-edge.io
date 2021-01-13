@@ -16,7 +16,7 @@ use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet::Publish;
-use rumqttc::QoS;
+pub use rumqttc::QoS;
 use tokio::sync::broadcast;
 
 /// A connection to the local MQTT bus.
@@ -93,21 +93,18 @@ impl Client {
     }
 
     /// Publish a message on the local MQTT bus.
-    ///
     pub async fn publish(&self, message: Message) -> Result<(), Error> {
-        let qos = QoS::AtLeastOnce;
         let retain = false;
         self.mqtt_client
-            .publish(&message.topic.name, qos, retain, message.payload)
+            .publish(&message.topic.name, message.qos, retain, message.payload)
             .await
             .map_err(Error::client_error)
     }
 
     /// Subscribe to the messages published on the given topics
     pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
-        let qos = QoS::AtLeastOnce;
         self.mqtt_client
-            .subscribe(&filter.pattern, qos)
+            .subscribe(&filter.pattern, filter.qos)
             .await
             .map_err(Error::client_error)?;
 
@@ -166,6 +163,7 @@ impl Client {
                     let _ = message_sender.send(Message {
                         topic: Topic::incoming(&msg.topic),
                         payload: msg.payload.to_vec(),
+                        qos: msg.qos,
                     });
                 }
                 Ok(Event::Incoming(Incoming::Disconnect))
@@ -191,6 +189,13 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
         }
+    }
+}
+
+impl Config {
+    /// Use this config to connect a MQTT client if host and port are not default.
+    pub fn new(host: String, port: u16) -> Self {
+        Config { host, port }
     }
 }
 
@@ -228,6 +233,7 @@ impl Topic {
     pub fn filter(&self) -> TopicFilter {
         TopicFilter {
             pattern: self.name.clone(),
+            qos: QoS::AtLeastOnce,
         }
     }
 }
@@ -236,14 +242,26 @@ impl Topic {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TopicFilter {
     pub pattern: String,
+    pub qos: QoS,
 }
 
 impl TopicFilter {
     /// Check if the pattern is valid and build a new topic filter.
     pub fn new(pattern: &str) -> Result<TopicFilter, Error> {
         let pattern = String::from(pattern);
+        let qos = QoS::AtLeastOnce;
         if rumqttc::valid_filter(&pattern) {
-            Ok(TopicFilter { pattern })
+            Ok(TopicFilter { pattern, qos })
+        } else {
+            Err(Error::InvalidFilter { pattern })
+        }
+    }
+
+    /// Check if the pattern is valid and build a new topic filter.
+    pub fn new_with_qos(pattern: &str, qos: QoS) -> Result<TopicFilter, Error> {
+        let pattern = String::from(pattern);
+        if rumqttc::valid_filter(&pattern) {
+            Ok(TopicFilter { pattern, qos })
         } else {
             Err(Error::InvalidFilter { pattern })
         }
@@ -260,6 +278,7 @@ impl TopicFilter {
 pub struct Message {
     pub topic: Topic,
     pub payload: Vec<u8>,
+    pub qos: QoS,
 }
 
 impl Message {
@@ -270,6 +289,18 @@ impl Message {
         Message {
             topic: topic.clone(),
             payload: payload.into(),
+            qos: QoS::AtLeastOnce,
+        }
+    }
+
+    pub fn new_with_qos<B>(topic: &Topic, qos: QoS, payload: B) -> Message
+    where
+        B: Into<Vec<u8>>,
+    {
+        Message {
+            topic: topic.clone(),
+            payload: payload.into(),
+            qos,
         }
     }
 }

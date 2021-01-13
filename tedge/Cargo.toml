@@ -6,8 +6,9 @@ readme = "README.md"
 
 [dependencies]
 structopt = "0.3.21"
-rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
 tokio = { version = "1.0", features = ["full"] }
+mqtt_client = { path = "../mqtt/mqtt_client" }
+futures = "0.3"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
