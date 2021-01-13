@@ -79,10 +79,7 @@ impl Mapper {
             match Mapper::map(&message.payload) {
                 Ok(mapped) => {
                     self.client
-                        .publish(mqtt_client::Message::new(
-                            &self.out_topic,
-                            mapped.to_string(),
-                        ))
+                        .publish(mqtt_client::Message::new(&self.out_topic, mapped))
                         .await?
                 }
                 Err(error) => {
