@@ -96,19 +96,17 @@ impl Client {
     /// Publish a message on the local MQTT bus.
     ///
     pub async fn publish(&self, message: Message) -> Result<(), Error> {
-        let qos = QoS::AtLeastOnce;
         let retain = false;
         self.mqtt_client
-            .publish(&message.topic.name, qos, retain, message.payload)
+            .publish(&message.topic.name, message.qos, retain, message.payload)
             .await
             .map_err(Error::client_error)
     }
 
     /// Subscribe to the messages published on the given topics
     pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
-        let qos = QoS::AtLeastOnce;
         self.mqtt_client
-            .subscribe(&filter.pattern, qos)
+            .subscribe(&filter.pattern, QoS::AtLeastOnce)
             .await
             .map_err(Error::client_error)?;
 
@@ -167,6 +165,7 @@ impl Client {
                     let _ = message_sender.send(Message {
                         topic: Topic::incoming(&msg.topic),
                         payload: msg.payload.to_vec(),
+                        qos: msg.qos,
                     });
                 }
                 Ok(Event::Incoming(Incoming::Disconnect))
@@ -261,6 +260,7 @@ impl TopicFilter {
 pub struct Message {
     pub topic: Topic,
     pub payload: Vec<u8>,
+    pub qos: QoS,
 }
 
 impl Message {
@@ -271,6 +271,18 @@ impl Message {
         Message {
             topic: topic.clone(),
             payload: payload.into(),
+            qos: QoS::AtLeastOnce,
+        }
+    }
+
+    pub fn new_with_qos<B>(topic: &Topic, qos: QoS, payload: B) -> Message
+    where
+        B: Into<Vec<u8>>,
+    {
+        Message {
+            topic: topic.clone(),
+            payload: payload.into(),
+            qos,
         }
     }
 }
