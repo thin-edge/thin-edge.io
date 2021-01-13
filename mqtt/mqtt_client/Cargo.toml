@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 tokio = { version = "1.0", features = ["sync"] }
 rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
+mqttbytes = { git = "https://github.com/bytebeamio/rumqtt", rev = "aafa996fae76b35085d2e70cbab815251b4e174b" }
 
 [dev-dependencies]
 futures = "0.3"
