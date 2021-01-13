@@ -52,3 +52,18 @@ fn scan_port(port: u16) -> bool {
         Err(_) => false,
     }
 }
+
+mod tests {
+    use super::*;
+    #[test]
+    fn test_scan_port_fail_port_open() {
+        let result = scan_port(54321);
+        assert_eq!(result, false);
+    }
+    #[test]
+    fn test_scan_port_port_available() {
+        let _listener = std::net::TcpListener::bind("localhost:54321");
+        let result = scan_port(54321);
+        assert_eq!(result, true);
+    }
+}
