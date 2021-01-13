@@ -110,40 +110,6 @@ impl Mapper {
             msg_type,
         ))
     }
-
-    // / map function takes payload and extracts numeric value from json.
-    // pub fn map(input: &Vec<u8>) -> Result<Vec<u8>, String> {
-    //     let input = std::str::from_utf8(input).map_err(|err| format!("ERROR: {}", err))?;
-    //     let json = json::parse(input).map_err(|err| format!("ERROR: {}", err))?;
-    //     match json {
-    //         JsonValue::Object(obj) => {
-    //             for (key, value) in obj.iter() {
-    //                 match key {
-    //                     "temperature" => {}
-    //                     _ => {
-    //                         return Err(format!("ERROR: only supported temperature, not '{}'", key))
-    //                     }
-    //                 };
-
-    //                 match value {
-    //                     JsonValue::Number(num) => {
-    //                         let value: f64 = (*num).into();
-    //                         if value == 0.0 || value.is_normal() {
-    //                             return Ok(
-    //                                 format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, value).into_bytes()
-    //                             );
-    //                         } else {
-    //                             return Err(format!("ERROR: value out of range '{}'", value));
-    //                         }
-    //                     }
-    //                     _ => return Err(format!("ERROR: expected a number, not '{}'", value)),
-    //                 }
-    //             }
-    //             return Err(String::from("ERROR: empty measurement"));
-    //         }
-    //         _ => return Err(format!("ERROR: expected a JSON object, not {}", json)),
-    //     }
-    // }
 }
 
 // #[cfg(test)]
