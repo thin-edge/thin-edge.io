@@ -79,7 +79,7 @@ impl Command for CertCmd {
                 key_path,
             } => create_test_certificate(id, cert_path, key_path)?,
             _ => {
-                println!("Not implemented {:?}", self);
+                unimplemented!("{:?}", self);
             }
         }
         Ok(())

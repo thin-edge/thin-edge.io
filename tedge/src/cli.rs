@@ -80,7 +80,6 @@ impl Command for ConfigCmd {
     }
 
     fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
-        println!("Not implemented {:?}", self);
-        Ok(())
+        unimplemented!("{:?}", self);
     }
 }
