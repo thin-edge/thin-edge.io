@@ -154,7 +154,7 @@ impl MultiValueMeasurement {
                 }
                 JsonValue::Object(_object) => {
                     return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy {
-                        name: String::from(name),
+                        name: String::from(k),
                     })
                 }
                 _ => {
@@ -327,7 +327,7 @@ impl fmt::Display for ThinEdgeJsonError {
                 write!(f, "InvalidThinEdgeJsonValue {}", name)
             }
             ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
-                write!(f, "{} is a reserved word, takes only string value", value)
+                write!(f, "{} is a reserved word", value)
             }
             ThinEdgeJsonError::InvalidThinEdgeHierarchy { ref name } => {
                 write!(f, "InvalidThinEdgeHierarchy, at {}", name)
@@ -556,7 +556,7 @@ mod tests {
                   },
                 "pressure": 98
         }"#;
-        let expected_output = "InvalidThinEdgeHierarchy, at location";
+        let expected_output = "InvalidThinEdgeHierarchy, at area";
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
 
@@ -576,7 +576,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "type is a reserved word, takes only string value";
+        let expected_output = "type is a reserved word";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -598,7 +598,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "time is a reserved word, takes only string value";
+        let expected_output = "time is a reserved word";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
