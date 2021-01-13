@@ -32,7 +32,13 @@ async fn main() -> Result<(), mqtt_client::Error> {
     };
     let mqtt = Client::connect(NAME, &config).await?;
 
-    let mapper = mapper::Mapper::new(mqtt, "tedge/measurements", "c8y/s/us", "tedge/errors");
+    // let mapper = mapper::Mapper::new(mqtt, "tedge/measurements", "c8y/s/us", "tedge/errors");
+    let mapper = mapper::Mapper::new(
+        mqtt,
+        "tedge/measurements",
+        "c8y/measurement/measurements/create",
+        "tedge/errors",
+    );
     mapper.subscribe_messages().await?;
 
     Ok(())
