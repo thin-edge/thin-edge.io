@@ -1,8 +1,4 @@
 use c8y_json_translator::CumulocityJson;
-use c8y_json_translator::ThinEdgeJson;
-use chrono::prelude::*;
-
-// use json::JsonValue;
 
 use log;
 
@@ -20,8 +16,6 @@ pub struct Mapper {
     out_topic: mqtt_client::Topic,
     err_topic: mqtt_client::Topic,
 }
-
-const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 impl Mapper {
     pub fn new(
