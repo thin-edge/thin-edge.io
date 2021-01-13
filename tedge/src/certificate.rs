@@ -102,11 +102,7 @@ fn create_test_certificate(id: &str, cert_path: &str, key_path: &str) -> Result<
 }
 
 fn create_new_file(path: &str) -> Result<File, CertError> {
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|err| err.into())
+    Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
 }
 
 fn new_selfsigned_certificate(id: &str) -> Result<Certificate, RcgenError> {
