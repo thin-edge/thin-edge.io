@@ -94,7 +94,10 @@ impl Mapper {
                 Err(error) => {
                     log::debug!("Mapping error: {}", error);
                     self.client
-                        .publish(mqtt_client::Message::new(&self.err_topic, error))
+                        .publish(mqtt_client::Message::new(
+                            &self.err_topic,
+                            error.to_string(),
+                        ))
                         .await?
                 }
             }
