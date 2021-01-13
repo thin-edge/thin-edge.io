@@ -9,10 +9,7 @@ use std::net::TcpStream;
 mod mapper;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
-const EX_NOHOST: i32 = 68;
 const NAME: &str = "tedge_mapper";
-const MQTT_PORT: u16 = 1883;
-const MQTT_URL: &str = "localhost";
 
 #[tokio::main]
 async fn main() -> Result<(), mqtt_client::Error> {
@@ -20,10 +17,7 @@ async fn main() -> Result<(), mqtt_client::Error> {
 
     log::info!("tedge-mapper starting!");
 
-    let config = mqtt_client::Config {
-        host: MQTT_URL.to_owned(),
-        port: MQTT_PORT,
-    };
+    let config = mqtt_client::Config::default();
     let mqtt = Client::connect(NAME, &config).await?;
 
     // let mapper = mapper::Mapper::new(mqtt, "tedge/measurements", "c8y/s/us", "tedge/errors");
