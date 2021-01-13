@@ -22,9 +22,9 @@ async fn main() -> Result<(), mqtt_client::Error> {
 
     let mapper = mapper::Mapper::new(
         mqtt,
-        "tedge/measurements",
-        "c8y/measurement/measurements/create",
-        "tedge/errors",
+        mapper::IN_TOPIC,
+        mapper::C8Y_TOPIC_C8Y_JSON,
+        mapper::ERRORS_TOPIC,
     );
     mapper.subscribe_messages().await?;
 

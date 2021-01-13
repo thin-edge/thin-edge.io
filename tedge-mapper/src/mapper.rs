@@ -6,9 +6,10 @@ use mqtt_client;
 
 use tokio::task::JoinHandle;
 
-const IN_TOPIC: &str = "tedge/measurements";
-const C8Y_TOPIC: &str = "c8y/s/us";
-const ERRORS_TOPIC: &str = "tedge/errors";
+pub const IN_TOPIC: &str = "tedge/measurements";
+pub const C8Y_TOPIC_SMARTREST: &str = "c8y/s/us";
+pub const C8Y_TOPIC_C8Y_JSON: &str = "c8y/measurement/measurements/create";
+pub const ERRORS_TOPIC: &str = "tedge/errors";
 
 pub struct Mapper {
     client: mqtt_client::Client,
