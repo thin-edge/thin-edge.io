@@ -1,4 +1,3 @@
-use mqtt_client::{Config, Message, Topic};
 use structopt::StructOpt;
 mod cli;
 

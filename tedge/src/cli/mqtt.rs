@@ -1,7 +1,7 @@
 use crate::cli::MqttCmd;
 use futures::future::FutureExt;
 use futures::select;
-use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use mqtt_client::{Client, Config, Topic, Message, MessageStream, QoS, TopicFilter};
 
 const DEFAULT_HOST: &str = "test.mosquitto.org";
 const DEFAULT_PORT: u16 = 1883;
@@ -30,24 +30,26 @@ impl crate::cli::MqttCmd {
     }
 
     async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), String> {
-        let mqtt = Config::new(DEFAULT_HOST.into(), DEFAULT_PORT)
+        let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
             .connect(DEFAULT_ID)
             .await
             .unwrap();
         let c8y_msg = Topic::new(topic).unwrap();
-        mqtt.publish(Message::new_with_qos(&c8y_msg, qos, message))
+        let msg = Message::new(&c8y_msg, message).qos(qos).pkid(4);
+        mqtt.publish_and_wait_for_ack(msg, std::time::Duration::from_secs(2))
             .await
             .unwrap();
         mqtt.disconnect().await.unwrap();
+
         Ok(())
     }
 
     async fn subscribe(topic: &str, qos: QoS) -> Result<(), String> {
-        let config = Config::new(DEFAULT_HOST.into(), DEFAULT_PORT);
+        let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
         let mqtt = Client::connect(DEFAULT_ID, &config).await.unwrap();
-        let filter = TopicFilter::new_with_qos(topic, qos).unwrap();
+        let filter = TopicFilter::new(topic).unwrap().qos(qos);
 
-        let mut commands = mqtt.subscribe(filter).await.unwrap();
+        let commands = mqtt.subscribe(filter).await.unwrap();
 
         select! {
             _ = listen_topic(commands).fuse() => (),
@@ -59,92 +61,7 @@ impl crate::cli::MqttCmd {
 
 async fn listen_topic(mut messages: MessageStream) {
     while let Some(message) = messages.next().await {
-        println!("Received!: {:?}", message.payload);
+        let s = String::from_utf8(message.payload).unwrap();
+        println!("Received: {}", s);
     }
 }
-
-// fn publish(topic: &String, message: &String, qos: &rumqttc::QoS) -> Result<(), String> {
-//     let mut mqttoptions = MqttOptions::new(DEFAULT_ID, DEFAULT_HOST, DEFAULT_PORT);
-//     mqttoptions.set_keep_alive(30);
-//
-//     let (mut client, mut connection) = Client::new(mqttoptions, 10);
-//
-//     let topic_clone = topic.clone();
-//     let qos_clone = qos.clone();
-//     let message_clone = message.clone();
-//
-//     thread::spawn(move || {
-//         client
-//             .publish(topic_clone, qos_clone, false, message_clone)
-//             .map_err(|e| e.to_string());
-//         thread::sleep(Duration::from_millis(100));
-//     });
-//
-//     for (i, notification) in connection.iter().enumerate() {
-//         println!("Notification = {:?}", notification);
-//     }
-//
-//     Ok(())
-// }
-//
-// fn subscribe(topic: &String, qos: &rumqttc::QoS) -> Result<(), String> {
-//     let mut mqttoptions = MqttOptions::new(DEFAULT_ID, DEFAULT_HOST, DEFAULT_PORT);
-//     mqttoptions.set_keep_alive(30);
-//
-//     let (mut client, mut connection) = Client::new(mqttoptions, 10);
-//
-//     let topic_clone = topic.clone();
-//     let qos_clone = qos.clone();
-//
-//     client
-//         .subscribe(topic_clone, qos_clone)
-//         .map_err(|e| e.to_string());
-//
-//     for (i, notification) in connection.iter().enumerate() {
-//         println!("Notification = {:?}", notification);
-//     }
-//
-//     Ok(())
-// }
-
-//  #[tokio::main]
-// async fn publish(topic: &String, message: &String, qos: &rumqttc::QoS) -> Result<(), String> {
-//     let mut mqttoptions = MqttOptions::new(DEFAULT_ID, DEFAULT_HOST, DEFAULT_PORT);
-//     mqttoptions.set_keep_alive(5);
-//
-//     let (mut client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-//
-//     task::spawn(async move {
-//         client
-//             .publish("testtest", rumqttc::QoS::ExactlyOnce, false, "bbbbbbbb")
-//             .await
-//             .map_err(|e| e.to_string());
-//         time::sleep(Duration::from_millis(1000)).await;
-//     });
-//
-//     loop {
-//         let notification = eventloop.poll().await.map_err(|e| e.to_string());
-//         println!("Received = {:?}", notification);
-//         tokio::time::sleep(Duration::from_secs(1)).await;
-//     }
-//
-//     Ok(())
-// }
-
-// #[tokio::main]
-// async fn subscribe(topic: &String, qos: &rumqttc::QoS) -> Result<(), String> {
-//     let mut mqttoptions = MqttOptions::new("rumqtt-async", "test.mosquitto.org", 1883);
-//     mqttoptions.set_keep_alive(5);
-//
-//     let (mut client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-//     client.subscribe("testest", rumqttc::QoS::AtMostOnce).await.unwrap();
-//
-//     loop {
-//         let notification = eventloop.poll().await.unwrap();
-//         println!("Received = {:?}", notification);
-//         tokio::time::sleep(Duration::from_secs(1)).await;
-//     }
-//
-//     Ok(())
-// }
-// }
