@@ -128,3 +128,76 @@ fn new_selfsigned_certificate(id: &str) -> Result<Certificate, RcgenError> {
 
     Certificate::from_params(params)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use tempfile::*;
+
+    #[test]
+    fn basic_usage() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let id = "my-device-id";
+
+        let cmd = CertCmd::Create {
+            id: String::from(id),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+        };
+        let verbose = 0;
+
+        assert!(cmd.run(verbose).err().is_none());
+        assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
+    }
+
+    #[test]
+    fn check_certificate_is_not_overwritten() {
+        let cert_content = "some cert content";
+        let key_content = "some key content";
+        let cert_file = temp_file_with_content(cert_content);
+        let key_file = temp_file_with_content(key_content);
+        let id = "my-device-id";
+
+        let cmd = CertCmd::Create {
+            id: String::from(id),
+            cert_path: String::from(cert_file.path().to_str().unwrap()),
+            key_path: String::from(key_file.path().to_str().unwrap()),
+        };
+        let verbose = 0;
+
+        assert!(cmd.run(verbose).ok().is_none());
+
+        let mut cert_file = cert_file.reopen().unwrap();
+        assert_eq!(file_content(&mut cert_file), cert_content);
+
+        let mut key_file = key_file.reopen().unwrap();
+        assert_eq!(file_content(&mut key_file), key_content);
+    }
+
+    fn temp_file_path(dir: &TempDir, filename: &str) -> String {
+        String::from(dir.path().join(filename).to_str().unwrap())
+    }
+
+    fn temp_file_with_content(content: &str) -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        file.as_file().write_all(content.as_bytes()).unwrap();
+        file
+    }
+
+    fn file_content(file: &mut File) -> String {
+        let mut content = String::new();
+        file.read_to_string(&mut content).unwrap();
+        content
+    }
+
+    fn parse_pem_file(path: &str) -> Result<pem::Pem, String> {
+        let mut file = File::open(path).map_err(|err| err.to_string())?;
+        let content = file_content(&mut file);
+
+        pem::parse(content).map_err(|err| err.to_string())
+    }
+}
