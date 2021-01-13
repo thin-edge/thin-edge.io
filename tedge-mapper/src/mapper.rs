@@ -100,19 +100,42 @@ impl Mapper {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     #[test]
-// fn test_mapper_convert_number() {
-//     let input = String::into_bytes("{\"temperature\": 124}".to_owned());
-//     let output = Result::Ok(String::into_bytes("211,124".to_owned()));
-//     assert_eq!(Mapper::map(&input), output);
-// }
-// #[test]
-// fn test_mapper_convert_string() {
-//     let input = String::into_bytes("{\"temperature\": \"test\"}".to_owned());
-//     let output = Result::Err("ERROR: expected a number, not \'test\'".to_owned());
-//     assert_eq!(Mapper::map(&input), output);
-// }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_mapper_convert_number_with_time() {
+        let input = String::into_bytes(
+            "{\"time\": \"2021-01-13T11:00:47.236416800+00:00\",\"temperature\": 124}".to_owned(),
+        );
+        let output = String::into_bytes("{\"type\":\"ThinEdgeMeasurement\",\"time\":\"2021-01-13T11:00:47.236416800+00:00\",\"temperature\":{\"temperature\":{\"value\":124}}}".to_owned());
+        let result = Mapper::map(&input);
+        match result {
+            Ok(result) => assert_eq!(result, output),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_mapper_convert_number_without_time() {
+        let input = String::into_bytes("{\"temperature\": 124}".to_owned());
+        let output = String::from("\"temperature\":{\"temperature\":{\"value\":124}}}");
+        let result = Mapper::map(&input);
+        match result {
+            Ok(result) => assert!(String::from_utf8(result).unwrap().contains(&output)),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_mapper_convert_string() {
+        let input = String::into_bytes("{\"temperature\": \"test\"}".to_owned());
+        let result = Mapper::map(&input);
+        match result {
+            Err(e) => {
+                assert_eq!("InvalidThinEdgeJson temperature", e.to_string());
+            }
+            _ => {}
+        }
+    }
+}
