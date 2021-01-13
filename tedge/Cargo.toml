@@ -6,7 +6,7 @@ readme = "README.md"
 
 [dependencies]
 chrono = "0.4.19"
-rcgen = "0.8.9"
+rcgen = { version = "0.8.9", features = ["pem"] }
 structopt = "0.3.21"
 thiserror = "1.0"
 
