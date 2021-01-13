@@ -20,12 +20,6 @@ async fn main() -> Result<(), mqtt_client::Error> {
 
     log::info!("tedge-mapper starting!");
 
-    let server_available = scan_port(MQTT_PORT);
-    if !server_available {
-        log::error!("tedge-mapper failed to start, no server available!");
-        std::process::exit(EX_NOHOST)
-    }
-
     let config = mqtt_client::Config {
         host: MQTT_URL.to_owned(),
         port: MQTT_PORT,
@@ -42,28 +36,4 @@ async fn main() -> Result<(), mqtt_client::Error> {
     mapper.subscribe_messages().await?;
 
     Ok(())
-}
-
-/// A simple function to check if port we are trying to connect to is available.
-/// This should be part of the client to try to connect and report on connection if an error ocurred.
-fn scan_port(port: u16) -> bool {
-    match TcpStream::connect(("localhost", port)) {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
-
-mod tests {
-    use super::*;
-    #[test]
-    fn test_scan_port_fail_port_open() {
-        let result = scan_port(54321);
-        assert_eq!(result, false);
-    }
-    #[test]
-    fn test_scan_port_port_available() {
-        let _listener = std::net::TcpListener::bind("localhost:54321");
-        let result = scan_port(54321);
-        assert_eq!(result, true);
-    }
 }
