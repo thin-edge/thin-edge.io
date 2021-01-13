@@ -98,14 +98,8 @@ impl Mapper {
         })
     }
 
-    fn map(input: &Vec<u8>) -> Result<CumulocityJson, c8y_json_translator::ThinEdgeJsonError> {
-        let msg_type = "ThinEdgeMeasurement";
-        let time: DateTime<Utc> = Utc::now();
-        Ok(CumulocityJson::from_thin_edge_json(
-            &ThinEdgeJson::from_utf8(input)?,
-            time,
-            msg_type,
-        ))
+    fn map(input: &Vec<u8>) -> Result<Vec<u8>, c8y_json_translator::ThinEdgeJsonError> {
+        Ok(CumulocityJson::from_thin_edge_json(&input[..])?)
     }
 }
 
