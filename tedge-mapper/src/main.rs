@@ -4,8 +4,6 @@ use log;
 
 use mqtt_client::Client;
 
-use std::net::TcpStream;
-
 mod mapper;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
@@ -25,7 +23,7 @@ async fn main() -> Result<(), mqtt_client::Error> {
         mapper::IN_TOPIC,
         mapper::C8Y_TOPIC_C8Y_JSON,
         mapper::ERRORS_TOPIC,
-    );
+    )?;
     mapper.subscribe_messages().await?;
 
     Ok(())

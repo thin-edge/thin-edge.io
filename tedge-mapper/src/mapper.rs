@@ -7,7 +7,6 @@ use mqtt_client;
 use tokio::task::JoinHandle;
 
 pub const IN_TOPIC: &str = "tedge/measurements";
-pub const C8Y_TOPIC_SMARTREST: &str = "c8y/s/us";
 pub const C8Y_TOPIC_C8Y_JSON: &str = "c8y/measurement/measurements/create";
 pub const ERRORS_TOPIC: &str = "tedge/errors";
 
@@ -24,14 +23,12 @@ impl Mapper {
         in_topic: &str,
         out_topic: &str,
         err_topic: &str,
-    ) -> Mapper {
+    ) -> Result<Mapper, mqtt_client::Error> {
         let new_in_topic = match mqtt_client::Topic::new(in_topic) {
             Ok(topic) => topic,
             Err(error) => {
                 log::error!("{}", error);
-                mqtt_client::Topic {
-                    name: IN_TOPIC.to_string(),
-                }
+                return Err(error);
             }
         };
 
@@ -39,9 +36,7 @@ impl Mapper {
             Ok(topic) => topic,
             Err(error) => {
                 log::error!("{}", error);
-                mqtt_client::Topic {
-                    name: C8Y_TOPIC.to_string(),
-                }
+                return Err(error);
             }
         };
 
@@ -49,18 +44,16 @@ impl Mapper {
             Ok(topic) => topic,
             Err(error) => {
                 log::error!("{}", error);
-                mqtt_client::Topic {
-                    name: ERRORS_TOPIC.to_string(),
-                }
+                return Err(error);
             }
         };
 
-        Mapper {
+        Ok(Mapper {
             client: client,
             in_topic: new_in_topic,
             out_topic: new_out_topic,
             err_topic: new_err_topic,
-        }
+        })
     }
 
     fn subsribe_errors(&self) -> JoinHandle<()> {
