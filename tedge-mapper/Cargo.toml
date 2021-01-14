@@ -9,6 +9,5 @@ c8y_json_translator = {version = "0.1.0", path = "../translator/c8y_json_transla
 env_logger = "0.8.2"
 log = "0.4.11"
 mqtt_client = {version = "0.1.0", path = "../mqtt/mqtt_client"}
-rumqttc = "0.4.0"
 tokio = { version = "1.0.1", features = ["full"] }
 

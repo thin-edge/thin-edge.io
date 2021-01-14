@@ -7,7 +7,7 @@ use mqtt_client::Client;
 mod mapper;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
-const NAME: &str = "tedge_mapper";
+const APP_NAME: &str = "tedge-mapper";
 
 #[tokio::main]
 async fn main() -> Result<(), mqtt_client::Error> {
@@ -16,7 +16,7 @@ async fn main() -> Result<(), mqtt_client::Error> {
     log::info!("tedge-mapper starting!");
 
     let config = mqtt_client::Config::default();
-    let mqtt = Client::connect(NAME, &config).await?;
+    let mqtt = Client::connect(APP_NAME, &config).await?;
 
     let mapper = mapper::Mapper::new(
         mqtt,

@@ -1,6 +1,6 @@
 # location: /etc/systemd/system/
 [Unit]
-Description = tedge-mapper is required to convert open json measurements to connectivity provider format.
+Description = tedge-mapper converts open json measurements to connectivity provider format.
 After       = syslog.target network.target
 
 [Service]
