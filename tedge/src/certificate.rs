@@ -34,6 +34,21 @@ pub enum CertCmd {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertError {
+    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name"#)]
+    InvalidCharacter { name: String },
+
+    #[error(r#"The empty string cannot be used as a name"#)]
+    EmptyName,
+
+    #[error(
+        r#"The string '{name:?}' is more than {} characters long and cannot be used as a name"#,
+        MAX_CN_SIZE
+    )]
+    TooLongName { name: String },
+
+    #[error(r#"The same path is used both for the certificate and for the private key"#)]
+    IdenticalPath,
+
     #[error(
         r#"A certificate already exists and would be overwritten.
        Run `tegde cert remove` first to generate a new certificate.
@@ -126,6 +141,9 @@ fn create_test_certificate(
     cert_path: &str,
     key_path: &str,
 ) -> Result<(), CertError> {
+    check_identifier_validity(id)?;
+    check_path_validity(cert_path, key_path)?;
+
     let mut cert_file = create_new_file(cert_path)?;
     let mut key_file = create_new_file(key_path)?;
 
@@ -136,6 +154,28 @@ fn create_test_certificate(
 
     let cert_key = cert.serialize_private_key_pem();
     key_file.write_all(cert_key.as_bytes())?;
+
+    Ok(())
+}
+
+const MAX_CN_SIZE: usize = 64;
+
+fn check_identifier_validity(id: &str) -> Result<(), CertError> {
+    if id.is_empty() {
+        return Err(CertError::EmptyName);
+    } else if id.len() > MAX_CN_SIZE {
+        return Err(CertError::TooLongName { name: id.into() });
+    } else if id.contains(char::is_control) {
+        return Err(CertError::InvalidCharacter { name: id.into() });
+    }
+
+    Ok(())
+}
+
+fn check_path_validity(cert_path: &str, key_path: &str) -> Result<(), CertError> {
+    if cert_path == key_path {
+        return Err(CertError::IdenticalPath);
+    }
 
     Ok(())
 }
