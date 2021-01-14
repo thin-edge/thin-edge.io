@@ -89,6 +89,15 @@ impl Mapper {
         }
         Ok(())
     }
+    pub async fn run(self) -> Result<(), mqtt_client::Error> {
+        let errors_handle = self.subscribe_errors();
+        let messages_handle = self.subscribe_messages();
+        messages_handle.await?;
+        errors_handle
+            .await
+            .map_err(|_| mqtt_client::Error::JoinError)?;
+        Ok(())
+    }
 
     fn map(input: &[u8]) -> Result<Vec<u8>, c8y_json_translator::ThinEdgeJsonError> {
         CumulocityJson::from_thin_edge_json(input)
