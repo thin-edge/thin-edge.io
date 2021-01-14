@@ -71,12 +71,13 @@ impl Command for CertCmd {
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let config = CertCmd::read_configuration();
         match self {
             CertCmd::Create {
                 id,
                 cert_path,
                 key_path,
-            } => create_test_certificate(id, cert_path, key_path)?,
+            } => create_test_certificate(&config, id, cert_path, key_path)?,
             _ => {
                 unimplemented!("{:?}", self);
             }
@@ -85,11 +86,50 @@ impl Command for CertCmd {
     }
 }
 
-fn create_test_certificate(id: &str, cert_path: &str, key_path: &str) -> Result<(), CertError> {
+impl CertCmd {
+    fn read_configuration() -> CertConfig {
+        CertConfig::default()
+    }
+}
+
+struct CertConfig {
+    test_cert: TestCertConfig,
+}
+
+struct TestCertConfig {
+    validity_period_days: u32,
+    organization_name: String,
+    organizational_unit_name: String,
+}
+
+impl Default for CertConfig {
+    fn default() -> Self {
+        CertConfig {
+            test_cert: TestCertConfig::default(),
+        }
+    }
+}
+
+impl Default for TestCertConfig {
+    fn default() -> Self {
+        TestCertConfig {
+            validity_period_days: 90,
+            organization_name: "Thin Edge".into(),
+            organizational_unit_name: "Test Device".into(),
+        }
+    }
+}
+
+fn create_test_certificate(
+    config: &CertConfig,
+    id: &str,
+    cert_path: &str,
+    key_path: &str,
+) -> Result<(), CertError> {
     let mut cert_file = create_new_file(cert_path)?;
     let mut key_file = create_new_file(key_path)?;
 
-    let cert = new_selfsigned_certificate(id)?;
+    let cert = new_selfsigned_certificate(&config, id)?;
 
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
@@ -104,15 +144,21 @@ fn create_new_file(path: &str) -> Result<File, CertError> {
     Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
 }
 
-fn new_selfsigned_certificate(id: &str) -> Result<Certificate, RcgenError> {
+fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certificate, RcgenError> {
     let mut distinguished_name = rcgen::DistinguishedName::new();
     distinguished_name.push(rcgen::DnType::CommonName, id);
-    distinguished_name.push(rcgen::DnType::OrganizationName, "Thin Edge");
-    distinguished_name.push(rcgen::DnType::OrganizationalUnitName, "Test Device");
+    distinguished_name.push(
+        rcgen::DnType::OrganizationName,
+        &config.test_cert.organization_name,
+    );
+    distinguished_name.push(
+        rcgen::DnType::OrganizationalUnitName,
+        &config.test_cert.organizational_unit_name,
+    );
 
     let today = Utc::now();
     let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-    let not_after = today + Duration::days(90);
+    let not_after = today + Duration::days(config.test_cert.validity_period_days.into());
 
     let mut params = CertificateParams::default();
     params.distinguished_name = distinguished_name;
