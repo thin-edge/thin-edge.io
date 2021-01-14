@@ -3,7 +3,6 @@ use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::CertificateParams;
 use rcgen::{Certificate, RcgenError};
-use std::error::Error;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -71,7 +70,7 @@ impl Command for CertCmd {
         }
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         match self {
             CertCmd::Create {
                 id,

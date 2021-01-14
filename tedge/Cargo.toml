@@ -5,6 +5,7 @@ edition = "2018"
 readme = "README.md"
 
 [dependencies]
+anyhow = "1.0.38"
 chrono = "0.4.19"
 rcgen = { version = "0.8.9", features = ["pem"] }
 structopt = "0.3.21"

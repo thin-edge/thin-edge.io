@@ -1,5 +1,4 @@
 use super::command::Command;
-use std::error::Error;
 use structopt::clap;
 use structopt::StructOpt;
 
@@ -50,7 +49,7 @@ impl ToString for Opt {
 }
 
 impl Opt {
-    pub fn run(&self) -> Result<(), Box<dyn Error>> {
+    pub fn run(&self) -> Result<(), anyhow::Error> {
         self.tedge_cmd.run(self.verbose)
     }
 }
@@ -69,7 +68,7 @@ impl Command for TEdgeCmd {
         self.sub_command().to_string()
     }
 
-    fn run(&self, verbose: u8) -> Result<(), Box<dyn Error>> {
+    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
         self.sub_command().run(verbose)
     }
 }
@@ -79,7 +78,7 @@ impl Command for ConfigCmd {
         format!("{:?}", self)
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), Box<dyn Error>> {
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         unimplemented!("{:?}", self);
     }
 }
