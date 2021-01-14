@@ -18,13 +18,13 @@ async fn main() -> Result<(), mqtt_client::Error> {
     let config = mqtt_client::Config::default();
     let mqtt = Client::connect(APP_NAME, &config).await?;
 
-    let mapper = mapper::Mapper::new(
+    let mapper = mapper::Mapper::new_from_string(
         mqtt,
         mapper::IN_TOPIC,
         mapper::C8Y_TOPIC_C8Y_JSON,
         mapper::ERRORS_TOPIC,
     )?;
-    mapper.subscribe_messages().await?;
+    mapper.run().await?;
 
     Ok(())
 }

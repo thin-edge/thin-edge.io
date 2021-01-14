@@ -18,45 +18,35 @@ pub struct Mapper {
 }
 
 impl Mapper {
-    pub fn new(
+    pub fn new_from_string(
         client: mqtt_client::Client,
         in_topic: &str,
         out_topic: &str,
         err_topic: &str,
-    ) -> Result<Mapper, mqtt_client::Error> {
-        let new_in_topic = match mqtt_client::Topic::new(in_topic) {
-            Ok(topic) => topic,
-            Err(error) => {
-                log::error!("{}", error);
-                return Err(error);
-            }
-        };
-
-        let new_out_topic = match mqtt_client::Topic::new(out_topic) {
-            Ok(topic) => topic,
-            Err(error) => {
-                log::error!("{}", error);
-                return Err(error);
-            }
-        };
-
-        let new_err_topic = match mqtt_client::Topic::new(err_topic) {
-            Ok(topic) => topic,
-            Err(error) => {
-                log::error!("{}", error);
-                return Err(error);
-            }
-        };
-
-        Ok(Mapper {
-            client: client,
-            in_topic: new_in_topic,
-            out_topic: new_out_topic,
-            err_topic: new_err_topic,
-        })
+    ) -> Result<Self, mqtt_client::Error> {
+        Ok(Self::new(
+            client,
+            mqtt_client::Topic::new(in_topic)?,
+            mqtt_client::Topic::new(out_topic)?,
+            mqtt_client::Topic::new(err_topic)?,
+        ))
     }
 
-    fn subsribe_errors(&self) -> JoinHandle<()> {
+    fn new(
+        client: mqtt_client::Client,
+        in_topic: mqtt_client::Topic,
+        out_topic: mqtt_client::Topic,
+        err_topic: mqtt_client::Topic,
+    ) -> Self {
+        Self {
+            client,
+            in_topic,
+            out_topic,
+            err_topic,
+        }
+    }
+
+    fn subscribe_errors(&self) -> JoinHandle<()> {
         let mut errors = self.client.subscribe_errors();
         tokio::spawn(async move {
             while let Some(error) = errors.next().await {
@@ -65,8 +55,7 @@ impl Mapper {
         })
     }
 
-    pub async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
-        self.subsribe_errors();
+    async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
         let mut messages = self.client.subscribe(self.in_topic.filter()).await?;
         while let Some(message) = messages.next().await {
             log::debug!("Mapping {:?}", message);
