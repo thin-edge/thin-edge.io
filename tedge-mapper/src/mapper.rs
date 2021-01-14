@@ -101,14 +101,11 @@ mod tests {
     #[test]
     fn test_mapper_convert_number_with_time() {
         let input = String::into_bytes(
-            "{\"time\": \"2021-01-13T11:00:47.236416800+00:00\",\"temperature\": 124}".to_owned(),
+            "{\"time\": \"2021-01-13T11:00:47.000+00:00\",\"temperature\": 124}".to_owned(),
         );
-        let output = String::into_bytes("{\"type\":\"ThinEdgeMeasurement\",\"time\":\"2021-01-13T11:00:47.236416800+00:00\",\"temperature\":{\"temperature\":{\"value\":124}}}".to_owned());
+        let output = String::into_bytes("{\"type\":\"ThinEdgeMeasurement\",\"time\":\"2021-01-13T11:00:47.000+00:00\",\"temperature\":{\"temperature\":{\"value\":124}}}".to_owned());
         let result = Mapper::map(&input);
-        match result {
-            Ok(result) => assert_eq!(result, output),
-            _ => {}
-        }
+        assert_eq!(result, Ok(output))
     }
 
     #[test]
