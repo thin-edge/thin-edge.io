@@ -1,7 +1,6 @@
-use mqtt_client::QoS;
+use super::command::Command;
 use structopt::clap;
 use structopt::StructOpt;
-mod mqtt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -25,7 +24,7 @@ pub enum TEdgeCmd {
     Config(ConfigCmd),
 
     /// Publish a message on a topic and subscribe a topic.
-    Mqtt(MqttCmd),
+    Mqtt(super::mqtt::MqttCmd),
 }
 
 #[derive(StructOpt, Debug)]
@@ -43,25 +42,43 @@ pub enum ConfigCmd {
     Get { key: String },
 }
 
-#[derive(StructOpt, Debug)]
-pub enum MqttCmd {
-    /// Publish a MQTT message on a topic.
-    Pub {
-        /// Topic to publish
-        topic: String,
-        /// Message to publish
-        message: String,
-        ///  QoS level (0, 1, 2)
-        #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
-        qos: QoS,
-    },
+impl ToString for Opt {
+    fn to_string(&self) -> String {
+        self.tedge_cmd.to_string()
+    }
+}
 
-    /// Subscribe a MQTT topic.
-    Sub {
-        /// Topic to publish
-        topic: String,
-        /// QoS level (0, 1, 2)
-        #[structopt(short, long, parse(try_from_str = mqtt::parse_qos), default_value = "0")]
-        qos: QoS,
-    },
+impl Opt {
+    pub fn run(&self) -> Result<(), anyhow::Error> {
+        self.tedge_cmd.run(self.verbose)
+    }
+}
+
+impl TEdgeCmd {
+    fn sub_command(&self) -> &dyn Command {
+        match self {
+            TEdgeCmd::Config(ref cmd) => cmd,
+            TEdgeCmd::Mqtt(ref cmd) => cmd,
+        }
+    }
+}
+
+impl Command for TEdgeCmd {
+    fn to_string(&self) -> String {
+        self.sub_command().to_string()
+    }
+
+    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
+        self.sub_command().run(verbose)
+    }
+}
+
+impl Command for ConfigCmd {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        unimplemented!("{:?}", self);
+    }
 }

@@ -11,8 +11,6 @@
 //!     mqtt.disconnect().await.unwrap();
 //! }
 //! ```
-
-
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Request};
 use rumqttc::{PubAck, Publish};
