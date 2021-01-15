@@ -9,7 +9,6 @@ edition = "2018"
 chrono = "0.4.19"
 json = "0.12.4"
 
-
 [dev-dependencies]
 pretty_assertions = "0.6.1"
 proptest = "0.10.1"

@@ -522,7 +522,7 @@ pub enum Error {
     #[error("The error lagged too far behind : {lag:?} errors skipped")]
     ErrorsSkipped { lag: u64 },
 
-    #[error("MQTT connection error: ")]
+    #[error("Join Error")]
     JoinError,
 
     #[error("MQTT connection error: ")]
