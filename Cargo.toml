@@ -4,6 +4,7 @@ members = [
     "mqtt/mqtt_client",
     "tedge",
     "tests/testlib",
+    "translator/c8y_json_translator",
 ]
 
 [profile.release]
