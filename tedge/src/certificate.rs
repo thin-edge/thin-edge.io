@@ -1,11 +1,13 @@
 use super::command::Command;
 use chrono::offset::Utc;
 use chrono::Duration;
+use rcgen::Certificate;
 use rcgen::CertificateParams;
-use rcgen::{Certificate, RcgenError};
+use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::path::Path;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -51,25 +53,47 @@ pub enum CertError {
 
     #[error(
         r#"A certificate already exists and would be overwritten.
-       Run `tegde cert remove` first to generate a new certificate.
+        Existing file: {path:?}
+        Run `tegde cert remove` first to generate a new certificate.
     "#
     )]
-    AlreadyExists,
+    CertificateAlreadyExists { path: String },
+
+    #[error(
+        r#"A private key already exists and would be overwritten.
+        Existing file: {path:?}
+        Run `tegde cert remove` first to generate a new certificate and private key.
+    "#
+    )]
+    KeyAlreadyExists { path: String },
+
+    #[error(
+        r#"The content of the certificate file is not of the expected x509/pem format.
+        Existing file: {path:?}
+        Run `tegde cert remove` first to generate a new certificate.
+    "#
+    )]
+    ExpectCertificate { path: String },
+
+    #[error(
+        r#"The content of the private key file is not of the expected pem format.
+        Existing file: {path:?}
+        Run `tegde cert remove` first to generate a new certificate and private key.
+    "#
+    )]
+    ExpectKey { path: String },
 
     #[error("I/O error")]
-    IoError(std::io::Error),
+    IoError(#[from] std::io::Error),
 
     #[error("Cryptography related error")]
-    PemError(#[from] RcgenError),
-}
+    CryptographyError(#[from] RcgenError),
 
-impl From<std::io::Error> for CertError {
-    fn from(err: std::io::Error) -> Self {
-        match err.kind() {
-            std::io::ErrorKind::AlreadyExists => CertError::AlreadyExists,
-            _ => CertError::IoError(err),
-        }
-    }
+    #[error("PEM file format error")]
+    PemError(#[from] x509_parser::error::PEMError),
+
+    #[error("X509 file format error: {0}")]
+    X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
 }
 
 impl Command for CertCmd {
@@ -141,8 +165,8 @@ fn create_test_certificate(
     cert_path: &str,
     key_path: &str,
 ) -> Result<(), CertError> {
-    check_identifier_validity(id)?;
-    check_path_validity(cert_path, key_path)?;
+    check_identifier(id)?;
+    check_paths(cert_path, key_path)?;
 
     let mut cert_file = create_new_file(cert_path)?;
     let mut key_file = create_new_file(key_path)?;
@@ -155,12 +179,15 @@ fn create_test_certificate(
     let cert_key = cert.serialize_private_key_pem();
     key_file.write_all(cert_key.as_bytes())?;
 
+    check_certificate(id, cert_path)?;
+    check_key(key_path)?;
+
     Ok(())
 }
 
 const MAX_CN_SIZE: usize = 64;
 
-fn check_identifier_validity(id: &str) -> Result<(), CertError> {
+fn check_identifier(id: &str) -> Result<(), CertError> {
     if id.is_empty() {
         return Err(CertError::EmptyName);
     } else if id.len() > MAX_CN_SIZE {
@@ -172,12 +199,67 @@ fn check_identifier_validity(id: &str) -> Result<(), CertError> {
     Ok(())
 }
 
-fn check_path_validity(cert_path: &str, key_path: &str) -> Result<(), CertError> {
+fn check_paths(cert_path: &str, key_path: &str) -> Result<(), CertError> {
     if cert_path == key_path {
         return Err(CertError::IdenticalPath);
+    } else if Path::new(cert_path).exists() {
+        return Err(CertError::CertificateAlreadyExists {
+            path: cert_path.into(),
+        });
+    } else if Path::new(key_path).exists() {
+        return Err(CertError::KeyAlreadyExists {
+            path: key_path.into(),
+        });
     }
 
     Ok(())
+}
+
+fn check_certificate(id: &str, path: &str) -> Result<(), CertError> {
+    if let Some(subject) = read_certificate_subject(path)? {
+        if subject.contains(&format!("CN={},", id)) {
+            return Ok(());
+        }
+    }
+
+    Err(CertError::ExpectCertificate { path: path.into() })
+}
+
+fn check_key(path: &str) -> Result<(), CertError> {
+    if let Some(pem) = read_pem(path)? {
+        if pem.label == "PRIVATE" {
+            return Ok(());
+        }
+    }
+
+    Err(CertError::ExpectKey { path: path.into() })
+}
+
+fn read_certificate_subject(path: &str) -> Result<Option<String>, CertError> {
+    match read_pem(path)? {
+        None => Ok(None),
+        Some(pem) => {
+            let x509 = pem.parse_x509().map_err(|err| {
+                // The x509 error is wrapped into a `nom::Err`
+                // and cannot be extracted without pattern matching on that type
+                // So one simply extract the error as a string,
+                // to avoid a dependency on the `nom` crate.
+                let x509_error_string = format!("{}", err);
+                CertError::X509Error(x509_error_string)
+            })?;
+            Ok(Some(x509.tbs_certificate.subject.to_string()))
+        }
+    }
+}
+
+fn read_pem(path: &str) -> Result<Option<x509_parser::pem::Pem>, CertError> {
+    if Path::new(path).exists() {
+        let file = std::fs::File::open(path)?;
+        let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
+        Ok(Some(pem))
+    } else {
+        Ok(None)
+    }
 }
 
 fn create_new_file(path: &str) -> Result<File, CertError> {

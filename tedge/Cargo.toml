@@ -10,6 +10,7 @@ chrono = "0.4.19"
 rcgen = { version = "0.8.9", features = ["pem"] }
 structopt = "0.3.21"
 thiserror = "1.0"
+x509-parser = "0.9"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
