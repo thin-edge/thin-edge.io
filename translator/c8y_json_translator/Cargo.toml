@@ -8,10 +8,11 @@ edition = "2018"
 [dependencies]
 chrono = "0.4.19"
 json = "0.12.4"
-proptest = "0.10.1"
+
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
+proptest = "0.10.1"
 
 
 

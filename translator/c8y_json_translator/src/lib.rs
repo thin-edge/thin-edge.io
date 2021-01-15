@@ -12,11 +12,6 @@
 //!             &String::from(single_value_thin_edge_json).into_bytes());
 //! ```
 
-//#[macro_use]
-//crate proptest;
-
-use proptest::prelude::*;
-
 use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
@@ -631,16 +626,18 @@ mod tests {
             _ => {}
         }
     }
-}
-proptest! {
-        #[test]
-        fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
-            let input = format!(r#""time: "2013-06-22T17:03:14.000+02:00",{{
+
+    use proptest::prelude::*;
+
+    proptest! {
+            #[test]
+            fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
+                let input = format!(r#""time: "2013-06-22T17:03:14.000+02:00",{{
                             "{}": 123
                           }}"#, measurement);
-            let time = "2013-06-22T17:03:14.000+02:00";
-            let time_utc : DateTime<Utc> = time.parse().unwrap();
-            let expected_output = format!(r#"{{
+                let time = "2013-06-22T17:03:14.000+02:00";
+                let time_utc : DateTime<Utc> = time.parse().unwrap();
+                let expected_output = format!(r#"{{
                                   "type": "ThinEdgeMeasurement",
                                   "time": "{}",
                                   "{}": {{
@@ -651,21 +648,22 @@ proptest! {
                                 }}"#, time_utc.to_rfc3339(), measurement, measurement);
 
 
-    match CumulocityJson::from_thin_edge_json(
-                &String::from(input).into_bytes(),
-            ) {
-                Ok(vec) => {
-                    assert_eq!(
-                        expected_output.split_whitespace().collect::<String>(),
-                        String::from_utf8(vec)
-                            .unwrap()
-                            .split_whitespace()
-                            .collect::<String>()
-                    );
+        match CumulocityJson::from_thin_edge_json(
+                    &String::from(input).into_bytes(),
+                ) {
+                    Ok(vec) => {
+                        assert_eq!(
+                            expected_output.split_whitespace().collect::<String>(),
+                            String::from_utf8(vec)
+                                .unwrap()
+                                .split_whitespace()
+                                .collect::<String>()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Error is {}", e);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("Error is {}", e);
-                }
-            }
+        }
     }
 }
