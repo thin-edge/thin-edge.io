@@ -92,30 +92,3 @@ impl Mapper {
         CumulocityJson::from_thin_edge_json(input)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_mapper_convert_number_with_time() {
-        let input = br#"{"time": "2021-01-13T11:00:47.000+00:00","temperature": 124}"#;
-        let output = br#"{"type":"ThinEdgeMeasurement","time":"2021-01-13T11:00:47.000+00:00","temperature":{"temperature":{"value":124}}}"#;
-        let result = Mapper::map(input).unwrap();
-        assert_eq!(&result[..], output)
-    }
-
-    #[test]
-    fn test_mapper_convert_number_without_time() {
-        let input = br#"{"temperature": 124}"#;
-        let output = r#"temperature":{"temperature":{"value":124}}}"#;
-        let result = Mapper::map(input).unwrap();
-        assert!(String::from_utf8(result).unwrap().contains(output));
-    }
-
-    #[test]
-    fn test_mapper_convert_string() {
-        let input = br#"{"temperature": "test"}"#;
-        let result = Mapper::map(input).unwrap_err();
-        assert_eq!("InvalidThinEdgeJson temperature", result.to_string());
-    }
-}
