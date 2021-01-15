@@ -8,7 +8,7 @@ The Software AG Thin Edge
     - /cumulocity
     - /azure
     - /aws
-  - /conenctor
+  - /connector
     - /apama
   - /device-management
     - /debian
