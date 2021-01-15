@@ -9,6 +9,7 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 use structopt::StructOpt;
+use zeroize::Zeroize;
 
 #[derive(StructOpt, Debug)]
 pub enum CertCmd {
@@ -176,8 +177,9 @@ fn create_test_certificate(
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
 
-    let cert_key = cert.serialize_private_key_pem();
+    let mut cert_key = cert.serialize_private_key_pem();
     key_file.write_all(cert_key.as_bytes())?;
+    cert_key.zeroize();
 
     check_certificate(id, cert_path)?;
     check_key(key_path)?;
@@ -226,8 +228,9 @@ fn check_certificate(id: &str, path: &str) -> Result<(), CertError> {
 }
 
 fn check_key(path: &str) -> Result<(), CertError> {
-    if let Some(pem) = read_pem(path)? {
+    if let Some(mut pem) = read_pem(path)? {
         if pem.label == "PRIVATE" {
+            pem.contents.zeroize();
             return Ok(());
         }
     }
