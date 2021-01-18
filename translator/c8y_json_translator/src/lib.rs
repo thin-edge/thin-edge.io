@@ -15,7 +15,6 @@
 use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
-use std::error;
 use std::fmt;
 
 /// ThinEdgeJson is represented in this struct
@@ -253,42 +252,28 @@ impl fmt::Display for CumulocityJson {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum ThinEdgeJsonError {
+    #[error("Invalid utf8 error")]
     InvalidUTF8(std::str::Utf8Error),
+
+    #[error("Invalid json error")]
     InvalidJson(json::Error),
+
+    #[error("Invalid thinedge json error at: {name:?}")]
     InvalidThinEdgeJson { name: String },
+
+    #[error("Invalid thinedge json value : {name:?}")]
     InvalidThinEdgeJsonValue { name: String },
+
+    #[error("Thinedge reserved word error: {value:?}")]
     ThinEdgeReservedWordError { value: String },
+
+    #[error("Invalid time stamp")]
     InvalidTimeStamp(ParseError),
+
+    #[error("Invalid thinedge hierarchy: {name:?}")]
     InvalidThinEdgeHierarchy { name: String },
-}
-
-impl error::Error for ThinEdgeJsonError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match *self {
-            ThinEdgeJsonError::InvalidJson(ref e) => Some(e),
-            ThinEdgeJsonError::InvalidUTF8(ref e) => Some(e),
-            ThinEdgeJsonError::InvalidThinEdgeJson { ref name } => {
-                eprintln!("InvalidThinEdgeJson {}", name);
-                None
-            }
-            ThinEdgeJsonError::InvalidThinEdgeJsonValue { ref name } => {
-                eprintln!("InvalidThinEdgeJsonValue {}", name);
-                None
-            }
-            ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
-                eprintln!("ThinEdgeReservedWordError: {} is a reserved word", value);
-                None
-            }
-            ThinEdgeJsonError::InvalidThinEdgeHierarchy { ref name } => {
-                eprintln!("ThinEdgeHierarchy Error: {} is a reserved word", name);
-                None
-            }
-
-            ThinEdgeJsonError::InvalidTimeStamp(ref e) => Some(e),
-        }
-    }
 }
 
 impl From<std::str::Utf8Error> for ThinEdgeJsonError {
@@ -306,28 +291,6 @@ impl From<json::Error> for ThinEdgeJsonError {
 impl From<chrono::format::ParseError> for ThinEdgeJsonError {
     fn from(error: chrono::format::ParseError) -> Self {
         ThinEdgeJsonError::InvalidTimeStamp(error)
-    }
-}
-
-impl fmt::Display for ThinEdgeJsonError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ThinEdgeJsonError::InvalidUTF8(..) => write!(f, "InvalidUTF8 Error"),
-            ThinEdgeJsonError::InvalidJson(..) => write!(f, "InvalidJson Error"),
-            ThinEdgeJsonError::InvalidTimeStamp(..) => write!(f, "InvalidTimeStamp Error"),
-            ThinEdgeJsonError::InvalidThinEdgeJson { ref name } => {
-                write!(f, "InvalidThinEdgeJson {}", name)
-            }
-            ThinEdgeJsonError::InvalidThinEdgeJsonValue { ref name } => {
-                write!(f, "InvalidThinEdgeJsonValue {}", name)
-            }
-            ThinEdgeJsonError::ThinEdgeReservedWordError { ref value } => {
-                write!(f, "{} is a reserved word", value)
-            }
-            ThinEdgeJsonError::InvalidThinEdgeHierarchy { ref name } => {
-                write!(f, "InvalidThinEdgeHierarchy, at {}", name)
-            }
-        }
     }
 }
 
@@ -501,7 +464,7 @@ mod tests {
            "pressure": "20"
           }"#;
 
-        let expected_output = "InvalidThinEdgeJson pressure";
+        let expected_output = "Invalid thinedge json error at: \"pressure\"";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -523,7 +486,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "InvalidThinEdgeJson temperature";
+        let expected_output = "Invalid thinedge json error at: \"temperature\"";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -551,7 +514,7 @@ mod tests {
                   },
                 "pressure": 98
         }"#;
-        let expected_output = "InvalidThinEdgeHierarchy, at area";
+        let expected_output = "Invalid thinedge hierarchy: \"area\"";
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
 
@@ -571,7 +534,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "type is a reserved word";
+        let expected_output = "Thinedge reserved word error: \"type\"";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -593,7 +556,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "time is a reserved word";
+        let expected_output = "Thinedge reserved word error: \"time\"";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -614,7 +577,7 @@ mod tests {
            "pressure": 220;
           }"#;
 
-        let expected_output = "InvalidJson Error";
+        let expected_output = "Invalid json error";
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
