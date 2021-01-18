@@ -23,6 +23,9 @@ pub enum TEdgeCmd {
     /// Configure Thin Edge.
     Config(ConfigCmd),
 
+    /// Create and manage device certificate
+    Cert(super::certificate::CertCmd),
+  
     /// Publish a message on a topic and subscribe a topic.
     Mqtt(super::mqtt::MqttCmd),
 }
@@ -58,6 +61,7 @@ impl TEdgeCmd {
     fn sub_command(&self) -> &dyn Command {
         match self {
             TEdgeCmd::Config(ref cmd) => cmd,
+            TEdgeCmd::Cert(ref cmd) => cmd,
             TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
     }
