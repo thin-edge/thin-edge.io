@@ -49,9 +49,6 @@ pub enum CertError {
     )]
     TooLongName { name: String },
 
-    #[error(r#"The same path is used both for the certificate and for the private key"#)]
-    IdenticalPath,
-
     #[error(
         r#"A certificate already exists and would be overwritten.
         Existing file: {path:?}
@@ -195,7 +192,6 @@ fn create_test_certificate(
     key_path: &str,
 ) -> Result<(), CertError> {
     check_identifier(id)?;
-    check_paths(cert_path, key_path)?;
 
     let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
     let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
@@ -210,9 +206,6 @@ fn create_test_certificate(
         let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
         key_file.write_all(cert_key.as_bytes())?;
     }
-
-    check_certificate(id, cert_path)?;
-    check_key(key_path)?;
 
     Ok(())
 }
@@ -229,35 +222,6 @@ fn check_identifier(id: &str) -> Result<(), CertError> {
     }
 
     Ok(())
-}
-
-fn check_paths(cert_path: &str, key_path: &str) -> Result<(), CertError> {
-    if Path::new(cert_path) == Path::new(key_path) {
-        return Err(CertError::IdenticalPath);
-    }
-
-    Ok(())
-}
-
-fn check_certificate(id: &str, path: &str) -> Result<(), CertError> {
-    if let Some(subject) = read_certificate_subject(path)? {
-        if subject.contains(&format!("CN={},", id)) {
-            return Ok(());
-        }
-    }
-
-    Err(CertError::ExpectCertificate { path: path.into() })
-}
-
-fn check_key(path: &str) -> Result<(), CertError> {
-    if let Some(mut pem) = read_pem(path)? {
-        if pem.label == "PRIVATE" {
-            pem.contents.zeroize();
-            return Ok(());
-        }
-    }
-
-    Err(CertError::ExpectKey { path: path.into() })
 }
 
 fn read_certificate_subject(path: &str) -> Result<Option<String>, CertError> {
