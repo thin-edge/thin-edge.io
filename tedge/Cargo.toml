@@ -5,8 +5,16 @@ edition = "2018"
 readme = "README.md"
 
 [dependencies]
+anyhow = "1.0.38"
+chrono = "0.4.19"
+rcgen = { version = "0.8.9", features = ["pem"] }
 structopt = "0.3.21"
+thiserror = "1.0"
+x509-parser = "0.9"
+zeroize = "1.2"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
+pem = "0.8.2"
 predicates = "1.0.5"
+tempfile = "3.2.0"
