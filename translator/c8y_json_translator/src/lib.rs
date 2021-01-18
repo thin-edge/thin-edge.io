@@ -402,7 +402,7 @@ mod tests {
                          "temperature": {
                                "value": 23
                          }
-                    }, 
+                    },
                     "pressure" : {
                        "pressure": {
                           "value" : 220
@@ -449,12 +449,12 @@ mod tests {
             \"temperature\": {
                 \"temperature\": {
                     \"value\": 25
-                 } 
-            }, 
+                 }
+            },
            \"location\": {
                 \"latitude\": {
                    \"value\": 32.54
-                 }, 
+                 },
                 \"longitude\": {
                   \"value\": -117.67
                 },
