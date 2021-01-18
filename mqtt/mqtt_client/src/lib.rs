@@ -1,6 +1,6 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
-//! ```
+//! ```no_run
 //! use mqtt_client::{Config,Message,Topic};
 //!
 //! #[tokio::main]
@@ -20,7 +20,7 @@ use tokio::sync::broadcast;
 ///
 /// The host and port are implied: a connection can only be open on the localhost, port 1883.
 ///
-/// ```
+/// ```no_run
 /// use mqtt_client::{Config,Message,Topic};
 ///
 /// #[tokio::main]
@@ -52,7 +52,7 @@ impl Client {
     /// so messages sent while the client is disconnected
     /// will be resent on its re-connection.
     ///
-    /// ```
+    /// ```no_run
     /// use mqtt_client::{Config,Client,Topic};
     ///
     /// #[tokio::main]

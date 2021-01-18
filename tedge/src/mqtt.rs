@@ -61,21 +61,19 @@ impl Command for MqttCmd {
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            match self {
-                MqttCmd::Pub {
-                    topic,
-                    message,
-                    qos,
-                } => publish(topic, message, qos).await?,
-                MqttCmd::Sub { topic, qos } => subscribe(&topic, qos).await?,
-            }
-            Ok(())
-        })
+        match self {
+            MqttCmd::Pub {
+                topic,
+                message,
+                qos,
+            } => publish(topic, message, qos)?,
+            MqttCmd::Sub { topic, qos } => subscribe(&topic, qos)?,
+        }
+        Ok(())
     }
 }
 
+#[tokio::main]
 async fn publish(topic: &str, message: &str, qos: &QoS) -> Result<(), MqttError> {
     let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
@@ -94,6 +92,7 @@ async fn publish(topic: &str, message: &str, qos: &QoS) -> Result<(), MqttError>
     Ok(())
 }
 
+#[tokio::main]
 async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;
