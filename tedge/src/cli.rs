@@ -19,19 +19,19 @@ pub struct Opt {
 }
 
 #[derive(StructOpt, Debug)]
-pub enum TEdgeCmd {
+enum TEdgeCmd {
     /// Configure Thin Edge.
     Config(ConfigCmd),
 
     /// Create and manage device certificate
     Cert(super::certificate::CertCmd),
-  
+
     /// Publish a message on a topic and subscribe a topic.
     Mqtt(super::mqtt::MqttCmd),
 }
 
 #[derive(StructOpt, Debug)]
-pub enum ConfigCmd {
+enum ConfigCmd {
     /// List all.
     List,
 

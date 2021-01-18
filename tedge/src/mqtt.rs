@@ -19,7 +19,7 @@ pub enum MqttCmd {
         topic: String,
         /// Message to publish
         message: String,
-        ///  QoS level (0, 1, 2)
+        /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
     },
