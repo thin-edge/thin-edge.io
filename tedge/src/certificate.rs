@@ -97,6 +97,34 @@ pub enum CertError {
     X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
 }
 
+impl CertError {
+    /// Improve the error message in case the error in a IO error on the certificate file.
+    fn cert_context(self, path: &str) -> CertError {
+        match self {
+            CertError::IoError(ref err) => match err.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    CertError::CertificateAlreadyExists { path: path.into() }
+                }
+                _ => self,
+            },
+            _ => self,
+        }
+    }
+
+    /// Improve the error message in case the error in a IO error on the private key file.
+    fn key_context(self, path: &str) -> CertError {
+        match self {
+            CertError::IoError(ref err) => match err.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    CertError::KeyAlreadyExists { path: path.into() }
+                }
+                _ => self,
+            },
+            _ => self,
+        }
+    }
+}
+
 impl Command for CertCmd {
     fn to_string(&self) -> String {
         match self {
@@ -169,8 +197,8 @@ fn create_test_certificate(
     check_identifier(id)?;
     check_paths(cert_path, key_path)?;
 
-    let mut cert_file = create_new_file(cert_path)?;
-    let mut key_file = create_new_file(key_path)?;
+    let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
+    let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
 
     let cert = new_selfsigned_certificate(&config, id)?;
 
@@ -204,16 +232,8 @@ fn check_identifier(id: &str) -> Result<(), CertError> {
 }
 
 fn check_paths(cert_path: &str, key_path: &str) -> Result<(), CertError> {
-    if cert_path == key_path {
+    if Path::new(cert_path) == Path::new(key_path) {
         return Err(CertError::IdenticalPath);
-    } else if Path::new(cert_path).exists() {
-        return Err(CertError::CertificateAlreadyExists {
-            path: cert_path.into(),
-        });
-    } else if Path::new(key_path).exists() {
-        return Err(CertError::KeyAlreadyExists {
-            path: key_path.into(),
-        });
     }
 
     Ok(())
