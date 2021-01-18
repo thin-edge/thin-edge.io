@@ -177,9 +177,11 @@ fn create_test_certificate(
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
 
-    let mut cert_key = cert.serialize_private_key_pem();
-    key_file.write_all(cert_key.as_bytes())?;
-    cert_key.zeroize();
+    {
+        // Zero the private key on drop
+        let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
+        key_file.write_all(cert_key.as_bytes())?;
+    }
 
     check_certificate(id, cert_path)?;
     check_key(key_path)?;
