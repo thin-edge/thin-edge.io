@@ -269,7 +269,7 @@ pub enum ThinEdgeJsonError {
     #[error("Thinedge reserved word error: {value:?}")]
     ThinEdgeReservedWordError { value: String },
 
-    #[error("Invalid time stamp")]
+    #[error("Timestamp is not in ISO8601 format")]
     InvalidTimeStamp(ParseError),
 
     #[error("Invalid thinedge hierarchy: {name:?}")]
