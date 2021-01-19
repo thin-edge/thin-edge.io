@@ -7,7 +7,7 @@ edition = "2018"
 chrono = "0.4.19"
 c8y_json_translator = {version = "0.1.0", path = "../translator/c8y_json_translator"}
 env_logger = "0.8.2"
-log = "0.4.11"
+log = "0.4.13"
 mqtt_client = {version = "0.1.0", path = "../mqtt/mqtt_client"}
-tokio = { version = "1.0.1", features = ["full"] }
+tokio = { version = "1.0.2", features = ["full"] }
 

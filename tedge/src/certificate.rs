@@ -9,7 +9,6 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 use structopt::StructOpt;
-use zeroize::Zeroize;
 
 #[derive(StructOpt, Debug)]
 pub enum CertCmd {
