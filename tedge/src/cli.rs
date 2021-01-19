@@ -18,13 +18,16 @@ pub struct Opt {
     tedge_cmd: TEdgeCmd,
 }
 
-#[derive(StructOpt, Debug)]
-enum TEdgeCmd {
-    /// Configure Thin Edge.
-    Config(ConfigCmd),
+impl ToString for Opt {
+    fn to_string(&self) -> String {
+        self.tedge_cmd.to_string()
+    }
+}
 
-    /// Create and manage device certificate
-    Cert(super::certificate::CertCmd),
+impl Opt {
+    pub fn run(&self) -> Result<(), anyhow::Error> {
+        self.tedge_cmd.run(self.verbose)
+    }
 }
 
 #[derive(StructOpt, Debug)]
@@ -42,16 +45,23 @@ enum ConfigCmd {
     Get { key: String },
 }
 
-impl ToString for Opt {
+impl Command for ConfigCmd {
     fn to_string(&self) -> String {
-        self.tedge_cmd.to_string()
+        format!("{:?}", self)
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        unimplemented!("{:?}", self);
     }
 }
 
-impl Opt {
-    pub fn run(&self) -> Result<(), anyhow::Error> {
-        self.tedge_cmd.run(self.verbose)
-    }
+#[derive(StructOpt, Debug)]
+enum TEdgeCmd {
+    /// Create and manage device certificate
+    Cert(super::certificate::CertCmd),
+
+    /// Configure Thin Edge.
+    Config(ConfigCmd),
 }
 
 impl TEdgeCmd {
@@ -70,15 +80,5 @@ impl Command for TEdgeCmd {
 
     fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
         self.sub_command().run(verbose)
-    }
-}
-
-impl Command for ConfigCmd {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
-    }
-
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        unimplemented!("{:?}", self);
     }
 }
