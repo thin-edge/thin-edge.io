@@ -4,7 +4,6 @@ members = [
     "mqtt/mqtt_client",
     "tedge",
     "tedge-mapper",
-    "tests/testlib",
     "translator/c8y_json_translator",
 ]
 
