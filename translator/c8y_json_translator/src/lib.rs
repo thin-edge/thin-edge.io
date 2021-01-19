@@ -464,7 +464,7 @@ mod tests {
            "pressure": "20"
           }"#;
 
-        let expected_output = "Invalid thinedge json error at: \"pressure\"";
+        let expected_output = r#"Invalid thinedge json error at: "pressure""#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -486,7 +486,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "Invalid thinedge json error at: \"temperature\"";
+        let expected_output = r#"Invalid thinedge json error at: "temperature""#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -514,7 +514,7 @@ mod tests {
                   },
                 "pressure": 98
         }"#;
-        let expected_output = "Invalid thinedge hierarchy: \"area\"";
+        let expected_output = r#"Invalid thinedge hierarchy: "area""#;
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
 
@@ -534,7 +534,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "Thinedge reserved word error: \"type\"";
+        let expected_output = r#"Thinedge reserved word error: "type""#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -556,7 +556,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = "Thinedge reserved word error: \"time\"";
+        let expected_output = r#"Thinedge reserved word error: "time""#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
