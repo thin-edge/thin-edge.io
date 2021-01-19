@@ -501,6 +501,18 @@ impl AckStream {
     }
 }
 
+/// A Parser from u8 number to QoS type.
+/// 0 -> QoS::AtMostOnce, 1 -> QoS::AtLeastOnce, 2 -> QoS::ExactOnce.
+pub fn parse_qos(src: &str) -> Result<QoS, Error> {
+    let int_val: u8 = src.parse().map_err(|_| Error::InvalidQoSError)?;
+    match int_val {
+        0 => Ok(QoS::AtMostOnce),
+        1 => Ok(QoS::AtLeastOnce),
+        2 => Ok(QoS::ExactlyOnce),
+        _ => Err(Error::InvalidQoSError),
+    }
+}
+
 /// An MQTT related error
 #[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum Error {
@@ -527,6 +539,9 @@ pub enum Error {
 
     #[error("MQTT connection error: ")]
     Timeout,
+
+    #[error("The input QoS should be 0, 1, or 2")]
+    InvalidQoSError,
 }
 
 impl Error {

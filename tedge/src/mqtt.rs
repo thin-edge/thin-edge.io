@@ -1,7 +1,7 @@
 use super::command::Command;
 use futures::future::FutureExt;
 use futures::select;
-use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use mqtt_client::{parse_qos, Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use structopt::StructOpt;
 use tokio::signal::unix::{signal, SignalKind};
 
@@ -36,11 +36,14 @@ pub enum MqttCmd {
 
 #[derive(thiserror::Error, Debug)]
 pub enum MqttError {
-    #[error(r#"Client error"#)]
+    #[error("Client error")]
     ConnectError(#[from] mqtt_client::Error),
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
+
+    #[error("Received message is not UTF-8 format")]
+    InvalidMessageError,
 }
 
 impl Command for MqttCmd {
@@ -96,7 +99,7 @@ async fn publish(topic: &str, message: &str, qos: &QoS) -> Result<(), MqttError>
 async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;
-    let filter = TopicFilter::new(topic).unwrap().qos(*qos);
+    let filter = TopicFilter::new(topic)?.qos(*qos);
 
     let mut signals = signal(SignalKind::interrupt())?;
     let mut messages: MessageStream = mqtt.subscribe(filter).await?;
@@ -110,7 +113,7 @@ async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
 
             maybe_message = messages.next().fuse() => {
                 match maybe_message {
-                    Some(message) =>  handle_message(message),
+                    Some(message) =>  handle_message(message)?,
                     None => break
                  }
             }
@@ -120,19 +123,10 @@ async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
     Ok(())
 }
 
-fn handle_message(message: Message) {
-    let s = String::from_utf8(message.payload).unwrap();
-    println!("Received: {}", s);
-}
-
-pub fn parse_qos(src: &str) -> Result<QoS, String> {
-    let int_val: u8 = src.parse().map_err(|err| format!("{}", err))?;
-    match int_val {
-        0 => Ok(QoS::AtMostOnce),
-        1 => Ok(QoS::AtLeastOnce),
-        2 => Ok(QoS::ExactlyOnce),
-        _ => Err(String::from("QoS must be 0, 1 or 2")),
-    }
+fn handle_message(message: Message) -> Result<(), MqttError> {
+    let s = String::from_utf8(message.payload).map_err(|_| MqttError::InvalidMessageError)?;
+    println!("{}", s);
+    Ok(())
 }
 
 #[cfg(test)]
