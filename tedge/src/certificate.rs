@@ -11,7 +11,7 @@ use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 pub enum CertCmd {
-    /// Create a device certificate
+    /// Create a self-signed device certificate
     Create {
         /// The device identifier
         #[structopt(long)]
@@ -34,7 +34,15 @@ pub enum CertCmd {
     },
 
     /// Remove the device certificate
-    Remove,
+    Remove {
+       /// The path of the certificate to be removed
+        #[structopt(long, default_value = "./tedge-certificate.pem")]
+        cert_path: String,
+
+        /// The path of the private key to be removed
+        #[structopt(long, default_value = "./tedge-private-key.pem")]
+        key_path: String,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -141,7 +149,10 @@ impl Command for CertCmd {
             CertCmd::Show {
                 cert_path: _,
             } => format!("show the device certificate"),
-            CertCmd::Remove => format!("remove the device certificate"),
+            CertCmd::Remove {
+                cert_path: _,
+                key_path: _,
+            }=> format!("remove the device certificate"),
         }
     }
 
@@ -156,8 +167,11 @@ impl Command for CertCmd {
             CertCmd::Show {
                 cert_path,
             } => show_certificate(cert_path)?,
-            _ => {
-                unimplemented!("{:?}", self);
+            CertCmd::Remove {
+                cert_path,
+                key_path,
+            } => {
+                remove_certificate(cert_path, key_path)?;
             }
         }
         Ok(())
@@ -233,6 +247,28 @@ fn show_certificate(cert_path: &str) -> Result<(), CertError> {
     println!("Validity: {}", x509.tbs_certificate.validity.not_after.to_rfc2822());
 
     Ok(())
+}
+
+fn remove_certificate(
+    cert_path: &str,
+    key_path: &str,
+) -> Result<(), CertError> {
+    ok_if_not_found(std::fs::remove_file(cert_path))?;
+    ok_if_not_found(std::fs::remove_file(key_path))?;
+
+    Ok(())
+}
+
+fn ok_if_not_found(res: std::io::Result<()>) -> std::io::Result<()> {
+    match res {
+        Err(ref err) => match err.kind() {
+            std::io::ErrorKind::NotFound => {
+                Ok(())
+            }
+            _ => res,
+        },
+        _ => res,
+    }
 }
 
 const MAX_CN_SIZE: usize = 64;
