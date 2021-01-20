@@ -39,7 +39,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
+async fn publish_temperature(mut mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
     let mut temperature: i32 = random_in_range(-10, 20);
 
     info!("Publishing temperature measurements");
