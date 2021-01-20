@@ -2,6 +2,8 @@ use super::command::Command;
 use structopt::clap;
 use structopt::StructOpt;
 
+mod connect;
+
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = clap::crate_name!(),
@@ -62,6 +64,9 @@ enum TEdgeCmd {
 
     /// Configure Thin Edge.
     Config(ConfigCmd),
+
+    /// Connect to connector provider
+    Connect(connect::ConnectCmd),
 }
 
 impl TEdgeCmd {
@@ -69,6 +74,7 @@ impl TEdgeCmd {
         match self {
             TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Cert(ref cmd) => cmd,
+            TEdgeCmd::Connect(ref cmd) => cmd,
         }
     }
 }
