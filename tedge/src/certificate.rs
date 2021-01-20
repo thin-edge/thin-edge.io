@@ -38,7 +38,7 @@ pub enum CertCmd {
 
     /// Remove the device certificate
     Remove {
-       /// The path of the certificate to be removed
+        /// The path of the certificate to be removed
         #[structopt(long, default_value = DEFAULT_CERT_PATH)]
         cert_path: String,
 
@@ -131,9 +131,7 @@ impl CertError {
                 std::io::ErrorKind::AlreadyExists => {
                     CertError::KeyAlreadyExists { path: path.into() }
                 }
-                std::io::ErrorKind::NotFound => {
-                    CertError::KeyNotFound { path: path.into() }
-                }
+                std::io::ErrorKind::NotFound => CertError::KeyNotFound { path: path.into() },
                 _ => self,
             },
             _ => self,
@@ -149,13 +147,11 @@ impl Command for CertCmd {
                 cert_path: _,
                 key_path: _,
             } => format!("create a test certificate for the device {}.", id),
-            CertCmd::Show {
-                cert_path: _,
-            } => format!("show the device certificate"),
+            CertCmd::Show { cert_path: _ } => format!("show the device certificate"),
             CertCmd::Remove {
                 cert_path: _,
                 key_path: _,
-            }=> format!("remove the device certificate"),
+            } => format!("remove the device certificate"),
         }
     }
 
@@ -167,9 +163,9 @@ impl Command for CertCmd {
                 cert_path,
                 key_path,
             } => create_test_certificate(&config, id, cert_path, key_path)?,
-            CertCmd::Show {
-                cert_path,
-            } => show_certificate(cert_path)?,
+
+            CertCmd::Show { cert_path } => show_certificate(cert_path)?,
+
             CertCmd::Remove {
                 cert_path,
                 key_path,
@@ -247,15 +243,15 @@ fn show_certificate(cert_path: &str) -> Result<(), CertError> {
     println!("Device certificate: {}", cert_path);
     println!("Subject: {}", x509.tbs_certificate.subject.to_string());
     println!("Issuer: {}", x509.tbs_certificate.issuer.to_string());
-    println!("Validity: {}", x509.tbs_certificate.validity.not_after.to_rfc2822());
+    println!(
+        "Validity: {}",
+        x509.tbs_certificate.validity.not_after.to_rfc2822()
+    );
 
     Ok(())
 }
 
-fn remove_certificate(
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(), CertError> {
+fn remove_certificate(cert_path: &str, key_path: &str) -> Result<(), CertError> {
     ok_if_not_found(std::fs::remove_file(cert_path))?;
     ok_if_not_found(std::fs::remove_file(key_path))?;
 
@@ -265,9 +261,7 @@ fn remove_certificate(
 fn ok_if_not_found(res: std::io::Result<()>) -> std::io::Result<()> {
     match res {
         Err(ref err) => match err.kind() {
-            std::io::ErrorKind::NotFound => {
-                Ok(())
-            }
+            std::io::ErrorKind::NotFound => Ok(()),
             _ => res,
         },
         _ => res,
@@ -288,7 +282,9 @@ fn check_identifier(id: &str) -> Result<(), CertError> {
     Ok(())
 }
 
-fn extract_certificate(pem: &x509_parser::pem::Pem) -> Result<x509_parser::certificate::X509Certificate, CertError> {
+fn extract_certificate(
+    pem: &x509_parser::pem::Pem,
+) -> Result<x509_parser::certificate::X509Certificate, CertError> {
     let x509 = pem.parse_x509().map_err(|err| {
         // The x509 error is wrapped into a `nom::Err`
         // and cannot be extracted without pattern matching on that type
