@@ -9,6 +9,9 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
 
+const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
+const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
+
 #[derive(StructOpt, Debug)]
 pub enum CertCmd {
     /// Create a self-signed device certificate
@@ -18,29 +21,29 @@ pub enum CertCmd {
         id: String,
 
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = "./tedge-certificate.pem")]
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
         cert_path: String,
 
         /// The path where the device private key will be stored
-        #[structopt(long, default_value = "./tedge-private-key.pem")]
+        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
         key_path: String,
     },
 
     /// Show the device certificate, if any
     Show {
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = "./tedge-certificate.pem")]
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
         cert_path: String,
     },
 
     /// Remove the device certificate
     Remove {
        /// The path of the certificate to be removed
-        #[structopt(long, default_value = "./tedge-certificate.pem")]
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
         cert_path: String,
 
         /// The path of the private key to be removed
-        #[structopt(long, default_value = "./tedge-private-key.pem")]
+        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
         key_path: String,
     },
 }
