@@ -255,10 +255,10 @@ impl fmt::Display for CumulocityJson {
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum ThinEdgeJsonError {
     #[error("Invalid utf8 error")]
-    InvalidUTF8(std::str::Utf8Error),
+    InvalidUTF8(#[from] std::str::Utf8Error),
 
     #[error("Invalid json error")]
-    InvalidJson(json::Error),
+    InvalidJson(#[from] json::Error),
 
     #[error("Invalid thinedge json error at: {name:?}")]
     InvalidThinEdgeJson { name: String },
@@ -270,28 +270,10 @@ pub enum ThinEdgeJsonError {
     ThinEdgeReservedWordError { value: String },
 
     #[error("Timestamp is not in ISO8601 format")]
-    InvalidTimeStamp(ParseError),
+    InvalidTimeStamp(#[from] ParseError),
 
     #[error("Invalid thinedge hierarchy: {name:?}")]
     InvalidThinEdgeHierarchy { name: String },
-}
-
-impl From<std::str::Utf8Error> for ThinEdgeJsonError {
-    fn from(error: std::str::Utf8Error) -> Self {
-        ThinEdgeJsonError::InvalidUTF8(error)
-    }
-}
-
-impl From<json::Error> for ThinEdgeJsonError {
-    fn from(error: json::Error) -> Self {
-        ThinEdgeJsonError::InvalidJson(error)
-    }
-}
-
-impl From<chrono::format::ParseError> for ThinEdgeJsonError {
-    fn from(error: chrono::format::ParseError) -> Self {
-        ThinEdgeJsonError::InvalidTimeStamp(error)
-    }
 }
 
 #[cfg(test)]
