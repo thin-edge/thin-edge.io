@@ -9,8 +9,6 @@ use tokio::signal::unix::{signal, SignalKind};
 const DEFAULT_HOST: &str = "test.mosquitto.org";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_ID: &str = "tedge-cli";
-const DEFAULT_PACKET_ID: u16 = 1;
-const DEFAULT_WAIT_FOR_ACK_IN_SEC: u64 = 1;
 
 #[derive(StructOpt, Debug)]
 pub enum MqttCmd {
@@ -49,12 +47,6 @@ pub enum MqttError {
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,
 }
-
-// impl From<std::io::Error> for MqttError {
-//     fn from(e: std::io::Error) -> MqttError {
-//         MqttError::IoError(e)
-//     }
-// }
 
 impl Command for MqttCmd {
     fn to_string(&self) -> String {
@@ -142,8 +134,6 @@ async fn handle_message(message: Message) -> Result<(), MqttError> {
     Ok(())
 }
 
-/// A Parser from u8 number to QoS type.
-/// 0 -> QoS::AtMostOnce, 1 -> QoS::AtLeastOnce, 2 -> QoS::ExactOnce.
 pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
     let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoSError)?;
     match int_val {
