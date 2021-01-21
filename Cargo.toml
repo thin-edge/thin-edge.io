@@ -5,6 +5,7 @@ members = [
     "tedge",
     "tedge-mapper",
     "translator/c8y_json_translator",
+    "practice",
 ]
 
 [profile.release]

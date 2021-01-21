@@ -64,6 +64,7 @@ pub enum CertError {
     )]
     KeyAlreadyExists { path: String },
 
+    #[allow(dead_code)]
     #[error(
         r#"The content of the certificate file is not of the expected x509/pem format.
         Existing file: {path:?}
@@ -72,6 +73,7 @@ pub enum CertError {
     )]
     ExpectCertificate { path: String },
 
+    #[allow(dead_code)]
     #[error(
         r#"The content of the private key file is not of the expected pem format.
         Existing file: {path:?}
@@ -223,6 +225,7 @@ fn check_identifier(id: &str) -> Result<(), CertError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn read_certificate_subject(path: &str) -> Result<Option<String>, CertError> {
     match read_pem(path)? {
         None => Ok(None),
@@ -240,6 +243,7 @@ fn read_certificate_subject(path: &str) -> Result<Option<String>, CertError> {
     }
 }
 
+#[allow(dead_code)]
 fn read_pem(path: &str) -> Result<Option<x509_parser::pem::Pem>, CertError> {
     if Path::new(path).exists() {
         let file = std::fs::File::open(path)?;
