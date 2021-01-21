@@ -1,11 +1,12 @@
 use super::command::Command;
 use futures::future::FutureExt;
 use futures::select;
-use mqtt_client::{parse_qos, Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use structopt::StructOpt;
+use tokio::io::AsyncWriteExt;
 use tokio::signal::unix::{signal, SignalKind};
 
-const DEFAULT_HOST: &str = "localhost";
+const DEFAULT_HOST: &str = "test.mosquitto.org";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_ID: &str = "tedge-cli";
 const DEFAULT_PACKET_ID: u16 = 1;
@@ -43,8 +44,17 @@ pub enum MqttError {
     IoError(#[from] std::io::Error),
 
     #[error("Received message is not UTF-8 format")]
-    InvalidMessageError,
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("The input QoS should be 0, 1, or 2")]
+    InvalidQoSError,
 }
+
+// impl From<std::io::Error> for MqttError {
+//     fn from(e: std::io::Error) -> MqttError {
+//         MqttError::IoError(e)
+//     }
+// }
 
 impl Command for MqttCmd {
     fn to_string(&self) -> String {
@@ -69,37 +79,32 @@ impl Command for MqttCmd {
                 topic,
                 message,
                 qos,
-            } => publish(topic, message, qos)?,
-            MqttCmd::Sub { topic, qos } => subscribe(&topic, qos)?,
+            } => publish(topic, message, *qos)?,
+            MqttCmd::Sub { topic, qos } => subscribe(topic, *qos)?,
         }
         Ok(())
     }
 }
 
 #[tokio::main]
-async fn publish(topic: &str, message: &str, qos: &QoS) -> Result<(), MqttError> {
-    let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
+async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
+    let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
         .await?;
     let tpc = Topic::new(topic)?;
-    let msg = Message::new(&tpc, message)
-        .qos(*qos)
-        .pkid(DEFAULT_PACKET_ID);
-    mqtt.publish_and_wait_for_ack(
-        msg,
-        std::time::Duration::from_secs(DEFAULT_WAIT_FOR_ACK_IN_SEC),
-    )
-    .await?;
+    let msg = Message::new(&tpc, message).qos(qos);
+    mqtt.publish(msg).await?;
+    println!("hi!");
     mqtt.disconnect().await?;
 
     Ok(())
 }
 
 #[tokio::main]
-async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
+async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;
-    let filter = TopicFilter::new(topic)?.qos(*qos);
+    let filter = TopicFilter::new(topic)?.qos(qos);
 
     let mut signals = signal(SignalKind::interrupt())?;
     let mut messages: MessageStream = mqtt.subscribe(filter).await?;
@@ -113,7 +118,7 @@ async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
 
             maybe_message = messages.next().fuse() => {
                 match maybe_message {
-                    Some(message) =>  handle_message(message)?,
+                    Some(message) =>  handle_message(message).await?,
                     None => break
                  }
             }
@@ -123,10 +128,30 @@ async fn subscribe(topic: &str, qos: &QoS) -> Result<(), MqttError> {
     Ok(())
 }
 
-fn handle_message(message: Message) -> Result<(), MqttError> {
-    let s = String::from_utf8(message.payload).map_err(|_| MqttError::InvalidMessageError)?;
-    println!("{}", s);
+async fn async_println(s: &str) -> Result<(), MqttError> {
+    let mut stdout = tokio::io::stdout();
+    stdout.write_all(s.as_bytes()).await?;
+    stdout.write_all(b"\n\r").await?;
     Ok(())
+}
+
+async fn handle_message(message: Message) -> Result<(), MqttError> {
+    let s = String::from_utf8(message.payload)?;
+
+    async_println(&s).await?;
+    Ok(())
+}
+
+/// A Parser from u8 number to QoS type.
+/// 0 -> QoS::AtMostOnce, 1 -> QoS::AtLeastOnce, 2 -> QoS::ExactOnce.
+pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
+    let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoSError)?;
+    match int_val {
+        0 => Ok(QoS::AtMostOnce),
+        1 => Ok(QoS::AtLeastOnce),
+        2 => Ok(QoS::ExactlyOnce),
+        _ => Err(MqttError::InvalidQoSError),
+    }
 }
 
 #[cfg(test)]
