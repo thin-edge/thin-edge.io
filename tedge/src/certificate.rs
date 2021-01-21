@@ -239,13 +239,14 @@ fn create_test_certificate(
 fn show_certificate(cert_path: &str) -> Result<(), CertError> {
     let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
     let x509 = extract_certificate(&pem)?;
+    let tbs_certificate = x509.tbs_certificate;
 
     println!("Device certificate: {}", cert_path);
-    println!("Subject: {}", x509.tbs_certificate.subject.to_string());
-    println!("Issuer: {}", x509.tbs_certificate.issuer.to_string());
+    println!("Subject: {}", tbs_certificate.subject.to_string());
+    println!("Issuer: {}", tbs_certificate.issuer.to_string());
     println!(
         "Validity: {}",
-        x509.tbs_certificate.validity.not_after.to_rfc2822()
+        tbs_certificate.validity.not_after.to_rfc2822()
     );
 
     Ok(())
