@@ -5,7 +5,7 @@ mod tests {
 
     // Temporary workaround CIT-160
     const PATH: &'static str =
-        "target/release:target/debug:/home/runner/work/thin-edge/thin-edge/target/debug";
+        "target/release:target/debug:/home/runner/work/thin-edge/thin-edge/target/debug:/target/armv7-unknown-linux-gnueabihf/debug";
 
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
