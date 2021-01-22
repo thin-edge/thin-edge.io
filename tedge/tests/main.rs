@@ -1,13 +1,17 @@
 // Don't run on arm builds, relevant bug @CIT-160 needs resolution before.
-#[cfg(not(target_arch = "arm"))]
+//#[cfg(not(target_arch = "arm"))]
 mod tests {
 
     use assert_cmd::prelude::*; // Add methods on commands
     use predicates::prelude::*; // Used for writing assertions
 
+    // Temporary workaround CIT-160
+    const PATH: &'static str = "target/release:target/debug:/target/armv7-unknown-linux-gnueabihf/debug";
+
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = std::process::Command::new("tedge");
+        cmd.env("PATH", PATH);
 
         cmd.arg("--help");
         cmd.assert()
@@ -20,6 +24,7 @@ mod tests {
     #[test]
     fn run_version() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = std::process::Command::new("tedge");
+        cmd.env("PATH", PATH);
 
         let version_string = format!("tedge {}", env!("CARGO_PKG_VERSION"));
         cmd.arg("-V");
@@ -37,6 +42,7 @@ mod tests {
         let key_path = temp_path("test-key.pem");
 
         let mut create_cmd = std::process::Command::new("tedge");
+        create_cmd.env("PATH", PATH);
         create_cmd.args(&[
             "cert",
             "create",
@@ -49,9 +55,11 @@ mod tests {
         ]);
 
         let mut show_cmd = std::process::Command::new("tedge");
+        create_cmd.env("PATH", PATH);
         show_cmd.args(&["cert", "show", "--cert-path", &cert_path]);
 
         let mut remove_cmd = std::process::Command::new("tedge");
+        create_cmd.env("PATH", PATH);
         remove_cmd.args(&[
             "cert",
             "remove",
