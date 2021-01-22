@@ -1,14 +1,11 @@
-// Don't run on arm builds, relevant bug @CIT-160 needs resolution before.
-#[cfg(not(target_arch = "arm"))]
 mod tests {
 
     use assert_cmd::prelude::*; // Add methods on commands
     use predicates::prelude::*; // Used for writing assertions
-    use std::process::Command; // Run programs
 
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
+        let mut cmd = std::process::Command::new("tedge");
 
         cmd.arg("--help");
         cmd.assert()
@@ -20,7 +17,7 @@ mod tests {
 
     #[test]
     fn run_version() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
+        let mut cmd = std::process::Command::new("tedge");
 
         let version_string = format!("tedge {}", env!("CARGO_PKG_VERSION"));
         cmd.arg("-V");
@@ -37,31 +34,30 @@ mod tests {
         let cert_path = temp_path("test-cert.pem");
         let key_path = temp_path("test-key.pem");
 
-        let mut create_cmd = command(
-            "tedge",
-            vec![
-                "cert",
-                "create",
-                "--id",
-                device_id,
-                "--cert-path",
-                &cert_path,
-                "--key-path",
-                &key_path,
-            ],
-        )?;
-        let mut show_cmd = command("tedge", vec!["cert", "show", "--cert-path", &cert_path])?;
-        let mut remove_cmd = command(
-            "tedge",
-            vec![
-                "cert",
-                "remove",
-                "--cert-path",
-                &cert_path,
-                "--key-path",
-                &key_path,
-            ],
-        )?;
+        let mut create_cmd = std::process::Command::new("tedge");
+        create_cmd.args(&[
+            "cert",
+            "create",
+            "--id",
+            device_id,
+            "--cert-path",
+            &cert_path,
+            "--key-path",
+            &key_path,
+        ]);
+
+        let mut show_cmd = std::process::Command::new("tedge");
+        show_cmd.args(&["cert", "show", "--cert-path", &cert_path]);
+
+        let mut remove_cmd = std::process::Command::new("tedge");
+        remove_cmd.args(&[
+            "cert",
+            "remove",
+            "--cert-path",
+            &cert_path,
+            "--key-path",
+            &key_path,
+        ]);
 
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
@@ -97,16 +93,5 @@ mod tests {
         let mut path = std::env::temp_dir();
         path.push(filename);
         path.to_str().unwrap_or(filename).into()
-    }
-
-    fn command(
-        cmd: impl AsRef<str>,
-        args: Vec<impl AsRef<std::ffi::OsStr>>,
-    ) -> Result<Command, Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin(cmd)?;
-        for arg in args {
-            cmd.arg(arg);
-        }
-        Ok(cmd)
     }
 }
