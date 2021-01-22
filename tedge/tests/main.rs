@@ -1,3 +1,5 @@
+// Don't run on arm builds, relevant bug @CIT-160 needs resolution before.
+#[cfg(not(target_arch = "arm"))]
 mod tests {
 
     use assert_cmd::prelude::*; // Add methods on commands

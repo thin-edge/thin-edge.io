@@ -253,19 +253,16 @@ fn show_certificate(cert_path: &str) -> Result<(), CertError> {
 }
 
 fn remove_certificate(cert_path: &str, key_path: &str) -> Result<(), CertError> {
-    ok_if_not_found(std::fs::remove_file(cert_path))?;
-    ok_if_not_found(std::fs::remove_file(key_path))?;
+    std::fs::remove_file(cert_path).or_else(ok_if_not_found)?;
+    std::fs::remove_file(key_path).or_else(ok_if_not_found)?;
 
     Ok(())
 }
 
-fn ok_if_not_found(res: std::io::Result<()>) -> std::io::Result<()> {
-    match res {
-        Err(ref err) => match err.kind() {
-            std::io::ErrorKind::NotFound => Ok(()),
-            _ => res,
-        },
-        _ => res,
+fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
     }
 }
 
