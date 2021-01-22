@@ -58,9 +58,7 @@ fn translate(raw_input: &Vec<u8>) -> Result<Vec<u8>, String> {
                     JsonValue::Number(num) => {
                         let value: f64 = (*num).into();
                         if value == 0.0 || value.is_normal() {
-                            return Ok(
-                                format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, value).into_bytes()
-                            );
+                            return Ok(format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, value).into_bytes());
                         } else {
                             return Err(format!("ERROR: value out of range '{}'", v));
                         }

@@ -139,10 +139,7 @@ impl Client {
 
     /// Disconnect the client and drop it.
     pub async fn disconnect(self) -> Result<(), Error> {
-        self.mqtt_client
-            .disconnect()
-            .await
-            .map_err(Error::client_error)
+        self.mqtt_client.disconnect().await.map_err(Error::client_error)
     }
 
     /// Process all the MQTT events
@@ -168,8 +165,7 @@ impl Client {
                         payload: msg.payload.to_vec(),
                     });
                 }
-                Ok(Event::Incoming(Incoming::Disconnect))
-                | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                Ok(Event::Incoming(Incoming::Disconnect)) | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
                     break;
                 }
                 _ => (),

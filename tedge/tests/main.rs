@@ -11,9 +11,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("tedge")?;
 
         cmd.arg("--help");
-        cmd.assert()
-            .success()
-            .stdout(predicate::str::contains("USAGE"));
+        cmd.assert().success().stdout(predicate::str::contains("USAGE"));
 
         Ok(())
     }

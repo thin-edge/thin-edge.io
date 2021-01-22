@@ -99,9 +99,7 @@ impl CertError {
     fn cert_context(self, path: &str) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    CertError::CertificateAlreadyExists { path: path.into() }
-                }
+                std::io::ErrorKind::AlreadyExists => CertError::CertificateAlreadyExists { path: path.into() },
                 _ => self,
             },
             _ => self,
@@ -112,9 +110,7 @@ impl CertError {
     fn key_context(self, path: &str) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    CertError::KeyAlreadyExists { path: path.into() }
-                }
+                std::io::ErrorKind::AlreadyExists => CertError::KeyAlreadyExists { path: path.into() },
                 _ => self,
             },
             _ => self,
@@ -185,12 +181,7 @@ impl Default for TestCertConfig {
     }
 }
 
-fn create_test_certificate(
-    config: &CertConfig,
-    id: &str,
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(), CertError> {
+fn create_test_certificate(config: &CertConfig, id: &str, cert_path: &str, key_path: &str) -> Result<(), CertError> {
     check_identifier(id)?;
 
     let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
@@ -258,10 +249,7 @@ fn create_new_file(path: &str) -> Result<File, CertError> {
 fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certificate, RcgenError> {
     let mut distinguished_name = rcgen::DistinguishedName::new();
     distinguished_name.push(rcgen::DnType::CommonName, id);
-    distinguished_name.push(
-        rcgen::DnType::OrganizationName,
-        &config.test_cert.organization_name,
-    );
+    distinguished_name.push(rcgen::DnType::OrganizationName, &config.test_cert.organization_name);
     distinguished_name.push(
         rcgen::DnType::OrganizationalUnitName,
         &config.test_cert.organizational_unit_name,

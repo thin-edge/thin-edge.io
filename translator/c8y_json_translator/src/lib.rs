@@ -65,32 +65,24 @@ impl ThinEdgeJson {
                     match v {
                         //Single Value object
                         JsonValue::Number(num) => {
-                            let single_value_measurement =
-                                SingleValueMeasurement::new(k, (*num).into())?;
+                            let single_value_measurement = SingleValueMeasurement::new(k, (*num).into())?;
                             measurements.push(ThinEdgeValue::Single(single_value_measurement));
                         }
                         //Multi value object
                         JsonValue::Object(multi_value_thin_edge_object) => {
-                            let multi_value_measurement =
-                                MultiValueMeasurement::new(k, multi_value_thin_edge_object)?;
+                            let multi_value_measurement = MultiValueMeasurement::new(k, multi_value_thin_edge_object)?;
                             measurements.push(ThinEdgeValue::Multi(multi_value_measurement));
                         }
                         //Short String value object
                         JsonValue::Short(short_value) => {
                             if k.eq("time") {
-                                timestamp = ThinEdgeJson::check_timestamp_for_iso8601_complaint(
-                                    short_value,
-                                )?;
+                                timestamp = ThinEdgeJson::check_timestamp_for_iso8601_complaint(short_value)?;
                             } else {
-                                return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
-                                    name: String::from(k),
-                                });
+                                return Err(ThinEdgeJsonError::InvalidThinEdgeJson { name: String::from(k) });
                             }
                         }
                         _ => {
-                            return Err(ThinEdgeJsonError::InvalidThinEdgeJson {
-                                name: String::from(k),
-                            });
+                            return Err(ThinEdgeJsonError::InvalidThinEdgeJson { name: String::from(k) });
                         }
                     }
                 }
@@ -147,9 +139,7 @@ impl MultiValueMeasurement {
                     single_values.push(single_value_measurement);
                 }
                 JsonValue::Object(_object) => {
-                    return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy {
-                        name: String::from(k),
-                    })
+                    return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy { name: String::from(k) })
                 }
                 _ => {
                     return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
@@ -168,9 +158,7 @@ impl MultiValueMeasurement {
 impl CumulocityJson {
     fn new(timestamp: &str, c8y_msg_type: &str) -> CumulocityJson {
         let json_object: JsonValue = JsonValue::new_object();
-        let mut c8y_object: CumulocityJson = CumulocityJson {
-            c8y_json: json_object,
-        };
+        let mut c8y_object: CumulocityJson = CumulocityJson { c8y_json: json_object };
         c8y_object.c8y_json = JsonValue::new_object();
         c8y_object.insert_into_json_object("type", c8y_msg_type.into());
         c8y_object.insert_into_json_object("time", timestamp.into());
@@ -185,13 +173,10 @@ impl CumulocityJson {
         for v in measurements.values.iter() {
             match v {
                 ThinEdgeValue::Single(thin_edge_single_value_measurement) => {
-                    c8y_object.translate_into_c8y_single_value_object(
-                        &thin_edge_single_value_measurement,
-                    );
+                    c8y_object.translate_into_c8y_single_value_object(&thin_edge_single_value_measurement);
                 }
                 ThinEdgeValue::Multi(thin_edge_multi_value_measurement) => {
-                    c8y_object
-                        .translate_into_c8y_multi_value_object(&thin_edge_multi_value_measurement);
+                    c8y_object.translate_into_c8y_multi_value_object(&thin_edge_multi_value_measurement);
                 }
             }
         }
@@ -203,10 +188,8 @@ impl CumulocityJson {
         let mut single_value_c8y_object: CumulocityJson = CumulocityJson {
             c8y_json: single_value_object,
         };
-        single_value_c8y_object.insert_into_json_object(
-            &single.name,
-            CumulocityJson::create_value_object(single.value.into()),
-        );
+        single_value_c8y_object
+            .insert_into_json_object(&single.name, CumulocityJson::create_value_object(single.value.into()));
 
         self.insert_into_json_object(&single.name, single_value_c8y_object.c8y_json);
     }
@@ -218,10 +201,8 @@ impl CumulocityJson {
         };
         for s in multi.values.iter() {
             multi_value_c8y_object.insert_into_json_object(&s.name, s.value.into());
-            multi_value_c8y_object.insert_into_json_object(
-                &s.name,
-                CumulocityJson::create_value_object(s.value.into()),
-            );
+            multi_value_c8y_object
+                .insert_into_json_object(&s.name, CumulocityJson::create_value_object(s.value.into()));
         }
         self.insert_into_json_object(&multi.name, multi_value_c8y_object.c8y_json);
     }
@@ -233,9 +214,7 @@ impl CumulocityJson {
 
     fn create_value_object(value: JsonValue) -> JsonValue {
         let json_object = JsonValue::new_object();
-        let mut value_object: CumulocityJson = CumulocityJson {
-            c8y_json: json_object,
-        };
+        let mut value_object: CumulocityJson = CumulocityJson { c8y_json: json_object };
 
         value_object.insert_into_json_object("value", value);
         value_object.c8y_json
@@ -313,17 +292,12 @@ mod tests {
             body_of_message
         );
 
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(single_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
         match output {
             Ok(vec) => {
                 assert_ne!(
                     expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
+                    String::from_utf8(vec).unwrap().split_whitespace().collect::<String>()
                 );
             }
             Err(e) => {
@@ -355,17 +329,12 @@ mod tests {
                        }
                   }"#;
 
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(single_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
         match output {
             Ok(vec) => {
                 assert_eq!(
                     expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
+                    String::from_utf8(vec).unwrap().split_whitespace().collect::<String>()
                 );
             }
             Err(e) => {
@@ -425,10 +394,7 @@ mod tests {
             Ok(vec) => {
                 assert_ne!(
                     expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
+                    String::from_utf8(vec).unwrap().split_whitespace().collect::<String>()
                 );
             }
             Err(e) => {
@@ -447,9 +413,7 @@ mod tests {
           }"#;
 
         let expected_output = r#"Invalid thinedge json error at: "pressure""#;
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(string_value_thin_edge_json).into_bytes());
 
         match output {
             Err(e) => {
@@ -469,9 +433,7 @@ mod tests {
           }"#;
 
         let expected_output = r#"Invalid thinedge json error at: "temperature""#;
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(string_value_thin_edge_json).into_bytes());
 
         match output {
             Err(e) => {
@@ -497,8 +459,7 @@ mod tests {
                 "pressure": 98
         }"#;
         let expected_output = r#"Invalid thinedge hierarchy: "area""#;
-        let output =
-            CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
+        let output = CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
 
         match output {
             Err(e) => {
@@ -517,9 +478,7 @@ mod tests {
           }"#;
 
         let expected_output = r#"Thinedge reserved word error: "type""#;
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(string_value_thin_edge_json).into_bytes());
 
         match output {
             Err(e) => {
@@ -539,9 +498,7 @@ mod tests {
           }"#;
 
         let expected_output = r#"Thinedge reserved word error: "time""#;
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(string_value_thin_edge_json).into_bytes());
 
         match output {
             Err(e) => {
@@ -560,9 +517,7 @@ mod tests {
           }"#;
 
         let expected_output = "Invalid json error";
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output = CumulocityJson::from_thin_edge_json(&String::from(string_value_thin_edge_json).into_bytes());
 
         match output {
             Err(e) => {

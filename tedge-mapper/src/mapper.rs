@@ -68,10 +68,7 @@ impl Mapper {
                 Err(error) => {
                     log::debug!("Mapping error: {}", error);
                     self.client
-                        .publish(mqtt_client::Message::new(
-                            &self.err_topic,
-                            error.to_string(),
-                        ))
+                        .publish(mqtt_client::Message::new(&self.err_topic, error.to_string()))
                         .await?
                 }
             }
@@ -82,9 +79,7 @@ impl Mapper {
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
-        errors_handle
-            .await
-            .map_err(|_| mqtt_client::Error::JoinError)?;
+        errors_handle.await.map_err(|_| mqtt_client::Error::JoinError)?;
         Ok(())
     }
 
