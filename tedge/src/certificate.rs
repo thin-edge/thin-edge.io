@@ -245,7 +245,11 @@ fn show_certificate(cert_path: &str) -> Result<(), CertError> {
     println!("Subject: {}", tbs_certificate.subject.to_string());
     println!("Issuer: {}", tbs_certificate.issuer.to_string());
     println!(
-        "Validity: {}",
+        "Valid from: {}",
+        tbs_certificate.validity.not_before.to_rfc2822()
+    );
+    println!(
+        "Valid up to: {}",
         tbs_certificate.validity.not_after.to_rfc2822()
     );
 
