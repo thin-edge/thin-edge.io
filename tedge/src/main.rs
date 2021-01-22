@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::mem_forget)]
+
 use anyhow::Context;
 use structopt::StructOpt;
 
