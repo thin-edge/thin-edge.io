@@ -6,7 +6,8 @@ mod tests {
     use predicates::prelude::*; // Used for writing assertions
 
     // Temporary workaround CIT-160
-    const PATH: &'static str = "target/release:target/debug:/target/armv7-unknown-linux-gnueabihf/debug";
+    const PATH: &'static str =
+        "target/release:target/debug:/target/armv7-unknown-linux-gnueabihf/debug";
 
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
