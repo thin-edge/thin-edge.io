@@ -148,6 +148,7 @@ impl Connect {
     ///  - url (endpoint url to publish messages)
     ///  - cert_path (path to device certificate)
     ///  - key_path (path to device private key)
+    ///  - bridge_cafile
     // Look at error type, maybe parseerror
     fn generate_bridge_config(config: &Config) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
@@ -302,22 +303,19 @@ impl Default for BridgeConf {
     }
 }
 
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-
 impl std::fmt::Display for BridgeConf {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            r#"connection {}
+            r#"
+connection {}
 address {}
 bridge_cafile {}
 remote_clientid {}
 bridge_certfile {}
 bridge_keyfile {}
 try_private {}
-start_type {}
-"#,
+start_type {}"#,
             self.connection,
             self.address,
             self.bridge_cafile,
