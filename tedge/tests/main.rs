@@ -7,7 +7,7 @@ mod tests {
 
     // Temporary workaround CIT-160
     const PATH: &'static str =
-        "target/release:target/debug:/target/armv7-unknown-linux-gnueabihf/debug";
+        "target/release:target/debug:/home/runner/work/thin-edge/thin-edge/target/debug";
 
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,9 +38,10 @@ mod tests {
 
     #[test]
     fn run_create_certificate() -> Result<(), Box<dyn std::error::Error>> {
+        let tempdir = tempfile::tempdir().unwrap();
         let device_id = "test";
-        let cert_path = temp_path("test-cert.pem");
-        let key_path = temp_path("test-key.pem");
+        let cert_path = temp_path(&tempdir, "test-cert.pem");
+        let key_path = temp_path(&tempdir, "test-key.pem");
 
         let mut create_cmd = std::process::Command::new("tedge");
         create_cmd.env("PATH", PATH);
@@ -97,12 +98,13 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains("Missing file"));
 
+        // The a new certificate can then be created.
+        create_cmd.assert().success();
+
         Ok(())
     }
 
-    fn temp_path(filename: &str) -> String {
-        let mut path = std::env::temp_dir();
-        path.push(filename);
-        path.to_str().unwrap_or(filename).into()
+    fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
+        String::from(dir.path().join(filename).to_str().unwrap())
     }
 }
