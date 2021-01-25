@@ -21,10 +21,12 @@ structopt = "0.3.21"
 thiserror = "1.0.23"
 x509-parser = "0.9"
 zeroize = "1.2.0"
+toml = "0.5.8"
+serde = { version = "1.0.123", features = ["derive"] }
+tempfile = "3.2.0"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
 pem = "0.8.2"
 predicates = "1.0.6"
-tempfile = "3.2.0"
-
+assert_matches = "1.4.0"

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 #check the format of the rust code
 if ! cargo fmt -- --check;
