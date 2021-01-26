@@ -188,8 +188,8 @@ impl Client {
         let pkid = ack_events.wait_for_message_published().await?;
 
         match qos {
-            QoS::AtLeastOnce => {}
-            QoS::AtMostOnce => {
+            QoS::AtMostOnce => {}
+            QoS::AtLeastOnce => {
                 ack_events.wait_for_pub_ack_received(pkid).await?;
             }
             QoS::ExactlyOnce => {
