@@ -1,0 +1,60 @@
+name: tedge-nightly
+
+# triggering manually for test purpose
+on: workflow_dispatch
+#  schedule:
+#    - cron: '0 0 * * *' # Run at 0:00 every day
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - armv7-unknown-linux-gnueabihf
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - name: Build an Artifact
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tedge
+          path: target/armv7-unknown-linux-gnueabihf/release/tedge
+          retention-days: 5
+
+
+  test:
+    name: system-test
+    needs: build # Run after the first job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: Raspbian32
+    steps:
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: tedge
+          path: ~/Downloads
+      - name: Add executable permission
+        shell: bash
+        run: chmod +x ~/Downloads/tedge
+      - name: Run tedge
+        shell: bash
+        run: ~/Downloads/tedge
+

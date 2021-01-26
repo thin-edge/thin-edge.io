@@ -1,0 +1,36 @@
+name: tedge-commit
+
+# triggering manually for test purpose
+on: workflow_dispatch
+#  push:
+#    branches: [ main ]
+#  pull_request:
+#    branches: [ main ]
+
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Lint and format check
+        shell: bash
+        run: ./scripts/pre_build.sh
+      - name: Install Mosquitto
+        shell: bash
+        run: ./scripts/install_mosquitto.sh
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose
+      - name: Build release
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release
