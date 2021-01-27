@@ -1,11 +1,6 @@
 use json::JsonValue;
-use log::debug;
-use log::error;
-use log::info;
-use mqtt_client::Client;
-use mqtt_client::Config;
-use mqtt_client::Message;
-use mqtt_client::Topic;
+use log::{debug, error, info};
+use mqtt_client::{Client, Config, Message, Topic};
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,10 +24,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(message) = messages.next().await {
         debug!("Mapping {:?}", message);
         match translate(&message.payload) {
-            Ok(translation) => mqtt.publish(Message::new(&out_topic, translation)).await?,
+            Ok(translation) => {
+                let _ = mqtt.publish(Message::new(&out_topic, translation)).await?;
+            }
             Err(error) => {
                 debug!("Translation error: {}", error);
-                mqtt.publish(Message::new(&err_topic, error)).await?
+                let _ = mqtt.publish(Message::new(&err_topic, error)).await?;
             }
         }
     }

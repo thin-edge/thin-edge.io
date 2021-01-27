@@ -7,14 +7,15 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "1.0", features = ["sync"] }
-rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
+rumqttc = { git = "https://github.com/mneumann/rumqtt", branch = "support-publish-ack" }
 thiserror = "1.0"
+futures = "0.3"
 
 [dev-dependencies]
+log = "0.4.11"
 futures = "0.3"
 futures-timer = "3.0"
 tokio-test = "0.4"
-log = "0.4.11"
 env_logger = "0.8.2"
 async-log = "2.0.0"
 rand = "0.7.3"

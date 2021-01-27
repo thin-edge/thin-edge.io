@@ -1,6 +1,6 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
-//! ```
+//! ```no_run
 //! use mqtt_client::{Config,Message,Topic};
 //!
 //! #[tokio::main]
@@ -11,34 +11,66 @@
 //!     mqtt.disconnect().await.unwrap();
 //! }
 //! ```
+#![forbid(unsafe_code)]
+#![deny(clippy::mem_forget)]
 
-use rumqttc::Event;
-use rumqttc::Incoming;
-use rumqttc::Outgoing;
-use rumqttc::Packet::Publish;
-use rumqttc::QoS;
-use tokio::sync::broadcast;
+use futures::future::Future;
+pub use rumqttc::QoS;
+use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{broadcast, oneshot};
 
 /// A connection to the local MQTT bus.
 ///
 /// The host and port are implied: a connection can only be open on the localhost, port 1883.
 ///
-/// ```
+/// ```no_run
 /// use mqtt_client::{Config,Message,Topic};
 ///
 /// #[tokio::main]
 /// async fn main () {
-///     let mqtt = Config::default().connect("temperature").await.unwrap();
+///     let mut mqtt = Config::default().connect("temperature").await.unwrap();
 ///     let c8y_msg = Topic::new("c8y/s/us").unwrap();
 ///     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
 ///     mqtt.disconnect().await.unwrap();
 /// }
 /// ```
 pub struct Client {
-    pub name: String,
+    name: String,
     mqtt_client: rumqttc::AsyncClient,
     message_sender: broadcast::Sender<Message>,
-    error_sender: broadcast::Sender<Error>,
+    error_sender: broadcast::Sender<Arc<Error>>,
+    ack_event_sender: broadcast::Sender<AckEvent>,
+    join_handle: tokio::task::JoinHandle<()>,
+    requests_tx: rumqttc::Sender<Request>,
+}
+
+// Send a message on a broadcast channel discarding any error.
+// The send can only fail if there is no listener.
+macro_rules! send_discarding_error {
+    ($sender:expr, $msg:expr) => {
+        let _ = $sender.send($msg);
+    };
+}
+
+/// MQTT message id
+pub type MessageId = u16;
+
+/// `AckEvent` contains all events related to communicating acknowledgement of messages between our
+/// background event loop (see `Client::bg_process`) and frontend operations like
+/// `Client#publish_with_ack`.
+///
+/// This is required so that `Client#publish_with_ack` can wait for a `PubAck` (QoS=1) or `PubComp`
+/// (QoS=2) before returning to the caller. To be able to wait for an acknowledgement, we first
+/// need to obtain the `pkid` of the message. For this purpose we introduced
+/// `Request::PublishWithNotify` to the underlying `rumqttc` library, which takes a
+/// `oneshot::channel` that it resolves once the `pkid` is generated.
+///
+#[derive(Debug, Copy, Clone)]
+enum AckEvent {
+    PubAckReceived(MessageId),
+    PubCompReceived(MessageId),
 }
 
 impl Client {
@@ -49,7 +81,7 @@ impl Client {
     /// so messages sent while the client is disconnected
     /// will be resent on its re-connection.
     ///
-    /// ```
+    /// ```no_run
     /// use mqtt_client::{Config,Client,Topic};
     ///
     /// #[tokio::main]
@@ -72,16 +104,22 @@ impl Client {
         let name = String::from(name);
         let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
         mqtt_options.set_clean_session(false);
+        if let Some(inflight) = config.inflight {
+            mqtt_options.set_inflight(inflight);
+        }
 
-        let in_flight = 10;
-        let (mqtt_client, event_loop) = rumqttc::AsyncClient::new(mqtt_options, in_flight);
-        let (message_sender, _) = broadcast::channel(in_flight);
-        let (error_sender, _) = broadcast::channel(in_flight);
+        let (mqtt_client, eventloop) =
+            rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
+        let requests_tx = eventloop.requests_tx.clone();
+        let (message_sender, _) = broadcast::channel(config.queue_capacity);
+        let (error_sender, _) = broadcast::channel(config.queue_capacity);
+        let (ack_event_sender, _) = broadcast::channel(config.queue_capacity);
 
-        tokio::spawn(Client::bg_process(
-            event_loop,
+        let join_handle = tokio::spawn(Client::bg_process(
+            eventloop,
             message_sender.clone(),
             error_sender.clone(),
+            ack_event_sender.clone(),
         ));
 
         Ok(Client {
@@ -89,27 +127,95 @@ impl Client {
             mqtt_client,
             message_sender,
             error_sender,
+            ack_event_sender,
+            join_handle,
+            requests_tx,
         })
+    }
+
+    /// Returns the name used by the MQTT client.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Publish a message on the local MQTT bus.
     ///
-    pub async fn publish(&self, message: Message) -> Result<(), Error> {
-        let qos = QoS::AtLeastOnce;
-        let retain = false;
-        self.mqtt_client
-            .publish(&message.topic.name, qos, retain, message.payload)
+    /// This does not wait for until the acknowledge is received.
+    ///
+    /// Upon success, this returns the `pkid` of the published message.
+    ///
+    pub async fn publish(&self, message: Message) -> Result<MessageId, Error> {
+        let (sender, receiver) = oneshot::channel();
+        let request = Request::PublishWithNotify {
+            publish: message.into(),
+            notify: sender,
+        };
+
+        let () = self
+            .requests_tx
+            .send(request)
             .await
-            .map_err(Error::client_error)
+            .map_err(|err| Error::ClientError(rumqttc::ClientError::Request(err)))?;
+
+        // Wait for the confirmation from the `rumqttc` backend that a `pkid` has been assigned
+        // to the message. We need the `pkid` in order to wait for the corresponding
+        // acknowledgement message.
+        let pkid: MessageId = receiver.await?;
+
+        Ok(pkid)
+    }
+
+    /// Publish a message on the local MQTT bus.
+    ///
+    /// Supports awaiting the acknowledge.
+    ///
+    /// Upon success a `Future` is returned that resolves once the publish is acknowledged (only in
+    /// case QoS=1 or QoS=2).
+    ///
+    /// Example:
+    ///
+    /// ```no_run
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     use mqtt_client::*;
+    ///     let topic = Topic::new("c8y/s/us").unwrap();
+    ///     let mqtt = Config::default().connect("temperature").await.unwrap();
+    ///     let ack = mqtt.publish_with_ack(Message::new(&topic, "211,23")).await.unwrap();
+    ///     let () = ack.await.unwrap();
+    /// }
+    /// ```
+    pub async fn publish_with_ack(
+        &self,
+        message: Message,
+    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+        let qos = message.qos;
+
+        // Subscribe to the acknowledgement events. In case of QoS=1 or QoS=2 we
+        // need to wait for an PubAck / PubComp to confirm that the publish has succeeded.
+        let mut ack_events = AckEventStream::new(self.ack_event_sender.subscribe());
+
+        let pkid = self.publish(message).await?;
+
+        Ok(async move {
+            match qos {
+                QoS::AtMostOnce => {}
+                QoS::AtLeastOnce => {
+                    ack_events.wait_for_pub_ack_received(pkid).await?;
+                }
+                QoS::ExactlyOnce => {
+                    ack_events.wait_for_pub_comp_received(pkid).await?;
+                }
+            }
+            Ok(())
+        })
     }
 
     /// Subscribe to the messages published on the given topics
     pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
-        let qos = QoS::AtLeastOnce;
-        self.mqtt_client
-            .subscribe(&filter.pattern, qos)
-            .await
-            .map_err(Error::client_error)?;
+        let () = self
+            .mqtt_client
+            .subscribe(&filter.pattern, filter.qos)
+            .await?;
 
         Ok(MessageStream::new(
             filter,
@@ -139,10 +245,8 @@ impl Client {
 
     /// Disconnect the client and drop it.
     pub async fn disconnect(self) -> Result<(), Error> {
-        self.mqtt_client
-            .disconnect()
-            .await
-            .map_err(Error::client_error)
+        let () = self.mqtt_client.disconnect().await?;
+        self.join_handle.await.map_err(|_| Error::JoinError)
     }
 
     /// Process all the MQTT events
@@ -151,26 +255,54 @@ impl Client {
     async fn bg_process(
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
-        error_sender: broadcast::Sender<Error>,
+        error_sender: broadcast::Sender<Arc<Error>>,
+        ack_event_sender: broadcast::Sender<AckEvent>,
     ) {
+        let mut pending: HashMap<MessageId, Message> = HashMap::new();
+
         loop {
             match event_loop.poll().await {
-                Err(err) => {
-                    // The message sender can only fail if there is no listener
-                    // So we simply discard any sender error
-                    let _ = error_sender.send(Error::connection_error(err));
+                Ok(Event::Incoming(Packet::Publish(msg))) => {
+                    match msg.qos {
+                        QoS::AtLeastOnce | QoS::AtMostOnce => {
+                            send_discarding_error!(message_sender, msg.into());
+                        }
+                        QoS::ExactlyOnce => {
+                            // Do not annouce the incoming publish message immediatly in case
+                            // of QoS=2. Wait for the `PubRel`.
+                            //
+                            // TODO: Avoid buffering the message here by
+                            // moving that part of the code into the `rumqttc` library.
+                            let _ = pending.insert(msg.pkid, msg.into());
+                        }
+                    }
                 }
-                Ok(Event::Incoming(Publish(msg))) => {
-                    // The message sender can only fail if there is no listener
-                    // So we simply discard any sender error
-                    let _ = message_sender.send(Message {
-                        topic: Topic::incoming(&msg.topic),
-                        payload: msg.payload.to_vec(),
-                    });
+
+                Ok(Event::Incoming(Packet::PubRel(pubrel))) => {
+                    if let Some(msg) = pending.remove(&pubrel.pkid) {
+                        assert!(msg.qos == QoS::ExactlyOnce);
+                        // TODO: `rumqttc` library with cargo feature="v5" has a
+                        // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
+                        // and only notify in that case.
+                        send_discarding_error!(message_sender, msg.into());
+                    }
                 }
+
+                Ok(Event::Incoming(Packet::PubAck(ack))) => {
+                    send_discarding_error!(ack_event_sender, AckEvent::PubAckReceived(ack.pkid));
+                }
+
+                Ok(Event::Incoming(Packet::PubComp(ack))) => {
+                    send_discarding_error!(ack_event_sender, AckEvent::PubCompReceived(ack.pkid));
+                }
+
                 Ok(Event::Incoming(Incoming::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
                     break;
+                }
+
+                Err(err) => {
+                    send_discarding_error!(error_sender, Arc::new(err.into()));
                 }
                 _ => (),
             }
@@ -182,6 +314,18 @@ impl Client {
 pub struct Config {
     pub host: String,
     pub port: u16,
+    /// maximum number of outgoing inflight messages (pending acknowledgement).
+    ///
+    /// If `None` is provided, the default setting of `rumqttc` is used.
+    pub inflight: Option<u16>,
+
+    /// Capacity of various internal message queues.
+    ///
+    /// This is used to decouple both `rumqttc` and our background event loop from
+    /// frontend operations.
+    ///
+    /// Default: `10`.
+    queue_capacity: usize,
 }
 
 /// By default a client connects the local MQTT broker.
@@ -190,11 +334,21 @@ impl Default for Config {
         Config {
             host: String::from("localhost"),
             port: 1883,
+            inflight: None,
+            queue_capacity: 10,
         }
     }
 }
 
 impl Config {
+    pub fn new(host: impl Into<String>, port: u16) -> Self {
+        Self {
+            host: host.into(),
+            port,
+            ..Config::default()
+        }
+    }
+
     /// Use this config to connect a MQTT client
     pub async fn connect(&self, name: &str) -> Result<Client, Error> {
         Client::connect(name, self).await
@@ -228,6 +382,7 @@ impl Topic {
     pub fn filter(&self) -> TopicFilter {
         TopicFilter {
             pattern: self.name.clone(),
+            qos: QoS::AtLeastOnce,
         }
     }
 }
@@ -236,14 +391,16 @@ impl Topic {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TopicFilter {
     pub pattern: String,
+    pub qos: QoS,
 }
 
 impl TopicFilter {
     /// Check if the pattern is valid and build a new topic filter.
     pub fn new(pattern: &str) -> Result<TopicFilter, Error> {
         let pattern = String::from(pattern);
+        let qos = QoS::AtLeastOnce;
         if rumqttc::valid_filter(&pattern) {
-            Ok(TopicFilter { pattern })
+            Ok(TopicFilter { pattern, qos })
         } else {
             Err(Error::InvalidFilter { pattern })
         }
@@ -253,13 +410,23 @@ impl TopicFilter {
     fn accept(&self, topic: &Topic) -> bool {
         rumqttc::matches(&topic.name, &self.pattern)
     }
+
+    pub fn qos(self, qos: QoS) -> Self {
+        Self { qos, ..self }
+    }
 }
 
-/// A message to be sent to or received from MQTT
+/// A message to be sent to or received from MQTT.
+///
+/// NOTE: We never set the `pkid` of the `Publish` message,
+/// as this might conflict with ids generated by `rumqttc`.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
     pub payload: Vec<u8>,
+    pub qos: QoS,
+    pkid: u16,
+    retain: bool,
 }
 
 impl Message {
@@ -270,6 +437,42 @@ impl Message {
         Message {
             topic: topic.clone(),
             payload: payload.into(),
+            qos: QoS::AtLeastOnce,
+            pkid: 0,
+            retain: false,
+        }
+    }
+
+    pub fn qos(self, qos: QoS) -> Self {
+        Self { qos, ..self }
+    }
+}
+
+impl Into<Publish> for Message {
+    fn into(self) -> Publish {
+        let mut publish = Publish::new(&self.topic.name, self.qos, self.payload);
+        publish.retain = self.retain;
+        publish
+    }
+}
+
+impl From<Publish> for Message {
+    fn from(msg: Publish) -> Self {
+        let Publish {
+            topic,
+            payload,
+            qos,
+            pkid,
+            retain,
+            ..
+        } = msg;
+
+        Message {
+            topic: Topic::incoming(&topic),
+            payload: payload.to_vec(),
+            qos,
+            pkid,
+            retain,
         }
     }
 }
@@ -278,14 +481,14 @@ impl Message {
 pub struct MessageStream {
     filter: TopicFilter,
     receiver: broadcast::Receiver<Message>,
-    error_sender: broadcast::Sender<Error>,
+    error_sender: broadcast::Sender<Arc<Error>>,
 }
 
 impl MessageStream {
     fn new(
         filter: TopicFilter,
         receiver: broadcast::Receiver<Message>,
-        error_sender: broadcast::Sender<Error>,
+        error_sender: broadcast::Sender<Arc<Error>>,
     ) -> MessageStream {
         MessageStream {
             filter,
@@ -306,10 +509,11 @@ impl MessageStream {
                 Ok(_) => continue,
                 Err(broadcast::error::RecvError::Closed) => return None,
                 Err(broadcast::error::RecvError::Lagged(lag)) => {
-                    // The error is forwarded to the client.
-                    // The error sender can only fail if there is no listener
-                    // So we simply discard any sender error
-                    let _ = self.error_sender.send(Error::messages_skipped(lag));
+                    // Forward the error to the client.
+                    send_discarding_error!(
+                        self.error_sender,
+                        Arc::new(Error::MessagesSkipped { lag })
+                    );
                     continue;
                 }
             }
@@ -319,11 +523,11 @@ impl MessageStream {
 
 /// A stream of errors received asynchronously by the MQTT connection
 pub struct ErrorStream {
-    receiver: broadcast::Receiver<Error>,
+    receiver: broadcast::Receiver<Arc<Error>>,
 }
 
 impl ErrorStream {
-    fn new(receiver: broadcast::Receiver<Error>) -> ErrorStream {
+    fn new(receiver: broadcast::Receiver<Arc<Error>>) -> ErrorStream {
         ErrorStream { receiver }
     }
 
@@ -332,17 +536,50 @@ impl ErrorStream {
     /// - Return an `Error::ErrorsSkipped{lag}`
     ///   if too many errors have been received since the previous call to `next()`
     ///   and have been discarded.
-    pub async fn next(&mut self) -> Option<Error> {
+    pub async fn next(&mut self) -> Option<Arc<Error>> {
         match self.receiver.recv().await {
             Ok(error) => Some(error),
             Err(broadcast::error::RecvError::Closed) => None,
-            Err(broadcast::error::RecvError::Lagged(lag)) => Some(Error::errors_skipped(lag)),
+            Err(broadcast::error::RecvError::Lagged(lag)) => {
+                Some(Arc::new(Error::ErrorsSkipped { lag }))
+            }
+        }
+    }
+}
+
+/// A stream of `AckEvent`s received asynchronously from the background event loop.
+struct AckEventStream {
+    receiver: broadcast::Receiver<AckEvent>,
+}
+
+impl AckEventStream {
+    fn new(receiver: broadcast::Receiver<AckEvent>) -> Self {
+        Self { receiver }
+    }
+
+    /// Waits for the next `AckEvent::PubAckReceived` event with the specified `pkid`.
+    async fn wait_for_pub_ack_received(&mut self, pkid: MessageId) -> Result<(), Error> {
+        loop {
+            match self.receiver.recv().await? {
+                AckEvent::PubAckReceived(recv_pkid) if recv_pkid == pkid => return Ok(()),
+                _ => {}
+            }
+        }
+    }
+
+    /// Waits for the next `AckEvent::PubCompReceived` event with the specified `pkid`.
+    async fn wait_for_pub_comp_received(&mut self, pkid: MessageId) -> Result<(), Error> {
+        loop {
+            match self.receiver.recv().await? {
+                AckEvent::PubCompReceived(recv_pkid) if recv_pkid == pkid => return Ok(()),
+                _ => {}
+            }
         }
     }
 }
 
 /// An MQTT related error
-#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Invalid topic name: {name:?}")]
     InvalidTopic { name: String },
@@ -351,10 +588,13 @@ pub enum Error {
     InvalidFilter { pattern: String },
 
     #[error("MQTT client error: {0}")]
-    ClientError(String),
+    ClientError(#[from] rumqttc::ClientError),
+
+    #[error("Stream error: {0}")]
+    StreamError(Box<Error>),
 
     #[error("MQTT connection error: {0}")]
-    ConnectionError(String),
+    ConnectionError(#[from] rumqttc::ConnectionError),
 
     #[error("The receiver lagged too far behind : {lag:?} messages skipped")]
     MessagesSkipped { lag: u64 },
@@ -362,25 +602,14 @@ pub enum Error {
     #[error("The error lagged too far behind : {lag:?} errors skipped")]
     ErrorsSkipped { lag: u64 },
 
+    #[error("Broadcast receive error: {0}")]
+    BroadcastRecvError(#[from] broadcast::error::RecvError),
+
+    #[error("Oneshot channel receive error: {0}")]
+    OneshotRecvError(#[from] tokio::sync::oneshot::error::RecvError),
+
     #[error("Join Error")]
     JoinError,
-}
-
-impl Error {
-    fn client_error(err: rumqttc::ClientError) -> Error {
-        Error::ClientError(format!("{}", err))
-    }
-
-    fn connection_error(err: rumqttc::ConnectionError) -> Error {
-        Error::ConnectionError(format!("{}", err))
-    }
-
-    fn messages_skipped(lag: u64) -> Error {
-        Error::MessagesSkipped { lag }
-    }
-    fn errors_skipped(lag: u64) -> Error {
-        Error::ErrorsSkipped { lag }
-    }
 }
 
 #[cfg(test)]
@@ -389,28 +618,28 @@ mod tests {
 
     #[test]
     fn check_valid_topic() {
-        assert_eq!(Topic::new("temp").err(), None);
-        assert_eq!(Topic::new("temp/device-12").err(), None);
+        assert!(Topic::new("temp").is_ok());
+        assert!(Topic::new("temp/device-12").is_ok());
     }
 
     #[test]
     fn check_invalid_topic() {
-        assert_eq!(Topic::new("/temp/+").ok(), None);
-        assert_eq!(Topic::new("/temp/#").ok(), None);
+        assert!(Topic::new("/temp/+").is_err());
+        assert!(Topic::new("/temp/#").is_err());
     }
 
     #[test]
     fn check_valid_topic_filter() {
-        assert_eq!(TopicFilter::new("a/b/c").err(), None);
-        assert_eq!(TopicFilter::new("a/b/#").err(), None);
-        assert_eq!(TopicFilter::new("a/b/+").err(), None);
-        assert_eq!(TopicFilter::new("a/+/b").err(), None);
+        assert!(TopicFilter::new("a/b/c").is_ok());
+        assert!(TopicFilter::new("a/b/#").is_ok());
+        assert!(TopicFilter::new("a/b/+").is_ok());
+        assert!(TopicFilter::new("a/+/b").is_ok());
     }
 
     #[test]
     fn check_invalid_topic_filter() {
-        assert_eq!(TopicFilter::new("").ok(), None);
-        assert_eq!(TopicFilter::new("/a/#/b").ok(), None);
-        assert_eq!(TopicFilter::new("/a/#/+").ok(), None);
+        assert!(TopicFilter::new("").is_err());
+        assert!(TopicFilter::new("/a/#/b").is_err());
+        assert!(TopicFilter::new("/a/#/+").is_err());
     }
 }
