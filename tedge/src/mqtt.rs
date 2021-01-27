@@ -6,7 +6,7 @@ use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
 use tokio::signal::unix::{signal, SignalKind};
 
-const DEFAULT_HOST: &str = "test.mosquitto.org";
+const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_ID: &str = "tedge-cli";
 
@@ -80,12 +80,13 @@ impl Command for MqttCmd {
 
 #[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
-    let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
+    let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
         .await?;
     let tpc = Topic::new(topic)?;
     let msg = Message::new(&tpc, message).qos(qos);
-    mqtt.publish(msg).await?;
+    let ack = mqtt.publish_with_ack(msg).await?;
+    ack.await?;
     mqtt.disconnect().await?;
 
     Ok(())
