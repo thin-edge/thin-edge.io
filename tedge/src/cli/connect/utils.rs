@@ -42,7 +42,6 @@ enum ExitCodes {}
 
 impl ExitCodes {
     pub const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
-    pub const SUCCESS: ExitCode = 0;
     pub const SYSTEMCTL_ISACTICE_SUCCESS: ExitCode = 3;
     pub const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
 }
@@ -68,7 +67,7 @@ pub fn home_dir2() -> Option<PathBuf> {
 }
 
 // How about using some crates like for example 'which'??
-fn systemd_available() -> Result<bool, ConnectError> {
+fn systemd_available() -> Result<(), ConnectError> {
     std::process::Command::new(SystemCtlCmd::Base.as_str())
         .arg(SystemCtlCmd::Version.as_str())
         .stdout(std::process::Stdio::null())
@@ -76,29 +75,32 @@ fn systemd_available() -> Result<bool, ConnectError> {
         .status()
         .map_or_else(
             |_| Err(ConnectError::SystemdUnavailable),
-            |status| Ok(status.success()),
+            |status| {
+                if status.success() {
+                    Ok(())
+                } else {
+                    Err(ConnectError::SystemdUnavailable)
+                }
+            },
         )
 }
 
-fn mosquitto_available() -> Result<bool, ConnectError> {
-    match mosquitto_cmd_nostd(MosquittoCmd::Status.as_str(), 3) {
-        true => Ok(true),
-        false => Err(ConnectError::MosquittoNotAvailable),
-    }
+fn mosquitto_available() -> Result<(), ConnectError> {
+    mosquitto_cmd_nostd(
+        MosquittoCmd::Status.as_str(),
+        ExitCodes::MOSQUITTOCMD_SUCCESS,
+    )
 }
 
-fn mosquitto_available_as_service() -> Result<bool, ConnectError> {
-    match systemctl_cmd_nostd(
+fn mosquitto_available_as_service() -> Result<(), ConnectError> {
+    systemctl_cmd_nostd(
         SystemCtlCmd::Status.as_str(),
         MosquittoCmd::Base.as_str(),
         ExitCodes::SYSTEMCTL_STATUS_SUCCESS,
-    ) {
-        true => Ok(true),
-        false => Err(ConnectError::MosquittoNotAvailableAsService),
-    }
+    )
 }
 
-fn mosquitto_is_active_daemon() -> Result<bool, ConnectError> {
+fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
     systemctl_is_active_nostd(MosquittoCmd::Base.as_str(), ExitCodes::MOSQUITTOCMD_SUCCESS)
 }
 
@@ -117,28 +119,33 @@ pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
     }
 }
 
-fn systemctl_is_active_nostd(service: &str, expected_code: i32) -> Result<bool, ConnectError> {
-    match systemctl_cmd_nostd(SystemCtlCmd::IsActive.as_str(), service, expected_code) {
-        true => Ok(true),
+fn systemctl_is_active_nostd(service: &str, expected_code: i32) -> Result<(), ConnectError> {
+    systemctl_cmd_nostd(SystemCtlCmd::IsActive.as_str(), service, expected_code)
+}
+
+fn systemctl_restart_nostd(service: &str, expected_code: i32) -> Result<(), ConnectError> {
+    systemctl_cmd_nostd(SystemCtlCmd::Restart.as_str(), service, expected_code)
+}
+
+fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> Result<(), ConnectError> {
+    match cmd_nostd_args(SystemCtlCmd::Base.as_str(), &[cmd, service], expected_code) {
+        true => Ok(()),
         false => Err(ConnectError::SystemctlFailed {
-            reason: format!("Service '{}' is not active", service).into(),
+            reason: "jjjjjjjjjjjj".into(),
         }),
     }
 }
 
-fn systemctl_restart_nostd(service: &str, expected_code: i32) -> Result<bool, ConnectError> {
-    match systemctl_cmd_nostd(SystemCtlCmd::Restart.as_str(), service, expected_code) {
-        true => Ok(true),
-        false => Err(ConnectError::SystemctlFailed {
-            reason: "Restart required service {service}".into(),
-        }),
+fn mosquitto_cmd_nostd(cmd: &str, expected_code: i32) -> Result<(), ConnectError> {
+    match cmd_nostd_args(MosquittoCmd::Base.as_str(), &[cmd], expected_code) {
+        true => Ok(()),
+        false => Err(ConnectError::MosquittoFailed { reason: "".into() }),
     }
 }
 
-fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> bool {
-    std::process::Command::new(SystemCtlCmd::Base.as_str())
-        .arg(cmd)
-        .arg(service)
+fn cmd_nostd_args(command: &str, args: &[&str], expected_code: i32) -> bool {
+    std::process::Command::new(command)
+        .args(args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -147,18 +154,7 @@ fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> bool {
         .unwrap_or(false)
 }
 
-fn mosquitto_cmd_nostd(cmd: &str, expected_code: i32) -> bool {
-    std::process::Command::new(MosquittoCmd::Base.as_str())
-        .arg(cmd)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .ok()
-        .map(|status| status.code() == Some(expected_code))
-        .unwrap_or(false)
-}
-
-pub fn all_services_availble() -> Result<bool, ConnectError> {
+pub fn all_services_available() -> Result<(), ConnectError> {
     // This is just quick and naive way to check if systemd is available,
     // we should most likely find a better way to perform this check.
     systemd_available()?;
@@ -175,5 +171,5 @@ pub fn all_services_availble() -> Result<bool, ConnectError> {
 
     // Check mosquitto is running
     mosquitto_is_active_daemon()?;
-    Ok(true)
+    Ok(())
 }

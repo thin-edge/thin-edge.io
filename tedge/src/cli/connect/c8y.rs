@@ -14,7 +14,7 @@ pub struct Connect {}
 
 impl Command for Connect {
     fn to_string(&self) -> String {
-        String::new()
+        String::from("Connect command creates relay to selected provider allowing for devices to publish messages via mapper.")
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
@@ -22,7 +22,7 @@ impl Command for Connect {
         // let config = ConnectCmd::read_configuration();
 
         match self {
-            Connect {} => Connect::create_relay()?,
+            Connect {} => Connect::new_relay()?,
         };
 
         Ok(())
@@ -30,8 +30,8 @@ impl Command for Connect {
 }
 
 impl Connect {
-    fn create_relay() -> Result<(), ConnectError> {
-        utils::all_services_availble()?;
+    fn new_relay() -> Result<(), ConnectError> {
+        utils::all_services_available()?;
 
         // Check connected (c8y-bridge.conf present) // fail if so
         Self::config_exists()?;
@@ -68,12 +68,12 @@ impl Connect {
             }
         }
 
+        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+
         // Check if config file exists
         let path = format!(
             "{:?}/{}/{}",
-            utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
-            TEDGE_HOME_PREFIX,
-            C8Y_CONFIG_FILENAME
+            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
         );
 
         if std::path::Path::new(&path).exists() {
@@ -135,11 +135,11 @@ impl Connect {
     }
 
     fn config_exists() -> Result<(), ConnectError> {
+        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+
         let path = format!(
             "{:?}/{}/{}",
-            utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
-            TEDGE_HOME_PREFIX,
-            C8Y_CONFIG_FILENAME
+            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
         );
 
         if !std::path::Path::new(&path).exists() {
@@ -163,10 +163,11 @@ impl Connect {
     fn generate_bridge_config(config: &Config) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
 
+        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+
         bridge.bridge_cafile = String::from(format!(
             "{:?}/{}/c8y-trusted-root-certificates.pem",
-            utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
-            TEDGE_HOME_PREFIX
+            home_dir, TEDGE_HOME_PREFIX
         ));
 
         match config {
@@ -183,11 +184,11 @@ impl Connect {
     // write_all may fail, let's have a look how to overcome it?
     // Maybe AtomicWrite??
     fn write_bridge_config_to_file(config: &BridgeConf) -> Result<(), ConnectError> {
+        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+
         let mut file = std::fs::File::create(format!(
             "{:?}/{}/{}",
-            utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
-            TEDGE_HOME_PREFIX,
-            C8Y_CONFIG_FILENAME
+            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
         ))?;
         config.serialize(&mut file)?;
         Ok(())
