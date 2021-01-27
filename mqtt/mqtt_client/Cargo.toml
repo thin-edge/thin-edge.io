@@ -6,9 +6,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
-thiserror = "1.0.23"
 tokio = { version = "1.1.0", features = ["sync"] }
+rumqttc = { git = "https://github.com/mneumann/rumqtt", branch = "support-publish-ack" }
+thiserror = "1.0.23"
+futures = "0.3.12"
 
 [dev-dependencies]
 async-log = "2.0.0"

@@ -67,6 +67,9 @@ enum TEdgeCmd {
 
     /// Connect to connector provider
     Connect(connect::ConnectCmd),
+
+    /// Publish a message on a topic and subscribe a topic.
+    Mqtt(super::mqtt::MqttCmd),
 }
 
 impl TEdgeCmd {
@@ -75,6 +78,7 @@ impl TEdgeCmd {
             TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Cert(ref cmd) => cmd,
             TEdgeCmd::Connect(ref cmd) => cmd,
+            TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
     }
 }
