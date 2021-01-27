@@ -15,7 +15,6 @@
 #![deny(clippy::mem_forget)]
 
 use futures::future::Future;
-use log::error;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
 use std::collections::HashMap;
@@ -264,17 +263,12 @@ impl Client {
                 }
 
                 Ok(Event::Incoming(Packet::PubRel(pubrel))) => {
-                    match pending.remove(&pubrel.pkid) {
-                        Some(msg) => {
-                            assert!(msg.qos == QoS::ExactlyOnce);
-                            // TODO: `rumqttc` library with cargo feature="v5" has a
-                            // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
-                            // and only notify in that case.
-                            send_discarding_error!(message_sender, msg.into());
-                        }
-                        None => {
-                            error!("Unsolicited PubRel for pkid: {}", pubrel.pkid);
-                        }
+                    if let Some(msg) = pending.remove(&pubrel.pkid) {
+                        assert!(msg.qos == QoS::ExactlyOnce);
+                        // TODO: `rumqttc` library with cargo feature="v5" has a
+                        // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
+                        // and only notify in that case.
+                        send_discarding_error!(message_sender, msg.into());
                     }
                 }
 
