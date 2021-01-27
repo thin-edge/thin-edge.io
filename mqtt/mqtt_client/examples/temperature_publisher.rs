@@ -49,7 +49,7 @@ async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_cl
 
         let payload = format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, temperature);
         debug!("{}", payload);
-        mqtt.publish(Message::new(&c8y_msg, payload)).await?;
+        mqtt.publish(Message::new(&c8y_msg, payload)).await?.await?;
 
         Delay::new(Duration::from_millis(1000)).await;
     }

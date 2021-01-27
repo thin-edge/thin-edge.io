@@ -7,13 +7,14 @@
 //! async fn main (){
 //!     let mqtt = Config::default().connect("temperature").await.unwrap();
 //!     let c8y_msg = Topic::new("c8y/s/us").unwrap();
-//!     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
+//!     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap().await.unwrap();
 //!     mqtt.disconnect().await.unwrap();
 //! }
 //! ```
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use futures::future::Future;
 use log::error;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
@@ -32,7 +33,7 @@ use tokio::sync::{broadcast, oneshot};
 /// async fn main () {
 ///     let mut mqtt = Config::default().connect("temperature").await.unwrap();
 ///     let c8y_msg = Topic::new("c8y/s/us").unwrap();
-///     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
+///     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap().await.unwrap();
 ///     mqtt.disconnect().await.unwrap();
 /// }
 /// ```
@@ -139,8 +140,25 @@ impl Client {
 
     /// Publish a message on the local MQTT bus.
     ///
-    /// Waits for the acknowledgement in case of QoS=1 or QoS=2.
-    pub async fn publish(&self, message: Message) -> Result<(), Error> {
+    /// Upon success a `Future` is returned that resolves once the publish is acknowledged (only in
+    /// case QoS=1 or QoS=2).
+    ///
+    /// Example:
+    ///
+    /// ```no_run
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     use mqtt_client::*;
+    ///     let topic = Topic::new("c8y/s/us").unwrap();
+    ///     let mqtt = Config::default().connect("temperature").await.unwrap();
+    ///     let ack = mqtt.publish(Message::new(&topic, "211,23")).await.unwrap();
+    ///     let () = ack.await.unwrap();
+    /// }
+    /// ```
+    pub async fn publish(
+        &self,
+        message: Message,
+    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
         let qos = message.qos;
         let (sender, receiver) = oneshot::channel();
         let request = Request::PublishWithNotify {
@@ -163,17 +181,18 @@ impl Client {
         // acknowledgement message.
         let pkid: MessageId = receiver.await?;
 
-        match qos {
-            QoS::AtMostOnce => {}
-            QoS::AtLeastOnce => {
-                ack_events.wait_for_pub_ack_received(pkid).await?;
+        Ok(async move {
+            match qos {
+                QoS::AtMostOnce => {}
+                QoS::AtLeastOnce => {
+                    ack_events.wait_for_pub_ack_received(pkid).await?;
+                }
+                QoS::ExactlyOnce => {
+                    ack_events.wait_for_pub_comp_received(pkid).await?;
+                }
             }
-            QoS::ExactlyOnce => {
-                ack_events.wait_for_pub_comp_received(pkid).await?;
-            }
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Subscribe to the messages published on the given topics
