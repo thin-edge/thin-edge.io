@@ -86,7 +86,6 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
     let tpc = Topic::new(topic)?;
     let msg = Message::new(&tpc, message).qos(qos);
     mqtt.publish(msg).await?;
-    println!("hi!");
     mqtt.disconnect().await?;
 
     Ok(())
@@ -123,7 +122,7 @@ async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
 async fn async_println(s: &str) -> Result<(), MqttError> {
     let mut stdout = tokio::io::stdout();
     stdout.write_all(s.as_bytes()).await?;
-    stdout.write_all(b"\n\r").await?;
+    stdout.write_all(b"\n").await?;
     Ok(())
 }
 
