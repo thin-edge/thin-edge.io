@@ -12,7 +12,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     info!("Mapping ThinEdge messages");
-    let mut mqtt = Client::connect(name, &Config::default()).await?;
+    let mqtt = Client::connect(name, &Config::default()).await?;
     let mut errors = mqtt.subscribe_errors();
     tokio::spawn(async move {
         while let Some(error) = errors.next().await {

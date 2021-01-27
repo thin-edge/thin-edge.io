@@ -5,7 +5,7 @@
 //!
 //! #[tokio::main]
 //! async fn main (){
-//!     let mut mqtt = Config::default().connect("temperature").await.unwrap();
+//!     let mqtt = Config::default().connect("temperature").await.unwrap();
 //!     let c8y_msg = Topic::new("c8y/s/us").unwrap();
 //!     mqtt.publish(Message::new(&c8y_msg, "211,23")).await.unwrap();
 //!     mqtt.disconnect().await.unwrap();
@@ -140,7 +140,7 @@ impl Client {
     /// Publish a message on the local MQTT bus.
     ///
     /// Waits for the acknowledgement in case of QoS=1 or QoS=2.
-    pub async fn publish(&mut self, message: Message) -> Result<(), Error> {
+    pub async fn publish(&self, message: Message) -> Result<(), Error> {
         let qos = message.qos;
         let (sender, receiver) = oneshot::channel();
         let request = Request::PublishWithNotify {
