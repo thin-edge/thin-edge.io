@@ -1,22 +1,13 @@
-use std::fs::File;
-use std::io::prelude::*;
-
-use futures::future::FutureExt;
-use futures::select;
-use futures_timer::Delay;
 use log;
-use rand::prelude::*;
-use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
+use super::utils;
 use crate::command::Command;
-use mqtt_client::{Client, ErrorStream, Message, MessageStream, Topic};
-
-// mod utils;
-// use crate::utils;
+use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(StructOpt, Debug)]
 pub struct Connect {}
@@ -38,196 +29,9 @@ impl Command for Connect {
     }
 }
 
-mod utils {
-    use std::env;
-    use std::path::PathBuf;
-
-    use super::ConnectError;
-
-    enum MosquittoCmd {
-        Base,
-        Status,
-    }
-
-    impl MosquittoCmd {
-        fn as_str(self) -> &'static str {
-            match self {
-                MosquittoCmd::Base => "mosquitto",
-                MosquittoCmd::Status => "-h",
-            }
-        }
-    }
-
-    enum SystemCtlCmd {
-        Base,
-        IsActive,
-        Restart,
-        Status,
-        Version,
-    }
-
-    impl SystemCtlCmd {
-        fn as_str(self) -> &'static str {
-            match self {
-                SystemCtlCmd::Base => "systemctl",
-                SystemCtlCmd::IsActive => "is-active",
-                SystemCtlCmd::Restart => "restart",
-                SystemCtlCmd::Status => "status",
-                SystemCtlCmd::Version => "--version",
-            }
-        }
-    }
-
-    type ExitCode = i32;
-    enum ExitCodes {}
-
-    impl ExitCodes {
-        pub const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
-        pub const SUCCESS: ExitCode = 0;
-        pub const SYSTEMCTL_ISACTICE_SUCCESS: ExitCode = 3;
-        pub const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
-    }
-
-    // This isn't complete way to retrieve HOME dir from the user.
-    // We could parse passwd file to get actual home path if we can get user name.
-    // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
-    // Another alternative is to use deprecated env::home_dir() -1
-    // https://github.com/rust-lang/rust/issues/71684
-    pub fn home_dir() -> Option<PathBuf> {
-        return env::var_os("HOME")
-            .and_then(|home| if home.is_empty() { None } else { Some(home) })
-            // .or_else(|| return None; )
-            .map(PathBuf::from);
-    }
-
-    // Another simple method which has now been deprecated.
-    // (funny, advice says look on crates.io two of crates supposedly do what is expected are not necessarily correct:
-    // one uses unsafe code and another uses this method with deprecated env call)
-    pub fn home_dir2() -> Option<PathBuf> {
-        #[allow(deprecated)]
-        std::env::home_dir()
-    }
-
-    // How about using some crates like for example 'which'??
-    pub fn systemd_available() -> Result<bool, ConnectError> {
-        std::process::Command::new(SystemCtlCmd::Base.as_str())
-            .arg(SystemCtlCmd::Version.as_str())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map_or_else(
-                |err| Err(ConnectError::SystemdUnavailable),
-                |status| Ok(status.success()),
-            )
-    }
-
-    pub fn mosquitto_available() -> Result<bool, ConnectError> {
-        match mosquitto_cmd_nostd(MosquittoCmd::Status.as_str(), 3) {
-            true => Ok(true),
-            false => Err(ConnectError::MosquittoNotAvailable),
-        }
-    }
-
-    pub fn mosquitto_available_as_service() -> Result<bool, ConnectError> {
-        match systemctl_cmd_nostd(
-            SystemCtlCmd::Status.as_str(),
-            MosquittoCmd::Base.as_str(),
-            ExitCodes::SYSTEMCTL_STATUS_SUCCESS,
-        ) {
-            true => Ok(true),
-            false => Err(ConnectError::MosquittoNotAvailableAsService),
-        }
-    }
-
-    pub fn mosquitto_is_active_daemon() -> Result<bool, ConnectError> {
-        systemctl_is_active_nostd(MosquittoCmd::Base.as_str(), ExitCodes::MOSQUITTOCMD_SUCCESS)
-    }
-
-    // Note that restarting a unit with this command does not necessarily flush out all of the unit's resources before it is started again.
-    // For example, the per-service file descriptor storage facility (see FileDescriptorStoreMax= in systemd.service(5)) will remain intact
-    // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
-    // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
-    // systemctl stop command followed by systemctl start should be issued.
-    pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
-        match systemctl_restart_nostd(
-            MosquittoCmd::Base.as_str(),
-            ExitCodes::SYSTEMCTL_ISACTICE_SUCCESS,
-        ) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ConnectError::MosquittoNotAvailableAsService),
-        }
-    }
-
-    fn systemctl_is_active_nostd(service: &str, expected_code: i32) -> Result<bool, ConnectError> {
-        match systemctl_cmd_nostd(SystemCtlCmd::IsActive.as_str(), service, expected_code) {
-            true => Ok(true),
-            false => Err(ConnectError::SystemctlFailed {
-                reason: format!("Service '{}' is not active", service).into(),
-            }),
-        }
-    }
-
-    fn systemctl_restart_nostd(service: &str, expected_code: i32) -> Result<bool, ConnectError> {
-        match systemctl_cmd_nostd(SystemCtlCmd::Restart.as_str(), service, expected_code) {
-            true => Ok(true),
-            false => Err(ConnectError::SystemctlFailed {
-                reason: "Restart required service {service}".into(),
-            }),
-        }
-    }
-
-    fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> bool {
-        std::process::Command::new(SystemCtlCmd::Base.as_str())
-            .arg(cmd)
-            .arg(service)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .ok()
-            .map(|status| status.code() == Some(expected_code))
-            .unwrap_or(false)
-    }
-
-    fn mosquitto_cmd_nostd(cmd: &str, expected_code: i32) -> bool {
-        std::process::Command::new(MosquittoCmd::Base.as_str())
-            .arg(cmd)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .ok()
-            .map(|status| status.code() == Some(expected_code))
-            .unwrap_or(false)
-    }
-}
-
 impl Connect {
     fn create_relay() -> Result<(), ConnectError> {
-        // Check mosquitto service is available
-        // 1. check if systemd is available
-        // 2. check if mosquitto exists as a service
-        // 3. check if mosquitto is up
-
-        // Check all required parameters are set
-        // if !Self::config_ok() {
-        //     return Err(ConnectError::ConfigurationParatemers);
-        // }
-
-        // This is just quick and naive way to check if systemd is available,
-        // we should most likely find a better way to perform this check.
-        utils::systemd_available()?;
-
-        // Check mosquitto exists on the system
-        utils::mosquitto_available()?;
-
-        // Check mosquitto mosquitto available through systemd
-        // Theoretically we could just do a big boom and run just this command as it will error on following:
-        //  - systemd not available
-        //  - mosquitto not installed as a service
-        // That for instance would be sufficient and would return an error anyway, but I prefer to do it gently with separate checks.
-        utils::mosquitto_available_as_service()?;
-
-        // Check mosquitto is running
-        utils::mosquitto_is_active_daemon()?;
+        utils::all_services_availble()?;
 
         // Check connected (c8y-bridge.conf present) // fail if so
         Self::config_exists()?;
@@ -242,7 +46,6 @@ impl Connect {
         // This check may not be required as the config_exists does similar check
         // Create mosquitto config with relay and place it in /etc/whatever
         // Need to use home for now.
-
         let bridge_config = Self::generate_bridge_config(&config)?;
         Self::write_bridge_config_to_file(&bridge_config)?;
 
@@ -252,13 +55,8 @@ impl Connect {
         // Error if cloud not available (send mqtt message to validate connection)
         Self::check_connection()?;
 
-        // Clean up
-
-        // Add error handling here.
         // Self::clean_up();
 
-        // Terminate if something goes wrong
-        // Unit tests
         Ok(())
     }
 
@@ -272,8 +70,9 @@ impl Connect {
 
         // Check if config file exists
         let path = format!(
-            "{:?}/.tedge/{}",
+            "{:?}/{}/{}",
             utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
+            TEDGE_HOME_PREFIX,
             C8Y_CONFIG_FILENAME
         );
 
@@ -289,18 +88,38 @@ impl Connect {
     // timeout (5 seconds??) on error
     #[tokio::main]
     async fn check_connection() -> Result<(), ConnectError> {
+        const WAIT_FOR_SECONDS: u64 = 5;
         let c8y_msg = Topic::new("c8y/s/us")?;
         let c8y_err = Topic::new("c8y/s/e")?;
-
-        env_logger::init();
 
         let mqtt = Client::connect("connection_test", &mqtt_client::Config::default()).await?;
         let mut c8y_errors = mqtt.subscribe(c8y_err.filter()).await?;
 
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+
+        let _error_handle = tokio::spawn(async move {
+            while let Some(message) = c8y_errors.next().await {
+                if std::str::from_utf8(&message.payload)
+                    .unwrap_or("")
+                    .contains("999,No static template")
+                {
+                    let _ = sender.send(true);
+                    break;
+                }
+            }
+        });
+
         Self::publish_temperature(mqtt, c8y_msg).await?;
-        while let Some(message) = c8y_errors.next().await {
-            log::error!("C8Y error: {:?}", message.payload);
+
+        let fut = tokio::time::timeout(std::time::Duration::from_secs(WAIT_FOR_SECONDS), receiver);
+
+        match fut.await {
+            Ok(Ok(true)) => {
+                println!("Got message");
+            }
+            _ => {}
         }
+
         Ok(())
     }
 
@@ -309,33 +128,17 @@ impl Connect {
         log::debug!("{}", payload);
         mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
-        Delay::new(Duration::from_millis(1000)).await;
+        futures_timer::Delay::new(std::time::Duration::from_millis(1000)).await;
 
         mqtt.disconnect().await?;
         Ok(())
     }
 
-    fn random_in_range(low: i32, high: i32) -> i32 {
-        let mut rng = thread_rng();
-        rng.gen_range(low..high)
-    }
-
-    async fn listen_c8y_error(mut messages: MessageStream) {
-        while let Some(message) = messages.next().await {
-            log::error!("C8Y error: {:?}", message.payload);
-        }
-    }
-
-    async fn listen_error(mut errors: ErrorStream) {
-        while let Some(error) = errors.next().await {
-            log::error!("System error: {}", error);
-        }
-    }
-
     fn config_exists() -> Result<(), ConnectError> {
         let path = format!(
-            "{:?}/.tedge/{}",
+            "{:?}/{}/{}",
             utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
+            TEDGE_HOME_PREFIX,
             C8Y_CONFIG_FILENAME
         );
 
@@ -361,8 +164,9 @@ impl Connect {
         let mut bridge = BridgeConf::default();
 
         bridge.bridge_cafile = String::from(format!(
-            "{:?}/.tedge/c8y-trusted-root-certificates.pem",
-            utils::home_dir().unwrap_or(std::path::PathBuf::from("."))
+            "{:?}/{}/c8y-trusted-root-certificates.pem",
+            utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
+            TEDGE_HOME_PREFIX
         ));
 
         match config {
@@ -379,9 +183,10 @@ impl Connect {
     // write_all may fail, let's have a look how to overcome it?
     // Maybe AtomicWrite??
     fn write_bridge_config_to_file(config: &BridgeConf) -> Result<(), ConnectError> {
-        let mut file = File::create(format!(
-            "{:?}/.tedge/{}",
+        let mut file = std::fs::File::create(format!(
+            "{:?}/{}/{}",
             utils::home_dir().unwrap_or(std::path::PathBuf::from(".")),
+            TEDGE_HOME_PREFIX,
             C8Y_CONFIG_FILENAME
         ))?;
         config.serialize(&mut file)?;
@@ -502,6 +307,7 @@ impl C8yConfig {
     }
 }
 
+/// Mosquitto config parameters required for C8Y bridge to be estabilished:
 /// # C8Y Bridge
 /// connection edge_to_c8y
 /// address mqtt.$C8Y_URL:8883
@@ -528,7 +334,7 @@ struct BridgeConf {
 impl Default for BridgeConf {
     fn default() -> Self {
         BridgeConf {
-            connection: "".into(),
+            connection: "edge_to_c8y".into(),
             address: "".into(),
             bridge_cafile: "".into(),
             remote_clientid: "".into(),
@@ -569,6 +375,7 @@ impl Default for BridgeConf {
 
 impl BridgeConf {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writeln!(writer, "### Bridge",)?;
         writeln!(writer, "connection {}", self.connection)?;
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
@@ -578,6 +385,7 @@ impl BridgeConf {
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
 
+        writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
         }
@@ -585,8 +393,6 @@ impl BridgeConf {
         Ok(())
     }
 }
-
-struct TopicsList {}
 
 #[cfg(test)]
 mod tests {

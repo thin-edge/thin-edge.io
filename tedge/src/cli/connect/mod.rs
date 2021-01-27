@@ -2,7 +2,7 @@ use crate::command::Command;
 use structopt::StructOpt;
 
 mod c8y;
-
+mod utils;
 #[derive(StructOpt, Debug)]
 pub enum ConnectCmd {
     /// Create connection to Cumulocity
