@@ -8,10 +8,7 @@ use tokio::time::sleep;
 // Proposed to use mock server instead of using live service on the Internet.
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::Error> {
-        let test_broker = Config {
-            host: String::from("test.mosquitto.org"),
-            port: 1883,
-        };
+        let test_broker = Config::new("test.mosquitto.org", 1883);
 
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = test_broker.connect("subscriber").await?;
