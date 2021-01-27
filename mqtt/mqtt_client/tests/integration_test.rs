@@ -16,7 +16,7 @@ fn sending_and_receiving_a_message() {
 
         let message = Message::new(&topic, payload);
         let publisher = test_broker.connect("publisher").await?;
-        let () = publisher.publish(message).await?.await?;
+        let _pkid = publisher.publish(message).await?;
 
         tokio::select! {
             msg = received.next() => Ok(msg),
