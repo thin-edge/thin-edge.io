@@ -55,7 +55,7 @@ impl Mapper {
         })
     }
 
-    async fn subscribe_messages(&mut self) -> Result<(), mqtt_client::Error> {
+    async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
         let mut messages = self.client.subscribe(self.in_topic.filter()).await?;
         while let Some(message) = messages.next().await {
             log::debug!("Mapping {:?}", message);
@@ -80,7 +80,7 @@ impl Mapper {
         }
         Ok(())
     }
-    pub async fn run(mut self) -> Result<(), mqtt_client::Error> {
+    pub async fn run(self) -> Result<(), mqtt_client::Error> {
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
