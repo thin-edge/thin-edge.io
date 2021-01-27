@@ -1,6 +1,3 @@
-use std::env;
-use std::path::PathBuf;
-
 use super::c8y::ConnectError;
 
 enum MosquittoCmd {
@@ -51,17 +48,16 @@ impl ExitCodes {
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
 // Another alternative is to use deprecated env::home_dir() -1
 // https://github.com/rust-lang/rust/issues/71684
-pub fn home_dir() -> Option<PathBuf> {
-    return env::var_os("HOME")
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    return std::env::var_os("HOME")
         .and_then(|home| if home.is_empty() { None } else { Some(home) })
-        // .or_else(|| return None; )
-        .map(PathBuf::from);
+        .map(std::path::PathBuf::from);
 }
 
 // Another simple method which has now been deprecated.
 // (funny, advice says look on crates.io two of crates supposedly do what is expected are not necessarily correct:
 // one uses unsafe code and another uses this method with deprecated env call)
-pub fn home_dir2() -> Option<PathBuf> {
+pub fn home_dir2() -> Option<std::path::PathBuf> {
     #[allow(deprecated)]
     std::env::home_dir()
 }
@@ -130,9 +126,7 @@ fn systemctl_restart_nostd(service: &str, expected_code: i32) -> Result<(), Conn
 fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> Result<(), ConnectError> {
     match cmd_nostd_args(SystemCtlCmd::Base.as_str(), &[cmd, service], expected_code) {
         true => Ok(()),
-        false => Err(ConnectError::SystemctlFailed {
-            reason: "jjjjjjjjjjjj".into(),
-        }),
+        false => Err(ConnectError::SystemctlFailed { reason: "".into() }),
     }
 }
 
@@ -172,4 +166,48 @@ pub fn all_services_available() -> Result<(), ConnectError> {
     // Check mosquitto is running
     mosquitto_is_active_daemon()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmd_nostd_args_expected() {
+        // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
+        assert_eq!(cmd_nostd_args("ls", &[], 0), true);
+        assert_eq!(cmd_nostd_args("test-command", &[], 0), false);
+    }
+
+    #[test]
+    fn home_dir_test() {
+        std::env::set_var("HOME", "/home/test/");
+        let expected_path = std::path::PathBuf::from("/home/test/");
+        assert_eq!(home_dir(), Some(expected_path));
+
+        std::env::remove_var("HOME");
+        assert_eq!(home_dir(), None);
+    }
+
+    #[test]
+    fn mosquitto_available_with_path() {
+        if is_in_path("mosquitto") {
+            let expected_result = ();
+            assert_eq!(mosquitto_available().unwrap(), expected_result);
+        } else {
+            assert!(mosquitto_available().is_err());
+        }
+    }
+
+    fn is_in_path(command: &str) -> bool {
+        if let Ok(path) = std::env::var("PATH") {
+            for cmd in path.split(":") {
+                let cmd_str = format!("{}/{}", cmd, command);
+                if std::fs::metadata(cmd_str).is_ok() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }

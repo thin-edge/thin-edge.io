@@ -7,6 +7,7 @@ use crate::command::Command;
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const ROOT_CERT_NAME: &str = "c8y-trusted-root-certificates.pem";
 const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(StructOpt, Debug)]
@@ -79,16 +80,14 @@ impl Connect {
         if std::path::Path::new(&path).exists() {
             std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         }
-        // Remove config file if exists if conenction was unsuccessful
-        // Shutdown mosquitto
-        // Do I need to return anything here>/#
+
         Ok(())
     }
 
-    // timeout (5 seconds??) on error
     #[tokio::main]
     async fn check_connection() -> Result<(), ConnectError> {
         const WAIT_FOR_SECONDS: u64 = 5;
+
         let c8y_msg = Topic::new("c8y/s/us")?;
         let c8y_err = Topic::new("c8y/s/e")?;
 
@@ -166,8 +165,8 @@ impl Connect {
         let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
 
         bridge.bridge_cafile = String::from(format!(
-            "{:?}/{}/c8y-trusted-root-certificates.pem",
-            home_dir, TEDGE_HOME_PREFIX
+            "{:?}/{}/{}",
+            home_dir, TEDGE_HOME_PREFIX, ROOT_CERT_NAME
         ));
 
         match config {
@@ -259,7 +258,7 @@ impl Config {
     fn generate_bridge_config(self) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
 
-        bridge.bridge_cafile = String::from("./c8y-trusted-root-certificates.pem");
+        bridge.bridge_cafile = String::from(ROOT_CERT_NAME);
 
         match self {
             Config::C8y(config) => {
@@ -398,8 +397,11 @@ impl BridgeConf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use tempfile::*;
+
+    const CORRECT_URL: &str = "http://test.com";
+    const INCORRECT_URL: &str = "noturl";
+    const INCORRECT_PATH: &str = "/path";
 
     #[test]
     fn create_config_file() {}
@@ -407,9 +409,9 @@ mod tests {
     #[test]
     fn config_c8y_create() {
         let expected = Config::C8y(C8yConfig {
-            url: "url".into(),
-            cert_path: "path".into(),
-            key_path: "path".into(),
+            url: "mqtt.latest.stage.c8y.io:8883".into(),
+            cert_path: "./tedge-certificate.pem".into(),
+            key_path: "./tedge-private-key.pem".into(),
             bridge_config: BridgeConf::default(),
         });
         assert_eq!(Config::new_c8y(), expected);
@@ -417,21 +419,28 @@ mod tests {
 
     #[test]
     fn config_c8y_validate_ok() {
+        let cert_file = NamedTempFile::new().unwrap();
+        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+
+        let key_file = NamedTempFile::new().unwrap();
+        let key_path = key_file.path().to_str().unwrap().to_owned();
+
         let config = Config::C8y(C8yConfig {
-            url: "test.com".into(),
-            cert_path: "/path".into(),
-            key_path: "/path".into(),
+            url: CORRECT_URL.into(),
+            cert_path,
+            key_path,
             bridge_config: BridgeConf::default(),
         });
+
         assert!(config.validate().is_ok());
     }
 
     #[test]
     fn config_c8y_validate_wrong_url() {
         let config = Config::C8y(C8yConfig {
-            url: "noturl".into(),
-            cert_path: "/path".into(),
-            key_path: "/path".into(),
+            url: INCORRECT_URL.into(),
+            cert_path: INCORRECT_PATH.into(),
+            key_path: INCORRECT_PATH.into(),
             bridge_config: BridgeConf::default(),
         });
 
@@ -441,9 +450,9 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_cert_path() {
         let config = Config::C8y(C8yConfig {
-            url: "test.com".into(),
-            cert_path: "/path".into(),
-            key_path: "/path".into(),
+            url: CORRECT_URL.into(),
+            cert_path: INCORRECT_PATH.into(),
+            key_path: INCORRECT_PATH.into(),
             bridge_config: BridgeConf::default(),
         });
 
@@ -452,38 +461,35 @@ mod tests {
 
     #[test]
     fn config_c8y_validate_wrong_key_path() {
+        let cert_file = NamedTempFile::new().unwrap();
+        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+
         let config = Config::C8y(C8yConfig {
-            url: "test.com".into(),
-            cert_path: "/path".into(),
-            key_path: "/path".into(),
+            url: CORRECT_URL.into(),
+            cert_path,
+            key_path: INCORRECT_PATH.into(),
             bridge_config: BridgeConf::default(),
         });
 
         assert!(config.validate().is_err());
     }
-    #[test]
-    fn bridge_config_c8y_create() {
-        let mut bridge = BridgeConf::default();
-
-        bridge.bridge_cafile = String::from("./test_root.pem");
-        bridge.address = String::from("test.test.io:8883");
-        bridge.bridge_certfile = String::from("./test-certificate.pem");
-        bridge.bridge_keyfile = String::from("./test-private-key.pem");
-
-        let expected = BridgeConf {
-            bridge_cafile: "./test_root.pem".into(),
-            address: "test.test.io:8883".into(),
-            bridge_certfile: "./test-certificate.pem".into(),
-            bridge_keyfile: "./test-private-key.pem".into(),
-        };
-
-        assert_eq!(bridge.to_string(), expected.to_string());
-    }
 
     // #[test]
-    // fn create_config_file() {}
-    // #[test]
-    // fn create_config_file() {}
-    // #[test]
-    // fn create_config_file() {}
+    // fn bridge_config_c8y_create() {
+    //     let mut bridge = BridgeConf::default();
+
+    //     bridge.bridge_cafile = String::from("./test_root.pem");
+    //     bridge.address = String::from("test.test.io:8883");
+    //     bridge.bridge_certfile = String::from("./test-certificate.pem");
+    //     bridge.bridge_keyfile = String::from("./test-private-key.pem");
+
+    //     let expected = BridgeConf {
+    //         bridge_cafile: "./test_root.pem".into(),
+    //         address: "test.test.io:8883".into(),
+    //         bridge_certfile: "./test-certificate.pem".into(),
+    //         bridge_keyfile: "./test-private-key.pem".into(),
+    //     };
+
+    //     assert_eq!(bridge.to_string(), expected.to_string());
+    // }
 }
