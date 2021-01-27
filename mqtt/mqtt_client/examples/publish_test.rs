@@ -26,11 +26,11 @@ async fn pipelined_publish(
     let message1 = Message::new(&topic, payload.clone()).qos(QoS::ExactlyOnce);
     let message2 = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
 
-    let fut1 = client.publish(message1);
-    let fut2 = client.publish(message2);
+    let ack1 = client.publish_with_ack(message1).await?;
+    let ack2 = client.publish_with_ack(message2).await?;
 
-    let () = fut2.await?;
-    let () = fut1.await?;
+    let () = ack2.await?;
+    let () = ack1.await?;
 
     client.disconnect().await?;
     Ok(())

@@ -63,7 +63,7 @@ impl Mapper {
                 Ok(mapped) => {
                     self.client
                         .publish(mqtt_client::Message::new(&self.out_topic, mapped))
-                        .await?
+                        .await?;
                 }
                 Err(error) => {
                     log::debug!("Mapping error: {}", error);
@@ -72,7 +72,7 @@ impl Mapper {
                             &self.err_topic,
                             error.to_string(),
                         ))
-                        .await?
+                        .await?;
                 }
             }
         }

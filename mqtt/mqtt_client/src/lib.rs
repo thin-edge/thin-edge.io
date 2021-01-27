@@ -14,7 +14,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
-use log::error;
+use futures::future::Future;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
 use std::collections::HashMap;
@@ -58,13 +58,14 @@ macro_rules! send_discarding_error {
 pub type MessageId = u16;
 
 /// `AckEvent` contains all events related to communicating acknowledgement of messages between our
-/// background event loop (see `Client::bg_process`) and frontend operations like `Client#publish`.
+/// background event loop (see `Client::bg_process`) and frontend operations like
+/// `Client#publish_with_ack`.
 ///
-/// This is required so that `Client#publish` can wait for a `PubAck` (QoS=1) or `PubComp` (QoS=2)
-/// before returning to the caller. To be able to wait for an acknowledgement, we first need to
-/// obtain the `pkid` of the message. For this purpose we introduced `Request::PublishWithNotify`
-/// to the underlying `rumqttc` library, which takes a `oneshot::channel` that it resolves once
-/// the `pkid` is generated.
+/// This is required so that `Client#publish_with_ack` can wait for a `PubAck` (QoS=1) or `PubComp`
+/// (QoS=2) before returning to the caller. To be able to wait for an acknowledgement, we first
+/// need to obtain the `pkid` of the message. For this purpose we introduced
+/// `Request::PublishWithNotify` to the underlying `rumqttc` library, which takes a
+/// `oneshot::channel` that it resolves once the `pkid` is generated.
 ///
 #[derive(Debug, Copy, Clone)]
 enum AckEvent {
@@ -139,18 +140,16 @@ impl Client {
 
     /// Publish a message on the local MQTT bus.
     ///
-    /// Waits for the acknowledgement in case of QoS=1 or QoS=2.
-    pub async fn publish(&self, message: Message) -> Result<(), Error> {
-        let qos = message.qos;
+    /// This does not wait for until the acknowledge is received.
+    ///
+    /// Upon success, this returns the `pkid` of the published message.
+    ///
+    pub async fn publish(&self, message: Message) -> Result<MessageId, Error> {
         let (sender, receiver) = oneshot::channel();
         let request = Request::PublishWithNotify {
             publish: message.into(),
             notify: sender,
         };
-
-        // Subscribe to the acknowledgement events. In case of QoS=1 or QoS=2 we
-        // need to wait for an PubAck / PubComp to confirm that the publish has succeeded.
-        let mut ack_events = AckEventStream::new(self.ack_event_sender.subscribe());
 
         let () = self
             .requests_tx
@@ -163,17 +162,52 @@ impl Client {
         // acknowledgement message.
         let pkid: MessageId = receiver.await?;
 
-        match qos {
-            QoS::AtMostOnce => {}
-            QoS::AtLeastOnce => {
-                ack_events.wait_for_pub_ack_received(pkid).await?;
-            }
-            QoS::ExactlyOnce => {
-                ack_events.wait_for_pub_comp_received(pkid).await?;
-            }
-        }
+        Ok(pkid)
+    }
 
-        Ok(())
+    /// Publish a message on the local MQTT bus.
+    ///
+    /// Supports awaiting the acknowledge.
+    ///
+    /// Upon success a `Future` is returned that resolves once the publish is acknowledged (only in
+    /// case QoS=1 or QoS=2).
+    ///
+    /// Example:
+    ///
+    /// ```no_run
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     use mqtt_client::*;
+    ///     let topic = Topic::new("c8y/s/us").unwrap();
+    ///     let mqtt = Config::default().connect("temperature").await.unwrap();
+    ///     let ack = mqtt.publish_with_ack(Message::new(&topic, "211,23")).await.unwrap();
+    ///     let () = ack.await.unwrap();
+    /// }
+    /// ```
+    pub async fn publish_with_ack(
+        &self,
+        message: Message,
+    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+        let qos = message.qos;
+
+        // Subscribe to the acknowledgement events. In case of QoS=1 or QoS=2 we
+        // need to wait for an PubAck / PubComp to confirm that the publish has succeeded.
+        let mut ack_events = AckEventStream::new(self.ack_event_sender.subscribe());
+
+        let pkid = self.publish(message).await?;
+
+        Ok(async move {
+            match qos {
+                QoS::AtMostOnce => {}
+                QoS::AtLeastOnce => {
+                    ack_events.wait_for_pub_ack_received(pkid).await?;
+                }
+                QoS::ExactlyOnce => {
+                    ack_events.wait_for_pub_comp_received(pkid).await?;
+                }
+            }
+            Ok(())
+        })
     }
 
     /// Subscribe to the messages published on the given topics
@@ -245,17 +279,12 @@ impl Client {
                 }
 
                 Ok(Event::Incoming(Packet::PubRel(pubrel))) => {
-                    match pending.remove(&pubrel.pkid) {
-                        Some(msg) => {
-                            assert!(msg.qos == QoS::ExactlyOnce);
-                            // TODO: `rumqttc` library with cargo feature="v5" has a
-                            // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
-                            // and only notify in that case.
-                            send_discarding_error!(message_sender, msg.into());
-                        }
-                        None => {
-                            error!("Unsolicited PubRel for pkid: {}", pubrel.pkid);
-                        }
+                    if let Some(msg) = pending.remove(&pubrel.pkid) {
+                        assert!(msg.qos == QoS::ExactlyOnce);
+                        // TODO: `rumqttc` library with cargo feature="v5" has a
+                        // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
+                        // and only notify in that case.
+                        send_discarding_error!(message_sender, msg.into());
                     }
                 }
 
