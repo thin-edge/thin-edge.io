@@ -25,6 +25,9 @@ enum TEdgeCmd {
 
     /// Create and manage device certificate
     Cert(super::certificate::CertCmd),
+
+    /// Publish a message on a topic and subscribe a topic.
+    Mqtt(super::mqtt::MqttCmd),
 }
 
 #[derive(StructOpt, Debug)]
@@ -59,6 +62,7 @@ impl TEdgeCmd {
         match self {
             TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Cert(ref cmd) => cmd,
+            TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
     }
 }
