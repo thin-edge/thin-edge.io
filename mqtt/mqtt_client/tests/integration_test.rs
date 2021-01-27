@@ -15,7 +15,7 @@ fn sending_and_receiving_a_message() {
         let mut received = subscriber.subscribe(topic.filter()).await?;
 
         let message = Message::new(&topic, payload);
-        let mut publisher = test_broker.connect("publisher").await?;
+        let publisher = test_broker.connect("publisher").await?;
         publisher.publish(message).await?;
 
         tokio::select! {
