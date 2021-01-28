@@ -1,46 +1,62 @@
 use super::c8y::ConnectError;
 
+type ExitCode = i32;
+
+const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
+const SYSTEMCTL_ISACTIVE_SUCCESS: ExitCode = 3;
+const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
+
 enum MosquittoCmd {
-    Base,
-    Status,
+    Cmd,
 }
 
 impl MosquittoCmd {
     fn as_str(self) -> &'static str {
         match self {
-            MosquittoCmd::Base => "mosquitto",
-            MosquittoCmd::Status => "-h",
+            MosquittoCmd::Cmd => "mosquitto",
+        }
+    }
+}
+
+enum MosquittoParam {
+    Status,
+}
+
+impl MosquittoParam {
+    fn as_str(self) -> &'static str {
+        match self {
+            MosquittoParam::Status => "-h",
         }
     }
 }
 
 enum SystemCtlCmd {
-    Base,
+    Cmd,
     IsActive,
     Restart,
     Status,
-    Version,
 }
 
 impl SystemCtlCmd {
     fn as_str(self) -> &'static str {
         match self {
-            SystemCtlCmd::Base => "systemctl",
+            SystemCtlCmd::Cmd => "systemctl",
             SystemCtlCmd::IsActive => "is-active",
             SystemCtlCmd::Restart => "restart",
             SystemCtlCmd::Status => "status",
-            SystemCtlCmd::Version => "--version",
         }
     }
 }
+enum SystemCtlParam {
+    Version,
+}
 
-type ExitCode = i32;
-enum ExitCodes {}
-
-impl ExitCodes {
-    pub const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
-    pub const SYSTEMCTL_ISACTICE_SUCCESS: ExitCode = 3;
-    pub const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
+impl SystemCtlParam {
+    fn as_str(self) -> &'static str {
+        match self {
+            SystemCtlParam::Version => "--version",
+        }
+    }
 }
 
 // This isn't complete way to retrieve HOME dir from the user.
@@ -64,8 +80,8 @@ pub fn home_dir2() -> Option<std::path::PathBuf> {
 
 // How about using some crates like for example 'which'??
 fn systemd_available() -> Result<(), ConnectError> {
-    std::process::Command::new(SystemCtlCmd::Base.as_str())
-        .arg(SystemCtlCmd::Version.as_str())
+    std::process::Command::new(SystemCtlCmd::Cmd.as_str())
+        .arg(SystemCtlParam::Version.as_str())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -82,22 +98,19 @@ fn systemd_available() -> Result<(), ConnectError> {
 }
 
 fn mosquitto_available() -> Result<(), ConnectError> {
-    mosquitto_cmd_nostd(
-        MosquittoCmd::Status.as_str(),
-        ExitCodes::MOSQUITTOCMD_SUCCESS,
-    )
+    mosquitto_cmd_nullstdio(MosquittoParam::Status.as_str(), MOSQUITTOCMD_SUCCESS)
 }
 
 fn mosquitto_available_as_service() -> Result<(), ConnectError> {
-    systemctl_cmd_nostd(
+    systemctl_cmd_nullstdio(
         SystemCtlCmd::Status.as_str(),
-        MosquittoCmd::Base.as_str(),
-        ExitCodes::SYSTEMCTL_STATUS_SUCCESS,
+        MosquittoCmd::Cmd.as_str(),
+        SYSTEMCTL_STATUS_SUCCESS,
     )
 }
 
 fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
-    systemctl_is_active_nostd(MosquittoCmd::Base.as_str(), ExitCodes::MOSQUITTOCMD_SUCCESS)
+    systemctl_is_active_nullstdio(MosquittoCmd::Cmd.as_str(), MOSQUITTOCMD_SUCCESS)
 }
 
 // Note that restarting a unit with this command does not necessarily flush out all of the unit's resources before it is started again.
@@ -106,38 +119,39 @@ fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
 pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
-    match systemctl_restart_nostd(
-        MosquittoCmd::Base.as_str(),
-        ExitCodes::SYSTEMCTL_ISACTICE_SUCCESS,
-    ) {
+    match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_ISACTIVE_SUCCESS) {
         Ok(_) => Ok(()),
         Err(_) => Err(ConnectError::MosquittoNotAvailableAsService),
     }
 }
 
-fn systemctl_is_active_nostd(service: &str, expected_code: i32) -> Result<(), ConnectError> {
-    systemctl_cmd_nostd(SystemCtlCmd::IsActive.as_str(), service, expected_code)
+fn systemctl_is_active_nullstdio(service: &str, expected_code: i32) -> Result<(), ConnectError> {
+    systemctl_cmd_nullstdio(SystemCtlCmd::IsActive.as_str(), service, expected_code)
 }
 
-fn systemctl_restart_nostd(service: &str, expected_code: i32) -> Result<(), ConnectError> {
-    systemctl_cmd_nostd(SystemCtlCmd::Restart.as_str(), service, expected_code)
+fn systemctl_restart_nullstdio(service: &str, expected_code: i32) -> Result<(), ConnectError> {
+    systemctl_cmd_nullstdio(SystemCtlCmd::Restart.as_str(), service, expected_code)
 }
 
-fn systemctl_cmd_nostd(cmd: &str, service: &str, expected_code: i32) -> Result<(), ConnectError> {
-    match cmd_nostd_args(SystemCtlCmd::Base.as_str(), &[cmd, service], expected_code) {
+fn systemctl_cmd_nullstdio(
+    cmd: &str,
+    service: &str,
+    expected_code: i32,
+) -> Result<(), ConnectError> {
+    match cmd_nullstdio_args(SystemCtlCmd::Cmd.as_str(), &[cmd, service], expected_code) {
         true => Ok(()),
         false => Err(ConnectError::SystemctlFailed { reason: "".into() }),
     }
 }
 
-fn mosquitto_cmd_nostd(cmd: &str, expected_code: i32) -> Result<(), ConnectError> {
-    match cmd_nostd_args(MosquittoCmd::Base.as_str(), &[cmd], expected_code) {
+fn mosquitto_cmd_nullstdio(cmd: &str, expected_code: i32) -> Result<(), ConnectError> {
+    match cmd_nullstdio_args(MosquittoCmd::Cmd.as_str(), &[cmd], expected_code) {
         true => Ok(()),
         false => Err(ConnectError::MosquittoFailed { reason: "".into() }),
     }
 }
 
-fn cmd_nostd_args(command: &str, args: &[&str], expected_code: i32) -> bool {
+fn cmd_nullstdio_args(command: &str, args: &[&str], expected_code: i32) -> bool {
     std::process::Command::new(command)
         .args(args)
         .stdout(std::process::Stdio::null())
@@ -156,7 +170,7 @@ pub fn all_services_available() -> Result<(), ConnectError> {
     // Check mosquitto exists on the system
     mosquitto_available()?;
 
-    // Check mosquitto mosquitto available through systemd
+    // Check mosquitto is available through systemd
     // Theoretically we could just do a big boom and run just this command as it will error on following:
     //  - systemd not available
     //  - mosquitto not installed as a service
@@ -173,10 +187,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cmd_nostd_args_expected() {
+    fn cmd_nullstdio_args_expected() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
-        assert_eq!(cmd_nostd_args("ls", &[], 0), true);
-        assert_eq!(cmd_nostd_args("test-command", &[], 0), false);
+        assert_eq!(cmd_nullstdio_args("ls", &[], 0), true);
+        assert_eq!(cmd_nullstdio_args("test-command", &[], 0), false);
     }
 
     #[test]
@@ -192,8 +206,7 @@ mod tests {
     #[test]
     fn mosquitto_available_with_path() {
         if is_in_path("mosquitto") {
-            let expected_result = ();
-            assert_eq!(mosquitto_available().unwrap(), expected_result);
+            assert!(mosquitto_available().is_ok());
         } else {
             assert!(mosquitto_available().is_err());
         }

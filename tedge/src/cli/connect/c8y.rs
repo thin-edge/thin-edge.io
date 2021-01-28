@@ -1,5 +1,9 @@
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
 use log;
 use structopt::StructOpt;
+use tokio::time::timeout;
 use url::Url;
 
 use super::utils;
@@ -7,6 +11,9 @@ use crate::command::Command;
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const C8Y_MQTT_URL: &str = "mqtt.latest.stage.c8y.io:8883";
+const DEVICE_CERT_NAME: &str = "tedge-certificate.pem";
+const DEVICE_KEY_NAME: &str = "tedge-private-key.pem";
 const ROOT_CERT_NAME: &str = "c8y-trusted-root-certificates.pem";
 const TEDGE_HOME_PREFIX: &str = ".tedge";
 
@@ -15,53 +22,68 @@ pub struct Connect {}
 
 impl Command for Connect {
     fn to_string(&self) -> String {
-        String::from("Connect command creates relay to selected provider allowing for devices to publish messages via mapper.")
+        "Connect command creates bridge to selected provider allowing for devices to publish messages via mapper.".into()
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         // Awaiting for config story to finish to add this implementation.
         // let config = ConnectCmd::read_configuration();
 
-        match self {
-            Connect {} => Connect::new_relay()?,
-        };
+        self.new_bridge()?;
 
         Ok(())
     }
 }
 
 impl Connect {
-    fn new_relay() -> Result<(), ConnectError> {
+    fn new_bridge(&self) -> Result<(), ConnectError> {
         utils::all_services_available()?;
 
         // Check connected (c8y-bridge.conf present) // fail if so
-        Self::config_exists()?;
+        self.config_exists()?;
 
         // Check configuration for provider is provided and correct // otherwise fail with error
         // awaits config from Albin let's hardcode values for now
         // Check current configuration to make sure that the current provider is not connected.
         // This needs to cleanup after error...
-        let config = Self::load_config_with_validatation()?;
+        let config = self.load_config_with_validatation()?;
 
         // Verify current config does not contain just loaded config
         // This check may not be required as the config_exists does similar check
-        // Create mosquitto config with relay and place it in /etc/whatever
+        // Create mosquitto config with bridge and place it in /etc/whatever
         // Need to use home for now.
-        let bridge_config = Self::generate_bridge_config(&config)?;
-        Self::write_bridge_config_to_file(&bridge_config)?;
+        let bridge_config = self.generate_bridge_config(&config)?;
+        match self.write_bridge_config_to_file(&bridge_config) {
+            Err(err) => {
+                self.clean_up(true)?;
+                return Err(err);
+            }
+            _ => {}
+        }
 
-        // Check configuration is correct and restart mosquitto
-        utils::mosquitto_restart_daemon()?;
+        match utils::mosquitto_restart_daemon() {
+            Err(err) => {
+                self.clean_up(true)?;
+                return Err(err);
+            }
+            _ => {}
+        }
 
         // Error if cloud not available (send mqtt message to validate connection)
-        Self::check_connection()?;
+        match self.check_connection() {
+            Err(err) => {
+                self.clean_up(true)?;
+                return Err(err);
+            }
+            _ => {}
+        }
 
-        // Self::clean_up();
+        self.clean_up(false)?;
 
         Ok(())
     }
 
-    fn clean_up() -> Result<(), ConnectError> {
+    fn clean_up(&self, on_error: bool) -> Result<(), ConnectError> {
         fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
             match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(()),
@@ -69,15 +91,12 @@ impl Connect {
             }
         }
 
-        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+        if on_error {
+            let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+            let mut path = PathBuf::from(home_dir);
+            path.push(TEDGE_HOME_PREFIX);
+            path.push(C8Y_CONFIG_FILENAME);
 
-        // Check if config file exists
-        let path = format!(
-            "{:?}/{}/{}",
-            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
-        );
-
-        if std::path::Path::new(&path).exists() {
             std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         }
 
@@ -85,9 +104,11 @@ impl Connect {
     }
 
     #[tokio::main]
-    async fn check_connection() -> Result<(), ConnectError> {
+    async fn check_connection(&self) -> Result<(), ConnectError> {
         const WAIT_FOR_SECONDS: u64 = 5;
 
+        // maybe use s/ut/1??
+        // response s/dt
         let c8y_msg = Topic::new("c8y/s/us")?;
         let c8y_err = Topic::new("c8y/s/e")?;
 
@@ -108,13 +129,13 @@ impl Connect {
             }
         });
 
-        Self::publish_temperature(mqtt, c8y_msg).await?;
+        self.publish_test_message(mqtt, c8y_msg).await?;
 
-        let fut = tokio::time::timeout(std::time::Duration::from_secs(WAIT_FOR_SECONDS), receiver);
+        let fut = timeout(Duration::from_secs(WAIT_FOR_SECONDS), receiver);
 
         match fut.await {
             Ok(Ok(true)) => {
-                println!("Got message");
+                log::debug!("Received error.");
             }
             _ => {}
         }
@@ -122,44 +143,45 @@ impl Connect {
         Ok(())
     }
 
-    async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
+    async fn publish_test_message(
+        &self,
+        mqtt: Client,
+        c8y_msg: Topic,
+    ) -> Result<(), mqtt_client::Error> {
         let payload = format!("{},{}", "999", 999);
-        log::debug!("{}", payload);
-        mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
-        futures_timer::Delay::new(std::time::Duration::from_millis(1000)).await;
+        mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
         mqtt.disconnect().await?;
         Ok(())
     }
 
-    fn config_exists() -> Result<(), ConnectError> {
+    fn config_exists(&self) -> Result<(), ConnectError> {
         let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
 
-        let path = format!(
-            "{:?}/{}/{}",
-            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
-        );
+        let mut path: PathBuf = PathBuf::from(home_dir);
+        path.push(TEDGE_HOME_PREFIX);
+        path.push(C8Y_CONFIG_FILENAME);
 
-        if !std::path::Path::new(&path).exists() {
+        if !Path::new(&path).exists() {
             return Err(ConnectError::ConfigurationExists);
         }
 
         Ok(())
     }
 
-    fn load_config_with_validatation() -> Result<Config, ConnectError> {
+    fn load_config_with_validatation(&self) -> Result<Config, ConnectError> {
         Config::new_c8y().validate()
     }
 
     /// Validates provider configuration as per required parameters
-    /// E.g. c8y requires following parameters to create relay:
+    /// E.g. c8y requires following parameters to create bridge:
     ///  - url (endpoint url to publish messages)
     ///  - cert_path (path to device certificate)
     ///  - key_path (path to device private key)
     ///  - bridge_cafile
     // Look at error type, maybe parseerror
-    fn generate_bridge_config(config: &Config) -> Result<BridgeConf, ConnectError> {
+    fn generate_bridge_config(&self, config: &Config) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
 
         let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
@@ -181,14 +203,15 @@ impl Connect {
     }
 
     // write_all may fail, let's have a look how to overcome it?
-    // Maybe AtomicWrite??
-    fn write_bridge_config_to_file(config: &BridgeConf) -> Result<(), ConnectError> {
+    // Use tempfile
+    fn write_bridge_config_to_file(&self, config: &BridgeConf) -> Result<(), ConnectError> {
         let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
 
-        let mut file = std::fs::File::create(format!(
-            "{:?}/{}/{}",
-            home_dir, TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME
-        ))?;
+        let mut path = PathBuf::from(home_dir);
+        path.push(TEDGE_HOME_PREFIX);
+        path.push(C8Y_CONFIG_FILENAME);
+
+        let mut file = std::fs::File::create(&path)?;
         config.serialize(&mut file)?;
         Ok(())
     }
@@ -202,7 +225,7 @@ pub enum ConnectError {
     #[error("Couldn't load configuration, please provide valid configuration.")]
     InvalidConfigurationError(#[from] std::io::Error),
 
-    #[error("Couldn't load certificate, provide valid certificate.")]
+    #[error("Couldn't load certificate, please provide valid certificate.")]
     Certificate,
 
     #[error("Provided endpoint url is not valid, please provide valid url.")]
@@ -217,7 +240,7 @@ pub enum ConnectError {
     #[error("Mosquitto is not available on the system as a service, it is required to use this command.")]
     MosquittoNotAvailableAsService,
 
-    #[error("MQTT Server is already running. To create new relay please stop it using disconnect command.")]
+    #[error("MQTT Server is already running. To create new bridge please stop it using disconnect command.")]
     MosquittoRunning,
 
     #[error("Systemctl failed: `{reason:?}`")]
@@ -250,7 +273,7 @@ impl Config {
     }
 
     /// Validates provider configuration as per required parameters
-    /// E.g. c8y requires following parameters to create relay:
+    /// E.g. c8y requires following parameters to create bridge:
     ///  - url (endpoint url to publish messages)
     ///  - cert_path (path to device certificate)
     ///  - key_path (path to device private key)
@@ -283,9 +306,9 @@ struct C8yConfig {
 impl Default for C8yConfig {
     fn default() -> Self {
         C8yConfig {
-            url: String::from("mqtt.latest.stage.c8y.io:8883"),
-            cert_path: String::from("./tedge-certificate.pem"),
-            key_path: String::from("./tedge-private-key.pem"),
+            url: C8Y_MQTT_URL.into(),
+            cert_path: DEVICE_CERT_NAME.into(),
+            key_path: DEVICE_KEY_NAME.into(),
             bridge_config: BridgeConf::default(),
         }
     }
@@ -295,11 +318,11 @@ impl C8yConfig {
     fn validate(&self) -> Result<(), ConnectError> {
         Url::parse(&self.url)?;
 
-        if !std::path::Path::new(&self.cert_path).exists() {
+        if !Path::new(&self.cert_path).exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !std::path::Path::new(&self.key_path).exists() {
+        if !Path::new(&self.key_path).exists() {
             return Err(ConnectError::Certificate);
         }
 
@@ -410,8 +433,8 @@ mod tests {
     fn config_c8y_create() {
         let expected = Config::C8y(C8yConfig {
             url: "mqtt.latest.stage.c8y.io:8883".into(),
-            cert_path: "./tedge-certificate.pem".into(),
-            key_path: "./tedge-private-key.pem".into(),
+            cert_path: "tedge-certificate.pem".into(),
+            key_path: "tedge-private-key.pem".into(),
             bridge_config: BridgeConf::default(),
         });
         assert_eq!(Config::new_c8y(), expected);
