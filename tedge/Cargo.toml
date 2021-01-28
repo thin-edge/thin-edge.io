@@ -2,7 +2,10 @@
 name = "tedge"
 version = "0.1.0"
 edition = "2018"
+authors = ["Software AG <thin-edge-team@softwareag.com>"]
+license = "Apache-2.0"
 readme = "README.md"
+description = "tedge is the cli tool for thin-edge.io"
 
 [dependencies]
 anyhow = "1.0.38"
@@ -18,3 +21,4 @@ assert_cmd = "1.0.2"
 pem = "0.8.2"
 predicates = "1.0.5"
 tempfile = "3.2.0"
+
