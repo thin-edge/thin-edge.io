@@ -1,3 +1,4 @@
+#[cfg(not(using_cross))]
 mod tests {
 
     use assert_cmd::prelude::*; // Add methods on commands
