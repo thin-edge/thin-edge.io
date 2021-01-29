@@ -7,6 +7,9 @@ license = "Apache-2.0"
 readme = "README.md"
 description = "tedge is the cli tool for thin-edge.io"
 
+[package.metadata.deb]
+depends = "mosquitto"
+
 [dependencies]
 anyhow = "1.0.38"
 chrono = "0.4.19"
