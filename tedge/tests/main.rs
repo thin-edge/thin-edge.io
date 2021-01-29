@@ -1,22 +1,21 @@
 mod tests {
 
-    use assert_cmd::prelude::*; // Add methods on commands
     use predicates::prelude::*; // Used for writing assertions
 
-    fn tedge_command<I, S>(args: I) -> std::process::Command
+    fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<std::ffi::OsStr>,
     {
         let path: &str = "tedge";
-        let mut cmd = std::process::Command::new(path);
+        let mut cmd = assert_cmd::Command::cargo_bin(path)?;
         cmd.args(args);
-        cmd
+        Ok(cmd)
     }
 
     #[test]
     fn run_help() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = tedge_command(&["--help"]);
+        let mut cmd = tedge_command(&["--help"])?;
 
         cmd.assert()
             .success()
@@ -27,7 +26,7 @@ mod tests {
 
     #[test]
     fn run_version() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = tedge_command(&["-V"]);
+        let mut cmd = tedge_command(&["-V"])?;
 
         let version_string = format!("tedge {}", env!("CARGO_PKG_VERSION"));
 
@@ -40,7 +39,7 @@ mod tests {
 
     #[test]
     fn run_create_certificate() -> Result<(), Box<dyn std::error::Error>> {
-        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir = tempfile::tempdir()?;
         let device_id = "test";
         let cert_path = temp_path(&tempdir, "test-cert.pem");
         let key_path = temp_path(&tempdir, "test-key.pem");
@@ -54,9 +53,9 @@ mod tests {
             &cert_path,
             "--key-path",
             &key_path,
-        ]);
+        ])?;
 
-        let mut show_cmd = tedge_command(&["cert", "show", "--cert-path", &cert_path]);
+        let mut show_cmd = tedge_command(&["cert", "show", "--cert-path", &cert_path])?;
 
         let mut remove_cmd = tedge_command(&[
             "cert",
@@ -65,7 +64,7 @@ mod tests {
             &cert_path,
             "--key-path",
             &key_path,
-        ]);
+        ])?;
 
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
