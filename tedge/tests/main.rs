@@ -8,7 +8,7 @@ mod tests {
         I: IntoIterator<Item = S>,
         S: AsRef<std::ffi::OsStr>,
     {
-        let path: &str = env!("CARGO_bin_EXE_tedge");
+        let path: &str = "tedge";
         let mut cmd = std::process::Command::new(path);
         cmd.args(args);
         cmd
