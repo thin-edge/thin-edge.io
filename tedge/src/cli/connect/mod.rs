@@ -3,6 +3,7 @@ use structopt::StructOpt;
 
 mod c8y;
 mod utils;
+
 #[derive(StructOpt, Debug)]
 pub enum ConnectCmd {
     /// Create connection to Cumulocity
@@ -14,7 +15,7 @@ pub enum ConnectCmd {
 impl ConnectCmd {
     fn sub_command(&self) -> &dyn Command {
         match self {
-            ConnectCmd::C8y(ref cmd) => cmd,
+            ConnectCmd::C8y(cmd) => cmd,
         }
     }
 }

@@ -78,7 +78,6 @@ pub enum CertError {
     )]
     CertificateNotFound { path: String },
 
-    #[allow(dead_code)]
     #[error(
         r#"No private key has been attached to that device.
         Missing file: {path:?}
@@ -87,7 +86,6 @@ pub enum CertError {
     )]
     KeyNotFound { path: String },
 
-    #[allow(dead_code)]
     #[error(
         r#"A private key already exists and would be overwritten.
         Existing file: {path:?}
