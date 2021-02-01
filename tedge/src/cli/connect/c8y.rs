@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use log;
@@ -15,6 +15,7 @@ const C8Y_MQTT_URL: &str = "mqtt.latest.stage.c8y.io:8883";
 const DEVICE_CERT_NAME: &str = "tedge-certificate.pem";
 const DEVICE_KEY_NAME: &str = "tedge-private-key.pem";
 const ROOT_CERT_NAME: &str = "c8y-trusted-root-certificates.pem";
+const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(StructOpt, Debug)]
@@ -78,6 +79,14 @@ impl Connect {
             _ => {}
         }
 
+        match utils::mosquitto_enable_daemon() {
+            Err(err) => {
+                self.clean_up(true)?;
+                return Err(err);
+            }
+            _ => {}
+        }
+
         let _ = self.clean_up(false)?;
 
         Ok(())
@@ -92,11 +101,7 @@ impl Connect {
         }
 
         if on_error {
-            let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
-            let mut path = PathBuf::from(home_dir);
-            path.push(TEDGE_HOME_PREFIX);
-            path.push(C8Y_CONFIG_FILENAME);
-
+            let path = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME])?;
             let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         }
 
@@ -114,7 +119,7 @@ impl Connect {
     async fn check_connection(&self) -> Result<(), ConnectError> {
         const WAIT_FOR_SECONDS: u64 = 5;
 
-        const C8Y_TOPIC_TEMPLATE_UPSTREAM: &str = "c8y/s/ut/notExistingTemplateCollection{}";
+        const C8Y_TOPIC_TEMPLATE_UPSTREAM: &str = "c8y/s/ut/notExistingTemplateCollection";
         const C8Y_TOPIC_TEMPLATE_DOWNSTREAM: &str = "c8y/s/dt";
         const CLIENT_ID: &str = "check_connection";
 
@@ -146,7 +151,9 @@ impl Connect {
             Ok(Ok(true)) => {
                 log::debug!("Received error.");
             }
-            _ => {}
+            _ => {
+                return Err(ConnectError::BridgeConnectionFailed);
+            }
         }
 
         Ok(())
@@ -164,13 +171,13 @@ impl Connect {
     }
 
     fn config_exists(&self) -> Result<(), ConnectError> {
-        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+        let path = utils::build_path_from_home(&[
+            TEDGE_HOME_PREFIX,
+            TEDGE_BRIDGE_CONF_DIR_PATH,
+            C8Y_CONFIG_FILENAME,
+        ])?;
 
-        let mut path: PathBuf = PathBuf::from(home_dir);
-        path.push(C8Y_CONFIG_FILENAME);
-        path.push(TEDGE_HOME_PREFIX);
-
-        if !Path::new(&path).exists() {
+        if Path::new(&path).exists() {
             return Err(ConnectError::ConfigurationExists);
         }
 
@@ -191,12 +198,11 @@ impl Connect {
     fn generate_bridge_config(&self, config: &Config) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
 
-        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
-
-        bridge.bridge_cafile = String::from(format!(
-            "{:?}/{}/{}",
-            home_dir, TEDGE_HOME_PREFIX, ROOT_CERT_NAME
-        ));
+        // let bridge_cafile = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?;
+        bridge.bridge_cafile = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?
+            .into_os_string()
+            .into_string()
+            .unwrap_or("".into());
 
         match config {
             Config::C8y(config) => {
@@ -212,52 +218,61 @@ impl Connect {
     // write_all may fail, let's have a look how to overcome it?
     // Use tempfile
     fn write_bridge_config_to_file(&self, config: &BridgeConf) -> Result<(), ConnectError> {
-        let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
+        let dir_path =
+            utils::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
-        let mut path = PathBuf::from(home_dir);
-        path.push(TEDGE_HOME_PREFIX);
-        path.push(C8Y_CONFIG_FILENAME);
+        // This will forcefully create directory structure if doessn't exist, we should find better way to do it, maybe config should deal with it?
+        let _ = std::fs::create_dir_all(dir_path);
 
-        let mut file = std::fs::File::create(&path)?;
-        config.serialize(&mut file)?;
+        let config_path = utils::build_path_from_home(&[
+            TEDGE_HOME_PREFIX,
+            TEDGE_BRIDGE_CONF_DIR_PATH,
+            C8Y_CONFIG_FILENAME,
+        ])?;
+
+        let mut file = std::fs::File::create(&config_path)?;
+        let _ = config.serialize(&mut file)?;
+
         Ok(())
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
+    #[error("Bridge connection has not been established, check configuration and try again.")]
+    BridgeConnectionFailed,
+
+    #[error("Couldn't load certificate, please provide valid certificate.")]
+    Certificate,
+
     #[error("Connection cannot be established as config already exists.")]
     ConfigurationExists,
 
     #[error("Couldn't load configuration, please provide valid configuration.")]
     InvalidConfigurationError(#[from] std::io::Error),
 
-    #[error("Couldn't load certificate, please provide valid certificate.")]
-    Certificate,
+    #[error("MQTT Server is not available on the system, it is required to use this command.")]
+    MosquittoNotAvailable,
 
-    #[error("Provided endpoint url is not valid, please provide valid url.")]
-    UrlParse(#[from] url::ParseError),
+    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
+    MosquittoNotAvailableAsService,
+
+    // #[error("MQTT Server is already running. To create new bridge please stop it using disconnect command.")]
+    // MosquittoIsRunning,
+    #[error("MQTT Server is already running. To create new bridge please stop it using disconnect command.")]
+    MosquittoNotEnabled,
+
+    #[error("MQTT client failed.")]
+    MqttClient(#[from] mqtt_client::Error),
+
+    #[error("Systemctl failed.")]
+    SystemctlFailed,
 
     #[error("Systemd is not available on the system, it is required to use this command.")]
     SystemdNotAvailable,
 
-    #[error("Mosquitto is not available on the system, it is required to use this command.")]
-    MosquittoNotAvailable,
-
-    #[error("Mosquitto is not available on the system as a service, it is required to use this command.")]
-    MosquittoNotAvailableAsService,
-
-    #[error("MQTT Server is already running. To create new bridge please stop it using disconnect command.")]
-    MosquittoRunning,
-
-    #[error("Systemctl failed: `{reason:?}`")]
-    SystemctlFailed { reason: String },
-
-    #[error("Mosquitto failed: `{reason:?}`")]
-    MosquittoFailed { reason: String },
-
-    #[error("MQTT client failed.")]
-    MqttClient(#[from] mqtt_client::Error),
+    #[error("Provided endpoint url is not valid, please provide valid url.")]
+    UrlParse(#[from] url::ParseError),
 }
 
 #[derive(Debug, PartialEq)]
@@ -285,7 +300,7 @@ impl Config {
     ///  - cert_path (path to device certificate)
     ///  - key_path (path to device private key)
     // Look at error type, maybe parseerror
-    fn generate_bridge_config(self) -> Result<BridgeConf, ConnectError> {
+    fn _generate_bridge_config(self) -> Result<BridgeConf, ConnectError> {
         match self {
             Config::C8y(config) => Ok(BridgeConf {
                 address: config.url.into(),
@@ -307,10 +322,20 @@ struct C8yConfig {
 
 impl Default for C8yConfig {
     fn default() -> Self {
+        let cert_path = utils::build_path_from_home(&[DEVICE_CERT_NAME])
+            .unwrap()
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        let key_path = utils::build_path_from_home(&[DEVICE_KEY_NAME])
+            .unwrap()
+            .into_os_string()
+            .into_string()
+            .unwrap();
         C8yConfig {
             url: C8Y_MQTT_URL.into(),
-            cert_path: DEVICE_CERT_NAME.into(),
-            key_path: DEVICE_KEY_NAME.into(),
+            cert_path,
+            key_path,
             bridge_config: BridgeConf::default(),
         }
     }
@@ -354,47 +379,6 @@ struct BridgeConf {
     try_private: bool,
     start_type: String,
     topics: Vec<String>,
-}
-impl BridgeConf {
-    fn new() -> Self {
-        BridgeConf {
-            connection: "edge_to_c8y".into(),
-            address: "".into(),
-            bridge_cafile: "".into(),
-            remote_clientid: "".into(),
-            bridge_certfile: "".into(),
-            bridge_keyfile: "".into(),
-            try_private: false,
-            start_type: "automatic".into(),
-            topics: vec![
-                // Registration
-                r#"s/dcr in 2 c8y/ """#.into(),
-                r#"s/ucr out 2 c8y/ """#.into(),
-                // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
-                // Static templates
-                r#"s/us out 2 c8y/ """#.into(),
-                r#"t/us out 2 c8y/ """#.into(),
-                r#"q/us out 2 c8y/ """#.into(),
-                r#"c/us out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
-                r#"s/os in 2 c8y/ """#.into(),
-                // Debug
-                r#"s/e in 0 c8y/ """#.into(),
-                // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
-                r#"s/oc/# in 2 c8y/ """#.into(),
-                // c8y JSON
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
-            ],
-        }
-    }
 }
 
 impl Default for BridgeConf {
@@ -474,10 +458,13 @@ mod tests {
 
     #[test]
     fn config_c8y_create_default() {
+        let home = std::env::var("HOME").unwrap();
+        let cert_path = format!("{}/tedge-certificate.pem", home);
+        let key_path = format!("{}/tedge-private-key.pem", home);
         let expected = Config::C8y(C8yConfig {
             url: "mqtt.latest.stage.c8y.io:8883".into(),
-            cert_path: "tedge-certificate.pem".into(),
-            key_path: "tedge-private-key.pem".into(),
+            cert_path,
+            key_path,
             bridge_config: BridgeConf::default(),
         });
         assert_eq!(Config::new_c8y(), expected);
