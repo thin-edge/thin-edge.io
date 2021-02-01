@@ -145,7 +145,6 @@ pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
 }
 
 #[cfg(test)]
-#[cfg(not(target_arch = "arm"))] // Need CIT-160 resolution
 mod tests {
     use crate::mqtt::parse_qos;
     use assert_cmd::prelude::*;
