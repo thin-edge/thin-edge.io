@@ -86,12 +86,12 @@ fn systemd_available() -> Result<(), ConnectError> {
         .stderr(std::process::Stdio::null())
         .status()
         .map_or_else(
-            |_error| Err(ConnectError::SystemdUnavailable),
+            |_error| Err(ConnectError::SystemdNotAvailable),
             |status| {
                 if status.success() {
                     Ok(())
                 } else {
-                    Err(ConnectError::SystemdUnavailable)
+                    Err(ConnectError::SystemdNotAvailable)
                 }
             },
         )

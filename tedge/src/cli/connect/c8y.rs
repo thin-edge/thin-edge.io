@@ -37,10 +37,10 @@ impl Command for Connect {
 
 impl Connect {
     fn new_bridge(&self) -> Result<(), ConnectError> {
-        utils::all_services_available()?;
+        let _ = utils::all_services_available()?;
 
         // Check connected (c8y-bridge.conf present) // fail if so
-        self.config_exists()?;
+        let _ = self.config_exists()?;
 
         // Check configuration for provider is provided and correct // otherwise fail with error
         // awaits config from Albin let's hardcode values for now
@@ -78,7 +78,7 @@ impl Connect {
             _ => {}
         }
 
-        self.clean_up(false)?;
+        let _ = self.clean_up(false)?;
 
         Ok(())
     }
@@ -97,31 +97,40 @@ impl Connect {
             path.push(TEDGE_HOME_PREFIX);
             path.push(C8Y_CONFIG_FILENAME);
 
-            std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+            let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         }
 
         Ok(())
     }
 
+    // We are going to use c8y templates over mqtt to check if connectiom has been open.
+    // Empty payload publish to s/ut/existingTemplateCollection
+    // 20,existingTemplateCollection,<ID of collection>
+    //
+    // Empty payload publish to s/ut/notExistingTemplateCollection
+    // 41,notExistingTemplateCollection
+    // It seems to be appropriate to use the negative (second option) to check if template exists.
     #[tokio::main]
     async fn check_connection(&self) -> Result<(), ConnectError> {
         const WAIT_FOR_SECONDS: u64 = 5;
 
-        // maybe use s/ut/1??
-        // response s/dt
-        let c8y_msg = Topic::new("c8y/s/us")?;
-        let c8y_err = Topic::new("c8y/s/e")?;
+        const C8Y_TOPIC_TEMPLATE_UPSTREAM: &str = "c8y/s/ut/notExistingTemplateCollection{}";
+        const C8Y_TOPIC_TEMPLATE_DOWNSTREAM: &str = "c8y/s/dt";
+        const CLIENT_ID: &str = "check_connection";
 
-        let mqtt = Client::connect("connection_test", &mqtt_client::Config::default()).await?;
-        let mut c8y_errors = mqtt.subscribe(c8y_err.filter()).await?;
+        let template_pub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_UPSTREAM)?;
+        let template_sub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_DOWNSTREAM)?;
+
+        let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+        let mut template_response = mqtt.subscribe(template_sub_topic.filter()).await?;
 
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
         let _error_handle = tokio::spawn(async move {
-            while let Some(message) = c8y_errors.next().await {
+            while let Some(message) = template_response.next().await {
                 if std::str::from_utf8(&message.payload)
                     .unwrap_or("")
-                    .contains("999,No static template")
+                    .contains("41,notExistingTemplateCollection")
                 {
                     let _ = sender.send(true);
                     break;
@@ -129,7 +138,7 @@ impl Connect {
             }
         });
 
-        self.publish_test_message(mqtt, c8y_msg).await?;
+        self.publish_test_message(mqtt, template_pub_topic).await?;
 
         let fut = timeout(Duration::from_secs(WAIT_FOR_SECONDS), receiver);
 
@@ -148,11 +157,9 @@ impl Connect {
         mqtt: Client,
         c8y_msg: Topic,
     ) -> Result<(), mqtt_client::Error> {
-        let payload = format!("{},{}", "999", 999);
-
-        mqtt.publish(Message::new(&c8y_msg, payload)).await?;
-
+        mqtt.publish(Message::new(&c8y_msg, "")).await?;
         mqtt.disconnect().await?;
+
         Ok(())
     }
 
@@ -160,8 +167,8 @@ impl Connect {
         let home_dir = utils::home_dir().ok_or(ConnectError::ConfigurationExists)?;
 
         let mut path: PathBuf = PathBuf::from(home_dir);
-        path.push(TEDGE_HOME_PREFIX);
         path.push(C8Y_CONFIG_FILENAME);
+        path.push(TEDGE_HOME_PREFIX);
 
         if !Path::new(&path).exists() {
             return Err(ConnectError::ConfigurationExists);
@@ -232,7 +239,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error("Systemd is not available on the system, it is required to use this command.")]
-    SystemdUnavailable,
+    SystemdNotAvailable,
 
     #[error("Mosquitto is not available on the system, it is required to use this command.")]
     MosquittoNotAvailable,
@@ -279,19 +286,14 @@ impl Config {
     ///  - key_path (path to device private key)
     // Look at error type, maybe parseerror
     fn generate_bridge_config(self) -> Result<BridgeConf, ConnectError> {
-        let mut bridge = BridgeConf::default();
-
-        bridge.bridge_cafile = String::from(ROOT_CERT_NAME);
-
         match self {
-            Config::C8y(config) => {
-                bridge.address = config.url.to_owned();
-                bridge.bridge_certfile = config.cert_path.to_owned();
-                bridge.bridge_keyfile = config.key_path.to_owned();
-            }
+            Config::C8y(config) => Ok(BridgeConf {
+                address: config.url.into(),
+                bridge_certfile: config.cert_path.into(),
+                bridge_keyfile: config.key_path.into(),
+                ..BridgeConf::default()
+            }),
         }
-
-        Ok(bridge)
     }
 }
 
@@ -341,7 +343,7 @@ impl C8yConfig {
 /// try_private false
 /// start_type automatic
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 struct BridgeConf {
     connection: String,
     address: String,
@@ -352,6 +354,47 @@ struct BridgeConf {
     try_private: bool,
     start_type: String,
     topics: Vec<String>,
+}
+impl BridgeConf {
+    fn new() -> Self {
+        BridgeConf {
+            connection: "edge_to_c8y".into(),
+            address: "".into(),
+            bridge_cafile: "".into(),
+            remote_clientid: "".into(),
+            bridge_certfile: "".into(),
+            bridge_keyfile: "".into(),
+            try_private: false,
+            start_type: "automatic".into(),
+            topics: vec![
+                // Registration
+                r#"s/dcr in 2 c8y/ """#.into(),
+                r#"s/ucr out 2 c8y/ """#.into(),
+                // Templates
+                r#"s/dt in 2 c8y/ """#.into(),
+                r#"s/ut/# out 2 c8y/ """#.into(),
+                // Static templates
+                r#"s/us out 2 c8y/ """#.into(),
+                r#"t/us out 2 c8y/ """#.into(),
+                r#"q/us out 2 c8y/ """#.into(),
+                r#"c/us out 2 c8y/ """#.into(),
+                r#"s/ds in 2 c8y/ """#.into(),
+                r#"s/os in 2 c8y/ """#.into(),
+                // Debug
+                r#"s/e in 0 c8y/ """#.into(),
+                // SmartRest2
+                r#"s/uc/# out 2 c8y/ """#.into(),
+                r#"t/uc/# out 2 c8y/ """#.into(),
+                r#"q/uc/# out 2 c8y/ """#.into(),
+                r#"c/uc/# out 2 c8y/ """#.into(),
+                r#"s/dc/# in 2 c8y/ """#.into(),
+                r#"s/oc/# in 2 c8y/ """#.into(),
+                // c8y JSON
+                r#"measurement/measurements/create out 2 c8y/ """#.into(),
+                r#"error in 2 c8y/ """#.into(),
+            ],
+        }
+    }
 }
 
 impl Default for BridgeConf {
@@ -430,7 +473,7 @@ mod tests {
     fn create_config_file() {}
 
     #[test]
-    fn config_c8y_create() {
+    fn config_c8y_create_default() {
         let expected = Config::C8y(C8yConfig {
             url: "mqtt.latest.stage.c8y.io:8883".into(),
             cert_path: "tedge-certificate.pem".into(),
@@ -444,6 +487,7 @@ mod tests {
     fn config_c8y_validate_ok() {
         let cert_file = NamedTempFile::new().unwrap();
         let cert_path = cert_file.path().to_str().unwrap().to_owned();
+        // let cert_path = cert_file.path().to_str().unwrap().to_owned();
 
         let key_file = NamedTempFile::new().unwrap();
         let key_path = key_file.path().to_str().unwrap().to_owned();
@@ -497,22 +541,53 @@ mod tests {
         assert!(config.validate().is_err());
     }
 
-    // #[test]
-    // fn bridge_config_c8y_create() {
-    //     let mut bridge = BridgeConf::default();
+    #[test]
+    fn bridge_config_c8y_create() {
+        let mut bridge = BridgeConf::default();
 
-    //     bridge.bridge_cafile = String::from("./test_root.pem");
-    //     bridge.address = String::from("test.test.io:8883");
-    //     bridge.bridge_certfile = String::from("./test-certificate.pem");
-    //     bridge.bridge_keyfile = String::from("./test-private-key.pem");
+        bridge.bridge_cafile = "./test_root.pem".into();
+        bridge.address = "test.test.io:8883".into();
+        bridge.bridge_certfile = "./test-certificate.pem".into();
+        bridge.bridge_keyfile = "./test-private-key.pem".into();
 
-    //     let expected = BridgeConf {
-    //         bridge_cafile: "./test_root.pem".into(),
-    //         address: "test.test.io:8883".into(),
-    //         bridge_certfile: "./test-certificate.pem".into(),
-    //         bridge_keyfile: "./test-private-key.pem".into(),
-    //     };
+        let expected = BridgeConf {
+            bridge_cafile: "./test_root.pem".into(),
+            address: "test.test.io:8883".into(),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            connection: "edge_to_c8y".into(),
+            remote_clientid: "".into(),
+            try_private: false,
+            start_type: "automatic".into(),
+            topics: vec![
+                // Registration
+                r#"s/dcr in 2 c8y/ """#.into(),
+                r#"s/ucr out 2 c8y/ """#.into(),
+                // Templates
+                r#"s/dt in 2 c8y/ """#.into(),
+                r#"s/ut/# out 2 c8y/ """#.into(),
+                // Static templates
+                r#"s/us out 2 c8y/ """#.into(),
+                r#"t/us out 2 c8y/ """#.into(),
+                r#"q/us out 2 c8y/ """#.into(),
+                r#"c/us out 2 c8y/ """#.into(),
+                r#"s/ds in 2 c8y/ """#.into(),
+                r#"s/os in 2 c8y/ """#.into(),
+                // Debug
+                r#"s/e in 0 c8y/ """#.into(),
+                // SmartRest2
+                r#"s/uc/# out 2 c8y/ """#.into(),
+                r#"t/uc/# out 2 c8y/ """#.into(),
+                r#"q/uc/# out 2 c8y/ """#.into(),
+                r#"c/uc/# out 2 c8y/ """#.into(),
+                r#"s/dc/# in 2 c8y/ """#.into(),
+                r#"s/oc/# in 2 c8y/ """#.into(),
+                // c8y JSON
+                r#"measurement/measurements/create out 2 c8y/ """#.into(),
+                r#"error in 2 c8y/ """#.into(),
+            ],
+        };
 
-    //     assert_eq!(bridge.to_string(), expected.to_string());
-    // }
+        assert_eq!(bridge, expected);
+    }
 }
