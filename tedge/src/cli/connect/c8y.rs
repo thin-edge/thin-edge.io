@@ -202,7 +202,6 @@ impl Connect {
     fn generate_bridge_config(&self, config: &Config) -> Result<BridgeConf, ConnectError> {
         let mut bridge = BridgeConf::default();
 
-        // let bridge_cafile = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?;
         bridge.bridge_cafile = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?
             .into_os_string()
             .into_string()
@@ -246,14 +245,14 @@ pub enum ConnectError {
     #[error("Bridge connection has not been established, check configuration and try again.")]
     BridgeConnectionFailed,
 
-    #[error("Couldn't load certificate, please provide valid certificate.")]
+    #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
     Certificate,
 
-    #[error("Connection cannot be established as config already exists.")]
+    #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
     ConfigurationExists,
 
     #[error("Couldn't load configuration, please provide valid configuration.")]
-    InvalidConfigurationError(#[from] std::io::Error),
+    InvalidConfiguration(#[from] std::io::Error),
 
     #[error("MQTT Server is not available on the system, it is required to use this command.")]
     MosquittoNotAvailable,
@@ -269,10 +268,12 @@ pub enum ConnectError {
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Systemctl failed.")]
+    #[error(
+        "Systemctl failed. This command requires elevated permissions, please run it with sudo."
+    )]
     SystemctlFailed,
 
-    #[error("Systemd is not available on the system, it is required to use this command.")]
+    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
     SystemdNotAvailable,
 
     #[error("Provided endpoint url is not valid, please provide valid url.")]
@@ -327,15 +328,15 @@ struct C8yConfig {
 impl Default for C8yConfig {
     fn default() -> Self {
         let cert_path = utils::build_path_from_home(&[DEVICE_CERT_NAME])
-            .unwrap()
+            .unwrap_or("".into())
             .into_os_string()
             .into_string()
-            .unwrap();
+            .unwrap_or("".into());
         let key_path = utils::build_path_from_home(&[DEVICE_KEY_NAME])
-            .unwrap()
+            .unwrap_or("".into())
             .into_os_string()
             .into_string()
-            .unwrap();
+            .unwrap_or("".into());
         C8yConfig {
             url: C8Y_MQTT_URL.into(),
             cert_path,
