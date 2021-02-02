@@ -33,7 +33,8 @@ then
     exit 1
 fi
 
-C8Y_CERT=$PWD/c8y-trusted-root-certificates.pem
+DIR=$(dirname $0)
+C8Y_CERT=$DIR/c8y-trusted-root-certificates.pem
 LOG=stdout
 DATA=/tmp
 

@@ -34,7 +34,7 @@ HASH=$(echo -n "$TENANT/$USER:$PASSWORD" | base64)
 
 ### Upload request
 
-CERT=$(cat $CERT_PATH | tr -d '\n')
+CERT=$(sed 's/\r//g' $CERT_PATH | tr -d '\n')
 DATA=$(cat <<EOF
 { "name": "$DEVICE",
   "certInPemFormat":"$CERT",
