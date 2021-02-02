@@ -101,7 +101,11 @@ impl Connect {
         }
 
         if on_error {
-            let path = utils::build_path_from_home(&[TEDGE_HOME_PREFIX, C8Y_CONFIG_FILENAME])?;
+            let path = utils::build_path_from_home(&[
+                TEDGE_HOME_PREFIX,
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                C8Y_CONFIG_FILENAME,
+            ])?;
             let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         }
 
