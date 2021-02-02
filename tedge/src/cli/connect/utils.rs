@@ -1,9 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    process::ExitStatus,
+};
 
 use super::c8y::ConnectError;
 
 type ExitCode = i32;
 
+const MOSQUITTOCMD_IS_ACTIVE: ExitCode = 130;
 const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
 const SYSTEMCTL_ENABLE_SUCCESS: ExitCode = 0;
 const SYSTEMCTL_RESTART_SUCCESS: ExitCode = 0;
@@ -62,28 +66,20 @@ impl SystemCtlParam {
     }
 }
 
+/// Check if systemd and mosquitto are available on the system.
 pub fn all_services_available() -> Result<(), ConnectError> {
-    // This is just quick and naive way to check if systemd is available,
-    // we should most likely find a better way to perform this check.
-    systemd_available()?;
-
-    // Check mosquitto exists on the system
-    mosquitto_available()?;
-
-    // Check mosquitto is available through systemd
-    // Theoretically we could just do a big boom and run just this command as it will error on following:
-    //  - systemd not available
-    //  - mosquitto not installed as a service
-    // That for instance would be sufficient and would return an error anyway, but I prefer to do it gently with separate checks.
-    mosquitto_available_as_service()?;
-
-    // Check mosquitto is running
-    mosquitto_is_active_daemon()?;
-    Ok(())
+    systemd_available()
+        .and_then(|()| mosquitto_available())
+        .and_then(|()| mosquitto_available_as_service())
+        .and_then(|()| mosquitto_is_active_daemon())
 }
 
 // Path util functions
-pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, ConnectError> {
+pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, ConnectError> {
+    build_path_from_home_as_path(paths).and_then(pathbuf_to_string)
+}
+
+fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, ConnectError> {
     let home_dir = home_dir().ok_or(ConnectError::ConfigurationExists)?;
 
     let mut final_path: PathBuf = PathBuf::from(home_dir);
@@ -91,6 +87,13 @@ pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, Conn
         final_path.push(path);
     }
     Ok(final_path)
+}
+
+fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, ConnectError> {
+    pathbuf
+        .into_os_string()
+        .into_string()
+        .map_err(|_os_string| ConnectError::BridgeConnectionFailed)
 }
 
 // This isn't complete way to retrieve HOME dir from the user.
@@ -105,37 +108,69 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 // Commands util functions
-fn cmd_nullstdio_args(command: &str, args: &[&str], expected_code: i32) -> bool {
-    std::process::Command::new(command)
+fn cmd_nullstdio_args(
+    command: &str,
+    args: &[&str],
+    expected_code: i32,
+) -> Result<bool, ConnectError> {
+    Ok(std::process::Command::new(command)
         .args(args)
+        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .ok()
-        .map(|status| status.code() == Some(expected_code))
-        .unwrap_or(false)
+        .map_or_else(
+            |err| Err(err),
+            |status| Ok(status.code() == Some(expected_code)),
+        )?)
+}
+
+fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ConnectError> {
+    Ok(std::process::Command::new(command)
+        .args(args)
+        // .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()?)
 }
 
 fn mosquitto_available() -> Result<(), ConnectError> {
-    mosquitto_cmd_nullstdio(MosquittoParam::Status.as_str(), MOSQUITTOCMD_SUCCESS)
+    match cmd_nullstdio_args(
+        MosquittoCmd::Cmd.as_str(),
+        &[MosquittoParam::Status.as_str()],
+        MOSQUITTOCMD_SUCCESS,
+    ) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(ConnectError::MosquittoNotAvailable),
+        Err(err) => Err(err),
+    }
 }
 
 fn mosquitto_available_as_service() -> Result<(), ConnectError> {
-    systemctl_cmd_nullstdio(
-        SystemCtlCmd::Status.as_str(),
-        MosquittoCmd::Cmd.as_str(),
-        SYSTEMCTL_STATUS_SUCCESS,
-    )
+    match cmd_nullstdio_args_with_code(
+        SystemCtlCmd::Cmd.as_str(),
+        &[SystemCtlCmd::Status.as_str(), MosquittoCmd::Cmd.as_str()],
+    ) {
+        Ok(status) => match status.code() {
+            Some(SYSTEMCTL_STATUS_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoNotAvailableAsService),
+            _ => Err(ConnectError::UnknownReturnCode),
+        },
+        Err(err) => Err(err),
+    }
 }
 
 fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
-    systemctl_is_active_nullstdio(MosquittoCmd::Cmd.as_str(), MOSQUITTOCMD_SUCCESS)
-}
-
-fn mosquitto_cmd_nullstdio(cmd: &str, expected_code: i32) -> Result<(), ConnectError> {
-    match cmd_nullstdio_args(MosquittoCmd::Cmd.as_str(), &[cmd], expected_code) {
-        true => Ok(()),
-        false => Err(ConnectError::MosquittoNotAvailable),
+    match cmd_nullstdio_args_with_code(
+        SystemCtlCmd::Cmd.as_str(),
+        &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
+    ) {
+        Ok(status) => match status.code() {
+            Some(MOSQUITTOCMD_SUCCESS) => Ok(()),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoIsActive),
+            _ => Err(ConnectError::UnknownReturnCode),
+        },
+        Err(err) => Err(err),
     }
 }
 
@@ -145,36 +180,36 @@ fn mosquitto_cmd_nullstdio(cmd: &str, expected_code: i32) -> Result<(), ConnectE
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
 pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
-    match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_RESTART_SUCCESS) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(ConnectError::MosquittoNotAvailableAsService),
-    }
+    // match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_RESTART_SUCCESS) {
+    //     Ok(_) => Ok(()),
+    //     Err(_) => Err(ConnectError::MosquittoNotAvailableAsService),
+    // }
+
+    std::process::Command::new("/bin/sudo")
+        .args(&["systemctl", "restart", "mosquitto"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    Ok(())
+    // .ok()
+    // .map(|status| status.code() == Some(expected_code))
+    // .unwrap_or(false)
 }
 
 pub fn mosquitto_enable_daemon() -> Result<(), ConnectError> {
-    match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_ENABLE_SUCCESS) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(ConnectError::MosquittoNotEnabled),
-    }
-}
+    // match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_ENABLE_SUCCESS) {
+    //     Ok(_) => Ok(()),
+    //     Err(_) => Err(ConnectError::MosquittoNotEnabled),
+    // }
 
-fn systemctl_cmd_nullstdio(
-    cmd: &str,
-    service: &str,
-    expected_code: i32,
-) -> Result<(), ConnectError> {
-    match cmd_nullstdio_args(SystemCtlCmd::Cmd.as_str(), &[cmd, service], expected_code) {
-        true => Ok(()),
-        false => Err(ConnectError::SystemctlFailed),
-    }
-}
-
-fn systemctl_is_active_nullstdio(service: &str, expected_code: i32) -> Result<(), ConnectError> {
-    systemctl_cmd_nullstdio(SystemCtlCmd::IsActive.as_str(), service, expected_code)
-}
-
-fn systemctl_restart_nullstdio(service: &str, expected_code: i32) -> Result<(), ConnectError> {
-    systemctl_cmd_nullstdio(SystemCtlCmd::Restart.as_str(), service, expected_code)
+    std::process::Command::new("/bin/sudo")
+        .args(&["systemctl", "enable", "mosquitto"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    Ok(())
 }
 
 // How about using some crates like for example 'which'??
@@ -201,11 +236,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cmd_nullstdio_args_expected() {
-        // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
-        assert_eq!(cmd_nullstdio_args("ls", &[], 0), true);
-        assert_eq!(cmd_nullstdio_args("test-command", &[], 0), false);
+    fn build_path_from_home_multiple_arguments() {
+        let expected: &str = "/home/test/test/.test";
+        std::env::set_var("HOME", "/home/test/");
+        assert_eq!(build_path_from_home(&["test", ".test"]).unwrap(), expected);
     }
+
+    // #[test]
+    // fn cmd_nullstdio_args_expected() {
+    //     // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
+    //     assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
+    //     let expected = Err(ConnectError::InvalidConfiguration);
+    //     assert_eq!(
+    //         cmd_nullstdio_args("test-command", &[], 0).unwrap(),
+    //         expected
+    //     );
+    // }
 
     #[test]
     fn home_dir_test() {
