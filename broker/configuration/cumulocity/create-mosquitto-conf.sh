@@ -101,4 +101,7 @@ topic q/uc/# out 2 c8y/ ""
 topic c/uc/# out 2 c8y/ ""
 topic s/dc/# in 2 c8y/ ""
 topic s/oc/# in 2 c8y/ ""
+
+### JSON
+topic measurement/measurements/create out 2 c8y/ ""
 EOF

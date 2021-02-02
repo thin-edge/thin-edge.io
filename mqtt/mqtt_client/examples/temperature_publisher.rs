@@ -12,13 +12,12 @@ use rand::prelude::*;
 use std::time::Duration;
 
 const C8Y_TEMPLATE_RESTART: &str = "510";
-const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let c8y_msg = Topic::new("c8y/s/us")?;
+    let c8y_msg = Topic::new("tedge/measurements")?;
     let c8y_cmd = Topic::new("c8y/s/ds")?;
-    let c8y_err = Topic::new("c8y/s/e")?;
+    let c8y_err = Topic::new("tedge/errors")?;
 
     init_logger();
 
@@ -43,15 +42,14 @@ async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_cl
     let mut temperature: i32 = random_in_range(-10, 20);
 
     info!("Publishing temperature measurements");
-    for _ in 1..10 {
+    for _ in 1..10000 {
         let delta = random_in_range(-1, 2);
         temperature = temperature + delta;
 
-        let payload = format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, temperature);
-        debug!("{}", payload);
+        let payload = format!(r#"{{"temperature":{}}}"#, temperature);
         mqtt.publish(Message::new(&c8y_msg, payload)).await?;
 
-        Delay::new(Duration::from_millis(1000)).await;
+        Delay::new(Duration::from_millis(10)).await;
     }
 
     mqtt.disconnect().await?;
