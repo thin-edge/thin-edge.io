@@ -302,7 +302,16 @@ impl Client {
                 }
 
                 Err(err) => {
+                    let delay = match err {
+                        rumqttc::ConnectionError::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::ConnectionRefused => true,
+                        _ => false,
+                    };
+
                     send_discarding_error!(error_sender, Arc::new(err.into()));
+
+                    if delay {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
                 }
                 _ => (),
             }
