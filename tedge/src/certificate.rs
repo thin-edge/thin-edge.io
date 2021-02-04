@@ -7,6 +7,7 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::os::unix::fs::PermissionsExt;
 use structopt::StructOpt;
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
@@ -227,6 +228,10 @@ fn create_test_certificate(
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
     cert_file.sync_all()?;
+
+    let mut permissions = key_file.metadata()?.permissions();
+    permissions.set_mode(0o600);
+    key_file.set_permissions(permissions)?;
 
     {
         // Zero the private key on drop
