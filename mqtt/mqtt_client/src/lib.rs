@@ -303,7 +303,11 @@ impl Client {
 
                 Err(err) => {
                     let delay = match err {
-                        rumqttc::ConnectionError::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::ConnectionRefused => true,
+                        rumqttc::ConnectionError::Io(ref io_err)
+                            if io_err.kind() == std::io::ErrorKind::ConnectionRefused =>
+                        {
+                            true
+                        }
                         _ => false,
                     };
 
