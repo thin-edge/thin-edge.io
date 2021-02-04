@@ -29,8 +29,11 @@ pub enum ConnectError {
     #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
     ConfigurationExists,
 
-    #[error("Couldn't load configuration, please provide valid configuration.")]
-    InvalidConfiguration(#[from] std::io::Error),
+    #[error("IO Error.")]
+    StdIoError(#[from] std::io::Error),
+
+    #[error("Couldn't set MQTT Server to start on boot.")]
+    MosquittoCantPersist,
 
     #[error("MQTT Server is not available on the system, it is required to use this command.")]
     MosquittoNotAvailable,
@@ -41,21 +44,14 @@ pub enum ConnectError {
     #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
     MosquittoIsActive,
 
-    // #[error("MQTT Server is already running. To create new bridge please stop it using disconnect command.")]
-    // MosquittoIsRunning,
-    #[error("Couldn't enable MQTT Server. To create new bridge please stop it using disconnect command.")]
-    MosquittoCantEnable,
-
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
     #[error("Couldn't write configutation file, ")]
     PersistError(#[from] PersistError),
 
-    #[error(
-        "Systemctl failed. This command requires elevated permissions, please run it with sudo."
-    )]
-    SystemctlFailed,
+    #[error("Couldn't find path to 'sudo'.")]
+    SudoNotFound(#[from] which::Error),
 
     #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
     SystemdNotAvailable,
@@ -68,7 +64,11 @@ pub enum ConnectError {
 }
 
 #[derive(StructOpt, Debug)]
-pub struct Connect {}
+pub struct Connect {
+    /// Provide device id for certificate and device authentication.
+    #[structopt(long)]
+    id: String,
+}
 
 impl Command for Connect {
     fn to_string(&self) -> String {
@@ -87,18 +87,20 @@ impl Command for Connect {
 
 impl Connect {
     fn new_bridge(&self) -> Result<(), ConnectError> {
-        println!("Checking if systemd and mosquitto are available.");
+        println!("Checking if systemd and mosquitto are available.\n");
         let _ = utils::all_services_available()?;
 
-        println!("Checking if configuration for requested bridge already exists.");
+        println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.config_exists()?;
 
-        println!("Checking configuration for requested bridge.");
+        println!("Checking configuration for requested bridge.\n");
         let config = self.load_config_with_validatation()?;
 
-        println!("Creating configuration for requested bridge.");
+        println!("Creating configuration for requested bridge.\n");
         // Need to use home for now.
-        let bridge_config = BridgeConf::from_config(config)?;
+        let mut bridge_config = BridgeConf::from_config(config)?;
+        bridge_config.remote_clientid = self.id.clone();
+
         match self.write_bridge_config_to_file(&bridge_config) {
             Err(err) => {
                 self.clean_up()?;
@@ -108,7 +110,7 @@ impl Connect {
         }
 
         println!(
-            "Restarting MQTT Server, [requires elevated permission], please authorise if asked."
+            "Restarting MQTT Server, [requires elevated permission], please authorise if asked.\n"
         );
         match utils::mosquitto_restart_daemon() {
             Err(err) => {
@@ -120,7 +122,7 @@ impl Connect {
 
         const SECONDS: u64 = 5;
 
-        println!("Awaiting MQTT Server to start. This may take few seconds.");
+        println!("Awaiting MQTT Server to start. This may take few seconds.\n");
         std::thread::sleep(std::time::Duration::from_secs(SECONDS));
 
         println!("Sending packets to check connection.");
@@ -131,9 +133,8 @@ impl Connect {
             }
             _ => {}
         }
-        // }
 
-        println!("Persisting MQTT Server on reboot.");
+        println!("Persisting MQTT Server on reboot.\n");
         match utils::mosquitto_enable_daemon() {
             Err(err) => {
                 self.clean_up()?;
@@ -206,13 +207,11 @@ impl Connect {
             Ok(Ok(true)) => {
                 println!("Received message.");
             }
-            err => {
-                println!("{:?}", err);
+            _err => {
                 return Err(ConnectError::BridgeConnectionFailed);
             }
         }
 
-        println!("Successully created bridge connection!");
         Ok(())
     }
 
@@ -249,8 +248,6 @@ impl Connect {
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
-
-        println!("{}", &config_path);
 
         temp_file.persist(config_path)?;
 
@@ -290,7 +287,6 @@ impl Default for C8yConfig {
     fn default() -> Self {
         let cert_path =
             utils::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_CERT_NAME]).unwrap_or_default();
-        println!("{}", &cert_path);
 
         let key_path =
             utils::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_KEY_NAME]).unwrap_or_default();

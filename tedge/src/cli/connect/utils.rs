@@ -3,14 +3,15 @@ use std::{
     process::ExitStatus,
 };
 
+use which::which;
+
 use super::c8y::ConnectError;
 
 type ExitCode = i32;
 
 const MOSQUITTOCMD_IS_ACTIVE: ExitCode = 130;
 const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
-const SYSTEMCTL_ENABLE_SUCCESS: ExitCode = 0;
-const SYSTEMCTL_RESTART_SUCCESS: ExitCode = 0;
+const SYSTEMCTL_SUCCESS: ExitCode = 0;
 const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
 
 enum MosquittoCmd {
@@ -98,6 +99,10 @@ fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, ConnectError> {
         .map_err(|_os_string| ConnectError::BridgeConnectionFailed)
 }
 
+fn sudo_path() -> Result<PathBuf, ConnectError> {
+    Ok(which("sudo")?)
+}
+
 // This isn't complete way to retrieve HOME dir from the user.
 // We could parse passwd file to get actual home path if we can get user name.
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
@@ -130,7 +135,17 @@ fn cmd_nullstdio_args(
 fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ConnectError> {
     Ok(std::process::Command::new(command)
         .args(args)
-        // .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()?)
+}
+
+fn cmd_nullstdio_args_with_code_with_sudo(
+    command: &str,
+    args: &[&str],
+) -> Result<ExitStatus, ConnectError> {
+    Ok(std::process::Command::new(command)
+        .args(args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()?)
@@ -154,7 +169,7 @@ fn mosquitto_available_as_service() -> Result<(), ConnectError> {
         &[SystemCtlCmd::Status.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
-            Some(SYSTEMCTL_STATUS_SUCCESS) | Some(0) => Ok(()),
+            Some(SYSTEMCTL_STATUS_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoNotAvailableAsService),
             code => Err(ConnectError::UnknownReturnCode { code }),
         },
@@ -168,7 +183,7 @@ fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
         &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoIsActive),
             code => Err(ConnectError::UnknownReturnCode { code }),
         },
@@ -182,34 +197,41 @@ fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
 pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
-    std::process::Command::new("/bin/sudo")
-        .args(&[
+    let sudo = pathbuf_to_string(sudo_path()?)?;
+    match cmd_nullstdio_args_with_code_with_sudo(
+        sudo.as_str(),
+        &[
             SystemCtlCmd::Cmd.as_str(),
             SystemCtlCmd::Restart.as_str(),
             MosquittoCmd::Cmd.as_str(),
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-    Ok(())
-    // .ok()
-    // .map(|status| status.code() == Some(expected_code))
-    // .unwrap_or(false)
+        ],
+    ) {
+        Ok(status) => match status.code() {
+            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoCantPersist),
+            code => Err(ConnectError::UnknownReturnCode { code }),
+        },
+        Err(err) => Err(err),
+    }
 }
 
 pub fn mosquitto_enable_daemon() -> Result<(), ConnectError> {
-    std::process::Command::new("/bin/sudo")
-        .args(&[
+    let sudo = pathbuf_to_string(sudo_path()?)?;
+    match cmd_nullstdio_args_with_code_with_sudo(
+        sudo.as_str(),
+        &[
             SystemCtlCmd::Cmd.as_str(),
             SystemCtlCmd::Enable.as_str(),
             MosquittoCmd::Cmd.as_str(),
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-    Ok(())
+        ],
+    ) {
+        Ok(status) => match status.code() {
+            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoCantPersist),
+            code => Err(ConnectError::UnknownReturnCode { code }),
+        },
+        Err(err) => Err(err),
+    }
 }
 
 // How about using some crates like for example 'which'??
@@ -248,7 +270,7 @@ mod tests {
         assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
 
         match cmd_nullstdio_args("test-command", &[], 0) {
-            Err(ConnectError::InvalidConfiguration(_)) => assert!(true),
+            Err(_err) => assert!(true),
             _ => assert!(false, "Error should be ConnectError::InvalidConfiguration"),
         }
     }
