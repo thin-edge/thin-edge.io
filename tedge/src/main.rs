@@ -12,5 +12,5 @@ mod mqtt;
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
     opt.run()
-        .with_context(|| format!("fail to {}", opt.to_string()))
+        .with_context(|| format!("failed to {}", opt.to_string()))
 }

@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::time::Duration;
 
-use log;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
@@ -61,8 +60,8 @@ pub enum ConnectError {
     #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
     SystemdNotAvailable,
 
-    #[error("Returned error is not recognised.")]
-    UnknownReturnCode,
+    #[error("Returned error is not recognised: {code:?}.")]
+    UnknownReturnCode { code: Option<i32> },
 
     #[error("Provided endpoint url is not valid, please provide valid url.")]
     UrlParse(#[from] url::ParseError),
@@ -73,7 +72,7 @@ pub struct Connect {}
 
 impl Command for Connect {
     fn to_string(&self) -> String {
-        "Connect command creates bridge to selected provider allowing for devices to publish messages via mapper.".into()
+        "execute `tedge connect`.".into()
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
@@ -88,50 +87,53 @@ impl Command for Connect {
 
 impl Connect {
     fn new_bridge(&self) -> Result<(), ConnectError> {
-        // // println!("{:?}", utils::build_path_from_home(&["abc"]));
-        log::info!("Checking if systemd and mosquitto are available.");
+        println!("Checking if systemd and mosquitto are available.");
         let _ = utils::all_services_available()?;
-        log::debug!("Systemd and mosquitto are available.");
 
-        log::info!("Checking if configuration for requested bridge already exists.");
+        println!("Checking if configuration for requested bridge already exists.");
         let _ = self.config_exists()?;
-        log::debug!("Configuration for requested bridge already exists.");
 
-        log::info!("Checking configuration for requested bridge.");
+        println!("Checking configuration for requested bridge.");
         let config = self.load_config_with_validatation()?;
-        log::debug!("Cconfiguration for requested bridge is valid.");
 
-        log::info!("Creating configuration for requested bridge.");
+        println!("Creating configuration for requested bridge.");
         // Need to use home for now.
         let bridge_config = BridgeConf::from_config(config)?;
         match self.write_bridge_config_to_file(&bridge_config) {
             Err(err) => {
-                log::error!("{:?}", err);
                 self.clean_up()?;
                 return Err(err);
             }
             _ => {}
         }
 
+        println!(
+            "Restarting MQTT Server, [requires elevated permission], please authorise if asked."
+        );
         match utils::mosquitto_restart_daemon() {
             Err(err) => {
-                log::error!("{:?}", err);
                 self.clean_up()?;
                 return Err(err);
             }
             _ => {}
         }
 
-        // Error if cloud not available (send mqtt message to validate connection)
-        // match self.check_connection() {
-        //     Err(err) => {
-        //         log::error!("{:?}", err);
-        //         self.clean_up()?;
-        //         return Err(err);
-        //     }
-        //     _ => {}
+        const SECONDS: u64 = 5;
+
+        println!("Awaiting MQTT Server to start. This may take few seconds.");
+        std::thread::sleep(std::time::Duration::from_secs(SECONDS));
+
+        println!("Sending packets to check connection.");
+        match self.check_connection() {
+            Err(err) => {
+                self.clean_up()?;
+                return Err(err);
+            }
+            _ => {}
+        }
         // }
 
+        println!("Persisting MQTT Server on reboot.");
         match utils::mosquitto_enable_daemon() {
             Err(err) => {
                 self.clean_up()?;
@@ -140,6 +142,7 @@ impl Connect {
             _ => {}
         }
 
+        println!("Successully created bridge connection!");
         Ok(())
     }
 
@@ -184,44 +187,32 @@ impl Connect {
 
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        let _error_handle = tokio::spawn(async move {
+        let _task_handle = tokio::spawn(async move {
             while let Some(message) = template_response.next().await {
                 if std::str::from_utf8(&message.payload)
                     .unwrap_or("")
                     .contains("41,notExistingTemplateCollection")
                 {
                     let _ = sender.send(true);
-                    println!("here");
                     break;
                 }
             }
         });
 
-        self.publish_test_message(mqtt, template_pub_topic).await?;
+        mqtt.publish(Message::new(&template_pub_topic, "")).await?;
 
         let fut = timeout(Duration::from_secs(WAIT_FOR_SECONDS), receiver);
-
         match fut.await {
             Ok(Ok(true)) => {
-                log::debug!("Received message.");
+                println!("Received message.");
             }
-            _ => {
+            err => {
+                println!("{:?}", err);
                 return Err(ConnectError::BridgeConnectionFailed);
             }
         }
 
-        log::info!("Successully created bridge connection!");
-        Ok(())
-    }
-
-    async fn publish_test_message(
-        &self,
-        mqtt: Client,
-        c8y_msg: Topic,
-    ) -> Result<(), mqtt_client::Error> {
-        mqtt.publish(Message::new(&c8y_msg, "")).await?;
-        mqtt.disconnect().await?;
-
+        println!("Successully created bridge connection!");
         Ok(())
     }
 
@@ -359,7 +350,7 @@ impl Default for BridgeConf {
             connection: "edge_to_c8y".into(),
             address: "".into(),
             bridge_cafile: "".into(),
-            remote_clientid: "".into(),
+            remote_clientid: "alpha".into(),
             bridge_certfile: "".into(),
             bridge_keyfile: "".into(),
             try_private: false,
@@ -531,7 +522,7 @@ mod tests {
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             connection: "edge_to_c8y".into(),
-            remote_clientid: "".into(),
+            remote_clientid: "alpha".into(),
             try_private: false,
             start_type: "automatic".into(),
             topics: vec![

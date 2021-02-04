@@ -507,7 +507,9 @@ impl MessageStream {
             match self.receiver.recv().await {
                 Ok(message) if self.filter.accept(&message.topic) => return Some(message),
                 Ok(_) => continue,
-                Err(broadcast::error::RecvError::Closed) => return None,
+                Err(broadcast::error::RecvError::Closed) => {
+                    return None;
+                }
                 Err(broadcast::error::RecvError::Lagged(lag)) => {
                     // Forward the error to the client.
                     send_discarding_error!(

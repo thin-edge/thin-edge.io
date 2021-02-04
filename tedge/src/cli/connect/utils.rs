@@ -39,6 +39,7 @@ impl MosquittoParam {
 
 enum SystemCtlCmd {
     Cmd,
+    Enable,
     IsActive,
     Restart,
     Status,
@@ -48,6 +49,7 @@ impl SystemCtlCmd {
     fn as_str(self) -> &'static str {
         match self {
             SystemCtlCmd::Cmd => "systemctl",
+            SystemCtlCmd::Enable => "enable",
             SystemCtlCmd::IsActive => "is-active",
             SystemCtlCmd::Restart => "restart",
             SystemCtlCmd::Status => "status",
@@ -154,7 +156,7 @@ fn mosquitto_available_as_service() -> Result<(), ConnectError> {
         Ok(status) => match status.code() {
             Some(SYSTEMCTL_STATUS_SUCCESS) | Some(0) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoNotAvailableAsService),
-            _ => Err(ConnectError::UnknownReturnCode),
+            code => Err(ConnectError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
@@ -166,9 +168,9 @@ fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
         &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) => Ok(()),
+            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ConnectError::MosquittoIsActive),
-            _ => Err(ConnectError::UnknownReturnCode),
+            code => Err(ConnectError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
@@ -180,13 +182,12 @@ fn mosquitto_is_active_daemon() -> Result<(), ConnectError> {
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
 pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
-    // match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_RESTART_SUCCESS) {
-    //     Ok(_) => Ok(()),
-    //     Err(_) => Err(ConnectError::MosquittoNotAvailableAsService),
-    // }
-
     std::process::Command::new("/bin/sudo")
-        .args(&["systemctl", "restart", "mosquitto"])
+        .args(&[
+            SystemCtlCmd::Cmd.as_str(),
+            SystemCtlCmd::Restart.as_str(),
+            MosquittoCmd::Cmd.as_str(),
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -198,13 +199,12 @@ pub fn mosquitto_restart_daemon() -> Result<(), ConnectError> {
 }
 
 pub fn mosquitto_enable_daemon() -> Result<(), ConnectError> {
-    // match systemctl_restart_nullstdio(MosquittoCmd::Cmd.as_str(), SYSTEMCTL_ENABLE_SUCCESS) {
-    //     Ok(_) => Ok(()),
-    //     Err(_) => Err(ConnectError::MosquittoNotEnabled),
-    // }
-
     std::process::Command::new("/bin/sudo")
-        .args(&["systemctl", "enable", "mosquitto"])
+        .args(&[
+            SystemCtlCmd::Cmd.as_str(),
+            SystemCtlCmd::Enable.as_str(),
+            MosquittoCmd::Cmd.as_str(),
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -242,16 +242,16 @@ mod tests {
         assert_eq!(build_path_from_home(&["test", ".test"]).unwrap(), expected);
     }
 
-    // #[test]
-    // fn cmd_nullstdio_args_expected() {
-    //     // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
-    //     assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
-    //     let expected = Err(ConnectError::InvalidConfiguration);
-    //     assert_eq!(
-    //         cmd_nullstdio_args("test-command", &[], 0).unwrap(),
-    //         expected
-    //     );
-    // }
+    #[test]
+    fn cmd_nullstdio_args_expected() {
+        // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
+        assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
+
+        match cmd_nullstdio_args("test-command", &[], 0) {
+            Err(ConnectError::InvalidConfiguration(_)) => assert!(true),
+            _ => assert!(false, "Error should be ConnectError::InvalidConfiguration"),
+        }
+    }
 
     #[test]
     fn home_dir_test() {
