@@ -257,6 +257,7 @@ fn systemd_available() -> Result<(), ConnectError> {
 mod tests {
     use super::*;
 
+    #[ignore]
     #[test]
     fn build_path_from_home_multiple_arguments() {
         let expected: &str = "/home/test/test/.test";
