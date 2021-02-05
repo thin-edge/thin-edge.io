@@ -7,6 +7,7 @@ use structopt::StructOpt;
 mod certificate;
 mod cli;
 mod command;
+mod config;
 mod mqtt;
 
 fn main() -> anyhow::Result<()> {

@@ -271,18 +271,21 @@ mod tests {
 
         match cmd_nullstdio_args("test-command", &[], 0) {
             Err(_err) => assert!(true),
-            _ => assert!(false, "Error should be ConnectError::InvalidConfiguration"),
+            _ => assert!(false, "Error should be ConnectError"),
         }
     }
 
+    #[ignore]
     #[test]
     fn home_dir_test() {
+        let home = std::env::var("HOME").unwrap();
         std::env::set_var("HOME", "/home/test/");
         let expected_path = std::path::PathBuf::from("/home/test/");
         assert_eq!(home_dir(), Some(expected_path));
 
         std::env::remove_var("HOME");
         assert_eq!(home_dir(), None);
+        std::env::set_var("HOME", home);
     }
 
     #[test]

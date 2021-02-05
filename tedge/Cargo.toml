@@ -2,7 +2,13 @@
 name = "tedge"
 version = "0.1.0"
 edition = "2018"
+authors = ["Software AG <thin-edge-team@softwareag.com>"]
+license = "Apache-2.0"
 readme = "README.md"
+description = "tedge is the cli tool for thin-edge.io"
+
+[package.metadata.deb]
+depends = "mosquitto"
 
 [dependencies]
 anyhow = "1.0.38"
@@ -22,7 +28,8 @@ serde_str = "0.1.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
 thiserror = "1.0.23"
-tokio = { version = "1.1.0", features = ["rt", "signal", "io-util", "sync"] }
+tokio = { version = "1.1.1", features = ["rt", "signal", "io-util", "sync"] }
+toml = "0.5.8"
 url = "2.2.0"
 which = "4.0.2"
 x509-parser = "0.9.0"
@@ -30,6 +37,6 @@ zeroize = "1.2.0"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
+assert_matches = "1.4.0"
 pem = "0.8.2"
 predicates = "1.0.6"
-tempfile = "3.2.0"
