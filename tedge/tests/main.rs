@@ -99,6 +99,122 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn run_config_set_get_unset() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = temp_dir.path();
+        let test_home_str = temp_dir_path.to_str().unwrap();
+
+        let device_id = "test";
+
+        let mut get_device_id_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "device-id"])?;
+
+        get_device_id_cmd
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "The provided config key: device-id is not set",
+            ));
+
+        let mut set_device_id_cmd = tedge_command_with_test_home(
+            test_home_str,
+            &["config", "set", "device-id", device_id],
+        )?;
+
+        set_device_id_cmd.assert().success();
+
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(device_id));
+
+        let mut unset_device_id_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "unset", "device-id"])?;
+
+        unset_device_id_cmd.assert().success();
+
+        get_device_id_cmd
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "The provided config key: device-id is not set",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn run_config_defaults() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = temp_dir.path();
+        let test_home_str = temp_dir_path.to_str().unwrap();
+
+        let cert_path = temp_path(&temp_dir, "certificate/tedge-certificate.pem");
+        let key_path = temp_path(&temp_dir, "certificate/tedge-private-key.pem");
+
+        let mut get_device_id_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "device-id"])?;
+
+        get_device_id_cmd
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "The provided config key: device-id is not set",
+            ));
+
+        let mut get_cert_path_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "device-cert-path"])?;
+
+        get_cert_path_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(&cert_path));
+
+        let mut get_key_path_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "device-key-path"])?;
+
+        get_key_path_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(&key_path));
+
+        let mut get_c8y_url_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "c8y-url"])?;
+
+        get_c8y_url_cmd
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "The provided config key: c8y-url is not set",
+            ));
+
+        let mut get_c8y_root_cert_path_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "c8y-root-cert-path"])?;
+
+        get_c8y_root_cert_path_cmd
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "The provided config key: c8y-root-cert-path is not set",
+            ));
+
+        Ok(())
+    }
+
+    fn tedge_command_with_test_home<I, S>(
+        test_home: &str,
+        args: I,
+    ) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let mut command = tedge_command(args)?;
+        command.env("HOME", test_home);
+        Ok(command)
+    }
+
     fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
         String::from(dir.path().join(filename).to_str().unwrap())
     }

@@ -1,4 +1,5 @@
 use super::command::Command;
+use crate::config::ConfigCmd;
 use structopt::clap;
 use structopt::StructOpt;
 
@@ -29,31 +30,6 @@ impl ToString for Opt {
 impl Opt {
     pub fn run(&self) -> Result<(), anyhow::Error> {
         self.tedge_cmd.run(self.verbose)
-    }
-}
-
-#[derive(StructOpt, Debug)]
-enum ConfigCmd {
-    /// List all.
-    List,
-
-    /// Add new value (overwrite the value if the key exists).
-    Set { key: String, value: String },
-
-    /// Remove value.
-    Unset { key: String },
-
-    /// Get value.
-    Get { key: String },
-}
-
-impl Command for ConfigCmd {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
-    }
-
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        unimplemented!("{:?}", self);
     }
 }
 
