@@ -7,32 +7,45 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
-use std::path::Path;
 use structopt::StructOpt;
-use zeroize::Zeroize;
+
+const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
+const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
 
 #[derive(StructOpt, Debug)]
 pub enum CertCmd {
-    /// Create a device certificate
+    /// Create a self-signed device certificate
     Create {
         /// The device identifier
         #[structopt(long)]
         id: String,
 
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = "./tedge-certificate.pem")]
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
         cert_path: String,
 
         /// The path where the device private key will be stored
-        #[structopt(long, default_value = "./tedge-private-key.pem")]
+        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
         key_path: String,
     },
 
     /// Show the device certificate, if any
-    Show,
+    Show {
+        /// The path where the device certificate will be stored
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
+        cert_path: String,
+    },
 
     /// Remove the device certificate
-    Remove,
+    Remove {
+        /// The path of the certificate to be removed
+        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
+        cert_path: String,
+
+        /// The path of the private key to be removed
+        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
+        key_path: String,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -58,28 +71,28 @@ pub enum CertError {
     CertificateAlreadyExists { path: String },
 
     #[error(
+        r#"No certificate has been attached to that device.
+        Missing file: {path:?}
+        Run `tegde cert create` to generate a new certificate.
+    "#
+    )]
+    CertificateNotFound { path: String },
+
+    #[error(
+        r#"No private key has been attached to that device.
+        Missing file: {path:?}
+        Run `tegde cert create` to generate a new key and certificate.
+    "#
+    )]
+    KeyNotFound { path: String },
+
+    #[error(
         r#"A private key already exists and would be overwritten.
         Existing file: {path:?}
         Run `tegde cert remove` first to generate a new certificate and private key.
     "#
     )]
     KeyAlreadyExists { path: String },
-
-    #[error(
-        r#"The content of the certificate file is not of the expected x509/pem format.
-        Existing file: {path:?}
-        Run `tegde cert remove` first to generate a new certificate.
-    "#
-    )]
-    ExpectCertificate { path: String },
-
-    #[error(
-        r#"The content of the private key file is not of the expected pem format.
-        Existing file: {path:?}
-        Run `tegde cert remove` first to generate a new certificate and private key.
-    "#
-    )]
-    ExpectKey { path: String },
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
@@ -100,6 +113,7 @@ impl CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::CertificateAlreadyExists { path: path.into() },
+                std::io::ErrorKind::NotFound => CertError::CertificateNotFound { path: path.into() },
                 _ => self,
             },
             _ => self,
@@ -111,6 +125,7 @@ impl CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::KeyAlreadyExists { path: path.into() },
+                std::io::ErrorKind::NotFound => CertError::KeyNotFound { path: path.into() },
                 _ => self,
             },
             _ => self,
@@ -126,8 +141,11 @@ impl Command for CertCmd {
                 cert_path: _,
                 key_path: _,
             } => format!("create a test certificate for the device {}.", id),
-            CertCmd::Show => format!("show the device certificate"),
-            CertCmd::Remove => format!("remove the device certificate"),
+            CertCmd::Show { cert_path: _ } => format!("show the device certificate"),
+            CertCmd::Remove {
+                cert_path: _,
+                key_path: _,
+            } => format!("remove the device certificate"),
         }
     }
 
@@ -139,8 +157,11 @@ impl Command for CertCmd {
                 cert_path,
                 key_path,
             } => create_test_certificate(&config, id, cert_path, key_path)?,
-            _ => {
-                unimplemented!("{:?}", self);
+
+            CertCmd::Show { cert_path } => show_certificate(cert_path)?,
+
+            CertCmd::Remove { cert_path, key_path } => {
+                remove_certificate(cert_path, key_path)?;
             }
         }
         Ok(())
@@ -191,14 +212,44 @@ fn create_test_certificate(config: &CertConfig, id: &str, cert_path: &str, key_p
 
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
+    cert_file.sync_all()?;
 
     {
         // Zero the private key on drop
         let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
         key_file.write_all(cert_key.as_bytes())?;
+        key_file.sync_all()?;
     }
 
     Ok(())
+}
+
+fn show_certificate(cert_path: &str) -> Result<(), CertError> {
+    let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
+    let x509 = extract_certificate(&pem)?;
+    let tbs_certificate = x509.tbs_certificate;
+
+    println!("Device certificate: {}", cert_path);
+    println!("Subject: {}", tbs_certificate.subject.to_string());
+    println!("Issuer: {}", tbs_certificate.issuer.to_string());
+    println!("Valid from: {}", tbs_certificate.validity.not_before.to_rfc2822());
+    println!("Valid up to: {}", tbs_certificate.validity.not_after.to_rfc2822());
+
+    Ok(())
+}
+
+fn remove_certificate(cert_path: &str, key_path: &str) -> Result<(), CertError> {
+    std::fs::remove_file(cert_path).or_else(ok_if_not_found)?;
+    std::fs::remove_file(key_path).or_else(ok_if_not_found)?;
+
+    Ok(())
+}
+
+fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
+    }
 }
 
 const MAX_CN_SIZE: usize = 64;
@@ -215,31 +266,22 @@ fn check_identifier(id: &str) -> Result<(), CertError> {
     Ok(())
 }
 
-fn read_certificate_subject(path: &str) -> Result<Option<String>, CertError> {
-    match read_pem(path)? {
-        None => Ok(None),
-        Some(pem) => {
-            let x509 = pem.parse_x509().map_err(|err| {
-                // The x509 error is wrapped into a `nom::Err`
-                // and cannot be extracted without pattern matching on that type
-                // So one simply extract the error as a string,
-                // to avoid a dependency on the `nom` crate.
-                let x509_error_string = format!("{}", err);
-                CertError::X509Error(x509_error_string)
-            })?;
-            Ok(Some(x509.tbs_certificate.subject.to_string()))
-        }
-    }
+fn extract_certificate(pem: &x509_parser::pem::Pem) -> Result<x509_parser::certificate::X509Certificate, CertError> {
+    let x509 = pem.parse_x509().map_err(|err| {
+        // The x509 error is wrapped into a `nom::Err`
+        // and cannot be extracted without pattern matching on that type
+        // So one simply extract the error as a string,
+        // to avoid a dependency on the `nom` crate.
+        let x509_error_string = format!("{}", err);
+        CertError::X509Error(x509_error_string)
+    })?;
+    Ok(x509)
 }
 
-fn read_pem(path: &str) -> Result<Option<x509_parser::pem::Pem>, CertError> {
-    if Path::new(path).exists() {
-        let file = std::fs::File::open(path)?;
-        let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
-        Ok(Some(pem))
-    } else {
-        Ok(None)
-    }
+fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
+    let file = std::fs::File::open(path)?;
+    let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
+    Ok(pem)
 }
 
 fn create_new_file(path: &str) -> Result<File, CertError> {

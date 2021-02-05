@@ -1,7 +1,5 @@
 use env_logger::Env;
 
-use log;
-
 use mqtt_client::Client;
 
 mod mapper;

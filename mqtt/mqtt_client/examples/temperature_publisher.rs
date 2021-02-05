@@ -60,7 +60,7 @@ async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_cl
 
 fn random_in_range(low: i32, high: i32) -> i32 {
     let mut rng = thread_rng();
-    rng.gen_range(low, high)
+    rng.gen_range(low..high)
 }
 
 async fn listen_command(mut messages: MessageStream) {
