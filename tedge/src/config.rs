@@ -1,22 +1,90 @@
+use crate::command::Command;
 use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
 const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_CERT_DIR: &str = "certificate";
-const DEVICE_CERT_FILE: &str = "tedge-private-key.pem";
-const DEVICE_KEY_FILE: &str = "tedge-certificate.pem";
+const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
+const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
 const DEVICE_ID: &str = "device-id";
-const DEVICE_CERT_PATH: &str = "device-cert";
-const DEVICE_KEY_PATH: &str = "device-key";
+const DEVICE_CERT_PATH: &str = "device-cert-path";
+const DEVICE_KEY_PATH: &str = "device-key-path";
 
 const C8Y_URL: &str = "c8y-url";
 const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
+
+#[derive(StructOpt, Debug)]
+pub enum ConfigCmd {
+    /// Set or update the provided configuration key with the given value
+    Set {
+        /// Configuration key.
+        key: String,
+
+        /// Configuration value.
+        value: String,
+    },
+
+    /// Unset the provided configuration key
+    Unset {
+        /// Configuration key.
+        key: String,
+    },
+
+    /// Get the value of the provided configuration key
+    Get {
+        /// Configuration key.
+        key: String,
+    },
+}
+
+impl Command for ConfigCmd {
+    fn to_string(&self) -> String {
+        match self {
+            ConfigCmd::Set { key, value } => {
+                format!("set the configuration key: {} with value: {}.", key, value)
+            }
+            ConfigCmd::Get { key } => format!("get the configuration value for key: {}", key),
+            ConfigCmd::Unset { key } => format!("unset the configuration value for key: {}", key),
+        }
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let mut config = TEdgeConfig::from_default_config()?;
+        let mut config_updated = false;
+
+        match self {
+            ConfigCmd::Get { key } => {
+                let value =
+                    config
+                        .get_config_value(key.as_str())?
+                        .ok_or(ConfigError::ConfigNotSet {
+                            key: key.as_str().to_string(),
+                        })?;
+                println!("{}", value)
+            }
+            ConfigCmd::Set { key, value } => {
+                config.set_config_value(key.as_str(), value.to_string())?;
+                config_updated = true;
+            }
+            ConfigCmd::Unset { key } => {
+                config.unset_config_value(key.as_str())?;
+                config_updated = true;
+            }
+        }
+
+        if config_updated {
+            config.write_to_default_config()?;
+        }
+        Ok(())
+    }
+}
 
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -109,6 +177,9 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
+
+    #[error("The provided config key: {key} is not set")]
+    ConfigNotSet { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
@@ -200,7 +271,6 @@ impl TEdgeConfig {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use tempfile::*;
 
     #[test]
     fn test_parse_config_with_all_values() {
@@ -376,43 +446,6 @@ hello="tedge"
             ConfigError::TOMLParseError(_),
             "Expected the parsing to fail with TOMLParseError"
         );
-    }
-
-    #[ignore]
-    #[test]
-    fn test_parse_default_tedge_conf_non_existent() {
-        let temp_dir = tempdir().unwrap();
-        let temp_dir_path = temp_dir.path();
-        let test_home_str = temp_dir_path.to_str().unwrap();
-        std::env::set_var("HOME", test_home_str);
-
-        assert!(!tedge_config_path().unwrap().exists());
-        let mut config = TEdgeConfig::from_default_config().unwrap();
-
-        assert!(config.device.id.is_none());
-        assert!(config.c8y.url.is_none());
-        assert_eq!(
-            config.device.cert_path.clone().unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
-        );
-
-        let updated_device_id = "XYZ1234";
-        let updated_tenant_url = "other-tenant.cumulocity.com";
-
-        config.device.id = Some(updated_device_id.to_string());
-        config.c8y.url = Some(updated_tenant_url.to_string());
-
-        config.write_to_default_config().unwrap();
-        assert!(tedge_config_path().unwrap().exists());
-
-        assert_eq!(config.device.id.as_ref().unwrap(), updated_device_id);
-        assert_eq!(
-            config.device.cert_path.clone().unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
-        );
-
-        assert_eq!(config.c8y.url.as_ref().unwrap(), updated_tenant_url);
-        assert!(config.c8y.root_cert_path.is_none());
     }
 
     #[test]
