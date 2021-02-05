@@ -2,6 +2,8 @@ use super::command::Command;
 use structopt::clap;
 use structopt::StructOpt;
 
+mod connect;
+
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = clap::crate_name!(),
@@ -18,16 +20,16 @@ pub struct Opt {
     tedge_cmd: TEdgeCmd,
 }
 
-#[derive(StructOpt, Debug)]
-enum TEdgeCmd {
-    /// Configure Thin Edge.
-    Config(ConfigCmd),
+impl ToString for Opt {
+    fn to_string(&self) -> String {
+        self.tedge_cmd.to_string()
+    }
+}
 
-    /// Create and manage device certificate
-    Cert(super::certificate::CertCmd),
-
-    /// Publish a message on a topic and subscribe a topic.
-    Mqtt(super::mqtt::MqttCmd),
+impl Opt {
+    pub fn run(&self) -> Result<(), anyhow::Error> {
+        self.tedge_cmd.run(self.verbose)
+    }
 }
 
 #[derive(StructOpt, Debug)]
@@ -45,16 +47,29 @@ enum ConfigCmd {
     Get { key: String },
 }
 
-impl ToString for Opt {
+impl Command for ConfigCmd {
     fn to_string(&self) -> String {
-        self.tedge_cmd.to_string()
+        format!("{:?}", self)
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        unimplemented!("{:?}", self);
     }
 }
 
-impl Opt {
-    pub fn run(&self) -> Result<(), anyhow::Error> {
-        self.tedge_cmd.run(self.verbose)
-    }
+#[derive(StructOpt, Debug)]
+enum TEdgeCmd {
+    /// Create and manage device certificate
+    Cert(super::certificate::CertCmd),
+
+    /// Configure Thin Edge.
+    Config(ConfigCmd),
+
+    /// Connect to connector provider
+    Connect(connect::ConnectCmd),
+
+    /// Publish a message on a topic and subscribe a topic.
+    Mqtt(super::mqtt::MqttCmd),
 }
 
 impl TEdgeCmd {
@@ -62,6 +77,7 @@ impl TEdgeCmd {
         match self {
             TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Cert(ref cmd) => cmd,
+            TEdgeCmd::Connect(ref cmd) => cmd,
             TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
     }
@@ -74,15 +90,5 @@ impl Command for TEdgeCmd {
 
     fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
         self.sub_command().run(verbose)
-    }
-}
-
-impl Command for ConfigCmd {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
-    }
-
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        unimplemented!("{:?}", self);
     }
 }
