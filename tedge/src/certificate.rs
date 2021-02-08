@@ -229,15 +229,19 @@ fn create_test_certificate(
     cert_file.write_all(cert_pem.as_bytes())?;
     cert_file.sync_all()?;
 
-    let mut permissions = key_file.metadata()?.permissions();
-    permissions.set_mode(0o600);
-    key_file.set_permissions(permissions)?;
+    let mut cert_perm = cert_file.metadata()?.permissions();
+    cert_perm.set_mode(0o444);
+    cert_file.set_permissions(cert_perm)?;
 
     {
         // Zero the private key on drop
         let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
         key_file.write_all(cert_key.as_bytes())?;
         key_file.sync_all()?;
+
+        let mut key_perm = key_file.metadata()?.permissions();
+        key_perm.set_mode(0o400);
+        key_file.set_permissions(key_perm)?;
     }
 
     Ok(())
