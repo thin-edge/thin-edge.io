@@ -26,13 +26,13 @@ pub enum ConnectError {
     #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
     Certificate,
 
-    #[error("")]
+    #[error("An error occured in configuration.")]
     Configuration(#[from] ConfigError),
 
     #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
     ConfigurationExists,
 
-    #[error("Required configuration item is not provided [{item}], run 'tedge config set {item}' to add it to your config.")]
+    #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
     MissingRequiredConfigurationItem { item: String },
 
     #[error("Couldn't set MQTT Server to start on boot.")]
@@ -337,12 +337,6 @@ impl Default for C8yConfig {
 
 impl C8yConfig {
     fn new() -> Result<C8yConfig, ConnectError> {
-        let bridge_config = C8yConfig::from_tedge_config()?;
-
-        Ok(bridge_config)
-    }
-
-    fn from_tedge_config() -> Result<C8yConfig, ConnectError> {
         let config = TEdgeConfig::from_default_config()?;
         let address = get_config_value(&config, C8Y_URL)?;
 
