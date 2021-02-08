@@ -1,6 +1,6 @@
 use env_logger::Env;
 
-use mqtt_client::Client;
+use client::Client;
 
 mod mapper;
 
@@ -8,12 +8,12 @@ const DEFAULT_LOG_LEVEL: &str = "warn";
 const APP_NAME: &str = "tedge-mapper";
 
 #[tokio::main]
-async fn main() -> Result<(), mqtt_client::Error> {
+async fn main() -> Result<(), client::Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOG_LEVEL)).init();
 
     log::info!("tedge-mapper starting!");
 
-    let config = mqtt_client::Config::default();
+    let config = client::Config::default();
     let mqtt = Client::connect(APP_NAME, &config).await?;
 
     let mapper = mapper::Mapper::new_from_string(

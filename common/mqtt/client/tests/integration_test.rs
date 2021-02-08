@@ -1,4 +1,4 @@
-use mqtt_client::{Config, Message, Topic};
+use client::{Config, Message, Topic};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -7,7 +7,7 @@ use tokio::time::sleep;
 // Requires fix for access to service on Internet which is not available in gh actions.
 // Proposed to use mock server instead of using live service on the Internet.
 fn sending_and_receiving_a_message() {
-    async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::Error> {
+    async fn scenario(payload: String) -> Result<Option<Message>, client::Error> {
         let test_broker = Config::new("test.mosquitto.org", 1883);
 
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;

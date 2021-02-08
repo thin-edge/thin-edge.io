@@ -1,7 +1,7 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
-//! use mqtt_client::{Config,Message,Topic};
+//! use client::{Config,Message,Topic};
 //!
 //! #[tokio::main]
 //! async fn main (){
@@ -26,7 +26,7 @@ use tokio::sync::{broadcast, oneshot};
 /// The host and port are implied: a connection can only be open on the localhost, port 1883.
 ///
 /// ```no_run
-/// use mqtt_client::{Config,Message,Topic};
+/// use client::{Config,Message,Topic};
 ///
 /// #[tokio::main]
 /// async fn main () {
@@ -82,7 +82,7 @@ impl Client {
     /// will be resent on its re-connection.
     ///
     /// ```no_run
-    /// use mqtt_client::{Config,Client,Topic};
+    /// use client::{Config,Client,Topic};
     ///
     /// #[tokio::main]
     /// async fn main () {
@@ -177,7 +177,7 @@ impl Client {
     /// ```no_run
     /// #[tokio::main]
     /// async fn main() {
-    ///     use mqtt_client::*;
+    ///     use client::*;
     ///     let topic = Topic::new("c8y/s/us").unwrap();
     ///     let mqtt = Config::default().connect("temperature").await.unwrap();
     ///     let ack = mqtt.publish_with_ack(Message::new(&topic, "211,23")).await.unwrap();

@@ -1,8 +1,8 @@
-use c8y_json_translator::CumulocityJson;
+use c8y_translator_lib::CumulocityJson;
 
 use log;
 
-use mqtt_client;
+use client;
 
 use tokio::task::JoinHandle;
 
@@ -11,32 +11,32 @@ pub const C8Y_TOPIC_C8Y_JSON: &str = "c8y/measurement/measurements/create";
 pub const ERRORS_TOPIC: &str = "tedge/errors";
 
 pub struct Mapper {
-    client: mqtt_client::Client,
-    in_topic: mqtt_client::Topic,
-    out_topic: mqtt_client::Topic,
-    err_topic: mqtt_client::Topic,
+    client: client::Client,
+    in_topic: client::Topic,
+    out_topic: client::Topic,
+    err_topic: client::Topic,
 }
 
 impl Mapper {
     pub fn new_from_string(
-        client: mqtt_client::Client,
+        client: client::Client,
         in_topic: &str,
         out_topic: &str,
         err_topic: &str,
-    ) -> Result<Self, mqtt_client::Error> {
+    ) -> Result<Self, client::Error> {
         Ok(Self::new(
             client,
-            mqtt_client::Topic::new(in_topic)?,
-            mqtt_client::Topic::new(out_topic)?,
-            mqtt_client::Topic::new(err_topic)?,
+            client::Topic::new(in_topic)?,
+            client::Topic::new(out_topic)?,
+            client::Topic::new(err_topic)?,
         ))
     }
 
     fn new(
-        client: mqtt_client::Client,
-        in_topic: mqtt_client::Topic,
-        out_topic: mqtt_client::Topic,
-        err_topic: mqtt_client::Topic,
+        client: client::Client,
+        in_topic: client::Topic,
+        out_topic: client::Topic,
+        err_topic: client::Topic,
     ) -> Self {
         Self {
             client,
@@ -55,20 +55,20 @@ impl Mapper {
         })
     }
 
-    async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
+    async fn subscribe_messages(&self) -> Result<(), client::Error> {
         let mut messages = self.client.subscribe(self.in_topic.filter()).await?;
         while let Some(message) = messages.next().await {
             log::debug!("Mapping {:?}", message);
             match Mapper::map(&message.payload) {
                 Ok(mapped) => {
                     self.client
-                        .publish(mqtt_client::Message::new(&self.out_topic, mapped))
+                        .publish(client::Message::new(&self.out_topic, mapped))
                         .await?;
                 }
                 Err(error) => {
                     log::debug!("Mapping error: {}", error);
                     self.client
-                        .publish(mqtt_client::Message::new(
+                        .publish(client::Message::new(
                             &self.err_topic,
                             error.to_string(),
                         ))
@@ -78,17 +78,17 @@ impl Mapper {
         }
         Ok(())
     }
-    pub async fn run(self) -> Result<(), mqtt_client::Error> {
+    pub async fn run(self) -> Result<(), client::Error> {
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
         errors_handle
             .await
-            .map_err(|_| mqtt_client::Error::JoinError)?;
+            .map_err(|_| client::Error::JoinError)?;
         Ok(())
     }
 
-    fn map(input: &[u8]) -> Result<Vec<u8>, c8y_json_translator::ThinEdgeJsonError> {
+    fn map(input: &[u8]) -> Result<Vec<u8>, c8y_translator_lib::ThinEdgeJsonError> {
         CumulocityJson::from_thin_edge_json(input)
     }
 }

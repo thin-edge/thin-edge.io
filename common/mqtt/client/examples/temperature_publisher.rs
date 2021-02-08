@@ -4,10 +4,10 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_client::Config;
-use mqtt_client::Message;
-use mqtt_client::Topic;
-use mqtt_client::{Client, ErrorStream, MessageStream};
+use client::Config;
+use client::Message;
+use client::Topic;
+use client::{Client, ErrorStream, MessageStream};
 use rand::prelude::*;
 use std::time::Duration;
 
@@ -39,7 +39,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), mqtt_client::Error> {
+async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), client::Error> {
     let mut temperature: i32 = random_in_range(-10, 20);
 
     info!("Publishing temperature measurements");

@@ -8,7 +8,7 @@ use url::Url;
 
 use super::utils;
 use crate::command::Command;
-use mqtt_client::{Client, Message, Topic};
+use client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const C8Y_MQTT_URL: &str = "mqtt.latest.stage.c8y.io:8883";
@@ -45,7 +45,7 @@ pub enum ConnectError {
     MosquittoIsActive,
 
     #[error("MQTT client failed.")]
-    MqttClient(#[from] mqtt_client::Error),
+    MqttClient(#[from] client::Error),
 
     #[error("Couldn't write configutation file, ")]
     PersistError(#[from] PersistError),
@@ -183,7 +183,7 @@ impl Connect {
         let template_pub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_UPSTREAM)?;
         let template_sub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_DOWNSTREAM)?;
 
-        let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+        let mqtt = Client::connect(CLIENT_ID, &client::Config::default()).await?;
         let mut template_response = mqtt.subscribe(template_sub_topic.filter()).await?;
 
         let (sender, receiver) = tokio::sync::oneshot::channel();

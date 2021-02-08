@@ -1,4 +1,4 @@
-use c8y_json_translator::CumulocityJson;
+use c8y_translator_lib::CumulocityJson;
 
 fn single_value_translation() {
     let single_value_thin_edge_json = r#"  {
