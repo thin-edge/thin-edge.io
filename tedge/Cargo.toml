@@ -19,7 +19,7 @@ futures = "0.3.12"
 futures-timer = "3.0.2"
 json = "0.12.4"
 log = "0.4.14"
-mqtt_client = {version = "0.1.0", path = "../mqtt/mqtt_client"}
+mqtt_client = {version = "0.1.0", path = "../common/mqtt/mqtt-client" }
 rand = "0.8.3"
 rcgen = { version = "0.8.9", features = ["pem"] }
 rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
