@@ -13,12 +13,12 @@ const DEVICE_CERT_DIR: &str = "certificate";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-const DEVICE_ID: &str = "device-id";
-const DEVICE_CERT_PATH: &str = "device-cert-path";
-const DEVICE_KEY_PATH: &str = "device-key-path";
+pub const DEVICE_ID: &str = "device-id";
+pub const DEVICE_CERT_PATH: &str = "device-cert-path";
+pub const DEVICE_KEY_PATH: &str = "device-key-path";
 
-const C8Y_URL: &str = "c8y-url";
-const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
+pub const C8Y_URL: &str = "c8y-url";
+pub const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
 
 #[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
