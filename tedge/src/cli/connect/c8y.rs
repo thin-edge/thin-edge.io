@@ -93,6 +93,7 @@ impl Connect {
         println!("Creating configuration for requested bridge.\n");
         let config = self.load_config()?;
 
+        println!("Saving configuration for requested bridge.\n");
         match self.write_bridge_config_to_file(&config) {
             Err(err) => {
                 self.clean_up()?;
@@ -420,30 +421,30 @@ mod tests {
     #[test]
     fn config_c8y_create_default() {
         let home = std::env::var("HOME").unwrap();
-        let cert_path = format!("{}/.tedge/tedge-certificate.pem", home);
-        let key_path = format!("{}/.tedge/tedge-private-key.pem", home);
+        let bridge_certfile = format!("{}/.tedge/tedge-certificate.pem", home);
+        let bridge_keyfile = format!("{}/.tedge/tedge-private-key.pem", home);
         let expected = Config::C8y(C8yConfig {
-            url: "mqtt.latest.stage.c8y.io:8883".into(),
-            cert_path,
-            key_path,
-            bridge_config: BridgeConf::default(),
+            address: "mqtt.latest.stage.c8y.io:8883".into(),
+            bridge_certfile,
+            bridge_keyfile,
+            ..C8yConfig::default()
         });
-        assert_eq!(Config::new_c8y(), expected);
+        assert_eq!(Config::new_c8y().unwrap(), expected);
     }
 
     #[test]
     fn config_c8y_validate_ok() {
         let cert_file = NamedTempFile::new().unwrap();
-        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+        let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
 
         let key_file = NamedTempFile::new().unwrap();
-        let key_path = key_file.path().to_str().unwrap().to_owned();
+        let bridge_keyfile = key_file.path().to_str().unwrap().to_owned();
 
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path,
-            key_path,
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_certfile,
+            bridge_keyfile,
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_ok());
@@ -452,10 +453,10 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_url() {
         let config = Config::C8y(C8yConfig {
-            url: INCORRECT_URL.into(),
-            cert_path: INCORRECT_PATH.into(),
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: INCORRECT_URL.into(),
+            bridge_certfile: INCORRECT_PATH.into(),
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -464,10 +465,10 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_cert_path() {
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path: INCORRECT_PATH.into(),
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_certfile: INCORRECT_PATH.into(),
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -476,13 +477,13 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_key_path() {
         let cert_file = NamedTempFile::new().unwrap();
-        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+        let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
 
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path,
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_certfile,
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -490,14 +491,14 @@ mod tests {
 
     #[test]
     fn bridge_config_c8y_create() {
-        let mut bridge = BridgeConf::default();
+        let mut bridge = C8yConfig::default();
 
         bridge.bridge_cafile = "./test_root.pem".into();
         bridge.address = "test.test.io:8883".into();
         bridge.bridge_certfile = "./test-certificate.pem".into();
         bridge.bridge_keyfile = "./test-private-key.pem".into();
 
-        let expected = BridgeConf {
+        let expected = C8yConfig {
             bridge_cafile: "./test_root.pem".into(),
             address: "test.test.io:8883".into(),
             bridge_certfile: "./test-certificate.pem".into(),
