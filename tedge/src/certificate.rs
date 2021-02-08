@@ -220,8 +220,13 @@ fn create_test_certificate(
 ) -> Result<(), CertError> {
     check_identifier(id)?;
 
+    // Creating files with permission 644
     let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
     let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
+
+    let mut key_perm = key_file.metadata()?.permissions();
+    key_perm.set_mode(0o600);
+    key_file.set_permissions(key_perm)?;
 
     let cert = new_selfsigned_certificate(&config, id)?;
 
@@ -239,7 +244,7 @@ fn create_test_certificate(
         key_file.write_all(cert_key.as_bytes())?;
         key_file.sync_all()?;
 
-        let mut key_perm = key_file.metadata()?.permissions();
+        key_perm = key_file.metadata()?.permissions();
         key_perm.set_mode(0o400);
         key_file.set_permissions(key_perm)?;
     }
