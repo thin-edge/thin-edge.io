@@ -19,7 +19,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Bridge connection has not been established, check configuration and try again.")]
+    #[error("Bridge is configured, please check Cumulocity connection.")]
     BridgeConnectionFailed,
 
     #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
@@ -28,37 +28,39 @@ pub enum ConnectError {
     #[error("An error occurred in configuration.")]
     Configuration(#[from] ConfigError),
 
-    #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
+    #[error("Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.")]
     ConfigurationExists,
 
     #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
     MissingRequiredConfigurationItem { item: String },
 
-    #[error("Couldn't set MQTT Server to start on boot.")]
+    #[error("Couldn't set mosquitto server to start on boot.")]
     MosquittoCantPersist,
 
-    #[error("MQTT Server is not available on the system, it is required to use this command.")]
+    #[error("mosquitto is not installed on the system. Install mosquitto to use this command.")]
     MosquittoNotAvailable,
 
-    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
+    #[error("mosquitto is installed but the related systemd service is missing.")]
     MosquittoNotAvailableAsService,
 
-    #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
+    #[error("Stop mosquitto service before you use this command. (systemctl stop mosquitto).")]
     MosquittoIsActive,
 
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Couldn't write configuration file, ")]
+    #[error("Couldn't write configuration file, check permissions.")]
     PersistError(#[from] PersistError),
 
-    #[error("IO Error.")]
+    #[error("IO Error. Check permissions for <file>")]
     StdIoError(#[from] std::io::Error),
 
     #[error("Couldn't find path to 'sudo'.")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
+    #[error(
+        "Systemd is not available on the system or elevated permissions have not been granted."
+    )]
     SystemdNotAvailable,
 
     #[error("Returned error is not recognised: {code:?}.")]
