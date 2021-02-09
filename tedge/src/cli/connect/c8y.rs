@@ -10,13 +10,12 @@ use super::utils;
 use crate::command::Command;
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-    DEVICE_KEY_PATH,
+    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
-const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
@@ -149,7 +148,7 @@ impl Connect {
         }
 
         let path = utils::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
@@ -210,7 +209,7 @@ impl Connect {
 
     fn config_exists(&self) -> Result<(), ConnectError> {
         let path = utils::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
@@ -232,14 +231,13 @@ impl Connect {
             Config::C8y(c8y) => c8y.serialize(&mut temp_file)?,
         }
 
-        let dir_path =
-            utils::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+        let dir_path = utils::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = std::fs::create_dir_all(dir_path)?;
 
         let config_path = utils::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
@@ -415,10 +413,12 @@ mod tests {
     #[test]
     fn config_c8y_create_default() {
         let home = std::env::var("HOME").unwrap();
+        let bridge_cafile = format!("{}/.tedge/c8y-trusted-root-certificates.pem", home);
         let bridge_certfile = format!("{}/.tedge/tedge-certificate.pem", home);
         let bridge_keyfile = format!("{}/.tedge/tedge-private-key.pem", home);
         let expected = Config::C8y(C8yConfig {
             address: "mqtt.latest.stage.c8y.io:8883".into(),
+            bridge_cafile,
             bridge_certfile,
             bridge_keyfile,
             ..C8yConfig::default()
@@ -428,6 +428,9 @@ mod tests {
 
     #[test]
     fn config_c8y_validate_ok() {
+        let ca_file = NamedTempFile::new().unwrap();
+        let bridge_cafile = ca_file.path().to_str().unwrap().to_owned();
+
         let cert_file = NamedTempFile::new().unwrap();
         let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
 
@@ -436,6 +439,7 @@ mod tests {
 
         let config = Config::C8y(C8yConfig {
             address: CORRECT_URL.into(),
+            bridge_cafile,
             bridge_certfile,
             bridge_keyfile,
             ..C8yConfig::default()
