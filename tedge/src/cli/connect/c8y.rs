@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use url::Url;
 
 use crate::command::Command;
-use crate::utils::{files, services};
+use crate::utils::{files, services, UtilsError};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
@@ -45,7 +45,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error("Util failed.")]
-    UtilsError(#[from] crate::utils::UtilsError),
+    UtilsError(#[from] UtilsError),
 }
 
 #[derive(StructOpt, Debug)]
@@ -97,10 +97,11 @@ impl Connect {
         println!(
             "Restarting MQTT Server, [requires elevated permission], please authorise if asked.\n"
         );
+
         match services::mosquitto_restart_daemon() {
             Err(err) => {
                 self.clean_up()?;
-                return Err(ConnectError::UtilsError(err));
+                return Err(err.into());
             }
             _ => {}
         }
@@ -123,7 +124,7 @@ impl Connect {
         match services::mosquitto_enable_daemon() {
             Err(err) => {
                 self.clean_up()?;
-                return Err(ConnectError::UtilsError(err));
+                return Err(err.into());
             }
             _ => {}
         }
