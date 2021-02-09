@@ -47,18 +47,24 @@ pub struct CumulocityJson {
 }
 
 impl ThinEdgeJson {
-    pub fn from_utf8(input: &[u8]) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
+    pub fn from_utf8(
+        input: &[u8],
+        timestamp: DateTime<Utc>,
+    ) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let json_string = std::str::from_utf8(input)?;
         match json::parse(&json_string) {
-            Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj),
+            Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj, timestamp),
             Err(err) => Err(ThinEdgeJsonError::InvalidJson(err)),
         }
     }
 
     ///Confirms that the json is in thin-edge json format or not
-    fn from_json(input: json::JsonValue) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
+    fn from_json(
+        input: json::JsonValue,
+        timestamp: DateTime<Utc>,
+    ) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         let mut measurements = vec![];
-        let mut timestamp = Utc::now().to_rfc3339();
+        let mut timestamp = timestamp.to_rfc3339();
         match &input {
             JsonValue::Object(thin_edge_obj) => {
                 for (k, v) in thin_edge_obj.iter() {
@@ -180,7 +186,18 @@ impl CumulocityJson {
 
     ///Convert from thinedgejson to c8y_json
     pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
-        let measurements = ThinEdgeJson::from_utf8(input)?;
+        //let measurements = ThinEdgeJson::from_utf8(input)?;
+        Ok(Self::from_thin_edge_json_with_time_stamp(
+            input,
+            Utc::now(),
+        )?)
+    }
+
+    fn from_thin_edge_json_with_time_stamp(
+        input: &[u8],
+        time_stamp: DateTime<Utc>,
+    ) -> Result<Vec<u8>, ThinEdgeJsonError> {
+        let measurements = ThinEdgeJson::from_utf8(input, time_stamp)?;
         let mut c8y_object = CumulocityJson::new(&measurements.time_stamp, "ThinEdgeMeasurement");
         for v in measurements.values.iter() {
             match v {
@@ -313,23 +330,18 @@ mod tests {
             body_of_message
         );
 
-        let output = CumulocityJson::from_thin_edge_json(
+        let output = CumulocityJson::from_thin_edge_json_with_time_stamp(
             &String::from(single_value_thin_edge_json).into_bytes(),
+            utc_time_now,
         );
-        match output {
-            Ok(vec) => {
-                assert_ne!(
-                    expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
-                );
-            }
-            Err(e) => {
-                eprintln!("Error is {}", e);
-            }
-        }
+        let vec = output.unwrap();
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            String::from_utf8(vec)
+                .unwrap()
+                .split_whitespace()
+                .collect::<String>()
+        );
     }
 
     #[test]
@@ -376,7 +388,7 @@ mod tests {
 
     #[test]
     fn check_multi_value_translation() {
-        let local_time_now: DateTime<Utc> = Utc::now();
+        let utc_time_now: DateTime<Utc> = Utc::now();
         let type_string = "{\"type\": \"ThinEdgeMeasurement\",";
 
         let input = r#"{
@@ -417,24 +429,21 @@ mod tests {
         let expected_output = format!(
             "{} \"time\":\"{}\",{}",
             type_string,
-            local_time_now.to_rfc3339(),
+            utc_time_now.to_rfc3339(),
             body_of_message
         );
-        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
-        match output {
-            Ok(vec) => {
-                assert_ne!(
-                    expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
-                );
-            }
-            Err(e) => {
-                eprintln!("Error is {}", e);
-            }
-        }
+        let output = CumulocityJson::from_thin_edge_json_with_time_stamp(
+            &String::from(input).into_bytes(),
+            utc_time_now,
+        );
+        let vec = output.unwrap();
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            String::from_utf8(vec)
+                .unwrap()
+                .split_whitespace()
+                .collect::<String>()
+        );
     }
 
     #[test]
