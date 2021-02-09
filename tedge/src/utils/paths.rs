@@ -6,7 +6,7 @@ use std::{
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
     #[error("Path conversion to String failed: {path:?}.")]
-    PathBufToStringFailed { path: OsString },
+    PathToStringFailed { path: OsString },
 
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
@@ -20,7 +20,7 @@ pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
     pathbuf
         .into_os_string()
         .into_string()
-        .map_err(|os_string| PathsError::PathBufToStringFailed { path: os_string })
+        .map_err(|os_string| PathsError::PathToStringFailed { path: os_string })
 }
 
 fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, PathsError> {

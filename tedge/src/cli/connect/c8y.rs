@@ -47,7 +47,7 @@ enum ConnectError {
     #[error("Provided endpoint url is not valid, please provide valid url.")]
     UrlParse(#[from] url::ParseError),
 
-    #[error("Util failed.")]
+    #[error("Service execution failed.")]
     ServicesError(#[from] services::ServicesError),
 }
 
