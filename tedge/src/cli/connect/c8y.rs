@@ -26,7 +26,7 @@ pub enum ConnectError {
     #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
     Certificate,
 
-    #[error("An error occured in configuration.")]
+    #[error("An error occurred in configuration.")]
     Configuration(#[from] ConfigError),
 
     #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
@@ -50,7 +50,7 @@ pub enum ConnectError {
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Couldn't write configutation file, ")]
+    #[error("Couldn't write configuration file, ")]
     PersistError(#[from] PersistError),
 
     #[error("IO Error.")]
@@ -136,7 +136,7 @@ impl Connect {
             _ => {}
         }
 
-        println!("Successully created bridge connection!");
+        println!("Successfully created bridge connection!");
         Ok(())
     }
 
@@ -158,7 +158,7 @@ impl Connect {
         Ok(())
     }
 
-    // We are going to use c8y templates over mqtt to check if connectiom has been open.
+    // We are going to use c8y templates over mqtt to check if connection has been open.
     // Empty payload publish to s/ut/existingTemplateCollection
     // 20,existingTemplateCollection,<ID of collection>
     //
@@ -235,7 +235,7 @@ impl Connect {
         let dir_path =
             utils::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
-        // This will forcefully create directory structure if doessn't exist, we should find better way to do it, maybe config should deal with it?
+        // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = std::fs::create_dir_all(dir_path)?;
 
         let config_path = utils::build_path_from_home(&[
@@ -283,7 +283,7 @@ struct C8yConfig {
     topics: Vec<String>,
 }
 
-/// Mosquitto config parameters required for C8Y bridge to be estabilished:
+/// Mosquitto config parameters required for C8Y bridge to be established:
 /// # C8Y Bridge
 /// connection edge_to_c8y
 /// address mqtt.$C8Y_URL:8883
