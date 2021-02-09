@@ -1,7 +1,7 @@
 use super::command::Command;
 use futures::future::FutureExt;
 use futures::select;
-use client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
 use tokio::signal::unix::{signal, SignalKind};
@@ -36,7 +36,7 @@ pub enum MqttCmd {
 #[derive(thiserror::Error, Debug)]
 pub enum MqttError {
     #[error("Client error")]
-    ConnectError(#[from] client::Error),
+    ConnectError(#[from] mqtt_client::Error),
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
@@ -149,7 +149,7 @@ mod tests {
     use crate::mqtt::parse_qos;
     use assert_cmd::prelude::*;
     use assert_cmd::Command;
-    use client::QoS;
+    use mqtt_client::QoS;
     use predicates::prelude::*;
 
     // These test cases fail because there is no mosquitto on localhost on GH hosted machine.
