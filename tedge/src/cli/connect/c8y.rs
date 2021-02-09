@@ -136,7 +136,7 @@ impl Connect {
         }
 
         println!("Saving configuration.");
-        self.set_c8y_config()?;
+        self.save_c8y_config()?;
 
         println!("Successfully created bridge connection!");
         Ok(())
@@ -218,10 +218,10 @@ impl Connect {
     }
 
     fn load_config(&self) -> Result<Config, ConnectError> {
-        Config::new_c8y()?.validate()
+        Config::try_new_c8y()?.validate()
     }
 
-    fn set_c8y_config(&self) -> Result<(), ConnectError> {
+    fn save_c8y_config(&self) -> Result<(), ConnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
         TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "true".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)
@@ -256,8 +256,8 @@ enum Config {
 }
 
 impl Config {
-    fn new_c8y() -> Result<Config, ConnectError> {
-        Ok(Config::C8y(C8yConfig::new()?))
+    fn try_new_c8y() -> Result<Config, ConnectError> {
+        Ok(Config::C8y(C8yConfig::try_new()?))
     }
 
     fn validate(self) -> Result<Config, ConnectError> {
@@ -336,7 +336,7 @@ impl Default for C8yConfig {
 }
 
 impl C8yConfig {
-    fn new() -> Result<C8yConfig, ConnectError> {
+    fn try_new() -> Result<C8yConfig, ConnectError> {
         let config = TEdgeConfig::from_default_config()?;
         let address = get_config_value(&config, C8Y_URL)?;
 
