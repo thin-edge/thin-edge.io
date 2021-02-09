@@ -7,6 +7,7 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::os::unix::fs::PermissionsExt;
 use structopt::StructOpt;
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
@@ -219,8 +220,13 @@ fn create_test_certificate(
 ) -> Result<(), CertError> {
     check_identifier(id)?;
 
+    // Creating files with permission 644
     let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
     let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
+
+    let mut key_perm = key_file.metadata()?.permissions();
+    key_perm.set_mode(0o600);
+    key_file.set_permissions(key_perm)?;
 
     let cert = new_selfsigned_certificate(&config, id)?;
 
@@ -228,11 +234,19 @@ fn create_test_certificate(
     cert_file.write_all(cert_pem.as_bytes())?;
     cert_file.sync_all()?;
 
+    let mut cert_perm = cert_file.metadata()?.permissions();
+    cert_perm.set_mode(0o444);
+    cert_file.set_permissions(cert_perm)?;
+
     {
         // Zero the private key on drop
         let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
         key_file.write_all(cert_key.as_bytes())?;
         key_file.sync_all()?;
+
+        key_perm = key_file.metadata()?.permissions();
+        key_perm.set_mode(0o400);
+        key_file.set_permissions(key_perm)?;
     }
 
     Ok(())

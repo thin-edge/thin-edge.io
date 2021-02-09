@@ -1,4 +1,4 @@
-use c8y_json_translator::CumulocityJson;
+use c8y_translator_lib::CumulocityJson;
 
 use log;
 
@@ -88,7 +88,7 @@ impl Mapper {
         Ok(())
     }
 
-    fn map(input: &[u8]) -> Result<Vec<u8>, c8y_json_translator::ThinEdgeJsonError> {
+    fn map(input: &[u8]) -> Result<Vec<u8>, c8y_translator_lib::ThinEdgeJsonError> {
         CumulocityJson::from_thin_edge_json(input)
     }
 }
