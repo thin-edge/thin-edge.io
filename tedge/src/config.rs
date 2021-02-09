@@ -13,13 +13,6 @@ const DEVICE_CERT_DIR: &str = "certificate";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-const DEVICE_ID: &str = "device-id";
-const DEVICE_CERT_PATH: &str = "device-cert-path";
-const DEVICE_KEY_PATH: &str = "device-key-path";
-
-const C8Y_URL: &str = "c8y-url";
-const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
-
 #[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
@@ -93,6 +86,57 @@ pub struct TEdgeConfig {
     pub device: DeviceConfig,
     #[serde(default)]
     pub c8y: CumulocityConfig,
+}
+
+///
+/// This macros create `_get_config_value`, `_set_config_value`, `is_valid_key` and `valid_keys` functions.
+///
+macro_rules! config_keys {
+    ($ty:ty { $( $str:literal => $( $key:ident ).* ),* }) => {
+        impl $ty {
+            fn _get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
+                match key {
+                    $( $str => Ok(self . $( $key ).* .clone()), )*
+                    _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
+                }
+            }
+
+            fn _set_config_value(&mut self, key: &str, value: Option<String>) -> Result<(), ConfigError> {
+                match key {
+                    $(
+                        $str => {
+                            self . $( $key ).* = value;
+                            Ok(())
+                        }
+                     )*
+                     _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
+                }
+            }
+
+            fn is_valid_key(key: &str) -> bool {
+                match key {
+                    $( $str => true, )*
+                    _ => false,
+                }
+            }
+
+            fn valid_keys() -> Vec<&'static str> {
+                vec![
+                    $( $str , )*
+                ]
+            }
+        }
+    }
+}
+
+config_keys! {
+    TEdgeConfig {
+        "device-id"          => device.id,
+        "device-key-path"    => device.key_path,
+        "device-cert-path"   => device.cert_path,
+        "c8y-url"            => c8y.url,
+        "c8y-root-cert-path" => c8y.root_cert_path
+    }
 }
 
 impl TEdgeConfig {
@@ -236,34 +280,15 @@ impl TEdgeConfig {
     }
 
     pub fn get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
-        match key {
-            DEVICE_ID => Ok(self.device.id.clone()),
-            DEVICE_KEY_PATH => Ok(self.device.key_path.clone()),
-            DEVICE_CERT_PATH => Ok(self.device.cert_path.clone()),
-            C8Y_URL => Ok(self.c8y.url.clone()),
-            C8Y_ROOT_CERT_PATH => Ok(self.c8y.root_cert_path.clone()),
-            _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
-        }
+        self._get_config_value(key)
     }
 
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
-        self.update_config_value(key, Some(value))
+        self._set_config_value(key, Some(value))
     }
 
     pub fn unset_config_value(&mut self, key: &str) -> Result<(), ConfigError> {
-        self.update_config_value(key, None)
-    }
-
-    fn update_config_value(&mut self, key: &str, value: Option<String>) -> Result<(), ConfigError> {
-        match key {
-            DEVICE_ID => self.device.id = value,
-            DEVICE_KEY_PATH => self.device.key_path = value,
-            DEVICE_CERT_PATH => self.device.cert_path = value,
-            C8Y_URL => self.c8y.url = value,
-            C8Y_ROOT_CERT_PATH => self.c8y.root_cert_path = value,
-            _ => return Err(ConfigError::InvalidConfigKey { key: key.into() }),
-        };
-        Ok(())
+        self._set_config_value(key, None)
     }
 }
 
@@ -271,6 +296,19 @@ impl TEdgeConfig {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+
+    const DEVICE_ID: &str = "device-id";
+    const DEVICE_CERT_PATH: &str = "device-cert-path";
+    const DEVICE_KEY_PATH: &str = "device-key-path";
+
+    const C8Y_URL: &str = "c8y-url";
+    const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
+
+    #[test]
+    fn test_macro_creates_valid_keys_correctly() {
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), true);
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), false);
+    }
 
     #[test]
     fn test_parse_config_with_all_values() {
