@@ -140,19 +140,12 @@ impl Connect {
     }
 
     fn clean_up(&self) -> Result<(), ConnectError> {
-        fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
-            match err.kind() {
-                std::io::ErrorKind::NotFound => Ok(()),
-                _ => Err(err),
-            }
-        }
-
         let path = utils::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
-        let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+        let _ = std::fs::remove_file(&path).or_else(utils::ok_if_not_found)?;
 
         Ok(())
     }
@@ -406,25 +399,6 @@ mod tests {
     const CORRECT_URL: &str = "http://test.com";
     const INCORRECT_URL: &str = "noturl";
     const INCORRECT_PATH: &str = "/path";
-
-    #[test]
-    fn create_config_file() {}
-
-    #[test]
-    fn config_c8y_create_default() {
-        let home = std::env::var("HOME").unwrap();
-        let bridge_cafile = format!("{}/.tedge/c8y-trusted-root-certificates.pem", home);
-        let bridge_certfile = format!("{}/.tedge/tedge-certificate.pem", home);
-        let bridge_keyfile = format!("{}/.tedge/tedge-private-key.pem", home);
-        let expected = Config::C8y(C8yConfig {
-            address: "mqtt.latest.stage.c8y.io:8883".into(),
-            bridge_cafile,
-            bridge_certfile,
-            bridge_keyfile,
-            ..C8yConfig::default()
-        });
-        assert_eq!(Config::new_c8y().unwrap(), expected);
-    }
 
     #[test]
     fn config_c8y_validate_ok() {
