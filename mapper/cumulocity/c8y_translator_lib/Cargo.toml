@@ -1,5 +1,5 @@
 [package]
-name = "c8y_json_translator"
+name = "c8y_translator_lib"
 version = "0.1.0"
 edition = "2018"
 

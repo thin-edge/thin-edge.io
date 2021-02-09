@@ -1,10 +1,10 @@
 [workspace]
 
 members = [
-    "mqtt/mqtt_client",
+    "common/mqtt_client",
     "tedge",
-    "tedge-mapper",
-    "translator/c8y_json_translator",
+    "mapper/cumulocity/c8y_mapper",
+    "mapper/cumulocity/c8y_translator_lib",
 ]
 
 [profile.release]

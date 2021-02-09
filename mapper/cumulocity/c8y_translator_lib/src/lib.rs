@@ -2,7 +2,7 @@
 //! Takes thin_edge_json bytes and returns c8y json bytes
 //!
 //! ```
-//! use c8y_json_translator::CumulocityJson;
+//! use c8y_translator_lib::CumulocityJson;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,

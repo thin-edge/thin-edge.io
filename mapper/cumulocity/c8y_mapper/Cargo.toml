@@ -1,0 +1,12 @@
+[package]
+name = "c8y_mapper"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+c8y_translator_lib = {version = "0.1.0", path = "../c8y_translator_lib" }
+chrono = "0.4.19"
+env_logger = "0.8.2"
+log = "0.4.14"
+mqtt_client = {version = "0.1.0", path = "../../../common/mqtt_client" }
+tokio = { version = "1.1.0", features = ["full"] }
