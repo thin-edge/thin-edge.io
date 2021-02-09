@@ -3,7 +3,7 @@ use crate::config::ConfigCmd;
 use structopt::clap;
 use structopt::StructOpt;
 
-pub mod connect;
+mod connect;
 
 #[derive(StructOpt, Debug)]
 #[structopt(

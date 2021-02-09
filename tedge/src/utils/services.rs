@@ -1,7 +1,37 @@
 use std::process::ExitStatus;
+use which::which;
 
-use super::files;
-use super::UtilsError;
+use super::paths;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ServicesError {
+    #[error("Couldn't set MQTT Server to start on boot.")]
+    MosquittoCantPersist,
+
+    #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
+    MosquittoIsActive,
+
+    #[error("MQTT Server is not available on the system, it is required to use this command.")]
+    MosquittoNotAvailable,
+
+    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
+    MosquittoNotAvailableAsService,
+
+    #[error("Path Error: {0}")]
+    PathsError(#[from] paths::PathsError),
+
+    #[error("IO Error.")]
+    StdIoError(#[from] std::io::Error),
+
+    #[error("Couldn't find path to 'sudo'.")]
+    SudoNotFound(#[from] which::Error),
+
+    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
+    SystemdNotAvailable,
+
+    #[error("Returned error is not recognised: {code:?}.")]
+    UnknownReturnCode { code: Option<i32> },
+}
 
 type ExitCode = i32;
 
@@ -11,7 +41,7 @@ const SYSTEMCTL_SUCCESS: ExitCode = 0;
 const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
 
 /// Check if systemd and mosquitto are available on the system.
-pub fn all_services_available() -> Result<(), UtilsError> {
+pub fn all_services_available() -> Result<(), ServicesError> {
     systemd_available()
         .and_then(|()| mosquitto_available())
         .and_then(|()| mosquitto_available_as_service())
@@ -23,8 +53,8 @@ pub fn all_services_available() -> Result<(), UtilsError> {
 // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
-pub fn mosquitto_restart_daemon() -> Result<(), UtilsError> {
-    let sudo = files::pathbuf_to_string(files::sudo_path()?)?;
+pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
+    let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     match cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
         &[
@@ -35,15 +65,15 @@ pub fn mosquitto_restart_daemon() -> Result<(), UtilsError> {
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(UtilsError::MosquittoCantPersist),
-            code => Err(UtilsError::UnknownReturnCode { code }),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
+            code => Err(ServicesError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
 }
 
-pub fn mosquitto_enable_daemon() -> Result<(), UtilsError> {
-    let sudo = files::pathbuf_to_string(files::sudo_path()?)?;
+pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
+    let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     match cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
         &[
@@ -54,8 +84,8 @@ pub fn mosquitto_enable_daemon() -> Result<(), UtilsError> {
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(UtilsError::MosquittoCantPersist),
-            code => Err(UtilsError::UnknownReturnCode { code }),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
+            code => Err(ServicesError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
@@ -65,7 +95,7 @@ fn cmd_nullstdio_args(
     command: &str,
     args: &[&str],
     expected_code: i32,
-) -> Result<bool, UtilsError> {
+) -> Result<bool, ServicesError> {
     Ok(std::process::Command::new(command)
         .args(args)
         .stdin(std::process::Stdio::piped())
@@ -78,7 +108,7 @@ fn cmd_nullstdio_args(
         )?)
 }
 
-fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, UtilsError> {
+fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ServicesError> {
     Ok(std::process::Command::new(command)
         .args(args)
         .stdout(std::process::Stdio::null())
@@ -89,7 +119,7 @@ fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStat
 fn cmd_nullstdio_args_with_code_with_sudo(
     command: &str,
     args: &[&str],
-) -> Result<ExitStatus, UtilsError> {
+) -> Result<ExitStatus, ServicesError> {
     Ok(std::process::Command::new(command)
         .args(args)
         .stdout(std::process::Stdio::null())
@@ -97,59 +127,59 @@ fn cmd_nullstdio_args_with_code_with_sudo(
         .status()?)
 }
 
-fn mosquitto_available() -> Result<(), UtilsError> {
+fn mosquitto_available() -> Result<(), ServicesError> {
     match cmd_nullstdio_args(
         MosquittoCmd::Cmd.as_str(),
         &[MosquittoParam::Status.as_str()],
         MOSQUITTOCMD_SUCCESS,
     ) {
         Ok(true) => Ok(()),
-        Ok(false) => Err(UtilsError::MosquittoNotAvailable),
+        Ok(false) => Err(ServicesError::MosquittoNotAvailable),
         Err(err) => Err(err),
     }
 }
 
-fn mosquitto_available_as_service() -> Result<(), UtilsError> {
+fn mosquitto_available_as_service() -> Result<(), ServicesError> {
     match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::Status.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
             Some(SYSTEMCTL_STATUS_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(UtilsError::MosquittoNotAvailableAsService),
-            code => Err(UtilsError::UnknownReturnCode { code }),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
+            code => Err(ServicesError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
 }
 
-fn mosquitto_is_active_daemon() -> Result<(), UtilsError> {
+fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
     match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(UtilsError::MosquittoIsActive),
-            code => Err(UtilsError::UnknownReturnCode { code }),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
+            code => Err(ServicesError::UnknownReturnCode { code }),
         },
         Err(err) => Err(err),
     }
 }
 
-fn systemd_available() -> Result<(), UtilsError> {
+fn systemd_available() -> Result<(), ServicesError> {
     std::process::Command::new(SystemCtlCmd::Cmd.as_str())
         .arg(SystemCtlParam::Version.as_str())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .map_or_else(
-            |_error| Err(UtilsError::SystemdNotAvailable),
+            |_error| Err(ServicesError::SystemdNotAvailable),
             |status| {
                 if status.success() {
                     Ok(())
                 } else {
-                    Err(UtilsError::SystemdNotAvailable)
+                    Err(ServicesError::SystemdNotAvailable)
                 }
             },
         )

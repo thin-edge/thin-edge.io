@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use url::Url;
 
 use crate::command::Command;
-use crate::utils::{files, services, UtilsError};
+use crate::utils::{paths, services};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
@@ -19,7 +19,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConnectError {
+enum ConnectError {
     #[error("Bridge connection has not been established, check configuration and try again.")]
     BridgeConnectionFailed,
 
@@ -35,6 +35,9 @@ pub enum ConnectError {
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
+    #[error("Path Error: {0}")]
+    PathsError(#[from] paths::PathsError),
+
     #[error("Couldn't write configutation file, ")]
     PersistError(#[from] PersistError),
 
@@ -45,7 +48,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error("Util failed.")]
-    UtilsError(#[from] UtilsError),
+    ServicesError(#[from] services::ServicesError),
 }
 
 #[derive(StructOpt, Debug)]
@@ -141,7 +144,7 @@ impl Connect {
             }
         }
 
-        let path = files::build_path_from_home(&[
+        let path = paths::build_path_from_home(&[
             TEDGE_HOME_PREFIX,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
@@ -202,7 +205,7 @@ impl Connect {
     }
 
     fn config_exists(&self) -> Result<(), ConnectError> {
-        let path = files::build_path_from_home(&[
+        let path = paths::build_path_from_home(&[
             TEDGE_HOME_PREFIX,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
@@ -224,12 +227,12 @@ impl Connect {
         let _ = config.serialize(&mut temp_file)?;
 
         let dir_path =
-            files::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if doessn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = std::fs::create_dir_all(dir_path)?;
 
-        let config_path = files::build_path_from_home(&[
+        let config_path = paths::build_path_from_home(&[
             TEDGE_HOME_PREFIX,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
@@ -272,10 +275,10 @@ struct C8yConfig {
 impl Default for C8yConfig {
     fn default() -> Self {
         let cert_path =
-            files::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_CERT_NAME]).unwrap_or_default();
+            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_CERT_NAME]).unwrap_or_default();
 
         let key_path =
-            files::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_KEY_NAME]).unwrap_or_default();
+            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_KEY_NAME]).unwrap_or_default();
 
         C8yConfig {
             url: C8Y_MQTT_URL.into(),
@@ -378,7 +381,7 @@ impl BridgeConf {
     fn from_config(config: Config) -> Result<BridgeConf, ConnectError> {
         match config {
             Config::C8y(config) => Ok(BridgeConf {
-                bridge_cafile: files::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?,
+                bridge_cafile: paths::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?,
                 address: config.url.into(),
                 bridge_certfile: config.cert_path.into(),
                 bridge_keyfile: config.key_path.into(),

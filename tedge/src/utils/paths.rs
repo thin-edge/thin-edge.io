@@ -1,25 +1,30 @@
-use std::path::{Path, PathBuf};
-use which::which;
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
-use super::UtilsError;
+#[derive(thiserror::Error, Debug)]
+pub enum PathsError {
+    #[error("Path conversion to String failed: {path:?}.")]
+    PathBufToStringFailed { path: OsString },
 
-pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, UtilsError> {
+    #[error("User's Home Directory not found.")]
+    HomeDirNotFound,
+}
+
+pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
     build_path_from_home_as_path(paths).and_then(pathbuf_to_string)
 }
 
-pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, UtilsError> {
+pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
     pathbuf
         .into_os_string()
         .into_string()
-        .map_err(|_os_string| UtilsError::BridgeConnectionFailed)
+        .map_err(|os_string| PathsError::PathBufToStringFailed { path: os_string })
 }
 
-pub fn sudo_path() -> Result<PathBuf, UtilsError> {
-    Ok(which("sudo")?)
-}
-
-fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, UtilsError> {
-    let home_dir = home_dir().ok_or(UtilsError::ConfigurationExists)?;
+fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, PathsError> {
+    let home_dir = home_dir().ok_or(PathsError::HomeDirNotFound)?;
 
     let mut final_path: PathBuf = PathBuf::from(home_dir);
     for path in paths {
