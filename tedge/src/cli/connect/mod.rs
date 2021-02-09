@@ -1,8 +1,7 @@
 use crate::command::Command;
 use structopt::StructOpt;
 
-mod c8y;
-mod utils;
+pub mod c8y;
 
 #[derive(StructOpt, Debug)]
 pub enum ConnectCmd {
