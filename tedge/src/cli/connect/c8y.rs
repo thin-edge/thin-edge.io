@@ -7,16 +7,15 @@ use tokio::time::timeout;
 use url::Url;
 
 use crate::command::Command;
+use crate::config::{
+    ConfigError, TEdgeConfig, C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
+    DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
+};
 use crate::utils::{paths, services};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
-const C8Y_MQTT_URL: &str = "mqtt.latest.stage.c8y.io:8883";
-const DEVICE_CERT_NAME: &str = "tedge-certificate.pem";
-const DEVICE_KEY_NAME: &str = "tedge-private-key.pem";
-const ROOT_CERT_NAME: &str = "c8y-trusted-root-certificates.pem";
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
-const TEDGE_HOME_PREFIX: &str = ".tedge";
 
 #[derive(thiserror::Error, Debug)]
 enum ConnectError {
@@ -26,11 +25,14 @@ enum ConnectError {
     #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
     Certificate,
 
+    #[error("An error occurred in configuration.")]
+    Configuration(#[from] ConfigError),
+
     #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
     ConfigurationExists,
 
-    #[error("IO Error.")]
-    StdIoError(#[from] std::io::Error),
+    #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
+    MissingRequiredConfigurationItem { item: String },
 
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
@@ -40,6 +42,9 @@ enum ConnectError {
 
     #[error("Couldn't write configutation file, ")]
     PersistError(#[from] PersistError),
+
+    #[error("IO Error.")]
+    StdIoError(#[from] std::io::Error),
 
     #[error("Couldn't find path to 'sudo'.")]
     SudoNotFound(#[from] which::Error),
@@ -52,11 +57,7 @@ enum ConnectError {
 }
 
 #[derive(StructOpt, Debug)]
-pub struct Connect {
-    /// Provide device id for certificate and device authentication.
-    #[structopt(long)]
-    id: String,
-}
+pub struct Connect {}
 
 impl Command for Connect {
     fn to_string(&self) -> String {
@@ -64,12 +65,7 @@ impl Command for Connect {
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        // Awaiting for config story to finish to add this implementation.
-        // let config = ConnectCmd::read_configuration();
-
-        self.new_bridge()?;
-
-        Ok(())
+        Ok(self.new_bridge()?)
     }
 }
 
@@ -81,15 +77,11 @@ impl Connect {
         println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.config_exists()?;
 
-        println!("Checking configuration for requested bridge.\n");
-        let config = self.load_config_with_validatation()?;
-
         println!("Creating configuration for requested bridge.\n");
-        // Need to use home for now.
-        let mut bridge_config = BridgeConf::from_config(config)?;
-        bridge_config.remote_clientid = self.id.clone();
+        let config = self.load_config()?;
 
-        match self.write_bridge_config_to_file(&bridge_config) {
+        println!("Saving configuration for requested bridge.\n");
+        match self.write_bridge_config_to_file(&config) {
             Err(err) => {
                 self.clean_up()?;
                 return Err(err);
@@ -109,10 +101,10 @@ impl Connect {
             _ => {}
         }
 
-        const SECONDS: u64 = 5;
+        const RESTART_TIMEOUT_SECONDS: u64 = 5;
 
         println!("Awaiting MQTT Server to start. This may take few seconds.\n");
-        std::thread::sleep(std::time::Duration::from_secs(SECONDS));
+        std::thread::sleep(std::time::Duration::from_secs(RESTART_TIMEOUT_SECONDS));
 
         println!("Sending packets to check connection.");
         match self.check_connection() {
@@ -132,29 +124,25 @@ impl Connect {
             _ => {}
         }
 
-        println!("Successully created bridge connection!");
+        println!("Saving configuration.");
+        self.save_c8y_config()?;
+
+        println!("Successfully created bridge connection!");
         Ok(())
     }
 
     fn clean_up(&self) -> Result<(), ConnectError> {
-        fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
-            match err.kind() {
-                std::io::ErrorKind::NotFound => Ok(()),
-                _ => Err(err),
-            }
-        }
-
         let path = paths::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
-        let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+        let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
 
         Ok(())
     }
 
-    // We are going to use c8y templates over mqtt to check if connectiom has been open.
+    // We are going to use c8y templates over mqtt to check if connection has been open.
     // Empty payload publish to s/ut/existingTemplateCollection
     // 20,existingTemplateCollection,<ID of collection>
     //
@@ -206,7 +194,7 @@ impl Connect {
 
     fn config_exists(&self) -> Result<(), ConnectError> {
         let path = paths::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
@@ -218,22 +206,29 @@ impl Connect {
         Ok(())
     }
 
-    fn load_config_with_validatation(&self) -> Result<Config, ConnectError> {
-        Config::new_c8y().validate()
+    fn load_config(&self) -> Result<Config, ConnectError> {
+        Config::try_new_c8y()?.validate()
     }
 
-    fn write_bridge_config_to_file(&self, config: &BridgeConf) -> Result<(), ConnectError> {
+    fn save_c8y_config(&self) -> Result<(), ConnectError> {
+        let mut config = TEdgeConfig::from_default_config()?;
+        TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "true".into())?;
+        Ok(TEdgeConfig::write_to_default_config(&config)?)
+    }
+
+    fn write_bridge_config_to_file(&self, config: &Config) -> Result<(), ConnectError> {
         let mut temp_file = NamedTempFile::new()?;
-        let _ = config.serialize(&mut temp_file)?;
+        match config {
+            Config::C8y(c8y) => c8y.serialize(&mut temp_file)?,
+        }
 
-        let dir_path =
-            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+        let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
-        // This will forcefully create directory structure if doessn't exist, we should find better way to do it, maybe config should deal with it?
+        // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = std::fs::create_dir_all(dir_path)?;
 
         let config_path = paths::build_path_from_home(&[
-            TEDGE_HOME_PREFIX,
+            TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
@@ -243,15 +238,14 @@ impl Connect {
         Ok(())
     }
 }
-
 #[derive(Debug, PartialEq)]
 enum Config {
     C8y(C8yConfig),
 }
 
 impl Config {
-    fn new_c8y() -> Config {
-        Config::C8y(C8yConfig::default())
+    fn try_new_c8y() -> Result<Config, ConnectError> {
+        Ok(Config::C8y(C8yConfig::try_new()?))
     }
 
     fn validate(self) -> Result<Config, ConnectError> {
@@ -266,58 +260,6 @@ impl Config {
 
 #[derive(Debug, PartialEq)]
 struct C8yConfig {
-    url: String,
-    cert_path: String,
-    key_path: String,
-    bridge_config: BridgeConf,
-}
-
-impl Default for C8yConfig {
-    fn default() -> Self {
-        let cert_path =
-            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_CERT_NAME]).unwrap_or_default();
-
-        let key_path =
-            paths::build_path_from_home(&[TEDGE_HOME_PREFIX, DEVICE_KEY_NAME]).unwrap_or_default();
-
-        C8yConfig {
-            url: C8Y_MQTT_URL.into(),
-            cert_path,
-            key_path,
-            bridge_config: BridgeConf::default(),
-        }
-    }
-}
-
-impl C8yConfig {
-    fn validate(&self) -> Result<(), ConnectError> {
-        Url::parse(&self.url)?;
-
-        if !Path::new(&self.cert_path).exists() {
-            return Err(ConnectError::Certificate);
-        }
-
-        if !Path::new(&self.key_path).exists() {
-            return Err(ConnectError::Certificate);
-        }
-
-        Ok(())
-    }
-}
-
-/// Mosquitto config parameters required for C8Y bridge to be estabilished:
-/// # C8Y Bridge
-/// connection edge_to_c8y
-/// address mqtt.$C8Y_URL:8883
-/// bridge_cafile $C8Y_CERT
-/// remote_clientid $DEVICE_ID
-/// bridge_certfile $CERT_PATH
-/// bridge_keyfile $KEY_PATH
-/// try_private false
-/// start_type automatic
-
-#[derive(Debug, PartialEq, Eq)]
-struct BridgeConf {
     connection: String,
     address: String,
     bridge_cafile: String,
@@ -329,9 +271,19 @@ struct BridgeConf {
     topics: Vec<String>,
 }
 
-impl Default for BridgeConf {
-    fn default() -> Self {
-        BridgeConf {
+/// Mosquitto config parameters required for C8Y bridge to be established:
+/// # C8Y Bridge
+/// connection edge_to_c8y
+/// address mqtt.$C8Y_URL:8883
+/// bridge_cafile $C8Y_CERT
+/// remote_clientid $DEVICE_ID
+/// bridge_certfile $CERT_PATH
+/// bridge_keyfile $KEY_PATH
+/// try_private false
+/// start_type automatic
+impl Default for C8yConfig {
+    fn default() -> C8yConfig {
+        C8yConfig {
             connection: "edge_to_c8y".into(),
             address: "".into(),
             bridge_cafile: "".into(),
@@ -371,23 +323,26 @@ impl Default for BridgeConf {
     }
 }
 
-impl BridgeConf {
-    /// Validates provider configuration as per required parameters
-    /// E.g. c8y requires following parameters to create bridge:
-    ///  - url (endpoint url to publish messages)
-    ///  - cert_path (path to device certificate)
-    ///  - key_path (path to device private key)
-    // Look at error type, maybe parseerror
-    fn from_config(config: Config) -> Result<BridgeConf, ConnectError> {
-        match config {
-            Config::C8y(config) => Ok(BridgeConf {
-                bridge_cafile: paths::build_path_from_home(&[TEDGE_HOME_PREFIX, ROOT_CERT_NAME])?,
-                address: config.url.into(),
-                bridge_certfile: config.cert_path.into(),
-                bridge_keyfile: config.key_path.into(),
-                ..BridgeConf::default()
-            }),
-        }
+impl C8yConfig {
+    fn try_new() -> Result<C8yConfig, ConnectError> {
+        let config = TEdgeConfig::from_default_config()?;
+        let address = get_config_value(&config, C8Y_URL)?;
+
+        let remote_clientid = get_config_value(&config, DEVICE_ID)?;
+
+        let bridge_cafile = get_config_value(&config, C8Y_ROOT_CERT_PATH)?;
+        let bridge_certfile = get_config_value(&config, DEVICE_CERT_PATH)?;
+        let bridge_keyfile = get_config_value(&config, DEVICE_KEY_PATH)?;
+
+        Ok(C8yConfig {
+            connection: "edge_to_c8y".into(),
+            address,
+            bridge_cafile,
+            remote_clientid,
+            bridge_certfile,
+            bridge_keyfile,
+            ..C8yConfig::default()
+        })
     }
 
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -408,6 +363,30 @@ impl BridgeConf {
 
         Ok(())
     }
+
+    fn validate(&self) -> Result<(), ConnectError> {
+        Url::parse(&self.address)?;
+
+        if !Path::new(&self.bridge_cafile).exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        if !Path::new(&self.bridge_certfile).exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        if !Path::new(&self.bridge_keyfile).exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        Ok(())
+    }
+}
+
+fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConnectError> {
+    Ok(config
+        .get_config_value(key)?
+        .ok_or_else(|| ConnectError::MissingRequiredConfigurationItem { item: key.into() })?)
 }
 
 #[cfg(test)]
@@ -419,35 +398,22 @@ mod tests {
     const INCORRECT_PATH: &str = "/path";
 
     #[test]
-    fn create_config_file() {}
-
-    #[test]
-    fn config_c8y_create_default() {
-        let home = std::env::var("HOME").unwrap();
-        let cert_path = format!("{}/.tedge/tedge-certificate.pem", home);
-        let key_path = format!("{}/.tedge/tedge-private-key.pem", home);
-        let expected = Config::C8y(C8yConfig {
-            url: "mqtt.latest.stage.c8y.io:8883".into(),
-            cert_path,
-            key_path,
-            bridge_config: BridgeConf::default(),
-        });
-        assert_eq!(Config::new_c8y(), expected);
-    }
-
-    #[test]
     fn config_c8y_validate_ok() {
+        let ca_file = NamedTempFile::new().unwrap();
+        let bridge_cafile = ca_file.path().to_str().unwrap().to_owned();
+
         let cert_file = NamedTempFile::new().unwrap();
-        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+        let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
 
         let key_file = NamedTempFile::new().unwrap();
-        let key_path = key_file.path().to_str().unwrap().to_owned();
+        let bridge_keyfile = key_file.path().to_str().unwrap().to_owned();
 
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path,
-            key_path,
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_cafile,
+            bridge_certfile,
+            bridge_keyfile,
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_ok());
@@ -456,10 +422,10 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_url() {
         let config = Config::C8y(C8yConfig {
-            url: INCORRECT_URL.into(),
-            cert_path: INCORRECT_PATH.into(),
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: INCORRECT_URL.into(),
+            bridge_certfile: INCORRECT_PATH.into(),
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -468,10 +434,10 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_cert_path() {
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path: INCORRECT_PATH.into(),
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_certfile: INCORRECT_PATH.into(),
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -480,13 +446,13 @@ mod tests {
     #[test]
     fn config_c8y_validate_wrong_key_path() {
         let cert_file = NamedTempFile::new().unwrap();
-        let cert_path = cert_file.path().to_str().unwrap().to_owned();
+        let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
 
         let config = Config::C8y(C8yConfig {
-            url: CORRECT_URL.into(),
-            cert_path,
-            key_path: INCORRECT_PATH.into(),
-            bridge_config: BridgeConf::default(),
+            address: CORRECT_URL.into(),
+            bridge_certfile,
+            bridge_keyfile: INCORRECT_PATH.into(),
+            ..C8yConfig::default()
         });
 
         assert!(config.validate().is_err());
@@ -494,14 +460,14 @@ mod tests {
 
     #[test]
     fn bridge_config_c8y_create() {
-        let mut bridge = BridgeConf::default();
+        let mut bridge = C8yConfig::default();
 
         bridge.bridge_cafile = "./test_root.pem".into();
         bridge.address = "test.test.io:8883".into();
         bridge.bridge_certfile = "./test-certificate.pem".into();
         bridge.bridge_keyfile = "./test-private-key.pem".into();
 
-        let expected = BridgeConf {
+        let expected = C8yConfig {
             bridge_cafile: "./test_root.pem".into(),
             address: "test.test.io:8883".into(),
             bridge_certfile: "./test-certificate.pem".into(),

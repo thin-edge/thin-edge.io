@@ -91,6 +91,15 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
     }
 }
 
+// Generic util functions
+pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
+    }
+}
+
+// Commands util functions
 fn cmd_nullstdio_args(
     command: &str,
     args: &[&str],
