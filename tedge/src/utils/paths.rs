@@ -3,13 +3,24 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use tempfile::{NamedTempFile, PersistError};
+
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
+    #[error("Directory Error. Check permissions for {1}.")]
+    DirCreationFailed(#[source] std::io::Error, String),
+
+    #[error("File Error. Check permissions for {1}.")]
+    FileCreationFailed(#[source] PersistError, String),
+
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
 
     #[error("Path conversion to String failed: {path:?}.")]
     PathToStringFailed { path: OsString },
+
+    #[error("Couldn't write configuration file, check permissions.")]
+    PersistError(#[from] PersistError),
 }
 
 pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
@@ -21,6 +32,19 @@ pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
         .into_os_string()
         .into_string()
         .map_err(|os_string| PathsError::PathToStringFailed { path: os_string })
+}
+
+pub fn create_directories(dir_path: &str) -> Result<(), PathsError> {
+    std::fs::create_dir_all(&dir_path)
+        .map_err(|error| PathsError::DirCreationFailed(error, dir_path.into()))
+}
+
+pub fn persist_tempfile(file: NamedTempFile, path_to: &str) -> Result<(), PathsError> {
+    let _ = file
+        .persist(&path_to)
+        .map_err(|error| PathsError::FileCreationFailed(error, path_to.into()))?;
+
+    Ok(())
 }
 
 fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, PathsError> {

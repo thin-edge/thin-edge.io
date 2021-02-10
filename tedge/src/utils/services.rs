@@ -5,28 +5,30 @@ use super::paths;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServicesError {
-    #[error("Couldn't set MQTT Server to start on boot.")]
+    #[error("Couldn't set mosquitto server to start on boot.")]
     MosquittoCantPersist,
 
-    #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
+    #[error("Stop mosquitto service before you use this command: 'systemctl stop mosquitto'")]
     MosquittoIsActive,
 
-    #[error("MQTT Server is not available on the system, it is required to use this command.")]
+    #[error("mosquitto is not installed on the system. Install mosquitto to use this command.")]
     MosquittoNotAvailable,
 
-    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
+    #[error("mosquitto is installed but the related systemd-service is missing.")]
     MosquittoNotAvailableAsService,
 
-    #[error("Path Error: {0}")]
+    #[error(transparent)]
     PathsError(#[from] paths::PathsError),
 
-    #[error("IO Error.")]
-    StdIoError(#[from] std::io::Error),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 
-    #[error("Couldn't find path to 'sudo'.")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
+    #[error(
+        "Systemd is not available on the system or elevated permissions have not been granted."
+    )]
     SystemdNotAvailable,
 
     #[error("Returned error is not recognised: {code:?}.")]
