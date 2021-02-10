@@ -6,19 +6,19 @@ use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
 use url::Url;
 
-use super::utils;
 use crate::command::Command;
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
+use crate::utils::{paths, services};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConnectError {
+enum ConnectError {
     #[error("Bridge connection has not been established, check configuration and try again.")]
     BridgeConnectionFailed,
 
@@ -34,22 +34,13 @@ pub enum ConnectError {
     #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
     MissingRequiredConfigurationItem { item: String },
 
-    #[error("Couldn't set MQTT Server to start on boot.")]
-    MosquittoCantPersist,
-
-    #[error("MQTT Server is not available on the system, it is required to use this command.")]
-    MosquittoNotAvailable,
-
-    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
-    MosquittoNotAvailableAsService,
-
-    #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
-    MosquittoIsActive,
-
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Couldn't write configuration file, ")]
+    #[error("Path Error: {0}")]
+    PathsError(#[from] paths::PathsError),
+
+    #[error("Couldn't write configutation file, ")]
     PersistError(#[from] PersistError),
 
     #[error("IO Error.")]
@@ -58,14 +49,11 @@ pub enum ConnectError {
     #[error("Couldn't find path to 'sudo'.")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
-    SystemdNotAvailable,
-
-    #[error("Returned error is not recognised: {code:?}.")]
-    UnknownReturnCode { code: Option<i32> },
-
     #[error("Provided endpoint url is not valid, please provide valid url.")]
     UrlParse(#[from] url::ParseError),
+
+    #[error("Service execution failed.")]
+    ServicesError(#[from] services::ServicesError),
 }
 
 #[derive(StructOpt, Debug)]
@@ -84,7 +72,7 @@ impl Command for Connect {
 impl Connect {
     fn new_bridge(&self) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
-        let _ = utils::all_services_available()?;
+        let _ = services::all_services_available()?;
 
         println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.config_exists()?;
@@ -104,10 +92,11 @@ impl Connect {
         println!(
             "Restarting MQTT Server, [requires elevated permission], please authorise if asked.\n"
         );
-        match utils::mosquitto_restart_daemon() {
+
+        match services::mosquitto_restart_daemon() {
             Err(err) => {
                 self.clean_up()?;
-                return Err(err);
+                return Err(err.into());
             }
             _ => {}
         }
@@ -127,10 +116,10 @@ impl Connect {
         }
 
         println!("Persisting MQTT Server on reboot.\n");
-        match utils::mosquitto_enable_daemon() {
+        match services::mosquitto_enable_daemon() {
             Err(err) => {
                 self.clean_up()?;
-                return Err(err);
+                return Err(err.into());
             }
             _ => {}
         }
@@ -143,12 +132,12 @@ impl Connect {
     }
 
     fn clean_up(&self) -> Result<(), ConnectError> {
-        let path = utils::build_path_from_home(&[
+        let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
         ])?;
-        let _ = std::fs::remove_file(&path).or_else(utils::ok_if_not_found)?;
+        let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
 
         Ok(())
     }
@@ -204,7 +193,7 @@ impl Connect {
     }
 
     fn config_exists(&self) -> Result<(), ConnectError> {
-        let path = utils::build_path_from_home(&[
+        let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
@@ -233,12 +222,12 @@ impl Connect {
             Config::C8y(c8y) => c8y.serialize(&mut temp_file)?,
         }
 
-        let dir_path = utils::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+        let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = std::fs::create_dir_all(dir_path)?;
 
-        let config_path = utils::build_path_from_home(&[
+        let config_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             C8Y_CONFIG_FILENAME,
@@ -249,7 +238,6 @@ impl Connect {
         Ok(())
     }
 }
-
 #[derive(Debug, PartialEq)]
 enum Config {
     C8y(C8yConfig),

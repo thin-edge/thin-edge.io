@@ -9,6 +9,7 @@ mod cli;
 mod command;
 mod config;
 mod mqtt;
+mod utils;
 
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
