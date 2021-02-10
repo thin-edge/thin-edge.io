@@ -64,7 +64,7 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
         ],
     ) {
         Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => Err(ServicesError::UnknownReturnCode { code }),
         },
@@ -83,7 +83,7 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
         ],
     ) {
         Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) | Some(0) => Ok(()),
+            Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => Err(ServicesError::UnknownReturnCode { code }),
         },
