@@ -7,18 +7,19 @@ use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
-const TEDGE_HOME_DIR: &str = ".tedge";
+pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_CERT_DIR: &str = "certificate";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-const DEVICE_ID: &str = "device-id";
-const DEVICE_CERT_PATH: &str = "device-cert-path";
-const DEVICE_KEY_PATH: &str = "device-key-path";
+pub const DEVICE_ID: &str = "device-id";
+pub const DEVICE_CERT_PATH: &str = "device-cert-path";
+pub const DEVICE_KEY_PATH: &str = "device-key-path";
 
-const C8Y_URL: &str = "c8y-url";
-const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
+pub const C8Y_CONNECT: &str = "c8y-connect";
+pub const C8Y_URL: &str = "c8y-url";
+pub const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
 
 #[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
@@ -154,6 +155,7 @@ impl DeviceConfig {
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CumulocityConfig {
+    connect: Option<String>,
     url: Option<String>,
     root_cert_path: Option<String>,
 }
@@ -240,6 +242,7 @@ impl TEdgeConfig {
             DEVICE_ID => Ok(self.device.id.clone()),
             DEVICE_KEY_PATH => Ok(self.device.key_path.clone()),
             DEVICE_CERT_PATH => Ok(self.device.cert_path.clone()),
+            C8Y_CONNECT => Ok(self.c8y.connect.clone()),
             C8Y_URL => Ok(self.c8y.url.clone()),
             C8Y_ROOT_CERT_PATH => Ok(self.c8y.root_cert_path.clone()),
             _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
@@ -259,6 +262,7 @@ impl TEdgeConfig {
             DEVICE_ID => self.device.id = value,
             DEVICE_KEY_PATH => self.device.key_path = value,
             DEVICE_CERT_PATH => self.device.cert_path = value,
+            C8Y_CONNECT => self.c8y.connect = value,
             C8Y_URL => self.c8y.url = value,
             C8Y_ROOT_CERT_PATH => self.c8y.root_cert_path = value,
             _ => return Err(ConfigError::InvalidConfigKey { key: key.into() }),

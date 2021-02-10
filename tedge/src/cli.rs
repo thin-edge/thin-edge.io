@@ -51,8 +51,8 @@ enum TEdgeCmd {
 impl TEdgeCmd {
     fn sub_command(&self) -> &dyn Command {
         match self {
-            TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Cert(ref cmd) => cmd,
+            TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Connect(ref cmd) => cmd,
             TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
