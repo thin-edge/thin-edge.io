@@ -4,6 +4,7 @@ use structopt::clap;
 use structopt::StructOpt;
 
 mod connect;
+mod disconnect;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
