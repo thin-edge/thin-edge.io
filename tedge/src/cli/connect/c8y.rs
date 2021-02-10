@@ -19,7 +19,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Bridge connection has not been established, check configuration and try again.")]
+    #[error("Bridge is configured, please check Cumulocity connection.")]
     BridgeConnectionFailed,
 
     #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
@@ -28,37 +28,45 @@ pub enum ConnectError {
     #[error("An error occurred in configuration.")]
     Configuration(#[from] ConfigError),
 
-    #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
+    #[error("Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.")]
     ConfigurationExists,
+
+    #[error("Directory Error. Check permissions for {1}.")]
+    DirCreationFailed(#[source] std::io::Error, String),
+
+    #[error("File Error. Check permissions for {1}.")]
+    FileCreationFailed(#[source] PersistError, String),
+
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 
     #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
     MissingRequiredConfigurationItem { item: String },
 
-    #[error("Couldn't set MQTT Server to start on boot.")]
+    #[error("Couldn't set mosquitto server to start on boot.")]
     MosquittoCantPersist,
 
-    #[error("MQTT Server is not available on the system, it is required to use this command.")]
+    #[error("mosquitto is not installed on the system. Install mosquitto to use this command.")]
     MosquittoNotAvailable,
 
-    #[error("MQTT Server is not available on the system as a service, it is required to use this command.")]
+    #[error("mosquitto is installed but the related systemd service is missing.")]
     MosquittoNotAvailableAsService,
 
-    #[error("MQTT Server is active on the system as a service, please stop the service before you use this command.")]
+    #[error("Stop mosquitto service before you use this command. (systemctl stop mosquitto).")]
     MosquittoIsActive,
 
     #[error("MQTT client failed.")]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Couldn't write configuration file, ")]
+    #[error("Couldn't write configuration file, check permissions.")]
     PersistError(#[from] PersistError),
-
-    #[error("IO Error.")]
-    StdIoError(#[from] std::io::Error),
 
     #[error("Couldn't find path to 'sudo'.")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Systemd is not available on the system or elevated permissions have not been granted, it is required to use this command.")]
+    #[error(
+        "Systemd is not available on the system or elevated permissions have not been granted."
+    )]
     SystemdNotAvailable,
 
     #[error("Returned error is not recognised: {code:?}.")]
@@ -95,7 +103,8 @@ impl Connect {
         println!("Saving configuration for requested bridge.\n");
         match self.write_bridge_config_to_file(&config) {
             Err(err) => {
-                self.clean_up()?;
+                // We want to preserve previous errors and therefore discard result of this function.
+                let _ = self.clean_up();
                 return Err(err);
             }
             _ => {}
@@ -142,6 +151,8 @@ impl Connect {
         Ok(())
     }
 
+    // To preserve error chain and not discard other errors we need to ignore error here
+    // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
         let path = utils::build_path_from_home(&[
             TEDGE_HOME_DIR,
@@ -236,7 +247,8 @@ impl Connect {
         let dir_path = utils::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-        let _ = std::fs::create_dir_all(dir_path)?;
+        let _ = std::fs::create_dir_all(&dir_path)
+            .map_err(|error| ConnectError::DirCreationFailed(error, dir_path))?;
 
         let config_path = utils::build_path_from_home(&[
             TEDGE_HOME_DIR,
@@ -244,7 +256,9 @@ impl Connect {
             C8Y_CONFIG_FILENAME,
         ])?;
 
-        temp_file.persist(config_path)?;
+        let _ = temp_file
+            .persist(&config_path)
+            .map_err(|error| ConnectError::FileCreationFailed(error, config_path))?;
 
         Ok(())
     }
