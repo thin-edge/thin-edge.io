@@ -5,11 +5,11 @@ use std::{
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
-    #[error("Path conversion to String failed: {path:?}.")]
-    PathToStringFailed { path: OsString },
-
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
+
+    #[error("Path conversion to String failed: {path:?}.")]
+    PathToStringFailed { path: OsString },
 }
 
 pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
@@ -48,7 +48,7 @@ fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    #[ignore]
+    #[ignore = "Depends on HOME directory"]
     #[test]
     fn build_path_from_home_multiple_arguments() {
         let expected: &str = "/home/test/test/.test";
@@ -56,7 +56,7 @@ mod tests {
         assert_eq!(build_path_from_home(&["test", ".test"]).unwrap(), expected);
     }
 
-    #[ignore]
+    #[ignore = "Depends on HOME directory"]
     #[test]
     fn home_dir_test() {
         let home = std::env::var("HOME").unwrap();
