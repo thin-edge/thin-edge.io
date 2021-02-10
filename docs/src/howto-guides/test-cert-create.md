@@ -1,1 +1,1 @@
-# How-to connect a cloud end-point
+# How-to create a device certificate
