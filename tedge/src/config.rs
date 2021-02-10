@@ -109,12 +109,11 @@ impl Command for ConfigCmd {
 
         match self {
             ConfigCmd::Get { key } => {
-                let value =
-                    config
-                        .get_config_value(key.as_str())?
-                        .ok_or(ConfigError::ConfigNotSet {
-                            key: key.as_str().to_string(),
-                        })?;
+                let value = config.get_config_value(key.as_str())?.ok_or_else(|| {
+                    ConfigError::ConfigNotSet {
+                        key: key.to_owned(),
+                    }
+                })?;
                 println!("{}", value)
             }
             ConfigCmd::Set { key, value } => {
@@ -138,11 +137,15 @@ impl Command for ConfigCmd {
     }
 }
 
+/// Represents the configuration of a thin edge device derived from $HOME/.tedge/tedge.toml.
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TEdgeConfig {
+    /// Captures the device specific configurations
     #[serde(default)]
     pub device: DeviceConfig,
+
+    /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
     pub c8y: CumulocityConfig,
 }
@@ -276,11 +279,20 @@ impl TEdgeConfig {
     }
 }
 
+/// Represents the device specific configurations of a thin edge device
+/// derived from [device] section in a tedge.toml file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DeviceConfig {
+    /// The unique id of the device
     pub id: Option<String>,
+
+    /// Path where the device's private key is stored.
+    /// Defaults to $HOME/.tedge/tedge-private.pem
     pub key_path: Option<String>,
+
+    /// Path where the device's certificate is stored.
+    /// Defaults to $HOME/.tedge/tedge-certificate.crt
     pub cert_path: Option<String>,
 }
 
@@ -321,11 +333,19 @@ impl DeviceConfig {
     }
 }
 
+/// Represents the Cumulocity specific configurations of a thin edge device
+/// derived from the [c8y] section in a tedge.toml file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CumulocityConfig {
+    /// Preserves the current status of the connection
     connect: Option<String>,
+
+    /// Endpoint URL of the Cumulocity tenant
     url: Option<String>,
+
+    /// The path where Cumuocity root certificate(s) are stored.
+    /// The value can be a directory path as well as the path of the direct certificate file.
     root_cert_path: Option<String>,
 }
 
@@ -389,12 +409,12 @@ fn print_config_doc() {
 }
 
 impl TEdgeConfig {
-    ///Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 
-    ///Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
     fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
             Ok(content) => {
@@ -412,12 +432,12 @@ impl TEdgeConfig {
         }
     }
 
-    //Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
+    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
     pub fn write_to_default_config(&self) -> Result<(), ConfigError> {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
 
-    //Persists this `TEdgeConfig` to the `path` provided
+    /// Persists this `TEdgeConfig` to the `path` provided
     fn write_to_custom_config(&self, path: &Path) -> Result<(), ConfigError> {
         let toml = toml::to_string_pretty(&self)?;
         let mut file = NamedTempFile::new()?;
@@ -431,15 +451,19 @@ impl TEdgeConfig {
         }
     }
 
+    /// Get the value of the provided `key` from this configuration
     pub fn get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self._get_config_value(key)
             .map(|opt_str| opt_str.map(Into::into))
     }
 
+    /// Associate the provided key with the given value in this configuration.
+    /// If the key exists already with some value, it will be replaced by the new value.
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
         self._set_config_value(key, Some(value))
     }
 
+    /// Remove the mapping for the provided `key` from this configuration
     pub fn unset_config_value(&mut self, key: &str) -> Result<(), ConfigError> {
         self._set_config_value(key, None)
     }
