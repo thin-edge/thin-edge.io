@@ -19,10 +19,10 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Bridge is configured, please check Cumulocity connection.")]
+    #[error("Bridge is configured, check Cumulocity connection.")]
     BridgeConnectionFailed,
 
-    #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
+    #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
     #[error("An error occurred in configuration.")]
@@ -40,7 +40,7 @@ pub enum ConnectError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
-    #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
+    #[error("Required configuration item is not provided '{item}', run 'tedge config set {item} <value>' to add it to config.")]
     MissingRequiredConfigurationItem { item: String },
 
     #[error("Couldn't set mosquitto server to start on boot.")]
@@ -55,13 +55,13 @@ pub enum ConnectError {
     #[error("Stop mosquitto service before you use this command. (systemctl stop mosquitto).")]
     MosquittoIsActive,
 
-    #[error("MQTT client failed.")]
+    #[error(transparent)]
     MqttClient(#[from] mqtt_client::Error),
 
     #[error("Couldn't write configuration file, check permissions.")]
     PersistError(#[from] PersistError),
 
-    #[error("Couldn't find path to 'sudo'.")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.")]
     SudoNotFound(#[from] which::Error),
 
     #[error(
@@ -72,7 +72,7 @@ pub enum ConnectError {
     #[error("Returned error is not recognised: {code:?}.")]
     UnknownReturnCode { code: Option<i32> },
 
-    #[error("Provided endpoint url is not valid, please provide valid url.")]
+    #[error("Provided endpoint url is not valid, provide valid url.")]
     UrlParse(#[from] url::ParseError),
 }
 
@@ -110,9 +110,7 @@ impl Connect {
             _ => {}
         }
 
-        println!(
-            "Restarting MQTT Server, [requires elevated permission], please authorise if asked.\n"
-        );
+        println!("Restarting MQTT Server, [requires elevated permission], authorise when asked.\n");
         match utils::mosquitto_restart_daemon() {
             Err(err) => {
                 self.clean_up()?;
@@ -121,9 +119,12 @@ impl Connect {
             _ => {}
         }
 
-        const RESTART_TIMEOUT_SECONDS: u64 = 5;
+        const RESTART_TIMEOUT_SECONDS: u64 = 10;
 
-        println!("Awaiting MQTT Server to start. This may take few seconds.\n");
+        println!(
+            "Awaiting MQTT Server to start. This may take up to {} seconds.\n",
+            RESTART_TIMEOUT_SECONDS
+        );
         std::thread::sleep(std::time::Duration::from_secs(RESTART_TIMEOUT_SECONDS));
 
         println!("Sending packets to check connection.");
