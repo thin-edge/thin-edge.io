@@ -1,1 +1,1 @@
-# The tedge connect command
+# The `tedge connect` command

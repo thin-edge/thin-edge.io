@@ -1,1 +1,1 @@
-# The tedge config command
+# The `tedge config` command

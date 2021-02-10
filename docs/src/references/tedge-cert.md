@@ -1,1 +1,1 @@
-# The tedge cert command
+# The `tedge cert` command

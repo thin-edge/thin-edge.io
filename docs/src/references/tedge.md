@@ -1,1 +1,1 @@
-# The tedge command
+# The `tedge` command

@@ -1,1 +1,1 @@
-# The tedge mqtt command
+# The `tedge mqtt` command
