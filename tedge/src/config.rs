@@ -89,14 +89,67 @@ pub struct TEdgeConfig {
 }
 
 ///
-/// This macros create `_get_config_value`, `_set_config_value`, `is_valid_key` and `valid_keys` functions.
+/// This macro creates accessor functions for a `struct` to set and get the value of (possibly
+/// nested) fields given a string as key. It also creates functions to test if a key is valid or
+/// not and a utility function returning the list of all valid keys. The latter two of which are
+/// useful for StructOpt integration.
+///
+/// All fields accessed through this macro have to be of type `Option<String>`.
+///
+/// # Generated functions
+///
+/// - _set_config_value
+/// - _get_config_value
+/// - is_valid_key
+/// - valid_keys
+///
+/// # Basic Usage
+///
+/// ```rust,ignore
+/// struct MyType { field_of_my_type: ... };
+///
+/// config_keys!{
+///   MyType {
+///     "key1" => field_of_my_type.nested1,
+///     "key2" => path_to_field_2,
+///     ...
+///     "keyn" => path_to_field_n,
+///   }
+/// }
+/// ```
+///
+/// # Example
+///
+/// ```
+/// struct MyStruct {
+///   a: Option<String>,
+///   b: Nested,
+/// }
+///
+/// struct Nested {
+///     c: Option<String>,
+/// }
+///
+/// config_keys! {
+///   MyStruct {
+///     "a" => a,
+///     "b.c" => b.c,
+///   }
+/// }
+///
+/// let my = MyStruct { a: Some("test".into()), b: Nested { c: None } };
+/// assert_eq!(my._get_config_value("a").unwrap().unwrap(), "test");
+/// assert_eq!(my._get_config_value("b.c").unwrap(), None);
+/// assert_eq!(my.is_valid_key("b.c"), true);
+/// assert_eq!(my.is_valid_key("c"), false);
+/// ```
 ///
 macro_rules! config_keys {
     ($ty:ty { $( $str:literal => $( $key:ident ).* ),* }) => {
         impl $ty {
-            fn _get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
+            fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
                 match key {
-                    $( $str => Ok(self . $( $key ).* .clone()), )*
+                    $( $str => Ok(self . $( $key ).* .as_ref().map(String::as_str)), )*
                     _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
                 }
             }
@@ -281,6 +334,7 @@ impl TEdgeConfig {
 
     pub fn get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self._get_config_value(key)
+            .map(|opt_str| opt_str.map(Into::into))
     }
 
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
