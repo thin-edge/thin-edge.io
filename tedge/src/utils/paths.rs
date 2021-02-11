@@ -13,9 +13,6 @@ pub enum PathsError {
     #[error("File Error. Check permissions for {1}.")]
     FileCreationFailed(#[source] PersistError, String),
 
-    #[error("File Error. Check permissions for {1}.")]
-    FileIO(#[source] std::io::Error, String),
-
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
 
@@ -31,15 +28,6 @@ pub enum PathsError {
 
 pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
     build_path_from_home_as_path(paths).and_then(pathbuf_to_string)
-}
-
-pub fn check_path_exists(path: &str) -> Result<bool, PathsError> {
-    // Using .metadata as .exists doesn't fail if no permission for the file.
-    match Path::new(path).metadata() {
-        Ok(meta) => Ok(meta.is_file()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(PathsError::FileIO(e, path.into())),
-    }
 }
 
 pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
@@ -65,7 +53,7 @@ pub fn persist_tempfile(file: NamedTempFile, path_to: &str) -> Result<(), PathsE
 fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, PathsError> {
     let home_dir = home_dir().ok_or(PathsError::HomeDirNotFound)?;
 
-    let mut final_path: PathBuf = PathBuf::from(home_dir);
+    let mut final_path: PathBuf = home_dir;
     for path in paths {
         final_path.push(path);
     }
