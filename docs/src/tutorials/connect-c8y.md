@@ -14,15 +14,15 @@ Before you try to connect your device to Cumulocity IoT, you need:
 * Your credentials to connect Cumulocity:
     * Your tenant identifier (e.g. `t00000007`), a user name and password.
     * None of these credentials will be stored on the device.
-    * These are only required once to register the device.
+    * These are only required once, to register the device.
 
 If not done yet, [install `thin-edge` on your device](../howto-guides/002_installation.md).
 
 You can now to use [`tegde` command](../references/tedge.md) to:
-* create a certificate for you device,
-* make the device certificate trusted by Cumulocity,
-* connect the device, and
-* send your first telemetry data.
+* [create a certificate for you device](connect-c8y.md#create-the-certificate),
+* [make the device certificate trusted by Cumulocity](connect-c8y.md#make-the-device-trusted-by-cumulocity),
+* [connect the device](connect-c8y.md#connect-the-device), and
+* [send your first telemetry data](#sending-your-first-telemetry-data).
 
 ## Create the certificate
 
@@ -48,7 +48,7 @@ Valid from: Tue, 09 Feb 2021 17:16:52 +0000
 Valid up to: Tue, 11 May 2021 17:16:52 +0000
 ```
 
-You may notice that the issuer of this certificate is the device it-self.
+You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
 see the reference guide of [`tedge cert`](../references/tedge-cert.md).
@@ -60,7 +60,7 @@ one needs to add the certificate of the signing authority to the list of trusted
 In the Cumulocity GUI, navigate to "Device Management/Management/Trusted certificates"
 in order to see this list for your Cumulocity tenant.
 
-Here, the device certificate is self-signed and have to be directly trusted by Certificate.
+Here, the device certificate is self-signed and has to be directly trusted by Certificate.
 This can be done:
 * either with the GUI: upload the certificate from your device (`/home/pi/.tedge/tedge-certificate.pem`)
   to your tenant "Device Management/Management/Trusted certificates".
@@ -74,6 +74,11 @@ $ tedge cert register c8y \
 ```
 
 ## Connect the device
+
+Now, you are ready to run `tedge connect c8y`.
+This command configures the MQTT broker:
+* to establish a permanent and secure connection to the cloud,
+* to forward local messages to the cloud and vice versa.
 
 ```
 $ target/release/tedge connect c8y --id my-device
@@ -90,14 +95,17 @@ Restarting MQTT Server, [requires elevated permission], please authorise if aske
 Awaiting MQTT Server to start. This may take few seconds.
 
 Sending packets to check connection.
+Persisting MQTT Server on reboot.
+
+Successully created bridge connection!
 ```
 
 ## Sending your first telemetry data
 
-Sending data to Cumulocity is done using [MQTT](../architecture/mqtt-bus.md) over topics prefix my `c8y`.
+Sending data to Cumulocity is done using [MQTT](../architecture/mqtt-bus.md) over topics prefixed with `c8y`.
 Any messages sent to one of these topics will be forwarded to Cumulocity.
-The messages are expected to have a format specific to the topic.
-Here, we send a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
+The messages are expected to have a format specific to each topic.
+Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
 
 ```
 $ tedge mqtt pub c8y/s/us 211,20
@@ -107,3 +115,11 @@ To check that this message has been received by Cumulocity,
 navigate to "Device Management/Devices/All devices/<your device id>/Measurements".
 You should observe a "temperature measurement" graph with the new data point.
 
+
+## Next Steps
+
+You can now:
+* learn how to [send various kind of telemetry data](send-thin-edge-data.md)
+  using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
+* or have a detailed view of the [topics mapped to and from Cumulocity](../references/tedge-mapper.md)
+  if you prefer to use directly Cumulocity specific formats and protocols.
