@@ -33,12 +33,16 @@ pub enum ServicesError {
 
     #[error("Returned error is not recognised: {code:?}.")]
     UnknownReturnCode { code: Option<i32> },
+
+    #[error("Returned non zero exit code: {code:?}.")]
+    NonZeroReturnCode { code: Option<i32> },
 }
 
 type ExitCode = i32;
 
 const MOSQUITTOCMD_IS_ACTIVE: ExitCode = 130;
 const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
+const SYSTEMCTL_SERVICE_RUNNING: ExitCode = 0;
 const SYSTEMCTL_SUCCESS: ExitCode = 0;
 const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
 
@@ -48,6 +52,19 @@ pub fn all_services_available() -> Result<(), ServicesError> {
         .and_then(|()| mosquitto_available())
         .and_then(|()| mosquitto_available_as_service())
         .and_then(|()| mosquitto_is_active_daemon())
+}
+
+pub fn check_mosquitto_is_running() -> Result<(), ServicesError> {
+    match cmd_nullstdio_args_with_code(
+        SystemCtlCmd::Cmd.as_str(),
+        &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
+    ) {
+        Ok(status) => match status.code() {
+            Some(SYSTEMCTL_SERVICE_RUNNING) => Ok(()),
+            code => Err(ServicesError::NonZeroReturnCode { code }),
+        },
+        Err(err) => Err(err),
+    }
 }
 
 // Note that restarting a unit with this command does not necessarily flush out all of the unit's resources before it is started again.

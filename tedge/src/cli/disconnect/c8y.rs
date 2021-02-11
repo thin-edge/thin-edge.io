@@ -62,9 +62,16 @@ impl Disconnect {
             Err(e) => return Err(e.into()),
         }
 
-        // Restart mosquitto
+        // Deviation from specification:
+        // * Check if mosquitto is running, restart only if was active before, if not don't do anything.
         println!("Applying changes to mosquitto.\n");
-        let _ = services::mosquitto_restart_daemon()?;
+        match services::check_mosquitto_is_running() {
+            Ok(()) => services::mosquitto_restart_daemon()?,
+            Err(e) => match e {
+                services::ServicesError::NonZeroReturnCode { code } => (),
+                _ => return Err(e.into()),
+            },
+        }
 
         // set c8y.connect to false
         println!("Saving configuration.\n");
