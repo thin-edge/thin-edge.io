@@ -13,6 +13,9 @@ pub enum PathsError {
     #[error("File Error. Check permissions for {1}.")]
     FileCreationFailed(#[source] PersistError, String),
 
+    #[error("File Error. Check permissions for {1}.")]
+    FileIO(#[source] std::io::Error, String),
+
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
 
@@ -35,7 +38,7 @@ pub fn check_path_exists(path: &str) -> Result<bool, PathsError> {
     match Path::new(path).metadata() {
         Ok(meta) => Ok(meta.is_file()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(PathsError::FileIO(e, path.into())),
     }
 }
 

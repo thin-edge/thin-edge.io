@@ -1,5 +1,4 @@
 use structopt::StructOpt;
-use tempfile::PersistError;
 
 use crate::command::Command;
 use crate::config::{ConfigError, TEdgeConfig, C8Y_CONNECT, TEDGE_HOME_DIR};
@@ -17,19 +16,7 @@ pub enum DisconnectError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MqttClient(#[from] mqtt_client::Error),
-
-    #[error(transparent)]
     PathsError(#[from] paths::PathsError),
-
-    #[error(transparent)]
-    PersistError(#[from] PersistError),
-
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
-    SudoNotFound(#[from] which::Error),
-
-    #[error("Provided endpoint url is not valid, provide valid url. \n{0}")]
-    UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
