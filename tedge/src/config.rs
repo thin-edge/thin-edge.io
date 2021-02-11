@@ -456,7 +456,9 @@ hello="tedge"
     fn test_set_config_key_invalid_key() {
         let mut config = TEdgeConfig::from_default_config().unwrap();
         assert_matches!(
-            config.set_config_value("invalid-key", "dummy-value".into()).unwrap_err(),
+            config
+                .set_config_value("invalid-key", "dummy-value".into())
+                .unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
         );
     }

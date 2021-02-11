@@ -68,7 +68,7 @@ impl Disconnect {
         match services::check_mosquitto_is_running() {
             Ok(()) => services::mosquitto_restart_daemon()?,
             Err(e) => match e {
-                services::ServicesError::NonZeroReturnCode { code } => (),
+                services::ServicesError::NonZeroReturnCode { .. } => (),
                 _ => return Err(e.into()),
             },
         }

@@ -5,9 +5,7 @@ mod c8y;
 
 #[derive(StructOpt, Debug)]
 pub enum DisconnectCmd {
-    /// Create connection to Cumulocity
-    ///
-    /// The command will create config and start edge relay from the device to c8y instance
+    /// Remove bridge connection to Cumulocity.
     C8y(c8y::Disconnect),
 }
 
