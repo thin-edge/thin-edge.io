@@ -50,11 +50,14 @@ impl Disconnect {
                 // Remove bridge file from ~/.tedge/bridges
                 println!("Removing c8y bridge.\n");
                 let _ = std::fs::remove_file(&bridge_conf_path)?;
+
+                println!("Saving configuration.\n");
+                let _ = self.update_tedge_config()?;
             }
 
             false => {
                 // We need to set c8y.connect to 'false' here as it may have been 'true' before to be in 'actual state'.
-                let _ = self.set_connect_and_save_tedge_config()?;
+                let _ = self.update_tedge_config()?;
                 println!("Bridge doesn't exist. Operation successful!");
                 return Ok(());
             }
@@ -63,23 +66,15 @@ impl Disconnect {
         // Deviation from specification:
         // * Check if mosquitto is running, restart only if was active before, if not don't do anything.
         println!("Applying changes to mosquitto.\n");
-        match services::check_mosquitto_is_running() {
-            Ok(()) => services::mosquitto_restart_daemon()?,
-            Err(e) => match e {
-                services::ServicesError::NonZeroReturnCode { .. } => (),
-                _ => return Err(e.into()),
-            },
+        if services::check_mosquitto_is_running()? {
+            services::mosquitto_restart_daemon()?;
         }
-
-        // set c8y.connect to false
-        println!("Saving configuration.\n");
-        let _ = self.set_connect_and_save_tedge_config()?;
 
         println!("Bridge successfully disconnected!");
         Ok(())
     }
 
-    fn set_connect_and_save_tedge_config(&self) -> Result<(), DisconnectError> {
+    fn update_tedge_config(&self) -> Result<(), DisconnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
         TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "false".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)

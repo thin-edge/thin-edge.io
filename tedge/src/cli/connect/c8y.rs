@@ -83,13 +83,10 @@ impl Connect {
         let config = self.load_config()?;
 
         println!("Saving configuration for requested bridge.\n");
-        match self.write_bridge_config_to_file(&config) {
-            Err(err) => {
-                // We want to preserve previous errors and therefore discard result of this function.
-                let _ = self.clean_up();
-                return Err(err);
-            }
-            _ => {}
+        if let Err(err) = self.write_bridge_config_to_file(&config) {
+            // We want to preserve previous errors and therefore discard result of this function.
+            let _ = self.clean_up();
+            return Err(err);
         }
 
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");

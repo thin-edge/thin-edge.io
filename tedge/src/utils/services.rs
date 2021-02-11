@@ -23,7 +23,7 @@ pub enum ServicesError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
     SudoNotFound(#[from] which::Error),
 
     #[error(
@@ -33,9 +33,6 @@ pub enum ServicesError {
 
     #[error("Returned error is not recognised: {code:?}.")]
     UnknownReturnCode { code: Option<i32> },
-
-    #[error("Returned non zero exit code: {code:?}.")]
-    NonZeroReturnCode { code: Option<i32> },
 }
 
 type ExitCode = i32;
@@ -54,15 +51,15 @@ pub fn all_services_available() -> Result<(), ServicesError> {
         .and_then(|()| mosquitto_is_active_daemon())
 }
 
-pub fn check_mosquitto_is_running() -> Result<(), ServicesError> {
+pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
     let status = cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
     )?;
 
     match status.code() {
-        Some(SYSTEMCTL_SERVICE_RUNNING) => Ok(()),
-        code => Err(ServicesError::NonZeroReturnCode { code }),
+        Some(SYSTEMCTL_SERVICE_RUNNING) => Ok(true),
+        _ => Ok(false),
     }
 }
 
