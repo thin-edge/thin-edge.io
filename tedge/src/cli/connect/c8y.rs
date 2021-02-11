@@ -48,10 +48,10 @@ enum ConnectError {
     #[error(transparent)]
     PersistError(#[from] PersistError),
 
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Provided endpoint url is not valid, provide valid url. \n{0}")]
+    #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]

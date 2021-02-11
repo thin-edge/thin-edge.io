@@ -45,21 +45,19 @@ impl Disconnect {
             C8Y_CONFIG_FILENAME,
         ])?;
 
-        match paths::check_path_exists(&bridge_conf_path) {
-            Ok(true) => {
+        match paths::check_path_exists(&bridge_conf_path)? {
+            true => {
                 // Remove bridge file from ~/.tedge/bridges
                 println!("Removing c8y bridge.\n");
                 let _ = std::fs::remove_file(&bridge_conf_path)?;
             }
 
-            Ok(false) => {
+            false => {
                 // We need to set c8y.connect to 'false' here as it may have been 'true' before to be in 'actual state'.
                 let _ = self.set_connect_and_save_tedge_config()?;
                 println!("Bridge doesn't exist. Operation successful!");
                 return Ok(());
             }
-
-            Err(e) => return Err(e.into()),
         }
 
         // Deviation from specification:
