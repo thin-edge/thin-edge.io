@@ -16,6 +16,9 @@ pub enum PathsError {
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
 
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
     #[error("Path conversion to String failed: {path:?}.")]
     PathToStringFailed { path: OsString },
 
@@ -25,6 +28,15 @@ pub enum PathsError {
 
 pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
     build_path_from_home_as_path(paths).and_then(pathbuf_to_string)
+}
+
+pub fn check_path_exists(path: &str) -> Result<bool, PathsError> {
+    // Using .metadata as .exists doesn't fail if no permission for the file.
+    match Path::new(path).metadata() {
+        Ok(meta) => Ok(meta.is_file()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use structopt::StructOpt;
 use tempfile::PersistError;
 
@@ -17,9 +15,6 @@ pub enum DisconnectError {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-
-    #[error("Required configuration item is not provided '{item}', run 'tedge config set {item} <value>' to add it to config.")]
-    MissingRequiredConfigurationItem { item: String },
 
     #[error(transparent)]
     MqttClient(#[from] mqtt_client::Error),
@@ -55,72 +50,46 @@ impl Command for Disconnect {
 
 impl Disconnect {
     fn stop_bridge(&self) -> Result<(), DisconnectError> {
-        // Check if bridge is active and stop with code 0 if so.
-        println!("Checking if bridge exists.");
-        match self.check_bridge_config_exists() {
+        // Check if bridge exists and stop with code 0 if it doesn't.
+        println!("Checking if bridge exists.\n");
+        let bridge_conf_path = paths::build_path_from_home(&[
+            TEDGE_HOME_DIR,
+            TEDGE_BRIDGE_CONF_DIR_PATH,
+            C8Y_CONFIG_FILENAME,
+        ])?;
+
+        match paths::check_path_exists(&bridge_conf_path) {
+            Ok(true) => {
+                // Remove bridge file from ~/.tedge/bridges
+                println!("Removing c8y bridge.\n");
+                let _ = std::fs::remove_file(&bridge_conf_path)?;
+            }
+
             Ok(false) => {
-                let _ = self.save_c8y_config()?;
+                // We need to set c8y.connect to 'false' here as it may have been 'true' before to be in 'actual state'.
+                let _ = self.set_connect_and_save_tedge_config()?;
                 println!("Bridge doesn't exist. Operation successful!");
                 return Ok(());
             }
-            Ok(true) => {}
-            Err(e) => return Err(e),
+
+            Err(e) => return Err(e.into()),
         }
 
-        // Remove bridge file from ~/.tedge/bridges
-        println!("Removing c8y bridge.");
-        let _ = self.remove_c8y_bridge_config()?;
-
         // Restart mosquitto
-        println!("Applying changes to mosquitto.");
+        println!("Applying changes to mosquitto.\n");
         let _ = services::mosquitto_restart_daemon()?;
 
         // set c8y.connect to false
-        println!("Saving configuration.");
-        let _ = self.save_c8y_config()?;
+        println!("Saving configuration.\n");
+        let _ = self.set_connect_and_save_tedge_config()?;
 
         println!("Bridge successfully disconnected!");
         Ok(())
     }
 
-    fn check_bridge_config_exists(&self) -> Result<bool, DisconnectError> {
-        let path = paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
-            TEDGE_BRIDGE_CONF_DIR_PATH,
-            C8Y_CONFIG_FILENAME,
-        ])?;
-
-        // Using metadata as .exists doesn't fail if no permission.
-        match Path::new(&path).metadata() {
-            Ok(meta) => Ok(meta.is_file()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    fn remove_c8y_bridge_config(&self) -> Result<(), DisconnectError> {
-        let path = paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
-            TEDGE_BRIDGE_CONF_DIR_PATH,
-            C8Y_CONFIG_FILENAME,
-        ])?;
-        let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
-
-        Ok(())
-    }
-
-    fn save_c8y_config(&self) -> Result<(), DisconnectError> {
+    fn set_connect_and_save_tedge_config(&self) -> Result<(), DisconnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
         TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "false".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const CORRECT_URL: &str = "http://test.com";
-    const INCORRECT_URL: &str = "noturl";
-    const INCORRECT_PATH: &str = "/path";
 }
