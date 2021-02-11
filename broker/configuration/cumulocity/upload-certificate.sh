@@ -56,7 +56,7 @@ fi
 
 ### Test request
 
-CERT_ID=$(cat $CERT_PATH | grep -v CERTIFICATE | tr -d '\n')
+CERT_ID=$(sed 's/\r//g' $CERT_PATH | grep -v CERTIFICATE | tr -d '\n')
 
 if (curl --request GET --silent \
   --url https://$TENANT.$C8Y/tenant/tenants/$TENANT/trusted-certificates/ \
