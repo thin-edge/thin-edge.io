@@ -15,44 +15,46 @@ use crate::utils::{paths, services};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 
 #[derive(thiserror::Error, Debug)]
 enum ConnectError {
-    #[error("Bridge connection has not been established, check configuration and try again.")]
+    #[error("Bridge has been configured, but Cumulocity connection check failed.")]
     BridgeConnectionFailed,
 
-    #[error("Couldn't load certificate, please provide valid certificate path in configuration.")]
+    #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
-    #[error("An error occurred in configuration.")]
+    #[error(transparent)]
     Configuration(#[from] ConfigError),
 
-    #[error("Connection cannot be established as config already exists. Please remove existing configuration for the bridge and try again.")]
+    #[error("Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.")]
     ConfigurationExists,
 
-    #[error("Required configuration item is not provided [{item}], run 'tedge config set {item} <value>' to add it to your config.")]
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
+    #[error("Required configuration item is not provided '{item}', run 'tedge config set {item} <value>' to add it to config.")]
     MissingRequiredConfigurationItem { item: String },
 
-    #[error("MQTT client failed.")]
+    #[error(transparent)]
     MqttClient(#[from] mqtt_client::Error),
 
-    #[error("Path Error: {0}")]
+    #[error(transparent)]
     PathsError(#[from] paths::PathsError),
 
-    #[error("Couldn't write configutation file, ")]
+    #[error(transparent)]
     PersistError(#[from] PersistError),
 
-    #[error("IO Error.")]
-    StdIoError(#[from] std::io::Error),
-
-    #[error("Couldn't find path to 'sudo'.")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
     SudoNotFound(#[from] which::Error),
 
-    #[error("Provided endpoint url is not valid, please provide valid url.")]
+    #[error("Provided endpoint url is not valid, provide valid url. \n{0}")]
     UrlParse(#[from] url::ParseError),
 
-    #[error("Service execution failed.")]
+    #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
 }
 
@@ -83,16 +85,14 @@ impl Connect {
         println!("Saving configuration for requested bridge.\n");
         match self.write_bridge_config_to_file(&config) {
             Err(err) => {
-                self.clean_up()?;
+                // We want to preserve previous errors and therefore discard result of this function.
+                let _ = self.clean_up();
                 return Err(err);
             }
             _ => {}
         }
 
-        println!(
-            "Restarting MQTT Server, [requires elevated permission], please authorise if asked.\n"
-        );
-
+        println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
         match services::mosquitto_restart_daemon() {
             Err(err) => {
                 self.clean_up()?;
@@ -101,21 +101,21 @@ impl Connect {
             _ => {}
         }
 
-        const RESTART_TIMEOUT_SECONDS: u64 = 5;
+        println!(
+            "Awaiting mosquitto to start. This may take up to {} seconds.\n",
+            MOSQUITTO_RESTART_TIMEOUT_SECONDS
+        );
+        std::thread::sleep(std::time::Duration::from_secs(
+            MOSQUITTO_RESTART_TIMEOUT_SECONDS,
+        ));
 
-        println!("Awaiting MQTT Server to start. This may take few seconds.\n");
-        std::thread::sleep(std::time::Duration::from_secs(RESTART_TIMEOUT_SECONDS));
+        println!(
+            "Sending packets to check connection. This may take up to {} seconds.\n",
+            WAIT_FOR_CHECK_SECONDS
+        );
+        self.check_connection()?;
 
-        println!("Sending packets to check connection.");
-        match self.check_connection() {
-            Err(err) => {
-                self.clean_up()?;
-                return Err(err);
-            }
-            _ => {}
-        }
-
-        println!("Persisting MQTT Server on reboot.\n");
+        println!("Persisting mosquitto on reboot.\n");
         match services::mosquitto_enable_daemon() {
             Err(err) => {
                 self.clean_up()?;
@@ -131,6 +131,8 @@ impl Connect {
         Ok(())
     }
 
+    // To preserve error chain and not discard other errors we need to ignore error here
+    // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
         let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
@@ -151,8 +153,6 @@ impl Connect {
     // It seems to be appropriate to use the negative (second option) to check if template exists.
     #[tokio::main]
     async fn check_connection(&self) -> Result<(), ConnectError> {
-        const WAIT_FOR_SECONDS: u64 = 5;
-
         const C8Y_TOPIC_TEMPLATE_DOWNSTREAM: &str = "c8y/s/dt";
         const C8Y_TOPIC_TEMPLATE_UPSTREAM: &str = "c8y/s/ut/notExistingTemplateCollection";
         const CLIENT_ID: &str = "check_connection";
@@ -179,7 +179,7 @@ impl Connect {
 
         mqtt.publish(Message::new(&template_pub_topic, "")).await?;
 
-        let fut = timeout(Duration::from_secs(WAIT_FOR_SECONDS), receiver);
+        let fut = timeout(Duration::from_secs(WAIT_FOR_CHECK_SECONDS), receiver);
         match fut.await {
             Ok(Ok(true)) => {
                 println!("Received message.");
@@ -225,7 +225,7 @@ impl Connect {
         let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-        let _ = std::fs::create_dir_all(dir_path)?;
+        let _ = paths::create_directories(&dir_path)?;
 
         let config_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
@@ -233,7 +233,7 @@ impl Connect {
             C8Y_CONFIG_FILENAME,
         ])?;
 
-        temp_file.persist(config_path)?;
+        let _ = paths::persist_tempfile(temp_file, &config_path)?;
 
         Ok(())
     }
