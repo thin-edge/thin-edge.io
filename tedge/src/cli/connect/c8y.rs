@@ -20,7 +20,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConnectError {
+enum ConnectError {
     #[error("Bridge has been configured, but Cumulocity connection check failed.")]
     BridgeConnectionFailed,
 
@@ -113,13 +113,7 @@ impl Connect {
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
-        match self.check_connection() {
-            Err(err) => {
-                self.clean_up()?;
-                return Err(err);
-            }
-            _ => {}
-        }
+        self.check_connection()?;
 
         println!("Persisting mosquitto on reboot.\n");
         match services::mosquitto_enable_daemon() {
