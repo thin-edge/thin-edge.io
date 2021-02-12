@@ -73,14 +73,14 @@ pub enum ConfigCmd {
         key: ConfigKey,
     },
 
-    /// Print the list of the configured sets of keys and values
+    /// Print the configuration keys and their values
     List {
-        /// Lists also the keys without values
-        #[structopt(short, long)]
+        /// Prints all the configuration keys, even those without a configured value
+        #[structopt(long)]
         all: bool,
 
-        /// Lists all keys and descriptions with example values
-        #[structopt(short, long)]
+        /// Prints all keys and descriptions with example values
+        #[structopt(long)]
         doc: bool,
     },
 }
@@ -99,7 +99,7 @@ impl Command for ConfigCmd {
             ConfigCmd::Unset { key } => {
                 format!("unset the configuration value for key: {}", key.as_str())
             }
-            ConfigCmd::List { all: _, doc: _ } => String::from("list keys and values"),
+            ConfigCmd::List { .. } => String::from("list the configuration keys and values"),
         }
     }
 
@@ -256,7 +256,7 @@ macro_rules! config_keys {
 
 config_keys! {
     TEdgeConfig {
-        "device-id"          => (device.id, "Device ID used as a client ID of connection. It should be unique. UUID is recommended to use.")
+        "device-id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
         "device-key-path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
         "device-cert-path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
         "c8y-url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
@@ -384,7 +384,7 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
 fn print_config_doc() {
     for key in TEdgeConfig::valid_keys() {
         let desc = TEdgeConfig::get_description_of_key(key);
-        println!("{}: {}", key, desc);
+        println!("{:<30} {}", key, desc);
     }
 }
 
