@@ -202,6 +202,38 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn run_config_list() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = temp_dir.path();
+        let test_home_str = temp_dir_path.to_str().unwrap();
+
+        let cert_path = temp_path(&temp_dir, "certificate/tedge-certificate.pem");
+
+        let mut list_cmd = tedge_command_with_test_home(test_home_str, &["config", "list"])?;
+        let mut list_all_cmd = tedge_command(&["config", "list", "--all"])?;
+        let mut list_doc_cmd = tedge_command(&["config", "list", "--doc"])?;
+
+        list_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(cert_path));
+
+        list_all_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("c8y-url="));
+
+        list_doc_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "Device ID used as a client ID of connection.",
+            ));
+
+        Ok(())
+    }
+
     fn tedge_command_with_test_home<I, S>(
         test_home: &str,
         args: I,
