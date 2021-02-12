@@ -204,13 +204,16 @@ mod tests {
 
     #[test]
     fn run_config_list_default() {
-        let key_regex = r#"device-key-path=[\w/]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device-cert-path=[\w/]*certificate/tedge-certificate.pem"#;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let key_regex = r#"device-key-path=[\w/.]*certificate/tedge-private-key.pem"#;
+        let cert_regex = r#"device-cert-path=[\w/.]*certificate/tedge-certificate.pem"#;
 
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
 
-        let mut list_cmd = tedge_command(&["config", "list"]).unwrap();
+        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
@@ -221,13 +224,16 @@ mod tests {
 
     #[test]
     fn run_config_list_all() {
-        let key_regex = r#"device-key-path=[\w/]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device-cert-path=[\w/]*certificate/tedge-certificate.pem"#;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let key_regex = r#"device-key-path=[\w/.]*certificate/tedge-private-key.pem"#;
+        let cert_regex = r#"device-cert-path=[\w/.]*certificate/tedge-certificate.pem"#;
 
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
 
-        let mut list_cmd = tedge_command(&["config", "list", "--all"]).unwrap();
+        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list", "--all"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
@@ -241,7 +247,10 @@ mod tests {
 
     #[test]
     fn run_config_list_doc() {
-        let mut list_cmd = tedge_command(&["config", "list", "--doc"]).unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list", "--doc"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
