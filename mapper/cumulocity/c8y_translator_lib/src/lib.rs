@@ -186,10 +186,7 @@ impl CumulocityJson {
 
     ///Convert from thinedgejson to c8y_json
     pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
-        Ok(Self::from_thin_edge_json_with_timestamp(
-            input,
-            Utc::now(),
-        )?)
+        Ok(Self::from_thin_edge_json_with_timestamp(input, Utc::now())?)
     }
 
     fn from_thin_edge_json_with_timestamp(
