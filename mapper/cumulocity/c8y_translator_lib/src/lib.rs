@@ -366,20 +366,15 @@ mod tests {
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(single_value_thin_edge_json).into_bytes(),
         );
-        match output {
-            Ok(vec) => {
-                assert_eq!(
-                    expected_output.split_whitespace().collect::<String>(),
-                    String::from_utf8(vec)
-                        .unwrap()
-                        .split_whitespace()
-                        .collect::<String>()
-                );
-            }
-            Err(e) => {
-                eprintln!("Error is {}", e);
-            }
-        }
+
+        let vec = output.unwrap();
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            String::from_utf8(vec)
+                .unwrap()
+                .split_whitespace()
+                .collect::<String>()
+        );
     }
 
     #[test]
@@ -456,12 +451,8 @@ mod tests {
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
 
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
 
     #[test]
@@ -478,12 +469,8 @@ mod tests {
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
 
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
 
     #[test]
@@ -504,14 +491,10 @@ mod tests {
         let expected_output = r#"Invalid thinedge hierarchy: "area""#;
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
-
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
+
     #[test]
     //Thin-edge-json should not have reserved words type as keys
     fn check_type_reserved_word_as_key() {
@@ -526,12 +509,8 @@ mod tests {
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
 
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
 
     #[test]
@@ -548,13 +527,10 @@ mod tests {
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
 
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
+
     #[test]
     //Invalid json
     fn check_invalid_json_format() {
@@ -569,12 +545,8 @@ mod tests {
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
 
-        match output {
-            Err(e) => {
-                assert_eq!(expected_output, e.to_string());
-            }
-            _ => {}
-        }
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
     }
 
     use proptest::prelude::*;
