@@ -213,7 +213,8 @@ mod tests {
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
 
-        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list"]).unwrap();
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
@@ -233,7 +234,8 @@ mod tests {
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
 
-        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list", "--all"]).unwrap();
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list", "--all"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
@@ -250,7 +252,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        let mut list_cmd = tedge_command_with_test_home(test_home_str,&["config", "list", "--doc"]).unwrap();
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list", "--doc"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
         let str = String::from_utf8(output.clone().stdout).unwrap();
