@@ -95,4 +95,12 @@ mod tests {
         assert_eq!(home_dir(), None);
         std::env::set_var("HOME", home);
     }
+
+    #[test]
+    fn pathbuf_to_string_ok() {
+        let pathbuf: PathBuf = "test".into();
+        let expected: String = "test".into();
+        let result = pathbuf_to_string(pathbuf).unwrap();
+        assert_eq!(result, expected);
+    }
 }

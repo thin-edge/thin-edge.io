@@ -202,6 +202,19 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn tedge_disconnect_c8y_no_bridge_config() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = temp_dir.path();
+        let test_home_str = temp_dir_path.to_str().unwrap();
+
+        // If file doesn't exist exit code will be 0.
+        tedge_command_with_test_home(test_home_str, &["disconnect", "c8y"])
+            .unwrap()
+            .assert()
+            .success();
+    }
+
     fn tedge_command_with_test_home<I, S>(
         test_home: &str,
         args: I,
