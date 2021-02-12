@@ -1,4 +1,6 @@
 use super::command::Command;
+use crate::config::{ConfigError, TEdgeConfig};
+use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
@@ -7,7 +9,6 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
-use std::os::unix::fs::PermissionsExt;
 use structopt::StructOpt;
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
@@ -18,34 +19,39 @@ pub enum CertCmd {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier
-        #[structopt(long)]
+        #[structopt(long = "device-id")]
         id: String,
 
-        /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// The path where the device certificate will be stored.
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
-        /// The path where the device private key will be stored
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// The path where the device private key will be stored.
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
 
     /// Show the device certificate, if any
     Show {
-        /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// The path where the device certificate is stored.
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
     },
 
     /// Remove the device certificate
     Remove {
         /// The path of the certificate to be removed
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
         /// The path of the private key to be removed
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
 }
 
@@ -140,6 +146,20 @@ impl CertError {
     }
 }
 
+/// Return the first value provided, either
+/// - as a parameter provided on the command line
+/// - as a config parameter set in the device config
+/// - or a hard-coded default value.
+///
+/// ```
+/// let path = param_config_or_default!(cert_path, tedge.device.cert_path, default_cert_path);
+/// ```
+macro_rules! param_config_or_default {
+    ($( $param:ident ).*, $( $config:ident ).*, $( $default:ident ).*) => {
+         $( $param ).* .as_ref().or( $( $config ).*.as_ref()).unwrap_or(&  $( $default ).*);
+    }
+}
+
 impl Command for CertCmd {
     fn to_string(&self) -> String {
         match self {
@@ -157,33 +177,42 @@ impl Command for CertCmd {
     }
 
     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let config = CertCmd::read_configuration();
+        let tedge = TEdgeConfig::from_default_config()?;
+        let config = CertConfig::default();
+        let default_cert_path = String::from(DEFAULT_CERT_PATH);
+        let default_key_path = String::from(DEFAULT_KEY_PATH);
+
         match self {
             CertCmd::Create {
                 id,
                 cert_path,
                 key_path,
-            } => create_test_certificate(&config, id, cert_path, key_path)?,
+            } => create_test_certificate(
+                &config,
+                id,
+                param_config_or_default!(cert_path, tedge.device.cert_path, default_cert_path),
+                param_config_or_default!(key_path, tedge.device.key_path, default_key_path),
+            )?,
 
-            CertCmd::Show { cert_path } => show_certificate(cert_path)?,
+            CertCmd::Show { cert_path } => show_certificate(param_config_or_default!(
+                cert_path,
+                tedge.device.cert_path,
+                default_cert_path
+            ))?,
 
             CertCmd::Remove {
                 cert_path,
                 key_path,
-            } => {
-                remove_certificate(cert_path, key_path)?;
-            }
+            } => remove_certificate(
+                param_config_or_default!(cert_path, tedge.device.cert_path, default_cert_path),
+                param_config_or_default!(key_path, tedge.device.key_path, default_key_path),
+            )?,
         }
         Ok(())
     }
 }
 
-impl CertCmd {
-    fn read_configuration() -> CertConfig {
-        CertConfig::default()
-    }
-}
-
+#[derive(Default)]
 struct CertConfig {
     test_cert: TestCertConfig,
 }
@@ -192,14 +221,6 @@ struct TestCertConfig {
     validity_period_days: u32,
     organization_name: String,
     organizational_unit_name: String,
-}
-
-impl Default for CertConfig {
-    fn default() -> Self {
-        CertConfig {
-            test_cert: TestCertConfig::default(),
-        }
-    }
 }
 
 impl Default for TestCertConfig {
@@ -224,29 +245,22 @@ fn create_test_certificate(
     let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
     let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
 
-    let mut key_perm = key_file.metadata()?.permissions();
-    key_perm.set_mode(0o600);
-    key_file.set_permissions(key_perm)?;
-
     let cert = new_selfsigned_certificate(&config, id)?;
 
     let cert_pem = cert.serialize_pem()?;
     cert_file.write_all(cert_pem.as_bytes())?;
     cert_file.sync_all()?;
-
-    let mut cert_perm = cert_file.metadata()?.permissions();
-    cert_perm.set_mode(0o444);
-    cert_file.set_permissions(cert_perm)?;
+    paths::set_permission(&cert_file, 0o444)?;
 
     {
+        // Make sure the key is secret, before write
+        paths::set_permission(&key_file, 0o600)?;
+
         // Zero the private key on drop
         let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
         key_file.write_all(cert_key.as_bytes())?;
         key_file.sync_all()?;
-
-        key_perm = key_file.metadata()?.permissions();
-        key_perm.set_mode(0o400);
-        key_file.set_permissions(key_perm)?;
+        paths::set_permission(&key_file, 0o400)?;
     }
 
     Ok(())
@@ -365,8 +379,8 @@ mod tests {
 
         let cmd = CertCmd::Create {
             id: String::from(id),
-            cert_path: cert_path.clone(),
-            key_path: key_path.clone(),
+            cert_path: Some(cert_path.clone()),
+            key_path: Some(key_path.clone()),
         };
         let verbose = 0;
 
@@ -385,8 +399,8 @@ mod tests {
 
         let cmd = CertCmd::Create {
             id: String::from(id),
-            cert_path: String::from(cert_file.path().to_str().unwrap()),
-            key_path: String::from(key_file.path().to_str().unwrap()),
+            cert_path: Some(String::from(cert_file.path().to_str().unwrap())),
+            key_path: Some(String::from(key_file.path().to_str().unwrap())),
         };
         let verbose = 0;
 
