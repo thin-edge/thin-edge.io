@@ -1,6 +1,6 @@
 # Overview
 
-## Why `thin-edge`
+## Why `thin-edge.io`
 
 An open-source & cloud-agnostic IoT framework designed for resource-constrained Edge devices.
 
@@ -10,7 +10,7 @@ An open-source & cloud-agnostic IoT framework designed for resource-constrained 
 
 ## How to start
 
-1) The very first step is to [install `thin-edge`](howto-guides/002_installation.md)
+1) The very first step is to [install `thin-edge.io`](howto-guides/002_installation.md)
 and to connect your device to your IoT cloud,
 either [Cumulocity IoT](tutorials/connect-c8y.md)
 or [Azure IoT](tutorials/connect-azure.md) (10 minutes).

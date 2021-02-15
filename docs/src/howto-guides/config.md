@@ -1,1 +1,1 @@
-# How-to configure thin-edge
+# How-to configure `thin-edge.io`

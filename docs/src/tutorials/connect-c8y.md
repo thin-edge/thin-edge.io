@@ -1,10 +1,10 @@
 # Connect your device to Cumulocity IoT
 
-The very first step to enable `thin-edge` is to connect your device to the cloud.
+The very first step to enable `thin-edge.io` is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
-* Sending data the cloud will be then as simple as sending data locally.
+* Sending data to the cloud will then be as simple as sending data locally.
 
 The focus is here on connecting to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/).
 See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
@@ -16,7 +16,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
-If not done yet, [install `thin-edge` on your device](../howto-guides/002_installation.md).
+If not done yet, [install `thin-edge.io` on your device](../howto-guides/002_installation.md).
 
 You can now to use [`tegde` command](../references/tedge.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),

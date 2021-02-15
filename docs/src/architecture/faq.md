@@ -6,4 +6,4 @@
 
 ## Why JSON
 
-## Why rust
+## Why Rust
