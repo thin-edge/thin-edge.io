@@ -47,22 +47,22 @@ mod tests {
         let mut create_cmd = tedge_command(&[
             "cert",
             "create",
-            "--id",
+            "--device-id",
             device_id,
-            "--cert-path",
+            "--device-cert-path",
             &cert_path,
-            "--key-path",
+            "--device-key-path",
             &key_path,
         ])?;
 
-        let mut show_cmd = tedge_command(&["cert", "show", "--cert-path", &cert_path])?;
+        let mut show_cmd = tedge_command(&["cert", "show", "--device-cert-path", &cert_path])?;
 
         let mut remove_cmd = tedge_command(&[
             "cert",
             "remove",
-            "--cert-path",
+            "--device-cert-path",
             &cert_path,
-            "--key-path",
+            "--device-key-path",
             &key_path,
         ])?;
 

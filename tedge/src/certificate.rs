@@ -1,5 +1,5 @@
 use super::command::Command;
-use crate::config::{ConfigError, TEdgeConfig};
+use crate::config::TEdgeConfig;
 use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
