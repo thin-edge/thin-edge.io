@@ -72,6 +72,17 @@ pub enum ConfigCmd {
         #[structopt(help = TEdgeConfig::valid_keys_help_message())]
         key: ConfigKey,
     },
+
+    /// Print the configuration keys and their values
+    List {
+        /// Prints all the configuration keys, even those without a configured value
+        #[structopt(long)]
+        all: bool,
+
+        /// Prints all keys and descriptions with example values
+        #[structopt(long)]
+        doc: bool,
+    },
 }
 
 impl Command for ConfigCmd {
@@ -88,6 +99,7 @@ impl Command for ConfigCmd {
             ConfigCmd::Unset { key } => {
                 format!("unset the configuration value for key: {}", key.as_str())
             }
+            ConfigCmd::List { .. } => String::from("list the configuration keys and values"),
         }
     }
 
@@ -113,6 +125,10 @@ impl Command for ConfigCmd {
                 config.unset_config_value(key.as_str())?;
                 config_updated = true;
             }
+            ConfigCmd::List { all, doc } => match doc {
+                true => print_config_doc(),
+                false => print_config_list(&config, *all)?,
+            },
         }
 
         if config_updated {
@@ -146,6 +162,7 @@ pub struct TEdgeConfig {
 /// - is_valid_key (test if a key is valid)
 /// - valid_keys (list of valid keys)
 /// - valid_keys_help_message (create a help message for structopt when `-h` is specified)
+/// - get_description_of_key (get a description of a given key)
 ///
 /// # Basic Usage
 ///
@@ -189,7 +206,7 @@ pub struct TEdgeConfig {
 /// ```
 ///
 macro_rules! config_keys {
-    ($ty:ty { $( $str:literal => $( $key:ident ).* ),* }) => {
+    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $desc:literal ) )* }) => {
         impl $ty {
             fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
                 match key {
@@ -226,18 +243,25 @@ macro_rules! config_keys {
             fn valid_keys_help_message() -> &'static str {
                 concat!("[", $( " ", $str ),*, " ]")
             }
+
+            fn get_description_of_key(key: &str) -> &'static str {
+                match key {
+                    $( $str => $desc, )*
+                    _ => "Undefined key",
+                }
+            }
         }
     }
 }
 
 config_keys! {
     TEdgeConfig {
-        "device-id"          => device.id,
-        "device-key-path"    => device.key_path,
-        "device-cert-path"   => device.cert_path,
-        "c8y-url"            => c8y.url,
-        "c8y-root-cert-path" => c8y.root_cert_path,
-        "c8y-connect"        => c8y.connect
+        "device-id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device-key-path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
+        "device-cert-path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
+        "c8y-url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y-root-cert-path" => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y-connect"        => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
     }
 }
 
@@ -337,6 +361,31 @@ pub fn home_dir() -> Result<PathBuf, ConfigError> {
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
     Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
+}
+
+fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
+    let mut keys_without_values: Vec<&str> = Vec::new();
+    for key in TEdgeConfig::valid_keys() {
+        let opt = config.get_config_value(key)?;
+        match opt {
+            Some(value) => println!("{}={}", key, value),
+            None => keys_without_values.push(key),
+        }
+    }
+    if all && !keys_without_values.is_empty() {
+        println!();
+        for key in keys_without_values {
+            println!("{}=", key);
+        }
+    }
+    Ok(())
+}
+
+fn print_config_doc() {
+    for key in TEdgeConfig::valid_keys() {
+        let desc = TEdgeConfig::get_description_of_key(key);
+        println!("{:<30} {}", key, desc);
+    }
 }
 
 impl TEdgeConfig {
