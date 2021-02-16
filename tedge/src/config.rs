@@ -13,13 +13,13 @@ const DEVICE_CERT_DIR: &str = "certificate";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-pub const DEVICE_ID: &str = "device-id";
-pub const DEVICE_CERT_PATH: &str = "device-cert-path";
-pub const DEVICE_KEY_PATH: &str = "device-key-path";
+pub const DEVICE_ID: &str = "device.id";
+pub const DEVICE_CERT_PATH: &str = "device.cert.path";
+pub const DEVICE_KEY_PATH: &str = "device.key.path";
 
-pub const C8Y_CONNECT: &str = "c8y-connect";
-pub const C8Y_URL: &str = "c8y-url";
-pub const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
+pub const C8Y_CONNECT: &str = "c8y.connect";
+pub const C8Y_URL: &str = "c8y.url";
+pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
 /// Wrapper type for Configuration keys.
 #[derive(Debug)]
@@ -256,12 +256,12 @@ macro_rules! config_keys {
 
 config_keys! {
     TEdgeConfig {
-        "device-id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
-        "device-key-path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
-        "device-cert-path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
-        "c8y-url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
-        "c8y-root-cert-path" => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
-        "c8y-connect"        => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
+        "device.id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device.key.path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
+        "device.cert.path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
+        "c8y.url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y.root.cert.path" => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y.connect"        => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
     }
 }
 
@@ -452,8 +452,8 @@ mod tests {
 
     #[test]
     fn test_macro_creates_valid_keys_correctly() {
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), true);
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), false);
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
     }
 
     #[test]
