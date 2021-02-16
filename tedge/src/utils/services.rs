@@ -266,13 +266,13 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
     fn cmd_nullstdio_args_expected() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
         assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
 
-        match cmd_nullstdio_args("test-command", &[], 0) {
-            Err(_err) => (),
-            _ => panic!("Error should be ConnectError"),
+        if let Err(_err) = cmd_nullstdio_args("test-command", &[], 0) {
+            panic!()
         }
     }
 

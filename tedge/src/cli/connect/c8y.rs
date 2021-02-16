@@ -90,12 +90,9 @@ impl Connect {
         }
 
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        match services::mosquitto_restart_daemon() {
-            Err(err) => {
-                self.clean_up()?;
-                return Err(err.into());
-            }
-            _ => {}
+        if let Err(err) = services::mosquitto_restart_daemon() {
+            self.clean_up()?;
+            return Err(err.into());
         }
 
         println!(
@@ -113,12 +110,9 @@ impl Connect {
         self.check_connection()?;
 
         println!("Persisting mosquitto on reboot.\n");
-        match services::mosquitto_enable_daemon() {
-            Err(err) => {
-                self.clean_up()?;
-                return Err(err.into());
-            }
-            _ => {}
+        if let Err(err) = services::mosquitto_enable_daemon() {
+            self.clean_up()?;
+            return Err(err.into());
         }
 
         println!("Saving configuration.");

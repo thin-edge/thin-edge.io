@@ -203,6 +203,27 @@ mod tests {
     }
 
     #[test]
+    fn run_config_list_default() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let key_regex = r#"device-key-path=[\w/.]*certificate/tedge-private-key.pem"#;
+        let cert_regex = r#"device-cert-path=[\w/.]*certificate/tedge-certificate.pem"#;
+
+        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
+        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
+
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list"]).unwrap();
+        let assert = list_cmd.assert().success();
+        let output = assert.get_output().clone();
+        let str = String::from_utf8(output.clone().stdout).unwrap();
+
+        assert_eq!(true, key_predicate_fn.eval(&str));
+        assert_eq!(true, cert_predicate_fn.eval(&str));
+    }
+
+    #[test]
     fn tedge_disconnect_c8y_no_bridge_config() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
@@ -213,6 +234,47 @@ mod tests {
             .unwrap()
             .assert()
             .success();
+    }
+
+    #[test]
+    fn run_config_list_all() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let key_regex = r#"device-key-path=[\w/.]*certificate/tedge-private-key.pem"#;
+        let cert_regex = r#"device-cert-path=[\w/.]*certificate/tedge-certificate.pem"#;
+
+        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
+        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
+
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list", "--all"]).unwrap();
+        let assert = list_cmd.assert().success();
+        let output = assert.get_output().clone();
+        let str = String::from_utf8(output.clone().stdout).unwrap();
+
+        assert_eq!(true, key_predicate_fn.eval(&str));
+        assert_eq!(true, cert_predicate_fn.eval(&str));
+        for key in get_tedge_config_keys() {
+            assert_eq!(true, str.contains(key));
+        }
+    }
+
+    #[test]
+    fn run_config_list_doc() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_home_str = temp_dir.path().to_str().unwrap();
+
+        let mut list_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "list", "--doc"]).unwrap();
+        let assert = list_cmd.assert().success();
+        let output = assert.get_output().clone();
+        let str = String::from_utf8(output.clone().stdout).unwrap();
+
+        for key in get_tedge_config_keys() {
+            assert_eq!(true, str.contains(key));
+        }
+        assert_eq!(true, str.contains("Example"));
     }
 
     fn tedge_command_with_test_home<I, S>(
@@ -230,5 +292,17 @@ mod tests {
 
     fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
         String::from(dir.path().join(filename).to_str().unwrap())
+    }
+
+    fn get_tedge_config_keys() -> Vec<&'static str> {
+        let vec = vec![
+            "device-id",
+            "device-key-path",
+            "device-cert-path",
+            "c8y-url",
+            "c8y-root-cert-path",
+            "c8y-connect",
+        ];
+        return vec;
     }
 }

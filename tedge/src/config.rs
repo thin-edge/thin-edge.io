@@ -21,12 +21,39 @@ pub const C8Y_CONNECT: &str = "c8y-connect";
 pub const C8Y_URL: &str = "c8y-url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y-root-cert-path";
 
+/// Wrapper type for Configuration keys.
+#[derive(Debug)]
+pub struct ConfigKey(pub String);
+
+impl ConfigKey {
+    fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::str::FromStr for ConfigKey {
+    type Err = String;
+
+    fn from_str(key: &str) -> Result<Self, Self::Err> {
+        if TEdgeConfig::is_valid_key(key) {
+            Ok(ConfigKey(key.into()))
+        } else {
+            Err(format!(
+                "Invalid key `{}'. Valid keys are: [{}].",
+                key,
+                TEdgeConfig::valid_keys().join(", ")
+            ))
+        }
+    }
+}
+
 #[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key.
-        key: String,
+        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        key: ConfigKey,
 
         /// Configuration value.
         value: String,
@@ -35,24 +62,44 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key.
-        key: String,
+        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        key: ConfigKey,
     },
 
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key.
-        key: String,
+        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        key: ConfigKey,
+    },
+
+    /// Print the configuration keys and their values
+    List {
+        /// Prints all the configuration keys, even those without a configured value
+        #[structopt(long)]
+        all: bool,
+
+        /// Prints all keys and descriptions with example values
+        #[structopt(long)]
+        doc: bool,
     },
 }
 
 impl Command for ConfigCmd {
     fn to_string(&self) -> String {
         match self {
-            ConfigCmd::Set { key, value } => {
-                format!("set the configuration key: {} with value: {}.", key, value)
+            ConfigCmd::Set { key, value } => format!(
+                "set the configuration key: {} with value: {}.",
+                key.as_str(),
+                value
+            ),
+            ConfigCmd::Get { key } => {
+                format!("get the configuration value for key: {}", key.as_str())
             }
-            ConfigCmd::Get { key } => format!("get the configuration value for key: {}", key),
-            ConfigCmd::Unset { key } => format!("unset the configuration value for key: {}", key),
+            ConfigCmd::Unset { key } => {
+                format!("unset the configuration value for key: {}", key.as_str())
+            }
+            ConfigCmd::List { .. } => String::from("list the configuration keys and values"),
         }
     }
 
@@ -78,6 +125,10 @@ impl Command for ConfigCmd {
                 config.unset_config_value(key.as_str())?;
                 config_updated = true;
             }
+            ConfigCmd::List { all, doc } => match doc {
+                true => print_config_doc(),
+                false => print_config_list(&config, *all)?,
+            },
         }
 
         if config_updated {
@@ -94,6 +145,124 @@ pub struct TEdgeConfig {
     pub device: DeviceConfig,
     #[serde(default)]
     pub c8y: CumulocityConfig,
+}
+
+///
+/// This macro creates accessor functions for a `struct` to set and get the value of (possibly
+/// nested) fields given a string as key. It also creates functions to test if a key is valid or
+/// not, a utility function returning the list of all valid keys, as well as a function returning a
+/// static string that includes all keys. The latter three are useful for StructOpt integration.
+///
+/// All fields accessed through this macro have to be of type `Option<String>`.
+///
+/// # Generated functions
+///
+/// - _get_config_value (get a value given a key)
+/// - _set_config_value (set a value)
+/// - is_valid_key (test if a key is valid)
+/// - valid_keys (list of valid keys)
+/// - valid_keys_help_message (create a help message for structopt when `-h` is specified)
+/// - get_description_of_key (get a description of a given key)
+///
+/// # Basic Usage
+///
+/// ```rust,ignore
+/// struct MyType { field_of_my_type: ... };
+///
+/// config_keys!{
+///   MyType {
+///     "key1" => field_of_my_type.nested1,
+///     "key2" => path_to_field_2,
+///     ...
+///     "keyn" => path_to_field_n,
+///   }
+/// }
+/// ```
+///
+/// # Example
+///
+/// ```
+/// struct MyStruct {
+///   a: Option<String>,
+///   b: Nested,
+/// }
+///
+/// struct Nested {
+///     c: Option<String>,
+/// }
+///
+/// config_keys! {
+///   MyStruct {
+///     "a" => a,
+///     "b.c" => b.c,
+///   }
+/// }
+///
+/// let my = MyStruct { a: Some("test".into()), b: Nested { c: None } };
+/// assert_eq!(my._get_config_value("a").unwrap().unwrap(), "test");
+/// assert_eq!(my._get_config_value("b.c").unwrap(), None);
+/// assert_eq!(my.is_valid_key("b.c"), true);
+/// assert_eq!(my.is_valid_key("c"), false);
+/// ```
+///
+macro_rules! config_keys {
+    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $desc:literal ) )* }) => {
+        impl $ty {
+            fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
+                match key {
+                    $( $str => Ok(self . $( $key ).* .as_ref().map(String::as_str)), )*
+                    _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
+                }
+            }
+
+            fn _set_config_value(&mut self, key: &str, value: Option<String>) -> Result<(), ConfigError> {
+                match key {
+                    $(
+                        $str => {
+                            self . $( $key ).* = value;
+                            Ok(())
+                        }
+                     )*
+                     _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
+                }
+            }
+
+            fn is_valid_key(key: &str) -> bool {
+                match key {
+                    $( $str => true, )*
+                    _ => false,
+                }
+            }
+
+            fn valid_keys() -> Vec<&'static str> {
+                vec![
+                    $( $str , )*
+                ]
+            }
+
+            fn valid_keys_help_message() -> &'static str {
+                concat!("[", $( " ", $str ),*, " ]")
+            }
+
+            fn get_description_of_key(key: &str) -> &'static str {
+                match key {
+                    $( $str => $desc, )*
+                    _ => "Undefined key",
+                }
+            }
+        }
+    }
+}
+
+config_keys! {
+    TEdgeConfig {
+        "device-id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device-key-path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
+        "device-cert-path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
+        "c8y-url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y-root-cert-path" => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y-connect"        => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
+    }
 }
 
 impl TEdgeConfig {
@@ -194,6 +363,31 @@ pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
     Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
 }
 
+fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
+    let mut keys_without_values: Vec<&str> = Vec::new();
+    for key in TEdgeConfig::valid_keys() {
+        let opt = config.get_config_value(key)?;
+        match opt {
+            Some(value) => println!("{}={}", key, value),
+            None => keys_without_values.push(key),
+        }
+    }
+    if all && !keys_without_values.is_empty() {
+        println!();
+        for key in keys_without_values {
+            println!("{}=", key);
+        }
+    }
+    Ok(())
+}
+
+fn print_config_doc() {
+    for key in TEdgeConfig::valid_keys() {
+        let desc = TEdgeConfig::get_description_of_key(key);
+        println!("{:<30} {}", key, desc);
+    }
+}
+
 impl TEdgeConfig {
     ///Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
@@ -213,7 +407,7 @@ impl TEdgeConfig {
                     let default: TEdgeConfig = Default::default();
                     Ok(default.with_defaults()?)
                 }
-                _ => return Err(ConfigError::IOError(err)),
+                _ => Err(ConfigError::IOError(err)),
             },
         }
     }
@@ -233,41 +427,21 @@ impl TEdgeConfig {
         }
         match file.persist(path) {
             Ok(_) => Ok(()),
-            Err(err) => Err(err.error)?,
+            Err(err) => Err(err.error.into()),
         }
     }
 
     pub fn get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
-        match key {
-            DEVICE_ID => Ok(self.device.id.clone()),
-            DEVICE_KEY_PATH => Ok(self.device.key_path.clone()),
-            DEVICE_CERT_PATH => Ok(self.device.cert_path.clone()),
-            C8Y_CONNECT => Ok(self.c8y.connect.clone()),
-            C8Y_URL => Ok(self.c8y.url.clone()),
-            C8Y_ROOT_CERT_PATH => Ok(self.c8y.root_cert_path.clone()),
-            _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
-        }
+        self._get_config_value(key)
+            .map(|opt_str| opt_str.map(Into::into))
     }
 
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
-        self.update_config_value(key, Some(value))
+        self._set_config_value(key, Some(value))
     }
 
     pub fn unset_config_value(&mut self, key: &str) -> Result<(), ConfigError> {
-        self.update_config_value(key, None)
-    }
-
-    fn update_config_value(&mut self, key: &str, value: Option<String>) -> Result<(), ConfigError> {
-        match key {
-            DEVICE_ID => self.device.id = value,
-            DEVICE_KEY_PATH => self.device.key_path = value,
-            DEVICE_CERT_PATH => self.device.cert_path = value,
-            C8Y_CONNECT => self.c8y.connect = value,
-            C8Y_URL => self.c8y.url = value,
-            C8Y_ROOT_CERT_PATH => self.c8y.root_cert_path = value,
-            _ => return Err(ConfigError::InvalidConfigKey { key: key.into() }),
-        };
-        Ok(())
+        self._set_config_value(key, None)
     }
 }
 
@@ -275,6 +449,12 @@ impl TEdgeConfig {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+
+    #[test]
+    fn test_macro_creates_valid_keys_correctly() {
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), true);
+        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), false);
+    }
 
     #[test]
     fn test_parse_config_with_all_values() {
@@ -384,11 +564,11 @@ url = "your-tenant.cumulocity.com"
 
         assert!(config.device.id.is_none());
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
+            config.device.cert_path.unwrap(),
             DeviceConfig::default_cert_path().unwrap()
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
+            config.device.key_path.unwrap(),
             DeviceConfig::default_key_path().unwrap()
         );
     }
