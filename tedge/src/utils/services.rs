@@ -23,7 +23,7 @@ pub enum ServicesError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path. \n{0}")]
+    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
     SudoNotFound(#[from] which::Error),
 
     #[error(
@@ -39,6 +39,7 @@ type ExitCode = i32;
 
 const MOSQUITTOCMD_IS_ACTIVE: ExitCode = 130;
 const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
+const SYSTEMCTL_SERVICE_RUNNING: ExitCode = 0;
 const SYSTEMCTL_SUCCESS: ExitCode = 0;
 const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
 
@@ -48,6 +49,18 @@ pub fn all_services_available() -> Result<(), ServicesError> {
         .and_then(|()| mosquitto_available())
         .and_then(|()| mosquitto_available_as_service())
         .and_then(|()| mosquitto_is_active_daemon())
+}
+
+pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
+    let status = cmd_nullstdio_args_with_code(
+        SystemCtlCmd::Cmd.as_str(),
+        &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
+    )?;
+
+    match status.code() {
+        Some(SYSTEMCTL_SERVICE_RUNNING) => Ok(true),
+        _ => Ok(false),
+    }
 }
 
 // Note that restarting a unit with this command does not necessarily flush out all of the unit's resources before it is started again.

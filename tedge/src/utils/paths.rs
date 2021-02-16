@@ -16,6 +16,9 @@ pub enum PathsError {
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
 
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
     #[error("Path conversion to String failed: {path:?}.")]
     PathToStringFailed { path: OsString },
 
@@ -91,5 +94,13 @@ mod tests {
         std::env::remove_var("HOME");
         assert_eq!(home_dir(), None);
         std::env::set_var("HOME", home);
+    }
+
+    #[test]
+    fn pathbuf_to_string_ok() {
+        let pathbuf: PathBuf = "test".into();
+        let expected: String = "test".into();
+        let result = pathbuf_to_string(pathbuf).unwrap();
+        assert_eq!(result, expected);
     }
 }

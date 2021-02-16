@@ -4,6 +4,7 @@ use structopt::clap;
 use structopt::StructOpt;
 
 mod connect;
+mod disconnect;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -44,6 +45,9 @@ enum TEdgeCmd {
     /// Connect to connector provider
     Connect(connect::ConnectCmd),
 
+    /// Remove bridge connection for a provider
+    Disconnect(disconnect::DisconnectCmd),
+
     /// Publish a message on a topic and subscribe a topic.
     Mqtt(super::mqtt::MqttCmd),
 }
@@ -54,6 +58,7 @@ impl TEdgeCmd {
             TEdgeCmd::Cert(ref cmd) => cmd,
             TEdgeCmd::Config(ref cmd) => cmd,
             TEdgeCmd::Connect(ref cmd) => cmd,
+            TEdgeCmd::Disconnect(cmd) => cmd,
             TEdgeCmd::Mqtt(ref cmd) => cmd,
         }
     }
