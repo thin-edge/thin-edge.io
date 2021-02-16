@@ -217,10 +217,10 @@ mod tests {
             tedge_command_with_test_home(test_home_str, &["config", "list"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let str = String::from_utf8(output.clone().stdout).unwrap();
+        let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&str));
-        assert_eq!(true, cert_predicate_fn.eval(&str));
+        assert_eq!(true, key_predicate_fn.eval(&output_str));
+        assert_eq!(true, cert_predicate_fn.eval(&output_str));
     }
 
     #[test]
@@ -238,12 +238,12 @@ mod tests {
             tedge_command_with_test_home(test_home_str, &["config", "list", "--all"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let str = String::from_utf8(output.clone().stdout).unwrap();
+        let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&str));
-        assert_eq!(true, cert_predicate_fn.eval(&str));
+        assert_eq!(true, key_predicate_fn.eval(&output_str));
+        assert_eq!(true, cert_predicate_fn.eval(&output_str));
         for key in get_tedge_config_keys() {
-            assert_eq!(true, str.contains(key));
+            assert_eq!(true, output_str.contains(key));
         }
     }
 
@@ -256,12 +256,12 @@ mod tests {
             tedge_command_with_test_home(test_home_str, &["config", "list", "--doc"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let str = String::from_utf8(output.clone().stdout).unwrap();
+        let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
         for key in get_tedge_config_keys() {
-            assert_eq!(true, str.contains(key));
+            assert_eq!(true, output_str.contains(key));
         }
-        assert_eq!(true, str.contains("Example"));
+        assert_eq!(true, output_str.contains("Example"));
     }
 
     fn tedge_command_with_test_home<I, S>(
