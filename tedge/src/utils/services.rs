@@ -113,10 +113,7 @@ fn cmd_nullstdio_args(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .map_or_else(
-            |err| Err(err),
-            |status| Ok(status.code() == Some(expected_code)),
-        )?)
+        .map_or_else(Err, |status| Ok(status.code() == Some(expected_code)))?)
 }
 
 fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ServicesError> {
@@ -201,7 +198,7 @@ enum MosquittoCmd {
 }
 
 impl MosquittoCmd {
-    fn as_str(self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             MosquittoCmd::Cmd => "mosquitto",
         }
@@ -213,7 +210,7 @@ enum MosquittoParam {
 }
 
 impl MosquittoParam {
-    fn as_str(self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             MosquittoParam::Status => "-h",
         }
@@ -229,7 +226,7 @@ enum SystemCtlCmd {
 }
 
 impl SystemCtlCmd {
-    fn as_str(self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             SystemCtlCmd::Cmd => "systemctl",
             SystemCtlCmd::Enable => "enable",
@@ -244,7 +241,7 @@ enum SystemCtlParam {
 }
 
 impl SystemCtlParam {
-    fn as_str(self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             SystemCtlParam::Version => "--version",
         }
@@ -256,13 +253,13 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
     fn cmd_nullstdio_args_expected() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
         assert_eq!(cmd_nullstdio_args("ls", &[], 0).unwrap(), true);
 
-        match cmd_nullstdio_args("test-command", &[], 0) {
-            Err(_err) => assert!(true),
-            _ => assert!(false, "Error should be ConnectError"),
+        if let Err(_err) = cmd_nullstdio_args("test-command", &[], 0) {
+            panic!()
         }
     }
 
@@ -277,7 +274,7 @@ mod tests {
 
     fn is_in_path(command: &str) -> bool {
         if let Ok(path) = std::env::var("PATH") {
-            for cmd in path.split(":") {
+            for cmd in path.split(':') {
                 let cmd_str = format!("{}/{}", cmd, command);
                 if std::fs::metadata(cmd_str).is_ok() {
                     return true;
