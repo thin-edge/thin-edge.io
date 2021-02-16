@@ -148,11 +148,11 @@ impl Command for CertCmd {
                 cert_path: _,
                 key_path: _,
             } => format!("create a test certificate for the device {}.", id),
-            CertCmd::Show { cert_path: _ } => format!("show the device certificate"),
+            CertCmd::Show { cert_path: _ } => "show the device certificate".into(),
             CertCmd::Remove {
                 cert_path: _,
                 key_path: _,
-            } => format!("remove the device certificate"),
+            } => "remove the device certificate".into(),
         }
     }
 

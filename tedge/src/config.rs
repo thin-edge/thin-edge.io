@@ -358,7 +358,7 @@ impl TEdgeConfig {
                     let default: TEdgeConfig = Default::default();
                     Ok(default.with_defaults()?)
                 }
-                _ => return Err(ConfigError::IOError(err)),
+                _ => Err(ConfigError::IOError(err)),
             },
         }
     }
@@ -378,7 +378,7 @@ impl TEdgeConfig {
         }
         match file.persist(path) {
             Ok(_) => Ok(()),
-            Err(err) => Err(err.error)?,
+            Err(err) => Err(err.error.into()),
         }
     }
 
@@ -515,11 +515,11 @@ url = "your-tenant.cumulocity.com"
 
         assert!(config.device.id.is_none());
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
+            config.device.cert_path.unwrap(),
             DeviceConfig::default_cert_path().unwrap()
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
+            config.device.key_path.unwrap(),
             DeviceConfig::default_key_path().unwrap()
         );
     }
@@ -587,7 +587,9 @@ hello="tedge"
     fn test_set_config_key_invalid_key() {
         let mut config = TEdgeConfig::from_default_config().unwrap();
         assert_matches!(
-            config.set_config_value("invalid-key", "dummy-value".into()).unwrap_err(),
+            config
+                .set_config_value("invalid-key", "dummy-value".into())
+                .unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
         );
     }
