@@ -138,11 +138,37 @@ impl Command for ConfigCmd {
     }
 }
 
+/// Represents the complete configuration of a thin edge device.
+/// This configuration is a wrapper over the device specific configurations
+/// as well as the IoT cloud provider specific configurations.
+///
+/// The following example showcases how the thin edge configuration can be read
+/// and how individual configuration values can be retrieved out of it:
+///
+/// # Examples
+/// ```
+/// /// Read the default tedge.toml file into a TEdgeConfig object
+/// let config: TEdgeConfig = TEdgeConfig::from_default_config().unwrap();
+///
+/// /// Fetch the device config from the TEdgeConfig object
+/// let device_config: DeviceConfig = config.device;
+/// /// Fetch the device id from the DeviceConfig object
+/// let device_id = device_config.id.unwrap();
+///
+/// /// Fetch the Cumulocity config from the TEdgeConfig object
+/// let cumulocity_config: CumulocityConfig = config.c8y;
+/// /// Fetch the Cumulocity URL from the CumulocityConfig object
+/// let cumulocity_url = cumulocity_config.url.unwrap();
+/// ```
+///
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TEdgeConfig {
+    /// Captures the device specific configurations
     #[serde(default)]
     pub device: DeviceConfig,
+
+    /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
     pub c8y: CumulocityConfig,
 }
@@ -276,20 +302,29 @@ impl TEdgeConfig {
     }
 }
 
+/// Represents the device specific configurations defined in the [device] section
+/// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DeviceConfig {
+    /// The unique id of the device
     pub id: Option<String>,
+
+    /// Path where the device's private key is stored.
+    /// Defaults to $HOME/.tedge/tedge-private.pem
     pub key_path: Option<String>,
+
+    /// Path where the device's certificate is stored.
+    /// Defaults to $HOME/.tedge/tedge-certificate.crt
     pub cert_path: Option<String>,
 }
 
 impl DeviceConfig {
-    pub fn default_cert_path() -> Result<String, ConfigError> {
+    fn default_cert_path() -> Result<String, ConfigError> {
         Self::path_in_cert_directory(DEVICE_CERT_FILE)
     }
 
-    pub fn default_key_path() -> Result<String, ConfigError> {
+    fn default_key_path() -> Result<String, ConfigError> {
         Self::path_in_cert_directory(DEVICE_KEY_FILE)
     }
 
@@ -321,11 +356,19 @@ impl DeviceConfig {
     }
 }
 
+/// Represents the Cumulocity specific configurations defined in the
+/// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CumulocityConfig {
+    /// Preserves the current status of the connection
     connect: Option<String>,
+
+    /// Endpoint URL of the Cumulocity tenant
     url: Option<String>,
+
+    /// The path where Cumulocity root certificate(s) are stored.
+    /// The value can be a directory path as well as the path of the direct certificate file.
     root_cert_path: Option<String>,
 }
 
@@ -389,12 +432,21 @@ fn print_config_doc() {
 }
 
 impl TEdgeConfig {
-    ///Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// The retrieved configuration will have default values applied to any unconfigured field
+    /// for which a default value is available.
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 
-    ///Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
+    /// The retrieved configuration will have default values applied to any unconfigured field
+    /// for which a default value is available.
+    ///
+    /// #Arguments
+    ///
+    /// * `path` - Path to a thin edge configuration TOML file
+    ///
     fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
             Ok(content) => {
@@ -412,12 +464,12 @@ impl TEdgeConfig {
         }
     }
 
-    //Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
+    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
     pub fn write_to_default_config(&self) -> Result<(), ConfigError> {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
 
-    //Persists this `TEdgeConfig` to the `path` provided
+    /// Persists this `TEdgeConfig` to the `path` provided
     fn write_to_custom_config(&self, path: &Path) -> Result<(), ConfigError> {
         let toml = toml::to_string_pretty(&self)?;
         let mut file = NamedTempFile::new()?;
@@ -431,15 +483,19 @@ impl TEdgeConfig {
         }
     }
 
+    /// Get the value of the provided `key` from this configuration
     pub fn get_config_value(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self._get_config_value(key)
             .map(|opt_str| opt_str.map(Into::into))
     }
 
+    /// Associate the provided key with the given value in this configuration.
+    /// If the key exists already with some value, it will be replaced by the new value.
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
         self._set_config_value(key, Some(value))
     }
 
+    /// Remove the mapping for the provided `key` from this configuration
     pub fn unset_config_value(&mut self, key: &str) -> Result<(), ConfigError> {
         self._set_config_value(key, None)
     }
