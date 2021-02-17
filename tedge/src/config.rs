@@ -117,10 +117,15 @@ impl Command for ConfigCmd {
                         })?;
                 println!("{}", value)
             }
-            ConfigCmd::Set { key, value } => {
-                config.set_config_value(key.as_str(), value.to_string())?;
-                config_updated = true;
-            }
+            ConfigCmd::Set { key, value } => match TEdgeConfig::is_protected_key(key.as_str()) {
+                false => {
+                    config.set_config_value(key.as_str(), value.to_string())?;
+                    config_updated = true;
+                }
+                true => Err(ConfigError::ProtectedConfigKey {
+                    key: key.as_str().parse()?,
+                })?,
+            },
             ConfigCmd::Unset { key } => {
                 config.unset_config_value(key.as_str())?;
                 config_updated = true;
@@ -205,8 +210,13 @@ pub struct TEdgeConfig {
 /// assert_eq!(my.is_valid_key("c"), false);
 /// ```
 ///
+macro_rules! hide_key {
+    ($str:literal, hidden) => {""};
+    ($str:literal, visible) => {concat!(" ", $str)};
+}
+
 macro_rules! config_keys {
-    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $desc:literal ) )* }) => {
+    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $is_protected:literal , $is_hidden:tt, $desc:literal ) )* }) => {
         impl $ty {
             fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
                 match key {
@@ -241,7 +251,8 @@ macro_rules! config_keys {
             }
 
             fn valid_keys_help_message() -> &'static str {
-                concat!("[", $( " ", $str ),*, " ]")
+                // how to remove "hidden" key from here!
+                concat!("[", $( hide_key!($str, $is_hidden) ),*, " ]")
             }
 
             fn get_description_of_key(key: &str) -> &'static str {
@@ -250,18 +261,26 @@ macro_rules! config_keys {
                     _ => "Undefined key",
                 }
             }
+
+            fn is_protected_key(key: &str) -> bool {
+                match key {
+                    $( $str => $is_protected, )*
+                    _ => false,
+                }
+            }
         }
     }
 }
 
 config_keys! {
     TEdgeConfig {
-        "device.id"          => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
-        "device.key.path"    => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
-        "device.cert.path"   => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
-        "c8y.url"            => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
-        "c8y.root.cert.path" => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
-        "c8y.connect"        => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
+        // external key => (internal key, type description)
+        "device.id"          => (device.id, false, hidden, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device.key.path"    => (device.key_path, false, visible, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
+        "device.cert.path"   => (device.cert_path, false, visible, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
+        "c8y.url"            => (c8y.url, false, visible, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y.root.cert.path" => (c8y.root_cert_path, false, visible, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y.connect"        => (c8y.connect, true, hidden, "Connection status to the provided Cumulocity tenant. Example: true")
     }
 }
 
@@ -351,6 +370,9 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not set")]
     ConfigNotSet { key: String },
+
+    #[error("The provided config key: {key} is protected. Not allowed to change the value")]
+    ProtectedConfigKey { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
@@ -454,6 +476,12 @@ mod tests {
     fn test_macro_creates_valid_keys_correctly() {
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
+    }
+
+    #[test]
+    fn test_macro_creates_is_protected_key_correctly() {
+        assert_eq!(TEdgeConfig::is_protected_key("c8y-connect"), true);
+        assert_eq!(TEdgeConfig::is_protected_key("c8y.connect"), false);
     }
 
     #[test]
