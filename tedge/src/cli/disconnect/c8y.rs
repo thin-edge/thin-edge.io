@@ -25,8 +25,18 @@ pub enum DisconnectError {
     ServicesError(#[from] services::ServicesError),
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone)]
 pub struct Disconnect {}
+
+impl crate::cli::CliOption for Disconnect {
+    fn build_command(&self, _config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+        // Temporary implementation
+        // - should return a specific command not self.
+        // - see certificate.rs for an example
+        // - once done remove the #[derive(Clone)]
+        Ok(Box::new(self.clone()))
+    }
+}
 
 impl Command for Disconnect {
     fn to_string(&self) -> String {

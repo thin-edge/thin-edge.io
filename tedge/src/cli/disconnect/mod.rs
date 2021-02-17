@@ -10,19 +10,15 @@ pub enum DisconnectCmd {
 }
 
 impl DisconnectCmd {
-    fn sub_command(&self) -> &dyn Command {
+    fn sub_command(&self) -> &dyn crate::cli::CliOption {
         match self {
             DisconnectCmd::C8y(cmd) => cmd,
         }
     }
 }
 
-impl Command for DisconnectCmd {
-    fn to_string(&self) -> String {
-        self.sub_command().to_string()
-    }
-
-    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
-        self.sub_command().run(verbose)
+impl crate::cli::CliOption for DisconnectCmd {
+    fn build_command(&self, config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+        self.sub_command().build_command(config)
     }
 }

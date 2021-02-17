@@ -55,7 +55,7 @@ enum ConnectError {
     ServicesError(#[from] services::ServicesError),
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone)]
 pub struct Connect {}
 
 impl Command for Connect {
@@ -69,6 +69,16 @@ impl Command for Connect {
         let rt = Runtime::new().unwrap();
         // Execute the future, blocking the current thread until completion
         rt.block_on(async { Ok(self.new_bridge().await?) })
+    }
+}
+
+impl crate::cli::CliOption for Connect {
+    fn build_command(&self, _config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+        // Temporary implementation
+        // - should return a specific command not self.
+        // - see certificate.rs for an example
+        // - once done remove the #[derive(Clone)]
+        Ok(Box::new(self.clone()))
     }
 }
 

@@ -9,11 +9,12 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
+use crate::config::{ConfigError, TEdgeConfig};
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
 const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone)]
 pub enum CertCmd {
     /// Create a self-signed device certificate
     Create {
@@ -137,6 +138,12 @@ impl CertError {
             },
             _ => self,
         }
+    }
+}
+
+impl crate::cli::CliOption for CertCmd {
+    fn build_command(&self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        Ok(Box::new(self.clone()))
     }
 }
 

@@ -1,10 +1,15 @@
 use super::command::Command;
-use crate::config::ConfigCmd;
+use crate::config;
 use structopt::clap;
 use structopt::StructOpt;
+use crate::config::{ConfigError, TEdgeConfig};
 
 mod connect;
 mod disconnect;
+
+pub trait CliOption {
+    fn build_command(&self, config: &config::TEdgeConfig) -> Result<Box<dyn Command>, config::ConfigError>;
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -16,31 +21,19 @@ pub struct Opt {
     // The number of occurrences of the `v` flag
     /// Verbose mode (-v, -vv, -vvv, etc.)
     #[structopt(short, parse(from_occurrences))]
-    verbose: u8,
+    pub verbose: u8,
 
     #[structopt(subcommand)]
-    tedge_cmd: TEdgeCmd,
-}
-
-impl ToString for Opt {
-    fn to_string(&self) -> String {
-        self.tedge_cmd.to_string()
-    }
-}
-
-impl Opt {
-    pub fn run(&self) -> Result<(), anyhow::Error> {
-        self.tedge_cmd.run(self.verbose)
-    }
+    pub tedge_opt: TEdgeOpt,
 }
 
 #[derive(StructOpt, Debug)]
-enum TEdgeCmd {
+pub enum TEdgeOpt {
     /// Create and manage device certificate
     Cert(super::certificate::CertCmd),
 
     /// Configure Thin Edge.
-    Config(ConfigCmd),
+    Config(config::ConfigCmd),
 
     /// Connect to connector provider
     Connect(connect::ConnectCmd),
@@ -52,24 +45,20 @@ enum TEdgeCmd {
     Mqtt(super::mqtt::MqttCmd),
 }
 
-impl TEdgeCmd {
-    fn sub_command(&self) -> &dyn Command {
+impl TEdgeOpt {
+    fn sub_option(&self) -> &dyn CliOption {
         match self {
-            TEdgeCmd::Cert(ref cmd) => cmd,
-            TEdgeCmd::Config(ref cmd) => cmd,
-            TEdgeCmd::Connect(ref cmd) => cmd,
-            TEdgeCmd::Disconnect(cmd) => cmd,
-            TEdgeCmd::Mqtt(ref cmd) => cmd,
+            TEdgeOpt::Cert(ref cmd) => cmd,
+            TEdgeOpt::Config(ref cmd) => cmd,
+            TEdgeOpt::Connect(ref cmd) => cmd,
+            TEdgeOpt::Disconnect(cmd) => cmd,
+            TEdgeOpt::Mqtt(ref cmd) => cmd,
         }
     }
 }
 
-impl Command for TEdgeCmd {
-    fn to_string(&self) -> String {
-        self.sub_command().to_string()
-    }
-
-    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
-        self.sub_command().run(verbose)
+impl CliOption for TEdgeOpt {
+    fn build_command(&self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        self.sub_option().build_command(config)
     }
 }

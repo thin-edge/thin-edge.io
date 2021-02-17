@@ -27,7 +27,7 @@ pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
 /// Wrapper type for Configuration keys.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConfigKey(pub String);
 
 impl ConfigKey {
@@ -52,7 +52,7 @@ impl std::str::FromStr for ConfigKey {
     }
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone)]
 pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
@@ -88,6 +88,16 @@ pub enum ConfigCmd {
         #[structopt(long)]
         doc: bool,
     },
+}
+
+impl crate::cli::CliOption for ConfigCmd {
+    fn build_command(&self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        // Temporary implementation
+        // - should return a specific command not self.
+        // - see certificate.rs for an example
+        // - once done remove the #[derive(Clone)]
+        Ok(Box::new(self.clone()))
+    }
 }
 
 impl Command for ConfigCmd {
