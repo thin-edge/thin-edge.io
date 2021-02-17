@@ -10,7 +10,7 @@ const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_ID: &str = "tedge-cli";
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(StructOpt, Debug)]
 pub enum MqttCmd {
     /// Publish a MQTT message on a topic.
     Pub {
@@ -49,12 +49,11 @@ pub enum MqttError {
 }
 
 impl crate::cli::CliOption for MqttCmd {
-    fn build_command(&self, _config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn into_command(self, _config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.
         // - see certificate.rs for an example
-        // - once done remove the #[derive(Clone)]
-        Ok(Box::new(self.clone()))
+        Ok(Box::new(self))
     }
 }
 

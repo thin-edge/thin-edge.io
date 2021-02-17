@@ -52,7 +52,7 @@ impl std::str::FromStr for ConfigKey {
     }
 }
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
@@ -91,12 +91,11 @@ pub enum ConfigCmd {
 }
 
 impl crate::cli::CliOption for ConfigCmd {
-    fn build_command(&self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.
         // - see certificate.rs for an example
-        // - once done remove the #[derive(Clone)]
-        Ok(Box::new(self.clone()))
+        Ok(Box::new(self))
     }
 }
 

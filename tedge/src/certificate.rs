@@ -14,8 +14,8 @@ use crate::config::{ConfigError, TEdgeConfig};
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
 const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
 
-#[derive(StructOpt, Debug, Clone)]
-pub enum CertCmd {
+#[derive(StructOpt, Debug)]
+pub enum CertOpt {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier
@@ -48,6 +48,32 @@ pub enum CertCmd {
         #[structopt(long, default_value = DEFAULT_KEY_PATH)]
         key_path: String,
     },
+}
+
+pub struct CertCreate {
+    /// The device identifier
+    id: String,
+
+    /// The path where the device certificate will be stored
+    cert_path: String,
+
+    /// The path where the device private key will be stored
+    key_path: String,
+}
+
+/// Show the device certificate, if any
+pub struct CertShow {
+    /// The path where the device certificate will be stored
+    cert_path: String,
+}
+
+/// Remove the device certificate
+pub struct CertRemove {
+    /// The path of the certificate to be removed
+    cert_path: String,
+
+    /// The path of the private key to be removed
+    key_path: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -141,53 +167,64 @@ impl CertError {
     }
 }
 
-impl crate::cli::CliOption for CertCmd {
-    fn build_command(&self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        Ok(Box::new(self.clone()))
-    }
-}
-
-impl Command for CertCmd {
-    fn to_string(&self) -> String {
-        match self {
-            CertCmd::Create {
+impl crate::cli::CliOption for CertOpt {
+    fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        let cmd: Box<dyn Command> = match self {
+            CertOpt::Create {
                 id,
-                cert_path: _,
-                key_path: _,
-            } => format!("create a test certificate for the device {}.", id),
-            CertCmd::Show { cert_path: _ } => "show the device certificate".into(),
-            CertCmd::Remove {
-                cert_path: _,
-                key_path: _,
-            } => "remove the device certificate".into(),
-        }
-    }
-
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let config = CertCmd::read_configuration();
-        match self {
-            CertCmd::Create {
-                id,
-                cert_path,
-                key_path,
-            } => create_test_certificate(&config, id, cert_path, key_path)?,
-
-            CertCmd::Show { cert_path } => show_certificate(cert_path)?,
-
-            CertCmd::Remove {
                 cert_path,
                 key_path,
             } => {
-                remove_certificate(cert_path, key_path)?;
-            }
-        }
+                let cmd = CertCreate {id, cert_path, key_path};
+                Box::new(cmd)
+            },
+            CertOpt::Show { cert_path} => {
+                let cmd = CertShow {cert_path};
+                Box::new(cmd)
+            },
+            CertOpt::Remove {
+                cert_path,
+                key_path,
+            } => {
+                let cmd = CertRemove {cert_path, key_path};
+                Box::new(cmd)
+            },
+        };
+
+        Ok(cmd)
+    }
+}
+
+impl Command for CertCreate {
+    fn to_string(&self) -> String {
+        format!("create a test certificate for the device {}.", self.id)
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let config = CertConfig::default();
+        let () = create_test_certificate(&config, &self.id, &self.cert_path, &self.key_path)?;
+        Ok(())
+    }
+}
+impl Command for CertShow {
+    fn to_string(&self) -> String {
+        "show the device certificate".into()
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let _ = show_certificate(&self.cert_path)?;
         Ok(())
     }
 }
 
-impl CertCmd {
-    fn read_configuration() -> CertConfig {
-        CertConfig::default()
+impl Command for CertRemove {
+    fn to_string(&self) -> String {
+        "remove the device certificate".into()
+    }
+
+    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let () = remove_certificate(&self.cert_path, &self.key_path)?;
+        Ok(())
     }
 }
 
@@ -367,7 +404,7 @@ mod tests {
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
 
-        let cmd = CertCmd::Create {
+        let cmd = CertCreate {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
@@ -387,7 +424,7 @@ mod tests {
         let key_file = temp_file_with_content(key_content);
         let id = "my-device-id";
 
-        let cmd = CertCmd::Create {
+        let cmd = CertCreate {
             id: String::from(id),
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
