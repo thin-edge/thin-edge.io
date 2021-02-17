@@ -109,11 +109,12 @@ impl Command for ConfigCmd {
 
         match self {
             ConfigCmd::Get { key } => {
-                let value = config.get_config_value(key.as_str())?.ok_or_else(|| {
-                    ConfigError::ConfigNotSet {
-                        key: key.to_owned(),
-                    }
-                })?;
+                let value =
+                    config
+                        .get_config_value(key.as_str())?
+                        .ok_or(ConfigError::ConfigNotSet {
+                            key: key.as_str().to_string(),
+                        })?;
                 println!("{}", value)
             }
             ConfigCmd::Set { key, value } => {
@@ -137,7 +138,29 @@ impl Command for ConfigCmd {
     }
 }
 
-/// Represents the configuration of a thin edge device derived from $HOME/.tedge/tedge.toml.
+/// Represents the complete configuration of a thin edge device.
+/// This configuration is a wrapper over the device specific configurations
+/// as well as the IoT cloud provider specific configurations.
+///
+/// The following example showcases how the thin edge configuration can be read
+/// and how individual configuration values can be retrieved out of it:
+///
+/// # Examples
+/// ```
+/// /// Read the default tedge.toml file into a TEdgeConfig object
+/// let config: TEdgeConfig = TEdgeConfig::from_default_config().unwrap();
+///
+/// /// Fetch the device config from the TEdgeConfig object
+/// let device_config: DeviceConfig = config.device;
+/// /// Fetch the device id from the DeviceConfig object
+/// let device_id = device_config.id.unwrap();
+///
+/// /// Fetch the Cumulocity config from the TEdgeConfig object
+/// let cumulocity_config: CumulocityConfig = config.c8y;
+/// /// Fetch the Cumulocity URL from the CumulocityConfig object
+/// let cumulocity_url = cumulocity_config.url.unwrap();
+/// ```
+///
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TEdgeConfig {
@@ -279,8 +302,8 @@ impl TEdgeConfig {
     }
 }
 
-/// Represents the device specific configurations of a thin edge device
-/// derived from [device] section in a tedge.toml file
+/// Represents the device specific configurations defined in the [device] section
+/// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DeviceConfig {
@@ -297,11 +320,11 @@ pub struct DeviceConfig {
 }
 
 impl DeviceConfig {
-    pub fn default_cert_path() -> Result<String, ConfigError> {
+    fn default_cert_path() -> Result<String, ConfigError> {
         Self::path_in_cert_directory(DEVICE_CERT_FILE)
     }
 
-    pub fn default_key_path() -> Result<String, ConfigError> {
+    fn default_key_path() -> Result<String, ConfigError> {
         Self::path_in_cert_directory(DEVICE_KEY_FILE)
     }
 
@@ -333,8 +356,8 @@ impl DeviceConfig {
     }
 }
 
-/// Represents the Cumulocity specific configurations of a thin edge device
-/// derived from the [c8y] section in a tedge.toml file
+/// Represents the Cumulocity specific configurations defined in the
+/// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CumulocityConfig {
@@ -344,7 +367,7 @@ pub struct CumulocityConfig {
     /// Endpoint URL of the Cumulocity tenant
     url: Option<String>,
 
-    /// The path where Cumuocity root certificate(s) are stored.
+    /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
     root_cert_path: Option<String>,
 }
@@ -410,11 +433,20 @@ fn print_config_doc() {
 
 impl TEdgeConfig {
     /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// The retrieved configuration will have default values applied to any unconfigured field
+    /// for which a default value is available.
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
+    /// The retrieved configuration will have default values applied to any unconfigured field
+    /// for which a default value is available.
+    ///
+    /// #Arguments
+    ///
+    /// * `path` - Path to a thin edge configuration TOML file
+    ///
     fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
             Ok(content) => {
