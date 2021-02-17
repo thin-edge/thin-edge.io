@@ -1,28 +1,21 @@
 use env_logger::Env;
-
-use mqtt_client::Client;
+use mapper::{Mapper, MapperError};
+use service::*;
 
 mod mapper;
+mod service;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
-const APP_NAME: &str = "tedge-mapper";
 
 #[tokio::main]
-async fn main() -> Result<(), mqtt_client::Error> {
+async fn main() -> Result<(), ServiceError<MapperError>> {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOG_LEVEL)).init();
 
     log::info!("tedge-mapper starting!");
+    log::info!("tedge-mapper pid: {}", std::process::id());
+    println!("tedge-mapper pid: {}", std::process::id());
 
-    let config = mqtt_client::Config::default();
-    let mqtt = Client::connect(APP_NAME, &config).await?;
-
-    let mapper = mapper::Mapper::new_from_string(
-        mqtt,
-        mapper::IN_TOPIC,
-        mapper::C8Y_TOPIC_C8Y_JSON,
-        mapper::ERRORS_TOPIC,
-    )?;
-    mapper.run().await?;
-
-    Ok(())
+    ServiceRunner::<Mapper>::new()
+        .run_with_config(|| Ok(()))
+        .await
 }
