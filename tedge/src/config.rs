@@ -52,7 +52,7 @@ pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
         key: ConfigKey,
 
         /// Configuration value.
@@ -62,14 +62,14 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
         key: ConfigKey,
     },
 
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_get())]
         key: ConfigKey,
     },
 
@@ -117,19 +117,24 @@ impl Command for ConfigCmd {
                         })?;
                 println!("{}", value)
             }
-            ConfigCmd::Set { key, value } => match TEdgeConfig::is_protected_key(key.as_str()) {
-                false => {
+            ConfigCmd::Set { key, value } => match TEdgeConfig::can_set_by_cli(key.as_str()) {
+                true => {
                     config.set_config_value(key.as_str(), value.to_string())?;
                     config_updated = true;
                 }
-                true => Err(ConfigError::ProtectedConfigKey {
+                false => Err(ConfigError::ForbiddenToSetByCLI {
                     key: key.as_str().parse()?,
                 })?,
             },
-            ConfigCmd::Unset { key } => {
-                config.unset_config_value(key.as_str())?;
-                config_updated = true;
-            }
+            ConfigCmd::Unset { key } => match TEdgeConfig::can_set_by_cli(key.as_str()) {
+                true => {
+                    config.unset_config_value(key.as_str())?;
+                    config_updated = true;
+                }
+                false => Err(ConfigError::ForbiddenToSetByCLI {
+                    key: key.as_str().parse()?,
+                })?,
+            },
             ConfigCmd::List { all, doc } => match doc {
                 true => print_config_doc(),
                 false => print_config_list(&config, *all)?,
@@ -211,12 +216,43 @@ pub struct TEdgeConfig {
 /// ```
 ///
 macro_rules! hide_key {
-    ($str:literal, hidden) => {""};
-    ($str:literal, visible) => {concat!(" ", $str)};
+    ($str:literal, Public) => {
+        concat!(" ", $str)
+    };
+    ($str:literal, Protected) => {
+        ""
+    };
+    ($str:literal, Computed) => {
+        ""
+    };
+}
+
+macro_rules! set_keys_by_cli {
+    ($str:literal, Public) => {
+        true
+    };
+    ($str:literal, Protected) => {
+        false
+    };
+    ($str:literal, Computed) => {
+        false
+    };
+}
+
+macro_rules! set_keys_by_api {
+    ($str:literal, Public) => {
+        true
+    };
+    ($str:literal, Protected) => {
+        true
+    };
+    ($str:literal, Computed) => {
+        false
+    };
 }
 
 macro_rules! config_keys {
-    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $is_protected:literal , $is_hidden:tt, $desc:literal ) )* }) => {
+    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $type:tt, $desc:literal ) )* }) => {
         impl $ty {
             fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
                 match key {
@@ -250,9 +286,12 @@ macro_rules! config_keys {
                 ]
             }
 
-            fn valid_keys_help_message() -> &'static str {
-                // how to remove "hidden" key from here!
-                concat!("[", $( hide_key!($str, $is_hidden) ),*, " ]")
+            fn valid_keys_help_message_for_get() -> &'static str {
+                concat!("[", $( " ", $str ),*, " ]")
+            }
+
+            fn valid_keys_help_message_for_set() -> &'static str {
+                concat!("[", $( hide_key!($str, $type) ),*, " ]")
             }
 
             fn get_description_of_key(key: &str) -> &'static str {
@@ -262,9 +301,16 @@ macro_rules! config_keys {
                 }
             }
 
-            fn is_protected_key(key: &str) -> bool {
+            fn can_set_by_cli(key: &str) -> bool {
                 match key {
-                    $( $str => $is_protected, )*
+                    $( $str => set_keys_by_cli!($str, $type), )*
+                    _ => false,
+                }
+            }
+
+            fn can_set_by_api(key: &str) -> bool {
+                match key {
+                    $( $str => set_keys_by_api!($str, $type), )*
                     _ => false,
                 }
             }
@@ -275,12 +321,12 @@ macro_rules! config_keys {
 config_keys! {
     TEdgeConfig {
         // external key => (internal key, type description)
-        "device.id"          => (device.id, false, hidden, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
-        "device.key.path"    => (device.key_path, false, visible, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
-        "device.cert.path"   => (device.cert_path, false, visible, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
-        "c8y.url"            => (c8y.url, false, visible, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
-        "c8y.root.cert.path" => (c8y.root_cert_path, false, visible, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
-        "c8y.connect"        => (c8y.connect, true, hidden, "Connection status to the provided Cumulocity tenant. Example: true")
+        "device.id"          => (device.id, Computed, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device.key.path"    => (device.key_path, Public, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
+        "device.cert.path"   => (device.cert_path, Public, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
+        "c8y.url"            => (c8y.url, Public, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y.root.cert.path" => (c8y.root_cert_path, Public, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y.connect"        => (c8y.connect, Protected, "Connection status to the provided Cumulocity tenant. Example: true")
     }
 }
 
@@ -371,8 +417,11 @@ pub enum ConfigError {
     #[error("The provided config key: {key} is not set")]
     ConfigNotSet { key: String },
 
-    #[error("The provided config key: {key} is protected. Not allowed to change the value")]
-    ProtectedConfigKey { key: String },
+    #[error("The provided config key: {key} is forbidden to change the value by user")]
+    ForbiddenToSetByCLI { key: String },
+
+    #[error("The provided config key: {key} is forbidden to change the value by API")]
+    ForbiddenToSetByAPI { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
@@ -459,7 +508,10 @@ impl TEdgeConfig {
     }
 
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {
-        self._set_config_value(key, Some(value))
+        match TEdgeConfig::can_set_by_api(key) {
+            true => self._set_config_value(key, Some(value)),
+            false => Err(ConfigError::ForbiddenToSetByAPI{key: key.to_string()}),
+        }
     }
 
     pub fn unset_config_value(&mut self, key: &str) -> Result<(), ConfigError> {
@@ -479,9 +531,17 @@ mod tests {
     }
 
     #[test]
-    fn test_macro_creates_is_protected_key_correctly() {
-        assert_eq!(TEdgeConfig::is_protected_key("c8y-connect"), true);
-        assert_eq!(TEdgeConfig::is_protected_key("c8y.connect"), false);
+    fn test_macro_creates_can_set_by_cli_correctly() {
+        assert_eq!(TEdgeConfig::can_set_by_cli("device.id"), false);
+        assert_eq!(TEdgeConfig::can_set_by_cli("device.cert.path"), true);
+        assert_eq!(TEdgeConfig::can_set_by_cli("c8y.connect"), false);
+    }
+
+    #[test]
+    fn test_macro_creates_can_set_by_api_correctly() {
+        assert_eq!(TEdgeConfig::can_set_by_api("device.id"), false);
+        assert_eq!(TEdgeConfig::can_set_by_api("device.cert.path"), true);
+        assert_eq!(TEdgeConfig::can_set_by_api("c8y.connect"), true);
     }
 
     #[test]
