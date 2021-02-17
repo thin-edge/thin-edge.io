@@ -1,4 +1,5 @@
 use super::command::Command;
+use crate::config::{ConfigError, TEdgeConfig};
 use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
@@ -9,7 +10,6 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
-use crate::config::{ConfigError, TEdgeConfig};
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
 const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
@@ -175,20 +175,27 @@ impl crate::cli::CliOption for CertOpt {
                 cert_path,
                 key_path,
             } => {
-                let cmd = CertCreate {id, cert_path, key_path};
+                let cmd = CertCreate {
+                    id,
+                    cert_path,
+                    key_path,
+                };
                 Box::new(cmd)
-            },
-            CertOpt::Show { cert_path} => {
-                let cmd = CertShow {cert_path};
+            }
+            CertOpt::Show { cert_path } => {
+                let cmd = CertShow { cert_path };
                 Box::new(cmd)
-            },
+            }
             CertOpt::Remove {
                 cert_path,
                 key_path,
             } => {
-                let cmd = CertRemove {cert_path, key_path};
+                let cmd = CertRemove {
+                    cert_path,
+                    key_path,
+                };
                 Box::new(cmd)
-            },
+            }
         };
 
         Ok(cmd)

@@ -49,7 +49,10 @@ pub enum MqttError {
 }
 
 impl crate::cli::CliOption for MqttCmd {
-    fn into_command(self, _config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn into_command(
+        self,
+        _config: &crate::config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.
         // - see certificate.rs for an example

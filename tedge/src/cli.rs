@@ -1,14 +1,17 @@
 use super::command::Command;
 use crate::config;
+use crate::config::{ConfigError, TEdgeConfig};
 use structopt::clap;
 use structopt::StructOpt;
-use crate::config::{ConfigError, TEdgeConfig};
 
 mod connect;
 mod disconnect;
 
 pub trait CliOption {
-    fn into_command(self, config: &config::TEdgeConfig) -> Result<Box<dyn Command>, config::ConfigError>;
+    fn into_command(
+        self,
+        config: &config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, config::ConfigError>;
 }
 
 #[derive(StructOpt, Debug)]

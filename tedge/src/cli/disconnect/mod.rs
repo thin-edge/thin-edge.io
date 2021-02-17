@@ -10,7 +10,10 @@ pub enum DisconnectCmd {
 }
 
 impl crate::cli::CliOption for DisconnectCmd {
-    fn into_command(self, config: &crate::config::TEdgeConfig) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn into_command(
+        self,
+        config: &crate::config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
             DisconnectCmd::C8y(opt) => opt.into_command(config),
         }
