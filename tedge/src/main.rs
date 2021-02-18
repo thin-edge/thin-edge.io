@@ -16,7 +16,7 @@ use crate::cli::BuildCommand;
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
     let config = config::TEdgeConfig::from_default_config()?;
-    let cmd = opt.tedge_opt.into_command(&config)?;
+    let cmd = opt.tedge_opt.build_command(&config)?;
     cmd.run(opt.verbose)
-        .with_context(|| format!("failed to {}", cmd.to_string()))
+        .with_context(|| format!("failed to {}", cmd.description()))
 }

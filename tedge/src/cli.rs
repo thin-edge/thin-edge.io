@@ -8,7 +8,7 @@ mod connect;
 mod disconnect;
 
 pub trait BuildCommand {
-    fn into_command(
+    fn build_command(
         self,
         config: &config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, config::ConfigError>;
@@ -49,13 +49,13 @@ pub enum TEdgeOpt {
 }
 
 impl BuildCommand for TEdgeOpt {
-    fn into_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            TEdgeOpt::Cert(opt) => opt.into_command(config),
-            TEdgeOpt::Config(opt) => opt.into_command(config),
-            TEdgeOpt::Connect(opt) => opt.into_command(config),
-            TEdgeOpt::Disconnect(opt) => opt.into_command(config),
-            TEdgeOpt::Mqtt(opt) => opt.into_command(config),
+            TEdgeOpt::Cert(opt) => opt.build_command(config),
+            TEdgeOpt::Config(opt) => opt.build_command(config),
+            TEdgeOpt::Connect(opt) => opt.build_command(config),
+            TEdgeOpt::Disconnect(opt) => opt.build_command(config),
+            TEdgeOpt::Mqtt(opt) => opt.build_command(config),
         }
     }
 }

@@ -91,7 +91,7 @@ pub enum ConfigCmd {
 }
 
 impl crate::cli::BuildCommand for ConfigCmd {
-    fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.
         // - see certificate.rs for an example
@@ -100,7 +100,7 @@ impl crate::cli::BuildCommand for ConfigCmd {
 }
 
 impl Command for ConfigCmd {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         match self {
             ConfigCmd::Set { key, value } => format!(
                 "set the configuration key: {} with value: {}.",

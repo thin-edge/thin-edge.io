@@ -168,7 +168,7 @@ impl CertError {
 }
 
 impl crate::cli::BuildCommand for CertOpt {
-    fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd: Box<dyn Command> = match self {
             CertOpt::Create {
                 id,
@@ -203,7 +203,7 @@ impl crate::cli::BuildCommand for CertOpt {
 }
 
 impl Command for CertCreate {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         format!("create a test certificate for the device {}.", self.id)
     }
 
@@ -214,7 +214,7 @@ impl Command for CertCreate {
     }
 }
 impl Command for CertShow {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "show the device certificate".into()
     }
 
@@ -225,7 +225,7 @@ impl Command for CertShow {
 }
 
 impl Command for CertRemove {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "remove the device certificate".into()
     }
 

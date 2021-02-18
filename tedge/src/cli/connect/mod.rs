@@ -12,12 +12,12 @@ pub enum ConnectCmd {
 }
 
 impl crate::cli::BuildCommand for ConnectCmd {
-    fn into_command(
+    fn build_command(
         self,
         config: &crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
-            ConnectCmd::C8y(opt) => opt.into_command(config),
+            ConnectCmd::C8y(opt) => opt.build_command(config),
         }
     }
 }

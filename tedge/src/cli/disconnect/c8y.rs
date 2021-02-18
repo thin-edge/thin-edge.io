@@ -29,7 +29,7 @@ pub enum DisconnectError {
 pub struct Disconnect {}
 
 impl crate::cli::BuildCommand for Disconnect {
-    fn into_command(
+    fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
@@ -41,7 +41,7 @@ impl crate::cli::BuildCommand for Disconnect {
 }
 
 impl Command for Disconnect {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "execute 'tedge disconnect'.".into()
     }
 

@@ -59,7 +59,7 @@ enum ConnectError {
 pub struct Connect {}
 
 impl Command for Connect {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "execute `tedge connect`.".into()
     }
 
@@ -73,7 +73,7 @@ impl Command for Connect {
 }
 
 impl crate::cli::BuildCommand for Connect {
-    fn into_command(
+    fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {

@@ -15,7 +15,7 @@
 /// }
 ///
 /// impl Command for ConfigCmd {
-///     fn to_string(&self) -> String {
+///     fn description(&self) -> String {
 ///        match self {
 ///            ConfigCmd::Set { key, value } => format!("set the parameter '{}' to the '{}'", key, value),
 ///            ConfigCmd::Get { key } => format!("get the value of the parameter '{}'", key),
@@ -40,8 +40,8 @@
 pub trait Command {
     /// Display that command to the user, telling what will be done.
     ///
-    /// This string is displayed to the end user in case of an error, to give the context of that error.
-    fn to_string(&self) -> String;
+    /// This description is displayed to the end user in case of an error, to give the context of that error.
+    fn description(&self) -> String;
 
     /// Run this command.
     ///

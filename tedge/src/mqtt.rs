@@ -49,7 +49,7 @@ pub enum MqttError {
 }
 
 impl crate::cli::BuildCommand for MqttCmd {
-    fn into_command(
+    fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
@@ -61,7 +61,7 @@ impl crate::cli::BuildCommand for MqttCmd {
 }
 
 impl Command for MqttCmd {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         match self {
             MqttCmd::Pub {
                 topic,
