@@ -1,6 +1,6 @@
 mod tests {
-
-    use predicates::prelude::*; // Used for writing assertions
+    use predicates::prelude::*;
+    use std::path::Path; // Used for writing assertions
 
     fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
     where
@@ -150,8 +150,15 @@ mod tests {
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        let cert_path = temp_path(&temp_dir, "certificate/tedge-certificate.pem");
-        let key_path = temp_path(&temp_dir, "certificate/tedge-private-key.pem");
+        // Handle Unix and Windows cases
+        let cert_path = temp_path(
+            &temp_dir,
+            &join_paths("certificate", "tedge-certificate.pem"),
+        );
+        let key_path = temp_path(
+            &temp_dir,
+            &join_paths("certificate", "tedge-private-key.pem"),
+        );
 
         let mut get_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.id"])?;
@@ -207,8 +214,9 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        let key_regex = r#"device.key.path=[\w/.]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.]*certificate/tedge-certificate.pem"#;
+        // Handle Unix and Windows cases
+        let key_regex = r#"device.key.path=[\w/.:\\]*certificate[/\\]tedge-private-key.pem"#;
+        let cert_regex = r#"device.cert.path=[\w/.:\\]*certificate[/\\]tedge-certificate.pem"#;
 
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
@@ -241,8 +249,9 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        let key_regex = r#"device.key.path=[\w/.]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.]*certificate/tedge-certificate.pem"#;
+        // Handle Unix and Windows cases
+        let key_regex = r#"device.key.path=[\w/.:\\]*certificate[/\\]tedge-private-key.pem"#;
+        let cert_regex = r#"device.cert.path=[\w/.:\\]*certificate[/\\]tedge-certificate.pem"#;
 
         let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
         let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
@@ -288,6 +297,14 @@ mod tests {
         let mut command = tedge_command(args)?;
         command.env("HOME", test_home);
         Ok(command)
+    }
+
+    fn join_paths(prefix_path: &str, trailer_path: &str) -> String {
+        Path::new(prefix_path)
+            .join(trailer_path)
+            .to_str()
+            .unwrap()
+            .into()
     }
 
     fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
