@@ -1,10 +1,7 @@
 use async_trait::async_trait;
 use futures::future::FutureExt;
 use thiserror::Error;
-use tokio::{
-    select,
-    signal::unix::{signal, SignalKind},
-};
+use tokio::select;
 
 #[async_trait]
 pub trait Service: Sized {
@@ -59,6 +56,7 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ignore_sighup(self) -> Self {
         Self {
             ignore_sighup: true,
@@ -66,6 +64,7 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ignore_sigterm(self) -> Self {
         Self {
             ignore_sigterm: true,
@@ -73,6 +72,7 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ignore_sigint(self) -> Self {
         Self {
             ignore_sigint: true,
@@ -80,11 +80,18 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
+    pub async fn run_with_default_config(self) -> Result<(), ServiceError<S::Error>>
+    where
+        S::Configuration: Default,
+    {
+        self.run_with_config(S::Configuration::default()).await
+    }
+
     pub async fn run_with_config(
         self,
         config: S::Configuration,
     ) -> Result<(), ServiceError<S::Error>> {
-        log::info!("Running service {}. pid={}", S::NAME, std::process::id());
+        log::info!("{} starting. pid={}", S::NAME, std::process::id());
         let mut service = S::setup(config).await.map_err(ServiceError::ServiceError)?;
 
         loop {
@@ -92,7 +99,7 @@ impl<S: Service> ServiceRunner<S> {
 
             match run_result {
                 Ok(ExitReason::Terminate) => {
-                    log::debug!("Shutting service down");
+                    log::info!("Shutting service down");
                     let () = service
                         .shutdown()
                         .await
@@ -100,11 +107,11 @@ impl<S: Service> ServiceRunner<S> {
                     return Ok(());
                 }
                 Ok(ExitReason::ReloadConfig) => {
-                    log::debug!("Reload config");
+                    log::info!("Reload config");
                     let () = service.reload().await.map_err(ServiceError::ServiceError)?;
                 }
                 Err(err) => {
-                    log::debug!("Service failed with: {:?}", err);
+                    log::info!("Service failed with: {:?}", err);
                     let () = service
                         .shutdown()
                         .await
@@ -119,21 +126,21 @@ impl<S: Service> ServiceRunner<S> {
         &self,
         service: &mut S,
     ) -> Result<ExitReason, ServiceError<S::Error>> {
-        let mut hangup_signals = signal(SignalKind::hangup())?;
-        let mut terminate_signals = signal(SignalKind::terminate())?;
-        let mut interrupt_signals = signal(SignalKind::interrupt())?;
+        let mut hangup_signals = signals::sighup_stream()?;
+        let mut terminate_signals = signals::sigterm_stream()?;
+        let mut interrupt_signals = signals::sigint_stream()?;
 
         let mut service_fut = service.run().fuse();
 
         loop {
             select! {
                 service_result = &mut service_fut => {
-                    log::debug!("Service terminated with: {:?}", service_result);
+                    log::info!("Service terminated with: {:?}", service_result);
                     return service_result.map(|()| ExitReason::Terminate).map_err(ServiceError::ServiceError);
                 }
 
                 terminate_signal = terminate_signals.recv() => {
-                    log::debug!("Got SIGTERM");
+                    log::info!("Got SIGTERM");
                     if self.ignore_sigterm {
                         continue;
                     }
@@ -142,7 +149,7 @@ impl<S: Service> ServiceRunner<S> {
                 }
 
                 interrupt_signal = interrupt_signals.recv() => {
-                    log::debug!("Got SIGINT");
+                    log::info!("Got SIGINT");
                     if self.ignore_sigint {
                         continue;
                     }
@@ -151,7 +158,7 @@ impl<S: Service> ServiceRunner<S> {
                 }
 
                 hangup_signal = hangup_signals.recv() => {
-                    log::debug!("Got SIGHUP");
+                    log::info!("Got SIGHUP");
                     if self.ignore_sighup {
                         continue;
                     }
@@ -167,4 +174,69 @@ impl<S: Service> ServiceRunner<S> {
 enum ExitReason {
     ReloadConfig,
     Terminate,
+}
+
+#[cfg(not(windows))]
+mod signals {
+    use tokio::signal::unix::{signal, Signal, SignalKind};
+
+    pub fn sighup_stream() -> std::io::Result<Signal> {
+        signal(SignalKind::hangup())
+    }
+
+    pub fn sigterm_stream() -> std::io::Result<Signal> {
+        signal(SignalKind::terminate())
+    }
+
+    pub fn sigint_stream() -> std::io::Result<Signal> {
+        signal(SignalKind::interrupt())
+    }
+}
+
+/// Signal compatibility layer for Windows
+#[cfg(windows)]
+mod signals {
+    use tokio::sync::mpsc::*;
+
+    /// A stream that will never produce any data.
+    /// Used on Windows to mock signals that do not exist.
+    pub struct DummySignalStream {
+        // We will never send on the `_sender`, but we
+        // need to keep it open otherwise the `recv` will
+        // "awake".
+        _sender: Sender<()>,
+        receiver: Receiver<()>,
+    }
+
+    impl DummySignalStream {
+        fn new() -> Self {
+            let (sender, receiver) = channel(1);
+            Self {
+                _sender: sender,
+                receiver,
+            }
+        }
+
+        pub async fn recv(&mut self) -> Option<()> {
+            self.receiver.recv().await
+        }
+    }
+
+    pub fn sighup_stream() -> std::io::Result<DummySignalStream> {
+        Ok(DummySignalStream::new())
+    }
+
+    pub fn sigterm_stream() -> std::io::Result<DummySignalStream> {
+        Ok(DummySignalStream::new())
+    }
+
+    pub fn sigint_stream() -> std::io::Result<Receiver<()>> {
+        let (sender, receiver) = channel::<()>(1);
+        tokio::spawn(async move {
+            if let Ok(_) = tokio::signal::ctrl_c().await {
+                let _ = sender.send(()).await;
+            }
+        });
+        Ok(receiver)
+    }
 }
