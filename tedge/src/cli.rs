@@ -1,6 +1,8 @@
+use crate::certificate;
 use crate::command::{BuildCommand, Command};
 use crate::config;
 use crate::config::{ConfigError, TEdgeConfig};
+use crate::mqtt;
 use structopt::clap;
 use structopt::StructOpt;
 
@@ -20,13 +22,13 @@ pub struct Opt {
     pub verbose: u8,
 
     #[structopt(subcommand)]
-    pub tedge_opt: TEdgeOpt,
+    pub tedge: TEdgeOpt,
 }
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeOpt {
     /// Create and manage device certificate
-    Cert(super::certificate::CertOpt),
+    Cert(certificate::TEdgeCertOpt),
 
     /// Configure Thin Edge.
     Config(config::ConfigCmd),
@@ -38,7 +40,7 @@ pub enum TEdgeOpt {
     Disconnect(disconnect::DisconnectCmd),
 
     /// Publish a message on a topic and subscribe a topic.
-    Mqtt(super::mqtt::MqttCmd),
+    Mqtt(mqtt::MqttCmd),
 }
 
 impl BuildCommand for TEdgeOpt {

@@ -15,7 +15,7 @@ const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
 const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
 
 #[derive(StructOpt, Debug)]
-pub enum CertOpt {
+pub enum TEdgeCertOpt {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier
@@ -50,7 +50,7 @@ pub enum CertOpt {
     },
 }
 
-pub struct CertCreate {
+pub struct CreateCertCmd {
     /// The device identifier
     id: String,
 
@@ -62,13 +62,13 @@ pub struct CertCreate {
 }
 
 /// Show the device certificate, if any
-pub struct CertShow {
+pub struct ShowCertCmd {
     /// The path where the device certificate will be stored
     cert_path: String,
 }
 
 /// Remove the device certificate
-pub struct CertRemove {
+pub struct RemoveCertCmd {
     /// The path of the certificate to be removed
     cert_path: String,
 
@@ -167,30 +167,30 @@ impl CertError {
     }
 }
 
-impl BuildCommand for CertOpt {
+impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
-            CertOpt::Create {
+            TEdgeCertOpt::Create {
                 id,
                 cert_path,
                 key_path,
             } => {
-                let cmd = CertCreate {
+                let cmd = CreateCertCmd {
                     id,
                     cert_path,
                     key_path,
                 };
                 cmd.into_boxed()
             }
-            CertOpt::Show { cert_path } => {
-                let cmd = CertShow { cert_path };
+            TEdgeCertOpt::Show { cert_path } => {
+                let cmd = ShowCertCmd { cert_path };
                 cmd.into_boxed()
             }
-            CertOpt::Remove {
+            TEdgeCertOpt::Remove {
                 cert_path,
                 key_path,
             } => {
-                let cmd = CertRemove {
+                let cmd = RemoveCertCmd {
                     cert_path,
                     key_path,
                 };
@@ -202,7 +202,7 @@ impl BuildCommand for CertOpt {
     }
 }
 
-impl Command for CertCreate {
+impl Command for CreateCertCmd {
     fn description(&self) -> String {
         format!("create a test certificate for the device {}.", self.id)
     }
@@ -213,7 +213,7 @@ impl Command for CertCreate {
         Ok(())
     }
 }
-impl Command for CertShow {
+impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
     }
@@ -224,7 +224,7 @@ impl Command for CertShow {
     }
 }
 
-impl Command for CertRemove {
+impl Command for RemoveCertCmd {
     fn description(&self) -> String {
         "remove the device certificate".into()
     }
@@ -411,7 +411,7 @@ mod tests {
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
 
-        let cmd = CertCreate {
+        let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
@@ -431,7 +431,7 @@ mod tests {
         let key_file = temp_file_with_content(key_content);
         let id = "my-device-id";
 
-        let cmd = CertCreate {
+        let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
