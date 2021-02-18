@@ -150,7 +150,6 @@ mod tests {
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        // Handle Unix and Windows cases
         let cert_path = temp_path(
             &temp_dir,
             &join_paths("certificate", "tedge-certificate.pem"),
@@ -214,21 +213,28 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        // Handle Unix and Windows cases
-        let key_regex = r#"device.key.path=[\w/.:\\]*certificate[/\\]tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.:\\]*certificate[/\\]tedge-certificate.pem"#;
-
-        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
-        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
-
         let mut list_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "list"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let output_str = String::from_utf8(output.clone().stdout).unwrap();
+        let output_str = String::from_utf8(output.stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&output_str));
-        assert_eq!(true, cert_predicate_fn.eval(&output_str));
+        let key_path = extract_config_value(&output_str, "device.key.path");
+        assert!(key_path.ends_with( "tedge-private-key.pem"));
+        assert!(key_path.contains( "certificate"));
+
+        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        assert!(cert_path.ends_with( "tedge-certificate.pem"));
+        assert!(cert_path.contains( "certificate"));
+    }
+
+    fn extract_config_value(output: &String, key: &str) -> String {
+        output
+            .lines()
+            .map(|line| line.splitn(2, "=").collect::<Vec<_>>())
+            .find(|pair| pair[0] == key)
+            .unwrap()[1]
+            .into()
     }
 
     #[test]
@@ -249,21 +255,20 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        // Handle Unix and Windows cases
-        let key_regex = r#"device.key.path=[\w/.:\\]*certificate[/\\]tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.:\\]*certificate[/\\]tedge-certificate.pem"#;
-
-        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
-        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
-
         let mut list_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "list", "--all"]).unwrap();
         let assert = list_cmd.assert().success();
-        let output = assert.get_output().clone();
+        let output = assert.get_output();
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&output_str));
-        assert_eq!(true, cert_predicate_fn.eval(&output_str));
+        let key_path = extract_config_value(&output_str, "device.key.path");
+        assert!(key_path.ends_with( "tedge-private-key.pem"));
+        assert!(key_path.contains( "certificate"));
+
+        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        assert!(cert_path.ends_with( "tedge-certificate.pem"));
+        assert!(cert_path.contains( "certificate"));
+
         for key in get_tedge_config_keys() {
             assert_eq!(true, output_str.contains(key));
         }
