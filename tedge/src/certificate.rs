@@ -1,3 +1,4 @@
+use crate::param_config_or_default;
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::utils::paths;
@@ -11,45 +12,49 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
 
-const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
-const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
-
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier
-        #[structopt(long)]
-        id: String,
+        /// If unset, use the value of `tedge config get device.cert.id`.
+        #[structopt(long = "device-id")]
+        id: Option<String>,
 
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
         /// The path where the device private key will be stored
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
 
     /// Show the device certificate, if any
     Show {
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
     },
 
     /// Remove the device certificate
     Remove {
         /// The path of the certificate to be removed
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
         /// The path of the private key to be removed
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
 }
 
+/// Create a self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
     id: String,
@@ -167,8 +172,10 @@ impl CertError {
     }
 }
 
+
 impl BuildCommand for TEdgeCertOpt {
-    fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        let device_config = &config.device;
         let cmd = match self {
             TEdgeCertOpt::Create {
                 id,
@@ -176,14 +183,16 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = CreateCertCmd {
-                    id,
-                    cert_path,
-                    key_path,
+                    id: param_config_or_default!(id, device_config.id, "device.cert.id")?,
+                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
+                    key_path: param_config_or_default!(key_path, device_config.key_path, "device.key.path")?,
                 };
                 cmd.into_boxed()
             }
             TEdgeCertOpt::Show { cert_path } => {
-                let cmd = ShowCertCmd { cert_path };
+                let cmd = ShowCertCmd {
+                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
+                };
                 cmd.into_boxed()
             }
             TEdgeCertOpt::Remove {
@@ -191,8 +200,8 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = RemoveCertCmd {
-                    cert_path,
-                    key_path,
+                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
+                    key_path: param_config_or_default!(key_path, device_config.key_path, "device.key.path")?,
                 };
                 cmd.into_boxed()
             }
