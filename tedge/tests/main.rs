@@ -220,12 +220,12 @@ mod tests {
         let output_str = String::from_utf8(output.stdout).unwrap();
 
         let key_path = extract_config_value(&output_str, "device.key.path");
-        assert!(key_path.ends_with( "tedge-private-key.pem"));
-        assert!(key_path.contains( "certificate"));
+        assert!(key_path.ends_with("tedge-private-key.pem"));
+        assert!(key_path.contains("certificate"));
 
         let cert_path = extract_config_value(&output_str, "device.cert.path");
-        assert!(cert_path.ends_with( "tedge-certificate.pem"));
-        assert!(cert_path.contains( "certificate"));
+        assert!(cert_path.ends_with("tedge-certificate.pem"));
+        assert!(cert_path.contains("certificate"));
     }
 
     fn extract_config_value(output: &String, key: &str) -> String {
@@ -262,12 +262,12 @@ mod tests {
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
         let key_path = extract_config_value(&output_str, "device.key.path");
-        assert!(key_path.ends_with( "tedge-private-key.pem"));
-        assert!(key_path.contains( "certificate"));
+        assert!(key_path.ends_with("tedge-private-key.pem"));
+        assert!(key_path.contains("certificate"));
 
         let cert_path = extract_config_value(&output_str, "device.cert.path");
-        assert!(cert_path.ends_with( "tedge-certificate.pem"));
-        assert!(cert_path.contains( "certificate"));
+        assert!(cert_path.ends_with("tedge-certificate.pem"));
+        assert!(cert_path.contains("certificate"));
 
         for key in get_tedge_config_keys() {
             assert_eq!(true, output_str.contains(key));
