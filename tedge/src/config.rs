@@ -549,8 +549,10 @@ url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/root/cert"
 "#;
 
-        let config_file = temp_file_with_content(toml_conf);
-        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        // Using a TempPath let's close the file (this is required on Windows for that test to work).
+        let config_file_path = temp_file_with_content(toml_conf).into_temp_path();
+
+        let mut config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
         assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
@@ -571,8 +573,10 @@ root_cert_path = "/path/to/root/cert"
         config.c8y.url = Some(updated_tenant_url.to_string());
         config.c8y.root_cert_path = None;
 
-        config.write_to_custom_config(config_file.path()).unwrap();
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        config
+            .write_to_custom_config(config_file_path.as_ref())
+            .unwrap();
+        let config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
 
         assert_eq!(config.device.id.as_ref().unwrap(), updated_device_id);
         assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
