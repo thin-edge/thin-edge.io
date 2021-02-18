@@ -1,6 +1,6 @@
-use crate::param_config_or_default;
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
+use crate::param_config_or_default;
 use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
@@ -172,7 +172,6 @@ impl CertError {
     }
 }
 
-
 impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let device_config = &config.device;
@@ -184,14 +183,26 @@ impl BuildCommand for TEdgeCertOpt {
             } => {
                 let cmd = CreateCertCmd {
                     id: param_config_or_default!(id, device_config.id, "device.cert.id")?,
-                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
-                    key_path: param_config_or_default!(key_path, device_config.key_path, "device.key.path")?,
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        device_config.cert_path,
+                        "device.cert.path"
+                    )?,
+                    key_path: param_config_or_default!(
+                        key_path,
+                        device_config.key_path,
+                        "device.key.path"
+                    )?,
                 };
                 cmd.into_boxed()
             }
             TEdgeCertOpt::Show { cert_path } => {
                 let cmd = ShowCertCmd {
-                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        device_config.cert_path,
+                        "device.cert.path"
+                    )?,
                 };
                 cmd.into_boxed()
             }
@@ -200,8 +211,16 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = RemoveCertCmd {
-                    cert_path: param_config_or_default!(cert_path, device_config.cert_path, "device.cert.path")?,
-                    key_path: param_config_or_default!(key_path, device_config.key_path, "device.key.path")?,
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        device_config.cert_path,
+                        "device.cert.path"
+                    )?,
+                    key_path: param_config_or_default!(
+                        key_path,
+                        device_config.key_path,
+                        "device.key.path"
+                    )?,
                 };
                 cmd.into_boxed()
             }

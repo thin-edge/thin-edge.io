@@ -75,7 +75,6 @@ pub trait BuildCommand {
     ) -> Result<Box<dyn Command>, config::ConfigError>;
 }
 
-
 /// Return the value provided on the command line,
 /// or, if not set, return the value stored in the config
 /// or, if not found, return an error asking for the missing value.
