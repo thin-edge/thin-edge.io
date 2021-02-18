@@ -6,7 +6,8 @@ use tokio::signal::unix::{signal, SignalKind};
 #[cfg(not(windows))]
 pub async fn interrupt() -> io::Result<()> {
     let mut signals = signal(SignalKind::interrupt())?;
-    signals.recv().await
+    let _ = signals.recv().await;
+    Ok(())
 }
 
 #[cfg(windows)]
