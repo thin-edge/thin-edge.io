@@ -9,6 +9,11 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+<<<<<<< HEAD
+=======
+use std::os::unix::fs::PermissionsExt;
+use crate::config::{ConfigError, TEdgeConfig};
+>>>>>>> 6d76857... [CIT-217] Fix missing import
 use structopt::StructOpt;
 
 const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
