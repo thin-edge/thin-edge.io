@@ -72,7 +72,7 @@ impl Command for Connect {
     }
 }
 
-impl crate::cli::CliOption for Connect {
+impl crate::cli::BuildCommand for Connect {
     fn into_command(
         self,
         _config: &crate::config::TEdgeConfig,

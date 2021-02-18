@@ -9,7 +9,7 @@ pub enum DisconnectCmd {
     C8y(c8y::Disconnect),
 }
 
-impl crate::cli::CliOption for DisconnectCmd {
+impl crate::cli::BuildCommand for DisconnectCmd {
     fn into_command(
         self,
         config: &crate::config::TEdgeConfig,

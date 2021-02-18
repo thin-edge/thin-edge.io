@@ -90,7 +90,7 @@ pub enum ConfigCmd {
     },
 }
 
-impl crate::cli::CliOption for ConfigCmd {
+impl crate::cli::BuildCommand for ConfigCmd {
     fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.

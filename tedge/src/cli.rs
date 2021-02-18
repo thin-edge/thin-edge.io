@@ -7,7 +7,7 @@ use structopt::StructOpt;
 mod connect;
 mod disconnect;
 
-pub trait CliOption {
+pub trait BuildCommand {
     fn into_command(
         self,
         config: &config::TEdgeConfig,
@@ -48,7 +48,7 @@ pub enum TEdgeOpt {
     Mqtt(super::mqtt::MqttCmd),
 }
 
-impl CliOption for TEdgeOpt {
+impl BuildCommand for TEdgeOpt {
     fn into_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             TEdgeOpt::Cert(opt) => opt.into_command(config),

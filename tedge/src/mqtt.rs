@@ -48,7 +48,7 @@ pub enum MqttError {
     InvalidQoSError,
 }
 
-impl crate::cli::CliOption for MqttCmd {
+impl crate::cli::BuildCommand for MqttCmd {
     fn into_command(
         self,
         _config: &crate::config::TEdgeConfig,

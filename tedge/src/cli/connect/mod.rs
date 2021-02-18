@@ -11,7 +11,7 @@ pub enum ConnectCmd {
     C8y(c8y::Connect),
 }
 
-impl crate::cli::CliOption for ConnectCmd {
+impl crate::cli::BuildCommand for ConnectCmd {
     fn into_command(
         self,
         config: &crate::config::TEdgeConfig,

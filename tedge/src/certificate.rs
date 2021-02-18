@@ -167,7 +167,7 @@ impl CertError {
     }
 }
 
-impl crate::cli::CliOption for CertOpt {
+impl crate::cli::BuildCommand for CertOpt {
     fn into_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd: Box<dyn Command> = match self {
             CertOpt::Create {

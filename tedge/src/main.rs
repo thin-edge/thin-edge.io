@@ -11,7 +11,7 @@ mod config;
 mod mqtt;
 mod utils;
 
-use crate::cli::CliOption;
+use crate::cli::BuildCommand;
 
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();

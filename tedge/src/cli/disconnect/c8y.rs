@@ -28,7 +28,7 @@ pub enum DisconnectError {
 #[derive(StructOpt, Debug)]
 pub struct Disconnect {}
 
-impl crate::cli::CliOption for Disconnect {
+impl crate::cli::BuildCommand for Disconnect {
     fn into_command(
         self,
         _config: &crate::config::TEdgeConfig,
