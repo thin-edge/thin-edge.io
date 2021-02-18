@@ -112,9 +112,9 @@ mod tests {
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         let mut set_device_id_cmd = tedge_command_with_test_home(
@@ -136,9 +136,9 @@ mod tests {
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         Ok(())
@@ -164,9 +164,9 @@ mod tests {
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         let mut get_cert_path_cmd =
@@ -190,9 +190,9 @@ mod tests {
 
         get_c8y_url_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: c8y.url is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'c8y.url' is not set",
             ));
 
         let mut get_c8y_root_cert_path_cmd =
@@ -200,9 +200,9 @@ mod tests {
 
         get_c8y_root_cert_path_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: c8y.root.cert.path is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'c8y.root.cert.path' is not set",
             ));
 
         Ok(())
