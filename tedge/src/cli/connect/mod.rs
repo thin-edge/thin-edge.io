@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use structopt::StructOpt;
 
 mod c8y;
@@ -11,7 +11,7 @@ pub enum ConnectCmd {
     C8y(c8y::Connect),
 }
 
-impl crate::cli::BuildCommand for ConnectCmd {
+impl BuildCommand for ConnectCmd {
     fn build_command(
         self,
         config: &crate::config::TEdgeConfig,

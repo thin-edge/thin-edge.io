@@ -1,4 +1,4 @@
-use super::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config;
 use crate::config::{ConfigError, TEdgeConfig};
 use structopt::clap;
@@ -6,13 +6,6 @@ use structopt::StructOpt;
 
 mod connect;
 mod disconnect;
-
-pub trait BuildCommand {
-    fn build_command(
-        self,
-        config: &config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, config::ConfigError>;
-}
 
 #[derive(StructOpt, Debug)]
 #[structopt(

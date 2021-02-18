@@ -1,4 +1,4 @@
-use super::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use futures::select;
@@ -48,7 +48,7 @@ pub enum MqttError {
     InvalidQoSError,
 }
 
-impl crate::cli::BuildCommand for MqttCmd {
+impl BuildCommand for MqttCmd {
     fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,

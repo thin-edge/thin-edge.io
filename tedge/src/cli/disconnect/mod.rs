@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use structopt::StructOpt;
 
 mod c8y;
@@ -9,7 +9,7 @@ pub enum DisconnectCmd {
     C8y(c8y::Disconnect),
 }
 
-impl crate::cli::BuildCommand for DisconnectCmd {
+impl BuildCommand for DisconnectCmd {
     fn build_command(
         self,
         config: &crate::config::TEdgeConfig,

@@ -6,7 +6,7 @@ use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
 use url::Url;
 
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
@@ -72,7 +72,7 @@ impl Command for Connect {
     }
 }
 
-impl crate::cli::BuildCommand for Connect {
+impl BuildCommand for Connect {
     fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,

@@ -1,4 +1,4 @@
-use super::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::utils::paths;
 use chrono::offset::Utc;
@@ -167,7 +167,7 @@ impl CertError {
     }
 }
 
-impl crate::cli::BuildCommand for CertOpt {
+impl BuildCommand for CertOpt {
     fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd: Box<dyn Command> = match self {
             CertOpt::Create {

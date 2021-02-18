@@ -1,6 +1,6 @@
 use structopt::StructOpt;
 
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, C8Y_CONNECT, TEDGE_HOME_DIR};
 use crate::utils::{paths, services};
 
@@ -28,7 +28,7 @@ pub enum DisconnectError {
 #[derive(StructOpt, Debug)]
 pub struct Disconnect {}
 
-impl crate::cli::BuildCommand for Disconnect {
+impl BuildCommand for Disconnect {
     fn build_command(
         self,
         _config: &crate::config::TEdgeConfig,

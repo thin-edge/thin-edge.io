@@ -1,3 +1,5 @@
+use crate::config;
+
 /// A trait to be implemented by all tedge sub-commands.
 ///
 /// In practice, an implementation will also:
@@ -57,4 +59,11 @@ pub trait Command {
     /// }
     /// ```
     fn run(&self, verbose: u8) -> Result<(), anyhow::Error>;
+}
+
+pub trait BuildCommand {
+    fn build_command(
+        self,
+        config: &config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, config::ConfigError>;
 }

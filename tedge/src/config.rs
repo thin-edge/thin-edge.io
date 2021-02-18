@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
@@ -90,7 +90,7 @@ pub enum ConfigCmd {
     },
 }
 
-impl crate::cli::BuildCommand for ConfigCmd {
+impl BuildCommand for ConfigCmd {
     fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command not self.
