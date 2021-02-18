@@ -1,10 +1,10 @@
 use super::command::Command;
+use crate::utils::signals;
 use futures::future::FutureExt;
 use futures::select;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
-use tokio::signal::unix::{signal, SignalKind};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -98,12 +98,11 @@ async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;
     let filter = TopicFilter::new(topic)?.qos(qos);
 
-    let mut signals = signal(SignalKind::interrupt())?;
     let mut messages: MessageStream = mqtt.subscribe(filter).await?;
 
     loop {
         select! {
-            _signal = signals.recv().fuse() => {
+            _signal = signals::interrupt().fuse() => {
                 println!("Received SIGINT.");
                 break;
             }
