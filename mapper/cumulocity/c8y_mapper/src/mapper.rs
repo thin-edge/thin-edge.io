@@ -39,7 +39,7 @@ impl Service for Mapper {
 
     type Configuration = ();
 
-    async fn create(_config: ()) -> Result<Self, Self::Error> {
+    async fn setup(_config: ()) -> Result<Self, Self::Error> {
         let config = mqtt_client::Config::default();
         let mqtt = mqtt_client::Client::connect(Self::NAME, &config).await?;
 
@@ -48,6 +48,10 @@ impl Service for Mapper {
 
     async fn run(&mut self) -> Result<(), Self::Error> {
         self.run_mapper().await
+    }
+
+    async fn reload(&mut self) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     async fn shutdown(self) -> Result<(), MapperError> {

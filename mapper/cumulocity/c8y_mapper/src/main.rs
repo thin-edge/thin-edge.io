@@ -15,7 +15,5 @@ async fn main() -> Result<(), ServiceError<MapperError>> {
     log::info!("tedge-mapper pid: {}", std::process::id());
     println!("tedge-mapper pid: {}", std::process::id());
 
-    ServiceRunner::<Mapper>::new()
-        .run_with_config(|| Ok(()))
-        .await
+    ServiceRunner::<Mapper>::new().run_with_config(()).await
 }
