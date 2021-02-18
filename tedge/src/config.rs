@@ -93,9 +93,9 @@ pub enum ConfigCmd {
 impl BuildCommand for ConfigCmd {
     fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
-        // - should return a specific command not self.
+        // - should return a specific command, not self.
         // - see certificate.rs for an example
-        Ok(Box::new(self))
+        Ok(self.into_boxed())
     }
 }
 

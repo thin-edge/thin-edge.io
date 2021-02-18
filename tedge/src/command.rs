@@ -59,6 +59,10 @@ pub trait Command {
     /// }
     /// ```
     fn run(&self, verbose: u8) -> Result<(), anyhow::Error>;
+
+    fn into_boxed(self) -> Box<dyn Command> where Self: Sized + 'static {
+        Box::new(self)
+    }
 }
 
 pub trait BuildCommand {

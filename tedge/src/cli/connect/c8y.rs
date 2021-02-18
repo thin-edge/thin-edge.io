@@ -78,9 +78,9 @@ impl BuildCommand for Connect {
         _config: &crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
-        // - should return a specific command not self.
+        // - should return a specific command, not self.
         // - see certificate.rs for an example
-        Ok(Box::new(self))
+        Ok(self.into_boxed())
     }
 }
 

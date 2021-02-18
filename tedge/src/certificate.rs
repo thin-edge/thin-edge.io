@@ -169,7 +169,7 @@ impl CertError {
 
 impl BuildCommand for CertOpt {
     fn build_command(self, _config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let cmd: Box<dyn Command> = match self {
+        let cmd = match self {
             CertOpt::Create {
                 id,
                 cert_path,
@@ -180,11 +180,11 @@ impl BuildCommand for CertOpt {
                     cert_path,
                     key_path,
                 };
-                Box::new(cmd)
+                cmd.into_boxed()
             }
             CertOpt::Show { cert_path } => {
                 let cmd = CertShow { cert_path };
-                Box::new(cmd)
+                cmd.into_boxed()
             }
             CertOpt::Remove {
                 cert_path,
@@ -194,7 +194,7 @@ impl BuildCommand for CertOpt {
                     cert_path,
                     key_path,
                 };
-                Box::new(cmd)
+                cmd.into_boxed()
             }
         };
 
