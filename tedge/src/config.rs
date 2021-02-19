@@ -21,10 +21,10 @@ pub const C8Y_CONNECT: &str = "c8y.connect";
 pub const C8Y_URL: &str = "c8y.url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
-// CIT-221 will use them. Until the implementation is done, gets never used warnings.
-pub const AZURE_CONNECT: &str = "azure.connect";
-pub const AZURE_URL: &str = "azure.url";
-pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
+// CIT-221 will use them. Remove the prefix `_` later
+pub const _AZURE_CONNECT: &str = "azure.connect";
+pub const _AZURE_URL: &str = "azure.url";
+pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
 /// Wrapper type for Configuration keys.
 #[derive(Debug)]
@@ -878,41 +878,41 @@ connect = "false"
 
         // read
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(_AZURE_URL).unwrap().unwrap(),
             original_azure_url
         );
         assert_eq!(
             config
-                .get_config_value(AZURE_ROOT_CERT_PATH)
+                .get_config_value(_AZURE_ROOT_CERT_PATH)
                 .unwrap()
                 .unwrap(),
             original_azure_root_cert_path
         );
         assert_eq!(
-            config.get_config_value(AZURE_CONNECT).unwrap().unwrap(),
+            config.get_config_value(_AZURE_CONNECT).unwrap().unwrap(),
             original_azure_connect
         );
 
         // set
         let updated_azure_url = "OtherAzure.azure-devices.net".to_string();
         config
-            .set_config_value(AZURE_URL, updated_azure_url.clone())
+            .set_config_value(_AZURE_URL, updated_azure_url.clone())
             .unwrap();
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(_AZURE_URL).unwrap().unwrap(),
             updated_azure_url
         );
 
         // unset
-        config.unset_config_value(AZURE_ROOT_CERT_PATH).unwrap();
+        config.unset_config_value(_AZURE_ROOT_CERT_PATH).unwrap();
         assert!(config
-            .get_config_value(AZURE_ROOT_CERT_PATH)
+            .get_config_value(_AZURE_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
 
         // no change
         assert_eq!(
-            config.get_config_value(AZURE_CONNECT).unwrap().unwrap(),
+            config.get_config_value(_AZURE_CONNECT).unwrap().unwrap(),
             original_azure_connect
         );
     }
