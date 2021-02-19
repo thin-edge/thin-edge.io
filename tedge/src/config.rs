@@ -108,15 +108,10 @@ impl Command for ConfigCmd {
         let mut config_updated = false;
 
         match self {
-            ConfigCmd::Get { key } => {
-                let value =
-                    config
-                        .get_config_value(key.as_str())?
-                        .ok_or(ConfigError::ConfigNotSet {
-                            key: key.as_str().to_string(),
-                        })?;
-                println!("{}", value)
-            }
+            ConfigCmd::Get { key } => match config.get_config_value(key.as_str())? {
+                None => println!("The provided config key: '{}' is not set", key.as_str()),
+                Some(value) => println!("{}", value),
+            },
             ConfigCmd::Set { key, value } => {
                 config.set_config_value(key.as_str(), value.to_string())?;
                 config_updated = true;
@@ -391,9 +386,6 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
-
-    #[error("The provided config key: {key} is not set")]
-    ConfigNotSet { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
