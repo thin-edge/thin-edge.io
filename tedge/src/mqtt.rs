@@ -77,7 +77,7 @@ impl Command for MqttCmd {
         }
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,

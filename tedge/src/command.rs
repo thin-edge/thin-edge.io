@@ -58,7 +58,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn run(&self, verbose: u8) -> Result<(), anyhow::Error>;
+    fn execute(&self, verbose: u8) -> Result<(), anyhow::Error>;
 
     fn into_boxed(self) -> Box<dyn Command>
     where

@@ -235,7 +235,7 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
         let () = create_test_certificate(&config, &self.id, &self.cert_path, &self.key_path)?;
         Ok(())
@@ -246,7 +246,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let _ = show_certificate(&self.cert_path)?;
         Ok(())
     }
@@ -257,7 +257,7 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let () = remove_certificate(&self.cert_path, &self.key_path)?;
         Ok(())
     }
@@ -446,7 +446,7 @@ mod tests {
         };
         let verbose = 0;
 
-        assert!(cmd.run(verbose).err().is_none());
+        assert!(cmd.execute(verbose).err().is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
@@ -466,7 +466,7 @@ mod tests {
         };
         let verbose = 0;
 
-        assert!(cmd.run(verbose).ok().is_none());
+        assert!(cmd.execute(verbose).ok().is_none());
 
         let mut cert_file = cert_file.reopen().unwrap();
         assert_eq!(file_content(&mut cert_file), cert_content);

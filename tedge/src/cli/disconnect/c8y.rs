@@ -45,7 +45,7 @@ impl Command for Disconnect {
         "execute 'tedge disconnect'.".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         Ok(self.stop_bridge()?)
     }
 }

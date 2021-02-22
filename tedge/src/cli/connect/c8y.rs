@@ -63,7 +63,7 @@ impl Command for Connect {
         "execute `tedge connect`.".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         use tokio::runtime::Runtime;
         // Create the runtime
         let rt = Runtime::new().unwrap();

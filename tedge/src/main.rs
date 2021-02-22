@@ -17,6 +17,6 @@ fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
     let config = config::TEdgeConfig::from_default_config()?;
     let cmd = opt.tedge.build_command(&config)?;
-    cmd.run(opt.verbose)
+    cmd.execute(opt.verbose)
         .with_context(|| format!("failed to {}", cmd.description()))
 }

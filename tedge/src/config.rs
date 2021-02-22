@@ -117,7 +117,7 @@ impl Command for ConfigCmd {
         }
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 
