@@ -413,6 +413,12 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
+
+    #[error(
+        r#"A value for `{key}` is missing.
+    A value can be set with `tedge config set {key} <value>`"#
+    )]
+    ConfigNotSet { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
