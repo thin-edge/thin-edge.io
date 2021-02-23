@@ -44,6 +44,8 @@ mod tests {
         let cert_path = temp_path(&tempdir, "test-cert.pem");
         let key_path = temp_path(&tempdir, "test-key.pem");
 
+        let mut get_device_id_cmd = tedge_command(&["config", "get", "device.id"])?;
+
         let mut create_cmd = tedge_command(&[
             "cert",
             "create",
@@ -69,7 +71,15 @@ mod tests {
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
 
-        // The create command create a certificate
+        // We start we no certificate, hence no device id
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stderr(predicate::str::contains(
+                "The configuration key `device.id` is not set",
+            ));
+
+        // The create command created a certificate
         create_cmd.assert().success();
 
         // The certificate use the device id as CN
@@ -78,13 +88,19 @@ mod tests {
             .success()
             .stdout(predicate::str::contains(format!("CN={},", device_id)));
 
+        // The create command updated the config with the device.id
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(device_id));
+
         // When a certificate exists, it is not over-written by the create command
         create_cmd
             .assert()
             .failure()
             .stderr(predicate::str::contains("A certificate already exists"));
 
-        // The remove command remove the certificate
+        // The remove command removed the certificate
         remove_cmd.assert().success();
 
         // which can no more be displayed
@@ -92,6 +108,14 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains("Missing file"));
+
+        // The remove command also removed the device id from the config
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stderr(predicate::str::contains(
+                "The configuration key `device.id` is not set",
+            ));
 
         // The a new certificate can then be created.
         create_cmd.assert().success();

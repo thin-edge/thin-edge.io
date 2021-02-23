@@ -17,10 +17,9 @@ use structopt::StructOpt;
 pub enum TEdgeCertOpt {
     /// Create a self-signed device certificate
     Create {
-        /// The device identifier
-        /// If unset, use the value of `tedge config get device.cert.id`.
+        /// The device identifier to be used as the common name for the certificate
         #[structopt(long = "device-id")]
-        id: Option<String>,
+        id: String,
 
         /// The path where the device certificate will be stored
         /// If unset, use the value of `tedge config get device.cert.path`.
@@ -79,6 +78,10 @@ pub struct ShowCertCmd {
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
+    /// The tedge configuration to be updated on success.
+    /// The device id will have to be removed.
+    tedge_config: RefCell<TEdgeConfig>,
+
     /// The path of the certificate to be removed
     cert_path: String,
 
@@ -182,7 +185,6 @@ impl CertError {
 
 impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let config_device_id = config.device.id.clone();
         let config_cert_path = config.device.cert_path.clone();
         let config_key_path = config.device.key_path.clone();
 
@@ -194,7 +196,7 @@ impl BuildCommand for TEdgeCertOpt {
             } => {
                 let cmd = CreateCertCmd {
                     tedge_config: RefCell::new(config),
-                    id: param_config_or_default!(id, config_device_id, "device.cert.id")?,
+                    id,
                     cert_path: param_config_or_default!(
                         cert_path,
                         config_cert_path,
@@ -225,6 +227,7 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = RemoveCertCmd {
+                    tedge_config: RefCell::new(config),
                     cert_path: param_config_or_default!(
                         cert_path,
                         config_cert_path,
@@ -262,7 +265,7 @@ impl Command for ShowCertCmd {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let _ = show_certificate(&self.cert_path)?;
+        let () = self.show_certificate()?;
         Ok(())
     }
 }
@@ -273,7 +276,8 @@ impl Command for RemoveCertCmd {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let () = remove_certificate(&self.cert_path, &self.key_path)?;
+        let () = self.remove_certificate()?;
+        let () = self.update_tedge_config()?;
         Ok(())
     }
 }
@@ -343,7 +347,6 @@ impl CreateCertCmd {
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
         let mut config = self.tedge_config.borrow_mut();
-
         config.device.id = Some(self.id.clone());
         config.device.cert_path = Some(self.cert_path.clone());
         config.device.key_path = Some(self.key_path.clone());
@@ -354,31 +357,45 @@ impl CreateCertCmd {
     }
 }
 
-fn show_certificate(cert_path: &str) -> Result<(), CertError> {
-    let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
-    let x509 = extract_certificate(&pem)?;
-    let tbs_certificate = x509.tbs_certificate;
+impl ShowCertCmd {
+    fn show_certificate(&self) -> Result<(), CertError> {
+        let cert_path = &self.cert_path;
+        let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
+        let x509 = extract_certificate(&pem)?;
+        let tbs_certificate = x509.tbs_certificate;
 
-    println!("Device certificate: {}", cert_path);
-    println!("Subject: {}", tbs_certificate.subject.to_string());
-    println!("Issuer: {}", tbs_certificate.issuer.to_string());
-    println!(
-        "Valid from: {}",
-        tbs_certificate.validity.not_before.to_rfc2822()
-    );
-    println!(
-        "Valid up to: {}",
-        tbs_certificate.validity.not_after.to_rfc2822()
-    );
+        println!("Device certificate: {}", cert_path);
+        println!("Subject: {}", tbs_certificate.subject.to_string());
+        println!("Issuer: {}", tbs_certificate.issuer.to_string());
+        println!(
+            "Valid from: {}",
+            tbs_certificate.validity.not_before.to_rfc2822()
+        );
+        println!(
+            "Valid up to: {}",
+            tbs_certificate.validity.not_after.to_rfc2822()
+        );
 
-    Ok(())
+        Ok(())
+    }
 }
 
-fn remove_certificate(cert_path: &str, key_path: &str) -> Result<(), CertError> {
-    std::fs::remove_file(cert_path).or_else(ok_if_not_found)?;
-    std::fs::remove_file(key_path).or_else(ok_if_not_found)?;
+impl RemoveCertCmd {
+    fn remove_certificate(&self) -> Result<(), CertError> {
+        std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
+        std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 
-    Ok(())
+        Ok(())
+    }
+
+    fn update_tedge_config(&self) -> Result<(), CertError> {
+        let mut config = self.tedge_config.borrow_mut();
+        config.device.id = None;
+
+        let _ = config.write_to_default_config()?;
+
+        Ok(())
+    }
 }
 
 fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
