@@ -12,7 +12,7 @@ pub enum DisconnectCmd {
 impl BuildCommand for DisconnectCmd {
     fn build_command(
         self,
-        config: &crate::config::TEdgeConfig,
+        config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
             DisconnectCmd::C8y(opt) => opt.build_command(config),

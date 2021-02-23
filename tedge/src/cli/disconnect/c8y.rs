@@ -29,10 +29,7 @@ pub enum DisconnectError {
 pub struct Disconnect {}
 
 impl BuildCommand for Disconnect {
-    fn build_command(
-        self,
-        _config: &crate::config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.
         // - see certificate.rs for an example

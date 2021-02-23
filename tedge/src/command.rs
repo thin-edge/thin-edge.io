@@ -45,7 +45,7 @@ pub trait Command {
     /// This description is displayed to the end user in case of an error, to give the context of that error.
     fn description(&self) -> String;
 
-    /// Run this command.
+    /// Execute this command.
     ///
     /// The simplest way to implement a specific `anyhow::Error` type is to derive the `thiserror::Error`.
     /// Doing so, the command specific error type implements `Into<anyhow::Error>`
@@ -71,7 +71,7 @@ pub trait Command {
 pub trait BuildCommand {
     fn build_command(
         self,
-        config: &config::TEdgeConfig,
+        config: config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, config::ConfigError>;
 }
 

@@ -51,7 +51,7 @@ pub enum MqttError {
 impl BuildCommand for MqttCmd {
     fn build_command(
         self,
-        _config: &crate::config::TEdgeConfig,
+        _config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.

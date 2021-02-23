@@ -14,7 +14,7 @@ pub enum ConnectCmd {
 impl BuildCommand for ConnectCmd {
     fn build_command(
         self,
-        config: &crate::config::TEdgeConfig,
+        config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
             ConnectCmd::C8y(opt) => opt.build_command(config),

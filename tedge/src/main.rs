@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
 
     let cmd = opt
         .tedge
-        .build_command(&config)
+        .build_command(config)
         .with_context(|| "missing configuration parameter")?;
 
     cmd.execute(opt.verbose)

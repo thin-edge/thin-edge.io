@@ -7,6 +7,7 @@ use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
+use std::cell::RefCell;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -56,6 +57,10 @@ pub enum TEdgeCertOpt {
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
+    /// The tedge configuration to be updated on success
+    /// with the id and paths provided on the command line.
+    tedge_config: RefCell<TEdgeConfig>,
+
     /// The device identifier
     id: String,
 
@@ -127,6 +132,9 @@ pub enum CertError {
     )]
     KeyAlreadyExists { path: String },
 
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
+
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
@@ -173,8 +181,11 @@ impl CertError {
 }
 
 impl BuildCommand for TEdgeCertOpt {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let device_config = &config.device;
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        let config_device_id = config.device.id.clone();
+        let config_cert_path = config.device.cert_path.clone();
+        let config_key_path = config.device.key_path.clone();
+
         let cmd = match self {
             TEdgeCertOpt::Create {
                 id,
@@ -182,30 +193,33 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = CreateCertCmd {
-                    id: param_config_or_default!(id, device_config.id, "device.cert.id")?,
+                    tedge_config: RefCell::new(config),
+                    id: param_config_or_default!(id, config_device_id, "device.cert.id")?,
                     cert_path: param_config_or_default!(
                         cert_path,
-                        device_config.cert_path,
+                        config_cert_path,
                         "device.cert.path"
                     )?,
                     key_path: param_config_or_default!(
                         key_path,
-                        device_config.key_path,
+                        config_key_path,
                         "device.key.path"
                     )?,
                 };
                 cmd.into_boxed()
             }
+
             TEdgeCertOpt::Show { cert_path } => {
                 let cmd = ShowCertCmd {
                     cert_path: param_config_or_default!(
                         cert_path,
-                        device_config.cert_path,
+                        config_cert_path,
                         "device.cert.path"
                     )?,
                 };
                 cmd.into_boxed()
             }
+
             TEdgeCertOpt::Remove {
                 cert_path,
                 key_path,
@@ -213,12 +227,12 @@ impl BuildCommand for TEdgeCertOpt {
                 let cmd = RemoveCertCmd {
                     cert_path: param_config_or_default!(
                         cert_path,
-                        device_config.cert_path,
+                        config_cert_path,
                         "device.cert.path"
                     )?,
                     key_path: param_config_or_default!(
                         key_path,
-                        device_config.key_path,
+                        config_key_path,
                         "device.key.path"
                     )?,
                 };
@@ -237,7 +251,8 @@ impl Command for CreateCertCmd {
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        let () = create_test_certificate(&config, &self.id, &self.cert_path, &self.key_path)?;
+        let () = self.create_test_certificate(&config)?;
+        let () = self.update_tedge_config()?;
         Ok(())
     }
 }
@@ -291,41 +306,52 @@ impl Default for TestCertConfig {
     }
 }
 
-fn create_test_certificate(
-    config: &CertConfig,
-    id: &str,
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(), CertError> {
-    check_identifier(id)?;
+impl CreateCertCmd {
+    fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
+        check_identifier(&self.id)?;
 
-    // Creating files with permission 644
-    let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
-    let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
+        // Creating files with permission 644
+        let mut cert_file =
+            create_new_file(&self.cert_path).map_err(|err| err.cert_context(&self.cert_path))?;
+        let mut key_file =
+            create_new_file(&self.key_path).map_err(|err| err.key_context(&self.key_path))?;
 
-    let cert = new_selfsigned_certificate(&config, id)?;
+        let cert = new_selfsigned_certificate(&config, &self.id)?;
 
-    let cert_pem = cert.serialize_pem()?;
-    cert_file.write_all(cert_pem.as_bytes())?;
-    cert_file.sync_all()?;
+        let cert_pem = cert.serialize_pem()?;
+        cert_file.write_all(cert_pem.as_bytes())?;
+        cert_file.sync_all()?;
 
-    // Prevent the certificate to be overwritten
-    paths::set_permission(&cert_file, 0o444)?;
+        // Prevent the certificate to be overwritten
+        paths::set_permission(&cert_file, 0o444)?;
 
-    {
-        // Make sure the key is secret, before write
-        paths::set_permission(&key_file, 0o600)?;
+        {
+            // Make sure the key is secret, before write
+            paths::set_permission(&key_file, 0o600)?;
 
-        // Zero the private key on drop
-        let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
-        key_file.write_all(cert_key.as_bytes())?;
-        key_file.sync_all()?;
+            // Zero the private key on drop
+            let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
+            key_file.write_all(cert_key.as_bytes())?;
+            key_file.sync_all()?;
 
-        // Prevent the key to be overwritten
-        paths::set_permission(&key_file, 0o400)?;
+            // Prevent the key to be overwritten
+            paths::set_permission(&key_file, 0o400)?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
+    fn update_tedge_config(&self) -> Result<(), CertError> {
+        let mut config = self.tedge_config.borrow_mut();
+
+        config.device.id = Some(self.id.clone());
+        config.device.cert_path = Some(self.cert_path.clone());
+        config.device.key_path = Some(self.key_path.clone());
+
+        let _ = config.write_to_default_config()?;
+
+        Ok(())
+    }
 }
 
 fn show_certificate(cert_path: &str) -> Result<(), CertError> {
@@ -440,6 +466,7 @@ mod tests {
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
+            tedge_config: RefCell::new(TEdgeConfig::default()),
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
@@ -460,6 +487,7 @@ mod tests {
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
+            tedge_config: RefCell::new(TEdgeConfig::default()),
             id: String::from(id),
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
