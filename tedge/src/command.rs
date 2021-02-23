@@ -2,41 +2,71 @@ use crate::config;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
-/// In practice, an implementation will also:
-/// * derive the `Structopt` trait to be parsed,
-/// * and provide a specific error type implementing the `std::error:Error` trait
+/// A command encapsulates all the required parameters and provides an `execute()` method
+/// to trigger the execution, plus a `description` of what is done by that command.
 ///
 /// ```
-/// #[derive(StructOpt, Debug)]
-/// enum ConfigCmd {
-///     /// Add new value (overwrite the value if the key exists).
-///     Set { key: String, value: String },
+/// struct SayHello {
+///     name: String,
+/// };
 ///
-///     /// Get value.
-///     Get { key: String },
-/// }
-///
-/// impl Command for ConfigCmd {
+/// impl Command for SetConfigKey {
 ///     fn description(&self) -> String {
-///        match self {
-///            ConfigCmd::Set { key, value } => format!("set the parameter '{}' to the '{}'", key, value),
-///            ConfigCmd::Get { key } => format!("get the value of the parameter '{}'", key),
-///        }
+///        format!("say hello to '{}'", name),
 ///     }
 ///
-///     // dummy implementation which always return an error
-///     fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-///        match self {
-///            ConfigCmd::Set { key, value: _ },
-///            ConfigCmd::Get { key } => UnknownKey{key},
-///        }
+///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///        println!("Hello {}!", name};
+///        Ok(())
 ///     }
 /// }
+/// ```
 ///
-/// #[derive(thiserror::Error, Debug)]
-/// pub enum ConfigError {
-///     #[error("Not a Thin Edge property: {key:?}")]
-///     UnknownKey{key: String},
+/// If a command needs some context, say the tedge configuration,
+/// this context can be provided to the command.
+///
+/// ```
+/// struct GetConfigKey {
+///     config: TEdgeConfig,
+///     key: String,
+/// };
+///
+/// impl Command for GetConfigKey {
+///     fn description(&self) -> String {
+///        format!("get the value of the configuration key '{}'", self.key),
+///     }
+///
+///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///        match self.config.get_config_value(self.key)? {
+///             Some(value) => println!("{}", value),
+///             None => eprintln!("The configuration key `{}` is not set", self.key),
+///        }
+///        Ok(())
+///     }
+/// }
+/// ```
+///
+/// If a command needs to manipulate the configuration, the simplest is to use a `RefCell`
+/// to hold the command and borrow a mutable reference when required.
+///
+/// ```
+/// struct SetConfigKey {
+///     config: RefCell<TEdgeConfig>,
+///     key: String,
+///     value: String,
+/// };
+///
+/// impl Command for SetConfigKey {
+///     fn description(&self) -> String {
+///        format!("set the value of the configuration key '{}' to '{}'", self.key, self.value),
+///     }
+///
+///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///        let mut config = self.config.borrow_mut();
+///        config.set_config_value(self.key, self.value)?;
+///        let _ = config.write_to_default_config()?;
+///        Ok(())
+///     }
 /// }
 /// ```
 pub trait Command {
@@ -68,6 +98,39 @@ pub trait Command {
     }
 }
 
+/// A trait implemented by the tedge subcommands to build the actual command
+/// using a combination of the parameters provided on the command line
+/// and those from the configuration.
+///
+/// In practice, an implementation will also derives the `Structopt` trait.
+///
+/// ```
+/// #[derive(StructOpt, Debug)]
+/// enum ConfigCmd {
+///     /// Add new value (overwrite the value if the key exists).
+///     Set { key: String, value: String },
+///
+///     /// Get value.
+///     Get { key: String },
+/// }
+///
+/// impl Command for ConfigCmd {
+///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+///        match self {
+///            ConfigCmd::Set { key, value } => SetConfigKey {
+///                config: RefCell::new(config),
+///                key,
+///                value,
+///            },
+///            ConfigCmd::Get { key } => SetConfigKey {
+///                config: config,
+///                key,
+///                value,
+///            },
+///        }
+///     }
+/// }
+/// ```
 pub trait BuildCommand {
     fn build_command(
         self,
