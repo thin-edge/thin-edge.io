@@ -75,8 +75,8 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stderr(predicate::str::contains(
-                "The configuration key `device.id` is not set",
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         // The create command created a certificate
@@ -113,8 +113,8 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stderr(predicate::str::contains(
-                "The configuration key `device.id` is not set",
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         // The a new certificate can then be created.
