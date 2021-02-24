@@ -3,12 +3,15 @@ use crate::utils::signals;
 use futures::future::FutureExt;
 use futures::select;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use std::time::Duration;
 use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_ID: &str = "tedge-cli";
+
+const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(StructOpt, Debug)]
 pub enum MqttCmd {
@@ -91,7 +94,7 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
     let msg = Message::new(&tpc, message).qos(qos);
     let mut errors = mqtt.subscribe_errors();
 
-    // Comment about this returning this returning future future
+    // This requires 2 awaits as publish_with_ack returns a future which returns a future.
     let ack = async {
         match mqtt.publish_with_ack(msg).await {
             Ok(fut) => fut.await,
@@ -100,12 +103,19 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
     };
 
     let mut res = Ok(());
-    // Comment about scope and and move mqtt client
+    // mqtt_client would be moved out of scopes and therefore not allow to call disconnect down below, scoping it allows for it to retain.
     {
         select! {
             error = errors.next().fuse() => {
              res = match error {
-                Some(err) => Err(MqttError::ServerError(err.to_string())),
+                Some(err) => {
+                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
+                        Err(MqttError::ServerError(err.to_string()))
+                    }
+                    else {
+                        Ok(())
+                    }
+                },
                 None => Err(MqttError::ServerError(
                      "Error stream closed unexpectedly.".into(),
                 )),
@@ -121,7 +131,7 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
     }
 
     // In case we don't have a connection, disconnect might block until there is a connection.
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), mqtt.disconnect()).await;
+    let _ = tokio::time::timeout(DISCONNECT_TIMEOUT, mqtt.disconnect()).await;
 
     res
 }
@@ -139,7 +149,9 @@ async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
         select! {
             error = errors.next().fuse() => {
                 if let Some(err) = error {
-                   return Err(MqttError::ServerError(err.to_string()));
+                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
+                        return Err(MqttError::ServerError(err.to_string()));
+                    }
                 }
             }
 

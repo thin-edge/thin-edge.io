@@ -284,7 +284,7 @@ impl Client {
                         // TODO: `rumqttc` library with cargo feature="v5" has a
                         // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
                         // and only notify in that case.
-                        send_discarding_error!(message_sender, msg.into());
+                        send_discarding_error!(message_sender, msg);
                     }
                 }
 
