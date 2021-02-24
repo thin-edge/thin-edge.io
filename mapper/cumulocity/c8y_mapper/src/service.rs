@@ -64,7 +64,7 @@ pub trait Service: Sized {
     /// Associated error
     type Error: std::error::Error + 'static;
 
-    /// The configuration type passed to `create`
+    /// The configuration type passed to `setup`
     type Configuration;
 
     /// Builds the service from `config` and initializes it to be ready for `run`ning.
