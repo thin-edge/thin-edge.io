@@ -1,6 +1,6 @@
-use crate::signals;
+use crate::signals::*;
 use async_trait::async_trait;
-use futures::future::FutureExt;
+use futures::{future::FutureExt, stream::StreamExt};
 use thiserror::Error;
 use tokio::select;
 
@@ -95,25 +95,21 @@ pub enum ServiceError<E: std::error::Error + 'static> {
 
 pub struct ServiceRunner<S: Service> {
     _marker: std::marker::PhantomData<S>,
-    ignore_sighup: bool,
-    ignore_sigterm: bool,
-    ignore_sigint: bool,
+    signal_builder: SignalStreamBuilder,
 }
 
 impl<S: Service> ServiceRunner<S> {
     pub fn new() -> Self {
         Self {
             _marker: std::marker::PhantomData,
-            ignore_sighup: false,
-            ignore_sigterm: false,
-            ignore_sigint: false,
+            signal_builder: SignalStreamBuilder::new(),
         }
     }
 
     #[allow(dead_code)]
     pub fn ignore_sighup(self) -> Self {
         Self {
-            ignore_sighup: true,
+            signal_builder: self.signal_builder.ignore_sighup(),
             ..self
         }
     }
@@ -121,7 +117,7 @@ impl<S: Service> ServiceRunner<S> {
     #[allow(dead_code)]
     pub fn ignore_sigterm(self) -> Self {
         Self {
-            ignore_sigterm: true,
+            signal_builder: self.signal_builder.ignore_sigterm(),
             ..self
         }
     }
@@ -129,7 +125,7 @@ impl<S: Service> ServiceRunner<S> {
     #[allow(dead_code)]
     pub fn ignore_sigint(self) -> Self {
         Self {
-            ignore_sigint: true,
+            signal_builder: self.signal_builder.ignore_sigint(),
             ..self
         }
     }
@@ -147,9 +143,10 @@ impl<S: Service> ServiceRunner<S> {
     ) -> Result<(), ServiceError<S::Error>> {
         log::info!("{} starting. pid={}", S::NAME, std::process::id());
         let mut service = S::setup(config).await.map_err(ServiceError::ServiceError)?;
+        let mut signal_stream = self.signal_builder.build()?;
 
         loop {
-            let run_result = self.run_service_with_signals(&mut service).await;
+            let run_result = Self::run_service_with_signals(&mut service, &mut signal_stream).await;
 
             match run_result {
                 Ok(ExitReason::Terminate) => {
@@ -177,13 +174,9 @@ impl<S: Service> ServiceRunner<S> {
     }
 
     async fn run_service_with_signals(
-        &self,
         service: &mut S,
+        signal_stream: &mut SignalStream,
     ) -> Result<ExitReason, ServiceError<S::Error>> {
-        let mut hangup_signals = signals::sighup_stream()?;
-        let mut terminate_signals = signals::sigterm_stream()?;
-        let mut interrupt_signals = signals::sigint_stream()?;
-
         let mut service_fut = service.run().fuse();
 
         loop {
@@ -193,31 +186,21 @@ impl<S: Service> ServiceRunner<S> {
                     return service_result.map(|()| ExitReason::Terminate).map_err(ServiceError::ServiceError);
                 }
 
-                terminate_signal = terminate_signals.recv() => {
-                    log::info!("Got SIGTERM");
-                    if self.ignore_sigterm {
-                        continue;
+                signal = signal_stream.next() => {
+                    match signal.ok_or(ServiceError::SignalStreamExhausted)? {
+                        Signal::Terminate => {
+                            log::info!("Got SIGTERM");
+                            return Ok(ExitReason::Terminate);
+                        }
+                        Signal::Interrupt => {
+                            log::info!("Got SIGINT");
+                            return Ok(ExitReason::Terminate);
+                        }
+                        Signal::Hangup => {
+                            log::info!("Got SIGHUP");
+                            return Ok(ExitReason::ReloadConfig);
+                        }
                     }
-                    let () = terminate_signal.ok_or(ServiceError::SignalStreamExhausted)?;
-                    return Ok(ExitReason::Terminate);
-                }
-
-                interrupt_signal = interrupt_signals.recv() => {
-                    log::info!("Got SIGINT");
-                    if self.ignore_sigint {
-                        continue;
-                    }
-                    let () = interrupt_signal.ok_or(ServiceError::SignalStreamExhausted)?;
-                    return Ok(ExitReason::Terminate);
-                }
-
-                hangup_signal = hangup_signals.recv() => {
-                    log::info!("Got SIGHUP");
-                    if self.ignore_sighup {
-                        continue;
-                    }
-                    let () = hangup_signal.ok_or(ServiceError::SignalStreamExhausted)?;
-                    return Ok(ExitReason::ReloadConfig);
                 }
             }
         }

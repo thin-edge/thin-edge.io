@@ -1,4 +1,4 @@
-#[path = "../src/signals/mod.rs"]
+#[path = "../src/signals.rs"]
 mod signals;
 
 #[path = "../src/service.rs"]
