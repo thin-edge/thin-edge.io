@@ -3,6 +3,59 @@ use futures::future::FutureExt;
 use thiserror::Error;
 use tokio::select;
 
+///
+/// Service abstraction and integration with signal handling.
+///
+/// The `Service` trait provides a template for dealing with common
+/// lifecycle events of a service.
+///
+/// # Service lifecycle
+///
+/// Currently, the following lifecycle events of a service exist:
+///
+/// * Service creation and initialization (`Service::setup`)
+/// * Service execution (`Service#run`)
+/// * Reloading (`Service#reload`)
+/// * Service shutdown (`Service#shutdown`)
+///
+/// The life of a service begins with it's `setup`, shortly followed by
+/// invoking it's service handling loop `run`. A `SIGHUP` signal, unless
+/// ignored, will break out of `run` and enter `reload`. Once `reload`
+/// is done, `run` is called again. It's important to note that anything
+/// that you allocate on the "stack" within `run` will be dropped before
+/// calling `reload`. If there is anything that you want to persist
+/// across calls between `run` and `reload` that will have to go into
+/// `setup`. The `SIGINT` or `SIGTERM` signals will as well break out of
+/// `run`, drop anything allocated on the "stack frame" of `run`, and
+/// then call `shutdown`. This is where resources can be deallocated.
+///
+/// ```
+///     +---------------+
+///     |     setup     |
+///     +---------------+
+///             |
+///             |
+///             v
+///     +---------------+         +---------------+
+///     |      run      |<------->|     reload    |
+///     +---------------+         +---------------+
+///             |
+///             |
+///             v
+///     +---------------+
+///     |    shutdown   |
+///     +---------------+
+/// ```
+///
+/// # Caveats
+///
+/// The `run` method runs concurrently with the signal handlers. That
+/// means, if you have a busy loop in `run` or you do not give up
+/// control from `run` to the tokio scheduler (e.g. by means of
+/// `.await`ing), there is no chance for the signal handlers to run.
+/// Signals will not be lost, but signal handling will be postponed to
+/// when `run` gives up control.
+///
 #[async_trait]
 pub trait Service: Sized {
     /// The service name
