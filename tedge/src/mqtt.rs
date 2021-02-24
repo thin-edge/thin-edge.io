@@ -46,6 +46,9 @@ pub enum MqttError {
 
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,
+
+    #[error("{0}")]
+    ServerError(String),
 }
 
 impl Command for MqttCmd {
@@ -83,13 +86,44 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
     let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
         .await?;
+
     let tpc = Topic::new(topic)?;
     let msg = Message::new(&tpc, message).qos(qos);
-    let ack = mqtt.publish_with_ack(msg).await?;
-    ack.await?;
-    mqtt.disconnect().await?;
+    let mut errors = mqtt.subscribe_errors();
 
-    Ok(())
+    // Comment about this returning this returning future future
+    let ack = async {
+        match mqtt.publish_with_ack(msg).await {
+            Ok(fut) => fut.await,
+            Err(err) => Err(err),
+        }
+    };
+
+    let mut res = Ok(());
+    // Comment about scope and and move mqtt client
+    {
+        select! {
+            error = errors.next().fuse() => {
+             res = match error {
+                Some(err) => Err(MqttError::ServerError(err.to_string())),
+                None => Err(MqttError::ServerError(
+                     "Error stream closed unexpectedly.".into(),
+                )),
+                };
+            }
+
+            result = ack.fuse() => {
+                if let Err(err) = result {
+                    res = Err(err.into());
+                }
+            }
+        }
+    }
+
+    // In case we don't have a connection, disconnect might block until there is a connection.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), mqtt.disconnect()).await;
+
+    res
 }
 
 #[tokio::main]
@@ -98,10 +132,17 @@ async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;
     let filter = TopicFilter::new(topic)?.qos(qos);
 
+    let mut errors = mqtt.subscribe_errors();
     let mut messages: MessageStream = mqtt.subscribe(filter).await?;
 
     loop {
         select! {
+            error = errors.next().fuse() => {
+                if let Some(err) = error {
+                   return Err(MqttError::ServerError(err.to_string()));
+                }
+            }
+
             _signal = signals::interrupt().fuse() => {
                 println!("Received SIGINT.");
                 break;
