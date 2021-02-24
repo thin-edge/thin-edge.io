@@ -1,3 +1,6 @@
+#[path = "../src/signals/mod.rs"]
+mod signals;
+
 #[path = "../src/service.rs"]
 mod service;
 

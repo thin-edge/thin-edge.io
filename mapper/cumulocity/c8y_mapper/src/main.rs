@@ -4,6 +4,7 @@ use service::*;
 
 mod mapper;
 mod service;
+mod signals;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
 
