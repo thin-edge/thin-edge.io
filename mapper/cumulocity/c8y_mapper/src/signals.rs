@@ -6,11 +6,11 @@ pub type SignalStream = SelectAll<SignalHandler>;
 
 #[derive(Copy, Clone)]
 pub enum Signal {
-    /// SIGHUP on POSIX or CTRL-C on Windows
+    /// SIGHUP
     Hangup,
     /// SIGTERM
     Terminate,
-    /// SIGINT
+    /// SIGINT on POSIX or CTRL-C on Windows
     Interrupt,
 }
 
