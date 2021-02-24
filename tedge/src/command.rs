@@ -10,7 +10,7 @@ use crate::config;
 ///     name: String,
 /// };
 ///
-/// impl Command for SetConfigKey {
+/// impl Command for SayHello {
 ///     fn description(&self) -> String {
 ///        format!("say hello to '{}'", name),
 ///     }
@@ -114,7 +114,7 @@ pub trait Command {
 ///     Get { key: String },
 /// }
 ///
-/// impl Command for ConfigCmd {
+/// impl BuildCommand for ConfigCmd {
 ///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
 ///        match self {
 ///            ConfigCmd::Set { key, value } => SetConfigKey {
@@ -122,10 +122,9 @@ pub trait Command {
 ///                key,
 ///                value,
 ///            },
-///            ConfigCmd::Get { key } => SetConfigKey {
+///            ConfigCmd::Get { key } => GetConfigKey {
 ///                config: config,
 ///                key,
-///                value,
 ///            },
 ///        }
 ///     }

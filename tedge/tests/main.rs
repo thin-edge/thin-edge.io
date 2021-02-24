@@ -45,6 +45,8 @@ mod tests {
         let key_path = temp_path(&tempdir, "test-key.pem");
 
         let mut get_device_id_cmd = tedge_command(&["config", "get", "device.id"])?;
+        let mut get_cert_path_cmd = tedge_command(&["config", "get", "device.cert.path"])?;
+        let mut get_key_path_cmd = tedge_command(&["config", "get", "device.key.path"])?;
 
         let mut create_cmd = tedge_command(&[
             "cert",
@@ -93,6 +95,18 @@ mod tests {
             .assert()
             .success()
             .stdout(predicate::str::contains(device_id));
+
+        // The create command updated the config with the device.cert.path
+        get_cert_path_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(cert_path));
+
+        // The create command updated the config with the device.key.path
+        get_key_path_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(key_path));
 
         // When a certificate exists, it is not over-written by the create command
         create_cmd
