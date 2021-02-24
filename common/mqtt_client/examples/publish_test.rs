@@ -14,7 +14,7 @@ async fn publish(
     Ok(())
 }
 
-async fn pipelined_publish(
+async fn publish_inflight(
     config: &Config,
     payload: impl Into<String>,
 ) -> Result<(), mqtt_client::Error> {
@@ -26,11 +26,12 @@ async fn pipelined_publish(
     let message1 = Message::new(&topic, payload.clone()).qos(QoS::ExactlyOnce);
     let message2 = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
 
-    let ack1 = client.publish_with_ack(message1).await?;
-    let ack2 = client.publish_with_ack(message2).await?;
+    let ack1 = client.publish_with_ack(message1);
+    let ack2 = client.publish_with_ack(message2);
 
-    let () = ack2.await?;
-    let () = ack1.await?;
+    // Both `message1` and `message2` are issued concurrently.
+    // Note that the order in which they are sent is undefined.
+    let ((), ()) = tokio::try_join!(ack1, ack2)?;
 
     client.disconnect().await?;
     Ok(())
@@ -47,7 +48,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     publish(&config, QoS::AtLeastOnce, payload).await?;
     publish(&config, QoS::ExactlyOnce, payload).await?;
 
-    pipelined_publish(&config, payload).await?;
+    publish_inflight(&config, payload).await?;
 
     Ok(())
 }

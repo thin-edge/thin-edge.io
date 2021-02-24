@@ -85,8 +85,7 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
         .await?;
     let tpc = Topic::new(topic)?;
     let msg = Message::new(&tpc, message).qos(qos);
-    let ack = mqtt.publish_with_ack(msg).await?;
-    ack.await?;
+    let () = mqtt.publish_with_ack(msg).await?;
     mqtt.disconnect().await?;
 
     Ok(())

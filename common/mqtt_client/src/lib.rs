@@ -14,7 +14,6 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
-use futures::future::Future;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
 use std::collections::HashMap;
@@ -140,7 +139,7 @@ impl Client {
 
     /// Publish a message on the local MQTT bus.
     ///
-    /// This does not wait for until the acknowledge is received.
+    /// This does not wait until the acknowledgment is received.
     ///
     /// Upon success, this returns the `pkid` of the published message.
     ///
@@ -167,10 +166,7 @@ impl Client {
 
     /// Publish a message on the local MQTT bus.
     ///
-    /// Supports awaiting the acknowledge.
-    ///
-    /// Upon success a `Future` is returned that resolves once the publish is acknowledged (only in
-    /// case QoS=1 or QoS=2).
+    /// Waits until the published message is acknowledged (in case of QoS=1 or QoS=2).
     ///
     /// Example:
     ///
@@ -180,14 +176,10 @@ impl Client {
     ///     use mqtt_client::*;
     ///     let topic = Topic::new("c8y/s/us").unwrap();
     ///     let mqtt = Config::default().connect("temperature").await.unwrap();
-    ///     let ack = mqtt.publish_with_ack(Message::new(&topic, "211,23")).await.unwrap();
-    ///     let () = ack.await.unwrap();
+    ///     let () = mqtt.publish_with_ack(Message::new(&topic, "211,23")).await.unwrap();
     /// }
     /// ```
-    pub async fn publish_with_ack(
-        &self,
-        message: Message,
-    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+    pub async fn publish_with_ack(&self, message: Message) -> Result<(), Error> {
         let qos = message.qos;
 
         // Subscribe to the acknowledgement events. In case of QoS=1 or QoS=2 we
@@ -196,18 +188,16 @@ impl Client {
 
         let pkid = self.publish(message).await?;
 
-        Ok(async move {
-            match qos {
-                QoS::AtMostOnce => {}
-                QoS::AtLeastOnce => {
-                    ack_events.wait_for_pub_ack_received(pkid).await?;
-                }
-                QoS::ExactlyOnce => {
-                    ack_events.wait_for_pub_comp_received(pkid).await?;
-                }
+        match qos {
+            QoS::AtMostOnce => {}
+            QoS::AtLeastOnce => {
+                ack_events.wait_for_pub_ack_received(pkid).await?;
             }
-            Ok(())
-        })
+            QoS::ExactlyOnce => {
+                ack_events.wait_for_pub_comp_received(pkid).await?;
+            }
+        }
+        Ok(())
     }
 
     /// Subscribe to the messages published on the given topics
