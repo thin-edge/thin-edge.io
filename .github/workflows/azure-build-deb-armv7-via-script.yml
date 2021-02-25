@@ -1,5 +1,9 @@
 name: azure-build-deb-armv7-via-script
 
+# Build a debian package for architecture armv7 with exernal script.
+# The script is currently necessary to modify the environment prior to
+# compilation.
+
 on:
   push:
     branches: [ main ]

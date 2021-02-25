@@ -1,6 +1,6 @@
 name: hosted-build-debian-amd64
 
-# Build a debian packet for architecture amd64 only with no exernal script
+# Build a debian package for architecture amd64 only with no exernal script
 
 on:
   push:
