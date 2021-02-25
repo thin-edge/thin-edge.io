@@ -104,7 +104,7 @@ impl Connect {
 
         println!(
             "Sending packets to check connection.\n\
-            Also, registering the device if the device is not yet registered.\n\
+            Registering the device in Cumulocity if the device is not yet registered.\n\
             This may take up to {} seconds per try.\n",
             RESPONSE_TIMEOUT.as_secs(),
         );
