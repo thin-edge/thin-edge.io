@@ -1,11 +1,10 @@
 use super::command::Command;
 use crate::utils::signals;
 use futures::future::FutureExt;
-use futures::select;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use std::time::Duration;
 use structopt::StructOpt;
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, select};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -86,12 +85,22 @@ impl Command for MqttCmd {
 
 #[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
-    let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
+    let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
         .await?;
 
     let tpc = Topic::new(topic)?;
-    let msg = Message::new(&tpc, message).qos(qos);
+    let message = Message::new(&tpc, message).qos(qos);
+
+    let res = try_publish(&mut mqtt, message).await;
+
+    // In case we don't have a connection, disconnect might block until there is a connection,
+    // therefore timeout.
+    let _ = tokio::time::timeout(DISCONNECT_TIMEOUT, mqtt.disconnect()).await;
+    res
+}
+
+async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
     let mut errors = mqtt.subscribe_errors();
 
     // This requires 2 awaits as publish_with_ack returns a future which returns a future.
@@ -102,38 +111,21 @@ async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> 
         }
     };
 
-    let mut res = Ok(());
-    // mqtt_client would be moved out of scopes and therefore not allow to call disconnect down below, scoping it allows for it to retain.
-    {
-        select! {
-            error = errors.next().fuse() => {
-             res = match error {
-                Some(err) => {
-                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
-                        Err(MqttError::ServerError(err.to_string()))
-                    }
-                    else {
-                        Ok(())
-                    }
-                },
-                None => Err(MqttError::ServerError(
-                     "Error stream closed unexpectedly.".into(),
-                )),
-                };
-            }
-
-            result = ack.fuse() => {
-                if let Err(err) = result {
-                    res = Err(err.into());
+    select! {
+        error = errors.next().fuse() => {
+            if let Some(err) = error {
+                if let mqtt_client::Error::ConnectionError(..) = *err {
+                    return Err(MqttError::ServerError(err.to_string()));
                 }
             }
         }
+
+        result = ack.fuse() => {
+            result?
+        }
     }
 
-    // In case we don't have a connection, disconnect might block until there is a connection.
-    let _ = tokio::time::timeout(DISCONNECT_TIMEOUT, mqtt.disconnect()).await;
-
-    res
+    Ok(())
 }
 
 #[tokio::main]
