@@ -29,7 +29,7 @@ jobs:
           command: install
           args: cargo-deb
 
-      - name: Build tedge debian packet
+      - name: Build tedge debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
