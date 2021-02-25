@@ -1,4 +1,6 @@
-use super::command::Command;
+use crate::command::{BuildCommand, Command};
+use crate::config::{ConfigError, TEdgeConfig};
+use crate::param_config_or_default;
 use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
@@ -10,43 +12,72 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use structopt::StructOpt;
 
-const DEFAULT_CERT_PATH: &str = "./tedge-certificate.pem";
-const DEFAULT_KEY_PATH: &str = "./tedge-private-key.pem";
-
 #[derive(StructOpt, Debug)]
-pub enum CertCmd {
+pub enum TEdgeCertOpt {
     /// Create a self-signed device certificate
     Create {
-        /// The device identifier
-        #[structopt(long)]
+        /// The device identifier to be used as the common name for the certificate
+        #[structopt(long = "device-id")]
         id: String,
 
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
         /// The path where the device private key will be stored
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
 
     /// Show the device certificate, if any
     Show {
         /// The path where the device certificate will be stored
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
     },
 
     /// Remove the device certificate
     Remove {
         /// The path of the certificate to be removed
-        #[structopt(long, default_value = DEFAULT_CERT_PATH)]
-        cert_path: String,
+        /// If unset, use the value of `tedge config get device.cert.path`.
+        #[structopt(long = "device-cert-path")]
+        cert_path: Option<String>,
 
         /// The path of the private key to be removed
-        #[structopt(long, default_value = DEFAULT_KEY_PATH)]
-        key_path: String,
+        /// If unset, use the value of `tedge config get device.key.path`.
+        #[structopt(long = "device-key-path")]
+        key_path: Option<String>,
     },
+}
+
+/// Create a self-signed device certificate
+pub struct CreateCertCmd {
+    /// The device identifier
+    id: String,
+
+    /// The path where the device certificate will be stored
+    cert_path: String,
+
+    /// The path where the device private key will be stored
+    key_path: String,
+}
+
+/// Show the device certificate, if any
+pub struct ShowCertCmd {
+    /// The path where the device certificate will be stored
+    cert_path: String,
+}
+
+/// Remove the device certificate
+pub struct RemoveCertCmd {
+    /// The path of the certificate to be removed
+    cert_path: String,
+
+    /// The path of the private key to be removed
+    key_path: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -95,6 +126,9 @@ pub enum CertError {
     )]
     KeyAlreadyExists { path: String },
 
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
+
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
@@ -140,47 +174,100 @@ impl CertError {
     }
 }
 
-impl Command for CertCmd {
-    fn to_string(&self) -> String {
-        match self {
-            CertCmd::Create {
+impl BuildCommand for TEdgeCertOpt {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        let config_cert_path = config.device.cert_path.clone();
+        let config_key_path = config.device.key_path.clone();
+
+        let cmd = match self {
+            TEdgeCertOpt::Create {
                 id,
-                cert_path: _,
-                key_path: _,
-            } => format!("create a test certificate for the device {}.", id),
-            CertCmd::Show { cert_path: _ } => "show the device certificate".into(),
-            CertCmd::Remove {
-                cert_path: _,
-                key_path: _,
-            } => "remove the device certificate".into(),
-        }
-    }
-
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let config = CertCmd::read_configuration();
-        match self {
-            CertCmd::Create {
-                id,
-                cert_path,
-                key_path,
-            } => create_test_certificate(&config, id, cert_path, key_path)?,
-
-            CertCmd::Show { cert_path } => show_certificate(cert_path)?,
-
-            CertCmd::Remove {
                 cert_path,
                 key_path,
             } => {
-                remove_certificate(cert_path, key_path)?;
+                let cmd = CreateCertCmd {
+                    id,
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        config_cert_path,
+                        "device.cert.path"
+                    )?,
+                    key_path: param_config_or_default!(
+                        key_path,
+                        config_key_path,
+                        "device.key.path"
+                    )?,
+                };
+                cmd.into_boxed()
             }
-        }
+
+            TEdgeCertOpt::Show { cert_path } => {
+                let cmd = ShowCertCmd {
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        config_cert_path,
+                        "device.cert.path"
+                    )?,
+                };
+                cmd.into_boxed()
+            }
+
+            TEdgeCertOpt::Remove {
+                cert_path,
+                key_path,
+            } => {
+                let cmd = RemoveCertCmd {
+                    cert_path: param_config_or_default!(
+                        cert_path,
+                        config_cert_path,
+                        "device.cert.path"
+                    )?,
+                    key_path: param_config_or_default!(
+                        key_path,
+                        config_key_path,
+                        "device.key.path"
+                    )?,
+                };
+                cmd.into_boxed()
+            }
+        };
+
+        Ok(cmd)
+    }
+}
+
+impl Command for CreateCertCmd {
+    fn description(&self) -> String {
+        format!("create a test certificate for the device {}.", self.id)
+    }
+
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let config = CertConfig::default();
+        let () = self.create_test_certificate(&config)?;
+        let () = self.update_tedge_config()?;
+        Ok(())
+    }
+}
+impl Command for ShowCertCmd {
+    fn description(&self) -> String {
+        "show the device certificate".into()
+    }
+
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let () = self.show_certificate()?;
         Ok(())
     }
 }
 
-impl CertCmd {
-    fn read_configuration() -> CertConfig {
-        CertConfig::default()
+impl Command for RemoveCertCmd {
+    fn description(&self) -> String {
+        "remove the device certificate".into()
+    }
+
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        let () = self.remove_certificate()?;
+        let () = self.update_tedge_config()?;
+        Ok(())
     }
 }
 
@@ -212,68 +299,92 @@ impl Default for TestCertConfig {
     }
 }
 
-fn create_test_certificate(
-    config: &CertConfig,
-    id: &str,
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(), CertError> {
-    check_identifier(id)?;
+impl CreateCertCmd {
+    fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
+        check_identifier(&self.id)?;
 
-    // Creating files with permission 644
-    let mut cert_file = create_new_file(cert_path).map_err(|err| err.cert_context(cert_path))?;
-    let mut key_file = create_new_file(key_path).map_err(|err| err.key_context(key_path))?;
+        // Creating files with permission 644
+        let mut cert_file =
+            create_new_file(&self.cert_path).map_err(|err| err.cert_context(&self.cert_path))?;
+        let mut key_file =
+            create_new_file(&self.key_path).map_err(|err| err.key_context(&self.key_path))?;
 
-    let cert = new_selfsigned_certificate(&config, id)?;
+        let cert = new_selfsigned_certificate(&config, &self.id)?;
 
-    let cert_pem = cert.serialize_pem()?;
-    cert_file.write_all(cert_pem.as_bytes())?;
-    cert_file.sync_all()?;
+        let cert_pem = cert.serialize_pem()?;
+        cert_file.write_all(cert_pem.as_bytes())?;
+        cert_file.sync_all()?;
 
-    // Prevent the certificate to be overwritten
-    paths::set_permission(&cert_file, 0o444)?;
+        // Prevent the certificate to be overwritten
+        paths::set_permission(&cert_file, 0o444)?;
 
-    {
-        // Make sure the key is secret, before write
-        paths::set_permission(&key_file, 0o600)?;
+        {
+            // Make sure the key is secret, before write
+            paths::set_permission(&key_file, 0o600)?;
 
-        // Zero the private key on drop
-        let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
-        key_file.write_all(cert_key.as_bytes())?;
-        key_file.sync_all()?;
+            // Zero the private key on drop
+            let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
+            key_file.write_all(cert_key.as_bytes())?;
+            key_file.sync_all()?;
 
-        // Prevent the key to be overwritten
-        paths::set_permission(&key_file, 0o400)?;
+            // Prevent the key to be overwritten
+            paths::set_permission(&key_file, 0o400)?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
+    fn update_tedge_config(&self) -> Result<(), CertError> {
+        let mut config = TEdgeConfig::from_default_config()?;
+        config.device.id = Some(self.id.clone());
+        config.device.cert_path = Some(self.cert_path.clone());
+        config.device.key_path = Some(self.key_path.clone());
+
+        let _ = config.write_to_default_config()?;
+
+        Ok(())
+    }
 }
 
-fn show_certificate(cert_path: &str) -> Result<(), CertError> {
-    let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
-    let x509 = extract_certificate(&pem)?;
-    let tbs_certificate = x509.tbs_certificate;
+impl ShowCertCmd {
+    fn show_certificate(&self) -> Result<(), CertError> {
+        let cert_path = &self.cert_path;
+        let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
+        let x509 = extract_certificate(&pem)?;
+        let tbs_certificate = x509.tbs_certificate;
 
-    println!("Device certificate: {}", cert_path);
-    println!("Subject: {}", tbs_certificate.subject.to_string());
-    println!("Issuer: {}", tbs_certificate.issuer.to_string());
-    println!(
-        "Valid from: {}",
-        tbs_certificate.validity.not_before.to_rfc2822()
-    );
-    println!(
-        "Valid up to: {}",
-        tbs_certificate.validity.not_after.to_rfc2822()
-    );
+        println!("Device certificate: {}", cert_path);
+        println!("Subject: {}", tbs_certificate.subject.to_string());
+        println!("Issuer: {}", tbs_certificate.issuer.to_string());
+        println!(
+            "Valid from: {}",
+            tbs_certificate.validity.not_before.to_rfc2822()
+        );
+        println!(
+            "Valid up to: {}",
+            tbs_certificate.validity.not_after.to_rfc2822()
+        );
 
-    Ok(())
+        Ok(())
+    }
 }
 
-fn remove_certificate(cert_path: &str, key_path: &str) -> Result<(), CertError> {
-    std::fs::remove_file(cert_path).or_else(ok_if_not_found)?;
-    std::fs::remove_file(key_path).or_else(ok_if_not_found)?;
+impl RemoveCertCmd {
+    fn remove_certificate(&self) -> Result<(), CertError> {
+        std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
+        std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 
-    Ok(())
+        Ok(())
+    }
+
+    fn update_tedge_config(&self) -> Result<(), CertError> {
+        let mut config = TEdgeConfig::from_default_config()?;
+        config.device.id = None;
+
+        let _ = config.write_to_default_config()?;
+
+        Ok(())
+    }
 }
 
 fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
@@ -360,14 +471,14 @@ mod tests {
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
 
-        let cmd = CertCmd::Create {
+        let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
         let verbose = 0;
 
-        assert!(cmd.run(verbose).err().is_none());
+        assert!(cmd.execute(verbose).err().is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
@@ -380,14 +491,14 @@ mod tests {
         let key_file = temp_file_with_content(key_content);
         let id = "my-device-id";
 
-        let cmd = CertCmd::Create {
+        let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
         };
         let verbose = 0;
 
-        assert!(cmd.run(verbose).ok().is_none());
+        assert!(cmd.execute(verbose).ok().is_none());
 
         let mut cert_file = cert_file.reopen().unwrap();
         assert_eq!(file_content(&mut cert_file), cert_content);

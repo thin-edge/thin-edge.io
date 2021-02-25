@@ -1,4 +1,4 @@
-use super::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use futures::select;
@@ -48,8 +48,20 @@ pub enum MqttError {
     InvalidQoSError,
 }
 
+impl BuildCommand for MqttCmd {
+    fn build_command(
+        self,
+        _config: crate::config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+        // Temporary implementation
+        // - should return a specific command, not self.
+        // - see certificate.rs for an example
+        Ok(self.into_boxed())
+    }
+}
+
 impl Command for MqttCmd {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         match self {
             MqttCmd::Pub {
                 topic,
@@ -65,7 +77,7 @@ impl Command for MqttCmd {
         }
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,

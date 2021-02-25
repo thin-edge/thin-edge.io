@@ -6,7 +6,7 @@ use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
 use url::Url;
 
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
@@ -59,16 +59,25 @@ enum ConnectError {
 pub struct Connect {}
 
 impl Command for Connect {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "execute `tedge connect`.".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         use tokio::runtime::Runtime;
         // Create the runtime
         let rt = Runtime::new().unwrap();
         // Execute the future, blocking the current thread until completion
         rt.block_on(async { Ok(self.new_bridge().await?) })
+    }
+}
+
+impl BuildCommand for Connect {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        // Temporary implementation
+        // - should return a specific command, not self.
+        // - see certificate.rs for an example
+        Ok(self.into_boxed())
     }
 }
 

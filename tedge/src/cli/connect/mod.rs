@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use structopt::StructOpt;
 
 mod c8y;
@@ -11,20 +11,13 @@ pub enum ConnectCmd {
     C8y(c8y::Connect),
 }
 
-impl ConnectCmd {
-    fn sub_command(&self) -> &dyn Command {
+impl BuildCommand for ConnectCmd {
+    fn build_command(
+        self,
+        config: crate::config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
-            ConnectCmd::C8y(cmd) => cmd,
+            ConnectCmd::C8y(opt) => opt.build_command(config),
         }
-    }
-}
-
-impl Command for ConnectCmd {
-    fn to_string(&self) -> String {
-        self.sub_command().to_string()
-    }
-
-    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
-        self.sub_command().run(verbose)
     }
 }

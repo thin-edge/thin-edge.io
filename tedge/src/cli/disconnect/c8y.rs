@@ -1,6 +1,6 @@
 use structopt::StructOpt;
 
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, C8Y_CONNECT, TEDGE_HOME_DIR};
 use crate::utils::{paths, services};
 
@@ -28,12 +28,21 @@ pub enum DisconnectError {
 #[derive(StructOpt, Debug)]
 pub struct Disconnect {}
 
+impl BuildCommand for Disconnect {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        // Temporary implementation
+        // - should return a specific command, not self.
+        // - see certificate.rs for an example
+        Ok(self.into_boxed())
+    }
+}
+
 impl Command for Disconnect {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "execute 'tedge disconnect'.".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         Ok(self.stop_bridge()?)
     }
 }
