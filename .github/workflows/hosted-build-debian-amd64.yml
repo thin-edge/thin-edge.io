@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-     runs-on: ubuntu-latest
+     runs-on: ubuntu-20.04
 
      steps:
 
@@ -64,4 +64,3 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
         with:
           path: 'target/debian/c8y_mapper_0.1.0_amd64.deb'
-
