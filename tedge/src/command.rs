@@ -46,12 +46,11 @@ use crate::config;
 /// }
 /// ```
 ///
-/// If a command needs to manipulate the configuration, the simplest is to use a `RefCell`
-/// to hold the command and borrow a mutable reference when required.
+/// No specific support is provided to a command that needs to update the configuration.
+/// The simplest is to acquire a mutable config using `TEdgeConfig::from_default_config()`.
 ///
 /// ```
 /// struct SetConfigKey {
-///     config: RefCell<TEdgeConfig>,
 ///     key: String,
 ///     value: String,
 /// };
@@ -62,7 +61,7 @@ use crate::config;
 ///     }
 ///
 ///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-///        let mut config = self.config.borrow_mut();
+///        let mut config = TEdgeConfig::from_default_config()?;
 ///        config.set_config_value(self.key, self.value)?;
 ///        let _ = config.write_to_default_config()?;
 ///        Ok(())
@@ -118,12 +117,12 @@ pub trait Command {
 ///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
 ///        match self {
 ///            ConfigCmd::Set { key, value } => SetConfigKey {
-///                config: RefCell::new(config),
+///                config,
 ///                key,
 ///                value,
 ///            },
 ///            ConfigCmd::Get { key } => GetConfigKey {
-///                config: config,
+///                config,
 ///                key,
 ///            },
 ///        }

@@ -7,7 +7,6 @@ use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
-use std::cell::RefCell;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -56,10 +55,6 @@ pub enum TEdgeCertOpt {
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
-    /// The tedge configuration to be updated on success
-    /// with the id and paths provided on the command line.
-    tedge_config: RefCell<TEdgeConfig>,
-
     /// The device identifier
     id: String,
 
@@ -78,10 +73,6 @@ pub struct ShowCertCmd {
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
-    /// The tedge configuration to be updated on success.
-    /// The device id will have to be removed.
-    tedge_config: RefCell<TEdgeConfig>,
-
     /// The path of the certificate to be removed
     cert_path: String,
 
@@ -195,7 +186,6 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = CreateCertCmd {
-                    tedge_config: RefCell::new(config),
                     id,
                     cert_path: param_config_or_default!(
                         cert_path,
@@ -227,7 +217,6 @@ impl BuildCommand for TEdgeCertOpt {
                 key_path,
             } => {
                 let cmd = RemoveCertCmd {
-                    tedge_config: RefCell::new(config),
                     cert_path: param_config_or_default!(
                         cert_path,
                         config_cert_path,
@@ -346,7 +335,7 @@ impl CreateCertCmd {
     }
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = self.tedge_config.borrow_mut();
+        let mut config = TEdgeConfig::from_default_config()?;
         config.device.id = Some(self.id.clone());
         config.device.cert_path = Some(self.cert_path.clone());
         config.device.key_path = Some(self.key_path.clone());
@@ -389,7 +378,7 @@ impl RemoveCertCmd {
     }
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = self.tedge_config.borrow_mut();
+        let mut config = TEdgeConfig::from_default_config()?;
         config.device.id = None;
 
         let _ = config.write_to_default_config()?;
@@ -483,7 +472,6 @@ mod tests {
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
-            tedge_config: RefCell::new(TEdgeConfig::default()),
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
@@ -504,7 +492,6 @@ mod tests {
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
-            tedge_config: RefCell::new(TEdgeConfig::default()),
             id: String::from(id),
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
