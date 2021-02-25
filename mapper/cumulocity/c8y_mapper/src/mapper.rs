@@ -1,7 +1,7 @@
-use crate::service::*;
 use async_trait::async_trait;
 use c8y_translator_lib::CumulocityJson;
 use mqtt_client::Message;
+use service::Service;
 use thiserror::Error;
 use tokio::select;
 

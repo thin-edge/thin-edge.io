@@ -1,9 +1,3 @@
-#[path = "../src/signals.rs"]
-mod signals;
-
-#[path = "../src/service.rs"]
-mod service;
-
 use async_trait::async_trait;
 use service::*;
 use tokio::{

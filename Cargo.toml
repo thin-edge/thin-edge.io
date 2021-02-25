@@ -2,6 +2,7 @@
 
 members = [
     "common/mqtt_client",
+    "common/service",
     "tedge",
     "mapper/cumulocity/c8y_mapper",
     "mapper/cumulocity/c8y_translator_lib",

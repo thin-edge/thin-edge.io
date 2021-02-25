@@ -1,10 +1,8 @@
 use env_logger::Env;
 use mapper::{Mapper, MapperError};
-use service::*;
+use service::{ServiceError, ServiceRunner};
 
 mod mapper;
-mod service;
-mod signals;
 
 const DEFAULT_LOG_LEVEL: &str = "warn";
 

@@ -1,8 +1,10 @@
-use crate::signals::*;
 use async_trait::async_trait;
 use futures::{future::FutureExt, stream::StreamExt};
+use signals::*;
 use thiserror::Error;
 use tokio::select;
+
+mod signals;
 
 ///
 /// Service abstraction and integration with signal handling.
@@ -30,7 +32,7 @@ use tokio::select;
 /// `run`, drop anything allocated on the "stack frame" of `run`, and
 /// then call `shutdown`. This is where resources can be deallocated.
 ///
-/// ```
+/// ```ignore
 ///     +---------------+
 ///     |     setup     |
 ///     +---------------+
@@ -106,7 +108,6 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn ignore_sighup(self) -> Self {
         Self {
             signal_builder: self.signal_builder.ignore_sighup(),
@@ -114,7 +115,6 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn ignore_sigterm(self) -> Self {
         Self {
             signal_builder: self.signal_builder.ignore_sigterm(),
@@ -122,7 +122,6 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn ignore_sigint(self) -> Self {
         Self {
             signal_builder: self.signal_builder.ignore_sigint(),
