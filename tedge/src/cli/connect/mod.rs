@@ -2,6 +2,7 @@ use crate::command::Command;
 use structopt::StructOpt;
 
 mod c8y;
+mod az;
 
 #[derive(StructOpt, Debug)]
 pub enum ConnectCmd {
@@ -9,12 +10,18 @@ pub enum ConnectCmd {
     ///
     /// The command will create config and start edge relay from the device to c8y instance
     C8y(c8y::Connect),
+
+    /// Create connection to Azure 
+    ///
+    /// The command will create config and start edge relay from the device to az instance
+    AZ(az::Connect),
 }
 
 impl ConnectCmd {
     fn sub_command(&self) -> &dyn Command {
         match self {
             ConnectCmd::C8y(cmd) => cmd,
+            ConnectCmd::AZ(cmd) => cmd,
         }
     }
 }

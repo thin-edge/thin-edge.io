@@ -171,6 +171,7 @@ pub struct TEdgeConfig {
     /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
     pub c8y: CumulocityConfig,
+
     #[serde(default)]
     pub azure: AzureConfig,
 }
