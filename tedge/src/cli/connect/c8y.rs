@@ -100,7 +100,7 @@ impl Connect {
             "Awaiting mosquitto to start. This may take up to {} seconds.\n",
             MOSQUITTO_RESTART_TIMEOUT.as_secs()
         );
-        std::thread::sleep(MOSQUITTO_RESTART_TIMEOUT);
+        tokio::time::sleep(MOSQUITTO_RESTART_TIMEOUT).await;
 
         println!(
             "Sending packets to check connection.\n\
@@ -141,15 +141,14 @@ impl Connect {
     //
     // If the device is already registered, it can finish in the first try.
     // If the device is new, the device is going to be registered here and
-    // it can finish in the second try as no error response in the first try.
+    // the check can finish in the second try as there is no error response in the first try.
     async fn check_connection(&self) -> Result<(), ConnectError> {
-        const C8Y_TOPIC_BUILTIN_MESSAGE_DOWNSTREAM: &str = "c8y/s/us";
-        const C8Y_TOPIC_ERROR_MESSAGE_UPSTREAM: &str = "c8y/s/e";
+        const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
+        const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
         const CLIENT_ID: &str = "check_connection";
-        const MAX_RETRY_TIMES: u64 = 2;
 
-        let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_DOWNSTREAM)?;
-        let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_UPSTREAM)?;
+        let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
+        let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
 
         let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
         let mut error_response = mqtt.subscribe(c8y_error_sub_topic.filter()).await?;
@@ -168,11 +167,10 @@ impl Connect {
             }
         });
 
-        for i in 0..MAX_RETRY_TIMES {
+        for i in 0..2 {
             print!(
-                "Try {} / {}: Sending a message to Cumulocity. ",
+                "Try {} / 2: Sending a message to Cumulocity. ",
                 i + 1,
-                MAX_RETRY_TIMES
             );
 
             // 100: Device creation
@@ -189,7 +187,7 @@ impl Connect {
                 }
                 _err => {
                     if i == 0 {
-                        println!("... No response. If the device is new, normal to get no response in the first try.");
+                        println!("... No response. If the device is new, it's normal to get no response in the first try.");
                     } else {
                         println!("... No response. ");
                     }
