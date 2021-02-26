@@ -50,7 +50,7 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: debian-package
+          name: debian-packages-amd64
           path: target/debian/*.deb
 
       - name: Upload tedge
