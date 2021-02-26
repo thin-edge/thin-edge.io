@@ -29,14 +29,14 @@ jobs:
           command: install
           args: cargo-deb
 
-      - name: Build tedge debian packet
+      - name: Build tedge debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
           args: -p tedge
 
-      - name: Build c8y_mapper debian packet
+      - name: Build c8y_mapper debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
