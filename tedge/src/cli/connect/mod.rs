@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use structopt::StructOpt;
 
 use crate::utils::{paths,services};
@@ -21,8 +21,11 @@ pub enum ConnectCmd {
     AZ(az::Connect),
 }
 
-impl ConnectCmd {
-    fn sub_command(&self) -> &dyn Command {
+impl BuildCommand for ConnectCmd {
+    fn build_command(
+        self,
+        config: crate::config::TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         match self {
             ConnectCmd::C8y(cmd) => cmd,
             ConnectCmd::AZ(cmd) => cmd,

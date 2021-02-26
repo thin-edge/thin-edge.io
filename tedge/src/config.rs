@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
@@ -27,7 +27,7 @@ pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
 /// Wrapper type for Configuration keys.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConfigKey(pub String);
 
 impl ConfigKey {
@@ -90,8 +90,17 @@ pub enum ConfigCmd {
     },
 }
 
+impl BuildCommand for ConfigCmd {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        // Temporary implementation
+        // - should return a specific command, not self.
+        // - see certificate.rs for an example
+        Ok(self.into_boxed())
+    }
+}
+
 impl Command for ConfigCmd {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         match self {
             ConfigCmd::Set { key, value } => format!(
                 "set the configuration key: {} with value: {}.",
@@ -108,7 +117,7 @@ impl Command for ConfigCmd {
         }
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 
@@ -405,6 +414,12 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
+
+    #[error(
+        r#"A value for `{key}` is missing.
+    A value can be set with `tedge config set {key} <value>`"#
+    )]
+    ConfigNotSet { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {

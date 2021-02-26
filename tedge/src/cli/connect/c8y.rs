@@ -6,7 +6,7 @@ use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
 use url::Url;
 
-use crate::command::Command;
+use crate::command::{BuildCommand, Command};
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
@@ -15,15 +15,12 @@ use crate::utils::{paths, services};
 use mqtt_client::{Client, Message, Topic};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
-const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
-const WAIT_FOR_CHECK_SECONDS: u64 = 10;
+const MOSQUITTO_RESTART_TIMEOUT: Duration = Duration::from_secs(5);
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(thiserror::Error, Debug)]
 enum ConnectError {
-    #[error("Bridge has been configured, but Cumulocity connection check failed.")]
-    BridgeConnectionFailed,
-
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
@@ -62,17 +59,30 @@ enum ConnectError {
 pub struct Connect {}
 
 impl Command for Connect {
-    fn to_string(&self) -> String {
+    fn description(&self) -> String {
         "execute `tedge connect`.".into()
     }
 
-    fn run(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        Ok(self.new_bridge()?)
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        use tokio::runtime::Runtime;
+        // Create the runtime
+        let rt = Runtime::new().unwrap();
+        // Execute the future, blocking the current thread until completion
+        rt.block_on(async { Ok(self.new_bridge().await?) })
+    }
+}
+
+impl BuildCommand for Connect {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        // Temporary implementation
+        // - should return a specific command, not self.
+        // - see certificate.rs for an example
+        Ok(self.into_boxed())
     }
 }
 
 impl Connect {
-    fn new_bridge(&self) -> Result<(), ConnectError> {
+    async fn new_bridge(&self) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
@@ -97,17 +107,17 @@ impl Connect {
 
         println!(
             "Awaiting mosquitto to start. This may take up to {} seconds.\n",
-            MOSQUITTO_RESTART_TIMEOUT_SECONDS
+            MOSQUITTO_RESTART_TIMEOUT.as_secs()
         );
-        std::thread::sleep(std::time::Duration::from_secs(
-            MOSQUITTO_RESTART_TIMEOUT_SECONDS,
-        ));
+        tokio::time::sleep(MOSQUITTO_RESTART_TIMEOUT).await;
 
         println!(
-            "Sending packets to check connection. This may take up to {} seconds.\n",
-            WAIT_FOR_CHECK_SECONDS
+            "Sending packets to check connection.\n\
+            Registering the device in Cumulocity if the device is not yet registered.\n\
+            This may take up to {} seconds per try.\n",
+            RESPONSE_TIMEOUT.as_secs(),
         );
-        self.check_connection()?;
+        self.check_connection().await?;
 
         println!("Persisting mosquitto on reboot.\n");
         if let Err(err) = services::mosquitto_enable_daemon() {
@@ -135,32 +145,30 @@ impl Connect {
         Ok(())
     }
 
-    // We are going to use c8y templates over mqtt to check if connection has been open.
-    // Empty payload publish to s/ut/existingTemplateCollection
-    // 20,existingTemplateCollection,<ID of collection>
+    // Check the connection by using the response of the SmartREST template 100.
+    // If getting the response '41,100,Device already existing', the connection is established.
     //
-    // Empty payload publish to s/ut/notExistingTemplateCollection
-    // 41,notExistingTemplateCollection
-    // It seems to be appropriate to use the negative (second option) to check if template exists.
-    #[tokio::main]
+    // If the device is already registered, it can finish in the first try.
+    // If the device is new, the device is going to be registered here and
+    // the check can finish in the second try as there is no error response in the first try.
     async fn check_connection(&self) -> Result<(), ConnectError> {
-        const C8Y_TOPIC_TEMPLATE_DOWNSTREAM: &str = "c8y/s/dt";
-        const C8Y_TOPIC_TEMPLATE_UPSTREAM: &str = "c8y/s/ut/notExistingTemplateCollection";
+        const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
+        const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
         const CLIENT_ID: &str = "check_connection";
 
-        let template_pub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_UPSTREAM)?;
-        let template_sub_topic = Topic::new(C8Y_TOPIC_TEMPLATE_DOWNSTREAM)?;
+        let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
+        let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
 
         let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
-        let mut template_response = mqtt.subscribe(template_sub_topic.filter()).await?;
+        let mut error_response = mqtt.subscribe(c8y_error_sub_topic.filter()).await?;
 
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let (sender, mut receiver) = tokio::sync::oneshot::channel();
 
         let _task_handle = tokio::spawn(async move {
-            while let Some(message) = template_response.next().await {
+            while let Some(message) = error_response.next().await {
                 if std::str::from_utf8(&message.payload)
                     .unwrap_or("")
-                    .contains("41,notExistingTemplateCollection")
+                    .contains("41,100,Device already existing")
                 {
                     let _ = sender.send(true);
                     break;
@@ -168,18 +176,32 @@ impl Connect {
             }
         });
 
-        mqtt.publish(Message::new(&template_pub_topic, "")).await?;
+        for i in 0..2 {
+            print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        let fut = timeout(Duration::from_secs(WAIT_FOR_CHECK_SECONDS), receiver);
-        match fut.await {
-            Ok(Ok(true)) => {
-                println!("Received message.");
-            }
-            _err => {
-                return Err(ConnectError::BridgeConnectionFailed);
+            // 100: Device creation
+            mqtt.publish(Message::new(&c8y_msg_pub_topic, "100"))
+                .await?;
+
+            let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
+            match fut.await {
+                Ok(Ok(true)) => {
+                    println!(
+                        " ... Received message.\nThe device is already registered in Cumulocity.\n",
+                    );
+                    return Ok(());
+                }
+                _err => {
+                    if i == 0 {
+                        println!("... No response. If the device is new, it's normal to get no response in the first try.");
+                    } else {
+                        println!("... No response. ");
+                    }
+                }
             }
         }
 
+        println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
         Ok(())
     }
 
