@@ -3,9 +3,9 @@ name: hosted-build-debian-amd64
 # Build a debian package for amd64 only with no external script.
 
 on:
+  # Only run, when a pull request is merged.
+  # Trick: A merged pull request always results in a push.
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
