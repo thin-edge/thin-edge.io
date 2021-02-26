@@ -81,7 +81,7 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: debian-package
+          name: debian-packages-armhf
           path: target/armv7-unknown-linux-gnueabihf/debian/*.deb
 
       - name: upload tedge
