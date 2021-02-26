@@ -49,7 +49,7 @@ pub enum MqttError {
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,
 
-    #[error("{0}")]
+    #[error("{0}\nHint: Is bridge running?")]
     ServerError(String),
 }
 
