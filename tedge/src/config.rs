@@ -344,6 +344,7 @@ impl DeviceConfig {
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
         home_dir()?
+            .join(TEDGE_HOME_DIR)
             .join(DEVICE_CERT_DIR)
             .join(file_name)
             .to_str()
