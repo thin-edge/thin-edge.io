@@ -1,3 +1,4 @@
+/*
 use std::path::Path;
 use std::time::Duration;
 
@@ -218,7 +219,8 @@ impl Connect {
 
         Ok(())
     }
-
+*/
+    /*
     fn load_config(&self) -> Result<Config, ConnectError> {
         Config::try_new_c8y()?.validate()
     }
@@ -521,3 +523,4 @@ mod tests {
         assert_eq!(bridge, expected);
     }
 }
+*/

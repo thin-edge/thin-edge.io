@@ -1,49 +1,70 @@
 use crate::command::{BuildCommand, Command};
-use structopt::StructOpt;
+use crate::config::{ConfigError, TEdgeConfig};
 
+use structopt::StructOpt;
+/*
+use tempfile::PersistError;
 use crate::utils::{paths,services};
 use crate::config::ConfigError;
-use tempfile::PersistError;
 
 mod c8y;
 mod az;
-
+*/
 #[derive(StructOpt, Debug)]
-pub enum ConnectCmd {
+pub enum TEdgeConnectOpt {
     /// Create connection to Cumulocity
     ///
     /// The command will create config and start edge relay from the device to c8y instance
-    C8y(c8y::Connect),
+    C8y,
 
     /// Create connection to Azure 
     ///
     /// The command will create config and start edge relay from the device to az instance
-    AZ(az::Connect),
+    AZ,
 }
 
-impl BuildCommand for ConnectCmd {
+impl BuildCommand for TEdgeConnectOpt {
     fn build_command(
         self,
         config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
-        match self {
-            ConnectCmd::C8y(cmd) => cmd,
-            ConnectCmd::AZ(cmd) => cmd,
-        }
+      let cmd = match self {
+            TEdgeConnectOpt::C8y => BridgeCommand {cloud_type:TEdgeConnectOpt::C8y},
+            TEdgeConnectOpt::AZ => BridgeCommand{cloud_type:TEdgeConnectOpt::AZ},
+        };
+      Ok(cmd.into_boxed())
     }
 }
 
-impl Command for ConnectCmd {
-    fn to_string(&self) -> String {
-        self.sub_command().to_string()
+pub struct BridgeCommand {
+ cloud_type:TEdgeConnectOpt,
+}
+
+impl Command for BridgeCommand{
+   fn description(&self) -> String {
+        format!("Command to create bridge to connect to either to Cumulocity or Azure cloud")
     }
 
-    fn run(&self, verbose: u8) -> Result<(), anyhow::Error> {
-        self.sub_command().run(verbose)
+   fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    
+      //initialize the bridge config struct
+      //Only check will differ
+       match self.cloud_type {
+           TEdgeConnectOpt::AZ => {
+                 println!("Connect to azure cloud...................");
+           }
+           TEdgeConnectOpt::C8y =>{
+               println!("Connect to c8y cloud....................");
+           }
+           _=> { println!("......Wrong Cloud or Not Supported....");}
+       }
+        Ok(())
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+
+/*
+#[AlreadyExistsrive(thiserror::Error, Debug)]
 enum ConnectError {
     #[error("Bridge has been configured, but {cloud} connection check failed.")]
     BridgeConnectionFailed {cloud: String},
@@ -81,4 +102,34 @@ enum ConnectError {
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
 }
+*/
 
+/*
+ //trait with check connection
+//and config
+/*
+pub trait Brdige {
+    check_connection(&self)->Result<(),anyhow::Error>
+}
+*/
+    
+#[derive(Debug, PartialEq)]
+pub struct BridgeConfig {
+        connection: String,
+        address: String,
+        remote_username: String,
+        bridge_cafile: String,
+        remote_clientid: String,
+        bridge_certfile: String,
+        bridge_keyfile: String,
+        try_private: bool,
+        start_type: String,
+        cleansession: bool,
+        bridge_insecure: bool,
+        notifications: bool,
+        bridge_attempt_unsubscribe: bool,
+        topics: Vec<String>,
+}
+
+*
+*/
