@@ -16,6 +16,8 @@ jobs:
   build:
     name: build
     runs-on: Ubuntu-20.04
+    env:
+      TARGET: armv7-unknown-linux-gnueabihf
 
     steps:
 
@@ -26,7 +28,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: armv7-unknown-linux-gnueabihf
+          target: env.TARGET
           override: true
 
       - name: install cargo-deb
@@ -55,7 +57,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=armv7-unknown-linux-gnueabihf
+          args: --release --target=env.TARGET
 
       - name: strip binaries (cargo deb fails to strip)
         uses: actions-rs/cargo@v1
@@ -68,22 +70,20 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge --no-strip --no-build --target=armv7-unknown-linux-gnueabihf
+          args: -p tedge --no-strip --no-build --target=env.TARGET
 
       - name: build c8y_mapper debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p c8y_mapper --no-strip --no-build --target=armv7-unknown-linux-gnueabihf
-
+          args: -p c8y_mapper --no-strip --no-build --target=env.TARGET
 
       - name: upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: debian-packages-armhf
-          path: target/armv7-unknown-linux-gnueabihf/debian/*.deb
-
+          path: target/env.TARGET /debian/*.deb
 
 
