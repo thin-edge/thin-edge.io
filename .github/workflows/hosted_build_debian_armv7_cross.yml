@@ -29,16 +29,19 @@ jobs:
           target: armv7-unknown-linux-gnueabihf
           override: true
 
-#      - name: enable cache
-#        uses: Swatinem/rust-cache@v1
-#        # https://github.com/marketplace/actions/rust-cache
-
       - name: install cargo-deb
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
           args: cargo-deb
+
+      - name: install cargo-strip
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-strip
 
       - name: apt update
         run: sudo apt update
@@ -54,6 +57,12 @@ jobs:
           command: build
           args: --release --target=armv7-unknown-linux-gnueabihf
 
+      - name: strip binaries (cargo deb fails to strip)
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: strip
+
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -67,9 +76,6 @@ jobs:
         with:
           command: deb
           args: -p c8y_mapper --no-strip --no-build --target=armv7-unknown-linux-gnueabihf
-
-      - name: lslah target
-        run: ls -lah ./target/armv7-unknown-linux-gnueabihf/debian/
 
       - name: upload artifact as is
         uses: kittaakos/upload-artifact-as-is@v0
