@@ -1,0 +1,66 @@
+name: hosted-build-debian-amd64
+
+# Build a debian package for amd64 only with no external script.
+
+on:
+  # Only run, when a pull request is merged.
+  # Trick: A merged pull request always results in a push.
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+     runs-on: ubuntu-20.04
+
+     steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: Build tedge debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge
+
+      - name: Build c8y_mapper debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p c8y_mapper
+
+      - name: List target folder
+        run: ls -lah target/debian/
+
+      - name: Upload artifacts as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-package
+          path: target/debian/*.deb
+
+      - name: Upload tedge
+        uses: kittaakos/upload-artifact-as-is@v0
+        # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
+        with:
+          path: 'target/debian/tedge_0.1.0_amd64.deb'
+
+      - name: Upload mapper
+        uses: kittaakos/upload-artifact-as-is@v0
+        # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
+        with:
+          path: 'target/debian/c8y_mapper_0.1.0_amd64.deb'
