@@ -57,7 +57,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=$TARGET
+          args: --release --target=${{ env.TARGET }}
 
       - name: strip binaries (cargo deb fails to strip)
         uses: actions-rs/cargo@v1
@@ -70,20 +70,20 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge --no-strip --no-build --target=$TARGET
+          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
 
       - name: build c8y_mapper debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p c8y_mapper --no-strip --no-build --target=$TARGET
+          args: -p c8y_mapper --no-strip --no-build --target=${{ env.TARGET }}
 
       - name: upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: debian-packages-armhf
-          path: target/$TARGET /debian/*.deb
+          path: target/${{ env.TARGET }}/debian/*.deb
 
 
