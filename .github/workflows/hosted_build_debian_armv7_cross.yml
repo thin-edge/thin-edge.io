@@ -77,11 +77,6 @@ jobs:
           command: deb
           args: -p c8y_mapper --no-strip --no-build --target=armv7-unknown-linux-gnueabihf
 
-      - name: upload artifact as is
-        uses: kittaakos/upload-artifact-as-is@v0
-        # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
-        with:
-          path: 'target/armv7-unknown-linux-gnueabihf/debian/tedge_0.1.0_armhf.deb'
 
       - name: upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -90,16 +85,5 @@ jobs:
           name: debian-packages-armhf
           path: target/armv7-unknown-linux-gnueabihf/debian/*.deb
 
-      - name: upload tedge
-        uses: kittaakos/upload-artifact-as-is@v0
-        # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
-        with:
-          path: 'target/armv7-unknown-linux-gnueabihf/debian/tedge_0.1.0_armhf.deb'
-
-      - name: upload mapper
-        uses: kittaakos/upload-artifact-as-is@v0
-        # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
-        with:
-          path: 'target/armv7-unknown-linux-gnueabihf/debian/c8y_mapper_0.1.0_armhf.deb'
 
 
