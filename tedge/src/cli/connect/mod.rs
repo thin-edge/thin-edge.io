@@ -1,6 +1,7 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::cli::connect::az::Azure;
+use crate::cli::connect::c8y::C8y;
 use std::path::Path;
 use tempfile::NamedTempFile;
 use url::Url;
@@ -11,6 +12,7 @@ use tempfile::PersistError;
 use crate::utils::{paths,services};
 
 mod az;
+mod c8y;
 
 use crate::config::{
     CLOUD_CONNECT, CLOUD_ROOT_CERT_PATH, CLOUD_URL, DEVICE_CERT_PATH,
@@ -137,11 +139,11 @@ impl BridgeConfig {
         match  self.cloud_type {
             TEdgeConnectOpt::AZ => { 
                  println!("Check azure cloud Connection...................");
-                //az.check_connection()?;
+                 //Azure::check_connection()?;
                 }
             TEdgeConnectOpt::C8y => { 
                  println!("Check c8y cloud Connection...................");
-                //c8y.check_connection()?;
+                //C8y::check_connection()?;
                 }
         }
 
@@ -185,10 +187,20 @@ impl BridgeConfig {
         
 
     fn config_exists(&self) -> Result<(), ConnectError> {
+         let config_file_path: String;
+         match self.cloud_type {
+                TEdgeConnectOpt::AZ => {
+                    config_file_path = AZURE_CONFIG_FILENAME.to_string();
+                }
+                TEdgeConnectOpt::C8y => {
+                    config_file_path = C8Y_CONFIG_FILENAME.to_string();
+                }
+            }
+
         let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            AZURE_CONFIG_FILENAME,
+            &config_file_path,
         ])?;
 
         if Path::new(&path).exists() {
@@ -277,7 +289,11 @@ impl BridgeConfig {
                 }
            }
            TEdgeConnectOpt::C8y => {
-               //Initialize C8y topics
+                let c8y_topics = C8y::get_c8y_topics(); 
+                writeln!(writer, "\n### Topics",)?;
+                for topic in &c8y_topics {
+                    writeln!(writer, "topic {}", topic)?;
+                }
            }
         }
         Ok(())
