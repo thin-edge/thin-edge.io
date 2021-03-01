@@ -116,7 +116,7 @@ impl BridgeConfig {
             let _ = self.clean_up();
             return Err(err);
         }
-
+/*
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
         if let Err(err) = services::mosquitto_restart_daemon() {
             self.clean_up()?;
@@ -158,6 +158,7 @@ impl BridgeConfig {
 
         println!("Successfully created bridge connection!");
         
+        */
         Ok(())
     }
 
@@ -291,7 +292,6 @@ impl BridgeConfig {
 
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge",)?;
-        writeln!(writer, "connection {}", self.connection)?;
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
@@ -306,6 +306,7 @@ impl BridgeConfig {
         writeln!(writer, "bridge_attempt_unsubscribe {}", self.bridge_attempt_unsubscribe)?;
         match self.cloud_type {
            TEdgeConnectOpt::AZ => { 
+                writeln!(writer, "connection {}", "edge_to_az")?;
                 let az_topics = Azure::get_azure_topics(self); 
                 writeln!(writer, "\n### Topics",)?;
                 for topic in &az_topics {
@@ -313,6 +314,7 @@ impl BridgeConfig {
                 }
            }
            TEdgeConnectOpt::C8y => {
+                writeln!(writer, "connection {}", "edge_to_c8y")?;
                 let c8y_topics = C8y::get_c8y_topics(); 
                 writeln!(writer, "\n### Topics",)?;
                 for topic in &c8y_topics {
