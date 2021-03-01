@@ -100,7 +100,8 @@ pub struct BridgeConfig {
 }
 
 impl BridgeConfig {
-    fn new_bridge(&mut self) -> Result<(), ConnectError> {
+    #[tokio::main]
+    async fn new_bridge(&mut self) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
@@ -141,7 +142,7 @@ impl BridgeConfig {
                 }
             TEdgeConnectOpt::C8y => { 
                  println!("Check c8y cloud Connection...................");
-                //C8y::check_connection()?;
+                C8y::check_connection().await?;
                 }
         }
 

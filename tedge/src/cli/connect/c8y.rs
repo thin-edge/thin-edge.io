@@ -47,7 +47,7 @@ impl C8y {
     // If the device is already registered, it can finish in the first try.
     // If the device is new, the device is going to be registered here and
     // the check can finish in the second try as there is no error response in the first try.
-    /*
+    
     pub async fn check_connection() -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
@@ -101,7 +101,6 @@ impl C8y {
         println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
         Ok(())
     }
-*/
 }
 
 /*
