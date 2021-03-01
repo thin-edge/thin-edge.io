@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig, CLOUD_CONNECT, TEDGE_HOME_DIR};
+use crate::config::{ConfigError, TEdgeConfig, C8Y_CONNECT, TEDGE_HOME_DIR};
 use crate::utils::{paths, services};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
@@ -86,7 +86,7 @@ impl Disconnect {
 
     fn update_tedge_config(&self) -> Result<(), DisconnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        TEdgeConfig::set_config_value(&mut config, CLOUD_CONNECT, "false".into())?;
+        TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "false".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 }

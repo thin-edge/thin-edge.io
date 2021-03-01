@@ -17,12 +17,6 @@ pub const DEVICE_ID: &str = "device.id";
 pub const DEVICE_CERT_PATH: &str = "device.cert.path";
 pub const DEVICE_KEY_PATH: &str = "device.key.path";
 
-pub const CLOUD_CONNECT: &str = "cloud.connect";
-pub const CLOUD_URL: &str = "cloud.url";
-pub const CLOUD_ROOT_CERT_PATH: &str = "cloud.root.cert.path";
-
-
-/*
 pub const C8Y_CONNECT: &str = "c8y.connect";
 pub const C8Y_URL: &str = "c8y.url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
@@ -31,7 +25,6 @@ pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 pub const _AZURE_CONNECT: &str = "azure.connect";
 pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
-*/
 
 /// Wrapper type for Configuration keys.
 #[derive(Debug, Clone)]
@@ -186,7 +179,9 @@ pub struct TEdgeConfig {
 
     /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
-    pub cloud: CloudConfig,
+    pub c8y: CumulocityConfig,
+    #[serde(default)]
+    pub azure: AzureConfig,
 }
 
 ///
@@ -301,9 +296,12 @@ config_keys! {
         "device.id"            => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
         "device.key.path"      => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
         "device.cert.path"     => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
-        "cloud.url"              => (cloud.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com or iothub_name.azure-devices.net")
-        "cloud.root.cert.path"   => (cloud.root_cert_path, "Path where Cumulocity/Azure root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem or in /etc/ssl/certs")
-        "cloud.connect"          => (cloud.connect, "Connection status to the provided Cumulocity/Azure tenant. Example: true")
+        "c8y.url"              => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y.root.cert.path"   => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
+        "c8y.connect"          => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
+        "azure.url"            => (azure.url, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
+        "azure.root.cert.path" => (azure.root_cert_path, "Path where Azure IoT root certificate(s) are located. Example: /home/user/certificate/azure-trusted-root-certificates.pem")
+        "azure.connect"        => (azure.connect, "Connection status to the provided Azure IoT tenant. Example: true")
     }
 }
 
@@ -376,7 +374,7 @@ impl DeviceConfig {
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct CloudConfig {
+pub struct CumulocityConfig {
     /// Preserves the current status of the connection
     connect: Option<String>,
 
@@ -385,6 +383,14 @@ pub struct CloudConfig {
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
+    root_cert_path: Option<String>,
+}
+
+#[serde(deny_unknown_fields)]
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct AzureConfig {
+    connect: Option<String>,
+    url: Option<String>,
     root_cert_path: Option<String>,
 }
 

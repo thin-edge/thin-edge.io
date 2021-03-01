@@ -15,7 +15,7 @@ mod az;
 mod c8y;
 
 use crate::config::{
-    CLOUD_CONNECT, CLOUD_ROOT_CERT_PATH, CLOUD_URL, DEVICE_CERT_PATH,
+    C8Y_CONNECT, C8Y_URL, C8Y_ROOT_CERT_PATH, _AZURE_CONNECT, _AZURE_ROOT_CERT_PATH, _AZURE_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
@@ -224,7 +224,15 @@ impl BridgeConfig {
 
     fn save_bridge_config(&self) -> Result<(), ConnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        TEdgeConfig::set_config_value(&mut config, CLOUD_CONNECT, "true".into())?;
+        match self.cloud_type {
+            TEdgeConnectOpt::AZ => {
+                TEdgeConfig::set_config_value(&mut config, _AZURE_CONNECT, "true".into())?;
+            }
+            TEdgeConnectOpt::C8y => {
+                TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "true".into())?;
+            }
+          }
+
         Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 
@@ -250,7 +258,16 @@ impl BridgeConfig {
 
    fn try_new(&mut self) -> Result<(), ConnectError> {
         let config = TEdgeConfig::from_default_config()?;
-        self.address = get_config_value(&config, CLOUD_URL)?;
+        match self.cloud_type {
+            TEdgeConnectOpt::AZ => {
+                    self.address = get_config_value(&config, _AZURE_URL)?;
+                    self.bridge_cafile = get_config_value(&config, _AZURE_ROOT_CERT_PATH)?;
+            }
+            TEdgeConnectOpt::C8y => {
+                    self.address = get_config_value(&config, C8Y_URL)?;
+                    self.bridge_cafile = get_config_value(&config, C8Y_ROOT_CERT_PATH)?;
+            }
+        }
         self.remote_clientid = get_config_value(&config, DEVICE_ID)?;
         let iothub_name: Vec<&str> = self.address.split(":").collect();  
         match self.cloud_type  {
@@ -259,7 +276,6 @@ impl BridgeConfig {
             }
             _=> {}
         }
-        self.bridge_cafile = get_config_value(&config, CLOUD_ROOT_CERT_PATH)?;
         self.bridge_certfile = get_config_value(&config, DEVICE_CERT_PATH)?;
         self.bridge_keyfile = get_config_value(&config, DEVICE_KEY_PATH)?;
         Ok(())
