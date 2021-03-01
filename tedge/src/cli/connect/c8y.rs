@@ -186,9 +186,7 @@ impl Connect {
             let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
             match fut.await {
                 Ok(Ok(true)) => {
-                    println!(
-                        " ... Received message.\nThe device is already registered in Cumulocity.\n",
-                    );
+                    println!("... Received message.\nThe device is connected to Cumulocity.\n",);
                     return Ok(());
                 }
                 _err => {
