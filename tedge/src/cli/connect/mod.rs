@@ -116,7 +116,6 @@ impl BridgeConfig {
             let _ = self.clean_up();
             return Err(err);
         }
-/*
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
         if let Err(err) = services::mosquitto_restart_daemon() {
             self.clean_up()?;
@@ -158,7 +157,6 @@ impl BridgeConfig {
 
         println!("Successfully created bridge connection!");
         
-        */
         Ok(())
     }
 
