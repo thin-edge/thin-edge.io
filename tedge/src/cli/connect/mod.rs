@@ -1,23 +1,24 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
-use std::time::Duration;
+use crate::cli::connect::az::Azure;
 use std::path::Path;
 use tempfile::NamedTempFile;
-use tokio::time::timeout;
 use url::Url;
 
 use structopt::StructOpt;
 
 use tempfile::PersistError;
 use crate::utils::{paths,services};
-use mqtt_client::{Client, Message, Topic, TopicFilter};
+
+mod az;
 
 use crate::config::{
-    _AZURE_CONNECT, _AZURE_ROOT_CERT_PATH, _AZURE_URL, DEVICE_CERT_PATH,
+    CLOUD_CONNECT, CLOUD_ROOT_CERT_PATH, CLOUD_URL, DEVICE_CERT_PATH,
     DEVICE_ID, DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
@@ -38,11 +39,11 @@ pub enum TEdgeConnectOpt {
 impl BuildCommand for TEdgeConnectOpt {
     fn build_command(
         self,
-        config: crate::config::TEdgeConfig,
+        _config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
       let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {cloud_type:TEdgeConnectOpt::C8y},
-            TEdgeConnectOpt::AZ => BridgeCommand{cloud_type:TEdgeConnectOpt::AZ},
+            TEdgeConnectOpt::AZ => BridgeCommand {cloud_type:TEdgeConnectOpt::AZ},
         };
       Ok(cmd.into_boxed())
     }
@@ -162,10 +163,19 @@ impl BridgeConfig {
     // To preserve error chain and not discard other errors we need to ignore error here
     // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
+           let config_file_path: String;
+           match self.cloud_type {
+                TEdgeConnectOpt::AZ => {
+                    config_file_path = AZURE_CONFIG_FILENAME.to_string();
+                }
+                TEdgeConnectOpt::C8y => {
+                    config_file_path = C8Y_CONFIG_FILENAME.to_string();
+                }
+            }
         let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            AZURE_CONFIG_FILENAME,
+            &config_file_path,
         ])?;
         let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
 
@@ -196,13 +206,13 @@ impl BridgeConfig {
     }
 
     fn load_config(&mut self) -> Result<(), ConnectError> {
-       let bridge_config = self.try_new()?;
+       self.try_new()?;
        Ok(self.validate()?)
     }
 
     fn save_bridge_config(&self) -> Result<(), ConnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        TEdgeConfig::set_config_value(&mut config, _AZURE_CONNECT, "true".into())?;
+        TEdgeConfig::set_config_value(&mut config, CLOUD_CONNECT, "true".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 
@@ -228,7 +238,7 @@ impl BridgeConfig {
 
    fn try_new(&mut self) -> Result<(), ConnectError> {
         let config = TEdgeConfig::from_default_config()?;
-        self.address = get_config_value(&config, _AZURE_URL)?;
+        self.address = get_config_value(&config, CLOUD_URL)?;
         self.remote_clientid = get_config_value(&config, DEVICE_ID)?;
         let iothub_name: Vec<&str> = self.address.split(":").collect();  
         match self.cloud_type  {
@@ -237,7 +247,7 @@ impl BridgeConfig {
             }
             _=> {}
         }
-        self.bridge_cafile = get_config_value(&config, _AZURE_ROOT_CERT_PATH)?;
+        self.bridge_cafile = get_config_value(&config, CLOUD_ROOT_CERT_PATH)?;
         self.bridge_certfile = get_config_value(&config, DEVICE_CERT_PATH)?;
         self.bridge_keyfile = get_config_value(&config, DEVICE_KEY_PATH)?;
         Ok(())
@@ -260,23 +270,16 @@ impl BridgeConfig {
         writeln!(writer, "bridge_attempt_unsubscribe {}", self.bridge_attempt_unsubscribe)?;
         match self.cloud_type {
            TEdgeConnectOpt::AZ => { 
-                let pub_msg_topic =  format!("messages/events/ out 1 az/ devices/{}/",self.remote_clientid);
-                let sub_msg_topic =  format!("messages/devicebound/# out 1 az/ devices/{}/",self.remote_clientid);
+                let az_topics = Azure::get_azure_topics(self); 
                 writeln!(writer, "\n### Topics",)?;
-                for topic in &self.topics {
+                for topic in &az_topics {
                     writeln!(writer, "topic {}", topic)?;
                 }
-                writeln!(writer,"topic {}", pub_msg_topic)?;
-                writeln!(writer,"topic {}", sub_msg_topic)?;
-                // az JSON
-                writeln!(writer, "topic {}", r##"$iothub/twin/res/# in 1"##)?;
-                writeln!(writer, "topic {}", r#"$iothub/twin/GET/?$rid=1 out 1"#)?;
            }
            TEdgeConnectOpt::C8y => {
                //Initialize C8y topics
            }
         }
-
         Ok(())
     }
 
@@ -297,77 +300,15 @@ impl BridgeConfig {
 
         Ok(())
     }
-
-    // Here We check the az device twin properties over mqtt to check if connection has been open.
-    // First the mqtt client will subscribe to a topic az/$iothub/twin/res/#, listen to the
-    // device twin property output
-    // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID
-    // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}
-    // Here if the status is 200 then its success
-    
-    #[tokio::main]
-    async fn check_connection(&self) -> Result<(), ConnectError> {
-
-        const AZURE_TOPIC_DEVICETWIN_DOWNSTREAM: &str = r##"$iothub/twin/res/#"##;
-        const AZURE_TOPIC_DEVICETWIN_UPSTREAM: &str = r#"$iothub/twin/GET/?$rid=1"#;
-        const CLIENT_ID: &str = "check_connection";
-
-        let template_pub_topic = Topic::new("$iothub/twin/GET/?$rid=1")?;
-        let template_sub_filter = TopicFilter::new("$iothub/twin/res/200/?$rid=1")?;
-
-        let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
-        let mut device_twin_response = mqtt.subscribe(template_sub_filter).await?;
-
-        //let (sender, receiver) = tokio::sync::oneshot::channel();
-
-/*
-        let _task_handle = tokio::spawn(async move {
-            while let Some(message) = device_twin_response.next().await {
-                println!("msg====>{:#?}",message);
-                let _ = sender.send(true);
-                break;
-
-                if std::str::from_utf8(message.topic)
-                    .unwrap_or("")
-                    .contains("200")
-                {
-                    let _ = sender.send(true);
-                    break;
-                }
-            }
-        });
-
-*/
-        mqtt.publish(Message::new(&template_pub_topic, "")).await?;
-
-        println!("-------waiting for response---------------");
-                
-        if let Some(message) = device_twin_response.next().await{
-                println!("msg====>{:#?}",message);
-        }
-        /*
-        match fut.await {
-            Ok(Ok(true)) => {
-                println!("Received message.");
-            }
-            _err => {
-                return Err(ConnectError::BridgeConnectionFailed {cloud: String::from("azure")});
-            }
-        }
-        */
-
-        Ok(())
-    }
-
 }
-
 /// Mosquitto config parameters required for bridge to be established:
-/// # AZURE Bridge
+/// cloud_type azure/c8y
+/// # CLOUD Bridge
 /// connection edge_to_az
-/// address mqtt.$AZURE_URL:8883
-/// bridge_cafile $AZURE_CERT
+/// address mqtt.$CLOUD_URL:8883
+/// bridge_cafile $CLOUD_CERT
 /// remote_clientid $DEVICE_ID
-/// remote_username $AZURE_USERNAME
+/// remote_username $CLOUD_USERNAME
 /// bridge_certfile $CERT_PATH
 /// bridge_keyfile $KEY_PATH
 /// try_private false
@@ -392,8 +333,6 @@ impl Default for BridgeConfig {
             topics: vec![
                 //Cloud specific topics to be added later 
             ],
-            
-
         }
     }
 }
