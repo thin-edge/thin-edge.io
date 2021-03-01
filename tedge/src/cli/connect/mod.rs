@@ -2,12 +2,11 @@ use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::cli::connect::az::Azure;
 use crate::cli::connect::c8y::C8y;
+
 use std::path::Path;
 use tempfile::NamedTempFile;
 use url::Url;
-
 use structopt::StructOpt;
-
 use tempfile::PersistError;
 use crate::utils::{paths,services};
 
@@ -244,11 +243,20 @@ impl BridgeConfig {
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
+        let config_file_path: String;
+           match self.cloud_type {
+                TEdgeConnectOpt::AZ => {
+                    config_file_path = AZURE_CONFIG_FILENAME.to_string();
+                }
+                TEdgeConnectOpt::C8y => {
+                    config_file_path = C8Y_CONFIG_FILENAME.to_string();
+                }
+            }
 
         let config_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            AZURE_CONFIG_FILENAME,
+            &config_file_path,
         ])?;
 
         let _ = paths::persist_tempfile(temp_file, &config_path)?;
