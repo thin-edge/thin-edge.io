@@ -51,10 +51,18 @@ impl ThinEdgeJson {
         input: &[u8],
         timestamp: DateTime<Utc>,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        let json_string = std::str::from_utf8(input)?;
+        let json_string = std::str::from_utf8(input)
+            .map_err(|err| ThinEdgeJsonError::new_invalid_utf8(input, err))?;
+        ThinEdgeJson::from_str(json_string, timestamp)
+    }
+
+    pub fn from_str(
+        json_string: &str,
+        timestamp: DateTime<Utc>,
+    ) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         match json::parse(&json_string) {
             Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj, timestamp),
-            Err(err) => Err(ThinEdgeJsonError::InvalidJson(err)),
+            Err(err) => Err(ThinEdgeJsonError::new_invalid_json(json_string, err)),
         }
     }
 
@@ -105,22 +113,18 @@ impl ThinEdgeJson {
                     values: measurements,
                 })
             }
-            _ => {
-                let json = input.to_string();
-                Err(ThinEdgeJsonError::InvalidThinEdgeJsonRoot {
-                    json: if json.len() < 10 {
-                        json
-                    } else {
-                        json[0..10].to_string()
-                    },
-                })
-            }
+            _ => Err(ThinEdgeJsonError::new_invalid_json_root(&input)),
         }
     }
 
     fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
         //Parse fails if timestamp is not is8601 complaint
-        DateTime::parse_from_rfc3339(&value)?;
+        DateTime::parse_from_rfc3339(&value).map_err(|err| {
+            ThinEdgeJsonError::InvalidTimeStamp {
+                value: String::from(value),
+                from: err,
+            }
+        })?;
         Ok(String::from(value))
     }
 }
@@ -152,7 +156,6 @@ impl MultiValueMeasurement {
         let mut single_values = vec![];
 
         for (k, v) in multi_value_obj.iter() {
-            println!("k: {}", k);
             match v {
                 JsonValue::Number(num) => {
                     //Single Value object
@@ -274,14 +277,20 @@ impl fmt::Display for CumulocityJson {
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum ThinEdgeJsonError {
-    #[error(transparent)]
-    InvalidUTF8(#[from] std::str::Utf8Error),
+    #[error("Invalid UTF8: {from}: {input_excerpt}...")]
+    InvalidUTF8 {
+        input_excerpt: String,
+        from: std::str::Utf8Error,
+    },
 
-    #[error("Invalid json: {0}")]
-    InvalidJson(#[from] json::Error),
+    #[error("Invalid JSON: {from}: {input_excerpt}")]
+    InvalidJson {
+        input_excerpt: String,
+        from: json::Error,
+    },
 
-    #[error("Not a record of measurements: {json}")]
-    InvalidThinEdgeJsonRoot { json: String },
+    #[error("Not a record of measurements: {json_excerpt}")]
+    InvalidThinEdgeJsonRoot { json_excerpt: String },
 
     #[error("Not a number: the {name:?} value must be a number.")]
     InvalidThinEdgeJsonValue { name: String },
@@ -292,11 +301,47 @@ pub enum ThinEdgeJsonError {
     #[error("Invalid measurement name: {name:?} is a reserved word.")]
     ThinEdgeReservedWordError { name: String },
 
-    #[error("Invalid ISO8601 timestamp: {0}")]
-    InvalidTimeStamp(#[from] ParseError),
+    #[error("Invalid ISO8601 timestamp: {value:?}: {from}")]
+    InvalidTimeStamp { value: String, from: ParseError },
 
-    #[error("Too many nested levels: {name:?} must be hoisted or flattened.")]
+    #[error("More than 2 nested levels: the record for {name:?} must be flattened.")]
     InvalidThinEdgeHierarchy { name: String },
+}
+
+impl ThinEdgeJsonError {
+    const MAX_LEN: usize = 80;
+
+    fn excerpt(input: &str, len: usize) -> String {
+        let input = input.split_whitespace().collect::<String>();
+        if input.len() < len {
+            input.to_string()
+        } else {
+            input[0..len].to_string()
+        }
+    }
+
+    fn new_invalid_utf8(bytes: &[u8], from: std::str::Utf8Error) -> ThinEdgeJsonError {
+        let index = from.valid_up_to();
+        let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
+
+        ThinEdgeJsonError::InvalidUTF8 {
+            input_excerpt: ThinEdgeJsonError::excerpt(input, ThinEdgeJsonError::MAX_LEN),
+            from,
+        }
+    }
+
+    fn new_invalid_json(input: &str, from: json::JsonError) -> ThinEdgeJsonError {
+        ThinEdgeJsonError::InvalidJson {
+            input_excerpt: ThinEdgeJsonError::excerpt(input, ThinEdgeJsonError::MAX_LEN),
+            from,
+        }
+    }
+
+    fn new_invalid_json_root(json: &JsonValue) -> ThinEdgeJsonError {
+        ThinEdgeJsonError::InvalidThinEdgeJsonRoot {
+            json_excerpt: ThinEdgeJsonError::excerpt(&json.to_string(), ThinEdgeJsonError::MAX_LEN),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -451,7 +496,8 @@ mod tests {
     fn thin_edge_json_reject_invalid_ut8() {
         let input = b"temperature\xc3\x28";
 
-        let expected_error = r#"invalid utf-8 sequence of 1 bytes from index 11"#;
+        let expected_error =
+            r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 11: temperature..."#;
         let output = CumulocityJson::from_thin_edge_json(input);
 
         let error = output.unwrap_err();
@@ -463,6 +509,20 @@ mod tests {
         let input = r"[50,23]";
 
         let expected_error = r#"Not a record of measurements: [50,23]"#;
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_nested_arrays() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": [50,60,70]
+          }"#;
+
+        let expected_error = r#"Not a number: the "temperature" value must be a number."#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -500,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_json_round_yocto_number() {
+    fn thin_edge_json_round_tiny_number() {
         let input = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
            "temperature": 10e-9999999999
@@ -560,7 +620,8 @@ mod tests {
                   },
                 "pressure": 98
         }"#;
-        let expected_output = r#"Too many nested levels: "area" must be hoisted or flattened."#;
+        let expected_output =
+            r#"More than 2 nested levels: the record for "area" must be flattened."#;
         let output =
             CumulocityJson::from_thin_edge_json(&String::from(multi_level_heirarchy).into_bytes());
         let error = output.unwrap_err();
@@ -607,7 +668,21 @@ mod tests {
            "pressure": 220;
           }"#;
 
-        let expected_error = "Invalid json: Unexpected character: ; at (3:27)";
+        let expected_error = "Invalid JSON: Unexpected character: ; at (3:27): {\"time\":\"2013-06-22T17:03:14.000+02:00\",\"pressure\":220;}";
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_partial_json() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+        "#;
+
+        let expected_error =
+            r#"Invalid JSON: Unexpected end of JSON: {"time":"2013-06-22T17:03:14.000+02:00","#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -621,7 +696,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_error = "Invalid ISO8601 timestamp: premature end of input";
+        let expected_error = "Invalid ISO8601 timestamp: \"2013-06-22\": premature end of input";
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -635,7 +710,8 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_error = "Invalid ISO8601 timestamp: input contains invalid characters";
+        let expected_error =
+            "Invalid ISO8601 timestamp: \"2013-06-22 3am\": input contains invalid characters";
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
