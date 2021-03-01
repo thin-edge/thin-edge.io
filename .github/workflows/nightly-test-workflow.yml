@@ -17,12 +17,13 @@ env:
 jobs:
 
   install-amd64:
-    runs-on: [self-hosted, Linux, X64, builder]
+    runs-on: Ubuntu-20.04
 
     steps:
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
           with:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted-build-debian-amd64.yml
@@ -53,6 +54,7 @@ jobs:
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
           with:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted_build_debian_armv7_cross.yml
@@ -75,3 +77,4 @@ jobs:
 
         - name: install mosquitto
           run: tedge --help
+
