@@ -45,12 +45,6 @@ jobs:
           command: install
           args: cargo-strip
 
-      - name: apt update
-        run: sudo apt update
-
-      - name: install cross compiler packages
-        run: sudo apt install gcc-arm-linux-gnueabihf
-
       - name: build cross release for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
