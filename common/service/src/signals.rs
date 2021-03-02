@@ -5,7 +5,8 @@ use futures::task::{Context, Poll};
 pub type SignalStream = SelectAll<SignalHandler>;
 
 #[derive(Copy, Clone)]
-pub enum Signal {
+/// Portable signal kind abstraction.
+pub enum SignalKind {
     /// SIGHUP
     Hangup,
     /// SIGTERM
@@ -19,17 +20,17 @@ pub enum SignalHandler {
     #[cfg(not(windows))]
     UnixSignal {
         stream: tokio::signal::unix::Signal,
-        emit_signal: Signal,
+        emit_signal: SignalKind,
     },
     #[cfg(windows)]
     GenericSignal {
         receiver: tokio::sync::mpsc::Receiver<()>,
-        emit_signal: Signal,
+        emit_signal: SignalKind,
     },
 }
 
 impl Stream for SignalHandler {
-    type Item = Signal;
+    type Item = SignalKind;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.get_mut() {
@@ -94,28 +95,28 @@ impl SignalStreamBuilder {
 
     #[cfg(not(windows))]
     pub fn build(self) -> std::io::Result<SignalStream> {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix;
 
         let mut signals = SelectAll::new();
 
         if !self.ignore_hangup {
             signals.push(SignalHandler::UnixSignal {
-                stream: signal(SignalKind::hangup())?,
-                emit_signal: Signal::Hangup,
+                stream: unix::signal(unix::SignalKind::hangup())?,
+                emit_signal: SignalKind::Hangup,
             });
         }
 
         if !self.ignore_terminate {
             signals.push(SignalHandler::UnixSignal {
-                stream: signal(SignalKind::terminate())?,
-                emit_signal: Signal::Terminate,
+                stream: unix::signal(unix::SignalKind::terminate())?,
+                emit_signal: SignalKind::Terminate,
             });
         }
 
         if !self.ignore_interrupt {
             signals.push(SignalHandler::UnixSignal {
-                stream: signal(SignalKind::interrupt())?,
-                emit_signal: Signal::Interrupt,
+                stream: unix::signal(unix::SignalKind::interrupt())?,
+                emit_signal: SignalKind::Interrupt,
             });
         }
 
@@ -142,7 +143,7 @@ impl SignalStreamBuilder {
 
             signals.push(SignalHandler::GenericSignal {
                 receiver,
-                emit_signal: Signal::Interrupt,
+                emit_signal: SignalKind::Interrupt,
             });
         }
 

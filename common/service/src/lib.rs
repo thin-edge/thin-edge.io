@@ -21,7 +21,7 @@ mod signals;
 /// * Reloading (`Service#reload`)
 /// * Service shutdown (`Service#shutdown`)
 ///
-/// The life of a service begins with it's `setup`, shortly followed by
+/// The life of a service begins with its `setup`, shortly followed by
 /// invoking it's service handling loop `run`. A `SIGHUP` signal, unless
 /// ignored, will break out of `run` and enter `reload`. Once `reload`
 /// is done, `run` is called again. It's important to note that anything
@@ -52,9 +52,10 @@ mod signals;
 ///
 /// # Caveats
 ///
-/// The `run` method runs concurrently with the signal handlers. That
-/// means, if you have a busy loop in `run` or you do not give up
-/// control from `run` to the tokio scheduler (e.g. by means of
+/// The `run` method runs concurrently with the signal handlers (this
+/// applies to any `async` functions scheduled on the same scheduler
+/// thread). That means, if you have a busy loop in `run` or you do not
+/// give up control from `run` to the tokio scheduler (e.g. by means of
 /// `.await`ing), there is no chance for the signal handlers to run.
 /// Signals will not be lost, but signal handling will be postponed to
 /// when `run` gives up control.
@@ -77,7 +78,7 @@ pub trait Service: Sized {
     async fn run(&mut self) -> Result<(), Self::Error>;
 
     /// Reloads the service.
-    async fn reload(&mut self) -> Result<(), Self::Error>;
+    async fn reload(self) -> Result<Self, Self::Error>;
 
     /// Shuts the service down (gracefully).
     async fn shutdown(self) -> Result<(), Self::Error>;
@@ -158,7 +159,7 @@ impl<S: Service> ServiceRunner<S> {
                 }
                 Ok(ExitReason::ReloadConfig) => {
                     log::info!("Reload config");
-                    let () = service.reload().await.map_err(ServiceError::ServiceError)?;
+                    service = service.reload().await.map_err(ServiceError::ServiceError)?;
                 }
                 Err(err) => {
                     log::info!("Service failed with: {:?}", err);
@@ -187,15 +188,15 @@ impl<S: Service> ServiceRunner<S> {
 
                 signal = signal_stream.next() => {
                     match signal.ok_or(ServiceError::SignalStreamExhausted)? {
-                        Signal::Terminate => {
+                        SignalKind::Terminate => {
                             log::info!("Got SIGTERM");
                             return Ok(ExitReason::Terminate);
                         }
-                        Signal::Interrupt => {
+                        SignalKind::Interrupt => {
                             log::info!("Got SIGINT");
                             return Ok(ExitReason::Terminate);
                         }
-                        Signal::Hangup => {
+                        SignalKind::Hangup => {
                             log::info!("Got SIGHUP");
                             return Ok(ExitReason::ReloadConfig);
                         }
