@@ -44,7 +44,7 @@ jobs:
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
 
-        - name: install mosquitto
+        - name: run tedge help
           run: tedge --help
 
   install-rpi:
@@ -72,6 +72,6 @@ jobs:
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
 
-        - name: install mosquitto
+        - name: run tedge help
           run: tedge --help
 
