@@ -85,6 +85,7 @@ pub struct BridgeConfig {
     remote_username: String,
     bridge_cafile: String,
     remote_clientid: String,
+    local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
     try_private: bool,
@@ -248,6 +249,7 @@ impl BridgeConfig {
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
+        writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
         writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
         writeln!(writer, "try_private {}", self.try_private)?;

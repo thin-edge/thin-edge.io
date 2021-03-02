@@ -20,6 +20,7 @@ impl C8y {
             remote_username: "".into(),
             bridge_cafile: get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
             remote_clientid: get_config_value(&config, DEVICE_ID)?,
+            local_clientid: "c8y_local".into(),
             bridge_certfile: get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: get_config_value(&config, DEVICE_KEY_PATH)?,
             try_private: false,
