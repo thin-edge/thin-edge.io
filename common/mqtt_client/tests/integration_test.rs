@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[test]
-#[cfg(feature="integrationtest")]
+#[cfg(feature="integration-test")]
 // Requires fix for access to service on Internet which is not available in gh actions.
 // Proposed to use mock server instead of using live service on the Internet.
 fn sending_and_receiving_a_message() {

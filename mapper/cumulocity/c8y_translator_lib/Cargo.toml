@@ -15,5 +15,5 @@ pretty_assertions = "0.6.1"
 proptest = "0.10.1"
 
 [features]
-# use: #[cfg(feature="integrationtest")]
-integrationtest = []
+# use: #[cfg(feature="integration-test")]
+integration-test = []

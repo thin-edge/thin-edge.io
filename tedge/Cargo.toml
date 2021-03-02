@@ -42,5 +42,4 @@ pem = "0.8.2"
 predicates = "1.0.6"
 
 [features]
-# use: #[cfg(feature="integrationtest")]
-integrationtest = []
+integration-test = []

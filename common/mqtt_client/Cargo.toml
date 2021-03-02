@@ -22,5 +22,4 @@ rand = "0.8.3"
 tokio-test = "0.4.0"
 
 [features]
-# use: #[cfg(feature="integrationtest")]
-integrationtest = []
+integration-test = []
