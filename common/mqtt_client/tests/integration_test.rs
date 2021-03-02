@@ -1,5 +1,9 @@
+
+#[cfg(feature="integration-test")]
 use mqtt_client::{Config, Message, Topic};
+#[cfg(feature="integration-test")]
 use std::time::Duration;
+#[cfg(feature="integration-test")]
 use tokio::time::sleep;
 
 #[test]
