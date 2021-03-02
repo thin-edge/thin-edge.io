@@ -5,6 +5,7 @@ use tokio::time::timeout;
 
 const MOSQUITTO_RESTART_TIMEOUT: Duration = Duration::from_secs(5);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 
 pub struct C8y {}
 
@@ -13,6 +14,7 @@ impl C8y {
         let config = TEdgeConfig::from_default_config()?;
         Ok(BridgeConfig {
             cloud_type: TEdgeConnectOpt::C8y,
+            config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
             address: get_config_value(&config, C8Y_URL)?,
             remote_username: "".into(),

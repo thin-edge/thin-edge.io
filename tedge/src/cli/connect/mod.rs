@@ -18,8 +18,6 @@ use crate::config::{
     TEDGE_HOME_DIR, _AZURE_CONNECT, _AZURE_ROOT_CERT_PATH, _AZURE_URL,
 };
 
-const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
-const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
@@ -81,6 +79,7 @@ impl Command for BridgeCommand {
 #[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
     cloud_type: TEdgeConnectOpt,
+    config_file: String,
     connection: String,
     address: String,
     remote_username: String,
@@ -159,19 +158,10 @@ impl BridgeConfig {
     // To preserve error chain and not discard other errors we need to ignore error here
     // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
-        let config_file_path: String;
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                config_file_path = AZURE_CONFIG_FILENAME.to_string();
-            }
-            TEdgeConnectOpt::C8y => {
-                config_file_path = C8Y_CONFIG_FILENAME.to_string();
-            }
-        }
         let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            &config_file_path,
+            &self.config_file,
         ])?;
         let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
 
@@ -179,20 +169,10 @@ impl BridgeConfig {
     }
 
     fn config_exists(&self) -> Result<(), ConnectError> {
-        let config_file_path: String;
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                config_file_path = AZURE_CONFIG_FILENAME.to_string();
-            }
-            TEdgeConnectOpt::C8y => {
-                config_file_path = C8Y_CONFIG_FILENAME.to_string();
-            }
-        }
-
         let path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            &config_file_path,
+            &self.config_file,
         ])?;
 
         if Path::new(&path).exists() {
@@ -235,20 +215,11 @@ impl BridgeConfig {
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
-        let config_file_path: String;
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                config_file_path = AZURE_CONFIG_FILENAME.to_string();
-            }
-            TEdgeConnectOpt::C8y => {
-                config_file_path = C8Y_CONFIG_FILENAME.to_string();
-            }
-        }
 
         let config_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            &config_file_path,
+            &self.config_file,
         ])?;
 
         let _ = paths::persist_tempfile(temp_file, &config_path)?;
@@ -258,6 +229,7 @@ impl BridgeConfig {
 
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge",)?;
+        writeln!(writer, "connection {}", self.connection)?;
         match self.cloud_type {
             TEdgeConnectOpt::AZ => {
                 writeln!(writer, "remote_username {}", self.remote_username)?;

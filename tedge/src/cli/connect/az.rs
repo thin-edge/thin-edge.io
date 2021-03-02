@@ -1,5 +1,8 @@
 use super::*;
 //use mqtt_client::{Client, Message, Topic, TopicFilter};
+
+const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+
 pub struct Azure {}
 
 impl Azure {
@@ -17,6 +20,7 @@ impl Azure {
 
         Ok(BridgeConfig {
             cloud_type: TEdgeConnectOpt::AZ,
+            config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
             address: az_url,
             remote_username: user_name,
