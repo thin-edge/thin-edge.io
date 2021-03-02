@@ -28,7 +28,7 @@ jobs:
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
+            github_token: ${{secrets.TEDGE_CI_TOKEN}}
             workflow: hosted-build-debian-amd64.yml
             workflow_conclusion: success
             branch: main
@@ -56,7 +56,7 @@ jobs:
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
+            github_token: ${{secrets.TEDGE_CI_TOKEN}}
             workflow: hosted_build_debian_armv7_cross.yml
             workflow_conclusion: success
             branch: main
