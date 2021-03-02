@@ -257,7 +257,7 @@ impl Default for CertConfig {
 impl Default for TestCertConfig {
     fn default() -> Self {
         TestCertConfig {
-            validity_period_days: 90,
+            validity_period_days: 365,
             organization_name: "Thin Edge".into(),
             organizational_unit_name: "Test Device".into(),
         }
