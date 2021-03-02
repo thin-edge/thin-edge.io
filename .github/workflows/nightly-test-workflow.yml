@@ -1,13 +1,16 @@
 
 name: nightly-test-workflow
 
-#https://github.com/marketplace/actions/download-workflow-artifact
+# This is the workflow to be executed "nightly".
+# At current it is executed on every push to main in the main repository.
+# As a stand in for tests that are coming soon we execute tedge --help
+# to see if the binary can be executed on that platform.
 
 on:
-  #push:
-  #  branches: [ main ]
-  #pull_request:
-  #  branches: [ main ]
+  # Only run, when a pull request is merged.
+  # Trick: A merged pull request always results in a push.
+  push:
+    branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
 
@@ -28,12 +31,9 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted-build-debian-amd64.yml
             workflow_conclusion: success
-            branch: continuous_integration
+            branch: main
             name: debian-packages-amd64
             path: debian-package_unpack
-
-        - name: lslah
-          run: ls -lah ./debian-package_unpack
 
         - name: purge
           run: sudo dpkg -P mosquitto tedge c8y_mapper
@@ -59,12 +59,9 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted_build_debian_armv7_cross.yml
             workflow_conclusion: success
-            branch: continuous_integration
+            branch: main
             name: debian-packages-armhf
             path: debian-package_unpack
-
-        - name: lslah
-          run: ls -lah ./debian-package_unpack
 
         - name: purge
           run: sudo dpkg -P mosquitto tedge c8y_mapper
