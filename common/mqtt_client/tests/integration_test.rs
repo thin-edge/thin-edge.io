@@ -1,16 +1,14 @@
 
-#[cfg(feature="integration-test")]
-use mqtt_client::{Config, Message, Topic};
-#[cfg(feature="integration-test")]
-use std::time::Duration;
-#[cfg(feature="integration-test")]
-use tokio::time::sleep;
-
 #[test]
 #[cfg(feature="integration-test")]
 // Requires fix for access to service on Internet which is not available in gh actions.
 // Proposed to use mock server instead of using live service on the Internet.
+// Run this test by calling 'cargo test --features integration-test' from the base path of the crate
 fn sending_and_receiving_a_message() {
+    use mqtt_client::{Config, Message, Topic};
+    use std::time::Duration;
+    use tokio::time::sleep;
+
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::Error> {
         let test_broker = Config::new("test.mosquitto.org", 1883);
 
