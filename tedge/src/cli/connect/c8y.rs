@@ -1,18 +1,32 @@
-use mqtt_client::{Client, Message, Topic};
-use tokio::time::timeout;
-use std::time::Duration;
 use super::*;
+use mqtt_client::{Client, Message, Topic};
+use std::time::Duration;
+use tokio::time::timeout;
 
 const MOSQUITTO_RESTART_TIMEOUT: Duration = Duration::from_secs(5);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub struct C8y {
-}
+pub struct C8y {}
 
 impl C8y {
-
-    pub fn get_c8y_topics()->Vec<String> {
-        vec![
+    pub fn c8y_bridge_config() -> Result<BridgeConfig, ConnectError> {
+        let config = TEdgeConfig::from_default_config()?;
+        Ok(BridgeConfig {
+            cloud_type: TEdgeConnectOpt::C8y,
+            connection: "edge_to_c8y".into(),
+            address: get_config_value(&config, C8Y_URL)?,
+            remote_username: "".into(),
+            bridge_cafile: get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
+            remote_clientid: get_config_value(&config, DEVICE_ID)?,
+            bridge_certfile: get_config_value(&config, DEVICE_CERT_PATH)?,
+            bridge_keyfile: get_config_value(&config, DEVICE_KEY_PATH)?,
+            try_private: false,
+            start_type: "automatic".into(),
+            cleansession: true,
+            bridge_insecure: false,
+            notifications: false,
+            bridge_attempt_unsubscribe: false,
+            topics: vec![
                 // Registration
                 r#"s/dcr in 2 c8y/ """#.into(),
                 r#"s/ucr out 2 c8y/ """#.into(),
@@ -38,7 +52,8 @@ impl C8y {
                 // c8y JSON
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
-            ]
+            ],
+        })
     }
 
     // Check the connection by using the response of the SmartREST template 100.
@@ -47,7 +62,7 @@ impl C8y {
     // If the device is already registered, it can finish in the first try.
     // If the device is new, the device is going to be registered here and
     // the check can finish in the second try as there is no error response in the first try.
-    
+
     pub async fn check_connection() -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
@@ -104,157 +119,6 @@ impl C8y {
 }
 
 /*
-#[derive(Debug, PartialEq)]
-enum Config {
-    C8y(C8yConfig),
-}
-
-impl Config {
-    fn try_new_c8y() -> Result<Config, ConnectError> {
-        Ok(Config::C8y(C8yConfig::try_new()?))
-    }
-
-    fn validate(self) -> Result<Config, ConnectError> {
-        match self {
-            Config::C8y(config) => {
-                config.validate()?;
-                Ok(Config::C8y(config))
-            }
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-struct C8yConfig {
-    connection: String,
-    address: String,
-    bridge_cafile: String,
-    remote_clientid: String,
-    bridge_certfile: String,
-    bridge_keyfile: String,
-    try_private: bool,
-    start_type: String,
-    topics: Vec<String>,
-}
-
-/// Mosquitto config parameters required for C8Y bridge to be established:
-/// # C8Y Bridge
-/// connection edge_to_c8y
-/// address mqtt.$C8Y_URL:8883
-/// bridge_cafile $C8Y_CERT
-/// remote_clientid $DEVICE_ID
-/// bridge_certfile $CERT_PATH
-/// bridge_keyfile $KEY_PATH
-/// try_private false
-/// start_type automatic
-impl Default for C8yConfig {
-    fn default() -> C8yConfig {
-        C8yConfig {
-            connection: "edge_to_c8y".into(),
-            address: "".into(),
-            bridge_cafile: "".into(),
-            remote_clientid: "alpha".into(),
-            bridge_certfile: "".into(),
-            bridge_keyfile: "".into(),
-            try_private: false,
-            start_type: "automatic".into(),
-            topics: vec![
-                // Registration
-                r#"s/dcr in 2 c8y/ """#.into(),
-                r#"s/ucr out 2 c8y/ """#.into(),
-                // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
-                // Static templates
-                r#"s/us out 2 c8y/ """#.into(),
-                r#"t/us out 2 c8y/ """#.into(),
-                r#"q/us out 2 c8y/ """#.into(),
-                r#"c/us out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
-                r#"s/os in 2 c8y/ """#.into(),
-                // Debug
-                r#"s/e in 0 c8y/ """#.into(),
-                // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
-                r#"s/oc/# in 2 c8y/ """#.into(),
-                // c8y JSON
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
-            ],
-        }
-    }
-}
-
-impl C8yConfig {
-    fn try_new() -> Result<C8yConfig, ConnectError> {
-        let config = TEdgeConfig::from_default_config()?;
-        let address = get_config_value(&config, C8Y_URL)?;
-
-        let remote_clientid = get_config_value(&config, DEVICE_ID)?;
-
-        let bridge_cafile = get_config_value(&config, C8Y_ROOT_CERT_PATH)?;
-        let bridge_certfile = get_config_value(&config, DEVICE_CERT_PATH)?;
-        let bridge_keyfile = get_config_value(&config, DEVICE_KEY_PATH)?;
-
-        Ok(C8yConfig {
-            connection: "edge_to_c8y".into(),
-            address,
-            bridge_cafile,
-            remote_clientid,
-            bridge_certfile,
-            bridge_keyfile,
-            ..C8yConfig::default()
-        })
-    }
-
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writeln!(writer, "### Bridge",)?;
-        writeln!(writer, "connection {}", self.connection)?;
-        writeln!(writer, "address {}", self.address)?;
-        writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
-        writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
-        writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
-        writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
-        writeln!(writer, "try_private {}", self.try_private)?;
-        writeln!(writer, "start_type {}", self.start_type)?;
-
-        writeln!(writer, "\n### Topics",)?;
-        for topic in &self.topics {
-            writeln!(writer, "topic {}", topic)?;
-        }
-
-        Ok(())
-    }
-
-    fn validate(&self) -> Result<(), ConnectError> {
-        Url::parse(&self.address)?;
-
-        if !Path::new(&self.bridge_cafile).exists() {
-            return Err(ConnectError::Certificate);
-        }
-
-        if !Path::new(&self.bridge_certfile).exists() {
-            return Err(ConnectError::Certificate);
-        }
-
-        if !Path::new(&self.bridge_keyfile).exists() {
-            return Err(ConnectError::Certificate);
-        }
-
-        Ok(())
-    }
-}
-
-fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConnectError> {
-    Ok(config
-        .get_config_value(key)?
-        .ok_or_else(|| ConnectError::MissingRequiredConfigurationItem { item: key.into() })?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
