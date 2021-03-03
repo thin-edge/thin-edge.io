@@ -142,7 +142,7 @@ Saving configuration.
 Successfully created bridge connection!
 ```
 
-This error may be caused by some of following reasons:
+This error may be caused by some of the following reasons:
 
 - No access to Internet connection
 
