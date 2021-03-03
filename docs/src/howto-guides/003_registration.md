@@ -21,7 +21,7 @@ $ ls ~/.tedge
 
 If the certificate already exists you may see following error:
 
-```shell
+```plain
 Error: failed to create a test certificate for the device alpha.
 
 Caused by:
@@ -38,6 +38,6 @@ tegde cert remove
 
 and try [`tedge cert create`](../references/tedge-cert.md) once again.
 
-Next steps:
+## Next steps
 
-1. [Connection](./004_connect)
+1. [Connect](./004_connect)

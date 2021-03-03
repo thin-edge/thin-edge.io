@@ -4,7 +4,7 @@ To install thin edge package it is required to use `curl` to download the packag
 
 ## Dependency installation
 
-thin-edge has single dependency and it is `mosquitto` MQTT server, the server is used for communication southband and northbound e.g. southband, devices can publish measurementes; northbound, gateway may relay messages to cloud.
+thin-edge has single dependency and it is `mosquitto` MQTT server, the server is used for communication southbound and northbound e.g. southbound, devices can publish measurements; northbound, gateway may relay messages to cloud.
 `mosquitto` can be installed with your package manager for apt the command may look as following:
 
 ```shell
@@ -19,7 +19,7 @@ sudo apt install mosquitto
 
 ## Thin Edge installation
 
-When all dependencies are in place you can proceed with installation of thin-edge cli and thin-edge mapper service.
+When all dependencies are in place you can proceed with installation of `thin-edge cli` and `thin-edge mapper` service.
 
 ### Package download
 
@@ -75,7 +75,7 @@ Eg:
 dpkg -i mapper_0.1.0_amd64
 ```
 
-Next steps:
+## Next steps
 
 1. [Registration](./003_registration.md)
 2. [Connect](./004_connect.md)

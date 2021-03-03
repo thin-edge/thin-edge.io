@@ -2,17 +2,33 @@
 
 ## Connect to Cumulocity IoT​
 
-To create northbound conenction a local bridge shall be established and this can be achieved with `tedge` cli and following command:
+To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
 > NB: Some of the commands require elevated permissions to enable system services e.g. [`tedge connect`](../references/tedge-connect.md) needs to enable `mosquitto` server.
+
+Configure required parameters for thin-edge with [`tedge config set`](../references/tedge-config.md):
 
 ```shell
 tedge config set c8y.url example.cumulocity.com​
 ```
 
-Upload self-signed certificate, not needed in production with root cert!​
+> Tip: If you you are unsure which parameters are required for the command to work just issue that command and it will tell you which parameters you should have set.
+> For example, if we issue [`tedge connect c8y`](../references/tedge-connect.md) without any configuration following advice will be given:
+>
+> ```shell
+> $ tedge connect c8y`
+> ...
+> Error: failed to execute `tedge connect`.
+>
+> Caused by:
+>     Required configuration item is not provided 'c8y.url', run 'tedge config set c8y.url <value>' to add it to config.
+> ```
+>
+> This message explains which configuration parameter is missing and how to add it to configuration, in this case we are told to run `tedge config set c8y.url <value>`.
+
+Next step is to upload self-signed certificate, which is not needed in production with root cert!​
 
 > This command takes parameter `user`, this is due to upload mechanism to Cumulocity cloud which uses username and password for authentication.
-> After issuing this command you are going to be prompted for a password.
+> After issuing this command you are going to be prompted for a password. Users usernames and passwords are not stored in configuration due to security.
 
 ```shell
 $ tedge cert register c8y –-user <username>
@@ -22,7 +38,6 @@ Password:
 where:
 > `username` -> user in Cumulocity with permissions to upload new certificates
 
-Add happy commands output
 Add known unhappy paths, permission issue, file exists ...
 
 To create bridge use [`tedge connect`](../references/tedge-connect.md):
@@ -58,7 +73,7 @@ Saving configuration.
 Successfully created bridge connection!
 ```
 
-If conenction has already been established following error may appear:
+If connection has already been established following error may appear:
 
 ```shell
 $ tedge connect c8y
@@ -72,7 +87,7 @@ Caused by:
     Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.
 ```
 
-To remove existing conenction and create new one follow the advice and issue [`tedge disconnect c8y`](../references/tedge-disconnect.md):
+To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../references/tedge-disconnect.md):
 
 ```shell
 $ tedge disconnect c8y
@@ -83,7 +98,8 @@ Applying changes to mosquitto.
 Bridge successfully disconnected!
 ```
 
-And now you can issue `tedge connect c8y` to create new bridge.
-Next steps:
+And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to create new bridge.
+
+## Next steps
 
 1. [Testing with MQTT pub and sub](./005_pub_sub.md)
