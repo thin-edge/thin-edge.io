@@ -1,4 +1,4 @@
-# Installation
+# How to instal thin-edge?
 
 To install thin edge package it is required to use `curl` to download the package and `dpkg` to install it.
 
@@ -11,13 +11,13 @@ thin-edge has single dependency and it is `mosquitto` MQTT server, the server is
 apt install mosquitto
 ```
 
-> NB: Some OSes may require you to use `sudo` to install packages:
+> Note: Some OSes may require you to use `sudo` to install packages:
 
 ```shell
 sudo apt install mosquitto
 ```
 
-## Thin Edge installation
+## `thin-edge` installation
 
 When all dependencies are in place you can proceed with installation of `thin-edge cli` and `thin-edge mapper` service.
 
@@ -51,6 +51,9 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/archive/mapper_0.1.0_amd64.d
 ### Package installation
 
 Now, we have downloaded the package we can proceed to installation. First we will install cli tool `tedge`.
+
+> Note: Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
+
 To install `tedge` use following command:
 
 ```shell
@@ -77,6 +80,6 @@ dpkg -i mapper_0.1.0_amd64
 
 ## Next steps
 
-1. [Registration](./003_registration.md)
-2. [Connect](./004_connect.md)
-3. [Mapping](...)
+1. [How to register?](./003_registration.md)
+2. [How to connect?](./004_connect.md)
+3. [How to use mapper?](...)
