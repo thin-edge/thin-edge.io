@@ -1,4 +1,4 @@
-# How to instal thin-edge?
+# How to install `thin-edge`?
 
 To install thin edge package it is required to use `curl` to download the package and `dpkg` to install it.
 
