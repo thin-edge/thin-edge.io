@@ -1,8 +1,6 @@
-# Registration
+# How to register?
 
 ## Create self-signed certificate
-
-NB: DO NOT USE IN PRODUCTION!​
 
 To create new certificate you can use [`tedge cert create`](../references/tedge-cert.md) thin-edge command:
 
@@ -10,14 +8,20 @@ To create new certificate you can use [`tedge cert create`](../references/tedge-
 tedge cert create --device-id alpha
 ```
 
-> NB: This command provides no output on success.
+> Note: This command provides no output on success.
 
-Now you should have a certificate in the `.tedge` directory.
+[`tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/home/user/.tedge/`), to use custom location refer to [`tedge config`](../references/tedge-config.md).
+
+Now you should have a certificate in the `/home/user/.tedge/` directory.
 
 ```shell
-$ ls ~/.tedge
+$ ls ~/.tedge/
 /home/user/.tedge/tedge-certificate.pem
 ```
+
+### Errors
+
+#### Certificate already exists in the given location
 
 If the certificate already exists you may see following error:
 
@@ -40,4 +44,5 @@ and try [`tedge cert create`](../references/tedge-cert.md) once again.
 
 ## Next steps
 
-1. [Connect](./004_connect)
+1. [How to connect?](./004_connect)
+2. [How to use mqtt pub/sub?](./005_pub_sub.md)
