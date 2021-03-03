@@ -15,33 +15,50 @@ pub enum SignalKind {
 
 #[cfg(not(windows))]
 mod unix {
-    use core::pin::Pin;
+    use super::SignalKind;
+    use async_stream::stream;
     use futures::stream::Stream;
-    use futures::task::{Context, Poll};
-    use tokio::signal::unix::{signal, Signal, SignalKind};
+    use tokio::signal::unix::{signal, Signal, SignalKind as UnixSignalKind};
 
-    pub struct UnixSignalStream(Signal);
-
-    impl Stream for UnixSignalStream {
-        type Item = ();
-
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            self.get_mut().0.poll_recv(cx)
-        }
+    pub fn hangup_stream() -> std::io::Result<impl Stream<Item = SignalKind>> {
+        signal(UnixSignalKind::hangup())
+            .map(|signal| stream_from_signal(signal, SignalKind::Hangup))
     }
 
-    impl UnixSignalStream {
-        pub fn hangup() -> std::io::Result<Self> {
-            signal(SignalKind::hangup()).map(Self)
-        }
+    pub fn terminate_stream() -> std::io::Result<impl Stream<Item = SignalKind>> {
+        signal(UnixSignalKind::terminate())
+            .map(|signal| stream_from_signal(signal, SignalKind::Terminate))
+    }
 
-        pub fn terminate() -> std::io::Result<Self> {
-            signal(SignalKind::terminate()).map(Self)
-        }
+    pub fn interrupt_stream() -> std::io::Result<impl Stream<Item = SignalKind>> {
+        signal(UnixSignalKind::interrupt())
+            .map(|signal| stream_from_signal(signal, SignalKind::Interrupt))
+    }
 
-        pub fn interrupt() -> std::io::Result<Self> {
-            signal(SignalKind::interrupt()).map(Self)
+    fn stream_from_signal(
+        mut signal: Signal,
+        signal_kind: SignalKind,
+    ) -> impl Stream<Item = SignalKind> {
+        stream! {
+            while let Some(()) = signal.recv().await {
+                yield signal_kind;
+            }
         }
+    }
+}
+
+#[cfg(windows)]
+mod windows {
+    use super::SignalKind;
+    use async_stream::stream;
+    use futures::stream::Stream;
+
+    pub fn interrupt_stream() -> std::io::Result<impl Stream<Item = SignalKind>> {
+        Ok(stream! {
+            if let Ok(_) = tokio::signal::ctrl_c().await {
+                yield SignalKind::Interrupt;
+            }
+        })
     }
 }
 
@@ -86,45 +103,22 @@ impl SignalStreamBuilder {
 
         #[cfg(not(windows))]
         if self.register_hangup {
-            signals.push(
-                unix::UnixSignalStream::hangup()?
-                    .map(|()| SignalKind::Hangup)
-                    .boxed(),
-            );
+            signals.push(unix::hangup_stream()?.boxed());
         }
 
         #[cfg(not(windows))]
         if self.register_terminate {
-            signals.push(
-                unix::UnixSignalStream::terminate()?
-                    .map(|()| SignalKind::Terminate)
-                    .boxed(),
-            );
+            signals.push(unix::terminate_stream()?.boxed());
         }
 
         #[cfg(not(windows))]
         if self.register_interrupt {
-            signals.push(
-                unix::UnixSignalStream::interrupt()?
-                    .map(|()| SignalKind::Interrupt)
-                    .boxed(),
-            );
+            signals.push(unix::interrupt_stream()?.boxed());
         }
 
         #[cfg(windows)]
         if self.register_interrupt {
-            let (sender, receiver) = tokio::sync::mpsc::channel::<()>(1);
-            tokio::spawn(async move {
-                if let Ok(_) = tokio::signal::ctrl_c().await {
-                    let _ = sender.send(()).await;
-                }
-            });
-
-            signals.push(
-                tokio_stream::wrappers::ReceiverStream::new(receiver)
-                    .map(|()| SignalKind::Interrupt)
-                    .boxed(),
-            );
+            signals.push(windows::interrupt_stream()?.boxed());
         }
 
         // Make sure that we have at least one signal handler.
