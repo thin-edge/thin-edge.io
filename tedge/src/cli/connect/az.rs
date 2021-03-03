@@ -26,7 +26,7 @@ impl Azure {
             remote_username: user_name,
             bridge_cafile: get_config_value(&config, _AZURE_ROOT_CERT_PATH)?,
             remote_clientid: clientid,
-            local_clientid: "azure_local".into(),
+            local_clientid: "Azure".into(),
             bridge_certfile: get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: get_config_value(&config, DEVICE_KEY_PATH)?,
             try_private: false,

@@ -59,7 +59,7 @@ pub struct BridgeCommand {
 
 impl Command for BridgeCommand {
     fn description(&self) -> String {
-        format!("Create bridge to connect Cumulocity/Azure cloud")
+        format!("Create bridge to connect {} cloud", self.bridge_config.local_clientid)
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
