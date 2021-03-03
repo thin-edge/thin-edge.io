@@ -1,5 +1,6 @@
 use std::{
     ffi::OsString,
+    fs::File,
     path::{Path, PathBuf},
 };
 
@@ -69,6 +70,23 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .and_then(|home| if home.is_empty() { None } else { Some(home) })
         .map(PathBuf::from)
+}
+
+/// Set the permission modes of a Unix file.
+#[cfg(not(windows))]
+pub fn set_permission(file: &File, mode: u32) -> Result<(), std::io::Error> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perm = file.metadata()?.permissions();
+    perm.set_mode(mode);
+    file.set_permissions(perm)
+}
+
+/// On windows, no file permission modes are changed.
+///
+/// So Windows might be used for dev even if not supported.
+#[cfg(windows)]
+pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
+    Ok(())
 }
 
 #[cfg(test)]

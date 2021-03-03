@@ -1,0 +1,77 @@
+
+name: nightly-test-workflow
+
+# This is the workflow to be executed "nightly".
+# At current it is executed on every push to main in the main repository.
+# As a stand in for tests that are coming soon we execute tedge --help
+# to see if the binary can be executed on that platform.
+
+on:
+  # Only run, when a pull request is merged.
+  # Trick: A merged pull request always results in a push.
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  install-amd64:
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: hosted-build-debian-amd64.yml
+            workflow_conclusion: success
+            branch: main
+            name: debian-packages-amd64
+            path: debian-package_unpack
+
+        - name: purge
+          run: sudo dpkg -P mosquitto tedge c8y_mapper
+
+        - name: install mosquitto
+          run: sudo apt-get --assume-yes install mosquitto
+
+        - name: install packages
+          run: sudo dpkg -i ./debian-package_unpack/*.deb
+
+        - name: run tedge help
+          run: tedge --help
+
+  install-rpi:
+    runs-on: [self-hosted, Linux, ARM]
+
+    steps:
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: hosted_build_debian_armv7_cross.yml
+            workflow_conclusion: success
+            branch: main
+            name: debian-packages-armhf
+            path: debian-package_unpack
+
+        - name: purge
+          run: sudo dpkg -P mosquitto tedge c8y_mapper
+
+        - name: install mosquitto
+          run: sudo apt-get --assume-yes install mosquitto
+
+        - name: install packages
+          run: sudo dpkg -i ./debian-package_unpack/*.deb
+
+        - name: run tedge help
+          run: tedge --help
+

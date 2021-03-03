@@ -1,6 +1,6 @@
 mod tests {
-
-    use predicates::prelude::*; // Used for writing assertions
+    use predicates::prelude::*;
+    use std::path::Path; // Used for writing assertions
 
     fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
     where
@@ -43,33 +43,40 @@ mod tests {
         let device_id = "test";
         let cert_path = temp_path(&tempdir, "test-cert.pem");
         let key_path = temp_path(&tempdir, "test-key.pem");
+        let home_dir = tempdir.path().to_str().unwrap();
 
-        let mut create_cmd = tedge_command(&[
-            "cert",
-            "create",
-            "--id",
-            device_id,
-            "--cert-path",
-            &cert_path,
-            "--key-path",
-            &key_path,
-        ])?;
+        let mut get_device_id_cmd =
+            tedge_command_with_test_home(home_dir, &["config", "get", "device.id"])?;
+        let mut set_cert_path_cmd = tedge_command_with_test_home(
+            home_dir,
+            &["config", "set", "device.cert.path", &cert_path],
+        )?;
+        let mut set_key_path_cmd = tedge_command_with_test_home(
+            home_dir,
+            &["config", "set", "device.key.path", &key_path],
+        )?;
 
-        let mut show_cmd = tedge_command(&["cert", "show", "--cert-path", &cert_path])?;
+        let mut create_cmd =
+            tedge_command_with_test_home(home_dir, &["cert", "create", "--device-id", device_id])?;
+        let mut show_cmd = tedge_command_with_test_home(home_dir, &["cert", "show"])?;
+        let mut remove_cmd = tedge_command_with_test_home(home_dir, &["cert", "remove"])?;
 
-        let mut remove_cmd = tedge_command(&[
-            "cert",
-            "remove",
-            "--cert-path",
-            &cert_path,
-            "--key-path",
-            &key_path,
-        ])?;
+        // Configure tedge to use specific paths for the private key and the certificate
+        set_cert_path_cmd.assert().success();
+        set_key_path_cmd.assert().success();
 
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
 
-        // The create command create a certificate
+        // We start we no certificate, hence no device id
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
+            ));
+
+        // The create command created a certificate
         create_cmd.assert().success();
 
         // The certificate use the device id as CN
@@ -78,13 +85,19 @@ mod tests {
             .success()
             .stdout(predicate::str::contains(format!("CN={},", device_id)));
 
+        // The create command updated the config with the device.id
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(device_id));
+
         // When a certificate exists, it is not over-written by the create command
         create_cmd
             .assert()
             .failure()
             .stderr(predicate::str::contains("A certificate already exists"));
 
-        // The remove command remove the certificate
+        // The remove command removed the certificate
         remove_cmd.assert().success();
 
         // which can no more be displayed
@@ -92,6 +105,14 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains("Missing file"));
+
+        // The remove command also removed the device id from the config
+        get_device_id_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
+            ));
 
         // The a new certificate can then be created.
         create_cmd.assert().success();
@@ -112,9 +133,9 @@ mod tests {
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         let mut set_device_id_cmd = tedge_command_with_test_home(
@@ -136,9 +157,9 @@ mod tests {
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         Ok(())
@@ -150,17 +171,23 @@ mod tests {
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        let cert_path = temp_path(&temp_dir, "certificate/tedge-certificate.pem");
-        let key_path = temp_path(&temp_dir, "certificate/tedge-private-key.pem");
+        let cert_path = temp_path(
+            &temp_dir,
+            &join_paths("certificate", "tedge-certificate.pem"),
+        );
+        let key_path = temp_path(
+            &temp_dir,
+            &join_paths("certificate", "tedge-private-key.pem"),
+        );
 
         let mut get_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.id"])?;
 
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: device.id is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'device.id' is not set",
             ));
 
         let mut get_cert_path_cmd =
@@ -184,9 +211,9 @@ mod tests {
 
         get_c8y_url_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: c8y.url is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'c8y.url' is not set",
             ));
 
         let mut get_c8y_root_cert_path_cmd =
@@ -194,9 +221,9 @@ mod tests {
 
         get_c8y_root_cert_path_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "The provided config key: c8y.root.cert.path is not set",
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'c8y.root.cert.path' is not set",
             ));
 
         Ok(())
@@ -207,20 +234,28 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        let key_regex = r#"device.key.path=[\w/.]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.]*certificate/tedge-certificate.pem"#;
-
-        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
-        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
-
         let mut list_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "list"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let output_str = String::from_utf8(output.clone().stdout).unwrap();
+        let output_str = String::from_utf8(output.stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&output_str));
-        assert_eq!(true, cert_predicate_fn.eval(&output_str));
+        let key_path = extract_config_value(&output_str, "device.key.path");
+        assert!(key_path.ends_with("tedge-private-key.pem"));
+        assert!(key_path.contains("certificate"));
+
+        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        assert!(cert_path.ends_with("tedge-certificate.pem"));
+        assert!(cert_path.contains("certificate"));
+    }
+
+    fn extract_config_value(output: &String, key: &str) -> String {
+        output
+            .lines()
+            .map(|line| line.splitn(2, "=").collect::<Vec<_>>())
+            .find(|pair| pair[0] == key)
+            .unwrap()[1]
+            .into()
     }
 
     #[test]
@@ -241,20 +276,20 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let test_home_str = temp_dir.path().to_str().unwrap();
 
-        let key_regex = r#"device.key.path=[\w/.]*certificate/tedge-private-key.pem"#;
-        let cert_regex = r#"device.cert.path=[\w/.]*certificate/tedge-certificate.pem"#;
-
-        let key_predicate_fn = predicate::str::is_match(key_regex).unwrap();
-        let cert_predicate_fn = predicate::str::is_match(cert_regex).unwrap();
-
         let mut list_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "list", "--all"]).unwrap();
         let assert = list_cmd.assert().success();
-        let output = assert.get_output().clone();
+        let output = assert.get_output();
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        assert_eq!(true, key_predicate_fn.eval(&output_str));
-        assert_eq!(true, cert_predicate_fn.eval(&output_str));
+        let key_path = extract_config_value(&output_str, "device.key.path");
+        assert!(key_path.ends_with("tedge-private-key.pem"));
+        assert!(key_path.contains("certificate"));
+
+        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        assert!(cert_path.ends_with("tedge-certificate.pem"));
+        assert!(cert_path.contains("certificate"));
+
         for key in get_tedge_config_keys() {
             assert_eq!(true, output_str.contains(key));
         }
@@ -288,6 +323,14 @@ mod tests {
         let mut command = tedge_command(args)?;
         command.env("HOME", test_home);
         Ok(command)
+    }
+
+    fn join_paths(prefix_path: &str, trailer_path: &str) -> String {
+        Path::new(prefix_path)
+            .join(trailer_path)
+            .to_str()
+            .unwrap()
+            .into()
     }
 
     fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {

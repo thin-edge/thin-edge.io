@@ -103,7 +103,7 @@ impl Client {
     pub async fn connect(name: &str, config: &Config) -> Result<Client, Error> {
         let name = String::from(name);
         let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
-        mqtt_options.set_clean_session(false);
+        mqtt_options.set_clean_session(config.clean_session);
         if let Some(inflight) = config.inflight {
             mqtt_options.set_inflight(inflight);
         }
@@ -284,7 +284,7 @@ impl Client {
                         // TODO: `rumqttc` library with cargo feature="v5" has a
                         // field `PubRel#reason`. Check that for `rumqttc::PubRelReason::Success`
                         // and only notify in that case.
-                        send_discarding_error!(message_sender, msg.into());
+                        send_discarding_error!(message_sender, msg);
                     }
                 }
 
@@ -339,6 +339,11 @@ pub struct Config {
     ///
     /// Default: `10`.
     queue_capacity: usize,
+
+    /// Clean the MQTT session upon connect if set to `true`.
+    ///
+    /// Default: `false`.
+    clean_session: bool,
 }
 
 /// By default a client connects the local MQTT broker.
@@ -349,6 +354,7 @@ impl Default for Config {
             port: 1883,
             inflight: None,
             queue_capacity: 10,
+            clean_session: false,
         }
     }
 }
@@ -359,6 +365,14 @@ impl Config {
             host: host.into(),
             port,
             ..Config::default()
+        }
+    }
+
+    /// Enable `clean_session`.
+    pub fn clean_session(self) -> Self {
+        Self {
+            clean_session: true,
+            ..self
         }
     }
 
