@@ -2,7 +2,16 @@ use core::pin::Pin;
 use futures::stream::{SelectAll, Stream};
 use futures::task::{Context, Poll};
 
-pub type SignalStream = SelectAll<SignalHandler>;
+pub struct SignalStream(SelectAll<SignalHandler>);
+
+impl Stream for SignalStream {
+    type Item = SignalKind;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = Pin::into_inner(self);
+        Pin::new(&mut me.0).poll_next(cx)
+    }
+}
 
 #[derive(Copy, Clone)]
 /// Portable signal kind abstraction.
@@ -126,7 +135,7 @@ impl SignalStreamBuilder {
             signals.push(SignalHandler::Dummy);
         }
 
-        Ok(signals)
+        Ok(SignalStream(signals))
     }
 
     #[cfg(windows)]
@@ -153,6 +162,6 @@ impl SignalStreamBuilder {
             signals.push(SignalHandler::Dummy);
         }
 
-        Ok(signals)
+        Ok(SignalStream(signals))
     }
 }
