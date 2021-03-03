@@ -22,13 +22,13 @@ mod signals;
 /// * Service shutdown (`Service#shutdown`)
 ///
 /// The life of a service begins with its `setup`, shortly followed by
-/// invoking it's service handling loop `run`. A `SIGHUP` signal, unless
+/// invoking its service handling loop `run`. A `SIGHUP` signal, unless
 /// ignored, will break out of `run` and enter `reload`. Once `reload`
 /// is done, `run` is called again. It's important to note that anything
 /// that you allocate on the "stack" within `run` will be dropped before
-/// calling `reload`. If there is anything that you want to persist
-/// across calls between `run` and `reload` that will have to go into
-/// `setup`. The `SIGINT` or `SIGTERM` signals will as well break out of
+/// calling `reload`. If there is anything that you want to keep open
+/// across calls between `run` and `reload`, put it into `setup`.
+/// The `SIGINT` or `SIGTERM` signals will as well break out of
 /// `run`, drop anything allocated on the "stack frame" of `run`, and
 /// then call `shutdown`. This is where resources can be deallocated.
 ///
