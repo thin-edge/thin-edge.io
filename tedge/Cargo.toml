@@ -43,3 +43,4 @@ predicates = "1.0.6"
 
 [features]
 integration-test = []
+mosquitto-available = []
