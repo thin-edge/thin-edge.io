@@ -369,9 +369,9 @@ config_keys! {
         "c8y.url"              => (c8y.url, Public, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
         "c8y.root.cert.path"   => (c8y.root_cert_path, Public, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
         "c8y.connect"          => (c8y.connect, Protected, "Connection status to the provided Cumulocity tenant. Example: true")
-        "azure.url"            => (azure.url, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
-        "azure.root.cert.path" => (azure.root_cert_path, "Path where Azure IoT root certificate(s) are located. Example: /home/user/certificate/azure-trusted-root-certificates.pem")
-        "azure.connect"        => (azure.connect, "Connection status to the provided Azure IoT tenant. Example: true")
+        "azure.url"            => (azure.url, Public, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
+        "azure.root.cert.path" => (azure.root_cert_path, Public, "Path where Azure IoT root certificate(s) are located. Example: /home/user/certificate/azure-trusted-root-certificates.pem")
+        "azure.connect"        => (azure.connect, Public, "Connection status to the provided Azure IoT tenant. Example: true")
     }
 }
 
