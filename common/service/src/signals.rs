@@ -2,17 +2,6 @@ use core::pin::Pin;
 use futures::stream::{SelectAll, Stream};
 use futures::task::{Context, Poll};
 
-pub struct SignalStream(SelectAll<SignalHandler>);
-
-impl Stream for SignalStream {
-    type Item = SignalKind;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let me = Pin::into_inner(self);
-        Pin::new(&mut me.0).poll_next(cx)
-    }
-}
-
 #[derive(Copy, Clone)]
 /// Portable signal kind abstraction.
 pub enum SignalKind {
@@ -24,7 +13,18 @@ pub enum SignalKind {
     Interrupt,
 }
 
-pub enum SignalHandler {
+pub struct SignalStream(SelectAll<SignalHandler>);
+
+impl Stream for SignalStream {
+    type Item = SignalKind;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = Pin::into_inner(self);
+        Pin::new(&mut me.0).poll_next(cx)
+    }
+}
+
+enum SignalHandler {
     Dummy,
     #[cfg(not(windows))]
     UnixSignal {
