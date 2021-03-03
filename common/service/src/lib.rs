@@ -50,16 +50,6 @@ mod signals;
 ///     +---------------+
 /// ```
 ///
-/// # Caveats
-///
-/// The `run` method runs concurrently with the signal handlers (this
-/// applies to any `async` functions scheduled on the same scheduler
-/// thread). That means, if you have a busy loop in `run` or you do not
-/// give up control from `run` to the tokio scheduler (e.g. by means of
-/// `.await`ing), there is no chance for the signal handlers to run.
-/// Signals will not be lost, but signal handling will be postponed to
-/// when `run` gives up control.
-///
 #[async_trait]
 pub trait Service: Sized {
     /// The service name
