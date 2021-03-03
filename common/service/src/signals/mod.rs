@@ -3,15 +3,11 @@ use futures::{
     stream::{SelectAll, Stream, StreamExt},
     FutureExt,
 };
-#[cfg(not(windows))]
-use unix::*;
-#[cfg(windows)]
-use windows::*;
+use signal_streams::*;
 
-#[cfg(not(windows))]
-mod unix;
-#[cfg(windows)]
-mod windows;
+#[cfg_attr(not(windows), path = "unix.rs")]
+#[cfg_attr(windows, path = "windows.rs")]
+mod signal_streams;
 
 #[derive(Copy, Clone)]
 /// Portable signal kind abstraction.
