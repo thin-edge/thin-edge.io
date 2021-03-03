@@ -1,5 +1,5 @@
 use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig};
+use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
 use crate::utils::paths;
 use chrono::offset::Utc;
 use chrono::Duration;
@@ -157,12 +157,12 @@ impl BuildCommand for TEdgeCertOpt {
                         id,
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from("device.cert.path"),
+                                key: String::from(DEVICE_CERT_PATH),
                             }
                         })?,
                         key_path: config.device.key_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from("device.key.path"),
+                                key: String::from(DEVICE_KEY_PATH),
                             }
                         })?,
                     };
@@ -173,7 +173,7 @@ impl BuildCommand for TEdgeCertOpt {
                     let cmd = ShowCertCmd {
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from("device.cert.path"),
+                                key: String::from(DEVICE_CERT_PATH),
                             }
                         })?,
                     };
@@ -184,12 +184,12 @@ impl BuildCommand for TEdgeCertOpt {
                     let cmd = RemoveCertCmd {
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from("device.cert.path"),
+                                key: String::from(DEVICE_CERT_PATH),
                             }
                         })?,
                         key_path: config.device.key_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from("device.key.path"),
+                                key: String::from(DEVICE_KEY_PATH),
                             }
                         })?,
                     };
