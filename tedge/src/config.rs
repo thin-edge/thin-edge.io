@@ -17,12 +17,10 @@ pub const DEVICE_ID: &str = "device.id";
 pub const DEVICE_CERT_PATH: &str = "device.cert.path";
 pub const DEVICE_KEY_PATH: &str = "device.key.path";
 
-pub const C8Y_CONNECT: &str = "c8y.connect";
 pub const C8Y_URL: &str = "c8y.url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
 // CIT-221 will use them. Remove the prefix `_` later
-pub const _AZURE_CONNECT: &str = "azure.connect";
 pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
@@ -298,10 +296,8 @@ config_keys! {
         "device.cert.path"     => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
         "c8y.url"              => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
         "c8y.root.cert.path"   => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
-        "c8y.connect"          => (c8y.connect, "Connection status to the provided Cumulocity tenant. Example: true")
         "azure.url"            => (azure.url, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
         "azure.root.cert.path" => (azure.root_cert_path, "Path where Azure IoT root certificate(s) are located. Example: /home/user/certificate/azure-trusted-root-certificates.pem")
-        "azure.connect"        => (azure.connect, "Connection status to the provided Azure IoT tenant. Example: true")
     }
 }
 
@@ -565,14 +561,12 @@ connect = "false"
 
         assert_eq!(config.c8y.url.unwrap(), "your-tenant.cumulocity.com");
         assert_eq!(config.c8y.root_cert_path.unwrap(), "/path/to/c8y/root/cert");
-        assert_eq!(config.c8y.connect.unwrap(), "true");
 
         assert_eq!(config.azure.url.unwrap(), "MyAzure.azure-devices.net");
         assert_eq!(
             config.azure.root_cert_path.unwrap(),
             "/path/to/azure/root/cert"
         );
-        assert_eq!(config.azure.connect.unwrap(), "false");
     }
 
     #[test]
@@ -586,12 +580,10 @@ cert_path = "/path/to/cert"
 [c8y]
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
-connect = "true"
 
 [azure]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
-connect = "false"
 "#;
 
         // Using a TempPath let's close the file (this is required on Windows for that test to work).
@@ -610,7 +602,6 @@ connect = "false"
             config.c8y.root_cert_path.as_ref().unwrap(),
             "/path/to/c8y/root/cert"
         );
-        assert_eq!(config.c8y.connect.as_ref().unwrap(), "true");
 
         assert_eq!(
             config.azure.url.as_ref().unwrap(),
@@ -620,21 +611,16 @@ connect = "false"
             config.azure.root_cert_path.as_ref().unwrap(),
             "/path/to/azure/root/cert"
         );
-        assert_eq!(config.azure.connect.as_ref().unwrap(), "false");
 
         let updated_device_id = "XYZ1234";
         let updated_c8y_url = "other-tenant.cumulocity.com";
-        let updated_c8y_connect = "false";
         let updated_azure_url = "OtherAzure.azure-devices.net";
-        let updated_azure_connect = "true";
 
         config.device.id = Some(updated_device_id.to_string());
         config.c8y.url = Some(updated_c8y_url.to_string());
         config.c8y.root_cert_path = None;
-        config.c8y.connect = Some(updated_c8y_connect.to_string());
         config.azure.url = Some(updated_azure_url.to_string());
         config.azure.root_cert_path = None;
-        config.azure.connect = Some(updated_azure_connect.to_string());
 
         config
             .write_to_custom_config(config_file_path.as_ref())
@@ -647,14 +633,9 @@ connect = "false"
 
         assert_eq!(config.c8y.url.as_ref().unwrap(), updated_c8y_url);
         assert!(config.c8y.root_cert_path.is_none());
-        assert_eq!(config.c8y.connect.as_ref().unwrap(), updated_c8y_connect);
 
         assert_eq!(config.azure.url.as_ref().unwrap(), updated_azure_url);
         assert!(config.azure.root_cert_path.is_none());
-        assert_eq!(
-            config.azure.connect.as_ref().unwrap(),
-            updated_azure_connect
-        );
     }
 
     #[test]
@@ -679,7 +660,6 @@ id = "ABCD1234"
 
         assert!(config.c8y.url.is_none());
         assert!(config.c8y.root_cert_path.is_none());
-        assert!(config.c8y.connect.is_none());
     }
 
     #[test]
@@ -704,7 +684,6 @@ id = "ABCD1234"
 
         assert!(config.azure.url.is_none());
         assert!(config.azure.root_cert_path.is_none());
-        assert!(config.azure.connect.is_none());
     }
 
     #[test]
@@ -747,10 +726,8 @@ url = "your-tenant.cumulocity.com"
 
         assert!(config.c8y.url.is_none());
         assert!(config.c8y.root_cert_path.is_none());
-        assert!(config.c8y.connect.is_none());
         assert!(config.azure.url.is_none());
         assert!(config.azure.root_cert_path.is_none());
-        assert!(config.azure.connect.is_none());
     }
 
     #[test]
@@ -833,12 +810,10 @@ cert_path = "/path/to/cert"
 [c8y]
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
-connect = "true"
 
 [azure]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
-connect = "false"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
@@ -862,7 +837,6 @@ connect = "false"
 
         let original_c8y_url = "your-tenant.cumulocity.com".to_string();
         let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
-        let original_c8y_connect = "true".to_string();
         assert_eq!(
             config.get_config_value(C8Y_URL).unwrap().unwrap(),
             original_c8y_url
@@ -873,10 +847,6 @@ connect = "false"
                 .unwrap()
                 .unwrap(),
             original_c8y_root_cert_path
-        );
-        assert_eq!(
-            config.get_config_value(C8Y_CONNECT).unwrap().unwrap(),
-            original_c8y_connect
         );
 
         let updated_device_id = "XYZ1234".to_string();
@@ -911,10 +881,6 @@ connect = "false"
             .get_config_value(C8Y_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
-        assert_eq!(
-            config.get_config_value(C8Y_CONNECT).unwrap().unwrap(),
-            original_c8y_connect
-        );
     }
 
     #[test]
@@ -928,12 +894,10 @@ cert_path = "/path/to/cert"
 [c8y]
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
-connect = "true"
 
 [azure]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
-connect = "false"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
@@ -941,7 +905,6 @@ connect = "false"
 
         let original_azure_url = "MyAzure.azure-devices.net".to_string();
         let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();
-        let original_azure_connect = "false".to_string();
 
         // read
         assert_eq!(
@@ -954,10 +917,6 @@ connect = "false"
                 .unwrap()
                 .unwrap(),
             original_azure_root_cert_path
-        );
-        assert_eq!(
-            config.get_config_value(_AZURE_CONNECT).unwrap().unwrap(),
-            original_azure_connect
         );
 
         // set
@@ -976,12 +935,6 @@ connect = "false"
             .get_config_value(_AZURE_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
-
-        // no change
-        assert_eq!(
-            config.get_config_value(_AZURE_CONNECT).unwrap().unwrap(),
-            original_azure_connect
-        );
     }
 
     fn temp_file_with_content(content: &str) -> NamedTempFile {
