@@ -70,6 +70,7 @@ impl Command for BridgeCommand {
 #[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
     cloud_type: TEdgeConnectOpt,
+    cloud_name: String,
     config_file: String,
     connection: String,
     address: String,
@@ -169,21 +170,12 @@ impl BridgeConfig {
         ])?;
 
         if Path::new(&path).exists() {
-            match self.cloud_type {
-                TEdgeConnectOpt::AZ => {
-                    return Err(ConnectError::ConfigurationExists {
-                        cloud: String::from("az"),
-                    });
-                }
-                TEdgeConnectOpt::C8y => {
-                    return Err(ConnectError::ConfigurationExists {
-                        cloud: String::from("c8y"),
-                    });
-                }
-            }
-        }
+              return Err(ConnectError::ConfigurationExists {
+                        cloud: self.cloud_name.to_string(),
+              });
 
-        Ok(())
+         }
+         Ok(())
     }
 
     fn save_bridge_config(&self) -> Result<(), ConnectError> {
@@ -215,8 +207,9 @@ impl BridgeConfig {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge",)?;
         writeln!(writer, "connection {}", self.connection)?;
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
+        //write azure specific configuration to file
+        match self.cloud_name.as_str() {
+               "az" => {
                 writeln!(writer, "remote_username {}", self.remote_username)?;
                 writeln!(writer, "cleansession {}", self.cleansession)?;
                 writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
@@ -227,7 +220,7 @@ impl BridgeConfig {
                     self.bridge_attempt_unsubscribe
                 )?;
             }
-            TEdgeConnectOpt::C8y => {}
+            _ => {}
         }
 
         writeln!(writer, "address {}", self.address)?;

@@ -20,6 +20,7 @@ impl Azure {
 
         Ok(BridgeConfig {
             cloud_type: TEdgeConnectOpt::AZ,
+            cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
             address: az_url,
