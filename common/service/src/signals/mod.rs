@@ -77,6 +77,6 @@ impl SignalStreamBuilder {
             signals.push(pending().into_stream().boxed());
         }
 
-        Ok(signals.boxed())
+        Ok(signals)
     }
 }
