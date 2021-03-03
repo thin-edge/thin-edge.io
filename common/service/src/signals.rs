@@ -58,37 +58,37 @@ impl Stream for SignalHandler {
 }
 
 pub struct SignalStreamBuilder {
-    ignore_hangup: bool,
-    ignore_terminate: bool,
-    ignore_interrupt: bool,
+    register_hangup: bool,
+    register_terminate: bool,
+    register_interrupt: bool,
 }
 
 impl SignalStreamBuilder {
     pub fn new() -> Self {
         Self {
-            ignore_hangup: false,
-            ignore_terminate: false,
-            ignore_interrupt: false,
+            register_hangup: true,
+            register_terminate: true,
+            register_interrupt: true,
         }
     }
 
     pub fn ignore_sighup(self) -> Self {
         Self {
-            ignore_hangup: true,
+            register_hangup: false,
             ..self
         }
     }
 
     pub fn ignore_sigterm(self) -> Self {
         Self {
-            ignore_terminate: true,
+            register_terminate: true,
             ..self
         }
     }
 
     pub fn ignore_sigint(self) -> Self {
         Self {
-            ignore_interrupt: true,
+            register_interrupt: true,
             ..self
         }
     }
@@ -99,21 +99,21 @@ impl SignalStreamBuilder {
 
         let mut signals = SelectAll::new();
 
-        if !self.ignore_hangup {
+        if self.register_hangup {
             signals.push(SignalHandler::UnixSignal {
                 stream: unix::signal(unix::SignalKind::hangup())?,
                 emit_signal: SignalKind::Hangup,
             });
         }
 
-        if !self.ignore_terminate {
+        if self.register_terminate {
             signals.push(SignalHandler::UnixSignal {
                 stream: unix::signal(unix::SignalKind::terminate())?,
                 emit_signal: SignalKind::Terminate,
             });
         }
 
-        if !self.ignore_interrupt {
+        if self.register_interrupt {
             signals.push(SignalHandler::UnixSignal {
                 stream: unix::signal(unix::SignalKind::interrupt())?,
                 emit_signal: SignalKind::Interrupt,
@@ -133,7 +133,7 @@ impl SignalStreamBuilder {
     pub fn build(self) -> std::io::Result<SignalStream> {
         let mut signals = SelectAll::new();
 
-        if !self.ignore_interrupt {
+        if self.register_interrupt {
             let (sender, receiver) = tokio::sync::mpsc::channel::<()>(1);
             tokio::spawn(async move {
                 if let Ok(_) = tokio::signal::ctrl_c().await {
