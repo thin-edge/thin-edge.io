@@ -42,10 +42,10 @@ impl BuildCommand for TEdgeConnectOpt {
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
-                cloud_type: TEdgeConnectOpt::C8y,
+                bridge_config: C8y::c8y_bridge_config()?,
             },
             TEdgeConnectOpt::AZ => BridgeCommand {
-                cloud_type: TEdgeConnectOpt::AZ,
+                bridge_config: Azure::azure_bridge_config()?,
             },
         };
         Ok(cmd.into_boxed())
@@ -53,7 +53,7 @@ impl BuildCommand for TEdgeConnectOpt {
 }
 
 pub struct BridgeCommand {
-    cloud_type: TEdgeConnectOpt,
+    bridge_config:  BridgeConfig,
 }
 
 impl Command for BridgeCommand {
@@ -62,18 +62,9 @@ impl Command for BridgeCommand {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                let mut az_br_config = Azure::azure_bridge_config()?;
-                az_br_config.new_bridge()?;
-            }
-            TEdgeConnectOpt::C8y => {
-                let mut c8y_br_config = C8y::c8y_bridge_config()?;
-                c8y_br_config.new_bridge()?
-            }
-        };
-        Ok(())
-    }
+             self.bridge_config.new_bridge()?;
+             Ok(())
+        }
 }
 
 #[derive(Debug, PartialEq)]
@@ -95,11 +86,12 @@ pub struct BridgeConfig {
     notifications: bool,
     bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
+    cloud_connect: String,
 }
 
 impl BridgeConfig {
     #[tokio::main]
-    async fn new_bridge(&mut self) -> Result<(), ConnectError> {
+    async fn new_bridge(&self) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
@@ -196,15 +188,7 @@ impl BridgeConfig {
 
     fn save_bridge_config(&self) -> Result<(), ConnectError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                TEdgeConfig::set_config_value(&mut config, _AZURE_CONNECT, "true".into())?;
-            }
-            TEdgeConnectOpt::C8y => {
-                TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "true".into())?;
-            }
-        }
-
+        TEdgeConfig::set_config_value(&mut config, &self.cloud_connect, "true".into())?;
         Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 
@@ -280,10 +264,10 @@ impl BridgeConfig {
     }
 }
 
-fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConnectError> {
-    Ok(config
+fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConfigError> {
+    config
         .get_config_value(key)?
-        .ok_or_else(|| ConnectError::MissingRequiredConfigurationItem { item: key.into() })?)
+        .ok_or_else(||ConfigError::ConfigNotSet{key: key.into()})
 }
 
 #[derive(thiserror::Error, Debug)]

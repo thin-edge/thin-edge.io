@@ -2,6 +2,7 @@ use super::*;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
 use tokio::time::timeout;
+use crate::config::ConfigError;
 
 const MOSQUITTO_RESTART_TIMEOUT: Duration = Duration::from_secs(5);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -10,7 +11,7 @@ const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 pub struct C8y {}
 
 impl C8y {
-    pub fn c8y_bridge_config() -> Result<BridgeConfig, ConnectError> {
+    pub fn c8y_bridge_config() -> Result<BridgeConfig, ConfigError> {
         let config = TEdgeConfig::from_default_config()?;
         Ok(BridgeConfig {
             cloud_type: TEdgeConnectOpt::C8y,
@@ -56,6 +57,7 @@ impl C8y {
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
             ],
+            cloud_connect: "c8y.connect".into(),
         })
     }
 
