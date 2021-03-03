@@ -1,11 +1,6 @@
 use async_trait::async_trait;
-use futures::{
-    future::FutureExt,
-    stream::{Stream, StreamExt},
-};
-use signals::*;
+pub use signals::*;
 use thiserror::Error;
-use tokio::select;
 
 mod signals;
 
@@ -21,19 +16,14 @@ mod signals;
 ///
 /// * Service creation and initialization (`Service::setup`)
 /// * Service execution (`Service#run`)
-/// * Reloading (`Service#reload`)
 /// * Service shutdown (`Service#shutdown`)
 ///
 /// The life of a service begins with its `setup`, shortly followed by
-/// invoking its service handling loop `run`. A `SIGHUP` signal, unless
-/// ignored, will break out of `run` and enter `reload`. Once `reload`
-/// is done, `run` is called again. It's important to note that anything
-/// that you allocate on the "stack" within `run` will be dropped before
-/// calling `reload`. If there is anything that you want to keep open
-/// across calls between `run` and `reload`, put it into `setup`.
-/// The `SIGINT` or `SIGTERM` signals will as well break out of
-/// `run`, drop anything allocated on the "stack frame" of `run`, and
-/// then call `shutdown`. This is where resources can be deallocated.
+/// invoking its service handling loop `run`. A `SignalStream` is passed
+/// to the `run` method in order to react on incoming signals like SIGHUP,
+/// SIGTERM or SIGINT. The `shutdown` method is called once `run` has
+/// terminated, independent of wether or not `run` returned `Ok` or `Err`.
+/// This is where to put code to gracefully shutdown the service.
 ///
 /// ```ignore
 ///     +---------------+
@@ -42,9 +32,9 @@ mod signals;
 ///             |
 ///             |
 ///             v
-///     +---------------+         +---------------+
-///     |      run      |<------->|     reload    |
-///     +---------------+         +---------------+
+///     +---------------+
+///     |      run      |
+///     +---------------+
 ///             |
 ///             |
 ///             v
@@ -54,7 +44,7 @@ mod signals;
 /// ```
 ///
 #[async_trait]
-pub trait Service: Sized {
+pub trait Service: Sized + Send + 'static {
     /// The service name
     const NAME: &'static str;
 
@@ -67,23 +57,19 @@ pub trait Service: Sized {
     /// Builds the service from `config` and initializes it to be ready for `run`ning.
     async fn setup(config: Self::Configuration) -> Result<Self, Self::Error>;
 
-    /// Runs the main loop of the service.
-    async fn run(&mut self) -> Result<(), Self::Error>;
+    /// Runs the service.
+    async fn run(&mut self, signal_stream: SignalStream) -> Result<(), Self::Error>;
 
-    /// Reloads the service.
-    async fn reload(self) -> Result<Self, Self::Error>;
-
-    /// Shuts the service down (gracefully).
-    async fn shutdown(self) -> Result<(), Self::Error>;
+    /// Shuts the service down.
+    async fn shutdown(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[derive(Error, Debug)]
 pub enum ServiceError<E: std::error::Error + 'static> {
     #[error("Service error: {0}")]
     ServiceError(E),
-
-    #[error("Signal stream exhausted")]
-    SignalStreamExhausted,
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
@@ -135,76 +121,21 @@ impl<S: Service> ServiceRunner<S> {
         config: S::Configuration,
     ) -> Result<(), ServiceError<S::Error>> {
         log::info!("{} starting. pid={}", S::NAME, std::process::id());
+        let signal_stream = self.signal_builder.build()?;
         let mut service = S::setup(config).await.map_err(ServiceError::ServiceError)?;
-        let mut signal_stream = self.signal_builder.build()?;
-
-        loop {
-            let run_result = Self::run_service_with_signals(&mut service, &mut signal_stream).await;
-
-            match run_result {
-                Ok(ExitReason::Terminate) => {
-                    log::info!("Shutting service down");
-                    let () = service
-                        .shutdown()
-                        .await
-                        .map_err(ServiceError::ServiceError)?;
-                    return Ok(());
-                }
-                Ok(ExitReason::ReloadConfig) => {
-                    log::info!("Reload config");
-                    service = service.reload().await.map_err(ServiceError::ServiceError)?;
-                }
-                Err(err) => {
-                    log::info!("Service failed with: {:?}", err);
-                    let () = service
-                        .shutdown()
-                        .await
-                        .map_err(ServiceError::ServiceError)?;
-                    return Err(err);
-                }
-            }
+        let run_result = service
+            .run(signal_stream)
+            .await
+            .map_err(ServiceError::ServiceError);
+        log::info!("Service {} stopped running with: {:?}", S::NAME, run_result);
+        log::info!("Shutting down service {}", S::NAME);
+        if let Err(shutdown_err) = service.shutdown().await {
+            log::warn!(
+                "Shutdown of service {} failed with: {:?}",
+                S::NAME,
+                shutdown_err
+            );
         }
+        run_result
     }
-
-    async fn run_service_with_signals<T>(
-        service: &mut S,
-        signal_stream: &mut T,
-    ) -> Result<ExitReason, ServiceError<S::Error>>
-    where
-        T: Stream<Item = SignalKind> + std::marker::Unpin,
-    {
-        let mut service_fut = service.run().fuse();
-
-        loop {
-            select! {
-                service_result = &mut service_fut => {
-                    log::info!("Service terminated with: {:?}", service_result);
-                    return service_result.map(|()| ExitReason::Terminate).map_err(ServiceError::ServiceError);
-                }
-
-                signal = signal_stream.next() => {
-                    match signal.ok_or(ServiceError::SignalStreamExhausted)? {
-                        SignalKind::Terminate => {
-                            log::info!("Got SIGTERM");
-                            return Ok(ExitReason::Terminate);
-                        }
-                        SignalKind::Interrupt => {
-                            log::info!("Got SIGINT");
-                            return Ok(ExitReason::Terminate);
-                        }
-                        SignalKind::Hangup => {
-                            log::info!("Got SIGHUP");
-                            return Ok(ExitReason::ReloadConfig);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum ExitReason {
-    ReloadConfig,
-    Terminate,
 }

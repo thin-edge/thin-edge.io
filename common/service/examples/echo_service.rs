@@ -1,10 +1,12 @@
 use async_trait::async_trait;
+use futures::prelude::stream::*;
 use service::*;
 use std::net::{AddrParseError, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
+    select,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -65,18 +67,18 @@ impl Service for EchoService {
         })
     }
 
-    async fn run(&mut self) -> Result<(), Self::Error> {
-        loop {
-            let (socket, _remote_addr) = self.listener.accept().await?;
-            let mut io = BufReader::new(socket);
-            let mut line = String::with_capacity(1024);
-            io.read_line(&mut line).await?;
-            io.write_all(line.as_bytes()).await?;
-            io.flush().await?;
-        }
+    async fn run(&mut self, signal_stream: SignalStream) -> Result<(), Self::Error> {
+        self.run_loop(signal_stream).await
     }
 
-    async fn reload(self) -> Result<Self, Self::Error> {
+    async fn shutdown(self) -> Result<(), Self::Error> {
+        // `drop` will clean up for us.
+        Ok(())
+    }
+}
+
+impl EchoService {
+    async fn reload(&mut self) -> Result<(), EchoServiceError> {
         match self.config.listen_on()? {
             updated_listen_on if updated_listen_on != self.listen_on => {
                 log::info!(
@@ -85,24 +87,63 @@ impl Service for EchoService {
                     updated_listen_on
                 );
                 let new_listener = TcpListener::bind(updated_listen_on).await?;
-                let updated_service = Self {
-                    listener: new_listener,
-                    listen_on: updated_listen_on,
-                    config: self.config,
-                };
-                Ok(updated_service)
+                self.listener = new_listener;
+                self.listen_on = updated_listen_on;
             }
             _ => {
                 log::info!("Configuration has not changed");
-                Ok(self)
+            }
+        }
+        Ok(())
+    }
+
+    async fn run_loop(&mut self, mut signal_stream: SignalStream) -> Result<(), EchoServiceError> {
+        loop {
+            select! {
+                signal = signal_stream.next() => {
+                    match signal {
+                        Some(SignalKind::Hangup) => {
+                            log::info!("Got SIGHUP");
+                            self.reload().await?;
+                        }
+                        Some(SignalKind::Interrupt) => {
+                            log::info!("Got SIGINT");
+                            return Ok(());
+                        }
+                        Some(SignalKind::Terminate) => {
+                            log::info!("Got SIGTERM");
+                            return Ok(());
+                        }
+                        _ => {
+                            // ignore
+                        }
+                    }
+                }
+                accept = self.listener.accept() => {
+                    match accept {
+                        Ok((socket, _remote_addr)) => {
+                            let _handler = tokio::spawn(async move {
+                                let _ = handle_request(socket).await;
+                            });
+                        }
+                        Err(err) => {
+                            log::info!("Accept failed with: {:?}", err);
+                            return Err(err.into());
+                        }
+                    }
+                }
             }
         }
     }
+}
 
-    async fn shutdown(self) -> Result<(), Self::Error> {
-        // `drop` will clean up for us.
-        Ok(())
-    }
+async fn handle_request(socket: TcpStream) -> std::io::Result<()> {
+    let mut io = BufReader::new(socket);
+    let mut line = String::with_capacity(1024);
+    io.read_line(&mut line).await?;
+    io.write_all(line.as_bytes()).await?;
+    io.flush().await?;
+    Ok(())
 }
 
 ///

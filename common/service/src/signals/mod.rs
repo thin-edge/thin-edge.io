@@ -1,9 +1,22 @@
+use core::pin::Pin;
 use futures::{
     future::pending,
     stream::{SelectAll, Stream, StreamExt},
+    task::{Context, Poll},
     FutureExt,
 };
 use signal_streams::*;
+
+pub struct SignalStream(Pin<Box<dyn Stream<Item = SignalKind> + Send + 'static>>);
+
+impl Stream for SignalStream {
+    type Item = SignalKind;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = Pin::into_inner(self);
+        Pin::new(&mut me.0).poll_next(cx)
+    }
+}
 
 #[cfg_attr(not(windows), path = "unix.rs")]
 #[cfg_attr(windows, path = "windows.rs")]
@@ -56,7 +69,7 @@ impl SignalStreamBuilder {
         }
     }
 
-    pub fn build(self) -> std::io::Result<impl Stream<Item = SignalKind> + std::marker::Unpin> {
+    pub fn build(self) -> std::io::Result<SignalStream> {
         let mut signals = SelectAll::new();
 
         if self.register_hangup {
@@ -77,6 +90,6 @@ impl SignalStreamBuilder {
             signals.push(pending().into_stream().boxed());
         }
 
-        Ok(signals)
+        Ok(SignalStream(signals.boxed()))
     }
 }

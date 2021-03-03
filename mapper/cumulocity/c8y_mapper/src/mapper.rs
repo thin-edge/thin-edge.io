@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use c8y_translator_lib::CumulocityJson;
+use futures::prelude::stream::StreamExt;
 use mqtt_client::Message;
-use service::Service;
+use service::{Service, SignalKind, SignalStream};
 use thiserror::Error;
 use tokio::select;
 
@@ -72,12 +73,8 @@ impl Service for Mapper {
         })
     }
 
-    async fn run(&mut self) -> Result<(), Self::Error> {
-        self.run_mapper().await
-    }
-
-    async fn reload(self) -> Result<Self, Self::Error> {
-        Ok(self)
+    async fn run(&mut self, signal_stream: SignalStream) -> Result<(), Self::Error> {
+        self.run_mapper(signal_stream).await
     }
 
     async fn shutdown(self) -> Result<(), MapperError> {
@@ -103,12 +100,31 @@ impl Mapper {
 
     // NOTE: This is a method in `impl Mapper` and not in `impl Service for Mapper`, as the `async_trait`
     // macro complains about it.
-    async fn run_mapper(&mut self) -> Result<(), MapperError> {
+    async fn run_mapper(&mut self, mut signal_stream: SignalStream) -> Result<(), MapperError> {
         let mut errors = self.client.subscribe_errors();
         let mut messages = self.client.subscribe(self.in_topic.filter()).await?;
 
         loop {
             select! {
+               signal = signal_stream.next() => {
+                   match signal {
+                       Some(SignalKind::Hangup) => {
+                           log::info!("Got SIGHUP");
+                       }
+                       Some(SignalKind::Interrupt) => {
+                           log::info!("Got SIGINT");
+                           return Ok(());
+                       }
+                       Some(SignalKind::Terminate) => {
+                           log::info!("Got SIGTERM");
+                           return Ok(());
+                       }
+                       _ => {
+                           // ignore
+                       }
+                   }
+               }
+
                next_error = errors.next() => {
                     let error = next_error.ok_or(MapperError::MqttErrorStreamExhausted)?;
                     log::error!("{}", error);
