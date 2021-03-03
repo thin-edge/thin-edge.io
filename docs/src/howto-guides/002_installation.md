@@ -11,7 +11,7 @@ thin-edge has single dependency and it is `mosquitto` MQTT server, the server is
 apt install mosquitto
 ```
 
-NB: Some OSes may require you to use `sudo` to install packages:
+> NB: Some OSes may require you to use `sudo` to install packages:
 
 ```shell
 sudo apt install mosquitto
@@ -28,13 +28,13 @@ Thin Edge package is in thin-edge repository on GitHub: [thin-edge.io](https://g
 To download the package from github repository use following command (use desired version):
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/archive/tedge_<version>_<arch>.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/archive/<package>_<version>_<arch>.deb
 ```
 
 where:
 > `version` -> thin-edge version in x.x.x format
-
-> `arch` -> required architecture [amd64, armhf]
+>
+> `arch` -> architecture type [amd64, armhf]
 
 Eg:
 
@@ -45,10 +45,13 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/archive/tedge_0.1.0_amd64.de
 and for `mapper`:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/archive/c8y_mapper_0.1.0_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/archive/mapper_0.1.0_amd64.deb
 ```
 
 ### Package installation
+
+Now, we have downloaded the package we can proceed to installation. First we will install cli tool `tedge`.
+To install `tedge` use following command:
 
 ```shell
 dpkg -i tedge_<version>_<arch>
@@ -60,18 +63,20 @@ Eg:
 dpkg -i tedge_0.1.0_amd64
 ```
 
+To install mapper for thin-edge do:
+
 ```shell
-dpkg -i c8y_mapper_<version>_<arch>
+dpkg -i mapper_<version>_<arch>
 ```
 
 Eg:
 
 ```shell
-dpkg -i c8y_mapper_0.1.0_amd64
+dpkg -i mapper_0.1.0_amd64
 ```
 
 Next steps:
 
 1. [Registration](./003_registration.md)
-2. [Connect](004_connect.md)
+2. [Connect](./004_connect.md)
 3. [Mapping](...)
