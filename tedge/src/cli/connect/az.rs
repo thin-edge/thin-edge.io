@@ -1,6 +1,6 @@
 use super::*;
-//use mqtt_client::{Client, Message, Topic, TopicFilter};
 use crate::config::ConfigError;
+use async_trait::async_trait;
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 
 pub struct Azure {}
@@ -19,7 +19,6 @@ impl Azure {
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
         Ok(BridgeConfig {
-            cloud_type: TEdgeConnectOpt::AZ,
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
@@ -43,8 +42,14 @@ impl Azure {
                 r#"$iothub/twin/GET/?$rid=1 out 1"#.into(),
             ],
             cloud_connect: "azure.connect".into(),
+            check_connection: Box::new(Azure {}),
         })
     }
 }
 
-
+#[async_trait]
+impl CheckConnection for Azure {
+    async fn check_connection(&self) -> Result<(), ConnectError> {
+        Ok(())
+    }
+}

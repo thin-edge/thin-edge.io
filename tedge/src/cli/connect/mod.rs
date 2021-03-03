@@ -4,6 +4,7 @@ use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
 use crate::utils::{paths, services};
+use async_trait::async_trait;
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
@@ -14,8 +15,8 @@ mod az;
 mod c8y;
 
 use crate::config::{
-    C8Y_CONNECT, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
-    TEDGE_HOME_DIR, _AZURE_CONNECT, _AZURE_ROOT_CERT_PATH, _AZURE_URL,
+    C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
+    TEDGE_HOME_DIR, _AZURE_ROOT_CERT_PATH, _AZURE_URL,
 };
 
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
@@ -53,7 +54,7 @@ impl BuildCommand for TEdgeConnectOpt {
 }
 
 pub struct BridgeCommand {
-    bridge_config:  BridgeConfig,
+    bridge_config: BridgeConfig,
 }
 
 impl Command for BridgeCommand {
@@ -62,14 +63,13 @@ impl Command for BridgeCommand {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-             self.bridge_config.new_bridge()?;
-             Ok(())
-        }
+        self.bridge_config.new_bridge()?;
+        Ok(())
+    }
 }
 
-#[derive(Debug, PartialEq)]
+//#[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
-    cloud_type: TEdgeConnectOpt,
     cloud_name: String,
     config_file: String,
     connection: String,
@@ -88,6 +88,12 @@ pub struct BridgeConfig {
     bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
     cloud_connect: String,
+    check_connection: Box<dyn CheckConnection>,
+}
+
+#[async_trait]
+trait CheckConnection {
+    async fn check_connection(&self) -> Result<(), ConnectError>;
 }
 
 impl BridgeConfig {
@@ -126,14 +132,7 @@ impl BridgeConfig {
             WAIT_FOR_CHECK_SECONDS
         );
 
-        match self.cloud_type {
-            TEdgeConnectOpt::AZ => {
-                //Azure::check_connection()?;
-            }
-            TEdgeConnectOpt::C8y => {
-                C8y::check_connection().await?;
-            }
-        }
+        self.check_connection.check_connection().await?;
 
         println!("Persisting mosquitto on reboot.\n");
         if let Err(err) = services::mosquitto_enable_daemon() {
@@ -170,12 +169,11 @@ impl BridgeConfig {
         ])?;
 
         if Path::new(&path).exists() {
-              return Err(ConnectError::ConfigurationExists {
-                        cloud: self.cloud_name.to_string(),
-              });
-
-         }
-         Ok(())
+            return Err(ConnectError::ConfigurationExists {
+                cloud: self.cloud_name.to_string(),
+            });
+        }
+        Ok(())
     }
 
     fn save_bridge_config(&self) -> Result<(), ConnectError> {
@@ -209,7 +207,7 @@ impl BridgeConfig {
         writeln!(writer, "connection {}", self.connection)?;
         //write azure specific configuration to file
         match self.cloud_name.as_str() {
-               "az" => {
+            "az" => {
                 writeln!(writer, "remote_username {}", self.remote_username)?;
                 writeln!(writer, "cleansession {}", self.cleansession)?;
                 writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
@@ -260,14 +258,11 @@ impl BridgeConfig {
 fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConfigError> {
     config
         .get_config_value(key)?
-        .ok_or_else(||ConfigError::ConfigNotSet{key: key.into()})
+        .ok_or_else(|| ConfigError::ConfigNotSet { key: key.into() })
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Bridge has been configured, but {cloud} connection check failed.")]
-    BridgeConnectionFailed { cloud: String },
-
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
@@ -279,9 +274,6 @@ pub enum ConnectError {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-
-    #[error("Required configuration item is not provided '{item}', run 'tedge config set {item} <value>' to add it to config.")]
-    MissingRequiredConfigurationItem { item: String },
 
     #[error(transparent)]
     MqttClient(#[from] mqtt_client::Error),

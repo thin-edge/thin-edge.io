@@ -1,10 +1,10 @@
 use super::*;
+use crate::config::ConfigError;
+use async_trait::async_trait;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
 use tokio::time::timeout;
-use crate::config::ConfigError;
 
-const MOSQUITTO_RESTART_TIMEOUT: Duration = Duration::from_secs(5);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 
@@ -14,7 +14,6 @@ impl C8y {
     pub fn c8y_bridge_config() -> Result<BridgeConfig, ConfigError> {
         let config = TEdgeConfig::from_default_config()?;
         Ok(BridgeConfig {
-            cloud_type: TEdgeConnectOpt::C8y,
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
@@ -59,9 +58,13 @@ impl C8y {
                 r#"error in 2 c8y/ """#.into(),
             ],
             cloud_connect: "c8y.connect".into(),
+            check_connection: Box::new(C8y {}),
         })
     }
+}
 
+#[async_trait]
+impl CheckConnection for C8y {
     // Check the connection by using the response of the SmartREST template 100.
     // If getting the response '41,100,Device already existing', the connection is established.
     //
@@ -69,7 +72,7 @@ impl C8y {
     // If the device is new, the device is going to be registered here and
     // the check can finish in the second try as there is no error response in the first try.
 
-    pub async fn check_connection() -> Result<(), ConnectError> {
+    async fn check_connection(&self) -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
         const CLIENT_ID: &str = "check_connection";
