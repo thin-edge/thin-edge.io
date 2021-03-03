@@ -76,8 +76,8 @@ impl Service for Mapper {
         self.run_mapper().await
     }
 
-    async fn reload(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+    async fn reload(self) -> Result<Self, Self::Error> {
+        Ok(self)
     }
 
     async fn shutdown(self) -> Result<(), MapperError> {
