@@ -1,8 +1,9 @@
 # Registration
 
-### Create self-signed certificate, do not use in production!​
+## Create self-signed certificate, do not use in production!​
+
 ```shell
-fish> tedge cert create --id myRasp123456​
+tedge cert create --id myDevice
 ```
 
 Next steps: [Connection](./004_connect)
