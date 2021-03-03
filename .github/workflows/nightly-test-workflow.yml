@@ -9,10 +9,8 @@ name: nightly-test-workflow
 on:
   # Only run, when a pull request is merged.
   # Trick: A merged pull request always results in a push.
-  #
-  # Disabled trigger, until we have the right access token in place
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
 
@@ -30,7 +28,7 @@ jobs:
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
-            github_token: ${{secrets.TEDGE_CI_TOKEN}}
+            github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted-build-debian-amd64.yml
             workflow_conclusion: success
             branch: main
@@ -58,7 +56,7 @@ jobs:
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
-            github_token: ${{secrets.TEDGE_CI_TOKEN}}
+            github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: hosted_build_debian_armv7_cross.yml
             workflow_conclusion: success
             branch: main
