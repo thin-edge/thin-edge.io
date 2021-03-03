@@ -1,7 +1,5 @@
-use core::pin::Pin;
 use futures::stream::StreamExt;
 use futures::stream::{SelectAll, Stream};
-use futures::task::{Context, Poll};
 use futures::FutureExt;
 
 #[derive(Copy, Clone)]
@@ -13,17 +11,6 @@ pub enum SignalKind {
     Terminate,
     /// SIGINT on POSIX or CTRL-C on Windows
     Interrupt,
-}
-
-pub struct SignalStream(Pin<Box<dyn Stream<Item = SignalKind>>>);
-
-impl Stream for SignalStream {
-    type Item = SignalKind;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let me = Pin::into_inner(self);
-        Pin::new(&mut me.0).poll_next(cx)
-    }
 }
 
 #[cfg(not(windows))]
@@ -94,7 +81,7 @@ impl SignalStreamBuilder {
         }
     }
 
-    pub fn build(self) -> std::io::Result<SignalStream> {
+    pub fn build(self) -> std::io::Result<impl Stream<Item = SignalKind> + std::marker::Unpin> {
         let mut signals = SelectAll::new();
 
         #[cfg(not(windows))]
@@ -146,6 +133,6 @@ impl SignalStreamBuilder {
             signals.push(futures::future::pending().into_stream().boxed());
         }
 
-        Ok(SignalStream(signals.boxed()))
+        Ok(signals.boxed())
     }
 }

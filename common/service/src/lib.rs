@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use futures::{future::FutureExt, stream::StreamExt};
+use futures::{
+    future::FutureExt,
+    stream::{Stream, StreamExt},
+};
 use signals::*;
 use thiserror::Error;
 use tokio::select;
@@ -163,10 +166,13 @@ impl<S: Service> ServiceRunner<S> {
         }
     }
 
-    async fn run_service_with_signals(
+    async fn run_service_with_signals<T>(
         service: &mut S,
-        signal_stream: &mut SignalStream,
-    ) -> Result<ExitReason, ServiceError<S::Error>> {
+        signal_stream: &mut T,
+    ) -> Result<ExitReason, ServiceError<S::Error>>
+    where
+        T: Stream<Item = SignalKind> + std::marker::Unpin,
+    {
         let mut service_fut = service.run().fuse();
 
         loop {
