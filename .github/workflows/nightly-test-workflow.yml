@@ -9,8 +9,6 @@ name: nightly-test-workflow
 on:
   # Only run, when a pull request is merged.
   # Trick: A merged pull request always results in a push.
-  #
-  # Disabled trigger, until we have the right access token in place
   push:
     branches: [ main ]
   workflow_dispatch:
