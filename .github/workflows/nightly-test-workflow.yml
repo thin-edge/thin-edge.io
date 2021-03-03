@@ -11,8 +11,8 @@ on:
   # Trick: A merged pull request always results in a push.
   #
   # Disabled trigger, until we have the right access token in place
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
 
