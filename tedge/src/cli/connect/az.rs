@@ -10,10 +10,7 @@ impl Azure {
         let az_url = get_config_value(&config, AZURE_URL)?;
         let clientid = get_config_value(&config, DEVICE_ID)?;
         let iothub_name: Vec<&str> = az_url.split(':').collect();
-        let user_name =  iothub_name[0].to_string()
-            + "/"
-            + &clientid
-            + "/?api-version=2018-06-30";
+        let user_name = iothub_name[0].to_string() + "/" + &clientid + "/?api-version=2018-06-30";
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 

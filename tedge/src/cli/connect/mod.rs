@@ -209,16 +209,16 @@ impl BridgeConfig {
         writeln!(writer, "connection {}", self.connection)?;
         //write azure specific configuration to file
         if let "az" = self.cloud_name.as_str() {
-                writeln!(writer, "remote_username {}", self.remote_username)?;
-                writeln!(writer, "cleansession {}", self.cleansession)?;
-                writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
-                writeln!(writer, "notifications {}", self.notifications)?;
-                writeln!(
-                    writer,
-                    "bridge_attempt_unsubscribe {}",
-                    self.bridge_attempt_unsubscribe
-                )?;
-            }
+            writeln!(writer, "remote_username {}", self.remote_username)?;
+            writeln!(writer, "cleansession {}", self.cleansession)?;
+            writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
+            writeln!(writer, "notifications {}", self.notifications)?;
+            writeln!(
+                writer,
+                "bridge_attempt_unsubscribe {}",
+                self.bridge_attempt_unsubscribe
+            )?;
+        }
 
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
