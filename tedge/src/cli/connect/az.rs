@@ -37,8 +37,8 @@ impl Azure {
             topics: vec![
                 pub_msg_topic,
                 sub_msg_topic,
-                r##"$iothub/twin/res/# in 1"##.into(),
-                r#"$iothub/twin/GET/?$rid=1 out 1"#.into(),
+                r##"twin/res/# in 1 az/ $iothub/"##.into(),
+                r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
             cloud_connect: "azure.connect".into(),
         })
