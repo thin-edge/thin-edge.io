@@ -57,7 +57,6 @@ impl C8y {
                 r#"error in 2 c8y/ """#.into(),
             ],
             cloud_connect: "c8y.connect".into(),
-            check_connection: Box::new(C8y {}),
         })
     }
 }

@@ -41,7 +41,6 @@ impl Azure {
                 r#"$iothub/twin/GET/?$rid=1 out 1"#.into(),
             ],
             cloud_connect: "azure.connect".into(),
-            check_connection: Box::new(Azure {}),
         })
     }
 }

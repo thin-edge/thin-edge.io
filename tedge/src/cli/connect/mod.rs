@@ -45,9 +45,11 @@ impl BuildCommand for TEdgeConnectOpt {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
                 bridge_config: C8y::c8y_bridge_config(tedge_config)?,
+                check_connection: Box::new(C8y {}), 
             },
             TEdgeConnectOpt::AZ => BridgeCommand {
                 bridge_config: Azure::azure_bridge_config(tedge_config)?,
+                check_connection: Box::new(Azure{}), 
             },
         };
         Ok(cmd.into_boxed())
@@ -56,6 +58,7 @@ impl BuildCommand for TEdgeConnectOpt {
 
 pub struct BridgeCommand {
     bridge_config: BridgeConfig,
+    check_connection: Box<dyn CheckConnection>,
 }
 
 impl Command for BridgeCommand {
@@ -65,11 +68,19 @@ impl Command for BridgeCommand {
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         self.bridge_config.new_bridge()?;
+        self.check_connection()?;
         Ok(())
     }
 }
 
-//#[derive(Debug, PartialEq)]
+impl BridgeCommand {
+    #[tokio::main]
+    async fn check_connection(&self)->Result<(), ConnectError> {
+        self.check_connection.check_connection().await?;
+        Ok(())
+    }
+}
+
 pub struct BridgeConfig {
     cloud_name: String,
     config_file: String,
@@ -89,7 +100,6 @@ pub struct BridgeConfig {
     bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
     cloud_connect: String,
-    check_connection: Box<dyn CheckConnection>,
 }
 
 #[async_trait]
@@ -132,8 +142,6 @@ impl BridgeConfig {
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
-
-        self.check_connection.check_connection().await?;
 
         println!("Persisting mosquitto on reboot.\n");
         if let Err(err) = services::mosquitto_enable_daemon() {
