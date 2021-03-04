@@ -56,7 +56,6 @@ impl C8y {
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
             ],
-            cloud_connect: "c8y.connect".into(),
         })
     }
 }

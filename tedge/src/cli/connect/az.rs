@@ -40,7 +40,6 @@ impl Azure {
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
-            cloud_connect: "azure.connect".into(),
         })
     }
 }

@@ -99,7 +99,6 @@ pub struct BridgeConfig {
     notifications: bool,
     bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
-    cloud_connect: String,
 }
 
 #[async_trait]
@@ -149,9 +148,6 @@ impl BridgeConfig {
             return Err(err.into());
         }
 
-        println!("Saving configuration.");
-        self.save_bridge_config()?;
-
         println!("Successfully created bridge connection!");
 
         Ok(())
@@ -183,12 +179,6 @@ impl BridgeConfig {
             });
         }
         Ok(())
-    }
-
-    fn save_bridge_config(&self) -> Result<(), ConnectError> {
-        let mut config = TEdgeConfig::from_default_config()?;
-        TEdgeConfig::set_config_value(&mut config, &self.cloud_connect, "true".into())?;
-        Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
