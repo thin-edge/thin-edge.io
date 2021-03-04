@@ -15,8 +15,8 @@ mod az;
 mod c8y;
 
 use crate::config::{
-    C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
-    TEDGE_HOME_DIR, AZURE_ROOT_CERT_PATH, AZURE_URL,
+    AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
+    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
@@ -45,11 +45,11 @@ impl BuildCommand for TEdgeConnectOpt {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
                 bridge_config: C8y::c8y_bridge_config(tedge_config)?,
-                check_connection: Box::new(C8y {}), 
+                check_connection: Box::new(C8y {}),
             },
             TEdgeConnectOpt::AZ => BridgeCommand {
                 bridge_config: Azure::azure_bridge_config(tedge_config)?,
-                check_connection: Box::new(Azure{}), 
+                check_connection: Box::new(Azure {}),
             },
         };
         Ok(cmd.into_boxed())
@@ -63,7 +63,10 @@ pub struct BridgeCommand {
 
 impl Command for BridgeCommand {
     fn description(&self) -> String {
-        format!("Create bridge to connect {} cloud", self.bridge_config.local_clientid)
+        format!(
+            "Create bridge to connect {} cloud",
+            self.bridge_config.local_clientid
+        )
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
@@ -75,7 +78,7 @@ impl Command for BridgeCommand {
 
 impl BridgeCommand {
     #[tokio::main]
-    async fn check_connection(&self)->Result<(), ConnectError> {
+    async fn check_connection(&self) -> Result<(), ConnectError> {
         self.check_connection.check_connection().await?;
         Ok(())
     }

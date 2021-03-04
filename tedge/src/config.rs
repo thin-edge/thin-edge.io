@@ -21,6 +21,7 @@ pub const C8Y_CONNECT: &str = "c8y.connect";
 pub const C8Y_URL: &str = "c8y.url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
+pub const AZURE_CONNECT: &str = "azure.connect";
 pub const AZURE_URL: &str = "azure.url";
 pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
