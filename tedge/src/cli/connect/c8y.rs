@@ -11,8 +11,7 @@ const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 pub struct C8y {}
 
 impl C8y {
-    pub fn c8y_bridge_config() -> Result<BridgeConfig, ConfigError> {
-        let config = TEdgeConfig::from_default_config()?;
+    pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         Ok(BridgeConfig {
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),

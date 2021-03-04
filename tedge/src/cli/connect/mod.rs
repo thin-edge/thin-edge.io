@@ -41,12 +41,13 @@ impl BuildCommand for TEdgeConnectOpt {
         self,
         _config: crate::config::TEdgeConfig,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+        let tedge_config = TEdgeConfig::from_default_config()?;
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
-                bridge_config: C8y::c8y_bridge_config()?,
+                bridge_config: C8y::c8y_bridge_config(tedge_config)?,
             },
             TEdgeConnectOpt::AZ => BridgeCommand {
-                bridge_config: Azure::azure_bridge_config()?,
+                bridge_config: Azure::azure_bridge_config(tedge_config)?,
             },
         };
         Ok(cmd.into_boxed())
@@ -293,3 +294,6 @@ pub enum ConnectError {
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
 }
+
+#[cfg(test)]
+mod test;
