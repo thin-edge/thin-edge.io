@@ -502,10 +502,7 @@ mod tests {
 
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::CertPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
     #[test]
@@ -522,10 +519,7 @@ mod tests {
 
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::KeyPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {
