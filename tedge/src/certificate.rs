@@ -1,6 +1,7 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
 use crate::utils::paths;
+use crate::utils::paths::PathsError;
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
@@ -9,6 +10,7 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::path::Path;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -105,6 +107,12 @@ pub enum CertError {
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
+
+    #[error("Invalid device.cert.path path: {0}")]
+    CertPathError(PathsError),
+
+    #[error("Invalid device.key.path path: {0}")]
+    KeyPathError(PathsError),
 
     #[error("Cryptography related error")]
     CryptographyError(#[from] RcgenError),
@@ -268,6 +276,13 @@ impl CreateCertCmd {
     fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
         check_identifier(&self.id)?;
 
+        let cert_path = Path::new(&self.cert_path);
+        let key_path = Path::new(&self.key_path);
+
+        paths::validate_parent_dir_exists(cert_path)
+            .map_err(|err| CertError::CertPathError(err))?;
+        paths::validate_parent_dir_exists(key_path).map_err(|err| CertError::KeyPathError(err))?;
+
         // Creating files with permission 644
         let mut cert_file =
             create_new_file(&self.cert_path).map_err(|err| err.cert_context(&self.cert_path))?;
@@ -426,6 +441,7 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use std::fs::File;
     use tempfile::*;
 
@@ -470,6 +486,46 @@ mod tests {
 
         let mut key_file = key_file.reopen().unwrap();
         assert_eq!(file_content(&mut key_file), key_content);
+    }
+
+    #[test]
+    fn create_certificate_in_non_existent_directory() {
+        let dir = tempdir().unwrap();
+        let key_path = temp_file_path(&dir, "my-device-key.pem");
+
+        let cmd = CreateCertCmd {
+            id: "my-device-id".to_string(),
+            cert_path: "/non/existent/cert/path".to_string(),
+            key_path,
+        };
+        let verbose = 0;
+
+        let error = cmd.execute(verbose).unwrap_err();
+        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        assert_matches!(
+            cert_error,
+            CertError::CertPathError { .. }
+        );
+    }
+
+    #[test]
+    fn create_key_in_non_existent_directory() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+
+        let cmd = CreateCertCmd {
+            id: "my-device-id".to_string(),
+            cert_path,
+            key_path: "/non/existent/key/path".to_string(),
+        };
+        let verbose = 0;
+
+        let error = cmd.execute(verbose).unwrap_err();
+        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        assert_matches!(
+            cert_error,
+            CertError::KeyPathError { .. }
+        );
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {
