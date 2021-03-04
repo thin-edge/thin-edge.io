@@ -121,13 +121,14 @@ mod tests {
     }
 
     #[test]
-    fn run_config_set_get_unset() -> Result<(), Box<dyn std::error::Error>> {
+    fn run_config_set_get_unset_read_only_key() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
         let device_id = "test";
 
+        // allowed to get read-only key by CLI
         let mut get_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.id"])?;
 
@@ -138,28 +139,61 @@ mod tests {
                 "The provided config key: 'device.id' is not set",
             ));
 
+        // forbidden to set read-only key by CLI
         let mut set_device_id_cmd = tedge_command_with_test_home(
             test_home_str,
             &["config", "set", "device.id", device_id],
         )?;
 
-        set_device_id_cmd.assert().success();
+        set_device_id_cmd.assert().failure();
 
-        get_device_id_cmd
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(device_id));
-
+        // forbidden to unset read-only key by CLI
         let mut unset_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "unset", "device.id"])?;
 
-        unset_device_id_cmd.assert().success();
+        unset_device_id_cmd.assert().failure();
 
-        get_device_id_cmd
+        Ok(())
+    }
+
+    #[test]
+    fn run_config_set_get_unset_read_write_key() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = temp_dir.path();
+        let test_home_str = temp_dir_path.to_str().unwrap();
+
+        let c8y_url = "mytenant.cumulocity.com";
+
+        let mut get_c8y_url_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "get", "c8y.url"])?;
+
+        get_c8y_url_cmd
             .assert()
             .success()
             .stdout(predicate::str::contains(
-                "The provided config key: 'device.id' is not set",
+                "The provided config key: 'c8y.url' is not set",
+            ));
+
+        let mut set_c8y_url_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "set", "c8y.url", c8y_url])?;
+
+        set_c8y_url_cmd.assert().success();
+
+        get_c8y_url_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(c8y_url));
+
+        let mut unset_c8y_url_cmd =
+            tedge_command_with_test_home(test_home_str, &["config", "unset", "c8y.url"])?;
+
+        unset_c8y_url_cmd.assert().success();
+
+        get_c8y_url_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "The provided config key: 'c8y.url' is not set",
             ));
 
         Ok(())
