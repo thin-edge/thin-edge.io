@@ -344,7 +344,6 @@ mod tests {
             "device.cert.path",
             "c8y.url",
             "c8y.root.cert.path",
-            "c8y.connect",
         ];
         return vec;
     }

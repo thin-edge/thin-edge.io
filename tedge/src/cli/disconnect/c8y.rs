@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig, C8Y_CONNECT, TEDGE_HOME_DIR};
+use crate::config::{ConfigError, TEdgeConfig, TEDGE_HOME_DIR};
 use crate::utils::{paths, services};
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
@@ -58,14 +58,13 @@ impl Disconnect {
 
         println!("Removing c8y bridge.\n");
         match std::fs::remove_file(&bridge_conf_path) {
-            // If we found the bridge config file we and removed it we also need to update tedge config file
+            // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
-            Ok(()) => Ok(self.update_tedge_config()?),
+            Ok(()) => Ok(()),
 
             // If bridge config file was not found we assume that the bridge doesn't exist,
-            // we make sure tedge config 'c8y.connect' is in correct state and we finish early returning exit code 0.
+            // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let _ = self.update_tedge_config()?;
                 println!("Bridge doesn't exist. Operation finished!");
                 return Ok(());
             }
@@ -82,11 +81,5 @@ impl Disconnect {
 
         println!("Bridge successfully disconnected!");
         Ok(())
-    }
-
-    fn update_tedge_config(&self) -> Result<(), DisconnectError> {
-        let mut config = TEdgeConfig::from_default_config()?;
-        TEdgeConfig::set_config_value(&mut config, C8Y_CONNECT, "false".into())?;
-        Ok(TEdgeConfig::write_to_default_config(&config)?)
     }
 }
