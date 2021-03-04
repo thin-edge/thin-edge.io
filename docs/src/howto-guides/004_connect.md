@@ -7,7 +7,7 @@ To create northbound connection a local bridge shall be established and this can
 
 ___
 
-Configure required parameters for thin-edge with [`tedge config set`](../references/tedge-config.md):
+Configure required parameters for thin-edge.io with [`tedge config set`](../references/tedge-config.md):
 
 ```shell
 tedge config set c8y.url example.cumulocity.com​
@@ -211,7 +211,7 @@ Caused by:
     mosquitto is not installed on the system. Install mosquitto to use this command.
 ```
 
-mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge?](./002_installation.md) to install mosquitto and try again.
+mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](./002_installation.md) to install mosquitto and try again.
 
 ## Next steps
 

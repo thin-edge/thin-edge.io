@@ -2,7 +2,7 @@
 
 ## Create self-signed certificate
 
-To create new certificate you can use [`tedge cert create`](../references/tedge-cert.md) thin-edge command:
+To create new certificate you can use [`tedge cert create`](../references/tedge-cert.md) thin-edge.io command:
 
 ```shell
 tedge cert create --device-id alpha
@@ -33,6 +33,8 @@ Caused by:
             Existing file: "/home/user/.tedge/tedge-certificate.pem"
             Run `tegde cert remove` first to generate a new certificate.
 ```
+
+> Warning! Removing a certificate can break the bridge and more seriously delete a certificate that was a CA-signed certificate.
 
 Follow the instruction to remove the existing certificate and issue [`tedge cert remove`](../references/tedge-cert.md):
 

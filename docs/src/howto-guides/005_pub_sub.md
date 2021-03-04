@@ -1,6 +1,6 @@
 # How to use [`tedge mqtt`](../references/tedge-mqtt.md) pub and sub?
 
-thin-edge cli provides a convenient way to debug and aid development process.
+thin-edge.io cli provides a convenient way to debug and aid development process.
 
 ## Publish
 

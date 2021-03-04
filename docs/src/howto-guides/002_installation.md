@@ -1,11 +1,11 @@
-# How to install `thin-edge`?
+# How to install `thin-edge.io`?
 
 To install thin edge package it is required to use `curl` to download the package and `dpkg` to install it.
 
 ## Dependency installation
 
-thin-edge has single dependency and it is `mosquitto` MQTT server, the server is used for communication southbound and northbound e.g. southbound, devices can publish measurements; northbound, gateway may relay messages to cloud.
-`mosquitto` can be installed with your package manager for apt the command may look as following:
+thin-edge.io has single dependency and it is `mosquitto` used for communication southbound and northbound e.g. southbound, devices can publish measurements; northbound, gateway may relay messages to cloud.
+`mosquitto` can be installed with your package manager. For apt the command may look as following:
 
 ```shell
 apt install mosquitto
@@ -17,13 +17,13 @@ apt install mosquitto
 sudo apt install mosquitto
 ```
 
-## `thin-edge` installation
+## `thin-edge.io` installation
 
-When all dependencies are in place you can proceed with installation of `thin-edge cli` and `thin-edge mapper` service.
+When all dependencies are in place you can proceed with installation of `thin-edge.io cli` and `thin-edge.io mapper` service.
 
 ### Package download
 
-Thin Edge package is in thin-edge repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases/).
+thin-edge.io package is in thin-edge.io repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases/).
 
 To download the package from github repository use following command (use desired version):
 
@@ -32,7 +32,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/archive/<package>_<version>_
 ```
 
 where:
-> `version` -> thin-edge version in x.x.x format
+> `version` -> thin-edge.io version in x.x.x format
 >
 > `arch` -> architecture type [amd64, armhf]
 
@@ -66,7 +66,7 @@ Eg:
 dpkg -i tedge_0.1.0_amd64
 ```
 
-To install mapper for thin-edge do:
+To install mapper for thin-edge.io do:
 
 ```shell
 dpkg -i mapper_<version>_<arch>
