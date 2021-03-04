@@ -7,7 +7,7 @@ pub struct Azure {}
 
 impl Azure {
     pub fn azure_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
-        let az_url = get_config_value(&config, _AZURE_URL)?;
+        let az_url = get_config_value(&config, AZURE_URL)?;
         let clientid = get_config_value(&config, DEVICE_ID)?;
         let iothub_name: Vec<&str> = az_url.split(":").collect();
         let user_name = format!("{}", &iothub_name[0])
@@ -23,7 +23,7 @@ impl Azure {
             connection: "edge_to_az".into(),
             address: az_url,
             remote_username: user_name,
-            bridge_cafile: get_config_value(&config, _AZURE_ROOT_CERT_PATH)?,
+            bridge_cafile: get_config_value(&config, AZURE_ROOT_CERT_PATH)?,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
             bridge_certfile: get_config_value(&config, DEVICE_CERT_PATH)?,
