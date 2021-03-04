@@ -208,8 +208,7 @@ impl BridgeConfig {
         writeln!(writer, "### Bridge",)?;
         writeln!(writer, "connection {}", self.connection)?;
         //write azure specific configuration to file
-        match self.cloud_name.as_str() {
-            "az" => {
+        if let "az" = self.cloud_name.as_str() {
                 writeln!(writer, "remote_username {}", self.remote_username)?;
                 writeln!(writer, "cleansession {}", self.cleansession)?;
                 writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
@@ -220,8 +219,6 @@ impl BridgeConfig {
                     self.bridge_attempt_unsubscribe
                 )?;
             }
-            _ => {}
-        }
 
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
