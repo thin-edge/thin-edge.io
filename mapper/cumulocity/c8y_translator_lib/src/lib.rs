@@ -120,7 +120,7 @@ impl ThinEdgeJson {
     fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
         //Parse fails if timestamp is not is8601 complaint
         DateTime::parse_from_rfc3339(&value).map_err(|err| {
-            ThinEdgeJsonError::InvalidTimeStamp {
+            ThinEdgeJsonError::InvalidTimestamp {
                 value: String::from(value),
                 from: err,
             }
@@ -302,7 +302,7 @@ pub enum ThinEdgeJsonError {
     ThinEdgeReservedWordError { name: String },
 
     #[error("Invalid ISO8601 timestamp: {value:?}: {from}")]
-    InvalidTimeStamp { value: String, from: ParseError },
+    InvalidTimestamp { value: String, from: ParseError },
 
     #[error("More than 2 nested levels: the record for {name:?} must be flattened.")]
     InvalidThinEdgeHierarchy { name: String },
@@ -311,36 +311,36 @@ pub enum ThinEdgeJsonError {
 impl ThinEdgeJsonError {
     const MAX_LEN: usize = 80;
 
-    fn excerpt(input: &str, len: usize) -> String {
-        let input = input.split_whitespace().collect::<String>();
-        if input.len() < len {
-            input.to_string()
-        } else {
-            input[0..len].to_string()
-        }
-    }
-
     fn new_invalid_utf8(bytes: &[u8], from: std::str::Utf8Error) -> ThinEdgeJsonError {
         let index = from.valid_up_to();
         let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
 
         ThinEdgeJsonError::InvalidUTF8 {
-            input_excerpt: ThinEdgeJsonError::excerpt(input, ThinEdgeJsonError::MAX_LEN),
+            input_excerpt: input_prefix(input, ThinEdgeJsonError::MAX_LEN),
             from,
         }
     }
 
     fn new_invalid_json(input: &str, from: json::JsonError) -> ThinEdgeJsonError {
         ThinEdgeJsonError::InvalidJson {
-            input_excerpt: ThinEdgeJsonError::excerpt(input, ThinEdgeJsonError::MAX_LEN),
+            input_excerpt: input_prefix(input, ThinEdgeJsonError::MAX_LEN),
             from,
         }
     }
 
     fn new_invalid_json_root(json: &JsonValue) -> ThinEdgeJsonError {
         ThinEdgeJsonError::InvalidThinEdgeJsonRoot {
-            json_excerpt: ThinEdgeJsonError::excerpt(&json.to_string(), ThinEdgeJsonError::MAX_LEN),
+            json_excerpt: input_prefix(&json.to_string(), ThinEdgeJsonError::MAX_LEN),
         }
+    }
+}
+
+fn input_prefix(input: &str, len: usize) -> String {
+    let input = input.split_whitespace().collect::<String>();
+    if input.len() < len {
+        input.to_string()
+    } else {
+        input[0..len].to_string()
     }
 }
 
@@ -493,7 +493,7 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_json_reject_invalid_ut8() {
+    fn thin_edge_json_reject_invalid_utf8() {
         let input = b"temperature\xc3\x28";
 
         let expected_error =
@@ -668,7 +668,7 @@ mod tests {
            "pressure": 220;
           }"#;
 
-        let expected_error = "Invalid JSON: Unexpected character: ; at (3:27): {\"time\":\"2013-06-22T17:03:14.000+02:00\",\"pressure\":220;}";
+        let expected_error = r#"Invalid JSON: Unexpected character: ; at (3:27): {"time":"2013-06-22T17:03:14.000+02:00","pressure":220;}"#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
