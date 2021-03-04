@@ -50,10 +50,10 @@ A multi-valued measurement like `coordinate` that consists of `x`, `y` and `z` c
 
 ```json
 {
-  "coordinate": {
-    "x": 32.54,
-    "y": -117.67,
-    "z": 98.6
+  "current": {
+    "L1": 9.5,
+    "L2": 10.3,
+    "L3": 8.8
   }
 }
 ```
@@ -65,10 +65,10 @@ along with a multi-valued `coordinate` measurement, all sharing a single timesta
 {
   "time": "2020-10-15T05:30:47+00:00",
   "temperature": 25,
-  "coordinate": {
-    "x": 32.54,
-    "y": -117.67,
-    "z": 98.6
+  "current": {
+    "L1": 9.5,
+    "L2": 10.3,
+    "L3": 8.8
   },
   "pressure": 98
 }

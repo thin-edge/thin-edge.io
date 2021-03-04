@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::utils::paths::PathsError::RelativePathNotPermitted;
 use tempfile::{NamedTempFile, PersistError};
 
 #[derive(thiserror::Error, Debug)]
@@ -25,6 +26,15 @@ pub enum PathsError {
 
     #[error("Couldn't write configuration file, check permissions.")]
     PersistError(#[from] PersistError),
+
+    #[error("Directory: {path:?} not found")]
+    DirNotFound { path: OsString },
+
+    #[error("Parent directory for the path: {path:?} not found")]
+    ParentDirNotFound { path: OsString },
+
+    #[error("Relative path: {path:?} is not permitted. Provide an absolute path instead.")]
+    RelativePathNotPermitted { path: OsString },
 }
 
 pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
@@ -89,9 +99,29 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+pub fn validate_parent_dir_exists(path: &Path) -> Result<(), PathsError> {
+    if path.is_relative() {
+        Err(RelativePathNotPermitted { path: path.into() })
+    } else {
+        match path.parent() {
+            None => Err(PathsError::ParentDirNotFound { path: path.into() }),
+            Some(parent) => {
+                if !parent.exists() {
+                    Err(PathsError::DirNotFound {
+                        path: parent.into(),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
 
     #[ignore = "Depends on HOME directory"]
     #[test]
@@ -120,5 +150,26 @@ mod tests {
         let expected: String = "test".into();
         let result = pathbuf_to_string(pathbuf).unwrap();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn validate_path_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
+        assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
+    }
+
+    #[test]
+    fn validate_parent_dir_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/"));
+        assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });
+    }
+
+    #[test]
+    fn validate_parent_dir_relative_path() {
+        let result = validate_parent_dir_exists(Path::new("test.txt"));
+        assert_matches!(
+            result.unwrap_err(),
+            PathsError::RelativePathNotPermitted { .. }
+        );
     }
 }
