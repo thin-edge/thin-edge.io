@@ -10,7 +10,7 @@ impl Azure {
         let az_url = get_config_value(&config, _AZURE_URL)?;
         let clientid = get_config_value(&config, DEVICE_ID)?;
         let iothub_name: Vec<&str> = az_url.split(":").collect();
-        let user_name = format!("{}", iothub_name.into_iter().nth(0).unwrap())
+        let user_name = format!("{}", &iothub_name[0])
             + "/"
             + &clientid.to_string()
             + "/?api-version=2018-06-30";
