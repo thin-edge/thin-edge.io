@@ -76,35 +76,30 @@ impl ThinEdgeJson {
         match &input {
             JsonValue::Object(thin_edge_obj) => {
                 for (k, v) in thin_edge_obj.iter() {
-                    match v {
-                        //Single Value object
-                        JsonValue::Number(num) => {
-                            let single_value_measurement =
-                                SingleValueMeasurement::new(k, (*num).into())?;
-                            measurements.push(ThinEdgeValue::Single(single_value_measurement));
-                        }
-                        //Multi value object
-                        JsonValue::Object(multi_value_thin_edge_object) => {
-                            let multi_value_measurement =
-                                MultiValueMeasurement::new(k, multi_value_thin_edge_object)?;
-                            measurements.push(ThinEdgeValue::Multi(multi_value_measurement));
-                        }
-                        //Short String value object
-                        JsonValue::Short(short_value) => {
-                            if k.eq("time") {
-                                time = ThinEdgeJson::check_timestamp_for_iso8601_complaint(
-                                    short_value,
-                                )?;
-                            } else {
-                                return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
-                                    name: String::from(k),
-                                });
+                    if k.eq("type") {
+                        return Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
+                            name: String::from(k),
+                        });
+                    } else if k.eq("time") {
+                        time = ThinEdgeJson::check_timestamp_for_iso8601_complaint(v)?;
+                    } else {
+                        match v {
+                            //Single Value object
+                            JsonValue::Number(num) => {
+                                let single_value_measurement =
+                                    SingleValueMeasurement::new(k, (*num).into())?;
+                                measurements.push(ThinEdgeValue::Single(single_value_measurement));
                             }
-                        }
-                        _ => {
-                            return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
-                                name: String::from(k),
-                            });
+                            //Multi value object
+                            JsonValue::Object(multi_value_thin_edge_object) => {
+                                let multi_value_measurement =
+                                    MultiValueMeasurement::new(k, multi_value_thin_edge_object)?;
+                                measurements.push(ThinEdgeValue::Multi(multi_value_measurement));
+                            }
+
+                            _ => {
+                                return Err(ThinEdgeJsonError::new_invalid_json_value(k, v));
+                            }
                         }
                     }
                 }
@@ -117,34 +112,36 @@ impl ThinEdgeJson {
         }
     }
 
-    fn check_timestamp_for_iso8601_complaint(value: &str) -> Result<String, ThinEdgeJsonError> {
-        //Parse fails if timestamp is not is8601 complaint
-        DateTime::parse_from_rfc3339(&value).map_err(|err| {
-            ThinEdgeJsonError::InvalidTimestamp {
-                value: String::from(value),
-                from: err,
+    fn check_timestamp_for_iso8601_complaint(
+        value: &JsonValue,
+    ) -> Result<String, ThinEdgeJsonError> {
+        match value {
+            JsonValue::Short(str) => {
+                let timestamp = str.as_str();
+                //Parse fails if timestamp is not is8601 complaint
+                DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
+                    ThinEdgeJsonError::InvalidTimestamp {
+                        value: String::from(timestamp),
+                        from: err,
+                    }
+                })?;
+                Ok(String::from(timestamp))
             }
-        })?;
-        Ok(String::from(value))
+            _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
+        }
     }
 }
 
 impl SingleValueMeasurement {
     fn new(name: &str, value: f64) -> Result<Self, ThinEdgeJsonError> {
-        if name.ne("time") && name.ne("type") {
-            if value == 0.0 || value.is_normal() {
-                let single_value = SingleValueMeasurement {
-                    name: String::from(name),
-                    value,
-                };
-                Ok(single_value)
-            } else {
-                Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber {
-                    name: String::from(name),
-                })
-            }
+        if value == 0.0 || value.is_normal() {
+            let single_value = SingleValueMeasurement {
+                name: String::from(name),
+                value,
+            };
+            Ok(single_value)
         } else {
-            Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
+            Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber {
                 name: String::from(name),
             })
         }
@@ -167,10 +164,8 @@ impl MultiValueMeasurement {
                         name: String::from(k),
                     })
                 }
-                _ => {
-                    return Err(ThinEdgeJsonError::InvalidThinEdgeJsonValue {
-                        name: String::from(name),
-                    })
+                value => {
+                    return Err(ThinEdgeJsonError::new_invalid_json_value(name, value));
                 }
             }
         }
@@ -289,13 +284,21 @@ pub enum ThinEdgeJsonError {
         from: json::Error,
     },
 
-    #[error("Not a record of measurements: {json_excerpt}")]
-    InvalidThinEdgeJsonRoot { json_excerpt: String },
+    #[error("Invalid Thin Edge measurement: it cannot be {actual_type}: {json_excerpt}")]
+    InvalidThinEdgeJsonRoot {
+        json_excerpt: String,
+        actual_type: String,
+    },
 
-    #[error("Not a number: the {name:?} value must be a number.")]
-    InvalidThinEdgeJsonValue { name: String },
+    #[error("Not a number: the {name:?} value must be a number, not {actual_type}.")]
+    InvalidThinEdgeJsonValue { name: String, actual_type: String },
 
-    #[error("Number out-of-range: the {name:?} value cannot be represented as a float64.")]
+    #[error("Not a timestamp: the time value must be a timestamp string, not {actual_type}.")]
+    InvalidThinEdgeJsonTime { actual_type: String },
+
+    #[error(
+        "Number out-of-range: the {name:?} value is too large to be represented as a float64."
+    )]
     InvalidThinEdgeJsonNumber { name: String },
 
     #[error("Invalid measurement name: {name:?} is a reserved word.")]
@@ -333,6 +336,31 @@ impl ThinEdgeJsonError {
     fn new_invalid_json_root(json: &JsonValue) -> ThinEdgeJsonError {
         ThinEdgeJsonError::InvalidThinEdgeJsonRoot {
             json_excerpt: input_prefix(&json.to_string(), ThinEdgeJsonError::MAX_LEN),
+            actual_type: ThinEdgeJsonError::json_type(&json).to_string(),
+        }
+    }
+
+    fn new_invalid_json_value(name: &str, json: &JsonValue) -> ThinEdgeJsonError {
+        ThinEdgeJsonError::InvalidThinEdgeJsonValue {
+            name: String::from(name),
+            actual_type: ThinEdgeJsonError::json_type(&json).to_string(),
+        }
+    }
+
+    fn new_invalid_json_time(json: &JsonValue) -> ThinEdgeJsonError {
+        ThinEdgeJsonError::InvalidThinEdgeJsonTime {
+            actual_type: ThinEdgeJsonError::json_type(&json).to_string(),
+        }
+    }
+
+    fn json_type(input: &JsonValue) -> &'static str {
+        match input {
+            JsonValue::String(_) | JsonValue::Short(_) => "a string",
+            JsonValue::Number(_) => "a number",
+            JsonValue::Object(_) => "an object",
+            JsonValue::Array(_) => "an array",
+            JsonValue::Boolean(_) => "a boolean",
+            JsonValue::Null => "null",
         }
     }
 }
@@ -510,7 +538,7 @@ mod tests {
     fn thin_edge_json_reject_arrays() {
         let input = r"[50,23]";
 
-        let expected_error = r#"Not a record of measurements: [50,23]"#;
+        let expected_error = r#"Invalid Thin Edge measurement: it cannot be an array: [50,23]"#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -524,7 +552,8 @@ mod tests {
            "temperature": [50,60,70]
           }"#;
 
-        let expected_error = r#"Not a number: the "temperature" value must be a number."#;
+        let expected_error =
+            r#"Not a number: the "temperature" value must be a number, not an array."#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -539,7 +568,8 @@ mod tests {
            "pressure": "20"
           }"#;
 
-        let expected_error = r#"Not a number: the "pressure" value must be a number."#;
+        let expected_error =
+            r#"Not a number: the "pressure" value must be a number, not a string."#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -553,8 +583,7 @@ mod tests {
            "temperature": 10e99999
           }"#;
 
-        let expected_error =
-            r#"Number out-of-range: the "temperature" value cannot be represented as a float64."#;
+        let expected_error = r#"Number out-of-range: the "temperature" value is too large to be represented as a float64."#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -599,7 +628,8 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output = r#"Not a number: the "temperature" value must be a number."#;
+        let expected_output =
+            r#"Not a number: the "temperature" value must be a number, not a boolean."#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
@@ -648,13 +678,14 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_reject_measurement_named_time() {
+    fn thin_edge_reject_number_for_time() {
         let string_value_thin_edge_json = r#"{
            "time": 40,
            "pressure": 220
           }"#;
 
-        let expected_output = r#"Invalid measurement name: "time" is a reserved word."#;
+        let expected_output =
+            r#"Not a timestamp: the time value must be a timestamp string, not a number."#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
