@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use structopt::StructOpt;
 
 use crate::command::{BuildCommand, Command};
@@ -37,12 +38,13 @@ impl BuildCommand for Disconnect {
     }
 }
 
+#[async_trait]
 impl Command for Disconnect {
     fn description(&self) -> String {
         "execute 'tedge disconnect'.".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         Ok(self.stop_bridge()?)
     }
 }

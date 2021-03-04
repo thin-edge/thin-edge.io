@@ -1,5 +1,6 @@
 use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
+use async_trait::async_trait;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
 use std::time::Duration;
@@ -65,6 +66,7 @@ impl BuildCommand for MqttCmd {
     }
 }
 
+#[async_trait]
 impl Command for MqttCmd {
     fn description(&self) -> String {
         match self {
@@ -82,20 +84,19 @@ impl Command for MqttCmd {
         }
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,
                 message,
                 qos,
-            } => publish(topic, message, *qos)?,
-            MqttCmd::Sub { topic, qos } => subscribe(topic, *qos)?,
+            } => publish(topic, message, *qos).await?,
+            MqttCmd::Sub { topic, qos } => subscribe(topic, *qos).await?,
         }
         Ok(())
     }
 }
 
-#[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
     let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
         .connect(DEFAULT_ID)
@@ -140,7 +141,6 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
     Ok(())
 }
 
-#[tokio::main]
 async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
     let mqtt = Client::connect(DEFAULT_ID, &config).await?;

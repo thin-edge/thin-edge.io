@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
 use tokio::time::timeout;
@@ -58,17 +59,14 @@ enum ConnectError {
 #[derive(StructOpt, Debug)]
 pub struct Connect {}
 
+#[async_trait]
 impl Command for Connect {
     fn description(&self) -> String {
         "execute `tedge connect`.".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        use tokio::runtime::Runtime;
-        // Create the runtime
-        let rt = Runtime::new().unwrap();
-        // Execute the future, blocking the current thread until completion
-        rt.block_on(async { Ok(self.new_bridge().await?) })
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        Ok(self.new_bridge().await?)
     }
 }
 

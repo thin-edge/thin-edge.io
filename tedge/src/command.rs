@@ -1,4 +1,5 @@
 use crate::config;
+use async_trait::async_trait;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -68,6 +69,7 @@ use crate::config;
 ///     }
 /// }
 /// ```
+#[async_trait]
 pub trait Command {
     /// Display that command to the user, telling what will be done.
     ///
@@ -87,7 +89,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self, verbose: u8) -> Result<(), anyhow::Error>;
+    async fn execute(&self, verbose: u8) -> Result<(), anyhow::Error>;
 
     fn into_boxed(self) -> Box<dyn Command>
     where

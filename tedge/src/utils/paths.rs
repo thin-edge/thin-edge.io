@@ -155,19 +155,13 @@ mod tests {
     #[test]
     fn validate_path_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
-        assert_matches!(
-            result.unwrap_err(),
-            PathsError::DirNotFound { .. }
-        );
+        assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
     }
 
     #[test]
     fn validate_parent_dir_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/"));
-        assert_matches!(
-            result.unwrap_err(),
-            PathsError::ParentDirNotFound { .. }
-        );
+        assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });
     }
 
     #[test]

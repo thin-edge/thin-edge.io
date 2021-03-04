@@ -13,7 +13,8 @@ mod utils;
 
 use command::BuildCommand;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
 
     let config = config::TEdgeConfig::from_default_config()
@@ -25,5 +26,6 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| "missing configuration parameter")?;
 
     cmd.execute(opt.verbose)
+        .await
         .with_context(|| format!("failed to {}", cmd.description()))
 }

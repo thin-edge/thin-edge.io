@@ -1,5 +1,6 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
@@ -99,6 +100,7 @@ impl BuildCommand for ConfigCmd {
     }
 }
 
+#[async_trait]
 impl Command for ConfigCmd {
     fn description(&self) -> String {
         match self {
@@ -117,7 +119,7 @@ impl Command for ConfigCmd {
         }
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 

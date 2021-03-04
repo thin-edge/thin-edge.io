@@ -2,6 +2,7 @@ use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
 use crate::utils::paths;
 use crate::utils::paths::PathsError;
+use async_trait::async_trait;
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
@@ -209,35 +210,39 @@ impl BuildCommand for TEdgeCertOpt {
     }
 }
 
+#[async_trait]
 impl Command for CreateCertCmd {
     fn description(&self) -> String {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
         let () = self.create_test_certificate(&config)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
 }
+
+#[async_trait]
 impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let () = self.show_certificate()?;
         Ok(())
     }
 }
 
+#[async_trait]
 impl Command for RemoveCertCmd {
     fn description(&self) -> String {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    async fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
         let () = self.remove_certificate()?;
         let () = self.update_tedge_config()?;
         Ok(())
@@ -279,9 +284,8 @@ impl CreateCertCmd {
         let cert_path = Path::new(&self.cert_path);
         let key_path = Path::new(&self.key_path);
 
-        paths::validate_parent_dir_exists(cert_path)
-            .map_err(|err| CertError::CertPathError(err))?;
-        paths::validate_parent_dir_exists(key_path).map_err(|err| CertError::KeyPathError(err))?;
+        paths::validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
+        paths::validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
 
         // Creating files with permission 644
         let mut cert_file =
@@ -445,8 +449,8 @@ mod tests {
     use std::fs::File;
     use tempfile::*;
 
-    #[test]
-    fn basic_usage() {
+    #[tokio::test]
+    async fn basic_usage() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
@@ -459,13 +463,13 @@ mod tests {
         };
         let verbose = 0;
 
-        assert!(cmd.execute(verbose).err().is_none());
+        assert!(cmd.execute(verbose).await.err().is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
 
-    #[test]
-    fn check_certificate_is_not_overwritten() {
+    #[tokio::test]
+    async fn check_certificate_is_not_overwritten() {
         let cert_content = "some cert content";
         let key_content = "some key content";
         let cert_file = temp_file_with_content(cert_content);
@@ -479,7 +483,7 @@ mod tests {
         };
         let verbose = 0;
 
-        assert!(cmd.execute(verbose).ok().is_none());
+        assert!(cmd.execute(verbose).await.ok().is_none());
 
         let mut cert_file = cert_file.reopen().unwrap();
         assert_eq!(file_content(&mut cert_file), cert_content);
@@ -488,8 +492,8 @@ mod tests {
         assert_eq!(file_content(&mut key_file), key_content);
     }
 
-    #[test]
-    fn create_certificate_in_non_existent_directory() {
+    #[tokio::test]
+    async fn create_certificate_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
 
@@ -500,16 +504,13 @@ mod tests {
         };
         let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
+        let error = cmd.execute(verbose).await.unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::CertPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
-    #[test]
-    fn create_key_in_non_existent_directory() {
+    #[tokio::test]
+    async fn create_key_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
 
@@ -520,12 +521,9 @@ mod tests {
         };
         let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
+        let error = cmd.execute(verbose).await.unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::KeyPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {
