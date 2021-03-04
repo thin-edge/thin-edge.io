@@ -301,7 +301,9 @@ pub enum ThinEdgeJsonError {
     #[error("Invalid measurement name: {name:?} is a reserved word.")]
     ThinEdgeReservedWordError { name: String },
 
-    #[error("Invalid ISO8601 timestamp: {value:?}: {from}")]
+    #[error(
+        "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {value:?}: {from}"
+    )]
     InvalidTimestamp { value: String, from: ParseError },
 
     #[error("More than 2 nested levels: the record for {name:?} must be flattened.")]
@@ -696,7 +698,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_error = "Invalid ISO8601 timestamp: \"2013-06-22\": premature end of input";
+        let expected_error = "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22\": premature end of input";
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
@@ -711,7 +713,7 @@ mod tests {
           }"#;
 
         let expected_error =
-            "Invalid ISO8601 timestamp: \"2013-06-22 3am\": input contains invalid characters";
+            "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22 3am\": input contains invalid characters";
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
