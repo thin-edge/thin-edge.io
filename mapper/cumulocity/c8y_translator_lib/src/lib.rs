@@ -103,10 +103,14 @@ impl ThinEdgeJson {
                         }
                     }
                 }
-                Ok(ThinEdgeJson {
-                    timestamp: time,
-                    values: measurements,
-                })
+                if measurements.is_empty() {
+                    Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot)
+                } else {
+                    Ok(ThinEdgeJson {
+                        timestamp: time,
+                        values: measurements,
+                    })
+                }
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_root(&input)),
         }
@@ -169,10 +173,16 @@ impl MultiValueMeasurement {
                 }
             }
         }
-        Ok(MultiValueMeasurement {
-            name: String::from(name),
-            values: single_values,
-        })
+        if single_values.is_empty() {
+            Err(ThinEdgeJsonError::EmptyThinEdgeJson {
+                name: String::from(name),
+            })
+        } else {
+            Ok(MultiValueMeasurement {
+                name: String::from(name),
+                values: single_values,
+            })
+        }
     }
 }
 
@@ -289,6 +299,12 @@ pub enum ThinEdgeJsonError {
         json_excerpt: String,
         actual_type: String,
     },
+
+    #[error("Empty Thin Edge measurement: it must contain at least one measurement")]
+    EmptyThinEdgeJsonRoot,
+
+    #[error("Empty Thin Edge measurement: {name:?} must contain at least one measurement")]
+    EmptyThinEdgeJson { name: String },
 
     #[error("Not a number: the {name:?} value must be a number, not {actual_type}.")]
     InvalidThinEdgeJsonValue { name: String, actual_type: String },
@@ -535,6 +551,17 @@ mod tests {
     }
 
     #[test]
+    fn thin_edge_json_reject_non_utf8_input() {
+        let input = b"\xc3\x28";
+
+        let expected_error = r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 0: ..."#;
+        let output = CumulocityJson::from_thin_edge_json(input);
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
     fn thin_edge_json_reject_arrays() {
         let input = r"[50,23]";
 
@@ -716,6 +743,46 @@ mod tests {
 
         let expected_error =
             r#"Invalid JSON: Unexpected end of JSON: {"time":"2013-06-22T17:03:14.000+02:00","#;
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_empty_record() {
+        let input = "{}";
+
+        let expected_error =
+            "Empty Thin Edge measurement: it must contain at least one measurement";
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_just_time() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00"
+        }"#;
+
+        let expected_error =
+            "Empty Thin Edge measurement: it must contain at least one measurement";
+        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_empty_measurement() {
+        let input = r#"{
+           "foo" : {}
+        }"#;
+
+        let expected_error =
+            r#"Empty Thin Edge measurement: "foo" must contain at least one measurement"#;
         let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
 
         let error = output.unwrap_err();
