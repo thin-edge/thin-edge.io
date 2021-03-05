@@ -27,6 +27,9 @@ pub enum TEdgeCertOpt {
 
     /// Remove the device certificate
     Remove,
+
+    /// Upload root certificate
+    Upload(UploadCertOpt),
 }
 
 /// Create a self-signed device certificate
@@ -54,6 +57,36 @@ pub struct RemoveCertCmd {
 
     /// The path of the private key to be removed
     key_path: String,
+}
+
+#[derive(StructOpt, Debug)]
+pub enum UploadCertOpt {
+    /// Upload root certificate to Cumulocity
+    ///
+    /// The command will upload root certificate to Cumulocity.
+    C8y,
+}
+
+impl BuildCommand for UploadCertOpt {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        todo!()
+    }
+}
+
+impl Command for UploadCertOpt {
+    fn description(&self) -> String {
+        "upload root certificate".into()
+    }
+
+    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+        Ok(self.upload_certificate()?)
+    }
+}
+
+impl UploadCertOpt {
+    fn upload_certificate(&self) -> Result<(), CertError> {
+        Ok(())
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -203,6 +236,10 @@ impl BuildCommand for TEdgeCertOpt {
                     };
                     cmd.into_boxed()
                 }
+
+                TEdgeCertOpt::Upload(cmd) => match cmd {
+                    UploadCertOpt::C8y => cmd.into_boxed(),
+                },
             };
 
         Ok(cmd)
@@ -502,10 +539,7 @@ mod tests {
 
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::CertPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
     #[test]
@@ -522,10 +556,7 @@ mod tests {
 
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
-        assert_matches!(
-            cert_error,
-            CertError::KeyPathError { .. }
-        );
+        assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {

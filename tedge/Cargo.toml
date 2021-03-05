@@ -22,6 +22,7 @@ log = "0.4.14"
 mqtt_client = {version = "0.1.0", path = "../common/mqtt_client" }
 rand = "0.8.3"
 rcgen = { version = "0.8.9", features = ["pem"] }
+reqwest = { version = "0.11.1", features = ["blocking", "json", "rustls"] }
 rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
 serde = { version = "1.0.123", features = ["derive"] }
 serde_str = "0.1.0"
