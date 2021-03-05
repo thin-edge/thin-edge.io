@@ -2,13 +2,15 @@ use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use std::process;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::{io::AsyncWriteExt, select};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_ID: &str = "tedge-cli";
+const PUB_CLIENT_PREFIX: &str = "tedge-pub";
+const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -97,8 +99,9 @@ impl Command for MqttCmd {
 
 #[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
+    let client_id = format!("{}-{}", PUB_CLIENT_PREFIX, process::id());
     let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
-        .connect(DEFAULT_ID)
+        .connect(client_id.as_str())
         .await?;
 
     let tpc = Topic::new(topic)?;
@@ -142,8 +145,9 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
 
 #[tokio::main]
 async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
-    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
-    let mqtt = Client::connect(DEFAULT_ID, &config).await?;
+    let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
+    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
+    let mqtt = Client::connect(client_id.as_str(), &config).await?;
     let filter = TopicFilter::new(topic)?.qos(qos);
 
     let mut errors = mqtt.subscribe_errors();
