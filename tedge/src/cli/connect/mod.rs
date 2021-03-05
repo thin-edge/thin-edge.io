@@ -4,7 +4,6 @@ use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
 use crate::utils::{paths, services};
-use async_trait::async_trait;
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
@@ -78,8 +77,7 @@ impl Command for BridgeCommand {
 impl BridgeCommand {
     #[tokio::main]
     async fn check_connection(&self) -> Result<(), ConnectError> {
-        self.check_connection.check_connection().await?;
-        Ok(())
+        Ok(self.check_connection.check_connection()?)
     }
 }
 
@@ -104,9 +102,8 @@ pub struct BridgeConfig {
     topics: Vec<String>,
 }
 
-#[async_trait]
 trait CheckConnection {
-    async fn check_connection(&self) -> Result<(), ConnectError>;
+    fn check_connection(&self) -> Result<(), ConnectError>;
 }
 
 impl BridgeConfig {

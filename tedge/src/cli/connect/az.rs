@@ -1,6 +1,5 @@
 use super::*;
 use crate::config::ConfigError;
-use async_trait::async_trait;
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 
 pub struct Azure {}
@@ -41,9 +40,8 @@ impl Azure {
     }
 }
 
-#[async_trait]
 impl CheckConnection for Azure {
-    async fn check_connection(&self) -> Result<(), ConnectError> {
+    fn check_connection(&self) -> Result<(), ConnectError> {
         Ok(())
     }
 }

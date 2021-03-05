@@ -1,6 +1,5 @@
 use super::*;
 use crate::config::ConfigError;
-use async_trait::async_trait;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -58,10 +57,7 @@ impl C8y {
             ],
         })
     }
-}
 
-#[async_trait]
-impl CheckConnection for C8y {
     // Check the connection by using the response of the SmartREST template 100.
     // If getting the response '41,100,Device already existing', the connection is established.
     //
@@ -69,7 +65,8 @@ impl CheckConnection for C8y {
     // If the device is new, the device is going to be registered here and
     // the check can finish in the second try as there is no error response in the first try.
 
-    async fn check_connection(&self) -> Result<(), ConnectError> {
+    #[tokio::main]
+    async fn check_connection_async(&self) -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
         const CLIENT_ID: &str = "check_connection";
@@ -121,5 +118,11 @@ impl CheckConnection for C8y {
 
         println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
         Ok(())
+    }
+}
+
+impl CheckConnection for C8y {
+    fn check_connection(&self) -> Result<(), ConnectError> {
+        Ok(self.check_connection_async()?)
     }
 }
