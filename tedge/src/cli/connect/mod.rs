@@ -83,6 +83,7 @@ impl BridgeCommand {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
     cloud_name: String,
     config_file: String,
