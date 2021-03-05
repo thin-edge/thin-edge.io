@@ -309,7 +309,7 @@ pub enum ThinEdgeJsonError {
     #[error("Not a number: the {name:?} value must be a number, not {actual_type}.")]
     InvalidThinEdgeJsonValue { name: String, actual_type: String },
 
-    #[error("Not a timestamp: the time value must be a timestamp string, not {actual_type}.")]
+    #[error("Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not {actual_type}.")]
     InvalidThinEdgeJsonTime { actual_type: String },
 
     #[error(
@@ -711,8 +711,7 @@ mod tests {
            "pressure": 220
           }"#;
 
-        let expected_output =
-            r#"Not a timestamp: the time value must be a timestamp string, not a number."#;
+        let expected_output = r#"Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number."#;
         let output = CumulocityJson::from_thin_edge_json(
             &String::from(string_value_thin_edge_json).into_bytes(),
         );
