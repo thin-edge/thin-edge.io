@@ -9,7 +9,6 @@ use tempfile::NamedTempFile;
 
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_CERT_DIR: &str = "certificate";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
@@ -341,7 +340,6 @@ impl DeviceConfig {
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
         home_dir()?
             .join(TEDGE_HOME_DIR)
-            .join(DEVICE_CERT_DIR)
             .join(file_name)
             .to_str()
             .map(|s| s.into())

@@ -171,14 +171,8 @@ mod tests {
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        let cert_path = temp_path(
-            &temp_dir,
-            &join_paths(".tedge/certificate", "tedge-certificate.pem"),
-        );
-        let key_path = temp_path(
-            &temp_dir,
-            &join_paths(".tedge/certificate", "tedge-private-key.pem"),
-        );
+        let cert_path = temp_path(&temp_dir, &join_paths(".tedge", "tedge-certificate.pem"));
+        let key_path = temp_path(&temp_dir, &join_paths(".tedge", "tedge-private-key.pem"));
 
         let mut get_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.id"])?;
@@ -242,11 +236,11 @@ mod tests {
 
         let key_path = extract_config_value(&output_str, "device.key.path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
-        assert!(key_path.contains("certificate"));
+        assert!(key_path.contains(".tedge"));
 
         let cert_path = extract_config_value(&output_str, "device.cert.path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
-        assert!(cert_path.contains("certificate"));
+        assert!(cert_path.contains(".tedge"));
     }
 
     fn extract_config_value(output: &String, key: &str) -> String {
@@ -284,11 +278,11 @@ mod tests {
 
         let key_path = extract_config_value(&output_str, "device.key.path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
-        assert!(key_path.contains("certificate"));
+        assert!(key_path.contains(".tedge"));
 
         let cert_path = extract_config_value(&output_str, "device.cert.path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
-        assert!(cert_path.contains("certificate"));
+        assert!(cert_path.contains(".tedge"));
 
         for key in get_tedge_config_keys() {
             assert_eq!(true, output_str.contains(key));
