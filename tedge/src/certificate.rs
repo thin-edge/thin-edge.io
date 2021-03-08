@@ -1,7 +1,7 @@
 use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig};
-use crate::param_config_or_default;
+use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
 use crate::utils::paths;
+use crate::utils::paths::PathsError;
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
@@ -10,6 +10,7 @@ use rcgen::RcgenError;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::path::Path;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -19,38 +20,13 @@ pub enum TEdgeCertOpt {
         /// The device identifier to be used as the common name for the certificate
         #[structopt(long = "device-id")]
         id: String,
-
-        /// The path where the device certificate will be stored
-        /// If unset, use the value of `tedge config get device.cert.path`.
-        #[structopt(long = "device-cert-path")]
-        cert_path: Option<String>,
-
-        /// The path where the device private key will be stored
-        /// If unset, use the value of `tedge config get device.key.path`.
-        #[structopt(long = "device-key-path")]
-        key_path: Option<String>,
     },
 
     /// Show the device certificate, if any
-    Show {
-        /// The path where the device certificate will be stored
-        /// If unset, use the value of `tedge config get device.cert.path`.
-        #[structopt(long = "device-cert-path")]
-        cert_path: Option<String>,
-    },
+    Show,
 
     /// Remove the device certificate
-    Remove {
-        /// The path of the certificate to be removed
-        /// If unset, use the value of `tedge config get device.cert.path`.
-        #[structopt(long = "device-cert-path")]
-        cert_path: Option<String>,
-
-        /// The path of the private key to be removed
-        /// If unset, use the value of `tedge config get device.key.path`.
-        #[structopt(long = "device-key-path")]
-        key_path: Option<String>,
-    },
+    Remove,
 }
 
 /// Create a self-signed device certificate
@@ -132,6 +108,12 @@ pub enum CertError {
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
+    #[error("Invalid device.cert.path path: {0}")]
+    CertPathError(PathsError),
+
+    #[error("Invalid device.key.path path: {0}")]
+    KeyPathError(PathsError),
+
     #[error("Cryptography related error")]
     CryptographyError(#[from] RcgenError),
 
@@ -176,61 +158,52 @@ impl CertError {
 
 impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let config_cert_path = config.device.cert_path.clone();
-        let config_key_path = config.device.key_path.clone();
+        let cmd =
+            match self {
+                TEdgeCertOpt::Create { id } => {
+                    let cmd = CreateCertCmd {
+                        id,
+                        cert_path: config.device.cert_path.ok_or_else(|| {
+                            ConfigError::ConfigNotSet {
+                                key: String::from(DEVICE_CERT_PATH),
+                            }
+                        })?,
+                        key_path: config.device.key_path.ok_or_else(|| {
+                            ConfigError::ConfigNotSet {
+                                key: String::from(DEVICE_KEY_PATH),
+                            }
+                        })?,
+                    };
+                    cmd.into_boxed()
+                }
 
-        let cmd = match self {
-            TEdgeCertOpt::Create {
-                id,
-                cert_path,
-                key_path,
-            } => {
-                let cmd = CreateCertCmd {
-                    id,
-                    cert_path: param_config_or_default!(
-                        cert_path,
-                        config_cert_path,
-                        "device.cert.path"
-                    )?,
-                    key_path: param_config_or_default!(
-                        key_path,
-                        config_key_path,
-                        "device.key.path"
-                    )?,
-                };
-                cmd.into_boxed()
-            }
+                TEdgeCertOpt::Show => {
+                    let cmd = ShowCertCmd {
+                        cert_path: config.device.cert_path.ok_or_else(|| {
+                            ConfigError::ConfigNotSet {
+                                key: String::from(DEVICE_CERT_PATH),
+                            }
+                        })?,
+                    };
+                    cmd.into_boxed()
+                }
 
-            TEdgeCertOpt::Show { cert_path } => {
-                let cmd = ShowCertCmd {
-                    cert_path: param_config_or_default!(
-                        cert_path,
-                        config_cert_path,
-                        "device.cert.path"
-                    )?,
-                };
-                cmd.into_boxed()
-            }
-
-            TEdgeCertOpt::Remove {
-                cert_path,
-                key_path,
-            } => {
-                let cmd = RemoveCertCmd {
-                    cert_path: param_config_or_default!(
-                        cert_path,
-                        config_cert_path,
-                        "device.cert.path"
-                    )?,
-                    key_path: param_config_or_default!(
-                        key_path,
-                        config_key_path,
-                        "device.key.path"
-                    )?,
-                };
-                cmd.into_boxed()
-            }
-        };
+                TEdgeCertOpt::Remove => {
+                    let cmd = RemoveCertCmd {
+                        cert_path: config.device.cert_path.ok_or_else(|| {
+                            ConfigError::ConfigNotSet {
+                                key: String::from(DEVICE_CERT_PATH),
+                            }
+                        })?,
+                        key_path: config.device.key_path.ok_or_else(|| {
+                            ConfigError::ConfigNotSet {
+                                key: String::from(DEVICE_KEY_PATH),
+                            }
+                        })?,
+                    };
+                    cmd.into_boxed()
+                }
+            };
 
         Ok(cmd)
     }
@@ -292,7 +265,7 @@ impl Default for CertConfig {
 impl Default for TestCertConfig {
     fn default() -> Self {
         TestCertConfig {
-            validity_period_days: 90,
+            validity_period_days: 365,
             organization_name: "Thin Edge".into(),
             organizational_unit_name: "Test Device".into(),
         }
@@ -302,6 +275,13 @@ impl Default for TestCertConfig {
 impl CreateCertCmd {
     fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
         check_identifier(&self.id)?;
+
+        let cert_path = Path::new(&self.cert_path);
+        let key_path = Path::new(&self.key_path);
+
+        paths::validate_parent_dir_exists(cert_path)
+            .map_err(|err| CertError::CertPathError(err))?;
+        paths::validate_parent_dir_exists(key_path).map_err(|err| CertError::KeyPathError(err))?;
 
         // Creating files with permission 644
         let mut cert_file =
@@ -461,6 +441,7 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use std::fs::File;
     use tempfile::*;
 
@@ -505,6 +486,40 @@ mod tests {
 
         let mut key_file = key_file.reopen().unwrap();
         assert_eq!(file_content(&mut key_file), key_content);
+    }
+
+    #[test]
+    fn create_certificate_in_non_existent_directory() {
+        let dir = tempdir().unwrap();
+        let key_path = temp_file_path(&dir, "my-device-key.pem");
+
+        let cmd = CreateCertCmd {
+            id: "my-device-id".to_string(),
+            cert_path: "/non/existent/cert/path".to_string(),
+            key_path,
+        };
+        let verbose = 0;
+
+        let error = cmd.execute(verbose).unwrap_err();
+        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        assert_matches!(cert_error, CertError::CertPathError { .. });
+    }
+
+    #[test]
+    fn create_key_in_non_existent_directory() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+
+        let cmd = CreateCertCmd {
+            id: "my-device-id".to_string(),
+            cert_path,
+            key_path: "/non/existent/key/path".to_string(),
+        };
+        let verbose = 0;
+
+        let error = cmd.execute(verbose).unwrap_err();
+        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {

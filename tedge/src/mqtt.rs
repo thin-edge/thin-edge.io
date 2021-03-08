@@ -1,14 +1,18 @@
 use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
 use futures::future::FutureExt;
-use futures::select;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use std::process;
+use std::time::Duration;
 use structopt::StructOpt;
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, select};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_ID: &str = "tedge-cli";
+const PUB_CLIENT_PREFIX: &str = "tedge-pub";
+const SUB_CLIENT_PREFIX: &str = "tedge-sub";
+
+const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(StructOpt, Debug)]
 pub enum MqttCmd {
@@ -46,6 +50,9 @@ pub enum MqttError {
 
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,
+
+    #[error("{0}\n\nHint: Is MQTT server running?")]
+    ServerError(String),
 }
 
 impl BuildCommand for MqttCmd {
@@ -92,28 +99,70 @@ impl Command for MqttCmd {
 
 #[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
-    let mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
-        .connect(DEFAULT_ID)
+    let client_id = format!("{}-{}", PUB_CLIENT_PREFIX, process::id());
+    let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
+        .connect(client_id.as_str())
         .await?;
+
     let tpc = Topic::new(topic)?;
-    let msg = Message::new(&tpc, message).qos(qos);
-    let ack = mqtt.publish_with_ack(msg).await?;
-    ack.await?;
-    mqtt.disconnect().await?;
+    let message = Message::new(&tpc, message).qos(qos);
+
+    let res = try_publish(&mut mqtt, message).await;
+
+    // In case we don't have a connection, disconnect might block until there is a connection,
+    // therefore timeout.
+    let _ = tokio::time::timeout(DISCONNECT_TIMEOUT, mqtt.disconnect()).await;
+    res
+}
+
+async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
+    let mut errors = mqtt.subscribe_errors();
+
+    // This requires 2 awaits as publish_with_ack returns a future which returns a future.
+    let ack = async {
+        match mqtt.publish_with_ack(msg).await {
+            Ok(fut) => fut.await,
+            Err(err) => Err(err),
+        }
+    };
+
+    select! {
+        error = errors.next().fuse() => {
+            if let Some(err) = error {
+                if let mqtt_client::Error::ConnectionError(..) = *err {
+                    return Err(MqttError::ServerError(err.to_string()));
+                }
+            }
+        }
+
+        result = ack.fuse() => {
+            result?
+        }
+    }
 
     Ok(())
 }
 
 #[tokio::main]
 async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
-    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
-    let mqtt = Client::connect(DEFAULT_ID, &config).await?;
+    let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
+    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
+    let mqtt = Client::connect(client_id.as_str(), &config).await?;
     let filter = TopicFilter::new(topic)?.qos(qos);
 
+    let mut errors = mqtt.subscribe_errors();
     let mut messages: MessageStream = mqtt.subscribe(filter).await?;
 
     loop {
         select! {
+            error = errors.next().fuse() => {
+                if let Some(err) = error {
+                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
+                        return Err(MqttError::ServerError(err.to_string()));
+                    }
+                }
+            }
+
             _signal = signals::interrupt().fuse() => {
                 println!("Received SIGINT.");
                 break;
