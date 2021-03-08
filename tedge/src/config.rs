@@ -24,7 +24,7 @@ pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
-/// Wrapper type for all types configuration keys.
+/// Wrapper type for configuration keys.
 #[derive(Debug, Clone)]
 pub struct ConfigKey(pub String);
 
@@ -49,17 +49,17 @@ impl std::str::FromStr for ConfigKey {
     }
 }
 
-/// Wrapper type for read-write type configuration keys.
+/// Wrapper type for updatable (Read-Write mode) configuration keys.
 #[derive(Debug, Clone)]
-pub struct ConfigReadWriteKey(pub String);
+pub struct WritableConfigKey(pub String);
 
-impl ConfigReadWriteKey {
+impl WritableConfigKey {
     fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }
 
-impl std::str::FromStr for ConfigReadWriteKey {
+impl std::str::FromStr for WritableConfigKey {
     type Err = String;
 
     fn from_str(key: &str) -> Result<Self, Self::Err> {
@@ -67,25 +67,12 @@ impl std::str::FromStr for ConfigReadWriteKey {
             Some(ConfigKeyProperties {
                 mode: ConfigKeyMode::ReadWrite,
                 ..
-            }) => Ok(ConfigReadWriteKey(key.into())),
-            _ => {
-                // create a vector of read-write keys
-                let mut valid_readwrite_keys: Vec<&str> = Vec::new();
-                for predefined_key in TEdgeConfig::valid_keys() {
-                    if let ConfigKeyMode::ReadWrite =
-                        TEdgeConfig::get_key_properties(predefined_key)
-                            .unwrap()
-                            .mode
-                    {
-                        valid_readwrite_keys.push(predefined_key);
-                    }
-                }
-                Err(format!(
-                    "Invalid key `{}'. Valid keys are: [{}].",
-                    key,
-                    valid_readwrite_keys.join(", ")
-                ))
-            }
+            }) => Ok(WritableConfigKey(key.into())),
+            _ => Err(format!(
+                "Invalid key `{}'. Valid keys are: [{}].",
+                key,
+                TEdgeConfig::valid_writable_keys().join(", ")
+            )),
         }
     }
 }
@@ -96,7 +83,7 @@ pub enum ConfigCmd {
     Set {
         /// Configuration key.
         #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
-        key: ConfigReadWriteKey,
+        key: WritableConfigKey,
 
         /// Configuration value.
         value: String,
@@ -106,7 +93,7 @@ pub enum ConfigCmd {
     Unset {
         /// Configuration key.
         #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
-        key: ConfigReadWriteKey,
+        key: WritableConfigKey,
     },
 
     /// Get the value of the provided configuration key
@@ -248,6 +235,7 @@ struct ConfigKeyProperties {
 /// - _set_config_value (set a value)
 /// - get_key_properties (get ConfigKeyProperties of a key)
 /// - valid_keys (list of valid keys)
+/// - valid_writable_keys (list of writable keys)
 /// - valid_keys_help_message_for_get (create a help message for structopt when `-h` is specified with get)
 /// - valid_keys_help_message_for_set (create a help message for structopt when `-h` is specified with set/unset)
 ///
@@ -298,16 +286,7 @@ macro_rules! hide_key {
         ""
     };
     ($str:literal, ReadWrite) => {
-        concat!(" ", $str)
-    };
-}
-
-macro_rules! key_mode {
-    ($str:literal, ReadOnly) => {
-        ConfigKeyMode::ReadOnly
-    };
-    ($str:literal, ReadWrite) => {
-        ConfigKeyMode::ReadWrite
+        $str
     };
 }
 
@@ -335,7 +314,7 @@ macro_rules! config_keys {
 
             fn get_key_properties(key: &str) -> Option<ConfigKeyProperties> {
                 match key {
-                    $( $str => Some(ConfigKeyProperties{mode: key_mode!($str, $type), description: $desc}), )*
+                    $( $str => Some(ConfigKeyProperties{mode: ConfigKeyMode::$type, description: $desc}), )*
                     _ => None,
                 }
             }
@@ -346,12 +325,21 @@ macro_rules! config_keys {
                 ]
             }
 
+            fn valid_writable_keys() -> Vec<&'static str> {
+                vec![
+                    $( hide_key!($str, $type) , )*
+                ]
+                .into_iter()
+                .filter(|str| ! str.is_empty())
+                .collect()
+            }
+
             fn valid_keys_help_message_for_get() -> &'static str {
                 concat!("[", $( " ", $str ),*, " ]")
             }
 
             fn valid_keys_help_message_for_set() -> &'static str {
-                concat!("[", $( hide_key!($str, $type) ),*, " ]")
+                concat!("[", $( hide_key!($str, $type) , " "), *, "]")
             }
         }
     }
@@ -602,6 +590,18 @@ mod tests {
     fn test_macro_creates_valid_keys_correctly() {
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
+    }
+
+    #[test]
+    fn test_macro_creates_valid_writable_keys_correctly() {
+        assert_eq!(
+            TEdgeConfig::valid_writable_keys().contains(&"device.id"),
+            false
+        );
+        assert_eq!(
+            TEdgeConfig::valid_writable_keys().contains(&"device.cert.path"),
+            true
+        );
     }
 
     #[test]
