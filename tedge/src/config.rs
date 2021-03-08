@@ -380,7 +380,7 @@ pub struct CumulocityConfig {
     connect: Option<String>,
 
     /// Endpoint URL of the Cumulocity tenant
-    url: Option<String>,
+    pub url: Option<String>,
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
@@ -420,6 +420,9 @@ pub enum ConfigError {
     A value can be set with `tedge config set {key} <value>`"#
     )]
     ConfigNotSet { key: String },
+
+    #[error("")]
+    MissingRequiredConfigurationItem { key: String },
 }
 
 pub fn home_dir() -> Result<PathBuf, ConfigError> {
@@ -515,6 +518,11 @@ impl TEdgeConfig {
             .map(|opt_str| opt_str.map(Into::into))
     }
 
+    pub fn get_config_value_else_missing_error(&self, key: &str) -> Result<String, ConfigError> {
+        Ok(self
+            .get_config_value(key)?
+            .ok_or_else(|| ConfigError::MissingRequiredConfigurationItem { key: key.into() })?)
+    }
     /// Associate the provided key with the given value in this configuration.
     /// If the key exists already with some value, it will be replaced by the new value.
     pub fn set_config_value(&mut self, key: &str, value: String) -> Result<(), ConfigError> {

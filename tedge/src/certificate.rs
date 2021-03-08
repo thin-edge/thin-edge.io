@@ -1,16 +1,18 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
-use crate::utils::paths;
-use crate::utils::paths::PathsError;
+use crate::utils::{config, paths, paths::PathsError};
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
-use std::path::Path;
+use reqwest::{StatusCode, Url};
+use rpassword;
+use std::{convert::TryFrom, io::prelude::*};
+use std::{
+    fs::{File, OpenOptions},
+    path::{Path, PathBuf},
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -64,28 +66,129 @@ pub enum UploadCertOpt {
     /// Upload root certificate to Cumulocity
     ///
     /// The command will upload root certificate to Cumulocity.
-    C8y,
+    C8y {
+        #[structopt(long = "user")]
+        username: String,
+    },
 }
 
 impl BuildCommand for UploadCertOpt {
-    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        todo!()
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+        match self {
+            UploadCertOpt::C8y { username } => {
+                // let device_id: String = "alpha".into();
+                let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
+                    key: String::from("device.id"),
+                })?;
+
+                let path = PathBuf::try_from(config.device.cert_path.ok_or_else(|| {
+                    ConfigError::ConfigNotSet {
+                        key: String::from("device.cert_path"),
+                    }
+                })?)
+                .unwrap(); // This is Infallible that means it can never happen.
+
+                let url = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
+                    key: String::from("c8y.url"),
+                })?;
+
+                Ok((UploadCertCmd {
+                    device_id,
+                    path,
+                    url,
+                    username,
+                })
+                .into_boxed())
+            }
+        }
     }
 }
 
-impl Command for UploadCertOpt {
+#[derive(serde::Deserialize, Debug)]
+struct CumulocityResponse {
+    name: String,
+}
+
+// #[allow(non_snake_case)]
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct UploadCertBody {
+    name: String,
+    // certInPemFormat: String,
+    // autoRegistrationEnabled: bool,
+    cert_in_pem_format: String,
+    auto_registration_enabled: bool,
+    status: String,
+}
+
+struct UploadCertCmd {
+    device_id: String,
+    path: PathBuf,
+    url: String,
+    username: String,
+}
+
+impl Command for UploadCertCmd {
     fn description(&self) -> String {
         "upload root certificate".into()
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        Ok(self.upload_certificate()?)
+        let () = self.upload_certificate()?;
+        Ok(())
     }
 }
 
-impl UploadCertOpt {
+impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
-        Ok(())
+        let client = reqwest::blocking::Client::new();
+
+        // let password = "MjkMU3BruwvE8S3";
+        let password = rpassword::read_password_from_tty(Some("Enter password: \n"))?;
+
+        // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
+        // https://<tenant_domain>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
+        let tenant_id = get_tenant_id_blocking(&client, &self.url, &self.username, &password)?;
+        Ok(self.post_certificate(&client, &tenant_id, &password)?)
+    }
+
+    fn post_certificate(
+        &self,
+        client: &reqwest::blocking::Client,
+        tenant_id: &str,
+        password: &str,
+    ) -> Result<(), CertError> {
+        let post_url = make_upload_certificate_url(&self.url, tenant_id)?;
+
+        let post_body = UploadCertBody {
+            name: self.device_id.clone(),
+            cert_in_pem_format: read_cert_to_string(&self.path)?,
+            auto_registration_enabled: true,
+            status: "ENABLED".into(),
+        };
+
+        let res = client
+            .post(post_url)
+            .json(&post_body)
+            .basic_auth(&self.username, Some(password))
+            .send()?;
+
+        match res.status() {
+            StatusCode::OK | StatusCode::CREATED => {
+                println!("Upload OK");
+                Ok(())
+            }
+
+            StatusCode::CONFLICT => {
+                println!("Certificate already exists.");
+                Ok(())
+            }
+
+            code => {
+                println!("Something wrong: {}", code);
+                Err(CertError::EmptyName)
+            }
+        }
     }
 }
 
@@ -155,6 +258,12 @@ pub enum CertError {
 
     #[error("X509 file format error: {0}")]
     X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
+
+    #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
+
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 impl CertError {
@@ -237,9 +346,7 @@ impl BuildCommand for TEdgeCertOpt {
                     cmd.into_boxed()
                 }
 
-                TEdgeCertOpt::Upload(cmd) => match cmd {
-                    UploadCertOpt::C8y => cmd.into_boxed(),
-                },
+                TEdgeCertOpt::Upload(cmd) => cmd.build_command(config)?,
             };
 
         Ok(cmd)
@@ -316,9 +423,8 @@ impl CreateCertCmd {
         let cert_path = Path::new(&self.cert_path);
         let key_path = Path::new(&self.key_path);
 
-        paths::validate_parent_dir_exists(cert_path)
-            .map_err(|err| CertError::CertPathError(err))?;
-        paths::validate_parent_dir_exists(key_path).map_err(|err| CertError::KeyPathError(err))?;
+        paths::validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
+        paths::validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
 
         // Creating files with permission 644
         let mut cert_file =
@@ -445,6 +551,14 @@ fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
     Ok(pem)
 }
 
+fn read_cert_to_string(path: &PathBuf) -> Result<String, CertError> {
+    let mut file = std::fs::File::open(path)?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+
+    Ok(content)
+}
+
 fn create_new_file(path: &str) -> Result<File, CertError> {
     Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
 }
@@ -473,6 +587,33 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
     Certificate::from_params(params)
+}
+
+fn make_upload_certificate_url(url: &str, tenant_id: &str) -> Result<url::Url, CertError> {
+    let url_str = format!(
+        "https://{}/tenant/tenants/{}/trusted-certificates",
+        url, tenant_id
+    );
+
+    Ok(Url::parse(&url_str)?)
+}
+
+fn get_tenant_id_blocking(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    username: &str,
+    password: &str,
+) -> Result<String, CertError> {
+    let res = client
+        // .get("https://lukas-makr11st.latest.stage.c8y.io/tenant/currentTenant")
+        .get(url)
+        .basic_auth(username, Some(password))
+        .send()?
+        .error_for_status()?;
+
+    let body = res.json::<CumulocityResponse>()?;
+
+    Ok(body.name)
 }
 
 #[cfg(test)]
