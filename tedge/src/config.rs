@@ -467,7 +467,7 @@ impl TEdgeConfig {
     ///
     /// * `path` - Path to a thin edge configuration TOML file
     ///
-    fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
+    pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
             Ok(content) => {
                 let mut tedge_config = toml::from_str::<TEdgeConfig>(content.as_str())?;
