@@ -93,27 +93,6 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
 mod tests {
     use super::*;
 
-    #[ignore = "Depends on HOME directory"]
-    #[test]
-    fn build_path_from_home_multiple_arguments() {
-        let expected: &str = "/home/test/test/.test";
-        std::env::set_var("HOME", "/home/test/");
-        assert_eq!(build_path_from_home(&["test", ".test"]).unwrap(), expected);
-    }
-
-    #[ignore = "Depends on HOME directory"]
-    #[test]
-    fn home_dir_test() {
-        let home = std::env::var("HOME").unwrap();
-        std::env::set_var("HOME", "/home/test/");
-        let expected_path = std::path::PathBuf::from("/home/test/");
-        assert_eq!(home_dir(), Some(expected_path));
-
-        std::env::remove_var("HOME");
-        assert_eq!(home_dir(), None);
-        std::env::set_var("HOME", home);
-    }
-
     #[test]
     fn pathbuf_to_string_ok() {
         let pathbuf: PathBuf = "test".into();
