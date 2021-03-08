@@ -1,9 +1,5 @@
 use c8y_translator_lib::CumulocityJson;
 
-use log;
-
-use mqtt_client;
-
 use tokio::task::JoinHandle;
 
 pub const IN_TOPIC: &str = "tedge/measurements";
