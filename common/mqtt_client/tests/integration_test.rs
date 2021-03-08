@@ -1,6 +1,5 @@
-
 #[test]
-#[cfg(feature="integration-test")]
+#[cfg(feature = "integration-test")]
 // Requires fix for access to service on Internet which is not available in gh actions.
 // Proposed to use mock server instead of using live service on the Internet.
 // Run this test by calling 'cargo test --features integration-test' from the base path of the crate
