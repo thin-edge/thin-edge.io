@@ -23,7 +23,7 @@ pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 pub const _AZURE_URL: &str = "azure.url";
 pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
-/// Wrapper type for Configuration keys.
+/// Wrapper type for configuration keys.
 #[derive(Debug, Clone)]
 pub struct ConfigKey(pub String);
 
@@ -37,14 +37,41 @@ impl std::str::FromStr for ConfigKey {
     type Err = String;
 
     fn from_str(key: &str) -> Result<Self, Self::Err> {
-        if TEdgeConfig::is_valid_key(key) {
-            Ok(ConfigKey(key.into()))
-        } else {
-            Err(format!(
+        match TEdgeConfig::get_key_properties(key) {
+            Some(_) => Ok(ConfigKey(key.into())),
+            _ => Err(format!(
                 "Invalid key `{}'. Valid keys are: [{}].",
                 key,
                 TEdgeConfig::valid_keys().join(", ")
-            ))
+            )),
+        }
+    }
+}
+
+/// Wrapper type for updatable (Read-Write mode) configuration keys.
+#[derive(Debug, Clone)]
+pub struct WritableConfigKey(pub String);
+
+impl WritableConfigKey {
+    fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::str::FromStr for WritableConfigKey {
+    type Err = String;
+
+    fn from_str(key: &str) -> Result<Self, Self::Err> {
+        match TEdgeConfig::get_key_properties(key) {
+            Some(ConfigKeyProperties {
+                mode: ConfigKeyMode::ReadWrite,
+                ..
+            }) => Ok(WritableConfigKey(key.into())),
+            _ => Err(format!(
+                "Invalid key `{}'. Valid keys are: [{}].",
+                key,
+                TEdgeConfig::valid_writable_keys().join(", ")
+            )),
         }
     }
 }
@@ -54,8 +81,8 @@ pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
-        key: ConfigKey,
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
+        key: WritableConfigKey,
 
         /// Configuration value.
         value: String,
@@ -64,26 +91,26 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
-        key: ConfigKey,
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
+        key: WritableConfigKey,
     },
 
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message())]
+        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_get())]
         key: ConfigKey,
     },
 
     /// Print the configuration keys and their values
     List {
         /// Prints all the configuration keys, even those without a configured value
-        #[structopt(long)]
-        all: bool,
+        #[structopt(long = "all")]
+        is_all: bool,
 
         /// Prints all keys and descriptions with example values
-        #[structopt(long)]
-        doc: bool,
+        #[structopt(long = "doc")]
+        is_doc: bool,
     },
 }
 
@@ -131,9 +158,9 @@ impl Command for ConfigCmd {
                 config.unset_config_value(key.as_str())?;
                 config_updated = true;
             }
-            ConfigCmd::List { all, doc } => match doc {
+            ConfigCmd::List { is_all, is_doc } => match is_doc {
                 true => print_config_doc(),
-                false => print_config_list(&config, *all)?,
+                false => print_config_list(&config, *is_all)?,
             },
         }
 
@@ -181,6 +208,18 @@ pub struct TEdgeConfig {
     pub azure: AzureConfig,
 }
 
+// for macro
+#[derive(Debug, PartialEq)]
+enum ConfigKeyMode {
+    ReadOnly,
+    ReadWrite,
+}
+
+struct ConfigKeyProperties {
+    mode: ConfigKeyMode,
+    description: &'static str,
+}
+
 ///
 /// This macro creates accessor functions for a `struct` to set and get the value of (possibly
 /// nested) fields given a string as key. It also creates functions to test if a key is valid or
@@ -193,10 +232,11 @@ pub struct TEdgeConfig {
 ///
 /// - _get_config_value (get a value given a key)
 /// - _set_config_value (set a value)
-/// - is_valid_key (test if a key is valid)
+/// - get_key_properties (get ConfigKeyProperties of a key)
 /// - valid_keys (list of valid keys)
-/// - valid_keys_help_message (create a help message for structopt when `-h` is specified)
-/// - get_description_of_key (get a description of a given key)
+/// - valid_writable_keys (list of writable keys)
+/// - valid_keys_help_message_for_get (create a help message for structopt when `-h` is specified with get)
+/// - valid_keys_help_message_for_set (create a help message for structopt when `-h` is specified with set/unset)
 ///
 /// # Basic Usage
 ///
@@ -239,8 +279,18 @@ pub struct TEdgeConfig {
 /// assert_eq!(my.is_valid_key("c"), false);
 /// ```
 ///
+// We need to hide read-only keys from the help message of set/unset.
+macro_rules! hide_key {
+    ($str:literal, ReadOnly) => {
+        ""
+    };
+    ($str:literal, ReadWrite) => {
+        $str
+    };
+}
+
 macro_rules! config_keys {
-    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $desc:literal ) )* }) => {
+    ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $type:tt, $desc:literal ) )* }) => {
         impl $ty {
             fn _get_config_value<'a>(&'a self, key: &str) -> Result<Option<&'a str>, ConfigError> {
                 match key {
@@ -261,10 +311,10 @@ macro_rules! config_keys {
                 }
             }
 
-            fn is_valid_key(key: &str) -> bool {
+            fn get_key_properties(key: &str) -> Option<ConfigKeyProperties> {
                 match key {
-                    $( $str => true, )*
-                    _ => false,
+                    $( $str => Some(ConfigKeyProperties{mode: ConfigKeyMode::$type, description: $desc}), )*
+                    _ => None,
                 }
             }
 
@@ -274,15 +324,21 @@ macro_rules! config_keys {
                 ]
             }
 
-            fn valid_keys_help_message() -> &'static str {
+            fn valid_writable_keys() -> Vec<&'static str> {
+                vec![
+                    $( hide_key!($str, $type) , )*
+                ]
+                .into_iter()
+                .filter(|str| ! str.is_empty())
+                .collect()
+            }
+
+            fn valid_keys_help_message_for_get() -> &'static str {
                 concat!("[", $( " ", $str ),*, " ]")
             }
 
-            fn get_description_of_key(key: &str) -> &'static str {
-                match key {
-                    $( $str => $desc, )*
-                    _ => "Undefined key",
-                }
+            fn valid_keys_help_message_for_set() -> &'static str {
+                concat!("[", $( hide_key!($str, $type) , " "), *, "]")
             }
         }
     }
@@ -290,13 +346,14 @@ macro_rules! config_keys {
 
 config_keys! {
     TEdgeConfig {
-        "device.id"            => (device.id, "Identifier of the device within the fleet. It must be globally unique. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
-        "device.key.path"      => (device.key_path, "Path to the private key file. Example: /home/user/certificate/tedge-private-key.pem")
-        "device.cert.path"     => (device.cert_path, "Path to the certificate file. Example: /home/user/certificate/tedge-certificate.crt")
-        "c8y.url"              => (c8y.url, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
-        "c8y.root.cert.path"   => (c8y.root_cert_path, "Path where Cumulocity root certificate(s) are located. Example: /home/user/certificate/c8y-trusted-root-certificates.pem")
-        "azure.url"            => (azure.url, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
-        "azure.root.cert.path" => (azure.root_cert_path, "Path where Azure IoT root certificate(s) are located. Example: /home/user/certificate/azure-trusted-root-certificates.pem")
+        // external key => (internal key, type description)
+        "device.id"            => (device.id, ReadOnly, "Identifier of the device within the fleet. It must be globally unique and the same one used in the device certificate. Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
+        "device.key.path"      => (device.key_path, ReadWrite, "Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem")
+        "device.cert.path"     => (device.cert_path, ReadWrite, "Path to the certificate file. Example: /home/user/.tedge/tedge-certificate.crt")
+        "c8y.url"              => (c8y.url, ReadWrite, "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com")
+        "c8y.root.cert.path"   => (c8y.root_cert_path, ReadWrite, "Path where Cumulocity root certificate(s) are located. Example: /home/user/.tedge/c8y-trusted-root-certificates.pem")
+        "azure.url"            => (azure.url, ReadWrite, "Tenant endpoint URL of Azure IoT tenant. Example:  MyAzure.azure-devices.net")
+        "azure.root.cert.path" => (azure.root_cert_path, ReadWrite, "Path where Azure IoT root certificate(s) are located. Example: /home/user/.tedge/azure-trusted-root-certificates.pem")
     }
 }
 
@@ -446,7 +503,8 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
 
 fn print_config_doc() {
     for key in TEdgeConfig::valid_keys() {
-        let desc = TEdgeConfig::get_description_of_key(key);
+        // key is pre-defined surely
+        let desc = TEdgeConfig::get_key_properties(key).unwrap().description;
         println!("{:<30} {}", key, desc);
     }
 }
@@ -530,6 +588,54 @@ mod tests {
     fn test_macro_creates_valid_keys_correctly() {
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
         assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
+    }
+
+    #[test]
+    fn test_macro_creates_valid_writable_keys_correctly() {
+        assert_eq!(
+            TEdgeConfig::valid_writable_keys().contains(&"device.id"),
+            false
+        );
+        assert_eq!(
+            TEdgeConfig::valid_writable_keys().contains(&"device.cert.path"),
+            true
+        );
+    }
+
+    #[test]
+    fn test_macro_get_key_properties_correctly() {
+        assert_eq!(
+            TEdgeConfig::get_key_properties("device.id").unwrap().mode,
+            ConfigKeyMode::ReadOnly
+        );
+        assert_eq!(
+            TEdgeConfig::get_key_properties("c8y.url").unwrap().mode,
+            ConfigKeyMode::ReadWrite
+        );
+        let c8y_url_description =
+            "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
+        assert_eq!(
+            TEdgeConfig::get_key_properties("c8y.url")
+                .unwrap()
+                .description,
+            c8y_url_description
+        );
+    }
+
+    #[test]
+    fn test_macro_help_message_for_get_correctly() {
+        assert_eq!(
+            TEdgeConfig::valid_keys_help_message_for_get().contains("device.id"),
+            true
+        );
+    }
+
+    #[test]
+    fn test_macro_help_message_for_set_correctly() {
+        assert_eq!(
+            TEdgeConfig::valid_keys_help_message_for_set().contains("device.id"),
+            false
+        );
     }
 
     #[test]
