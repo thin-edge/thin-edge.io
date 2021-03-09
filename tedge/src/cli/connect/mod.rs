@@ -1,13 +1,11 @@
-use crate::cli::connect::az::Azure;
-use crate::cli::connect::c8y::C8y;
+use crate::cli::connect::{c8y::C8y, az::Azure};
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
 use crate::utils::{paths, services};
 use std::path::Path;
 use structopt::StructOpt;
-use tempfile::NamedTempFile;
-use tempfile::PersistError;
+use tempfile::{NamedTempFile, PersistError};
 use url::Url;
 
 mod az;
@@ -32,7 +30,7 @@ pub enum TEdgeConnectOpt {
     /// Create connection to Azure
     ///
     /// The command will create config and start edge relay from the device to az instance
-    AZ,
+    Az,
 }
 
 impl BuildCommand for TEdgeConnectOpt {
@@ -45,7 +43,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 bridge_config: C8y::c8y_bridge_config(tedge_config)?,
                 check_connection: Box::new(C8y {}),
             },
-            TEdgeConnectOpt::AZ => BridgeCommand {
+            TEdgeConnectOpt::Az => BridgeCommand {
                 bridge_config: Azure::azure_bridge_config(tedge_config)?,
                 check_connection: Box::new(Azure {}),
             },
@@ -76,6 +74,11 @@ impl Command for BridgeCommand {
 
 impl BridgeCommand {
     fn check_connection(&self) -> Result<(), ConnectError> {
+        println!(
+            "Sending packets to check connection. This may take up to {} seconds.\n",
+            WAIT_FOR_CHECK_SECONDS
+        );
+
         Ok(self.check_connection.check_connection()?)
     }
 }
@@ -133,11 +136,6 @@ impl BridgeConfig {
         std::thread::sleep(std::time::Duration::from_secs(
             MOSQUITTO_RESTART_TIMEOUT_SECONDS,
         ));
-
-        println!(
-            "Sending packets to check connection. This may take up to {} seconds.\n",
-            WAIT_FOR_CHECK_SECONDS
-        );
 
         println!("Persisting mosquitto on reboot.\n");
         if let Err(err) = services::mosquitto_enable_daemon() {
