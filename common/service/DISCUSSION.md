@@ -13,7 +13,7 @@ We start from the simplest approaches towards the more high-level ones.
 
 ## Approach 1 - Providing a SignalStream
 
-(Branch feature/CIT-83/service-signal-stream)[1].
+[Branch feature/CIT-83/service-signal-stream][1].
 
 All we provide is a `SignalStream` and minimal structure for a `Service`.
 Within the `run` method of your service, you have to take care of handling
@@ -75,7 +75,7 @@ Cons:
 
 ## Approach 2 - Service Framework plus Interrupt Flag 
 
-(Branch feature/CIT-83/interruption-flag)[2].
+[Branch feature/CIT-83/interruption-flag][2].
 
 We provide more structure for your service. Signal handling is done by the
 framework. The framework gives you callbacks how to handle `reload`, how to
@@ -126,7 +126,7 @@ Cons:
 
 ## Approach 3 - Using Actors
 
-(Branch feature/CIT-83/using-actors)[3].
+[Branch feature/CIT-83/using-actors][3].
 
 Actors use (asynchronous) message passing to communicate with other actors.
 Actors process messages sequentially. A signal is just another message being
@@ -182,7 +182,7 @@ Cons:
 
 ## Approach 4 - Service as a Stream
 
-(Branch feature/CIT-83/service-as-a-stream-coherence)[4].
+[Branch feature/CIT-83/service-as-a-stream-coherence][4].
 
 This uses streams to represent a service. I/O is shifted towards the boundaries
 (source and sink). This is a functional approach where mapping and reducing the
