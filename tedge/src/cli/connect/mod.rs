@@ -75,8 +75,7 @@ impl Command for BridgeCommand {
 }
 
 impl BridgeCommand {
-    #[tokio::main]
-    async fn check_connection(&self) -> Result<(), ConnectError> {
+    fn check_connection(&self) -> Result<(), ConnectError> {
         Ok(self.check_connection.check_connection()?)
     }
 }
@@ -87,7 +86,7 @@ pub struct BridgeConfig {
     config_file: String,
     connection: String,
     address: String,
-    remote_username: String,
+    remote_username: Option<String>,
     bridge_cafile: String,
     remote_clientid: String,
     local_clientid: String,
@@ -96,7 +95,6 @@ pub struct BridgeConfig {
     try_private: bool,
     start_type: String,
     cleansession: bool,
-    bridge_insecure: bool,
     notifications: bool,
     bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
@@ -189,17 +187,17 @@ impl BridgeConfig {
         writeln!(writer, "### Bridge",)?;
         writeln!(writer, "connection {}", self.connection)?;
         //write azure specific configuration to file
-        if let "az" = self.cloud_name.as_str() {
-            writeln!(writer, "remote_username {}", self.remote_username)?;
-            writeln!(writer, "cleansession {}", self.cleansession)?;
-            writeln!(writer, "bridge_insecure {}", self.bridge_insecure)?;
-            writeln!(writer, "notifications {}", self.notifications)?;
-            writeln!(
-                writer,
-                "bridge_attempt_unsubscribe {}",
-                self.bridge_attempt_unsubscribe
-            )?;
+        match &self.remote_username {
+            Some(name) => writeln!(writer, "remote_username {}", name)?,
+            None => {}
         }
+        writeln!(writer, "cleansession {}", self.cleansession)?;
+        writeln!(writer, "notifications {}", self.notifications)?;
+        writeln!(
+            writer,
+            "bridge_attempt_unsubscribe {}",
+            self.bridge_attempt_unsubscribe
+        )?;
 
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;

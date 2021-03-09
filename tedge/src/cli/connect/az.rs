@@ -18,7 +18,7 @@ impl Azure {
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
             address: az_url,
-            remote_username: user_name,
+            remote_username: Some(user_name),
             bridge_cafile: get_config_value(&config, AZURE_ROOT_CERT_PATH)?,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
@@ -27,7 +27,6 @@ impl Azure {
             try_private: false,
             start_type: "automatic".into(),
             cleansession: true,
-            bridge_insecure: false,
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![

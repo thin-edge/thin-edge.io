@@ -16,7 +16,7 @@ impl C8y {
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
             address: get_config_value(&config, C8Y_URL)?,
-            remote_username: "".into(),
+            remote_username: None,
             bridge_cafile: get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
             remote_clientid: get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
@@ -25,7 +25,6 @@ impl C8y {
             try_private: false,
             start_type: "automatic".into(),
             cleansession: true,
-            bridge_insecure: false,
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![
