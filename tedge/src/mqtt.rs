@@ -207,69 +207,7 @@ pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
 #[cfg(test)]
 mod tests {
     use crate::mqtt::parse_qos;
-    use assert_cmd::prelude::*;
-    use assert_cmd::Command;
     use mqtt_client::QoS;
-    use predicates::prelude::*;
-
-    // These test cases fail because there is no mosquitto on localhost on GH hosted machine.
-    #[test]
-    #[ignore]
-    fn test_cli_pub_basic() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let assert = cmd
-            .args(&["mqtt", "pub", "topic", "message"])
-            .unwrap()
-            .assert();
-
-        assert.success().code(predicate::eq(0));
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_pub_qos() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let assert = cmd
-            .args(&["mqtt", "pub", "topic", "message"])
-            .args(&["--qos", "1"])
-            .unwrap()
-            .assert();
-
-        assert.success().code(predicate::eq(0));
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_sub_basic() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let err = cmd
-            .args(&["mqtt", "sub", "topic"])
-            .timeout(std::time::Duration::from_secs(1))
-            .unwrap_err();
-
-        let output = err.as_output().unwrap();
-        assert_eq!(None, output.status.code());
-
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_sub_qos() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let err = cmd
-            .args(&["mqtt", "sub", "topic"])
-            .args(&["--qos", "1"])
-            .timeout(std::time::Duration::from_secs(1))
-            .unwrap_err();
-
-        let output = err.as_output().unwrap();
-        assert_eq!(None, output.status.code());
-
-        Ok(())
-    }
 
     #[test]
     fn test_parse_qos() {

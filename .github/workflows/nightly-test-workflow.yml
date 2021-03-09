@@ -37,6 +37,7 @@ jobs:
 
         - name: purge
           run: sudo dpkg -P mosquitto tedge tedge_mapper
+          continue-on-error: true
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto
@@ -65,6 +66,7 @@ jobs:
 
         - name: purge
           run: sudo dpkg -P mosquitto tedge tedge_mapper
+          continue-on-error: true
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto

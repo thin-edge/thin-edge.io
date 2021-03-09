@@ -40,3 +40,7 @@ assert_cmd = "1.0.2"
 assert_matches = "1.4.0"
 pem = "0.8.2"
 predicates = "1.0.6"
+
+[features]
+integration-test = []
+mosquitto-available = []
