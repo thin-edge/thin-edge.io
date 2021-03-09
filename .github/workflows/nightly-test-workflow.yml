@@ -36,7 +36,7 @@ jobs:
             path: debian-package_unpack
 
         - name: purge
-          run: sudo dpkg -P mosquitto tedge c8y_mapper
+          run: sudo dpkg -P mosquitto tedge tedge_mapper
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto
@@ -64,7 +64,7 @@ jobs:
             path: debian-package_unpack
 
         - name: purge
-          run: sudo dpkg -P mosquitto tedge c8y_mapper
+          run: sudo dpkg -P mosquitto tedge tedge_mapper
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto

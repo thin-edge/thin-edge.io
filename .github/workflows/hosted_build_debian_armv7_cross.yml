@@ -66,12 +66,12 @@ jobs:
           command: deb
           args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
 
-      - name: build c8y_mapper debian package for target
+      - name: build tedge_mapper debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p c8y_mapper --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
 
       - name: upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
