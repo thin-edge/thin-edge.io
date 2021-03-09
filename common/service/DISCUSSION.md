@@ -2,7 +2,7 @@
 
 ## What is this document about?
 
-What are the options we have when it comes to handling signals in services. How
+What are the options we have when it comes to handling signals in services? How
 can (or should) we structure a service? This document comes up with four
 different approaches and describes their pros and cons.
 
@@ -87,7 +87,7 @@ really means, where is it okay to terminate the service loop, run a signal
 handler (e.g. `reload`) and then enter `run` again (loosing all the previously
 created context). Terminating `run` is required because it has to modify the
 state (it takes `&mut self`) and so does `reload`. We could get away with `&mut
-self` and as such with terminating `run` to run the signal handler but using
+self` and as such with terminating `run` to run the signal handler by using
 interior mutability and just pass in `&self`. But that just shifts complexity
 and doesn't really help with shutting down the service.
 
@@ -101,7 +101,7 @@ async fn run(&mut self, interruption: &mut Interruption) -> Result<(), Self::Err
             let mut line = String::with_capacity(1024);
             io.read_line(&mut line).await?;
 
-            // writes should not be aborted in the middle.
+            // writes should not be aborted half-through
             interruption.disable();
             io.write_all(line.as_bytes()).await?;
             io.flush().await?;
@@ -135,7 +135,8 @@ Cons:
 Actors use (asynchronous) message passing to communicate with other actors.
 Actors process messages sequentially. A signal is just another message being
 sent to an actor. This is a rather different model than using `async/await`
-mainly because actors never block, whereas `async/await` is all about blocking.
+mainly because actors never block whereas `async/await` is all about suspension
+points.
 
 This is how the message handler for the "incoming MQTT message" looks like:
 
@@ -165,9 +166,9 @@ Pros:
 
 * Much simpler to reason about. There is no interruption. Much less to shoot yourself into the foot. 
 
-* Everything is just message passing. "reload" is a message. "shutdown" is a message.
+* Everything is just message passing. "reload" is a message. "shutdown" is a message, "publish" is a message.
 
-* You define the behavior of an incoming message. "When this message comes in, do this."
+* You define the behavior of an incoming message: "When this message comes in, do this."
 
 * Some parts of the rumqttc library already operate in this model (or use channels).
 
@@ -177,10 +178,12 @@ Pros:
 
 Cons:
 
-* Actors require state to be encoded by a state-machine rather than using
-  sequential flow and the stack. You end up using callbacks here and there.
+* Actors are stackless, i.e. they require state to be encoded by a
+  state-machine rather than using sequential flow and the stack. You end up
+  using callbacks here and there.
 
-* Rather bigger changes requires.
+* It's a rather bigger change in architecture and requires some more intense
+  code changes.
 
 * Different model. Needs acceptance. 
 
@@ -203,11 +206,13 @@ loop {
     let mqtt_config = MqttConfig::new("test.mosquitto.org", 1883);
     let mqtt_client = MqttClient::connect("tedge-mapper", &mqtt_config).await?;
 
+    /// Setup the Stream sources
     let result = select_all(vec![
         signals()?.boxed(),
         errors(&mqtt_client)?.boxed(),
         messages(&mqtt_client, &mapper_config).await?.boxed(),
     ])
+    /// Stream sink
     .try_for_each(|output| process_output(output, &mqtt_client))
     .await;
 
@@ -229,7 +234,7 @@ loop {
 ```
 
 
-This defines the stream source:
+This sets up the stream source:
 
 ```rust
 let result = select_all(vec![
@@ -241,8 +246,9 @@ let result = select_all(vec![
 
 So we have signals, errors and messages as inputs.
 
-We don't have an intermediary map'n reduce. The sink is defined by
-`process_output`:
+We don't have an intermediary map'n reduce in this case.
+
+The sink is defined by `process_output`:
 
 ```rust
 async fn process_output(output: Output, mqtt_client: &MqttClient) -> MapperResult<()> {
@@ -267,7 +273,7 @@ Pros:
 
 * Stateless, functional approach. Mapping over streams is purely functional.
 
-* Testable. Pass in a stream and compare against the stream that is produced. 
+* Testable. Pass in a stream and compare against the stream that it produces.
 
 * Reusability.
 
@@ -278,9 +284,10 @@ Cons:
 * In order to support graceful reload or shutdown, the stream sink
   might need to communicate with the stream source.
 
-* As we are merging three streams into one in our mapper (errors, signals and messages),
-  we have to take great care that each of the items produced by the individual streams
-  might be aborted at any time when we terminate the stream.
+* As we are merging three streams into one in our mapper (errors, signals and
+  messages), we have to take great care that each of the items produced by the
+  individual streams might be aborted at any time in case we terminate the
+  stream.
 
 * Exploited concurrency?
 
