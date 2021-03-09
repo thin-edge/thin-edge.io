@@ -1,0 +1,154 @@
+
+name: build-workflow
+
+on:
+  # Only run, when a pull request is merged.
+  # Trick: A merged pull request always results in a push.
+  # That is also triggered in the users repo when enabled
+  push:
+    branches: [ main, continuous_integration ]
+  workflow_dispatch:
+    branches: [ main, continuous_integration ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build_amd64:
+
+    name: Build tedge and mapper Debian packages for amd64
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: Build tedge debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge
+
+      - name: Build tedge_mapper debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper
+
+      - name: Upload artifacts as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-packages-amd64
+          path: target/debian/*.deb
+
+  build_armv7:
+
+    name: Build tedge and mapper Debian for armv7
+    runs-on: Ubuntu-20.04
+    env:
+      TARGET: armv7-unknown-linux-gnueabihf
+
+    steps:
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ env.TARGET}}
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: install cargo-strip
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-strip
+
+      - name: build cross release for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ env.TARGET }}
+
+      - name: strip binaries (cargo deb fails to strip)
+        # TODO This does not seem to work right
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: strip
+
+      - name: build tedge debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build tedge_mapper debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build examples
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --examples --target=${{ env.TARGET }}
+
+      - name: upload debian packages as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-packages-armhf
+          path: target/${{ env.TARGET }}/debian/*.deb
+
+      - name: upload examples as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
