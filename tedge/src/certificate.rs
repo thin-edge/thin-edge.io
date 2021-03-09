@@ -1,13 +1,12 @@
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
-use crate::utils::{config, paths, paths::PathsError};
+use crate::utils::{paths, paths::PathsError};
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
-use reqwest::{blocking::RequestBuilder, StatusCode, Url};
-use rpassword;
+use reqwest::{StatusCode, Url};
 use std::{convert::TryFrom, io::prelude::*};
 use std::{
     fs::{File, OpenOptions},
@@ -586,15 +585,6 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
     Certificate::from_params(params)
 }
 
-fn make_upload_certificate_url(url: &str, tenant_id: &str) -> Result<url::Url, CertError> {
-    let url_str = format!(
-        "https://{}/tenant/tenants/{}/trusted-certificates",
-        url, tenant_id
-    );
-
-    Ok(Url::parse(&url_str)?)
-}
-
 fn get_tenant_id_blocking(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -610,6 +600,15 @@ fn get_tenant_id_blocking(
     let body = res.json::<CumulocityResponse>()?;
 
     Ok(body.name)
+}
+
+fn make_upload_certificate_url(url: &str, tenant_id: &str) -> Result<url::Url, CertError> {
+    let url_str = format!(
+        "https://{}/tenant/tenants/{}/trusted-certificates",
+        url, tenant_id
+    );
+
+    Ok(Url::parse(&url_str)?)
 }
 
 #[cfg(test)]
@@ -694,6 +693,107 @@ mod tests {
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_tenant_id_blocking_malformed_url_panics() {
+        let client = reqwest::blocking::Client::new();
+
+        let _ = get_tenant_id_blocking(&client, "test.test", "", "").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_tenant_id_blocking_wrong_credentials_panics() {
+        let client = reqwest::blocking::Client::new();
+
+        let request_url = format!("{}/test", mockito::server_url());
+
+        let auth_header_field = "authorization";
+        let auth_header_value = "Basic dGVzdDpmYWlsZWR0ZXN0"; // Base64 encoded test:failedtest
+
+        let response_body = r#"{"name":"test"}"#;
+        let expected_status = 200;
+
+        let expected = "test";
+
+        let _ = mockito::mock("GET", "/test")
+            .match_header(auth_header_field, auth_header_value)
+            .with_body(response_body)
+            .with_status(expected_status)
+            .create();
+
+        let res = get_tenant_id_blocking(&client, &request_url, "test", "test").unwrap();
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn get_tenant_id_blocking_returns_correct_response() {
+        let client = reqwest::blocking::Client::new();
+
+        let request_url = format!("{}/test", mockito::server_url());
+
+        let auth_header_field = "authorization";
+        let auth_header_value = "Basic dGVzdDp0ZXN0"; // Base64 encoded test:test
+
+        let response_body = r#"{"name":"test"}"#;
+        let expected_status = 200;
+
+        let expected = "test";
+
+        let _serv = mockito::mock("GET", "/test")
+            .match_header(auth_header_field, auth_header_value)
+            .with_body(response_body)
+            .with_status(expected_status)
+            .create();
+
+        let res = get_tenant_id_blocking(&client, &request_url, "test", "test").unwrap();
+
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_tenant_id_blocking_response_no_name_field() {
+        let client = reqwest::blocking::Client::new();
+
+        let request_url = format!("{}/test", mockito::server_url());
+
+        let auth_header_field = "authorization";
+        let auth_header_value = "Basic dGVzdDp0ZXN0"; // Base64 encoded test:test
+
+        let response_body = r#"{"test":"test"}"#;
+        let expected_status = 200;
+
+        let _ = mockito::mock("GET", "/test")
+            .match_header(auth_header_field, auth_header_value)
+            .with_body(response_body)
+            .with_status(expected_status)
+            .create();
+
+        let _ = get_tenant_id_blocking(&client, &request_url, "test", "test").unwrap();
+    }
+
+    #[test]
+    fn make_upload_certificate_url_correct_parameters_return_url() {
+        let url = "test";
+        let tenant_id = "test";
+        let expected =
+            reqwest::Url::parse("https://test/tenant/tenants/test/trusted-certificates").unwrap();
+
+        let result = make_upload_certificate_url(url, tenant_id).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn make_upload_certificate_url_incorrect_url_returns_error() {
+        let url = "@";
+        let tenant_id = "test";
+        let _expected = CertError::UrlParseError(url::ParseError::EmptyHost);
+
+        let result = make_upload_certificate_url(url, tenant_id).unwrap_err();
+        assert_matches!(result, _expected);
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> String {
