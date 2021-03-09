@@ -107,8 +107,7 @@ trait CheckConnection {
 }
 
 impl BridgeConfig {
-    #[tokio::main]
-    async fn new_bridge(&self) -> Result<(), ConnectError> {
+    fn new_bridge(&self) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
