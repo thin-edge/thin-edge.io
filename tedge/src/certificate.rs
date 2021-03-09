@@ -6,7 +6,7 @@ use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
-use reqwest::{StatusCode, Url};
+use reqwest::{blocking::RequestBuilder, StatusCode, Url};
 use rpassword;
 use std::{convert::TryFrom, io::prelude::*};
 use std::{
@@ -114,8 +114,6 @@ struct CumulocityResponse {
 #[serde(rename_all = "camelCase")]
 struct UploadCertBody {
     name: String,
-    // certInPemFormat: String,
-    // autoRegistrationEnabled: bool,
     cert_in_pem_format: String,
     auto_registration_enabled: bool,
     status: String,
@@ -143,7 +141,6 @@ impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
         let client = reqwest::blocking::Client::new();
 
-        // let password = "MjkMU3BruwvE8S3";
         let password = rpassword::read_password_from_tty(Some("Enter password: \n"))?;
 
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
@@ -605,7 +602,6 @@ fn get_tenant_id_blocking(
     password: &str,
 ) -> Result<String, CertError> {
     let res = client
-        // .get("https://lukas-makr11st.latest.stage.c8y.io/tenant/currentTenant")
         .get(url)
         .basic_auth(username, Some(password))
         .send()?
