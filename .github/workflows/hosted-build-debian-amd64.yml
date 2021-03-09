@@ -36,12 +36,12 @@ jobs:
           command: deb
           args: -p tedge
 
-      - name: Build c8y_mapper debian package
+      - name: Build tedge_mapper debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p c8y_mapper
+          args: -p tedge_mapper
 
       - name: List target folder
         run: ls -lah target/debian/
@@ -63,4 +63,4 @@ jobs:
         uses: kittaakos/upload-artifact-as-is@v0
         # https://github.com/marketplace/actions/upload-a-build-artifact-as-is
         with:
-          path: 'target/debian/c8y_mapper_0.1.0_amd64.deb'
+          path: 'target/debian/tedge_mapper_0.1.0_amd64.deb'

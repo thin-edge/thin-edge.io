@@ -14,5 +14,6 @@ thiserror = "1.0.23"
 pretty_assertions = "0.6.1"
 proptest = "0.10.1"
 
-
-
+[features]
+# use: #[cfg(feature="integration-test")]
+integration-test = []

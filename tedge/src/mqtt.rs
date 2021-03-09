@@ -2,13 +2,15 @@ use crate::command::{BuildCommand, Command};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
+use std::process;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::{io::AsyncWriteExt, select};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_ID: &str = "tedge-cli";
+const PUB_CLIENT_PREFIX: &str = "tedge-pub";
+const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -97,8 +99,9 @@ impl Command for MqttCmd {
 
 #[tokio::main]
 async fn publish(topic: &str, message: &str, qos: QoS) -> Result<(), MqttError> {
+    let client_id = format!("{}-{}", PUB_CLIENT_PREFIX, process::id());
     let mut mqtt = Config::new(DEFAULT_HOST, DEFAULT_PORT)
-        .connect(DEFAULT_ID)
+        .connect(client_id.as_str())
         .await?;
 
     let tpc = Topic::new(topic)?;
@@ -142,8 +145,9 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
 
 #[tokio::main]
 async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
-    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT);
-    let mqtt = Client::connect(DEFAULT_ID, &config).await?;
+    let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
+    let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
+    let mqtt = Client::connect(client_id.as_str(), &config).await?;
     let filter = TopicFilter::new(topic)?.qos(qos);
 
     let mut errors = mqtt.subscribe_errors();
@@ -203,69 +207,7 @@ pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
 #[cfg(test)]
 mod tests {
     use crate::mqtt::parse_qos;
-    use assert_cmd::prelude::*;
-    use assert_cmd::Command;
     use mqtt_client::QoS;
-    use predicates::prelude::*;
-
-    // These test cases fail because there is no mosquitto on localhost on GH hosted machine.
-    #[test]
-    #[ignore]
-    fn test_cli_pub_basic() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let assert = cmd
-            .args(&["mqtt", "pub", "topic", "message"])
-            .unwrap()
-            .assert();
-
-        assert.success().code(predicate::eq(0));
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_pub_qos() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let assert = cmd
-            .args(&["mqtt", "pub", "topic", "message"])
-            .args(&["--qos", "1"])
-            .unwrap()
-            .assert();
-
-        assert.success().code(predicate::eq(0));
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_sub_basic() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let err = cmd
-            .args(&["mqtt", "sub", "topic"])
-            .timeout(std::time::Duration::from_secs(1))
-            .unwrap_err();
-
-        let output = err.as_output().unwrap();
-        assert_eq!(None, output.status.code());
-
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_cli_sub_qos() -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::cargo_bin("tedge")?;
-        let err = cmd
-            .args(&["mqtt", "sub", "topic"])
-            .args(&["--qos", "1"])
-            .timeout(std::time::Duration::from_secs(1))
-            .unwrap_err();
-
-        let output = err.as_output().unwrap();
-        assert_eq!(None, output.status.code());
-
-        Ok(())
-    }
 
     #[test]
     fn test_parse_qos() {

@@ -22,7 +22,7 @@ log = "0.4.14"
 mqtt_client = {version = "0.1.0", path = "../common/mqtt_client" }
 rand = "0.8.3"
 rcgen = { version = "0.8.9", features = ["pem"] }
-reqwest = { version = "0.11.1", features = ["blocking", "json", "rustls", "stream"] }
+reqwest = { version = "0.11.1", features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0.1"
 rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
 serde = { version = "1.0.123", features = ["derive"] }
@@ -43,3 +43,7 @@ assert_matches = "1.4.0"
 mockito = "0.29.0"
 pem = "0.8.2"
 predicates = "1.0.6"
+
+[features]
+integration-test = []
+mosquitto-available = []
