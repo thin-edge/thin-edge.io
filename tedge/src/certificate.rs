@@ -1,5 +1,7 @@
 use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig, DEVICE_CERT_PATH, DEVICE_KEY_PATH};
+use crate::config::{
+    ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
+};
 use crate::utils::{paths, paths::PathsError};
 use chrono::offset::Utc;
 use chrono::Duration;
@@ -76,18 +78,18 @@ impl BuildCommand for UploadCertOpt {
         match self {
             UploadCertOpt::C8y { username } => {
                 let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from("device.id"),
+                    key: String::from(DEVICE_ID),
                 })?;
 
                 let path = PathBuf::try_from(config.device.cert_path.ok_or_else(|| {
                     ConfigError::ConfigNotSet {
-                        key: String::from("device.cert_path"),
+                        key: String::from(DEVICE_CERT_PATH),
                     }
                 })?)
-                .unwrap_or_else(|_| PathBuf::new()); // This is Infallible that means it can never happen.
+                .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it can never happen.
 
                 let url = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from("c8y.url"),
+                    key: String::from(C8Y_URL),
                 })?;
 
                 Ok((UploadCertCmd {
@@ -107,7 +109,6 @@ struct CumulocityResponse {
     name: String,
 }
 
-// #[allow(non_snake_case)]
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct UploadCertBody {
@@ -547,9 +548,6 @@ fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
     Ok(pem)
 }
 
-// This returns a String and it doesn't seem as optimal option,
-// should this function rather take `&mut String` and then populate it in place?
-// fn read_cert_to_string(path: &PathBuf, target: &mut String) -> Result<(), CertError>??
 fn read_cert_to_string(path: &PathBuf) -> Result<String, CertError> {
     let mut file = std::fs::File::open(path)?;
     let mut content = String::new();
@@ -699,15 +697,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn get_tenant_id_blocking_malformed_url_panics() {
+    fn get_tenant_id_blocking_should_panic_given_malformed_url() {
         let client = reqwest::blocking::Client::new();
 
-        let _ = get_tenant_id_blocking(&client, "test.test", "", "").unwrap();
+        let res = get_tenant_id_blocking(&client, "test.test", "", "");
+        assert!(res.is_err());
     }
 
     #[test]
-    #[should_panic]
     fn get_tenant_id_blocking_wrong_credentials_panics() {
         let client = reqwest::blocking::Client::new();
 
@@ -719,16 +716,14 @@ mod tests {
         let response_body = r#"{"name":"test"}"#;
         let expected_status = 200;
 
-        let expected = "test";
-
-        let _ = mockito::mock("GET", "/test")
+        let _serv = mockito::mock("GET", "/test")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
             .create();
 
-        let res = get_tenant_id_blocking(&client, &request_url, "test", "test").unwrap();
-        assert_eq!(res, expected);
+        let res = get_tenant_id_blocking(&client, &request_url, "test", "test");
+        assert!(res.is_err());
     }
 
     #[test]
@@ -757,7 +752,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn get_tenant_id_blocking_response_no_name_field_in_response() {
         let client = reqwest::blocking::Client::new();
 
@@ -769,13 +763,14 @@ mod tests {
         let response_body = r#"{"test":"test"}"#;
         let expected_status = 200;
 
-        let _ = mockito::mock("GET", "/test")
+        let _serv = mockito::mock("GET", "/test")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
             .create();
 
-        let _ = get_tenant_id_blocking(&client, &request_url, "test", "test").unwrap();
+        let res = get_tenant_id_blocking(&client, &request_url, "test", "test");
+        assert!(res.is_err());
     }
 
     #[test]
