@@ -158,9 +158,9 @@ impl UploadCertCmd {
         let post_url = make_upload_certificate_url(&self.url, tenant_id)?;
 
         let post_body = UploadCertBody {
-            name: self.device_id.clone(),
-            cert_in_pem_format: read_cert_to_string(&self.path)?,
             auto_registration_enabled: true,
+            cert_in_pem_format: read_cert_to_string(&self.path)?,
+            name: self.device_id.clone(),
             status: "ENABLED".into(),
         };
 
@@ -548,7 +548,7 @@ fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
     Ok(pem)
 }
 
-fn read_cert_to_string(path: &PathBuf) -> Result<String, CertError> {
+fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
     let mut file = std::fs::File::open(path)?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
@@ -785,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    fn make_upload_certificate_url_incorrect_url_returns_error() {
+    fn make_upload_certificate_returns_error_given_incorrect_url() {
         let url = "@";
         let tenant_id = "test";
         let _expected = CertError::UrlParseError(url::ParseError::EmptyHost);
