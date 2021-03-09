@@ -9,9 +9,10 @@ use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
 use reqwest::{StatusCode, Url};
-use std::{convert::TryFrom, io::prelude::*};
 use std::{
+    convert::TryFrom,
     fs::{File, OpenOptions},
+    io::prelude::*,
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
