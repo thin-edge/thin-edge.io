@@ -75,7 +75,6 @@ impl BuildCommand for UploadCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             UploadCertOpt::C8y { username } => {
-                // let device_id: String = "alpha".into();
                 let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
                     key: String::from("device.id"),
                 })?;
@@ -85,7 +84,7 @@ impl BuildCommand for UploadCertOpt {
                         key: String::from("device.cert_path"),
                     }
                 })?)
-                .unwrap(); // This is Infallible that means it can never happen.
+                .unwrap_or_else(|_| PathBuf::new()); // This is Infallible that means it can never happen.
 
                 let url = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
                     key: String::from("c8y.url"),
@@ -131,8 +130,7 @@ impl Command for UploadCertCmd {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let () = self.upload_certificate()?;
-        Ok(())
+        Ok(self.upload_certificate()?)
     }
 }
 
@@ -142,8 +140,10 @@ impl UploadCertCmd {
 
         let password = rpassword::read_password_from_tty(Some("Enter password: \n"))?;
 
+        // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
         // https://<tenant_domain>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
+        // and therefore we need to get tenant_id.
         let tenant_id = get_tenant_id_blocking(&client, &self.url, &self.username, &password)?;
         Ok(self.post_certificate(&client, &tenant_id, &password)?)
     }
@@ -256,10 +256,10 @@ pub enum CertError {
     X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
 
     #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
+    ReqwestError(#[from] reqwest::Error),
 
     #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
+    UrlParseError(#[from] url::ParseError),
 }
 
 impl CertError {
@@ -547,6 +547,9 @@ fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
     Ok(pem)
 }
 
+// This returns a String and it doesn't seem as optimal option,
+// should this function rather take `&mut String` and then populate it in place?
+// fn read_cert_to_string(path: &PathBuf, target: &mut String) -> Result<(), CertError>??
 fn read_cert_to_string(path: &PathBuf) -> Result<String, CertError> {
     let mut file = std::fs::File::open(path)?;
     let mut content = String::new();
@@ -602,7 +605,7 @@ fn get_tenant_id_blocking(
     Ok(body.name)
 }
 
-fn make_upload_certificate_url(url: &str, tenant_id: &str) -> Result<url::Url, CertError> {
+fn make_upload_certificate_url(url: &str, tenant_id: &str) -> Result<Url, CertError> {
     let url_str = format!(
         "https://{}/tenant/tenants/{}/trusted-certificates",
         url, tenant_id
@@ -755,7 +758,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn get_tenant_id_blocking_response_no_name_field() {
+    fn get_tenant_id_blocking_response_no_name_field_in_response() {
         let client = reqwest::blocking::Client::new();
 
         let request_url = format!("{}/test", mockito::server_url());
