@@ -79,13 +79,17 @@ Cons:
 
 We provide more structure for your service. Signal handling is done by the
 framework. The framework gives you callbacks how to handle `reload`, how to
-`shutdown` and how to run your servive loop (`run`) and possibly more.
+`shutdown` and how to run your service loop (`run`) and possibly more.
 
 The `run` method gets passed an `Interruption` struct that you can use to tell
 the framework where it is okay to interrupt and where not. Interruption here
 really means, where is it okay to terminate the service loop, run a signal
 handler (e.g. `reload`) and then enter `run` again (loosing all the previously
-created context).
+created context). Terminating `run` is required because it has to modify the
+state (it takes `&mut self`) and so does `reload`. We could get away with `&mut
+self` and as such with terminating `run` to run the signal handler but using
+interior mutability and just pass in `&self`. But that just shifts complexity
+and doesn't really help with shutting down the service.
 
 With this approach `run` may look like this:
 
