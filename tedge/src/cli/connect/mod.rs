@@ -1,4 +1,4 @@
-use crate::cli::connect::{c8y::C8y, az::Azure};
+use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
@@ -186,16 +186,19 @@ impl BridgeConfig {
         writeln!(writer, "connection {}", self.connection)?;
         //write azure specific configuration to file
         match &self.remote_username {
-            Some(name) => writeln!(writer, "remote_username {}", name)?,
+            Some(name) => {
+                writeln!(writer, "remote_username {}", name)?;
+                writeln!(writer, "cleansession {}", self.cleansession)?;
+                writeln!(writer, "notifications {}", self.notifications)?;
+                writeln!(
+                    writer,
+                    "bridge_attempt_unsubscribe {}",
+                    self.bridge_attempt_unsubscribe
+                )?;
+            }
+
             None => {}
         }
-        writeln!(writer, "cleansession {}", self.cleansession)?;
-        writeln!(writer, "notifications {}", self.notifications)?;
-        writeln!(
-            writer,
-            "bridge_attempt_unsubscribe {}",
-            self.bridge_attempt_unsubscribe
-        )?;
 
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
@@ -237,12 +240,6 @@ impl BridgeConfig {
             &self.config_file,
         ])?)
     }
-}
-
-fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConfigError> {
-    config
-        .get_config_value(key)?
-        .ok_or_else(|| ConfigError::ConfigNotSet { key: key.into() })
 }
 
 #[derive(thiserror::Error, Debug)]

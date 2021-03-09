@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::ConfigError;
+use crate::utils::config;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -15,13 +16,13 @@ impl C8y {
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
-            address: get_config_value(&config, C8Y_URL)?,
+            address: config::get_config_value(&config, C8Y_URL)?,
             remote_username: None,
-            bridge_cafile: get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
-            remote_clientid: get_config_value(&config, DEVICE_ID)?,
+            bridge_cafile: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
+            remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
-            bridge_certfile: get_config_value(&config, DEVICE_CERT_PATH)?,
-            bridge_keyfile: get_config_value(&config, DEVICE_KEY_PATH)?,
+            bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
+            bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
             try_private: false,
             start_type: "automatic".into(),
             cleansession: true,
