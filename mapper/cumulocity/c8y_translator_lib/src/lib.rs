@@ -384,7 +384,7 @@ impl ThinEdgeJsonError {
 fn input_prefix(input: &str, len: usize) -> String {
     let input = input.split_whitespace().collect::<String>();
     if input.len() < len {
-        input.to_string()
+        input
     } else {
         input[0..len].to_string()
     }

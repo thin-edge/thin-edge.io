@@ -1,8 +1,11 @@
-use crate::command::{BuildCommand, Command};
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
 };
 use crate::utils::{paths, paths::PathsError};
+use crate::{
+    command::{BuildCommand, Command},
+    utils,
+};
 use chrono::offset::Utc;
 use chrono::Duration;
 use rcgen::Certificate;
@@ -70,6 +73,7 @@ pub enum UploadCertOpt {
     /// The command will upload root certificate to Cumulocity.
     C8y {
         #[structopt(long = "user")]
+        /// Provided username should be cumulocity user with tenant management permissions.
         username: String,
     },
 }
@@ -89,9 +93,11 @@ impl BuildCommand for UploadCertOpt {
                 })?)
                 .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it can never happen.
 
-                let host = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
+                let host_config = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
                     key: String::from(C8Y_URL),
                 })?;
+
+                let host = get_host_from_url(&host_config)?.to_owned();
 
                 Ok((UploadCertCmd {
                     device_id,
@@ -261,6 +267,15 @@ pub enum CertError {
 
     #[error("X509 file format error: {0}")]
     X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
+
+    #[error(
+        r#"Certificate read error at: {1:?}
+        Run `tedge cert create` to create certificate ."#
+    )]
+    CertificateReadFailed(#[source] std::io::Error, String),
+
+    #[error(transparent)]
+    PathsError(#[from] PathsError),
 
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
@@ -558,7 +573,11 @@ fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
 }
 
 fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
-    let mut file = std::fs::File::open(path)?;
+    let path = path.as_ref();
+    let path = utils::paths::pathbuf_to_string(path.to_owned())?;
+
+    let mut file =
+        std::fs::File::open(&path).map_err(|err| CertError::CertificateReadFailed(err, path))?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
 
@@ -593,6 +612,13 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
     Certificate::from_params(params)
+}
+
+fn get_host_from_url(c8y_url: &str) -> Result<&str, ConfigError> {
+    let mut split_url = c8y_url.splitn(2, ':');
+    split_url
+        .next()
+        .ok_or_else(|| ConfigError::InvalidUrl(c8y_url.to_owned()))
 }
 
 fn get_tenant_id_blocking(
