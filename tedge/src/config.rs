@@ -67,11 +67,23 @@ impl std::str::FromStr for WritableConfigKey {
                 mode: ConfigKeyMode::ReadWrite,
                 ..
             }) => Ok(WritableConfigKey(key.into())),
-            _ => Err(format!(
-                "Invalid key `{}'. Valid keys are: [{}].",
-                key,
-                TEdgeConfig::valid_writable_keys().join(", ")
-            )),
+            _ => {
+                if key == DEVICE_ID {
+                    Err(format!(
+                        "Invalid key `{}'. Valid keys are: [{}].\n\
+                Setting the device id is only allowed with tedge cert create. \
+                To set 'device.id', use `tedge cert create --device-id <id>`.",
+                        key,
+                        TEdgeConfig::valid_writable_keys().join(", ")
+                    ))
+                } else {
+                    Err(format!(
+                        "Invalid key `{}'. Valid keys are: [{}].",
+                        key,
+                        TEdgeConfig::valid_writable_keys().join(", ")
+                    ))
+                }
+            }
         }
     }
 }
