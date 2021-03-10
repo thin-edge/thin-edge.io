@@ -202,10 +202,10 @@ impl BridgeConfig {
         writeln!(writer, "cleansession {}", self.cleansession)?;
         writeln!(writer, "notifications {}", self.notifications)?;
         writeln!(
-                    writer,
-                    "bridge_attempt_unsubscribe {}",
-                    self.bridge_attempt_unsubscribe
-                )?;
+            writer,
+            "bridge_attempt_unsubscribe {}",
+            self.bridge_attempt_unsubscribe
+        )?;
 
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {
