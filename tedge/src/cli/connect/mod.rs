@@ -113,7 +113,7 @@ impl BridgeConfig {
         let _ = services::all_services_available()?;
 
         println!("Checking if configuration for requested bridge already exists.\n");
-        let _ = self.config_exists()?;
+        let _ = self.bridge_config_exists()?;
 
         println!("Validate the bridge certificates.\n");
         self.validate()?;
@@ -151,13 +151,13 @@ impl BridgeConfig {
     // To preserve error chain and not discard other errors we need to ignore error here
     // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
-        let path = self.get_config_file_path()?;
+        let path = self.get_bridge_config_file_path()?;
         let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
         Ok(())
     }
 
-    fn config_exists(&self) -> Result<(), ConnectError> {
-        let path = self.get_config_file_path()?;
+    fn bridge_config_exists(&self) -> Result<(), ConnectError> {
+        let path = self.get_bridge_config_file_path()?;
         if Path::new(&path).exists() {
             return Err(ConnectError::ConfigurationExists {
                 cloud: self.cloud_name.to_string(),
@@ -175,7 +175,7 @@ impl BridgeConfig {
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
 
-        let config_path = self.get_config_file_path()?;
+        let config_path = self.get_bridge_config_file_path()?;
         let _ = paths::persist_tempfile(temp_file, &config_path)?;
 
         Ok(())
@@ -233,7 +233,7 @@ impl BridgeConfig {
         Ok(())
     }
 
-    fn get_config_file_path(&self) -> Result<String, ConnectError> {
+    fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
         Ok(paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
