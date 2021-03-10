@@ -14,9 +14,10 @@
 ## How-to guides
 - [How-to Guides](howto-guides/001_overview.md)
     - [Installation](howto-guides/002_installation.md)
-    - [How-to configure thin-edge](./howto-guides/config.md)
-    - [How-to create a test certificate](./howto-guides/test-cert-create.md)
-    - [How-to connect a cloud end-point](./howto-guides/test-cert-connect.md)
+    - [How to configure thin-edge.io](howto-guides/006_config.md)
+    - [How to create a test certificate](./howto-guides/003_registration.md)
+    - [How to connect a cloud end-point](./howto-guides/004_connect.md)
+    - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
 
 ## Reference guides
 - [Reference Guides](references/001_overview.md)
