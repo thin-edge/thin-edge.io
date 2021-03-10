@@ -173,18 +173,18 @@ impl UploadCertCmd {
 
         match res.status() {
             StatusCode::OK | StatusCode::CREATED => {
-                println!("Upload OK");
+                println!("Certificate uploaded successfully.");
                 Ok(())
             }
 
             StatusCode::CONFLICT => {
-                println!("Certificate already exists.");
+                println!("Certificate already exists in the cloud.");
                 Ok(())
             }
 
-            code => {
-                println!("Something wrong: {}", code);
-                Err(CertError::EmptyName)
+            status_code => {
+                println!("Something went wrong: {}", status_code);
+                Err(CertError::StatusCode(status_code))
             }
         }
     }
@@ -259,6 +259,9 @@ pub enum CertError {
 
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
+
+    #[error("Request returned with code: {0}")]
+    StatusCode(StatusCode),
 
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
@@ -593,14 +596,15 @@ fn get_tenant_id_blocking(
     username: &str,
     password: &str,
 ) -> Result<String, CertError> {
+    let query_url = format!("https://{}/tenant/currentTenant", url);
+
     let res = client
-        .get(url)
+        .get(&query_url)
         .basic_auth(username, Some(password))
         .send()?
         .error_for_status()?;
 
     let body = res.json::<CumulocityResponse>()?;
-
     Ok(body.name)
 }
 
@@ -741,7 +745,7 @@ mod tests {
 
         let expected = "test";
 
-        let _serv = mockito::mock("GET", "/test")
+        let _serv = mockito::mock("GET", "/test/tenant/currentTenant")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
