@@ -12,21 +12,14 @@ depends = "mosquitto"
 
 [dependencies]
 anyhow = "1.0.38"
-async-log = "2.0.0"
 chrono = "0.4.19"
-env_logger = "0.8.2"
 futures = "0.3.12"
-futures-timer = "3.0.2"
-json = "0.12.4"
-log = "0.4.14"
 mqtt_client = {version = "0.1.0", path = "../common/mqtt_client" }
-rand = "0.8.3"
 rcgen = { version = "0.8.9", features = ["pem"] }
 reqwest = { version = "0.11.1", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0.1"
 rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
 serde = { version = "1.0.123", features = ["derive"] }
-serde_str = "0.1.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
 thiserror = "1.0.23"
