@@ -21,7 +21,7 @@ say [Rust](tutorials/my-thin-edge-rust.md) or [Python](tutorials/my-thin-edge-py
 
 ## Grow your skills
 
-* Explore the [tutorials and use-cases](tutorials/001_overview.md).
-* Understand the [architecture](architecture/001_overview.md).
-* Use the [how-to guides](howto-guides/001_overview.md) on a daily basis.
-* Refer to the [reference guides](references/001_overview.md) for any in-depth details.
+* Explore the [tutorials and use-cases](tutorials/).
+* Understand the [architecture](architecture/).
+* Use the [how-to guides](howto-guides/) on a daily basis.
+* Refer to the [reference guides](references/) for any in-depth details.
