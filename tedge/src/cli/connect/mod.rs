@@ -188,18 +188,9 @@ impl BridgeConfig {
         match &self.remote_username {
             Some(name) => {
                 writeln!(writer, "remote_username {}", name)?;
-                writeln!(writer, "cleansession {}", self.cleansession)?;
-                writeln!(writer, "notifications {}", self.notifications)?;
-                writeln!(
-                    writer,
-                    "bridge_attempt_unsubscribe {}",
-                    self.bridge_attempt_unsubscribe
-                )?;
             }
-
             None => {}
         }
-
         writeln!(writer, "address {}", self.address)?;
         writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
@@ -208,6 +199,14 @@ impl BridgeConfig {
         writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
+        writeln!(writer, "cleansession {}", self.cleansession)?;
+        writeln!(writer, "notifications {}", self.notifications)?;
+        writeln!(
+                    writer,
+                    "bridge_attempt_unsubscribe {}",
+                    self.bridge_attempt_unsubscribe
+                )?;
+
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
