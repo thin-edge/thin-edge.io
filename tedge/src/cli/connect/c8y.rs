@@ -69,7 +69,7 @@ impl C8y {
     async fn check_connection_async(&self) -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
-        const CLIENT_ID: &str = "check_connection";
+        const CLIENT_ID: &str = "check_connection_c8y";
 
         let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
         let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
@@ -102,7 +102,7 @@ impl C8y {
             match fut.await {
                 Ok(Ok(true)) => {
                     println!(
-                        " ... Received message.\nThe device is already registered in Cumulocity.\n",
+                        "Received expected response message, Connection check is successfull\n",
                     );
                     return Ok(());
                 }
@@ -116,8 +116,9 @@ impl C8y {
             }
         }
 
-        println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
-        Ok(())
+        return Err(ConnectError::BridgeConnectionFailed {
+            cloud: String::from("Cumulocity"),
+        });
     }
 }
 

@@ -78,7 +78,6 @@ impl BridgeCommand {
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
-
         Ok(self.check_connection.check_connection()?)
     }
 }
@@ -243,6 +242,9 @@ impl BridgeConfig {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
+    #[error("Bridge has been configured, but {cloud} connection check failed.")]
+    BridgeConnectionFailed { cloud: String },
+
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
