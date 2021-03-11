@@ -9,9 +9,9 @@ pub struct Azure {}
 impl Azure {
     pub fn azure_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let az_url = config::get_config_value(&config, AZURE_URL)?;
+        let address = format!("{}:{}", az_url, MQTT_TLS_PORT);
         let clientid = config::get_config_value(&config, DEVICE_ID)?;
-        let iothub_name: Vec<&str> = az_url.split(':').collect();
-        let user_name = iothub_name[0].to_string() + "/" + &clientid + "/?api-version=2018-06-30";
+        let user_name = format!("{}/{}/?api-version=2018-06-30", az_url, &clientid);
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
@@ -19,7 +19,7 @@ impl Azure {
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
-            address: az_url,
+            address,
             remote_username: Some(user_name),
             bridge_cafile: config::get_config_value(&config, AZURE_ROOT_CERT_PATH)?,
             remote_clientid: clientid,

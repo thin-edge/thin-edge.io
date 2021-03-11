@@ -5,6 +5,9 @@ use super::paths;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServicesError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
     #[error("Couldn't set mosquitto server to start on boot.")]
     MosquittoCantPersist,
 
@@ -20,9 +23,6 @@ pub enum ServicesError {
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
 
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-
     #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
     SudoNotFound(#[from] which::Error),
 
@@ -31,8 +31,11 @@ pub enum ServicesError {
     )]
     SystemdNotAvailable,
 
+    #[error("Unexpected value for exit status.")]
+    UnexpectedExitStatus,
+
     #[error("Returned error is not recognised: {code:?}.")]
-    UnknownReturnCode { code: Option<i32> },
+    UnknownReturnCode { code: i32 },
 }
 
 type ExitCode = i32;
@@ -81,7 +84,10 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnknownReturnCode { code })
+            }
         },
         Err(err) => Err(err),
     }
@@ -100,7 +106,10 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnknownReturnCode { code })
+            }
         },
         Err(err) => Err(err),
     }
@@ -168,7 +177,10 @@ fn mosquitto_available_as_service() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(SYSTEMCTL_STATUS_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnknownReturnCode { code })
+            }
         },
         Err(err) => Err(err),
     }
@@ -182,7 +194,10 @@ fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnknownReturnCode { code })
+            }
         },
         Err(err) => Err(err),
     }

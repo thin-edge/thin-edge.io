@@ -19,6 +19,7 @@ use crate::config::{
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
+const MQTT_TLS_PORT: u16 = 8883;
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {

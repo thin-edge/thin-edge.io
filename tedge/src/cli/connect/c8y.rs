@@ -12,11 +12,17 @@ pub struct C8y {}
 
 impl C8y {
     pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+        let address = format!(
+            "{}:{}",
+            config::get_config_value(&config, C8Y_URL)?,
+            MQTT_TLS_PORT
+        );
+
         Ok(BridgeConfig {
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
-            address: config::get_config_value(&config, C8Y_URL)?,
+            address,
             remote_username: None,
             bridge_cafile: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
             remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
