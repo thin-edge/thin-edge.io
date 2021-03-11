@@ -443,7 +443,7 @@ pub struct CumulocityConfig {
     connect: Option<String>,
 
     /// Endpoint URL of the Cumulocity tenant
-    url: Option<String>,
+    pub url: Option<String>,
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
@@ -474,6 +474,9 @@ pub enum ConfigError {
 
     #[error("Invalid characters found in home directory path")]
     InvalidCharacterInHomeDirectoryPath,
+
+    #[error("Provided url is invalid: {0}")]
+    InvalidUrl(String),
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
