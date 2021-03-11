@@ -73,7 +73,7 @@ pub enum UploadCertOpt {
     /// The command will upload root certificate to Cumulocity.
     C8y {
         #[structopt(long = "user")]
-        /// Provided username should be cumulocity user with tenant management permissions.
+        /// Provided username should be a Cumulocity user with tenant management permissions.
         username: String,
     },
 }
@@ -91,7 +91,7 @@ impl BuildCommand for UploadCertOpt {
                         key: String::from(DEVICE_CERT_PATH),
                     }
                 })?)
-                .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it can never happen.
+                .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
 
                 let host_config = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
                     key: String::from(C8Y_URL),
@@ -146,7 +146,7 @@ impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
         let client = reqwest::blocking::Client::new();
 
-        let password = rpassword::read_password_from_tty(Some("Enter password: \n"))?;
+        let password = rpassword::read_password_from_tty(Some("Enter password: "))?;
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
@@ -270,7 +270,7 @@ pub enum CertError {
 
     #[error(
         r#"Certificate read error at: {1:?}
-        Run `tedge cert create` to create certificate ."#
+        Run `tedge cert create` if you want to create a new certificate."#
     )]
     CertificateReadFailed(#[source] std::io::Error, String),
 
