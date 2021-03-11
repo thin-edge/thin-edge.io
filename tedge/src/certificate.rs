@@ -279,9 +279,8 @@ impl CreateCertCmd {
         let cert_path = Path::new(&self.cert_path);
         let key_path = Path::new(&self.key_path);
 
-        paths::validate_parent_dir_exists(cert_path)
-            .map_err(|err| CertError::CertPathError(err))?;
-        paths::validate_parent_dir_exists(key_path).map_err(|err| CertError::KeyPathError(err))?;
+        paths::validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
+        paths::validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
 
         // Creating files with permission 644
         let mut cert_file =

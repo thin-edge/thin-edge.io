@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::ConfigError;
 use crate::utils::config;
+
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 
 pub struct Azure {}
