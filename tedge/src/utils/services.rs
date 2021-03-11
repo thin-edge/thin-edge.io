@@ -34,8 +34,8 @@ pub enum ServicesError {
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
 
-    #[error("Returned error is not recognised: {code:?}.")]
-    UnhandledReturnCode { code: i32 },
+    #[error("Returned exit code: {code:?} for: {command} is unhandled.")]
+    UnhandledReturnCode { code: i32, command: String },
 }
 
 type ExitCode = i32;
@@ -86,7 +86,10 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
             }
         },
         Err(err) => Err(err),
@@ -108,7 +111,10 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
             }
         },
         Err(err) => Err(err),
@@ -179,7 +185,10 @@ fn mosquitto_available_as_service() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
             }
         },
         Err(err) => Err(err),
@@ -196,7 +205,10 @@ fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
             }
         },
         Err(err) => Err(err),
@@ -221,6 +233,7 @@ fn systemd_available() -> Result<(), ServicesError> {
         )
 }
 
+#[derive(Debug)]
 enum MosquittoCmd {
     Cmd,
 }
@@ -233,6 +246,15 @@ impl MosquittoCmd {
     }
 }
 
+impl Into<String> for MosquittoCmd {
+    fn into(self) -> String {
+        match self {
+            MosquittoCmd::Cmd => "mosquitto".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum MosquittoParam {
     Status,
 }
@@ -245,6 +267,15 @@ impl MosquittoParam {
     }
 }
 
+impl Into<String> for MosquittoParam {
+    fn into(self) -> String {
+        match self {
+            MosquittoParam::Status => "-h".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum SystemCtlCmd {
     Cmd,
     Enable,
@@ -264,6 +295,20 @@ impl SystemCtlCmd {
         }
     }
 }
+
+impl Into<String> for SystemCtlCmd {
+    fn into(self) -> String {
+        match self {
+            SystemCtlCmd::Cmd => "systemctl".to_owned(),
+            SystemCtlCmd::Enable => "enable".to_owned(),
+            SystemCtlCmd::IsActive => "is-active".to_owned(),
+            SystemCtlCmd::Restart => "restart".to_owned(),
+            SystemCtlCmd::Status => "status".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum SystemCtlParam {
     Version,
 }
@@ -272,6 +317,14 @@ impl SystemCtlParam {
     fn as_str(&self) -> &'static str {
         match self {
             SystemCtlParam::Version => "--version",
+        }
+    }
+}
+
+impl Into<String> for SystemCtlParam {
+    fn into(self) -> String {
+        match self {
+            SystemCtlParam::Version => "--version".to_owned(),
         }
     }
 }
