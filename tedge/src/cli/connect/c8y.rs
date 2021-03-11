@@ -14,7 +14,7 @@ impl C8y {
     pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let address = format!(
             "{}:{}",
-            config::get_config_value(&config, C8Y_URL)?,
+            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
             MQTT_TLS_PORT
         );
 

@@ -8,7 +8,8 @@ pub struct Azure {}
 
 impl Azure {
     pub fn azure_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
-        let az_url = config::get_config_value(&config, AZURE_URL)?;
+        let az_url =
+            config::parse_user_provided_address(config::get_config_value(&config, AZURE_URL)?)?;
         let address = format!("{}:{}", az_url, MQTT_TLS_PORT);
         let clientid = config::get_config_value(&config, DEVICE_ID)?;
         let user_name = format!("{}/{}/?api-version=2018-06-30", az_url, &clientid);
