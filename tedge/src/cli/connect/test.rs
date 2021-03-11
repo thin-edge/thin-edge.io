@@ -95,7 +95,7 @@ fn bridge_config_c8y_create() {
             key_path = "./test-private-key.pem"
 
             [c8y]
-            url = "test.test.io:8883"
+            url = "test.test.io"
             root_cert_path = "./test_root.pem"
             connect = "true"
             "#;
@@ -161,7 +161,7 @@ fn bridge_config_azure_create() {
             key_path = "./test-private-key.pem"
 
             [azure]
-            url = "test.test.io:8883"
+            url = "test.test.io"
             root_cert_path = "./test_root.pem"
             connect = "true"
             "#;
