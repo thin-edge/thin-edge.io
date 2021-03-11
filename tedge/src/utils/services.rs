@@ -35,7 +35,7 @@ pub enum ServicesError {
     UnexpectedExitStatus,
 
     #[error("Returned error is not recognised: {code:?}.")]
-    UnknownReturnCode { code: i32 },
+    UnhandledReturnCode { code: i32 },
 }
 
 type ExitCode = i32;
@@ -86,7 +86,7 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnknownReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode { code })
             }
         },
         Err(err) => Err(err),
@@ -108,7 +108,7 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnknownReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode { code })
             }
         },
         Err(err) => Err(err),
@@ -179,7 +179,7 @@ fn mosquitto_available_as_service() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnknownReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode { code })
             }
         },
         Err(err) => Err(err),
@@ -196,7 +196,7 @@ fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnknownReturnCode { code })
+                Err(ServicesError::UnhandledReturnCode { code })
             }
         },
         Err(err) => Err(err),

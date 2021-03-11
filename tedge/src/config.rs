@@ -475,9 +475,6 @@ pub enum ConfigError {
     #[error("Invalid characters found in home directory path")]
     InvalidCharacterInHomeDirectoryPath,
 
-    #[error("Provided URL is invalid: {0}")]
-    InvalidUrl(String),
-
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
 
