@@ -8,13 +8,12 @@ use mqtt_client::Config;
 use mqtt_client::Message;
 use mqtt_client::Topic;
 use mqtt_client::{Client, ErrorStream, MessageStream};
-use std::io::Write;
-use std::env;
 use std::convert::TryFrom;
-use std::time::{Duration, Instant};
+use std::env;
+use std::io::Write;
 use std::process;
+use std::time::{Duration, Instant};
 //use rumqttc::QoS;
-
 
 /*
 
@@ -52,23 +51,28 @@ const C8Y_TEMPLATE_RESTART: &str = "510";
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-    let args:Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
     // wait time, template, tooth-height,
     if args.len() != 5 {
         println!("Usage: sawtooth_publisher <wait_time_ms> <height> <iterations> <template>");
         panic!("Errof: Not enough Command line Arguments");
     }
-    let wait:i32 = args[1].parse().expect("Cannot parse wait time");
-    let height:i32 = args[2].parse().expect("Cannot parse height");
-    let iterations:i32 = args[3].parse().expect("Cannot parse iterations");
+    let wait: i32 = args[1].parse().expect("Cannot parse wait time");
+    let height: i32 = args[2].parse().expect("Cannot parse height");
+    let iterations: i32 = args[3].parse().expect("Cannot parse iterations");
     //let qosi:i32 = args[3].parse().expect("Cannot parse QoS");
-    let template:String = String::from(&args[4]);
+    let template: String = String::from(&args[4]);
     //let qos = rumqttc::QoS::AtMostOnce;
     //AtMostOnce, AtLeastOnce, ExactlyOnce
 
-    println!("Publishing sawtooth with delay {}ms height {} iterations {} template {} = publishs: {}",
-        wait, height, iterations, template, height*iterations);
+    println!(
+        "Publishing sawtooth with delay {}ms height {} iterations {} template {} = publishs: {}",
+        wait,
+        height,
+        iterations,
+        template,
+        height * iterations
+    );
     let c8y_msg = Topic::new("tedge/measurements")?;
     let c8y_cmd = Topic::new("c8y/s/ds")?;
     let c8y_err = Topic::new("c8y/s/e")?;
@@ -85,7 +89,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     tokio::spawn(publish_topic(
-        mqtt, c8y_msg, wait, height, iterations, template));
+        mqtt, c8y_msg, wait, height, iterations, template,
+    ));
 
     select! {
         _ = listen_command(commands).fuse() => (),
@@ -94,27 +99,36 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let elapsed = start.elapsed();
-    println!("Execution took {} s {} ms", elapsed.as_secs(), elapsed.as_millis());
+    println!(
+        "Execution took {} s {} ms",
+        elapsed.as_secs(),
+        elapsed.as_millis()
+    );
 
-    let elapsedm:u32 = u32::try_from(elapsed.as_millis()).unwrap();
-    let elapsedmsf:f64 = f64::try_from(elapsedm).unwrap();
-    let rate:f64 = elapsedmsf / (f64::try_from(height).unwrap() * f64::try_from(iterations).unwrap()) ;
+    let elapsedm: u32 = u32::try_from(elapsed.as_millis()).unwrap();
+    let elapsedmsf: f64 = f64::try_from(elapsedm).unwrap();
+    let rate: f64 =
+        elapsedmsf / (f64::try_from(height).unwrap() * f64::try_from(iterations).unwrap());
 
-    let pubpersec = 1.0/rate*1000.0;
+    let pubpersec = 1.0 / rate * 1000.0;
     println!("Publish rate: {:.3} ms/pub", rate);
     println!("Publish per second: {:.3} pub/s", pubpersec);
 
     Ok(())
 }
 
-async fn publish_topic(mqtt: Client, c8y_msg: Topic,
-    wait:i32, height:i32, iterations:i32, /*qos:rumqttc::QoS,*/ template:String) -> Result<(), mqtt_client::Error> {
-
+async fn publish_topic(
+    mqtt: Client,
+    c8y_msg: Topic,
+    wait: i32,
+    height: i32,
+    iterations: i32,
+    /*qos:rumqttc::QoS,*/ template: String,
+) -> Result<(), mqtt_client::Error> {
     info!("Publishing temperature measurements");
     println!();
-    for iteration in 0..iterations{
+    for iteration in 0..iterations {
         for value in 0..height {
-
             //let payload = format!("{},{}", template, value);
             let payload = format!("{{ {}: {} }}", "\"Flux [F]\"", value);
             debug!("{} ", value);
@@ -154,7 +168,7 @@ async fn listen_command(mut messages: MessageStream) {
 }
 
 async fn listen_c8y_error(mut messages: MessageStream) {
-    let mut count:u32=0;
+    let mut count: u32 = 0;
     while let Some(message) = messages.next().await {
         error!("C8Y error: {:?}", message.payload);
         if count >= 3 {
@@ -165,7 +179,7 @@ async fn listen_c8y_error(mut messages: MessageStream) {
 }
 
 async fn listen_error(mut errors: ErrorStream) {
-    let mut count:u32=0;
+    let mut count: u32 = 0;
     while let Some(error) = errors.next().await {
         error!("System error: {}", error);
         if count >= 3 {
