@@ -839,7 +839,7 @@ mod tests {
 
 
         match CumulocityJson::from_thin_edge_json(
-                    &String::from(input).into_bytes(),
+                    &input.into_bytes(),
                 ) {
                     Ok(vec) => {
                         assert_eq!(

@@ -93,11 +93,11 @@ impl BuildCommand for UploadCertOpt {
                 })?)
                 .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
 
-                let host_config = config.c8y.url.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from(C8Y_URL),
-                })?;
-
-                let host = get_host_from_url(&host_config)?.to_owned();
+                let host = utils::config::parse_user_provided_address(config.c8y.url.ok_or_else(
+                    || ConfigError::ConfigNotSet {
+                        key: String::from(C8Y_URL),
+                    },
+                )?)?;
 
                 Ok((UploadCertCmd {
                     device_id,
@@ -612,13 +612,6 @@ fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certifica
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
     Certificate::from_params(params)
-}
-
-fn get_host_from_url(c8y_url: &str) -> Result<&str, ConfigError> {
-    let mut split_url = c8y_url.splitn(2, ':');
-    split_url
-        .next()
-        .ok_or_else(|| ConfigError::InvalidUrl(c8y_url.to_owned()))
 }
 
 fn get_tenant_id_blocking(
