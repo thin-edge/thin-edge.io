@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   workflow_run:
     workflows: ["build-workflow"]
-    branches: [main, continuous_integration]
+    branches: [main]
     types:
       - completed
 env:
@@ -27,8 +27,7 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            #branch: main
-            branch: continuous_integration
+            branch: main
             name: debian-packages-amd64
             path: debian-package_unpack
 
@@ -59,8 +58,7 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            #branch: main
-            branch: continuous_integration
+            branch: main
             name: debian-packages-armhf
             path: debian-package_unpack
 
@@ -84,8 +82,7 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            #branch: main
-            branch: continuous_integration
+            branch: main
             name: examples
             path: examples
 
