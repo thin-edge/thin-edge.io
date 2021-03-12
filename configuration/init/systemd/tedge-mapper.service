@@ -1,18 +1,12 @@
-# location: /etc/systemd/system/
 [Unit]
-Description = tedge-mapper converts open json measurements to connectivity provider format.
-After       = syslog.target network.target
+Description=tedge-mapper converts thin edge json measurements to connectivity provider format.
+After=syslog.target network.target
 
 [Service]
-ExecStart   = /usr/bin/tedge-mapper
-KillSignal=SIGINT
-KillMode=process
-
-User=tedge
-ExecReload=kill -TERM `cat /var/run/tedge.pid`
+User=tedge-mapper
+ExecStart=/usr/bin/tedge_mapper
 Restart=on-failure
 RestartPreventExitStatus=255
-PIDFile     = /var/run/tedge-mapper.pid
 
 [Install]
 WantedBy=multi-user.target
