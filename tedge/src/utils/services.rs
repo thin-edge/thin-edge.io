@@ -34,7 +34,7 @@ pub enum ServicesError {
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
 
-    #[error("Returned exit code: {code:?} for: {command} is unhandled.")]
+    #[error("Returned exit code: '{code:?}' for: '{command}' is unhandled.")]
     UnhandledReturnCode { code: i32, command: String },
 }
 

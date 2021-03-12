@@ -480,7 +480,7 @@ pub enum ConfigError {
 
     #[error(
         r#"Provided URL: '{0}' contains scheme or port.
-    Provided URL should contain only hostname, eg: 'subdomain.hostname.io'"#
+    Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."#
     )]
     InvalidConfigUrl(String),
 
