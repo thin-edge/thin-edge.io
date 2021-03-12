@@ -79,7 +79,6 @@ impl BridgeCommand {
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
-
         Ok(self.check_connection.check_connection()?)
     }
 }
