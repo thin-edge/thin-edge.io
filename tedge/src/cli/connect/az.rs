@@ -66,36 +66,28 @@ impl Azure {
         let (sender, mut receiver) = tokio::sync::oneshot::channel();
 
         let _task_handle = tokio::spawn(async move {
-            while let Some(message) = device_twin_response.next().await {
+            if let Some(message) = device_twin_response.next().await {
                 //status should be 200 for successful connection
                 if message.topic.name.contains("200") {
                     let _ = sender.send(true);
-                    break;
                 }
             }
         });
 
-        for i in 0..2 {
-            mqtt.publish(Message::new(&template_pub_topic, "".to_string()))
-                .await?;
+        mqtt.publish(Message::new(&template_pub_topic, "".to_string()))
+            .await?;
 
-            let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
-            match fut.await {
-                Ok(Ok(true)) => {
-                    println!("Received expected response message, connection check is successful");
-                    return Ok(());
-                }
-                _err => {
-                    if i == 0 {
-                        println!("... No response. If the device is new, it's normal to get no response in the first try.");
-                    } else {
-                        println!("... No response. ");
-                    }
-                }
+        let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
+        match fut.await {
+            Ok(Ok(true)) => {
+                println!("Received expected response message, connection check is successful");
+                return Ok(());
+            }
+            _err => {
+                println!("Warning: No response, bridge has been configured, but Azure connection check failed.\n",);
+                Ok(())
             }
         }
-        println!("Warning: Bridge has been configured, but Azure connection check failed.\n",);
-        Ok(())
     }
 }
 
