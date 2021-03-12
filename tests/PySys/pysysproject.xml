@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysysproject>
+	<requires-pysys>1.6.1</requires-pysys>
+	<requires-python>3.6.9</requires-python>
+	
+	<!-- Pre-defined properties include: ${testRootDir}, ${outDirName}, ${os}, ${osfamily}, ${startDate}, ${startTime}, ${hostname}. -->
+	
+	<!-- Property identifying the home directory of the application build being tested. -->
+	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true"/>
+
+    <property name="tebasedir" value="${env.TEBASEDIR}" />
+    <property name="exampledir" value="${env.EXAMPLEDIR}" />
+    <property name="username" value="${env.C8YUSERNAME}" />
+    <property name="c8ypass" value="${env.C8YPASS}" />
+    <property name="tennant" value="${env.C8YTENNANT}" />
+    <property name="deviceid" value="${env.C8YDEVICEID}" />
+    <property name="device" value="${env.C8YDEVICE}" />
+    <property name="timezone" value="${env.C8YTIMEZONE}" />
+
+	<!-- User-defined properties (use lowerCamelCase for property names) -->
+	
+	<!-- Custom test framework plugins, if needed -->
+	<!--
+	<pythonpath value="./pysys-extensions" />
+	<test-plugin   classname="myorg.plugins.MyTestPlugin" alias="myorg"/>
+	<runner-plugin classname="myorg.plugins.MyRunnerPlugin" alias="myorg"/>
+	-->
+	
+	<writers>
+		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
+			<property name="destDir" value="__pysys_output_archives/"/>
+			<property name="maxTotalSizeMB" value="1024.0"/>
+		</writer>
+		
+		<writer classname="pysys.writer.outcomes.JUnitXMLResultsWriter">
+			<property name="outputDir" value="__pysys_junit_xml"/>
+		</writer>
+		
+		<writer classname="pysys.writer.ci.GitHubActionsCIWriter"></writer>
+		<writer classname="pysys.writer.ci.TravisCIWriter"></writer>
+		
+		<writer classname="pysys.writer.console.ConsoleSummaryResultsWriter"></writer>
+	</writers>
+
+	<default-file-encodings>
+		<default-file-encoding pattern="run.log" encoding="utf-8"/>
+		
+		<default-file-encoding pattern="*.xml"  encoding="utf-8"/>
+		<default-file-encoding pattern="*.json" encoding="utf-8"/>
+		<default-file-encoding pattern="*.yaml" encoding="utf-8"/>
+	</default-file-encodings>	
+	
+	<!-- Add project-specific text to be appended to the "pysys run -h". -->
+	<project-help>
+	</project-help>
+</pysysproject>
