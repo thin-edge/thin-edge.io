@@ -3,12 +3,12 @@ name: system-test-workflow
 on:
 
   workflow_dispatch:
-    branches: [ main, continuous_integration ]
-  #workflow_run:
-  #  workflows: ["integration-test-workflow"]
-  #  branches: [main, continuous_integration]
-  #  types:
-  #    - completed
+    branches: [ main ]
+  workflow_run:
+    workflows: ["integration-test-workflow"]
+    branches: [main]
+    types:
+      - completed
 
 env:
   CARGO_TERM_COLOR: always
