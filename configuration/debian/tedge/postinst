@@ -1,9 +1,12 @@
+#!/bin/sh
+set -e
+
 ### Create groups
 groupadd tedge-users
 groupadd tedge
 
 ### Create users
-# Create user tedge with no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
+# Create user tedge with no additional info(--gecos "") no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
 adduser --gecos "" --no-create-home --disabled-login --shell /sbin/nologin --ingroup tedge tedge
 
 ### Create folders
