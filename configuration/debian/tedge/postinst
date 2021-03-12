@@ -7,7 +7,7 @@ if ! getent group tedge-users > /dev/null; then
 fi
 
 if ! getent group tedge > /dev/null; then
-    addgroup --quiet tedge
+    addgroup --quiet --system tedge
 fi
 
 ### Create users
