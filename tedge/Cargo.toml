@@ -10,7 +10,6 @@ description = "tedge is the cli tool for thin-edge.io"
 [package.metadata.deb]
 depends = "mosquitto"
 maintainer-scripts = "../configuration/debian/tedge"
-systemd-units = { enable = false }
 
 [dependencies]
 anyhow = "1.0.38"
