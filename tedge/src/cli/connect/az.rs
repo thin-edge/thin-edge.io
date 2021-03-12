@@ -70,6 +70,8 @@ impl Azure {
                 //status should be 200 for successful connection
                 if message.topic.name.contains("200") {
                     let _ = sender.send(true);
+                } else {
+                    let _ = sender.send(false);
                 }
             }
         });
