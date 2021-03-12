@@ -17,9 +17,15 @@ use std::process;
 
 
 /*
-Todo:
-- Improve code quality
-- Add different data types
+
+This is a small and flexible publisher for deterministic test data.
+Its based on the temperature publisher.
+
+- TODO: Improve code quality
+- TODO: Add different data types for JSON publishing
+- TODO: Command line switch to swith betwen REST and JSON
+- TODO: Currently REST sending is disabled and JSON publishing is enabled
+- TODO: Add QoS selection
 */
 
 const C8Y_TEMPLATE_RESTART: &str = "510";
