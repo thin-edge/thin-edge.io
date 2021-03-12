@@ -102,7 +102,7 @@ impl C8y {
             match fut.await {
                 Ok(Ok(true)) => {
                     println!(
-                        "Received expected response message, Connection check is successfull\n",
+                        "Received expected response message, connection check is successful\n",
                     );
                     return Ok(());
                 }
@@ -116,9 +116,8 @@ impl C8y {
             }
         }
 
-        return Err(ConnectError::BridgeConnectionFailed {
-            cloud: String::from("Cumulocity"),
-        });
+        println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
+        Ok(())
     }
 }
 

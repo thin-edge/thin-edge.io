@@ -46,10 +46,10 @@ impl Azure {
 
     // Here We check the az device twin properties over mqtt to check if connection has been open.
     // First the mqtt client will subscribe to a topic az/$iothub/twin/res/#, listen to the
-    // device twin property output
-    // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID
-    // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}
-    // Here if the status is 200 then its success
+    // device twin property output.
+    // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
+    // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
+    // Here if the status is 200 then it's success.
 
     #[tokio::main]
     async fn check_connection_async(&self) -> Result<(), ConnectError> {
@@ -67,7 +67,7 @@ impl Azure {
 
         let _task_handle = tokio::spawn(async move {
             while let Some(message) = device_twin_response.next().await {
-                //status should be 200 for successfull connection
+                //status should be 200 for successful connection
                 if message.topic.name.contains("200") {
                     let _ = sender.send(true);
                     break;
@@ -82,7 +82,7 @@ impl Azure {
             let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
             match fut.await {
                 Ok(Ok(true)) => {
-                    println!("Received expected response message, Connection check is successfull");
+                    println!("Received expected response message, connection check is successful");
                     return Ok(());
                 }
                 _err => {
@@ -94,9 +94,8 @@ impl Azure {
                 }
             }
         }
-        return Err(ConnectError::BridgeConnectionFailed {
-            cloud: String::from("Azure"),
-        });
+        println!("Warning: Bridge has been configured, but Azure connection check failed.\n",);
+        Ok(())
     }
 }
 

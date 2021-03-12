@@ -242,9 +242,6 @@ impl BridgeConfig {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Bridge has been configured, but {cloud} connection check failed.")]
-    BridgeConnectionFailed { cloud: String },
-
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
     Certificate,
 
