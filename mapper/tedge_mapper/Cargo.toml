@@ -15,7 +15,6 @@ unit-scripts = "../../configuration/init/systemd"
 unit-name = "tedge-mapper"
 enable = false
 start = false
-restart-after-upgrade = true
 stop-on-upgrade = false
 
 [dependencies]
