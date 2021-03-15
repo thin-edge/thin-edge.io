@@ -9,10 +9,10 @@ const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
 #[tokio::main]
 async fn main() -> Result<(), mqtt_client::Error> {
-    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.to_owned());
+    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
-            TIME_FORMAT.to_owned(),
+            TIME_FORMAT.into(),
         ))
         .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
