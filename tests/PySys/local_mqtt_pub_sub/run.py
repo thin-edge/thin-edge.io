@@ -19,7 +19,6 @@ Then we find the messages in the output of tedge sub
 class PySysTest(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
-        #tedge = "/home/micha/thin-edge.io/target/debug/tedge"
 
         sub = self.startProcess(
             command=tedge,
