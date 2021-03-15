@@ -382,7 +382,11 @@ impl ThinEdgeJsonError {
 }
 
 fn input_prefix(input: &str, len: usize) -> String {
-    input.chars().filter(|c| ! c.is_whitespace()).take(len).collect()
+    input
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(len)
+        .collect()
 }
 
 #[cfg(test)]
