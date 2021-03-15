@@ -18,10 +18,10 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
-                cloud_name: String::from("c8y"),
+                cloud_name: "c8y".into(),
             },
             TedgeDisconnectBridgeOpt::Az => DisconnectBridge {
-                cloud_name: String::from("az"),
+                cloud_name: "az".into(),
             },
         };
         Ok(cmd.into_boxed())
@@ -52,7 +52,7 @@ impl DisconnectBridge {
             &self.get_bridge_config_file_name(),
         ])?;
 
-        println!("Removing c8y bridge.\n");
+        println!("Removing {} bridge .\n", self.cloud_name);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
