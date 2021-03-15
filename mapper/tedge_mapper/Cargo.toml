@@ -8,6 +8,14 @@ description = "tedge_mapper is the mapper that translates thin-edge.io data mode
 
 [package.metadata.deb]
 depends = "tedge"
+maintainer-scripts = "configuration/debian/tedge_mapper"
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "../../configuration/init/systemd"
+unit-name = "tedge-mapper"
+enable = false
+start = false
+stop-on-upgrade = false
 
 [dependencies]
 c8y_translator_lib = {version = "0.1.0", path = "../cumulocity/c8y_translator_lib" }
