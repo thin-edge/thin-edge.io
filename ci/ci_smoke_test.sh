@@ -146,7 +146,7 @@ check
 
 ls -lah ~/.tedge/
 
-tedge config set c8y.url mqtt.latest.stage.c8y.io:8883
+tedge config set c8y.url octocat.eu-latest.cumulocity.com:8883
 check
 
 # TODO Fix setting the device.id this depends on current development

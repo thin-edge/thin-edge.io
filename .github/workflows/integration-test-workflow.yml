@@ -90,10 +90,9 @@ jobs:
           run: ./ci/ci_smoke_test.sh $DEVICE $USERNAME $TENNANT $C8YPASS $DEVICEID $TIMEZONE
           env:
             C8YPASS: ${{secrets.SECRET_C8YPASS}}
-            PRIVATE_KEY_8CAT: ${{secrets.PRIVATE_KEY_8CAT}}
-            PUBLIC_KEY_8CAT: ${{secrets.PUBLIC_KEY_8CAT}}
-            USERNAME: michael-abel
-            TENNANT: t7067452
-            DEVICE: octodog
-            DEVICEID: 928759
+            USERNAME: octocat
+            TENNANT: t493319102
+            DEVICE: octocatpi3
+            # TODO fix device id when known
+            DEVICEID: 777777
             TIMEZONE: 01:00
