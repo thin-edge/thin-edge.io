@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+# Create a group "tedge-mapper" if not created before
+if ! getent group tedge-mapper > /dev/null; then
+    addgroup --quiet --system tedge-mapper
+fi
+
+# Create a user "tedge-mapper" if not created before
+if ! getent passwd tedge-mapper > /dev/null; then
+    adduser --quiet --system --no-create-home --ingroup tedge-mapper --shell /usr/sbin/nologin tedge-mapper
+fi
+
+#DEBHELPER#

@@ -5,6 +5,9 @@ use super::paths;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServicesError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
     #[error("Couldn't set mosquitto server to start on boot.")]
     MosquittoCantPersist,
 
@@ -20,9 +23,6 @@ pub enum ServicesError {
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
 
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-
     #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
     SudoNotFound(#[from] which::Error),
 
@@ -31,8 +31,11 @@ pub enum ServicesError {
     )]
     SystemdNotAvailable,
 
-    #[error("Returned error is not recognised: {code:?}.")]
-    UnknownReturnCode { code: Option<i32> },
+    #[error("Unexpected value for exit status.")]
+    UnexpectedExitStatus,
+
+    #[error("Returned exit code: '{code:?}' for: '{command}' is unhandled.")]
+    UnhandledReturnCode { code: i32, command: String },
 }
 
 type ExitCode = i32;
@@ -81,7 +84,13 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
+            }
         },
         Err(err) => Err(err),
     }
@@ -100,7 +109,13 @@ pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
+            }
         },
         Err(err) => Err(err),
     }
@@ -168,7 +183,13 @@ fn mosquitto_available_as_service() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(SYSTEMCTL_STATUS_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
+            }
         },
         Err(err) => Err(err),
     }
@@ -182,7 +203,13 @@ fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
-            code => Err(ServicesError::UnknownReturnCode { code }),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
+            }
         },
         Err(err) => Err(err),
     }
@@ -206,6 +233,7 @@ fn systemd_available() -> Result<(), ServicesError> {
         )
 }
 
+#[derive(Debug)]
 enum MosquittoCmd {
     Cmd,
 }
@@ -218,6 +246,15 @@ impl MosquittoCmd {
     }
 }
 
+impl Into<String> for MosquittoCmd {
+    fn into(self) -> String {
+        match self {
+            MosquittoCmd::Cmd => "mosquitto".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum MosquittoParam {
     Status,
 }
@@ -230,6 +267,15 @@ impl MosquittoParam {
     }
 }
 
+impl Into<String> for MosquittoParam {
+    fn into(self) -> String {
+        match self {
+            MosquittoParam::Status => "-h".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum SystemCtlCmd {
     Cmd,
     Enable,
@@ -249,6 +295,20 @@ impl SystemCtlCmd {
         }
     }
 }
+
+impl Into<String> for SystemCtlCmd {
+    fn into(self) -> String {
+        match self {
+            SystemCtlCmd::Cmd => "systemctl".to_owned(),
+            SystemCtlCmd::Enable => "enable".to_owned(),
+            SystemCtlCmd::IsActive => "is-active".to_owned(),
+            SystemCtlCmd::Restart => "restart".to_owned(),
+            SystemCtlCmd::Status => "status".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum SystemCtlParam {
     Version,
 }
@@ -257,6 +317,14 @@ impl SystemCtlParam {
     fn as_str(&self) -> &'static str {
         match self {
             SystemCtlParam::Version => "--version",
+        }
+    }
+}
+
+impl Into<String> for SystemCtlParam {
+    fn into(self) -> String {
+        match self {
+            SystemCtlParam::Version => "--version".to_owned(),
         }
     }
 }
