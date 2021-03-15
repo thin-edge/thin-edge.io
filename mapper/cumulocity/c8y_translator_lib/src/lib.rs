@@ -820,22 +820,26 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-            #[test]
-            fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
-                let input = format!(r#"{{"time": "2013-06-22T17:03:14.000+02:00",
-                            "{}": 123
-                          }}"#, measurement);
-                let time = "2013-06-22T17:03:14.000+02:00";
-                let expected_output = format!(r#"{{
-                                  "type": "ThinEdgeMeasurement",
-                                  "time": "{}",
-                                  "{}": {{
-                                  "{}": {{
-                                  "value": 123
-                                 }}
-                                 }}
-                                }}"#, time, measurement, measurement);
+        #[test]
+        fn prefix_doesnt_crash(input in "\\PC*") {
+            let _ = input_prefix(&input, 10);
+        }
 
+        #[test]
+        fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
+            let input = format!(r#"{{"time": "2013-06-22T17:03:14.000+02:00",
+                        "{}": 123
+                      }}"#, measurement);
+            let time = "2013-06-22T17:03:14.000+02:00";
+            let expected_output = format!(r#"{{
+                  "type": "ThinEdgeMeasurement",
+                  "time": "{}",
+                  "{}": {{
+                  "{}": {{
+                       "value": 123
+                      }}
+                   }}
+                }}"#, time, measurement, measurement);
 
         let output = CumulocityJson::from_thin_edge_json(&input.into_bytes()).unwrap();
         assert_eq!(
