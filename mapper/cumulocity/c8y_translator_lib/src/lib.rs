@@ -382,12 +382,7 @@ impl ThinEdgeJsonError {
 }
 
 fn input_prefix(input: &str, len: usize) -> String {
-    let input = input.split_whitespace().collect::<String>();
-    if input.len() < len {
-        input
-    } else {
-        input[0..len].to_string()
-    }
+    input.chars().filter(|c| ! c.is_whitespace()).take(len).collect()
 }
 
 #[cfg(test)]
@@ -815,6 +810,20 @@ mod tests {
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn prefix_fn_removes_extra_chars() {
+        let input = "薄いエッジ";
+        assert_eq!(input.len(), 15);
+        assert_eq!(input_prefix(input, 1), "薄");
+    }
+
+    #[test]
+    fn prefix_fn_let_unchanged_short_inputs() {
+        let input = "FØØ";
+        assert_eq!(input.len(), 5);
+        assert_eq!(input_prefix(input, 4), input);
     }
 
     use proptest::prelude::*;
