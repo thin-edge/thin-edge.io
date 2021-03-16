@@ -4,10 +4,14 @@ use crate::utils::{paths, services};
 use structopt::StructOpt;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+
 #[derive(StructOpt, Debug)]
 pub enum TedgeDisconnectBridgeOpt {
     /// Remove bridge connection to Cumulocity.
     C8y,
+    /// Remove bridge connection to Azure.
     Az,
 }
 
@@ -18,10 +22,12 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
-                cloud_name: "c8y".into(),
+                config_file: C8Y_CONFIG_FILENAME.into(),
+                cloud_name: "Cumulocity".into(),
             },
             TedgeDisconnectBridgeOpt::Az => DisconnectBridge {
-                cloud_name: "az".into(),
+                config_file: AZURE_CONFIG_FILENAME.into(),
+                cloud_name: "Azure".into(),
             },
         };
         Ok(cmd.into_boxed())
@@ -30,6 +36,7 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
 
 #[derive(StructOpt, Debug)]
 pub struct DisconnectBridge {
+    config_file: String,
     cloud_name: String,
 }
 
@@ -46,13 +53,13 @@ impl Command for DisconnectBridge {
 impl DisconnectBridge {
     fn stop_bridge(&self) -> Result<(), DisconnectBridgeError> {
         // Check if bridge exists and stop with code 0 if it doesn't.
+
         let bridge_conf_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
-            &self.get_bridge_config_file_name(),
+            &self.config_file,
         ])?;
-
-        println!("Removing {} bridge .\n", self.cloud_name);
+        println!("Removing {} bridge.\n", self.cloud_name);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
@@ -78,12 +85,8 @@ impl DisconnectBridge {
             services::mosquitto_restart_daemon()?;
         }
 
-        println!("Bridge successfully disconnected!");
+        println!("{} Bridge successfully disconnected!", self.cloud_name);
         Ok(())
-    }
-
-    fn get_bridge_config_file_name(&self) -> String {
-        self.cloud_name.clone() + "-bridge.conf"
     }
 }
 #[derive(thiserror::Error, Debug)]
