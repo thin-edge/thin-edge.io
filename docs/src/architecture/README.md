@@ -2,33 +2,25 @@
 
 Thin-edge.io is an open-source framework to develop lightweight, smart and secure connected devices.
 
-Cloud agnostic, thin-edge.io provides a set of pre-packaged  modules
-with plug & play connectors to cloud platforms,
-device certificate management
-as well as built-in software management.
+Cloud agnostic, thin-edge.io provides the foundations for cloud connectivity and device management,
+a set of pre-packaged  modules, plug & play connectors to cloud platforms,
+device certificate management, monitoring as well as built-in software management.
+
+On top of these foundations, telemetry applications are built using a combination of components provided by various IoT actors
+The features provided by these components can be as diverse as low-level connectivity to IoT protocols,
+event-stream analytics, machine-learning-powered systems, or application specific processors.
 
 Built around an extensible architecture,
-thin-edge.io can be extended in various programming languages
-to build telemetry applications with a combination of components
+thin-edge.io can be extended in various programming languages.
 
+1. The components are simple processes exchanging messages over a [MQTT bus](./mqtt-bus.md) connected to the cloud.
 
-and device monitoring
+2. A [canonical data](thin-edge-json.md) format is proposed as a pivot for telemetry data,
+so the components can shared a common dialect independently of their own representation of these data.
 
-analytics and machine learning components.
-
-A mapper process can read a modbus source and emit translated data over MQTT.
-While a 
-
-
-Using processes 
-The components must not have to designed with thin-edge.io in-mind to be able to used as a thin-edge.io componet
-
-Some of these components will be designed for thin-edge.io.
- specifically for the 
+3. A combination of pre-defined MQTT topics and [mapper processes](./mapper.md) is responsible
+of cloud-specific messages translation and dispatching.
 
 
 ![Overview](./thin-edge-overview.png)
-
-* Use a [MQTT bus](./mqtt-bus.md) both for local communications and to connect the cloud.
-* A canonical JSON format that the local processes can use to represent telemetry data. Cloud agnostic
 
