@@ -8,8 +8,8 @@ use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
 use url::Url;
 
-mod az;
-mod c8y;
+pub mod az;
+pub mod c8y;
 
 use crate::config::{
     AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
@@ -17,7 +17,7 @@ use crate::config::{
 };
 
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
-const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 const MQTT_TLS_PORT: u16 = 8883;
 

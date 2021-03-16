@@ -5,7 +5,7 @@ use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::time::Duration;
 use tokio::time::timeout;
 
-const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+pub const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Azure {}
