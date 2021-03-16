@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
-const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 
 pub struct C8y {}
 
