@@ -91,7 +91,7 @@ jobs:
           env:
             C8YPASS: ${{secrets.SECRET_C8YPASS}}
             USERNAME: octocat
-            TENNANT: t493319102
+            TENNANT: ${{secrets.SECRET_C8YTENANT}}
             DEVICE: octocatpi3
             # TODO fix device id when known
             DEVICEID: 777777
