@@ -6,9 +6,9 @@ on:
   # Trick: A merged pull request always results in a push.
   # That is also triggered in the users repo when enabled
   push:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
   workflow_dispatch:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
