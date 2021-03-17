@@ -192,7 +192,13 @@ impl BridgeConfig {
             None => {}
         }
         writeln!(writer, "address {}", self.address)?;
-        writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
+
+        if std::fs::metadata(self.bridge_cafile.clone())?.is_dir() {
+            writeln!(writer, "bridge_capath {}", self.bridge_cafile)?;
+        } else {
+            writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
+        }
+
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
