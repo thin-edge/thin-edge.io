@@ -31,17 +31,13 @@ impl Azure {
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            try_private: false,
-            start_type: "automatic".into(),
-            cleansession: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
             topics: vec![
                 pub_msg_topic,
                 sub_msg_topic,
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
+            ..BridgeConfig::default()
         })
     }
 

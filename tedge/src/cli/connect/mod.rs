@@ -100,7 +100,43 @@ pub struct BridgeConfig {
     cleansession: bool,
     notifications: bool,
     bridge_attempt_unsubscribe: bool,
+    bind_address: String,
+    connection_messages: bool,
+    log_type: Vec<String>,
     topics: Vec<String>,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        BridgeConfig {
+            cloud_name: "".into(),
+            config_file: "".to_string(),
+            connection: "".into(),
+            address: "".into(),
+            remote_username: None,
+            bridge_cafile: "".into(),
+            bridge_certfile: "".into(),
+            bridge_keyfile: "".into(),
+            remote_clientid: "".into(),
+            local_clientid: "".into(),
+            try_private: false,
+            start_type: "automatic".into(),
+            cleansession: true,
+            notifications: false,
+            bridge_attempt_unsubscribe: false,
+            bind_address: "127.0.0.1".into(),
+            connection_messages: true,
+            log_type: vec![
+                "error".into(),
+                "warning".into(),
+                "notice".into(),
+                "information".into(),
+                "subscribe".into(),
+                "unsubscribe".into(),
+            ],
+            topics: vec![],
+        }
+    }
 }
 
 trait CheckConnection {
@@ -206,6 +242,12 @@ impl BridgeConfig {
             "bridge_attempt_unsubscribe {}",
             self.bridge_attempt_unsubscribe
         )?;
+        writeln!(writer, "bind_address {}", self.bind_address)?;
+        writeln!(writer, "connection_messages {}", self.connection_messages)?;
+
+        for log_type in &self.log_type {
+            writeln!(writer, "log_type {}", log_type)?;
+        }
 
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {

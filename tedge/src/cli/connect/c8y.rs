@@ -29,11 +29,6 @@ impl C8y {
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            try_private: false,
-            start_type: "automatic".into(),
-            cleansession: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
             topics: vec![
                 // Registration
                 r#"s/dcr in 2 c8y/ """#.into(),
@@ -61,6 +56,7 @@ impl C8y {
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
             ],
+            ..BridgeConfig::default()
         })
     }
 
