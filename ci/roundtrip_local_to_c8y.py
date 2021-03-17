@@ -13,17 +13,18 @@ Call example:
 """
 
 import argparse
-import time
-import sys
-import os
-import os.path
+import base64
 from datetime import datetime, timedelta
+import os
+import sys
+import time
+
 import requests
 
 # Warning: the list begins with the earliest one
 PAGE_SIZE = "200"
 
-# Seconds to retrive from the past (smaller than 10 does not work all the time)
+# Seconds to retrieve from the past (smaller than 10 does not work all the time)
 TIMESLOT = 10
 
 CMD_PUBLISH_REST = "tedge mqtt pub c8y/s/us 211,%i"
@@ -56,11 +57,10 @@ def act(path_publisher, mode):
     time.sleep(2)
 
 
-def retrive_data(user, device_id, password, zone):
+def retrieve_data(user, device_id, password, zone, tenant):
     """Download via REST"""
 
     time_to = datetime.fromtimestamp(int(time.time()))
-    # time_from = time_to - timedelta(minutes=TIMESLOT)
     time_from = time_to - timedelta(seconds=TIMESLOT)
 
     date_from = time_from.isoformat(sep="T") + zone
@@ -72,15 +72,25 @@ def retrive_data(user, device_id, password, zone):
     # date_from = '2021-02-15T13:00:00%2B01:00'
     # date_to = '2021-02-15T14:00:00%2B01:00'
 
+    # TODO Add command line parameter: cloud = 'latest.stage.c8y.io'
+    cloud = "eu-latest.cumulocity.com"
+
     url = (
-        f"https://{user}.latest.stage.c8y.io/measurement/measurements?"
+        f"https://{user}.{cloud}/measurement/measurements?"
         + f"source={device_id}&pageSize={PAGE_SIZE}&"
         + f"dateFrom={date_from}&dateTo={date_to}"
     )
 
+    auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
+
+    header = {b"Authorization": b"Basic " + base64.b64encode(auth)}
+
     print("URL: ", url)
 
-    req = requests.get(url, auth=(user, password))
+    # TODO Add authorisation style as command line parameter
+    # req = requests.get(url, auth=(user, password))
+
+    req = requests.get(url, headers=header)
 
     if req.status_code != 200:
         print("Http request failed !!!")
@@ -126,12 +136,12 @@ def check_timestamps(timestamps, laststamp):
         sys.exit(1)
 
 
-def assert_values(mode, user, device_id, password, zone):
+def assert_values(mode, user, device_id, password, zone, tenant):
     """Assert: Retriving data via REST interface"""
 
     print("Assert: Retriving data via REST interface")
 
-    req, time_from = retrive_data(user, device_id, password, zone)
+    req, time_from = retrieve_data(user, device_id, password, zone, tenant)
 
     amount = len(req.json()["measurements"])
 
@@ -143,9 +153,17 @@ def assert_values(mode, user, device_id, password, zone):
     for i in req.json()["measurements"]:
 
         if mode == "JSON":
-            value = i["Flux [F]"]["Flux [F]"]["value"]
+            try:
+                value = i["Flux [F]"]["Flux [F]"]["value"]
+            except KeyError:
+                print(f"Error: Cannot parse response: {i}")
+                sys.exit(1)
         elif mode == "REST":
-            value = i["c8y_TemperatureMeasurement"]["T"]["value"]
+            try:
+                value = i["c8y_TemperatureMeasurement"]["T"]["value"]
+            except KeyError:
+                print(f"Error: Cannot parse response: {i}")
+                sys.exit(1)
         else:
             print(f"Error: Cannot parse response: {i}")
             sys.exit(1)
@@ -157,7 +175,7 @@ def assert_values(mode, user, device_id, password, zone):
 
     expected = list(range(0, 20))
 
-    print("Retrived:", values)
+    print("Retrieved:", values)
     print("Expected:", expected)
 
     if values == expected:
@@ -175,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", help="Mode JSON or REST")
     parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
     parser.add_argument("-u", "--user", help="C8y username")
-    parser.add_argument("-t", "--tennant", help="C8y tennant")
+    parser.add_argument("-t", "--tenant", help="C8y tenant")
     parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("-z", "--zone", help="Timezone e.g. 01:00 or 00:00 ")
@@ -186,7 +204,7 @@ if __name__ == "__main__":
     assert mode in ("REST", "JSON")
     path_publisher = args.publisher
     user = args.user
-    tennant = args.tennant
+    tenant = args.tenant
     password = args.password
     device_id = args.id
     # E.g. '%2B01:00' # UTC +1 (CET) Works for Germany
@@ -195,10 +213,10 @@ if __name__ == "__main__":
     print(f"Mode: {mode}")
     print(f"Using path for publisher: {path_publisher}")
     print(f"Using user name: {user}")
-    print(f"Using tennant-id: {tennant}")
+    print(f"Using tenant-id: {tenant}")
     print(f"Using device-id: {device_id}")
     print(f"Using timezone adjustment: {args.zone}")
 
     act(path_publisher, mode)
 
-    assert_values(mode, user, device_id, password, zone)
+    assert_values(mode, user, device_id, password, zone, tenant)
