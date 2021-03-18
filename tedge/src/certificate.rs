@@ -2,6 +2,7 @@ use crate::config::{
     ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
 };
 use crate::utils::{paths, paths::PathsError};
+use crate::utils::users;
 use crate::{
     command::{BuildCommand, Command},
     utils,
@@ -287,6 +288,9 @@ pub enum CertError {
 
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
+
+    #[error(transparent)]
+    UserSwitchError(#[from] users::UserSwitchError),
 }
 
 impl CertError {
@@ -442,6 +446,7 @@ impl Default for TestCertConfig {
 
 impl CreateCertCmd {
     fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
+        let _user_guard = users::become_user("mosquitto")?;
         check_identifier(&self.id)?;
 
         let cert_path = Path::new(&self.cert_path);
