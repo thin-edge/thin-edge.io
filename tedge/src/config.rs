@@ -20,8 +20,8 @@ pub const C8Y_URL: &str = "c8y.url";
 pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
 // CIT-221 will use them. Remove the prefix `_` later
-pub const _AZURE_URL: &str = "azure.url";
-pub const _AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
+pub const AZURE_URL: &str = "azure.url";
+pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 
 /// Wrapper type for configuration keys.
 #[derive(Debug, Clone)]
@@ -67,11 +67,23 @@ impl std::str::FromStr for WritableConfigKey {
                 mode: ConfigKeyMode::ReadWrite,
                 ..
             }) => Ok(WritableConfigKey(key.into())),
-            _ => Err(format!(
-                "Invalid key `{}'. Valid keys are: [{}].",
-                key,
-                TEdgeConfig::valid_writable_keys().join(", ")
-            )),
+            _ => {
+                if key == DEVICE_ID {
+                    Err(format!(
+                        "Invalid key `{}'. Valid keys are: [{}].\n\
+                Setting the device id is only allowed with tedge cert create. \
+                To set 'device.id', use `tedge cert create --device-id <id>`.",
+                        key,
+                        TEdgeConfig::valid_writable_keys().join(", ")
+                    ))
+                } else {
+                    Err(format!(
+                        "Invalid key `{}'. Valid keys are: [{}].",
+                        key,
+                        TEdgeConfig::valid_writable_keys().join(", ")
+                    ))
+                }
+            }
         }
     }
 }
@@ -431,7 +443,7 @@ pub struct CumulocityConfig {
     connect: Option<String>,
 
     /// Endpoint URL of the Cumulocity tenant
-    url: Option<String>,
+    pub url: Option<String>,
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
@@ -465,6 +477,12 @@ pub enum ConfigError {
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
+
+    #[error(
+        r#"Provided URL: '{0}' contains scheme or port.
+    Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."#
+    )]
+    InvalidConfigUrl(String),
 
     #[error(
         r#"A value for `{key}` is missing.
@@ -525,7 +543,7 @@ impl TEdgeConfig {
     ///
     /// * `path` - Path to a thin edge configuration TOML file
     ///
-    fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
+    pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
             Ok(content) => {
                 let mut tedge_config = toml::from_str::<TEdgeConfig>(content.as_str())?;
@@ -1013,12 +1031,12 @@ root_cert_path = "/path/to/azure/root/cert"
 
         // read
         assert_eq!(
-            config.get_config_value(_AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(AZURE_URL).unwrap().unwrap(),
             original_azure_url
         );
         assert_eq!(
             config
-                .get_config_value(_AZURE_ROOT_CERT_PATH)
+                .get_config_value(AZURE_ROOT_CERT_PATH)
                 .unwrap()
                 .unwrap(),
             original_azure_root_cert_path
@@ -1027,17 +1045,17 @@ root_cert_path = "/path/to/azure/root/cert"
         // set
         let updated_azure_url = "OtherAzure.azure-devices.net".to_string();
         config
-            .set_config_value(_AZURE_URL, updated_azure_url.clone())
+            .set_config_value(AZURE_URL, updated_azure_url.clone())
             .unwrap();
         assert_eq!(
-            config.get_config_value(_AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(AZURE_URL).unwrap().unwrap(),
             updated_azure_url
         );
 
         // unset
-        config.unset_config_value(_AZURE_ROOT_CERT_PATH).unwrap();
+        config.unset_config_value(AZURE_ROOT_CERT_PATH).unwrap();
         assert!(config
-            .get_config_value(_AZURE_ROOT_CERT_PATH)
+            .get_config_value(AZURE_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
     }

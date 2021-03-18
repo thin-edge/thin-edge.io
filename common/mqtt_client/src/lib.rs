@@ -36,6 +36,7 @@ use tokio::sync::{broadcast, oneshot};
 ///     mqtt.disconnect().await.unwrap();
 /// }
 /// ```
+#[derive(Debug)]
 pub struct Client {
     name: String,
     mqtt_client: rumqttc::AsyncClient,
