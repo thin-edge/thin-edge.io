@@ -11,7 +11,7 @@ pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 pub struct C8y {}
 
 impl C8y {
-    pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let address = format!(
             "{}:{}",
             config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
@@ -25,7 +25,7 @@ impl C8y {
             address,
             remote_username: None,
             bridge_root_cert_path: config::get_config_value_or_default(
-                &config,
+                &mut config,
                 C8Y_ROOT_CERT_PATH,
                 DEFAULT_ROOT_CERT_PATH,
             )?,

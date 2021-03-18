@@ -11,7 +11,7 @@ const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct Azure {}
 
 impl Azure {
-    pub fn azure_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let az_url =
             config::parse_user_provided_address(config::get_config_value(&config, AZURE_URL)?)?;
         let address = format!("{}:{}", az_url, MQTT_TLS_PORT);
@@ -27,7 +27,7 @@ impl Azure {
             address,
             remote_username: Some(user_name),
             bridge_root_cert_path: config::get_config_value_or_default(
-                &config,
+                &mut config,
                 AZURE_ROOT_CERT_PATH,
                 DEFAULT_ROOT_CERT_PATH,
             )?,

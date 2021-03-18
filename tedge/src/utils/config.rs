@@ -7,13 +7,17 @@ pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, Confi
 }
 
 pub fn get_config_value_or_default(
-    config: &TEdgeConfig,
+    config: &mut TEdgeConfig,
     key: &str,
     default: &str,
 ) -> Result<String, ConfigError> {
     let value = config
         .get_config_value(key)?
         .unwrap_or_else(|| default.into());
+
+    let _ = config.set_config_value(key, value.clone());
+    let _ = config.write_to_default_config()?;
+
     Ok(value)
 }
 
