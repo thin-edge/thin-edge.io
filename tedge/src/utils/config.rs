@@ -6,6 +6,17 @@ pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, Confi
         .ok_or_else(|| ConfigError::ConfigNotSet { key: key.into() })
 }
 
+pub fn get_config_value_or_default(
+    config: &TEdgeConfig,
+    key: &str,
+    default: &str,
+) -> Result<String, ConfigError> {
+    let value = config
+        .get_config_value(key)?
+        .unwrap_or_else(|| default.into());
+    Ok(value)
+}
+
 pub fn parse_user_provided_address(input: String) -> Result<String, ConfigError> {
     if input.contains(':') {
         return Err(ConfigError::InvalidConfigUrl(input));

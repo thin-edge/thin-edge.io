@@ -28,7 +28,7 @@ fn default_bridge_config() -> BridgeConfig {
 #[test]
 fn config_bridge_validate_ok() {
     let ca_file = NamedTempFile::new().unwrap();
-    let bridge_cafile = ca_file.path().to_str().unwrap().to_owned();
+    let bridge_ca_path = ca_file.path().to_str().unwrap().to_owned();
 
     let cert_file = NamedTempFile::new().unwrap();
     let bridge_certfile = cert_file.path().to_str().unwrap().to_owned();
@@ -38,7 +38,7 @@ fn config_bridge_validate_ok() {
 
     let config = BridgeConfig {
         address: CORRECT_URL.into(),
-        bridge_root_cert_path: bridge_cafile,
+        bridge_root_cert_path: bridge_ca_path,
         bridge_certfile,
         bridge_keyfile,
         ..default_bridge_config()

@@ -16,10 +16,11 @@ use crate::config::{
     DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
+const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
+const MQTT_TLS_PORT: u16 = 8883;
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
-const MQTT_TLS_PORT: u16 = 8883;
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {
@@ -193,7 +194,7 @@ impl BridgeConfig {
         }
         writeln!(writer, "address {}", self.address)?;
 
-        if std::fs::metadata(self.bridge_root_cert_path.clone())?.is_dir() {
+        if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
             writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
         } else {
             writeln!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;

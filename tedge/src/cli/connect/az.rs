@@ -26,7 +26,11 @@ impl Azure {
             connection: "edge_to_az".into(),
             address,
             remote_username: Some(user_name),
-            bridge_root_cert_path: config::get_config_value(&config, AZURE_ROOT_CERT_PATH)?,
+            bridge_root_cert_path: config::get_config_value_or_default(
+                &config,
+                AZURE_ROOT_CERT_PATH,
+                DEFAULT_ROOT_CERT_PATH,
+            )?,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
