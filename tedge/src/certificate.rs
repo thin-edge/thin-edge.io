@@ -1,5 +1,6 @@
 use crate::config::{
-    ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
+    keys::{C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH},
+    ConfigError, TEdgeConfig,
 };
 use crate::utils::{paths, paths::PathsError};
 use crate::{

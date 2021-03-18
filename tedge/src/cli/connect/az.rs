@@ -84,7 +84,7 @@ impl Azure {
         match fut.await {
             Ok(Ok(true)) => {
                 println!("Received expected response message, connection check is successful");
-                return Ok(());
+                Ok(())
             }
             _err => {
                 println!("Warning: No response, bridge has been configured, but Azure connection check failed.\n",);

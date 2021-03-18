@@ -12,16 +12,18 @@ const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-pub const DEVICE_ID: &str = "device.id";
-pub const DEVICE_CERT_PATH: &str = "device.cert.path";
-pub const DEVICE_KEY_PATH: &str = "device.key.path";
+pub mod keys {
+    pub const DEVICE_ID: &str = "device.id";
+    pub const DEVICE_CERT_PATH: &str = "device.cert.path";
+    pub const DEVICE_KEY_PATH: &str = "device.key.path";
 
-pub const C8Y_URL: &str = "c8y.url";
-pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
+    pub const C8Y_URL: &str = "c8y.url";
+    pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 
-// CIT-221 will use them. Remove the prefix `_` later
-pub const AZURE_URL: &str = "azure.url";
-pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
+    // CIT-221 will use them. Remove the prefix `_` later
+    pub const AZURE_URL: &str = "azure.url";
+    pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
+}
 
 /// Wrapper type for configuration keys.
 #[derive(Debug, Clone)]
@@ -68,7 +70,7 @@ impl std::str::FromStr for WritableConfigKey {
                 ..
             }) => Ok(WritableConfigKey(key.into())),
             _ => {
-                if key == DEVICE_ID {
+                if key == keys::DEVICE_ID {
                     Err(format!(
                         "Invalid key `{}'. Valid keys are: [{}].\n\
                 Setting the device id is only allowed with tedge cert create. \
@@ -599,7 +601,13 @@ impl TEdgeConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        keys::{
+            AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
+            DEVICE_ID, DEVICE_KEY_PATH,
+        },
+        *,
+    };
     use assert_matches::assert_matches;
 
     #[test]
