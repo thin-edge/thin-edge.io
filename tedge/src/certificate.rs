@@ -12,6 +12,7 @@ use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
 use reqwest::{StatusCode, Url};
+use sha1::{Digest, Sha1};
 use std::{
     convert::TryFrom,
     fs::{File, OpenOptions},
@@ -508,6 +509,8 @@ impl ShowCertCmd {
             "Valid up to: {}",
             tbs_certificate.validity.not_after.to_rfc2822()
         );
+        let result = Sha1::digest(&pem.contents);
+        println!("Thumbprint: {:X}", result);
 
         Ok(())
     }
