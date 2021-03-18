@@ -18,17 +18,25 @@ impl C8y {
             MQTT_TLS_PORT
         );
 
+        let bridge_root_cert_path = config::get_config_value_or_default(
+            &config,
+            C8Y_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
+        let _ = config::update_config_with_value(
+            &mut config,
+            C8Y_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
         Ok(BridgeConfig {
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
             address,
             remote_username: None,
-            bridge_root_cert_path: config::get_config_value_or_default(
-                &mut config,
-                C8Y_ROOT_CERT_PATH,
-                DEFAULT_ROOT_CERT_PATH,
-            )?,
+            bridge_root_cert_path,
             remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,

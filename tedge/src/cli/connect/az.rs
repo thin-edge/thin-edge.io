@@ -20,17 +20,25 @@ impl Azure {
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
+        let bridge_root_cert_path = config::get_config_value_or_default(
+            &config,
+            AZURE_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
+        let _ = config::update_config_with_value(
+            &mut config,
+            AZURE_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
         Ok(BridgeConfig {
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
             address,
             remote_username: Some(user_name),
-            bridge_root_cert_path: config::get_config_value_or_default(
-                &mut config,
-                AZURE_ROOT_CERT_PATH,
-                DEFAULT_ROOT_CERT_PATH,
-            )?,
+            bridge_root_cert_path,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,

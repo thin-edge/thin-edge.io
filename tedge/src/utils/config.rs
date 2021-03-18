@@ -7,7 +7,7 @@ pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, Confi
 }
 
 pub fn get_config_value_or_default(
-    config: &mut TEdgeConfig,
+    config: &TEdgeConfig,
     key: &str,
     default: &str,
 ) -> Result<String, ConfigError> {
@@ -15,10 +15,16 @@ pub fn get_config_value_or_default(
         .get_config_value(key)?
         .unwrap_or_else(|| default.into());
 
-    let _ = config.set_config_value(key, value.clone());
-    let _ = config.write_to_default_config()?;
-
     Ok(value)
+}
+
+pub fn update_config_with_value(
+    config: &mut TEdgeConfig,
+    key: &str,
+    value: &str,
+) -> Result<(), ConfigError> {
+    let _ = config.set_config_value(key, value.to_owned())?;
+    Ok(config.write_to_default_config()?)
 }
 
 pub fn parse_user_provided_address(input: String) -> Result<String, ConfigError> {
