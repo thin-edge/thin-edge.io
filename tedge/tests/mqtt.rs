@@ -3,6 +3,10 @@ mod tests {
 
     // These test cases need mosquitto on localhost on GH hosted machine.
 
+    use assert_cmd::Command;
+    use predicates::prelude::predicate;
+    use assert_cmd::assert::OutputAssertExt;
+
     #[test]
     #[cfg(feature = "mosquitto-available")]
     fn test_cli_pub_basic() -> Result<(), Box<dyn std::error::Error>> {

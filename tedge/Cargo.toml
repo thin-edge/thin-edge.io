@@ -44,3 +44,4 @@ base64 = "0.13.0"
 [features]
 integration-test = []
 mosquitto-available = []
+root-access = []              # Enable tests requesting root access
