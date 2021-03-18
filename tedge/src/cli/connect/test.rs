@@ -11,7 +11,7 @@ fn default_bridge_config() -> BridgeConfig {
         connection: "edge_to_az/c8y".into(),
         address: "".into(),
         remote_username: None,
-        bridge_cafile: "".into(),
+        bridge_root_cert_path: "".into(),
         bridge_certfile: "".into(),
         bridge_keyfile: "".into(),
         remote_clientid: "".into(),
@@ -38,7 +38,7 @@ fn config_bridge_validate_ok() {
 
     let config = BridgeConfig {
         address: CORRECT_URL.into(),
-        bridge_cafile,
+        bridge_root_cert_path: bridge_cafile,
         bridge_certfile,
         bridge_keyfile,
         ..default_bridge_config()
@@ -110,7 +110,7 @@ fn bridge_config_c8y_create() {
         connection: "edge_to_c8y".into(),
         address: "test.test.io:8883".into(),
         remote_username: None,
-        bridge_cafile: "./test_root.pem".into(),
+        bridge_root_cert_path: "./test_root.pem".into(),
         remote_clientid: "alpha".into(),
         local_clientid: "Cumulocity".into(),
         bridge_certfile: "./test-certificate.pem".into(),
@@ -176,7 +176,7 @@ fn bridge_config_azure_create() {
         connection: "edge_to_az".into(),
         address: "test.test.io:8883".into(),
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
-        bridge_cafile: "./test_root.pem".into(),
+        bridge_root_cert_path: "./test_root.pem".into(),
         remote_clientid: "alpha".into(),
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),

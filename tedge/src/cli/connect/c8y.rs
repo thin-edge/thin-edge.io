@@ -24,7 +24,7 @@ impl C8y {
             connection: "edge_to_c8y".into(),
             address,
             remote_username: None,
-            bridge_cafile: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
+            bridge_root_cert_path: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
             remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,

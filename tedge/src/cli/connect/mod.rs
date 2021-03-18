@@ -90,7 +90,7 @@ pub struct BridgeConfig {
     connection: String,
     address: String,
     remote_username: Option<String>,
-    bridge_cafile: String,
+    bridge_root_cert_path: String,
     remote_clientid: String,
     local_clientid: String,
     bridge_certfile: String,
@@ -193,10 +193,10 @@ impl BridgeConfig {
         }
         writeln!(writer, "address {}", self.address)?;
 
-        if std::fs::metadata(self.bridge_cafile.clone())?.is_dir() {
-            writeln!(writer, "bridge_capath {}", self.bridge_cafile)?;
+        if std::fs::metadata(self.bridge_root_cert_path.clone())?.is_dir() {
+            writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
         } else {
-            writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
+            writeln!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
         }
 
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
@@ -223,7 +223,7 @@ impl BridgeConfig {
     fn validate(&self) -> Result<(), ConnectError> {
         Url::parse(&self.address)?;
 
-        if !Path::new(&self.bridge_cafile).exists() {
+        if !Path::new(&self.bridge_root_cert_path).exists() {
             return Err(ConnectError::Certificate);
         }
 
