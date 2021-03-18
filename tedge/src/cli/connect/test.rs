@@ -6,10 +6,18 @@ const INCORRECT_PATH: &str = "/path";
 
 fn default_bridge_config() -> BridgeConfig {
     BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az/c8y".into(),
         config_file: "cfg".to_string(),
         connection: "edge_to_az/c8y".into(),
-        ..BridgeConfig::default()
+        address: "".into(),
+        remote_username: None,
+        bridge_cafile: "".into(),
+        bridge_certfile: "".into(),
+        bridge_keyfile: "".into(),
+        remote_clientid: "".into(),
+        local_clientid: "".into(),
+        topics: vec![],
     }
 }
 
@@ -73,7 +81,6 @@ fn config_bridge_validate_wrong_key_path() {
     assert!(config.validate().is_err());
 }
 
-use std::fs;
 use std::io::Write;
 
 #[test]
@@ -95,6 +102,7 @@ fn bridge_config_c8y_create() {
     let bridge = C8y::c8y_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "c8y".into(),
         config_file: "c8y-bridge.conf".into(),
         connection: "edge_to_c8y".into(),
@@ -132,7 +140,6 @@ fn bridge_config_c8y_create() {
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
         ],
-        ..BridgeConfig::default()
     };
 
     assert_eq!(bridge, expected);
@@ -157,6 +164,7 @@ fn bridge_config_azure_create() {
     let bridge = Azure::azure_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
@@ -173,13 +181,12 @@ fn bridge_config_azure_create() {
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
             r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
         ],
-        ..BridgeConfig::default()
     };
     assert_eq!(bridge, expected);
 }
 
 #[test]
-fn serilaize() {
+fn serialaize() {
     let config = BridgeConfig {
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
@@ -195,16 +202,22 @@ fn serilaize() {
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
         ],
-        ..BridgeConfig::default()
+        common_bridge_config: CommonBridgeConfig::default(),
     };
 
-    let mut file = NamedTempFile::new().unwrap();
+    let mut buffer = Vec::new();
     config
-        .serialize(&mut file)
+        .serialize(&mut buffer)
         .expect("Writing config to file failed");
 
-    let contents = fs::read_to_string(file).expect("Something went wrong reading the file");
-    assert_eq!(contents.lines().count(), 26);
+    let contents = String::from_utf8(buffer).unwrap();
+    assert_eq!(
+        contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with("#"))
+            .count(),
+        23
+    );
 
     assert!(contents.contains("connection edge_to_az"));
     assert!(contents.contains("remote_username test.test.io/alpha/?api-version=2018-06-30"));

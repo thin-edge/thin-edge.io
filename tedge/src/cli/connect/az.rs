@@ -21,6 +21,7 @@ impl Azure {
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
         Ok(BridgeConfig {
+            common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
@@ -37,7 +38,6 @@ impl Azure {
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
-            ..BridgeConfig::default()
         })
     }
 

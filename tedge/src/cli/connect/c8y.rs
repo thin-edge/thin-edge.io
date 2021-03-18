@@ -19,6 +19,7 @@ impl C8y {
         );
 
         Ok(BridgeConfig {
+            common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
@@ -56,7 +57,6 @@ impl C8y {
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
             ],
-            ..BridgeConfig::default()
         })
     }
 
