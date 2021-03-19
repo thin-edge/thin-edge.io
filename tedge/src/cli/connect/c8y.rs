@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::ConfigError;
+use crate::config::{keys, ConfigError};
 use crate::utils::config;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
@@ -14,7 +14,7 @@ impl C8y {
     pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let address = format!(
             "{}:{}",
-            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
+            config::parse_user_provided_address(config::get_config_value(&config, keys::C8Y_URL)?)?,
             MQTT_TLS_PORT
         );
 
@@ -24,11 +24,11 @@ impl C8y {
             connection: "edge_to_c8y".into(),
             address,
             remote_username: None,
-            bridge_cafile: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
-            remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
+            bridge_cafile: config::get_config_value(&config, keys::C8Y_ROOT_CERT_PATH)?,
+            remote_clientid: config::get_config_value(&config, keys::DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
-            bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
-            bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
+            bridge_certfile: config::get_config_value(&config, keys::DEVICE_CERT_PATH)?,
+            bridge_keyfile: config::get_config_value(&config, keys::DEVICE_KEY_PATH)?,
             try_private: false,
             start_type: "automatic".into(),
             cleansession: true,

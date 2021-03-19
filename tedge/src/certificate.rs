@@ -1,7 +1,4 @@
-use crate::config::{
-    keys::{C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH},
-    ConfigError, TEdgeConfig,
-};
+use crate::config::{keys, ConfigError, TEdgeConfig};
 use crate::utils::{paths, paths::PathsError};
 use crate::{
     command::{BuildCommand, Command},
@@ -84,19 +81,19 @@ impl BuildCommand for UploadCertOpt {
         match self {
             UploadCertOpt::C8y { username } => {
                 let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from(DEVICE_ID),
+                    key: String::from(keys::DEVICE_ID),
                 })?;
 
                 let path = PathBuf::try_from(config.device.cert_path.ok_or_else(|| {
                     ConfigError::ConfigNotSet {
-                        key: String::from(DEVICE_CERT_PATH),
+                        key: String::from(keys::DEVICE_CERT_PATH),
                     }
                 })?)
                 .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
 
                 let host = utils::config::parse_user_provided_address(config.c8y.url.ok_or_else(
                     || ConfigError::ConfigNotSet {
-                        key: String::from(C8Y_URL),
+                        key: String::from(keys::C8Y_URL),
                     },
                 )?)?;
 
@@ -329,12 +326,12 @@ impl BuildCommand for TEdgeCertOpt {
                         id,
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
+                                key: String::from(keys::DEVICE_CERT_PATH),
                             }
                         })?,
                         key_path: config.device.key_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
+                                key: String::from(keys::DEVICE_KEY_PATH),
                             }
                         })?,
                     };
@@ -345,7 +342,7 @@ impl BuildCommand for TEdgeCertOpt {
                     let cmd = ShowCertCmd {
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
+                                key: String::from(keys::DEVICE_CERT_PATH),
                             }
                         })?,
                     };
@@ -356,12 +353,12 @@ impl BuildCommand for TEdgeCertOpt {
                     let cmd = RemoveCertCmd {
                         cert_path: config.device.cert_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
+                                key: String::from(keys::DEVICE_CERT_PATH),
                             }
                         })?,
                         key_path: config.device.key_path.ok_or_else(|| {
                             ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
+                                key: String::from(keys::DEVICE_KEY_PATH),
                             }
                         })?,
                     };

@@ -1,12 +1,6 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command};
-use crate::config::{
-    keys::{
-        AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-        DEVICE_KEY_PATH,
-    },
-    ConfigError, TEdgeConfig, TEDGE_HOME_DIR,
-};
+use crate::config::{ConfigError, TEdgeConfig, TEDGE_HOME_DIR};
 
 use crate::utils::{paths, services};
 use std::path::Path;

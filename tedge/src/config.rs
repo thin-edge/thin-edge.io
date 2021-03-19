@@ -601,13 +601,7 @@ impl TEdgeConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        keys::{
-            AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH,
-            DEVICE_ID, DEVICE_KEY_PATH,
-        },
-        *,
-    };
+    use super::{keys, *};
     use assert_matches::assert_matches;
 
     #[test]
@@ -954,27 +948,33 @@ root_cert_path = "/path/to/azure/root/cert"
         let original_device_key_path = "/path/to/key".to_string();
         let original_device_cert_path = "/path/to/cert".to_string();
         assert_eq!(
-            config.get_config_value(DEVICE_ID).unwrap().unwrap(),
+            config.get_config_value(keys::DEVICE_ID).unwrap().unwrap(),
             original_device_id
         );
         assert_eq!(
-            config.get_config_value(DEVICE_KEY_PATH).unwrap().unwrap(),
+            config
+                .get_config_value(keys::DEVICE_KEY_PATH)
+                .unwrap()
+                .unwrap(),
             original_device_key_path
         );
         assert_eq!(
-            config.get_config_value(DEVICE_CERT_PATH).unwrap().unwrap(),
+            config
+                .get_config_value(keys::DEVICE_CERT_PATH)
+                .unwrap()
+                .unwrap(),
             original_device_cert_path
         );
 
         let original_c8y_url = "your-tenant.cumulocity.com".to_string();
         let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
         assert_eq!(
-            config.get_config_value(C8Y_URL).unwrap().unwrap(),
+            config.get_config_value(keys::C8Y_URL).unwrap().unwrap(),
             original_c8y_url
         );
         assert_eq!(
             config
-                .get_config_value(C8Y_ROOT_CERT_PATH)
+                .get_config_value(keys::C8Y_ROOT_CERT_PATH)
                 .unwrap()
                 .unwrap(),
             original_c8y_root_cert_path
@@ -984,32 +984,38 @@ root_cert_path = "/path/to/azure/root/cert"
         let updated_c8y_url = "other-tenant.cumulocity.com".to_string();
 
         config
-            .set_config_value(DEVICE_ID, updated_device_id.clone())
+            .set_config_value(keys::DEVICE_ID, updated_device_id.clone())
             .unwrap();
         config
-            .set_config_value(C8Y_URL, updated_c8y_url.clone())
+            .set_config_value(keys::C8Y_URL, updated_c8y_url.clone())
             .unwrap();
-        config.unset_config_value(C8Y_ROOT_CERT_PATH).unwrap();
+        config.unset_config_value(keys::C8Y_ROOT_CERT_PATH).unwrap();
 
         assert_eq!(
-            config.get_config_value(DEVICE_ID).unwrap().unwrap(),
+            config.get_config_value(keys::DEVICE_ID).unwrap().unwrap(),
             updated_device_id
         );
         assert_eq!(
-            config.get_config_value(DEVICE_KEY_PATH).unwrap().unwrap(),
+            config
+                .get_config_value(keys::DEVICE_KEY_PATH)
+                .unwrap()
+                .unwrap(),
             original_device_key_path
         );
         assert_eq!(
-            config.get_config_value(DEVICE_CERT_PATH).unwrap().unwrap(),
+            config
+                .get_config_value(keys::DEVICE_CERT_PATH)
+                .unwrap()
+                .unwrap(),
             original_device_cert_path
         );
 
         assert_eq!(
-            config.get_config_value(C8Y_URL).unwrap().unwrap(),
+            config.get_config_value(keys::C8Y_URL).unwrap().unwrap(),
             updated_c8y_url
         );
         assert!(config
-            .get_config_value(C8Y_ROOT_CERT_PATH)
+            .get_config_value(keys::C8Y_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
     }
@@ -1039,12 +1045,12 @@ root_cert_path = "/path/to/azure/root/cert"
 
         // read
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(keys::AZURE_URL).unwrap().unwrap(),
             original_azure_url
         );
         assert_eq!(
             config
-                .get_config_value(AZURE_ROOT_CERT_PATH)
+                .get_config_value(keys::AZURE_ROOT_CERT_PATH)
                 .unwrap()
                 .unwrap(),
             original_azure_root_cert_path
@@ -1053,17 +1059,19 @@ root_cert_path = "/path/to/azure/root/cert"
         // set
         let updated_azure_url = "OtherAzure.azure-devices.net".to_string();
         config
-            .set_config_value(AZURE_URL, updated_azure_url.clone())
+            .set_config_value(keys::AZURE_URL, updated_azure_url.clone())
             .unwrap();
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            config.get_config_value(keys::AZURE_URL).unwrap().unwrap(),
             updated_azure_url
         );
 
         // unset
-        config.unset_config_value(AZURE_ROOT_CERT_PATH).unwrap();
+        config
+            .unset_config_value(keys::AZURE_ROOT_CERT_PATH)
+            .unwrap();
         assert!(config
-            .get_config_value(AZURE_ROOT_CERT_PATH)
+            .get_config_value(keys::AZURE_ROOT_CERT_PATH)
             .unwrap()
             .is_none());
     }
