@@ -20,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
+use x509_parser::prelude::Pem;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
@@ -509,13 +510,12 @@ impl ShowCertCmd {
             "Valid up to: {}",
             tbs_certificate.validity.not_after.to_rfc2822()
         );
-        println!("Thumbprint: {}", show_thumbprint(cert_path)?);
+        println!("Thumbprint: {}", show_thumbprint(&pem)?);
         Ok(())
     }
 }
 
-fn show_thumbprint(cert_path: &str) -> Result<String, CertError> {
-    let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
+fn show_thumbprint(pem: &Pem) -> Result<String, CertError> {
     let bytes = Sha1::digest(&pem.contents).as_slice().to_vec();
     let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();
     Ok(strs.concat())
@@ -656,7 +656,9 @@ fn build_upload_certificate_url(host: &str, tenant_id: &str) -> Result<Url, Cert
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use openssl::{hash::MessageDigest, x509::X509};
     use std::fs::File;
+    use std::io::Cursor;
     use tempfile::*;
 
     #[test]
@@ -717,6 +719,64 @@ mod tests {
         let error = cmd.execute(verbose).unwrap_err();
         let cert_error = error.downcast_ref::<CertError>().unwrap();
         assert_matches!(cert_error, CertError::CertPathError { .. });
+    }
+
+    #[test]
+    fn check_certificate_thumbprint() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-thumbprint-device-cert.pem");
+        let key_path = temp_file_path(&dir, "my-thumbprint-device-key.pem");
+        let id = "my-device-id";
+        let cmd = CreateCertCmd {
+            id: String::from(id),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+        };
+        let verbose = 0;
+
+        //Create a certificate
+        assert!(cmd.execute(verbose).err().is_none());
+
+        //Compute the thumbprint of the certificate
+        let pem = read_pem(&cert_path)
+            .map_err(|err| err.cert_context(&cert_path))
+            .unwrap();
+        let thumbprint_sha1 = show_thumbprint(&pem).unwrap();
+
+        //Compute the thumbprint of the certificate using openssl
+        let mut file = File::open(cert_path)
+            .map_err(|err| err.to_string())
+            .unwrap();
+        let pem_cont = file_content(&mut file);
+        let pem = X509::from_pem(pem_cont.as_bytes()).unwrap();
+        let thumbprint_bytes = pem.digest(MessageDigest::sha1()).unwrap();
+        let x: &[u8] = &(*thumbprint_bytes);
+        let thumbprint_openssl: Vec<String> = x.iter().map(|b| format!("{:02X}", b)).collect();
+
+        //compare the two thumbprints
+        assert_eq!(thumbprint_sha1, thumbprint_openssl.concat());
+    }
+
+    #[test]
+    fn check_thumprint() {
+        let cert_content = r#"-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
+EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
+MzA5MTQxMDMwWhcNMjIwMzEwMTQxMDMwWjA7MQ8wDQYDVQQDDAZteS10YnIxEjAQ
+BgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwWTATBgcqhkjO
+PQIBBggqhkjOPQMBBwNCAAR6DVDOQ9ey3TX4tD2V0zCYe8GtmUHekNZZX6P+lUXx
+886P/Kkyra0xCYKam2me2VzdLMc4X5cpRkybVa0XH/WCozIwMDAdBgNVHQ4EFgQU
+Iz8LzGgzHjqsvB+ppPsVa+xf2bYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
+AgNIADBFAiEAhMAATBcZqE3Li1TZCzDoweBxRw1WD6gaSAcrsIWuW94CIHuR5ZG7
+ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
+-----END CERTIFICATE-----
+"#;
+        let expected_thumbprint = "860218AD0A996004449521E2713C28F67B5EA580";
+
+        let reader = Cursor::new(cert_content.as_bytes());
+        let (pem, _bytes_read) = Pem::read(reader).expect("Reading PEM failed");
+        let thumbprint = show_thumbprint(&pem).unwrap();
+        assert_eq!(thumbprint, expected_thumbprint);
     }
 
     #[test]
