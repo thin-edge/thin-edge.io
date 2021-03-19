@@ -509,11 +509,16 @@ impl ShowCertCmd {
             "Valid up to: {}",
             tbs_certificate.validity.not_after.to_rfc2822()
         );
-        let result = Sha1::digest(&pem.contents);
-        println!("Thumbprint: {:X}", result);
-
+        println!("Thumbprint: {}", show_thumbprint(cert_path)?);
         Ok(())
     }
+}
+
+fn show_thumbprint(cert_path: &str) -> Result<String, CertError> {
+    let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
+    let bytes = Sha1::digest(&pem.contents).as_slice().to_vec();
+    let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();
+    Ok(strs.concat())
 }
 
 impl RemoveCertCmd {
