@@ -1,8 +1,8 @@
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
 };
-use crate::utils::{paths, paths::PathsError};
 use crate::utils::users;
+use crate::utils::{paths, paths::PathsError};
 use crate::{
     command::{BuildCommand, Command},
     utils,

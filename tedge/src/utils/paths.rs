@@ -132,14 +132,14 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]  // On windows the error is unexpectedly RelativePathNotPermitted
+    #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
     fn validate_path_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
         assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
     }
 
     #[test]
-    #[cfg(unix)]  // On windows the error is unexpectedly RelativePathNotPermitted
+    #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
     fn validate_parent_dir_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/"));
         assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });

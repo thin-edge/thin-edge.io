@@ -5,9 +5,9 @@ mod tests {
     use std::path::Path; // Used for writing assertions
 
     fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
-        where
-            I: IntoIterator<Item = S>,
-            S: AsRef<std::ffi::OsStr>,
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
     {
         let path: &str = "tedge";
         let mut cmd = assert_cmd::Command::cargo_bin(path)?;
@@ -121,7 +121,6 @@ mod tests {
 
         Ok(())
     }
-
 
     #[test]
     fn run_config_set_get_unset_read_only_key() -> Result<(), Box<dyn std::error::Error>> {
