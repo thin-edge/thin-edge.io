@@ -38,10 +38,11 @@ users = "0.11.0"
 [dev-dependencies]
 assert_cmd = "1.0.2"
 assert_matches = "1.4.0"
+base64 = "0.13.0"
 mockito = "0.29.0"
 pem = "0.8.2"
 predicates = "1.0.6"
-base64 = "0.13.0"
+which = "4.0.2"
 
 [features]
 integration-test = []
