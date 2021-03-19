@@ -153,6 +153,112 @@ fn bridge_config_c8y_create() {
 }
 
 #[test]
+fn bridge_config_serialize_with_cafile_correctly() {
+    let file = NamedTempFile::new().unwrap();
+    let bridge_root_cert_path = file.path().to_str().unwrap().to_owned();
+
+    let bridge = BridgeConfig {
+        cloud_name: "test".into(),
+        config_file: "test-bridge.conf".into(),
+        connection: "edge_to_test".into(),
+        address: "test.test.io:8883".into(),
+        remote_username: None,
+        bridge_root_cert_path: bridge_root_cert_path.clone(),
+        remote_clientid: "alpha".into(),
+        local_clientid: "test".into(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
+        try_private: false,
+        start_type: "automatic".into(),
+        cleansession: true,
+        notifications: false,
+        bridge_attempt_unsubscribe: false,
+        topics: vec![],
+    };
+    let mut serialized_config = Vec::<u8>::new();
+    bridge.serialize(&mut serialized_config).unwrap();
+
+    let bridge_cafile = format!("bridge_cafile {}", bridge_root_cert_path);
+    let mut expected = r#"### Bridge
+connection edge_to_test
+address test.test.io:8883
+"#
+    .to_owned();
+
+    expected.push_str(&bridge_cafile);
+    expected.push_str(
+        r#"
+remote_clientid alpha
+local_clientid test
+bridge_certfile ./test-certificate.pem
+bridge_keyfile ./test-private-key.pem
+try_private false
+start_type automatic
+cleansession true
+notifications false
+bridge_attempt_unsubscribe false
+
+### Topics
+"#,
+    );
+
+    assert_eq!(serialized_config, expected.as_bytes());
+}
+
+#[test]
+fn bridge_config_serialize_with_capath_correctly() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let bridge_root_cert_path = dir.path().to_str().unwrap().to_owned();
+
+    let bridge = BridgeConfig {
+        cloud_name: "test".into(),
+        config_file: "test-bridge.conf".into(),
+        connection: "edge_to_test".into(),
+        address: "test.test.io:8883".into(),
+        remote_username: None,
+        bridge_root_cert_path: bridge_root_cert_path.clone(),
+        remote_clientid: "alpha".into(),
+        local_clientid: "test".into(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
+        try_private: false,
+        start_type: "automatic".into(),
+        cleansession: true,
+        notifications: false,
+        bridge_attempt_unsubscribe: false,
+        topics: vec![],
+    };
+    let mut serialized_config = Vec::<u8>::new();
+    bridge.serialize(&mut serialized_config).unwrap();
+
+    let bridge_capath = format!("bridge_capath {}", bridge_root_cert_path);
+    let mut expected = r#"### Bridge
+connection edge_to_test
+address test.test.io:8883
+"#
+    .to_owned();
+
+    expected.push_str(&bridge_capath);
+    expected.push_str(
+        r#"
+remote_clientid alpha
+local_clientid test
+bridge_certfile ./test-certificate.pem
+bridge_keyfile ./test-private-key.pem
+try_private false
+start_type automatic
+cleansession true
+notifications false
+bridge_attempt_unsubscribe false
+
+### Topics
+"#,
+    );
+
+    assert_eq!(serialized_config, expected.as_bytes());
+}
+
+#[test]
 fn bridge_config_azure_create() {
     let toml_config = r#"
             [device]
