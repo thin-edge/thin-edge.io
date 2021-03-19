@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-This is a hack to do a full roudtrip of data from thin-edge to c8y and back.
+This is a hack to do a full roundtrip of data from thin-edge to c8y and back.
 
 It publishes numbers from 0..19 and expects to read them back from the cloud.
 
@@ -77,8 +77,8 @@ def retrieve_data(user, device_id, password, zone, tenant):
 
     url = (
         f"https://{user}.{cloud}/measurement/measurements?"
-        + f"source={device_id}&pageSize={PAGE_SIZE}&"
-        + f"dateFrom={date_from}&dateTo={date_to}"
+        f"source={device_id}&pageSize={PAGE_SIZE}&"
+        f"dateFrom={date_from}&dateTo={date_to}"
     )
 
     auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
@@ -137,7 +137,7 @@ def check_timestamps(timestamps, laststamp):
 
 
 def assert_values(mode, user, device_id, password, zone, tenant):
-    """Assert: Retriving data via REST interface"""
+    """Assert: Retrieving data via REST interface"""
 
     print("Assert: Retriving data via REST interface")
 

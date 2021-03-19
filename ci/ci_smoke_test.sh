@@ -145,6 +145,7 @@ cp configuration/broker/configuration/cumulocity/c8y-trusted-root-certificates.p
 check
 
 ls -lah ~/.tedge/
+check
 
 tedge config set c8y.url octocat.eu-latest.cumulocity.com:8883
 check
