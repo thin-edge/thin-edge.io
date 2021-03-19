@@ -1,3 +1,4 @@
+
 #[derive(thiserror::Error, Debug)]
 pub enum UserSwitchError {
     #[error("Tried to become user, but it did not exist: {name}")]
@@ -23,9 +24,10 @@ impl UserGuard {
         UserGuard { _guard: None }
     }
 }
+
 impl From<users::switch::SwitchUserGuard> for UserGuard {
     fn from(guard: users::switch::SwitchUserGuard) -> Self {
-        UserGuard { _guard: Some (guard) }
+        UserGuard { _guard: Some(guard) }
     }
 }
 
@@ -45,3 +47,4 @@ pub fn become_user(username: &str) -> Result<UserGuard, UserSwitchError> {
         Ok(UserGuard::current_user())
     }
 }
+
