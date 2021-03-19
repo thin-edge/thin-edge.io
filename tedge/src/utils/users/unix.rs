@@ -1,18 +1,13 @@
-
 #[derive(thiserror::Error, Debug)]
 pub enum UserSwitchError {
     #[error("Tried to become user, but it did not exist: {name}")]
-    UnknownUser {
-        name: String
-    },
+    UnknownUser { name: String },
 
     #[error("Tried to become group, but it did not exist: {name}")]
-    UnknownGroup {
-        name: String
-    },
+    UnknownGroup { name: String },
 
     #[error(transparent)]
-    NotAuthorized(#[from] std::io::Error)
+    NotAuthorized(#[from] std::io::Error),
 }
 
 pub struct UserGuard {
@@ -27,17 +22,24 @@ impl UserGuard {
 
 impl From<users::switch::SwitchUserGuard> for UserGuard {
     fn from(guard: users::switch::SwitchUserGuard) -> Self {
-        UserGuard { _guard: Some(guard) }
+        UserGuard {
+            _guard: Some(guard),
+        }
     }
 }
 
 pub fn become_user(username: &str) -> Result<UserGuard, UserSwitchError> {
-    if users::get_current_uid() == 0 { // root has uid 0
-        let user = users::get_user_by_name(username)
-            .ok_or_else(|| UserSwitchError::UnknownUser { name: username.to_owned() })?;
+    if users::get_current_uid() == 0 {
+        // root has uid 0
+        let user =
+            users::get_user_by_name(username).ok_or_else(|| UserSwitchError::UnknownUser {
+                name: username.to_owned(),
+            })?;
 
-        let group = users::get_group_by_name(username)
-            .ok_or_else(|| UserSwitchError::UnknownGroup { name: username.to_owned() })?;
+        let group =
+            users::get_group_by_name(username).ok_or_else(|| UserSwitchError::UnknownGroup {
+                name: username.to_owned(),
+            })?;
 
         let uid = user.uid();
         let gid = group.gid();
@@ -47,4 +49,3 @@ pub fn become_user(username: &str) -> Result<UserGuard, UserSwitchError> {
         Ok(UserGuard::current_user())
     }
 }
-

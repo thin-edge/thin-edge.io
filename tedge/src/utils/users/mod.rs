@@ -9,4 +9,3 @@ pub mod windows;
 
 #[cfg(not(unix))]
 pub use windows::*;
-

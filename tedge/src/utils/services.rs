@@ -70,10 +70,7 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
 pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
     match cmd_nullstdio_args_with_code_as_root(
         SystemCtlCmd::Cmd.as_str(),
-        &[
-            SystemCtlCmd::Restart.as_str(),
-            MosquittoCmd::Cmd.as_str(),
-        ],
+        &[SystemCtlCmd::Restart.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
@@ -93,10 +90,7 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
 pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
     match cmd_nullstdio_args_with_code_as_root(
         SystemCtlCmd::Cmd.as_str(),
-        &[
-            SystemCtlCmd::Enable.as_str(),
-            MosquittoCmd::Cmd.as_str(),
-        ],
+        &[SystemCtlCmd::Enable.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
