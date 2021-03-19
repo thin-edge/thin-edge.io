@@ -5,7 +5,8 @@ fn command_as_root<I, S>(home_dir: &str, args: I) -> Result<std::process::Comman
         I: IntoIterator<Item = S>,
         S: AsRef<std::ffi::OsStr>,
 {
-    let mut command = std::process::Command::new("/usr/bin/sudo");
+    let sudo = which::which("sudo")?;
+    let mut command = std::process::Command::new(sudo);
     command
         .env("HOME", home_dir)
         .args(args);
@@ -22,7 +23,7 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
     let cert_path = temp_path(&tempdir, "test-cert.pem");
     let key_path = temp_path(&tempdir, "test-key.pem");
     let home_dir = tempdir.path().to_str().unwrap();
-    let tedge = "../target/debug/tedge";
+    let tedge = env!("CARGO_BIN_EXE_tedge");
 
     let mut chown_home = command_as_root(
         home_dir,
