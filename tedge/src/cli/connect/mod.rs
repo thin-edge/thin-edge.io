@@ -84,7 +84,42 @@ impl BridgeCommand {
 }
 
 #[derive(Debug, PartialEq)]
+struct CommonBridgeConfig {
+    try_private: bool,
+    start_type: String,
+    clean_session: bool,
+    notifications: bool,
+    bridge_attempt_unsubscribe: bool,
+    bind_address: String,
+    connection_messages: bool,
+    log_types: Vec<String>,
+}
+
+impl Default for CommonBridgeConfig {
+    fn default() -> Self {
+        CommonBridgeConfig {
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            notifications: false,
+            bridge_attempt_unsubscribe: false,
+            bind_address: "127.0.0.1".into(),
+            connection_messages: true,
+            log_types: vec![
+                "error".into(),
+                "warning".into(),
+                "notice".into(),
+                "information".into(),
+                "subscribe".into(),
+                "unsubscribe".into(),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
+    common_bridge_config: CommonBridgeConfig,
     cloud_name: String,
     config_file: String,
     connection: String,
@@ -95,11 +130,6 @@ pub struct BridgeConfig {
     local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
-    try_private: bool,
-    start_type: String,
-    cleansession: bool,
-    notifications: bool,
-    bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
 }
 
@@ -197,15 +227,45 @@ impl BridgeConfig {
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
         writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
-        writeln!(writer, "try_private {}", self.try_private)?;
-        writeln!(writer, "start_type {}", self.start_type)?;
-        writeln!(writer, "cleansession {}", self.cleansession)?;
-        writeln!(writer, "notifications {}", self.notifications)?;
+        writeln!(
+            writer,
+            "try_private {}",
+            self.common_bridge_config.try_private
+        )?;
+        writeln!(
+            writer,
+            "start_type {}",
+            self.common_bridge_config.start_type
+        )?;
+        writeln!(
+            writer,
+            "cleansession {}",
+            self.common_bridge_config.clean_session
+        )?;
+        writeln!(
+            writer,
+            "notifications {}",
+            self.common_bridge_config.notifications
+        )?;
         writeln!(
             writer,
             "bridge_attempt_unsubscribe {}",
-            self.bridge_attempt_unsubscribe
+            self.common_bridge_config.bridge_attempt_unsubscribe
         )?;
+        writeln!(
+            writer,
+            "bind_address {}",
+            self.common_bridge_config.bind_address
+        )?;
+        writeln!(
+            writer,
+            "connection_messages {}",
+            self.common_bridge_config.connection_messages
+        )?;
+
+        for log_type in &self.common_bridge_config.log_types {
+            writeln!(writer, "log_type {}", log_type)?;
+        }
 
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {

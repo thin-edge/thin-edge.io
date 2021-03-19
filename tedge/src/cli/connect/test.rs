@@ -6,6 +6,7 @@ const INCORRECT_PATH: &str = "/path";
 
 fn default_bridge_config() -> BridgeConfig {
     BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az/c8y".into(),
         config_file: "cfg".to_string(),
         connection: "edge_to_az/c8y".into(),
@@ -16,11 +17,6 @@ fn default_bridge_config() -> BridgeConfig {
         bridge_keyfile: "".into(),
         remote_clientid: "".into(),
         local_clientid: "".into(),
-        try_private: false,
-        start_type: "automatic".into(),
-        cleansession: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
         topics: vec![],
     }
 }
@@ -86,6 +82,7 @@ fn config_bridge_validate_wrong_key_path() {
 }
 
 use std::io::Write;
+
 #[test]
 fn bridge_config_c8y_create() {
     let toml_config = r#"
@@ -105,6 +102,7 @@ fn bridge_config_c8y_create() {
     let bridge = C8y::c8y_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "c8y".into(),
         config_file: "c8y-bridge.conf".into(),
         connection: "edge_to_c8y".into(),
@@ -115,11 +113,6 @@ fn bridge_config_c8y_create() {
         local_clientid: "Cumulocity".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        try_private: false,
-        start_type: "automatic".into(),
-        cleansession: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),
@@ -171,6 +164,7 @@ fn bridge_config_azure_create() {
     let bridge = Azure::azure_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
@@ -181,11 +175,6 @@ fn bridge_config_azure_create() {
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        try_private: false,
-        start_type: "automatic".into(),
-        cleansession: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
@@ -194,6 +183,66 @@ fn bridge_config_azure_create() {
         ],
     };
     assert_eq!(bridge, expected);
+}
+
+#[test]
+fn serialaize() {
+    let config = BridgeConfig {
+        cloud_name: "az".into(),
+        config_file: "az-bridge.conf".to_string(),
+        connection: "edge_to_az".into(),
+        address: "test.test.io:8883".into(),
+        remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
+        bridge_cafile: "./test_root.pem".into(),
+        remote_clientid: "alpha".into(),
+        local_clientid: "Azure".into(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
+        topics: vec![
+            r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
+            r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
+        ],
+        common_bridge_config: CommonBridgeConfig::default(),
+    };
+
+    let mut buffer = Vec::new();
+    config
+        .serialize(&mut buffer)
+        .expect("Writing config to file failed");
+
+    let contents = String::from_utf8(buffer).unwrap();
+    assert_eq!(
+        contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with("#"))
+            .count(),
+        23
+    );
+
+    assert!(contents.contains("connection edge_to_az"));
+    assert!(contents.contains("remote_username test.test.io/alpha/?api-version=2018-06-30"));
+    assert!(contents.contains("address test.test.io:8883"));
+    assert!(contents.contains("bridge_cafile ./test_root.pem"));
+    assert!(contents.contains("remote_clientid alpha"));
+    assert!(contents.contains("local_clientid Azure"));
+    assert!(contents.contains("bridge_certfile ./test-certificate.pem"));
+    assert!(contents.contains("bridge_keyfile ./test-private-key.pem"));
+    assert!(contents.contains("start_type automatic"));
+    assert!(contents.contains("cleansession true"));
+    assert!(contents.contains("notifications false"));
+    assert!(contents.contains("bridge_attempt_unsubscribe false"));
+    assert!(contents.contains("bind_address 127.0.0.1"));
+    assert!(contents.contains("connection_messages true"));
+
+    assert!(contents.contains("log_type error"));
+    assert!(contents.contains("log_type warning"));
+    assert!(contents.contains("log_type notice"));
+    assert!(contents.contains("log_type information"));
+    assert!(contents.contains("log_type subscribe"));
+    assert!(contents.contains("log_type unsubscribe"));
+
+    assert!(contents.contains("topic messages/events/ out 1 az/ devices/alpha/"));
+    assert!(contents.contains("topic messages/devicebound/# out 1 az/ devices/alpha/"));
 }
 
 fn temp_file_with_content(content: &str) -> NamedTempFile {

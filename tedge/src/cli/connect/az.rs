@@ -21,6 +21,7 @@ impl Azure {
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
         Ok(BridgeConfig {
+            common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),
             connection: "edge_to_az".into(),
@@ -31,11 +32,6 @@ impl Azure {
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            try_private: false,
-            start_type: "automatic".into(),
-            cleansession: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
             topics: vec![
                 pub_msg_topic,
                 sub_msg_topic,

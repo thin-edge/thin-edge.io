@@ -19,6 +19,7 @@ impl C8y {
         );
 
         Ok(BridgeConfig {
+            common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
@@ -29,11 +30,6 @@ impl C8y {
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            try_private: false,
-            start_type: "automatic".into(),
-            cleansession: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
             topics: vec![
                 // Registration
                 r#"s/dcr in 2 c8y/ """#.into(),
