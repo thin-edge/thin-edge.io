@@ -771,7 +771,7 @@ mod tests {
     }
 
     #[test]
-    fn check_thumprint_static_certificate() {
+    fn check_thumbprint_static_certificate() {
         let cert_content = r#"-----BEGIN CERTIFICATE-----
 MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
 EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
