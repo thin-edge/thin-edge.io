@@ -25,20 +25,23 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
+                mapper: true,
             },
             TedgeDisconnectBridgeOpt::Az => DisconnectBridge {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
+                mapper: false,
             },
         };
         Ok(cmd.into_boxed())
     }
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Debug)]
 pub struct DisconnectBridge {
     config_file: String,
     cloud_name: String,
+    mapper: bool,
 }
 
 impl Command for DisconnectBridge {
@@ -86,7 +89,18 @@ impl DisconnectBridge {
             services::mosquitto_restart_daemon()?;
         }
 
-        println!("{} Bridge successfully disconnected!", self.cloud_name);
+        println!("{} Bridge successfully disconnected!\n", self.cloud_name);
+
+        if self.mapper {
+            println!("Stopping tedge-mapper service.\n");
+            let _ = services::tedge_mapper_stop_daemon();
+
+            println!("Disabling tedge-mapper service.\n");
+            let _ = services::tedge_mapper_disable_daemon();
+
+            println!("tedge-mapper service successfully stopped and disabled!\n");
+        }
+
         Ok(())
     }
 }

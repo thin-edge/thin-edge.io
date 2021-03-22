@@ -21,6 +21,7 @@ const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
+const PATH_TO_TEDGE_MAPPER_BIN: &str = "/usr/bin/tedge_mapper";
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {
@@ -131,6 +132,7 @@ pub struct BridgeConfig {
     local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
+    mapper: bool,
     topics: Vec<String>,
 }
 
@@ -174,7 +176,23 @@ impl BridgeConfig {
             return Err(err.into());
         }
 
-        println!("Successfully created bridge connection!");
+        println!("Successfully created bridge connection!\n");
+
+        if self.mapper {
+            println!("Checking if tedge-mapper is installed.\n");
+
+            if !(Path::new(PATH_TO_TEDGE_MAPPER_BIN).exists()) {
+                println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            } else {
+                println!("Starting tedge-mapper service.\n");
+                let _ = services::tedge_mapper_start_daemon();
+
+                println!("Persisting tedge-mapper on reboot.\n");
+                let _ = services::tedge_mapper_enable_daemon();
+
+                println!("tedge-mapper service successfully started and enabled!\n");
+            }
+        }
 
         Ok(())
     }

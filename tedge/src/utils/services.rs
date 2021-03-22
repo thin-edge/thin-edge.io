@@ -71,19 +71,35 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
 // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
-pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
+pub fn mosquitto_restart_daemon() -> Result<(), ServicesError>{
+    mosquitto_systemctl_daemon(SystemCtlCmd::Restart, ServicesError::MosquittoCantPersist)
+}
+
+pub fn mosquitto_enable_daemon() -> Result<(), ServicesError>{
+    mosquitto_systemctl_daemon(SystemCtlCmd::Enable, ServicesError::MosquittoCantPersist)
+}
+
+fn mosquitto_available_as_service() -> Result<(), ServicesError> {
+    mosquitto_systemctl_daemon(SystemCtlCmd::Status, ServicesError::MosquittoNotAvailableAsService)
+}
+
+fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
+    mosquitto_systemctl_daemon(SystemCtlCmd::IsActive, ServicesError::MosquittoIsActive)
+}
+
+fn mosquitto_systemctl_daemon(systemctl_cmd: SystemCtlCmd, services_error: ServicesError) -> Result<(), ServicesError> {
     let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     match cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
         &[
             SystemCtlCmd::Cmd.as_str(),
-            SystemCtlCmd::Restart.as_str(),
+            systemctl_cmd.as_str(),
             MosquittoCmd::Cmd.as_str(),
         ],
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(services_error),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
                 Err(ServicesError::UnhandledReturnCode {
@@ -96,19 +112,34 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
     }
 }
 
-pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
+pub fn tedge_mapper_start_daemon() -> Result<(), ServicesError> {
+    tedge_mapper_systemctl_daemon(SystemCtlCmd::Start)
+}
+
+pub fn tedge_mapper_stop_daemon() -> Result<(), ServicesError> {
+    tedge_mapper_systemctl_daemon(SystemCtlCmd::Stop)
+}
+
+pub fn tedge_mapper_enable_daemon() -> Result<(), ServicesError> {
+    tedge_mapper_systemctl_daemon(SystemCtlCmd::Enable)
+}
+
+pub fn tedge_mapper_disable_daemon() -> Result<(), ServicesError> {
+    tedge_mapper_systemctl_daemon(SystemCtlCmd::Disable)
+}
+
+fn tedge_mapper_systemctl_daemon(systemctl_cmd: SystemCtlCmd) -> Result<(), ServicesError> {
     let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     match cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
         &[
             SystemCtlCmd::Cmd.as_str(),
-            SystemCtlCmd::Enable.as_str(),
-            MosquittoCmd::Cmd.as_str(),
+            systemctl_cmd.as_str(),
+            TedgeMapperCmd::Cmd.as_str(),
         ],
     ) {
         Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoCantPersist),
+            Some(SYSTEMCTL_SUCCESS) => Ok(()),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
                 Err(ServicesError::UnhandledReturnCode {
@@ -175,46 +206,6 @@ fn mosquitto_available() -> Result<(), ServicesError> {
     }
 }
 
-fn mosquitto_available_as_service() -> Result<(), ServicesError> {
-    match cmd_nullstdio_args_with_code(
-        SystemCtlCmd::Cmd.as_str(),
-        &[SystemCtlCmd::Status.as_str(), MosquittoCmd::Cmd.as_str()],
-    ) {
-        Ok(status) => match status.code() {
-            Some(SYSTEMCTL_STATUS_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
-            code => {
-                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode {
-                    code,
-                    command: SystemCtlCmd::Cmd.into(),
-                })
-            }
-        },
-        Err(err) => Err(err),
-    }
-}
-
-fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
-    match cmd_nullstdio_args_with_code(
-        SystemCtlCmd::Cmd.as_str(),
-        &[SystemCtlCmd::IsActive.as_str(), MosquittoCmd::Cmd.as_str()],
-    ) {
-        Ok(status) => match status.code() {
-            Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
-            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoIsActive),
-            code => {
-                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
-                Err(ServicesError::UnhandledReturnCode {
-                    code,
-                    command: SystemCtlCmd::Cmd.into(),
-                })
-            }
-        },
-        Err(err) => Err(err),
-    }
-}
-
 fn systemd_available() -> Result<(), ServicesError> {
     std::process::Command::new(SystemCtlCmd::Cmd.as_str())
         .arg(SystemCtlParam::Version.as_str())
@@ -231,6 +222,27 @@ fn systemd_available() -> Result<(), ServicesError> {
                 }
             },
         )
+}
+
+#[derive(Debug)]
+enum TedgeMapperCmd {
+    Cmd,
+}
+
+impl TedgeMapperCmd {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TedgeMapperCmd::Cmd => "tedge-mapper",
+        }
+    }
+}
+
+impl Into<String> for TedgeMapperCmd {
+    fn into(self) -> String {
+        match self {
+            TedgeMapperCmd::Cmd => "tedge-mapper".to_owned(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -279,7 +291,10 @@ impl Into<String> for MosquittoParam {
 enum SystemCtlCmd {
     Cmd,
     Enable,
+    Disable,
     IsActive,
+    Start,
+    Stop,
     Restart,
     Status,
 }
@@ -289,7 +304,10 @@ impl SystemCtlCmd {
         match self {
             SystemCtlCmd::Cmd => "systemctl",
             SystemCtlCmd::Enable => "enable",
+            SystemCtlCmd::Disable => "disable",
             SystemCtlCmd::IsActive => "is-active",
+            SystemCtlCmd::Start => "start",
+            SystemCtlCmd::Stop => "stop",
             SystemCtlCmd::Restart => "restart",
             SystemCtlCmd::Status => "status",
         }
@@ -301,7 +319,10 @@ impl Into<String> for SystemCtlCmd {
         match self {
             SystemCtlCmd::Cmd => "systemctl".to_owned(),
             SystemCtlCmd::Enable => "enable".to_owned(),
+            SystemCtlCmd::Disable => "disable".to_owned(),
             SystemCtlCmd::IsActive => "is-active".to_owned(),
+            SystemCtlCmd::Start => "start".to_owned(),
+            SystemCtlCmd::Stop => "stop".to_owned(),
             SystemCtlCmd::Restart => "restart".to_owned(),
             SystemCtlCmd::Status => "status".to_owned(),
         }
