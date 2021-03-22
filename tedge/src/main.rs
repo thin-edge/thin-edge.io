@@ -14,6 +14,8 @@ mod utils;
 use command::BuildCommand;
 
 fn main() -> anyhow::Result<()> {
+    let _user_guard = utils::users::become_user(utils::users::TEDGE_USER)?;
+
     let opt = cli::Opt::from_args();
 
     let config = config::TEdgeConfig::from_default_config()

@@ -385,10 +385,14 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, user: ) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        let () = self.create_test_certificate(&config)?;
-        let () = self.update_tedge_config()?;
+        {
+            let () = self.create_test_certificate(&config)?;
+        }
+        {
+            let () = self.update_tedge_config()?;
+        }
         Ok(())
     }
 }
@@ -446,7 +450,7 @@ impl Default for TestCertConfig {
 
 impl CreateCertCmd {
     fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
-        let _user_guard = users::become_user("mosquitto")?;
+        let _user_guard = users::become_user(users::BROKER_USER)?;
         check_identifier(&self.id)?;
 
         let cert_path = Path::new(&self.cert_path);
