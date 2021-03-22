@@ -736,10 +736,12 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
-        let verbose = 0;
 
         //Create a certificate
-        assert!(cmd.execute(verbose).err().is_none());
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .err()
+            .is_none());
 
         //Compute the thumbprint of the certificate
         let pem = read_pem(&cert_path)
