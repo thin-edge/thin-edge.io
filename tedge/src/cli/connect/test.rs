@@ -151,6 +151,7 @@ fn bridge_config_serialize_with_cafile_correctly() {
     let bridge_root_cert_path = file.path().to_str().unwrap().to_owned();
 
     let bridge = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "test".into(),
         config_file: "test-bridge.conf".into(),
         connection: "edge_to_test".into(),
@@ -161,13 +162,9 @@ fn bridge_config_serialize_with_cafile_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        try_private: false,
-        start_type: "automatic".into(),
-        cleansession: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
         topics: vec![],
     };
+
     let mut serialized_config = Vec::<u8>::new();
     bridge.serialize(&mut serialized_config).unwrap();
 
@@ -190,6 +187,14 @@ start_type automatic
 cleansession true
 notifications false
 bridge_attempt_unsubscribe false
+bind_address 127.0.0.1
+connection_messages true
+log_type error
+log_type warning
+log_type notice
+log_type information
+log_type subscribe
+log_type unsubscribe
 
 ### Topics
 "#,
@@ -204,6 +209,7 @@ fn bridge_config_serialize_with_capath_correctly() {
     let bridge_root_cert_path = dir.path().to_str().unwrap().to_owned();
 
     let bridge = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "test".into(),
         config_file: "test-bridge.conf".into(),
         connection: "edge_to_test".into(),
@@ -214,11 +220,6 @@ fn bridge_config_serialize_with_capath_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        try_private: false,
-        start_type: "automatic".into(),
-        cleansession: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
         topics: vec![],
     };
     let mut serialized_config = Vec::<u8>::new();
@@ -243,6 +244,14 @@ start_type automatic
 cleansession true
 notifications false
 bridge_attempt_unsubscribe false
+bind_address 127.0.0.1
+connection_messages true
+log_type error
+log_type warning
+log_type notice
+log_type information
+log_type subscribe
+log_type unsubscribe
 
 ### Topics
 "#,
@@ -292,14 +301,18 @@ fn bridge_config_azure_create() {
 }
 
 #[test]
-fn serialaize() {
+fn serialize() {
+    let file = NamedTempFile::new().unwrap();
+    let bridge_root_cert_path = file.path().to_str().unwrap().to_owned();
+
     let config = BridgeConfig {
+        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
         address: "test.test.io:8883".into(),
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
-        bridge_cafile: "./test_root.pem".into(),
+        bridge_root_cert_path: bridge_root_cert_path.clone(),
         remote_clientid: "alpha".into(),
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
@@ -308,7 +321,6 @@ fn serialaize() {
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
         ],
-        common_bridge_config: CommonBridgeConfig::default(),
     };
 
     let mut buffer = Vec::new();
@@ -320,7 +332,7 @@ fn serialaize() {
     assert_eq!(
         contents
             .lines()
-            .filter(|str| !str.is_empty() && !str.starts_with("#"))
+            .filter(|str| !str.is_empty() && !str.starts_with('#'))
             .count(),
         23
     );
@@ -328,7 +340,7 @@ fn serialaize() {
     assert!(contents.contains("connection edge_to_az"));
     assert!(contents.contains("remote_username test.test.io/alpha/?api-version=2018-06-30"));
     assert!(contents.contains("address test.test.io:8883"));
-    assert!(contents.contains("bridge_cafile ./test_root.pem"));
+    assert!(contents.contains(&bridge_root_cert_path));
     assert!(contents.contains("remote_clientid alpha"));
     assert!(contents.contains("local_clientid Azure"));
     assert!(contents.contains("bridge_certfile ./test-certificate.pem"));
