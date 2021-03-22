@@ -57,7 +57,7 @@ def act(path_publisher, mode):
     time.sleep(2)
 
 
-def retrieve_data(user, device_id, password, zone, tenant):
+def retrieve_data(user, device_id, password, zone, tenant, verbose):
     """Download via REST"""
 
     time_to = datetime.fromtimestamp(int(time.time()))
@@ -85,7 +85,8 @@ def retrieve_data(user, device_id, password, zone, tenant):
 
     header = {b"Authorization": b"Basic " + base64.b64encode(auth)}
 
-    print("URL: ", url)
+    if verbose:
+        print("URL: ", url)
 
     # TODO Add authorisation style as command line parameter
     # req = requests.get(url, auth=(user, password))
@@ -136,12 +137,12 @@ def check_timestamps(timestamps, laststamp):
         sys.exit(1)
 
 
-def assert_values(mode, user, device_id, password, zone, tenant):
-    """Assert: Retrieving data via REST interface"""
+def assert_values(mode, user, device_id, password, zone, tenant, verbose):
+    """Assert: Retriving data via REST interface"""
 
     print("Assert: Retriving data via REST interface")
 
-    req, time_from = retrieve_data(user, device_id, password, zone, tenant)
+    req, time_from = retrieve_data(user, device_id, password, zone, tenant, verbose)
 
     amount = len(req.json()["measurements"])
 
@@ -169,7 +170,8 @@ def assert_values(mode, user, device_id, password, zone, tenant):
             sys.exit(1)
 
         tstamp = i["time"]
-        print("   ", tstamp, value)
+        if verbose:
+            print("   ", tstamp, value)
         values.append(value)
         timestamps.append(tstamp)
 
@@ -197,12 +199,13 @@ if __name__ == "__main__":
     parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("-z", "--zone", help="Timezone e.g. 01:00 or 00:00 ")
-
+    parser.add_argument('--verbose', '-v', action='count', default=0)
     args = parser.parse_args()
 
     mode = args.mode
     assert mode in ("REST", "JSON")
     path_publisher = args.publisher
+    verbose = args.verbose
     user = args.user
     tenant = args.tenant
     password = args.password
@@ -210,13 +213,14 @@ if __name__ == "__main__":
     # E.g. '%2B01:00' # UTC +1 (CET) Works for Germany
     zone = "%2B" + args.zone
 
-    print(f"Mode: {mode}")
-    print(f"Using path for publisher: {path_publisher}")
-    print(f"Using user name: {user}")
-    print(f"Using tenant-id: {tenant}")
-    print(f"Using device-id: {device_id}")
-    print(f"Using timezone adjustment: {args.zone}")
+    if verbose:
+        print(f"Mode: {mode}")
+        print(f"Using path for publisher: {path_publisher}")
+        print(f"Using user name: HIDDEN")
+        print(f"Using tenant-id: HIDDEN")
+        print(f"Using device-id: HIDDEN")
+        print(f"Using timezone adjustment: {args.zone}")
 
     act(path_publisher, mode)
 
-    assert_values(mode, user, device_id, password, zone, tenant)
+    assert_values(mode, user, device_id, password, zone, tenant, verbose)

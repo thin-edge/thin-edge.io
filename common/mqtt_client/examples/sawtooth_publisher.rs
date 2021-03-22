@@ -66,7 +66,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //AtMostOnce, AtLeastOnce, ExactlyOnce
 
     println!(
-        "Publishing sawtooth with delay {}ms height {} iterations {} template {} = publishs: {}",
+        "Publishing sawtooth with delay {}ms height {} iterations {} template {} will cause {} publishs.",
         wait,
         height,
         iterations,
@@ -135,7 +135,9 @@ async fn publish_topic(
             debug!("{}", payload);
 
             mqtt.publish(Message::new(&c8y_msg, payload)).await?;
-            /*let msg = Message {
+            /*
+            TODO use differnent qos
+            let msg = Message {
                 topic: c8y_msg.clone(),
                 payload: payload.into(),
                 qos: qos.clone(),

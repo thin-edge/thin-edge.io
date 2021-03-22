@@ -87,12 +87,11 @@ jobs:
             path: examples
 
         - name: Run Smoke Test
-          run: ./ci/ci_smoke_test.sh $DEVICE $USERNAME $TENNANT $C8YPASS $DEVICEID $TIMEZONE
+          run: ./ci/ci_smoke_test.sh $TIMEZONE
           env:
-            C8YPASS: ${{secrets.SECRET_C8YPASS}}
-            USERNAME: octocat
-            TENNANT: ${{secrets.SECRET_C8YTENANT}}
-            DEVICE: octocatpi3
-            # TODO fix device id when known
-            DEVICEID: 777777
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
             TIMEZONE: 01:00
