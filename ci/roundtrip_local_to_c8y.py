@@ -101,8 +101,8 @@ def retrieve_data(user, device_id, password, zone, tenant, verbose):
 
 
 def check_timestamps(timestamps, laststamp):
-    """Check if timestamps are in range and monotonicaly rinsing
-    The timestamps that we read back are in UTC time.
+    """Check if timestamps are in range and monotonically rinsing
+    the timestamps that we read back are in UTC time.
     """
 
     failed = False
@@ -138,9 +138,9 @@ def check_timestamps(timestamps, laststamp):
 
 
 def assert_values(mode, user, device_id, password, zone, tenant, verbose):
-    """Assert: Retriving data via REST interface"""
+    """Assert: Retrieving data via REST interface"""
 
-    print("Assert: Retriving data via REST interface")
+    print("Assert: Retrieving data via REST interface")
 
     req, time_from = retrieve_data(user, device_id, password, zone, tenant, verbose)
 
