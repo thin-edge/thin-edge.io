@@ -388,6 +388,7 @@ impl Command for CreateCertCmd {
         Ok(())
     }
 }
+
 impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
@@ -656,10 +657,13 @@ fn build_upload_certificate_url(host: &str, tenant_id: &str) -> Result<Url, Cert
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use openssl::{hash::MessageDigest, x509::X509};
     use std::fs::File;
     use std::io::Cursor;
     use tempfile::*;
+
+    extern crate base64;
+
+    use crypto_hash::{digest, Algorithm};
 
     #[test]
     fn basic_usage() {
@@ -722,7 +726,7 @@ mod tests {
     }
 
     #[test]
-    fn check_certificate_thumbprint() {
+    fn check_certificate_thumbprint_b64_decode_sha1() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-thumbprint-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-thumbprint-device-key.pem");
@@ -748,17 +752,26 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
         let pem_cont = file_content(&mut file);
-        let pem = X509::from_pem(pem_cont.as_bytes()).unwrap();
-        let thumbprint_bytes = pem.digest(MessageDigest::sha1()).unwrap();
-        let x: &[u8] = &(*thumbprint_bytes);
-        let thumbprint_openssl: Vec<String> = x.iter().map(|b| format!("{:02X}", b)).collect();
+
+        //Remove new line and carriage return characters
+        let cert_cont = pem_cont.replace(&['\r', '\n'][..], "");
+
+        //Read the certificate contents, except the header and footer
+        let header_len = "-----BEGIN CERTIFICATE-----".len();
+        let footer_len = "-----END CERTIFICATE-----".len();
+
+        //just decode the key contents
+        let b64_bytes =
+            base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
+        let result = digest(Algorithm::SHA1, b64_bytes.as_ref());
+        let thumbprint_crypto: Vec<String> = result.iter().map(|b| format!("{:02X}", b)).collect();
 
         //compare the two thumbprints
-        assert_eq!(thumbprint_sha1, thumbprint_openssl.concat());
+        assert_eq!(thumbprint_sha1, thumbprint_crypto.concat());
     }
 
     #[test]
-    fn check_thumprint() {
+    fn check_thumprint_static_certificate() {
         let cert_content = r#"-----BEGIN CERTIFICATE-----
 MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
 EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
