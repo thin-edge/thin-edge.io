@@ -1,30 +1,27 @@
-#!/usr/bin/sh
+#!/usr/bin/bash
 
+# Run all available system-tests.
+# Note: Needs a bash shell to run
+#
+# Expected environment variables to be set:
+# C8YPASS : Cumulocity password
+# C8YUSERNAME : Cumolocity username
+# C8YTENANT : Cumolocity tennant
+# C8YDEVICE : The device name
+# C8YDEVICEID : The device ID in Cumolocity
+# TIMEZONE : Your timezone (temporary)
+# TEBASEDIR : Base directory for the thin edge repo
+# EXAMPLEDIR : The direcory of the sawtooth example
 
-# a simple checker function
-check() {
-    if [ $? -ne 0 ]; then
-        echo "Error: Exiting due to previous error"
-        exit 1;
-    fi
-}
+set -e
 
-set -x
+cd $TEBASEDIR
 
-pip3 install pysys
+# Run all PySys tests
 
-echo "Dumping Environment"
-echo "C8YPASS HIDDEN"
-echo "C8YUSERNAME $C8YUSERNAME"
-echo "C8YTENNANT HIDDEN"
-echo "C8YDEVICE $C8YDEVICE"
-echo "C8YDEVICEID $C8YDEVICEID"
-echo "C8YTIMEZONE $C8YTIMEZONE"
-echo "TEBASEDIR $TEBASEDIR"
-echo "EXAMPLEDIR $EXAMPLEDIR"
-
+python3 -mvenv ~/env-pysys
+source ~/env-pysys/bin/activate
+pip3 install -r tests/requirements.txt
 cd tests/PySys/
-check
-
-~/.local/bin/pysys.py run -v DEBUG
-check
+pysys.py run -v DEBUG
+deactivate

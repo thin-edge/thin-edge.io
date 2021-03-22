@@ -25,12 +25,13 @@ jobs:
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
       env:
-            C8YPASS: ${{secrets.SECRET_C8YPASS}}
-            C8YUSERNAME: octocat
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
             C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: octocatpi3
-            #TODO Fix this when the device id is known
-            C8YDEVICEID: 777777
-            C8YTIMEZONE: 01:00
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi
+
