@@ -13,13 +13,14 @@ event-stream analytics, machine-learning-powered systems, or application specifi
 Built around an extensible architecture,
 thin-edge.io can be extended in various programming languages.
 
-1. The components are processes exchanging messages over an [MQTT bus](./mqtt-bus.md) connected to the cloud.
+1. The components are processes exchanging messages over an [MQTT bus](./mqtt-bus.md)
 
-2. A [canonical data](thin-edge-json.md) format is proposed as a pivot for telemetry data,
-so the components can share a common dialect independent of their own representation of these data.
+2. The MQTT bus is connected to the cloud, forwarding the messages published on cloud specific topics. 
 
-3. A combination of pre-defined MQTT topics and [mapper processes](./mapper.md) is responsible
-for performing cloud-specific messages translation and dispatching.
+2. A [canonical data](thin-edge-json.md) format let the components exchange telemetry data independently of the connected cloud.
+This is an optional feature, and the components are free to also use cloud specific data formats.
+
+3. The [mapper processes](./mapper.md) are responsible for translating the canonical data format into cloud specific messages and vice versa.
 
 
 ![Overview](./thin-edge-overview.png)
