@@ -16,10 +16,11 @@ use crate::config::{
     DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
+const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
+const MQTT_TLS_PORT: u16 = 8883;
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
-const MQTT_TLS_PORT: u16 = 8883;
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {
@@ -125,7 +126,7 @@ pub struct BridgeConfig {
     connection: String,
     address: String,
     remote_username: Option<String>,
-    bridge_cafile: String,
+    bridge_root_cert_path: String,
     remote_clientid: String,
     local_clientid: String,
     bridge_certfile: String,
@@ -222,7 +223,13 @@ impl BridgeConfig {
             None => {}
         }
         writeln!(writer, "address {}", self.address)?;
-        writeln!(writer, "bridge_cafile {}", self.bridge_cafile)?;
+
+        if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
+            writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
+        } else {
+            writeln!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
+        }
+
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
@@ -277,7 +284,7 @@ impl BridgeConfig {
     fn validate(&self) -> Result<(), ConnectError> {
         Url::parse(&self.address)?;
 
-        if !Path::new(&self.bridge_cafile).exists() {
+        if !Path::new(&self.bridge_root_cert_path).exists() {
             return Err(ConnectError::Certificate);
         }
 
