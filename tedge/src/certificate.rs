@@ -140,7 +140,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -385,14 +385,10 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, _verbose: u8, user: ) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, user_manager: users::UserManager) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        {
-            let () = self.create_test_certificate(&config)?;
-        }
-        {
-            let () = self.update_tedge_config()?;
-        }
+        let () = self.create_test_certificate(&config, user_manager.clone())?;
+        let () = self.update_tedge_config()?;
         Ok(())
     }
 }
@@ -402,7 +398,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
         let () = self.show_certificate()?;
         Ok(())
     }
@@ -413,7 +409,7 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
         let () = self.remove_certificate()?;
         let () = self.update_tedge_config()?;
         Ok(())
@@ -449,8 +445,8 @@ impl Default for TestCertConfig {
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
-        let _user_guard = users::become_user(users::BROKER_USER)?;
+    fn create_test_certificate(&self, config: &CertConfig, user_manager: users::UserManager) -> Result<(), CertError> {
+        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         check_identifier(&self.id)?;
 
         let cert_path = Path::new(&self.cert_path);

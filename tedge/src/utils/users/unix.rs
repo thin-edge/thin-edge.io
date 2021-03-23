@@ -1,26 +1,80 @@
-pub struct UserGuard {
-    inner: Option<users::switch::SwitchUserGuard>,
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+pub struct UserManager {
+    inner: Arc<Mutex<InnerUserManager>>,
 }
 
-impl UserGuard {
-    fn current_user() -> UserGuard {
-        UserGuard { inner: None }
-    }
+struct InnerUserManager {
+    users: Vec<String>,
+    guard: Option<users::switch::SwitchUserGuard>,
+}
 
-    fn switched_user(guard: users::switch::SwitchUserGuard) -> UserGuard {
-        UserGuard {
-            inner: Some(guard)
+impl UserManager {
+    pub fn new() -> UserManager {
+        UserManager {
+            inner: Arc::new(Mutex::new(
+                InnerUserManager {
+                    users: vec![],
+                    guard: None,
+                }
+            ))
         }
     }
+
+    pub fn running_as_root() -> bool {
+        users::get_current_uid() == 0
+    }
+
+    pub fn become_user(&self, username: &str) -> Result<UserGuard, super::UserSwitchError> {
+        if users::get_current_uid() == 0 { // root has uid 0
+            self.inner.lock().unwrap().become_user(username)?;
+        }
+
+        Ok(UserGuard { user_manager: self.clone() })
+    }
+
+    fn drop_guard(&self) {
+        let mut lock_guard = self.inner.lock().unwrap();
+        lock_guard.drop_guard()
+    }
 }
 
-pub fn become_user(username: &str) -> Result<UserGuard, super::UserSwitchError> {
-    println!("Becoming user: {}", username);
-    println!("Current user: {}", users::get_current_uid());
-    println!("Effective user: {}", users::get_effective_uid());
+impl InnerUserManager {
+    fn become_user(&mut self, username: &str) -> Result<(), super::UserSwitchError> {
+        self.guard.take();
 
-    if users::get_current_uid() == 0 {
-        // root has uid 0
+        match InnerUserManager::inner_become_user(username) {
+            Ok(guard) => {
+                self.guard = Some(guard);
+                self.users.push(username.to_owned());
+                Ok(())
+            }
+            Err(err) => {
+                self.inner_restore_previous_user();
+                Err(err)
+            }
+        }
+    }
+
+    fn drop_guard(&mut self) {
+        self.guard.take();
+
+        if let None = self.users.pop() {
+            return;
+        }
+
+        self.inner_restore_previous_user();
+    }
+
+    fn inner_restore_previous_user(&mut self) {
+        if let Some(username) = self.users.last() {
+            let guard = InnerUserManager::inner_become_user(username).expect(format!("Fail to switch back to the former user: {}", username));
+            self.guard = Some(guard);
+        }
+    }
+
+    fn inner_become_user(username: &str) -> Result<users::switch::SwitchUserGuard, super::UserSwitchError> {
         let user =
             users::get_user_by_name(username).ok_or_else(|| super::UserSwitchError::UnknownUser {
                 name: username.to_owned(),
@@ -34,10 +88,17 @@ pub fn become_user(username: &str) -> Result<UserGuard, super::UserSwitchError> 
         let uid = user.uid();
         let gid = group.gid();
 
-        let guard = users::switch::switch_user_group(uid, gid)?;
-        println!("Successfully switched user");
-        Ok(UserGuard::switched_user(guard))
-    } else {
-        Ok(UserGuard::current_user())
+        Ok(users::switch::switch_user_group(uid, gid)?)
+    }
+
+}
+
+pub struct UserGuard {
+    user_manager: UserManager,
+}
+
+impl Drop for UserGuard {
+    fn drop(&mut self) {
+        self.user_manager.drop_guard();
     }
 }

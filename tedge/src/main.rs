@@ -14,7 +14,8 @@ mod utils;
 use command::BuildCommand;
 
 fn main() -> anyhow::Result<()> {
-    let _user_guard = utils::users::become_user(utils::users::TEDGE_USER)?;
+    let user_manager = utils::users::UserManager::new();
+    let _user_guard = user_manager.become_user(utils::users::TEDGE_USER)?;
 
     let opt = cli::Opt::from_args();
 
@@ -26,6 +27,6 @@ fn main() -> anyhow::Result<()> {
         .build_command(config)
         .with_context(|| "missing configuration parameter")?;
 
-    cmd.execute(opt.verbose)
+    cmd.execute(opt.verbose, user_manager.clone())
         .with_context(|| format!("failed to {}", cmd.description()))
 }

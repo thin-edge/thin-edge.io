@@ -153,7 +153,7 @@ impl Command for ConfigCmd {
         }
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _verbose: u8, _user_manager: crate::utils::users::UserManager) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 
@@ -544,7 +544,6 @@ impl TEdgeConfig {
     /// * `path` - Path to a thin edge configuration TOML file
     ///
     pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
-        println!("Reading config file: {}", path.to_str().unwrap());
         match read_to_string(path) {
             Ok(content) => {
                 let mut tedge_config = toml::from_str::<TEdgeConfig>(content.as_str())?;
