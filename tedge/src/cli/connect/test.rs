@@ -265,8 +265,8 @@ fn bridge_config_azure_create() {
     let toml_config = r#"
             [device]
             id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+            cert_path = "/etc/tedge/test-certificate.pem"
+            key_path = "/etc/tedge/test-private-key.pem"
 
             [azure]
             url = "test.test.io"

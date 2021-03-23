@@ -1,13 +1,19 @@
 use crate::command::{BuildCommand, Command};
-use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
+use crate::config::ConfigError::InvalidCharacterInHomeDirectoryPath;
 use serde::{Deserialize, Serialize};
-use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::{
+    fs::{create_dir_all, read_to_string},
+    str::FromStr,
+};
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
+use users;
 
+const ETC_ROOT: &str = "/etc";
 pub const TEDGE_HOME_DIR: &str = ".tedge";
+pub const TEDGE_HOME_DIR2: &str = "tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
@@ -154,7 +160,7 @@ impl Command for ConfigCmd {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let mut config = TEdgeConfig::from_default_config()?;
+        let mut config = TEdgeConfig::from_default_config(None)?;
         let mut config_updated = false;
 
         match self {
@@ -407,8 +413,9 @@ impl DeviceConfig {
     }
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        home_dir()?
-            .join(TEDGE_HOME_DIR)
+        PathBuf::from_str("/etc")
+            .expect("Path conversion failed unexpectedly!")
+            .join(TEDGE_HOME_DIR2)
             .join(file_name)
             .to_str()
             .map(|s| s.into())
@@ -469,9 +476,6 @@ pub enum ConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
-    #[error("Home directory not found")]
-    HomeDirectoryNotFound,
-
     #[error("Invalid characters found in home directory path")]
     InvalidCharacterInHomeDirectoryPath,
 
@@ -491,14 +495,11 @@ pub enum ConfigError {
     ConfigNotSet { key: String },
 }
 
-pub fn home_dir() -> Result<PathBuf, ConfigError> {
-    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
-    #![allow(deprecated)]
-    std::env::home_dir().ok_or(HomeDirectoryNotFound)
-}
-
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
+    Ok(PathBuf::from_str(ETC_ROOT)
+        .expect("Path conversion failed unexpectedly!")
+        .join(TEDGE_HOME_DIR2)
+        .join(TEDGE_CONFIG_FILE))
 }
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
@@ -531,7 +532,10 @@ impl TEdgeConfig {
     /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
-    pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
+    pub fn from_default_config(path: Option<PathBuf>) -> Result<TEdgeConfig, ConfigError> {
+        if let Some(path) = path {
+            return Self::from_custom_config(path.as_path());
+        }
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 
@@ -895,7 +899,7 @@ hello="tedge"
 
     #[test]
     fn test_set_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
+        let mut config = TEdgeConfig::from_default_config(None).unwrap();
         assert_matches!(
             config
                 .set_config_value("invalid.key", "dummy-value".into())
@@ -906,7 +910,7 @@ hello="tedge"
 
     #[test]
     fn test_get_config_key_invalid_key() {
-        let config = TEdgeConfig::from_default_config().unwrap();
+        let config = TEdgeConfig::from_default_config(None).unwrap();
         assert_matches!(
             config.get_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
@@ -915,7 +919,7 @@ hello="tedge"
 
     #[test]
     fn test_unset_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
+        let mut config = TEdgeConfig::from_default_config(None).unwrap();
         assert_matches!(
             config.unset_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
