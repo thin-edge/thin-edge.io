@@ -1,4 +1,5 @@
 use crate::config;
+use crate::utils::users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -87,7 +88,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self) -> Result<(), anyhow::Error>;
+    fn execute(&self, user_manager: UserManager) -> Result<(), anyhow::Error>;
 
     fn into_boxed(self) -> Box<dyn Command>
     where

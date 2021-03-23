@@ -1,6 +1,7 @@
 use std::process::ExitStatus;
 
 use super::paths;
+use crate::utils::users::UserManager;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServicesError {
@@ -67,8 +68,9 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
 // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
-pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
-    match cmd_nullstdio_args_with_code_as_root(
+pub fn mosquitto_restart_daemon(user_manager: &UserManager) -> Result<(), ServicesError> {
+    let _root_guard = user_manager.become_user("root");
+    match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::Restart.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {
@@ -87,8 +89,9 @@ pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
     }
 }
 
-pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
-    match cmd_nullstdio_args_with_code_as_root(
+pub fn mosquitto_enable_daemon(user_manager: &UserManager) -> Result<(), ServicesError> {
+    let _root_guard = user_manager.become_user("root");
+    match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::Enable.as_str(), MosquittoCmd::Cmd.as_str()],
     ) {

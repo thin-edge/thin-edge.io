@@ -3,6 +3,7 @@ use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
 use crate::utils::{paths, services};
+use crate::utils::users::UserManager;
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
@@ -68,8 +69,8 @@ impl Command for BridgeCommand {
         )
     }
 
-    fn execute(&self) -> Result<(), anyhow::Error> {
-        self.bridge_config.new_bridge()?;
+    fn execute(&self, user_manager: UserManager) -> Result<(), anyhow::Error> {
+        self.bridge_config.new_bridge(&user_manager)?;
         self.check_connection()?;
         Ok(())
     }
@@ -137,7 +138,7 @@ trait CheckConnection {
 }
 
 impl BridgeConfig {
-    fn new_bridge(&self) -> Result<(), ConnectError> {
+    fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
@@ -154,7 +155,7 @@ impl BridgeConfig {
             return Err(err);
         }
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        if let Err(err) = services::mosquitto_restart_daemon() {
+        if let Err(err) = services::mosquitto_restart_daemon(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -167,7 +168,7 @@ impl BridgeConfig {
         ));
 
         println!("Persisting mosquitto on reboot.\n");
-        if let Err(err) = services::mosquitto_enable_daemon() {
+        if let Err(err) = services::mosquitto_enable_daemon(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
