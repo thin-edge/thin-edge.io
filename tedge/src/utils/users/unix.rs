@@ -1,8 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
+use std::rc::Rc;
 
+// This implementation can never thread-safe because the current user is a global concept for the process.
+// If one thread changes the user, it affects another thread that might have wanted a different user.
+// So, let's use Rc rather than Arc to force !Send.
 #[derive(Clone)]
 pub struct UserManager {
-    inner: Arc<Mutex<InnerUserManager>>,
+    inner: Rc<Mutex<InnerUserManager>>,
 }
 
 struct InnerUserManager {
@@ -10,10 +14,12 @@ struct InnerUserManager {
     guard: Option<users::switch::SwitchUserGuard>,
 }
 
+impl !Send for UserManager {}
+
 impl UserManager {
     pub fn new() -> UserManager {
         UserManager {
-            inner: Arc::new(Mutex::new(
+            inner: Rc::new(Mutex::new(
                 InnerUserManager {
                     users: vec![],
                     guard: None,
@@ -69,7 +75,7 @@ impl InnerUserManager {
 
     fn inner_restore_previous_user(&mut self) {
         if let Some(username) = self.users.last() {
-            let guard = InnerUserManager::inner_become_user(username).expect(format!("Fail to switch back to the former user: {}", username));
+            let guard = InnerUserManager::inner_become_user(username).expect(&format!("Fail to switch back to the former user: {}", username));
             self.guard = Some(guard);
         }
     }
