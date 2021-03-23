@@ -677,9 +677,11 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
-        let verbose = 0;
 
-        assert!(cmd.execute(verbose).err().is_none());
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .err()
+            .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
@@ -697,9 +699,11 @@ mod tests {
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
         };
-        let verbose = 0;
 
-        assert!(cmd.execute(verbose).ok().is_none());
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .ok()
+            .is_none());
 
         let mut cert_file = cert_file.reopen().unwrap();
         assert_eq!(file_content(&mut cert_file), cert_content);
@@ -718,10 +722,10 @@ mod tests {
             cert_path: "/non/existent/cert/path".to_string(),
             key_path,
         };
-        let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
-        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        let cert_error = cmd
+            .create_test_certificate(&CertConfig::default())
+            .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
@@ -804,10 +808,10 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
             cert_path,
             key_path: "/non/existent/key/path".to_string(),
         };
-        let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
-        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        let cert_error = cmd
+            .create_test_certificate(&CertConfig::default())
+            .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
