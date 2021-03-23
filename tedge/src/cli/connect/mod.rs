@@ -7,6 +7,7 @@ use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
 use url::Url;
+use which::which;
 
 pub mod az;
 pub mod c8y;
@@ -21,7 +22,6 @@ const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
-const PATH_TO_TEDGE_MAPPER_BIN: &str = "/usr/bin/tedge_mapper";
 
 #[derive(StructOpt, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {
@@ -181,7 +181,7 @@ impl BridgeConfig {
         if self.mapper {
             println!("Checking if tedge-mapper is installed.\n");
 
-            if !(Path::new(PATH_TO_TEDGE_MAPPER_BIN).exists()) {
+            if !(which("tedge_mapper")?.exists()) {
                 println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
             } else {
                 println!("Starting tedge-mapper service.\n");
@@ -277,11 +277,11 @@ impl BridgeConfig {
             "bridge_attempt_unsubscribe {}",
             self.common_bridge_config.bridge_attempt_unsubscribe
         )?;
-        writeln!(
-            writer,
-            "bind_address {}",
-            self.common_bridge_config.bind_address
-        )?;
+        // writeln!(
+        //     writer,
+        //     "bind_address {}",
+        //     self.common_bridge_config.bind_address
+        // )?;
         writeln!(
             writer,
             "connection_messages {}",

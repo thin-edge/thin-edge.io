@@ -42,9 +42,8 @@ type ExitCode = i32;
 
 const MOSQUITTOCMD_IS_ACTIVE: ExitCode = 130;
 const MOSQUITTOCMD_SUCCESS: ExitCode = 3;
-const SYSTEMCTL_SERVICE_RUNNING: ExitCode = 0;
 const SYSTEMCTL_SUCCESS: ExitCode = 0;
-const SYSTEMCTL_STATUS_SUCCESS: ExitCode = 3;
+const SYSTEMCTL_UNIT_IS_NOT_ACTIVE: ExitCode = 3;
 
 /// Check if systemd and mosquitto are available on the system.
 pub fn all_services_available() -> Result<(), ServicesError> {
@@ -61,7 +60,7 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
     )?;
 
     match status.code() {
-        Some(SYSTEMCTL_SERVICE_RUNNING) => Ok(true),
+        Some(SYSTEMCTL_SUCCESS) => Ok(true),
         _ => Ok(false),
     }
 }
@@ -71,35 +70,59 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
 // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
-pub fn mosquitto_restart_daemon() -> Result<(), ServicesError>{
+pub fn mosquitto_restart_daemon() -> Result<(), ServicesError> {
     mosquitto_systemctl_daemon(SystemCtlCmd::Restart, ServicesError::MosquittoCantPersist)
 }
 
-pub fn mosquitto_enable_daemon() -> Result<(), ServicesError>{
+pub fn mosquitto_enable_daemon() -> Result<(), ServicesError> {
     mosquitto_systemctl_daemon(SystemCtlCmd::Enable, ServicesError::MosquittoCantPersist)
-}
-
-fn mosquitto_available_as_service() -> Result<(), ServicesError> {
-    mosquitto_systemctl_daemon(SystemCtlCmd::Status, ServicesError::MosquittoNotAvailableAsService)
 }
 
 fn mosquitto_is_active_daemon() -> Result<(), ServicesError> {
     mosquitto_systemctl_daemon(SystemCtlCmd::IsActive, ServicesError::MosquittoIsActive)
 }
 
-fn mosquitto_systemctl_daemon(systemctl_cmd: SystemCtlCmd, services_error: ServicesError) -> Result<(), ServicesError> {
+fn mosquitto_systemctl_daemon(
+    systemctl_subcmd: SystemCtlCmd,
+    services_error: ServicesError,
+) -> Result<(), ServicesError> {
     let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     match cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
         &[
             SystemCtlCmd::Cmd.as_str(),
-            systemctl_cmd.as_str(),
+            systemctl_subcmd.as_str(),
             MosquittoCmd::Cmd.as_str(),
         ],
     ) {
         Ok(status) => match status.code() {
             Some(MOSQUITTOCMD_SUCCESS) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
             Some(MOSQUITTOCMD_IS_ACTIVE) => Err(services_error),
+            code => {
+                let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
+                Err(ServicesError::UnhandledReturnCode {
+                    code,
+                    command: SystemCtlCmd::Cmd.into(),
+                })
+            }
+        },
+        Err(err) => Err(err),
+    }
+}
+
+fn mosquitto_available_as_service() -> Result<(), ServicesError> {
+    let sudo = paths::pathbuf_to_string(which("sudo")?)?;
+    match cmd_nullstdio_args_with_code_with_sudo(
+        sudo.as_str(),
+        &[
+            SystemCtlCmd::Cmd.as_str(),
+            SystemCtlCmd::Status.as_str(),
+            MosquittoCmd::Cmd.as_str(),
+        ],
+    ) {
+        Ok(status) => match status.code() {
+            Some(SYSTEMCTL_UNIT_IS_NOT_ACTIVE) | Some(SYSTEMCTL_SUCCESS) => Ok(()),
+            Some(MOSQUITTOCMD_IS_ACTIVE) => Err(ServicesError::MosquittoNotAvailableAsService),
             code => {
                 let code = code.ok_or(ServicesError::UnexpectedExitStatus)?;
                 Err(ServicesError::UnhandledReturnCode {
