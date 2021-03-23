@@ -10,7 +10,7 @@ where
 {
     let sudo = which::which("sudo")?;
     let mut command = std::process::Command::new(sudo);
-    command.env("HOME", home_dir).args(args);
+    command.env("HOME", home_dir).arg("-s").args(args);
 
     Ok(command)
 }
@@ -20,30 +20,36 @@ where
 #[cfg(feature = "root-access")]
 fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn std::error::Error>>
 {
-    let tempdir = tempfile::tempdir()?;
     let device_id = "test";
-    let cert_path = temp_path(&tempdir, "test-cert.pem");
-    let key_path = temp_path(&tempdir, "test-key.pem");
-    let home_dir = tempdir.path().to_str().unwrap();
+    let tedge_dir = tempfile::tempdir()?;
+    let mosquitto_dir = tempfile::tempdir()?;
+    let tedge_config_path = String::from(tedge_dir.path().join(".tedge").join("tedge.toml").to_str().unwrap());
+    let cert_path = temp_path(&mosquitto_dir,"test-cert.pem");
+    let key_path = temp_path(&mosquitto_dir,"test-key.pem");
+    let tedge_home = tedge_dir.path().to_str().unwrap();
+    let mosquitto_home = mosquitto_dir.path().to_str().unwrap();
+
     let tedge = env!("CARGO_BIN_EXE_tedge");
 
-    let mut chown_home = command_as_root(home_dir, &["chown", "mosquitto:mosquitto", &home_dir])?;
+    let mut chown_mosquitto = command_as_root(&mosquitto_home, &["chown", "mosquitto:mosquitto", &mosquitto_home])?;
+    let mut chown_tedge = command_as_root(&tedge_home, &["chown", "tedge:tedge", &tedge_home])?;
     let mut set_cert_path_cmd = command_as_root(
-        home_dir,
+        &tedge_home,
         &[tedge, "config", "set", "device.cert.path", &cert_path],
     )?;
     let mut set_key_path_cmd = command_as_root(
-        home_dir,
+        &tedge_home,
         &[tedge, "config", "set", "device.key.path", &key_path],
     )?;
 
     let mut create_cmd = command_as_root(
-        home_dir,
+        &tedge_home,
         &[tedge, "cert", "create", "--device-id", device_id],
     )?;
 
     // Run the commands to configure tedge
-    assert!(chown_home.output()?.status.success());
+    assert!(chown_mosquitto.output()?.status.success());
+    assert!(chown_tedge.output()?.status.success());
     assert!(set_cert_path_cmd.output()?.status.success());
     assert!(set_key_path_cmd.output()?.status.success());
 
@@ -52,6 +58,8 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
 
     let cert_metadata = std::fs::metadata(cert_path)?;
     let key_metadata = std::fs::metadata(key_path)?;
+//     let config_metadata = std::fs::metadata(tedge_config_path)?;
+
     assert_eq!(
         "mosquitto",
         users::get_user_by_uid(cert_metadata.st_uid())
@@ -65,6 +73,7 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
             .name()
     );
     assert_eq!(0o444, extract_mode(cert_metadata.st_mode()));
+
     assert_eq!(
         "mosquitto",
         users::get_user_by_uid(key_metadata.st_uid())
@@ -78,6 +87,20 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
             .name()
     );
     assert_eq!(0o400, extract_mode(key_metadata.st_mode()));
+
+    // assert_eq!(
+    //     "tedge",
+    //     users::get_user_by_uid(config_metadata.st_uid())
+    //         .unwrap()
+    //         .name()
+    // );
+    // assert_eq!(
+    //     "tedge",
+    //     users::get_group_by_gid(config_metadata.st_gid())
+    //         .unwrap()
+    //         .name()
+    // );
+    // assert_eq!(0o600, extract_mode(config_metadata.st_mode()));
 
     Ok(())
 }
