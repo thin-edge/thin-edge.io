@@ -14,8 +14,6 @@ struct InnerUserManager {
     guard: Option<users::switch::SwitchUserGuard>,
 }
 
-impl !Send for UserManager {}
-
 impl UserManager {
     pub fn new() -> UserManager {
         UserManager {

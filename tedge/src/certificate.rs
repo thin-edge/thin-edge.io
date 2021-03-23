@@ -665,10 +665,9 @@ mod tests {
     use std::fs::File;
     use std::io::Cursor;
     use tempfile::*;
+    use crate::utils::users::UserManager;
 
     extern crate base64;
-
-    use crypto_hash::{digest, Algorithm};
 
     #[test]
     fn basic_usage() {
@@ -684,7 +683,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), UserManager::new())
             .err()
             .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -706,7 +705,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), UserManager::new())
             .ok()
             .is_none());
 
@@ -729,7 +728,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -748,7 +747,7 @@ mod tests {
 
         //Create a certificate
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), UserManager::new())
             .err()
             .is_none());
 
@@ -758,7 +757,7 @@ mod tests {
             .unwrap();
         let thumbprint_sha1 = show_thumbprint(&pem).unwrap();
 
-        //Compute the thumbprint of the certificate using openssl
+        //Compute the thumbprint of the certificate using base64 and sha1
         let mut file = File::open(cert_path)
             .map_err(|err| err.to_string())
             .unwrap();
@@ -774,11 +773,10 @@ mod tests {
         //just decode the key contents
         let b64_bytes =
             base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let result = digest(Algorithm::SHA1, b64_bytes.as_ref());
-        let thumbprint_crypto: Vec<String> = result.iter().map(|b| format!("{:02X}", b)).collect();
+        let thumbprint_crypto = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
 
         //compare the two thumbprints
-        assert_eq!(thumbprint_sha1, thumbprint_crypto.concat());
+        assert_eq!(thumbprint_sha1, thumbprint_crypto.to_uppercase());
     }
 
     #[test]
@@ -815,7 +813,7 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
