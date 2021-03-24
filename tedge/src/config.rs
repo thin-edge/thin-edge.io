@@ -447,7 +447,7 @@ pub struct CumulocityConfig {
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
-    root_cert_path: Option<String>,
+    pub root_cert_path: Option<String>,
 }
 
 #[serde(deny_unknown_fields)]
@@ -455,7 +455,7 @@ pub struct CumulocityConfig {
 pub struct AzureConfig {
     connect: Option<String>,
     url: Option<String>,
-    root_cert_path: Option<String>,
+    pub root_cert_path: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
