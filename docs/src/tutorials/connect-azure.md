@@ -61,17 +61,16 @@ see the reference guide of [`tedge cert`](../references/tedge-cert.md).
 
 ## Register the device on Azure
 
-For a device to be trusted by Azure, one needs to add the self-signed certificate thumbprint
-on to the Azure iothub portal.
-In the Azure iothub portal, navigate to "Explores/IoT Devices click on + New"
-this will open a new blade "Create a device".
+For a device to be trusted by Azure, one needs to add the self-signed certificate thumbprint on to the Azure iothub portal.
+In the Azure iothub portal, navigate to "Explores/IoT Devices click on + New", this will open a new blade "Create a device".
+
 Here provide the configuration parameters that are required to create the device as described below
-   *Device ID: Should be same as the Subject of the certificate
-   *Authentication type: Select "X.509 Self-Signed" option
-      *Provide the Primary Thumbprint that was displayed in [`tedge cert show`](connect-azure.md#Show certificate details)
-      *Use the same for the Secondary Thumbprint as well (Since we are using a single certificate)
-   *Set Connect this device to an IoT hub to "Enable"
-   *Then save the configuration
+   * Device ID: Should be same as the Subject of the certificate
+   * Authentication type: Select "X.509 Self-Signed" option
+      * Provide the Primary Thumbprint that was displayed in [`tedge cert show`](connect-azure.md#Show certificate details)
+      * Use the same for the Secondary Thumbprint as well (Since we are using a single certificate)
+   * Set Connect this device to an IoT hub to "Enable"
+   * Then save the configuration
 Upon successfully saved the configuration a new device has been created on the IoT hub.
 The new device can be seen on the iot hub portal by navigating to "Explores/IoT Devices".
 
