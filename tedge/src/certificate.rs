@@ -12,6 +12,7 @@ use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
 use reqwest::{StatusCode, Url};
+use sha1::{Digest, Sha1};
 use std::{
     convert::TryFrom,
     fs::{File, OpenOptions},
@@ -19,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
+use x509_parser::prelude::Pem;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
@@ -386,6 +388,7 @@ impl Command for CreateCertCmd {
         Ok(())
     }
 }
+
 impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
@@ -508,9 +511,15 @@ impl ShowCertCmd {
             "Valid up to: {}",
             tbs_certificate.validity.not_after.to_rfc2822()
         );
-
+        println!("Thumbprint: {}", show_thumbprint(&pem)?);
         Ok(())
     }
+}
+
+fn show_thumbprint(pem: &Pem) -> Result<String, CertError> {
+    let bytes = Sha1::digest(&pem.contents).as_slice().to_vec();
+    let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();
+    Ok(strs.concat())
 }
 
 impl RemoveCertCmd {
@@ -649,7 +658,12 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use std::fs::File;
+    use std::io::Cursor;
     use tempfile::*;
+
+    extern crate base64;
+
+    use crypto_hash::{digest, Algorithm};
 
     #[test]
     fn basic_usage() {
@@ -663,9 +677,11 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
-        let verbose = 0;
 
-        assert!(cmd.execute(verbose).err().is_none());
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .err()
+            .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
@@ -683,9 +699,11 @@ mod tests {
             cert_path: String::from(cert_file.path().to_str().unwrap()),
             key_path: String::from(key_file.path().to_str().unwrap()),
         };
-        let verbose = 0;
 
-        assert!(cmd.execute(verbose).ok().is_none());
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .ok()
+            .is_none());
 
         let mut cert_file = cert_file.reopen().unwrap();
         assert_eq!(file_content(&mut cert_file), cert_content);
@@ -704,11 +722,80 @@ mod tests {
             cert_path: "/non/existent/cert/path".to_string(),
             key_path,
         };
-        let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
-        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        let cert_error = cmd
+            .create_test_certificate(&CertConfig::default())
+            .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
+    }
+
+    #[test]
+    fn check_certificate_thumbprint_b64_decode_sha1() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-thumbprint-device-cert.pem");
+        let key_path = temp_file_path(&dir, "my-thumbprint-device-key.pem");
+        let id = "my-device-id";
+        let cmd = CreateCertCmd {
+            id: String::from(id),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+        };
+
+        //Create a certificate
+        assert!(cmd
+            .create_test_certificate(&CertConfig::default())
+            .err()
+            .is_none());
+
+        //Compute the thumbprint of the certificate
+        let pem = read_pem(&cert_path)
+            .map_err(|err| err.cert_context(&cert_path))
+            .unwrap();
+        let thumbprint_sha1 = show_thumbprint(&pem).unwrap();
+
+        //Compute the thumbprint of the certificate using openssl
+        let mut file = File::open(cert_path)
+            .map_err(|err| err.to_string())
+            .unwrap();
+        let pem_cont = file_content(&mut file);
+
+        //Remove new line and carriage return characters
+        let cert_cont = pem_cont.replace(&['\r', '\n'][..], "");
+
+        //Read the certificate contents, except the header and footer
+        let header_len = "-----BEGIN CERTIFICATE-----".len();
+        let footer_len = "-----END CERTIFICATE-----".len();
+
+        //just decode the key contents
+        let b64_bytes =
+            base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
+        let result = digest(Algorithm::SHA1, b64_bytes.as_ref());
+        let thumbprint_crypto: Vec<String> = result.iter().map(|b| format!("{:02X}", b)).collect();
+
+        //compare the two thumbprints
+        assert_eq!(thumbprint_sha1, thumbprint_crypto.concat());
+    }
+
+    #[test]
+    fn check_thumbprint_static_certificate() {
+        let cert_content = r#"-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
+EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
+MzA5MTQxMDMwWhcNMjIwMzEwMTQxMDMwWjA7MQ8wDQYDVQQDDAZteS10YnIxEjAQ
+BgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwWTATBgcqhkjO
+PQIBBggqhkjOPQMBBwNCAAR6DVDOQ9ey3TX4tD2V0zCYe8GtmUHekNZZX6P+lUXx
+886P/Kkyra0xCYKam2me2VzdLMc4X5cpRkybVa0XH/WCozIwMDAdBgNVHQ4EFgQU
+Iz8LzGgzHjqsvB+ppPsVa+xf2bYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
+AgNIADBFAiEAhMAATBcZqE3Li1TZCzDoweBxRw1WD6gaSAcrsIWuW94CIHuR5ZG7
+ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
+-----END CERTIFICATE-----
+"#;
+        let expected_thumbprint = "860218AD0A996004449521E2713C28F67B5EA580";
+
+        let reader = Cursor::new(cert_content.as_bytes());
+        let (pem, _bytes_read) = Pem::read(reader).expect("Reading PEM failed");
+        let thumbprint = show_thumbprint(&pem).unwrap();
+        assert_eq!(thumbprint, expected_thumbprint);
     }
 
     #[test]
@@ -721,10 +808,10 @@ mod tests {
             cert_path,
             key_path: "/non/existent/key/path".to_string(),
         };
-        let verbose = 0;
 
-        let error = cmd.execute(verbose).unwrap_err();
-        let cert_error = error.downcast_ref::<CertError>().unwrap();
+        let cert_error = cmd
+            .create_test_certificate(&CertConfig::default())
+            .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
