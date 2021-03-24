@@ -85,19 +85,28 @@ use std::io::Write;
 
 #[test]
 fn bridge_config_c8y_create() {
-    let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+    let file = NamedTempFile::new().unwrap();
+    let cert_path = format!("\ncert_path = \"{}\"", file.path().to_str().unwrap());
+    let key_path = format!("\nkey_path = \"{}\"", file.path().to_str().unwrap());
+    let root_cert_path = format!("\nroot_cert_path = \"{}\"", file.path().to_str().unwrap());
+    let mut toml_config = r#"
+[device]
+id = "ABCD1234"
+"#
+    .to_owned();
 
-            [c8y]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
+    toml_config.push_str(&cert_path);
+    toml_config.push_str(&key_path);
 
-    let config_file = temp_file_with_content(toml_config);
+    toml_config.push_str(
+        r#"
+[c8y]
+url = "test.test.io""#,
+    );
+    toml_config.push_str(&root_cert_path);
+
+    println!("{}", toml_config);
+    let config_file = temp_file_with_content(&toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
     let bridge = C8y::c8y_bridge_config(config).unwrap();
 
@@ -108,11 +117,11 @@ fn bridge_config_c8y_create() {
         connection: "edge_to_c8y".into(),
         address: "test.test.io:8883".into(),
         remote_username: None,
-        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_root_cert_path: file.path().to_str().unwrap().to_owned(),
         remote_clientid: "alpha".into(),
         local_clientid: "Cumulocity".into(),
-        bridge_certfile: "./test-certificate.pem".into(),
-        bridge_keyfile: "./test-private-key.pem".into(),
+        bridge_certfile: file.path().to_str().unwrap().to_owned(),
+        bridge_keyfile: file.path().to_str().unwrap().to_owned(),
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),

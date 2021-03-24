@@ -9,7 +9,6 @@ use std::{
 };
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
-use users;
 
 const ETC_ROOT: &str = "/etc";
 pub const TEDGE_HOME_DIR: &str = ".tedge";
@@ -899,7 +898,10 @@ hello="tedge"
 
     #[test]
     fn test_set_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config(None).unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config
                 .set_config_value("invalid.key", "dummy-value".into())
@@ -910,7 +912,10 @@ hello="tedge"
 
     #[test]
     fn test_get_config_key_invalid_key() {
-        let config = TEdgeConfig::from_default_config(None).unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config.get_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
@@ -919,7 +924,10 @@ hello="tedge"
 
     #[test]
     fn test_unset_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config(None).unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config.unset_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
