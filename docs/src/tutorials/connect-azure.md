@@ -10,9 +10,9 @@ The focus is here on connecting the device to [Azure IoT Hub](https://azure.micr
 See this [tutorial](connect-c8y.md), if you want to connect Cumulocity IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
-* The url of the Azure iothub endpoint to connect (e.g. `[iot-hub-name].azure-devices.net`).
-* Your credentials to connect Azure:
-    * Your user name and password.
+* The url of the Azure IoT Hub endpoint to connect to (e.g. `[iot-hub-name].azure-devices.net`).
+* Your credentials to connect to Azure:
+    * Your username and password.
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
@@ -74,9 +74,19 @@ Here provide the configuration parameters that are required to create the device
 Upon successfully saved the configuration a new device has been created on the IoT hub.
 The new device can be seen on the iot hub portal by navigating to "Explores/IoT Devices".
 
+More info about registering a device can be found [Here](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
+
+## Configure the device
+To connect the device on to the Azure IoT Hub, one needs to set the Url/Hostname of the IoT Hub and the root certificate of the IoT Hub as below.
+* `tedge config set azure.url your-iot-hub-name.azure-devices.net`.
+   The Url/Hostname can be found in the Azure web portal, clicking on overview section of your IoT Hub.
+* `tedge config set azure.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem`.
+   This will set the root certificate path of the Azure IoT Hub.
+   In most of the Linux flavors this certificate will be present in /etc/ssl/certs. If not found download it from [Here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+
 ## Connect the device
 
-Now, you are ready to run `tedge connect az`.
+Now, you are ready to get your device connected to Azure IoT Hub with `tedge connect az`.
 This command configures the MQTT broker:
 * to establish a permanent and secure connection to the Azure cloud,
 * to forward local messages to the cloud and vice versa.
@@ -112,8 +122,9 @@ Any messages sent on the topic will be forwarded to Azure.
 Here, we use `tedge mqtt pub az/messages/events/` a message to be understood as a temperature of 20 Celsius.
 
 ```
-$ tedge mqtt pub az/messages/events {"temperature": 20}
+$ tedge mqtt pub az/messages/events '{"temperature": 20}'
 ```
+To view the messages that were sent from the device to cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
 
 More info about sending telemetry to Azure can be found [Here](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-dotnet)
 
