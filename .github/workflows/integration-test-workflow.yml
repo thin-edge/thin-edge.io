@@ -1,19 +1,13 @@
-
-name: nightly-test-workflow
-
-# This is the workflow to be executed "nightly".
-# At current it is executed on every push to main in the main repository.
-# As a stand in for tests that are coming soon we execute tedge --help
-# to see if the binary can be executed on that platform.
+name: integration-test-workflow
 
 on:
-  # Only run, when a pull request is merged.
-  # Trick: A merged pull request always results in a push.
-  push:
-    branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
-
+  workflow_run:
+    workflows: ["build-workflow"]
+    branches: [main]
+    types:
+      - completed
 env:
   CARGO_TERM_COLOR: always
 
@@ -23,13 +17,15 @@ jobs:
     runs-on: Ubuntu-20.04
 
     steps:
+        - name: checkout
+          uses: actions/checkout@v2
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
             github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: hosted-build-debian-amd64.yml
+            workflow: build-workflow.yml
             workflow_conclusion: success
             branch: main
             name: debian-packages-amd64
@@ -52,13 +48,15 @@ jobs:
     runs-on: [self-hosted, Linux, ARM]
 
     steps:
+        - name: checkout
+          uses: actions/checkout@v2
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
             github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: hosted_build_debian_armv7_cross.yml
+            workflow: build-workflow.yml
             workflow_conclusion: success
             branch: main
             name: debian-packages-armhf
@@ -77,3 +75,23 @@ jobs:
         - name: run tedge help
           run: tedge --help
 
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: main
+            name: examples
+            path: examples
+
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test.sh $TIMEZONE
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TIMEZONE: 01:00
