@@ -3,9 +3,9 @@ use crate::cli::connect::{
 };
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
+use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use structopt::StructOpt;
-use crate::utils::users::UserManager;
 
 //const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 

@@ -1,5 +1,5 @@
-use std::sync::Mutex;
 use std::rc::Rc;
+use std::sync::Mutex;
 
 // This implementation can never thread-safe because the current user is a global concept for the process.
 // If one thread changes the user, it affects another thread that might have wanted a different user.
@@ -17,12 +17,10 @@ struct InnerUserManager {
 impl UserManager {
     pub fn new() -> UserManager {
         UserManager {
-            inner: Rc::new(Mutex::new(
-                InnerUserManager {
-                    users: vec![],
-                    guard: None,
-                }
-            ))
+            inner: Rc::new(Mutex::new(InnerUserManager {
+                users: vec![],
+                guard: None,
+            })),
         }
     }
 
@@ -31,11 +29,14 @@ impl UserManager {
     }
 
     pub fn become_user(&self, username: &str) -> Result<UserGuard, super::UserSwitchError> {
-        if users::get_current_uid() == 0 { // root has uid 0
+        if users::get_current_uid() == 0 {
+            // root has uid 0
             self.inner.lock().unwrap().become_user(username)?;
         }
 
-        Ok(UserGuard { user_manager: self.clone() })
+        Ok(UserGuard {
+            user_manager: self.clone(),
+        })
     }
 
     fn drop_guard(&self) {
@@ -73,28 +74,34 @@ impl InnerUserManager {
 
     fn inner_restore_previous_user(&mut self) {
         if let Some(username) = self.users.last() {
-            let guard = InnerUserManager::inner_become_user(username).expect(&format!("Fail to switch back to the former user: {}", username));
+            let guard = InnerUserManager::inner_become_user(username).expect(&format!(
+                "Fail to switch back to the former user: {}",
+                username
+            ));
             self.guard = Some(guard);
         }
     }
 
-    fn inner_become_user(username: &str) -> Result<users::switch::SwitchUserGuard, super::UserSwitchError> {
-        let user =
-            users::get_user_by_name(username).ok_or_else(|| super::UserSwitchError::UnknownUser {
+    fn inner_become_user(
+        username: &str,
+    ) -> Result<users::switch::SwitchUserGuard, super::UserSwitchError> {
+        let user = users::get_user_by_name(username).ok_or_else(|| {
+            super::UserSwitchError::UnknownUser {
                 name: username.to_owned(),
-            })?;
+            }
+        })?;
 
-        let group =
-            users::get_group_by_name(username).ok_or_else(|| super::UserSwitchError::UnknownGroup {
+        let group = users::get_group_by_name(username).ok_or_else(|| {
+            super::UserSwitchError::UnknownGroup {
                 name: username.to_owned(),
-            })?;
+            }
+        })?;
 
         let uid = user.uid();
         let gid = group.gid();
 
         Ok(users::switch::switch_user_group(uid, gid)?)
     }
-
 }
 
 pub struct UserGuard {

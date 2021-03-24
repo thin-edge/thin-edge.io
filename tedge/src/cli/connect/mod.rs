@@ -2,8 +2,8 @@ use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
-use crate::utils::{paths, services};
 use crate::utils::users::UserManager;
+use crate::utils::{paths, services};
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};

@@ -445,7 +445,11 @@ impl Default for TestCertConfig {
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(&self, config: &CertConfig, user_manager: users::UserManager) -> Result<(), CertError> {
+    fn create_test_certificate(
+        &self,
+        config: &CertConfig,
+        user_manager: users::UserManager,
+    ) -> Result<(), CertError> {
         let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         check_identifier(&self.id)?;
 
@@ -661,11 +665,11 @@ fn build_upload_certificate_url(host: &str, tenant_id: &str) -> Result<Url, Cert
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
     use std::fs::File;
     use std::io::Cursor;
     use tempfile::*;
-    use crate::utils::users::UserManager;
 
     extern crate base64;
 

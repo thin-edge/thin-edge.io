@@ -24,4 +24,3 @@ pub enum UserSwitchError {
     #[error(transparent)]
     NotAuthorized(#[from] std::io::Error),
 }
-
