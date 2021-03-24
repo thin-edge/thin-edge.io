@@ -2,6 +2,7 @@ use std::process::ExitStatus;
 
 use super::paths;
 use crate::utils::users::UserManager;
+use crate::utils::users::ROOT_USER;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ServicesError {
@@ -69,7 +70,7 @@ pub fn check_mosquitto_is_running() -> Result<bool, ServicesError> {
 // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
 // systemctl stop command followed by systemctl start should be issued.
 pub fn mosquitto_restart_daemon(user_manager: &UserManager) -> Result<(), ServicesError> {
-    let _root_guard = user_manager.become_user("root");
+    let _root_guard = user_manager.become_user(ROOT_USER);
     match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::Restart.as_str(), MosquittoCmd::Cmd.as_str()],
@@ -90,7 +91,7 @@ pub fn mosquitto_restart_daemon(user_manager: &UserManager) -> Result<(), Servic
 }
 
 pub fn mosquitto_enable_daemon(user_manager: &UserManager) -> Result<(), ServicesError> {
-    let _root_guard = user_manager.become_user("root");
+    let _root_guard = user_manager.become_user(ROOT_USER);
     match cmd_nullstdio_args_with_code(
         SystemCtlCmd::Cmd.as_str(),
         &[SystemCtlCmd::Enable.as_str(), MosquittoCmd::Cmd.as_str()],

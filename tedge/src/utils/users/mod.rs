@@ -10,6 +10,7 @@ mod windows;
 #[cfg(not(unix))]
 pub use windows::*;
 
+pub const ROOT_USER: &str = "root";
 pub const TEDGE_USER: &str = "tedge";
 pub const BROKER_USER: &str = "mosquitto";
 
