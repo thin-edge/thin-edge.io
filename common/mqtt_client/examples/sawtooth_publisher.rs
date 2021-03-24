@@ -60,10 +60,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wait: i32 = args[1].parse().expect("Cannot parse wait time");
     let height: i32 = args[2].parse().expect("Cannot parse height");
     let iterations: i32 = args[3].parse().expect("Cannot parse iterations");
-    //let qosi:i32 = args[3].parse().expect("Cannot parse QoS");
     let template: String = String::from(&args[4]);
-    //let qos = rumqttc::QoS::AtMostOnce;
-    //AtMostOnce, AtLeastOnce, ExactlyOnce
 
     println!(
         "Publishing sawtooth with delay {}ms height {} iterations {} template {} will cause {} publishs.",
@@ -123,29 +120,16 @@ async fn publish_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-    /*qos:rumqttc::QoS,*/ template: String,
 ) -> Result<(), mqtt_client::Error> {
     info!("Publishing temperature measurements");
     println!();
     for iteration in 0..iterations {
         for value in 0..height {
-            //let payload = format!("{},{}", template, value);
             let payload = format!("{{ {}: {} }}", "\"Flux [F]\"", value);
             debug!("{} ", value);
             debug!("{}", payload);
 
             mqtt.publish(Message::new(&c8y_msg, payload)).await?;
-            /*
-            TODO use differnent qos
-            let msg = Message {
-                topic: c8y_msg.clone(),
-                payload: payload.into(),
-                qos: qos.clone(),
-                pkid: 0,
-                retain: false,
-                };
-            mqtt.publish(msg).await?;
-            */
             Delay::new(Duration::from_millis(u64::try_from(wait).unwrap())).await;
             std::io::stdout().flush().expect("Flush failed");
         }
