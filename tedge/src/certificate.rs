@@ -479,7 +479,7 @@ impl CreateCertCmd {
     }
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = TEdgeConfig::from_default_config(None)?;
+        let mut config = TEdgeConfig::from_default_config()?;
         config.device.id = Some(self.id.clone());
         config.device.cert_path = Some(self.cert_path.clone());
         config.device.key_path = Some(self.key_path.clone());
@@ -522,7 +522,7 @@ impl RemoveCertCmd {
     }
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = TEdgeConfig::from_default_config(None)?;
+        let mut config = TEdgeConfig::from_default_config()?;
         config.device.id = None;
 
         let _ = config.write_to_default_config()?;

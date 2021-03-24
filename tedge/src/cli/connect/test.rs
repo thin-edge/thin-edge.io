@@ -85,30 +85,19 @@ use std::io::Write;
 
 #[test]
 fn bridge_config_c8y_create() {
-    let file = NamedTempFile::new().unwrap();
-    let cert_path = format!("\ncert_path = \"{}\"", file.path().to_str().unwrap());
-    let key_path = format!("\nkey_path = \"{}\"", file.path().to_str().unwrap());
-    let root_cert_path = format!("\nroot_cert_path = \"{}\"", file.path().to_str().unwrap());
-    let mut toml_config = r#"
-[device]
-id = "ABCD1234"
-"#
-    .to_owned();
+    let toml_config = r#"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-    toml_config.push_str(&cert_path);
-    toml_config.push_str(&key_path);
-
-    toml_config.push_str(
-        r#"
-[c8y]
-url = "test.test.io""#,
-    );
-    toml_config.push_str(&root_cert_path);
-
-    println!("{}", toml_config);
+        [c8y]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
     let config_file = temp_file_with_content(&toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = C8y::c8y_bridge_config(config).unwrap();
+    let bridge = C8y::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         common_bridge_config: CommonBridgeConfig::default(),
@@ -117,11 +106,11 @@ url = "test.test.io""#,
         connection: "edge_to_c8y".into(),
         address: "test.test.io:8883".into(),
         remote_username: None,
-        bridge_root_cert_path: file.path().to_str().unwrap().to_owned(),
+        bridge_root_cert_path: "./test_root.pem".into(),
         remote_clientid: "alpha".into(),
         local_clientid: "Cumulocity".into(),
-        bridge_certfile: file.path().to_str().unwrap().to_owned(),
-        bridge_keyfile: file.path().to_str().unwrap().to_owned(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),
@@ -272,20 +261,19 @@ log_type unsubscribe
 #[test]
 fn bridge_config_azure_create() {
     let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "/etc/tedge/test-certificate.pem"
-            key_path = "/etc/tedge/test-private-key.pem"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-            [azure]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
+        [azure]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
 
     let config_file = temp_file_with_content(toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = Azure::azure_bridge_config(config).unwrap();
+    let bridge = Azure::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         common_bridge_config: CommonBridgeConfig::default(),

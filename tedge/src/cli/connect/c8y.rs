@@ -12,23 +12,27 @@ pub struct C8y {}
 
 impl C8y {
     pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
-        let address = format!(
-            "{}:{}",
-            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
-            MQTT_TLS_PORT
-        );
+        Self::assign_bridge_root_cert_path(&mut config)?;
+        config.write_to_default_config()?;
+        Self::new_config(&config)
+    }
 
+    pub fn assign_bridge_root_cert_path(config: &mut TEdgeConfig) -> Result<(), ConfigError> {
         let bridge_root_cert_path = config::get_config_value_or_default(
             &config,
             C8Y_ROOT_CERT_PATH,
             DEFAULT_ROOT_CERT_PATH,
         )?;
+        let _ = config.set_config_value(C8Y_ROOT_CERT_PATH, DEFAULT_ROOT_CERT_PATH.into())?;
+        Ok(())
+    }
 
-        let _ = config::update_config_with_value(
-            &mut config,
-            C8Y_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
+    pub fn new_config(config: &TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+        let address = format!(
+            "{}:{}",
+            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
+            MQTT_TLS_PORT
+        );
 
         Ok(BridgeConfig {
             common_bridge_config: CommonBridgeConfig::default(),
@@ -37,7 +41,7 @@ impl C8y {
             connection: "edge_to_c8y".into(),
             address,
             remote_username: None,
-            bridge_root_cert_path,
+            bridge_root_cert_path: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
             remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,

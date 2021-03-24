@@ -10,9 +10,9 @@ use std::{
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
-const ETC_ROOT: &str = "/etc";
+const ETC_PATH: &str = "/etc";
+pub const TEDGE_ETC_DIR: &str = "tedge";
 pub const TEDGE_HOME_DIR: &str = ".tedge";
-pub const TEDGE_HOME_DIR2: &str = "tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
@@ -159,7 +159,7 @@ impl Command for ConfigCmd {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let mut config = TEdgeConfig::from_default_config(None)?;
+        let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 
         match self {
@@ -412,9 +412,9 @@ impl DeviceConfig {
     }
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        PathBuf::from_str("/etc")
-            .expect("Path conversion failed unexpectedly!")
-            .join(TEDGE_HOME_DIR2)
+        PathBuf::from_str(ETC_PATH)
+            .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
+            .join(TEDGE_ETC_DIR)
             .join(file_name)
             .to_str()
             .map(|s| s.into())
@@ -495,9 +495,9 @@ pub enum ConfigError {
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    Ok(PathBuf::from_str(ETC_ROOT)
-        .expect("Path conversion failed unexpectedly!")
-        .join(TEDGE_HOME_DIR2)
+    Ok(PathBuf::from_str(ETC_PATH)
+        .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
+        .join(TEDGE_ETC_DIR)
         .join(TEDGE_CONFIG_FILE))
 }
 
@@ -531,10 +531,7 @@ impl TEdgeConfig {
     /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
-    pub fn from_default_config(path: Option<PathBuf>) -> Result<TEdgeConfig, ConfigError> {
-        if let Some(path) = path {
-            return Self::from_custom_config(path.as_path());
-        }
+    pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 

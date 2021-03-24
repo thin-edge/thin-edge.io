@@ -277,10 +277,10 @@ mod tests {
         assert!(cert_path.contains(".tedge"));
     }
 
-    fn extract_config_value(output: &str, key: &str) -> String {
+    fn extract_config_value(output: &String, key: &str) -> String {
         output
             .lines()
-            .map(|line| line.splitn(2, '=').collect::<Vec<_>>())
+            .map(|line| line.splitn(2, "=").collect::<Vec<_>>())
             .find(|pair| pair[0] == key)
             .unwrap()[1]
             .into()
@@ -332,7 +332,7 @@ mod tests {
             tedge_command_with_test_home(test_home_str, &["config", "list", "--doc"]).unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
-        let output_str = String::from_utf8(output.stdout).unwrap();
+        let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
         for key in get_tedge_config_keys() {
             assert_eq!(true, output_str.contains(key));
@@ -373,6 +373,6 @@ mod tests {
             "c8y.url",
             "c8y.root.cert.path",
         ];
-        vec
+        return vec;
     }
 }

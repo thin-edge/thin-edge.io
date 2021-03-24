@@ -16,7 +16,7 @@ use command::BuildCommand;
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::from_args();
 
-    let config = config::TEdgeConfig::from_default_config(None)
+    let config = config::TEdgeConfig::from_default_config()
         .with_context(|| "failed to read the tedge configuration")?;
 
     let cmd = opt
