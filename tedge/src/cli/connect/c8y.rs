@@ -23,7 +23,7 @@ impl C8y {
             C8Y_ROOT_CERT_PATH,
             DEFAULT_ROOT_CERT_PATH,
         )?;
-        let _ = config.set_config_value(C8Y_ROOT_CERT_PATH, DEFAULT_ROOT_CERT_PATH.into())?;
+        let _ = config.set_config_value(C8Y_ROOT_CERT_PATH, bridge_root_cert_path)?;
         Ok(())
     }
 
