@@ -382,12 +382,11 @@ impl ThinEdgeJsonError {
 }
 
 fn input_prefix(input: &str, len: usize) -> String {
-    let input = input.split_whitespace().collect::<String>();
-    if input.len() < len {
-        input
-    } else {
-        input[0..len].to_string()
-    }
+    input
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(len)
+        .collect()
 }
 
 #[cfg(test)]
@@ -817,43 +816,52 @@ mod tests {
         assert_eq!(expected_error, error.to_string());
     }
 
+    #[test]
+    fn prefix_fn_removes_extra_chars() {
+        let input = "薄いエッジ";
+        assert_eq!(input.len(), 15);
+        assert_eq!(input_prefix(input, 1), "薄");
+    }
+
+    #[test]
+    fn prefix_fn_let_unchanged_short_inputs() {
+        let input = "FØØ";
+        assert_eq!(input.len(), 5);
+        assert_eq!(input_prefix(input, 4), input);
+    }
+
     use proptest::prelude::*;
 
     proptest! {
-            #[test]
-            fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
-                let input = format!(r#""time: "2013-06-22T17:03:14.000+02:00",{{
-                            "{}": 123
-                          }}"#, measurement);
-                let time = "2013-06-22T17:03:14.000+02:00";
-                let time_utc : DateTime<Utc> = time.parse().unwrap();
-                let expected_output = format!(r#"{{
-                                  "type": "ThinEdgeMeasurement",
-                                  "time": "{}",
-                                  "{}": {{
-                                  "{}": {{
-                                  "value": 123
-                                 }}
-                                 }}
-                                }}"#, time_utc.to_rfc3339(), measurement, measurement);
+        #[test]
+        fn prefix_doesnt_crash(input in "\\PC*") {
+            let _ = input_prefix(&input, 10);
+        }
 
+        #[test]
+        fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
+            let input = format!(r#"{{"time": "2013-06-22T17:03:14.000+02:00",
+                        "{}": 123
+                      }}"#, measurement);
+            let time = "2013-06-22T17:03:14.000+02:00";
+            let expected_output = format!(r#"{{
+                  "type": "ThinEdgeMeasurement",
+                  "time": "{}",
+                  "{}": {{
+                  "{}": {{
+                       "value": 123
+                      }}
+                   }}
+                }}"#, time, measurement, measurement);
 
-        match CumulocityJson::from_thin_edge_json(
-                    &String::from(input).into_bytes(),
-                ) {
-                    Ok(vec) => {
-                        assert_eq!(
-                            expected_output.split_whitespace().collect::<String>(),
-                            String::from_utf8(vec)
-                                .unwrap()
-                                .split_whitespace()
-                                .collect::<String>()
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("Error is {}", e);
-                    }
-                }
+        let output = CumulocityJson::from_thin_edge_json(&input.into_bytes()).unwrap();
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            String::from_utf8(output)
+                .unwrap()
+                .split_whitespace()
+                .collect::<String>()
+        );
         }
     }
 }
