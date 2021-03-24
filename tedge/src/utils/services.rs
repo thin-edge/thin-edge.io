@@ -142,17 +142,6 @@ fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStat
         .status()?)
 }
 
-fn cmd_nullstdio_args_with_code_as_root(
-    command: &str,
-    args: &[&str],
-) -> Result<ExitStatus, ServicesError> {
-    Ok(std::process::Command::new(command)
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()?)
-}
-
 fn mosquitto_available() -> Result<(), ServicesError> {
     match cmd_nullstdio_args(
         MosquittoCmd::Cmd.as_str(),

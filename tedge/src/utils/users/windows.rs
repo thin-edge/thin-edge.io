@@ -17,6 +17,7 @@ impl UserManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn running_as_root() -> bool {
         false
     }

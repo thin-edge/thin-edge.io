@@ -14,6 +14,7 @@ pub const ROOT_USER: &str = "root";
 pub const TEDGE_USER: &str = "tedge";
 pub const BROKER_USER: &str = "mosquitto";
 
+#[allow(dead_code)] // These errors are only raised from unix
 #[derive(thiserror::Error, Debug)]
 pub enum UserSwitchError {
     #[error("Tried to become user, but it did not exist: {name}")]
