@@ -387,7 +387,7 @@ impl Command for CreateCertCmd {
 
     fn execute(&self, user_manager: users::UserManager) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        let () = self.create_test_certificate(&config, user_manager.clone())?;
+        let () = self.create_test_certificate(&config, &user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
@@ -448,7 +448,7 @@ impl CreateCertCmd {
     fn create_test_certificate(
         &self,
         config: &CertConfig,
-        user_manager: users::UserManager,
+        user_manager: &users::UserManager,
     ) -> Result<(), CertError> {
         let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         check_identifier(&self.id)?;
@@ -687,7 +687,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default(), UserManager::new())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .err()
             .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -709,7 +709,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default(), UserManager::new())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .ok()
             .is_none());
 
@@ -732,7 +732,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default(), UserManager::new())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -751,7 +751,7 @@ mod tests {
 
         //Create a certificate
         assert!(cmd
-            .create_test_certificate(&CertConfig::default(), UserManager::new())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .err()
             .is_none());
 
@@ -817,7 +817,7 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default(), UserManager::new())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
