@@ -23,11 +23,17 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
     let device_id = "test";
     let tedge_dir = tempfile::tempdir()?;
     let mosquitto_dir = tempfile::tempdir()?;
-    let tedge_config_path = String::from(tedge_dir.path().join(".tedge").join("tedge.toml").to_str().unwrap());
     let cert_path = temp_path(&mosquitto_dir,"test-cert.pem");
     let key_path = temp_path(&mosquitto_dir,"test-key.pem");
     let tedge_home = tedge_dir.path().to_str().unwrap();
     let mosquitto_home = mosquitto_dir.path().to_str().unwrap();
+
+    // We cannot easily test `sudo tedge` as long as the tedge command has no option to use a specific config.
+    // 1) sudo reset $HOME to be /root, and tedge expect than its config to be in "/root/.tedge/tedge.toml"
+    // 2) the plan for `sudo tedge` is to use a fix path "/etc/tedge/tedge.toml".
+    // In both cases, the tests break the system config.
+    // => The solution is to add a --config option to the tedge command.
+    let tedge_config_path = String::from("/root/.tedge/tedge.toml");
 
     let tedge = env!("CARGO_BIN_EXE_tedge");
 
@@ -58,7 +64,7 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
 
     let cert_metadata = std::fs::metadata(cert_path)?;
     let key_metadata = std::fs::metadata(key_path)?;
-//     let config_metadata = std::fs::metadata(tedge_config_path)?;
+    let config_metadata = std::fs::metadata(tedge_config_path)?;
 
     assert_eq!(
         "mosquitto",
@@ -88,19 +94,19 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
     );
     assert_eq!(0o400, extract_mode(key_metadata.st_mode()));
 
-    // assert_eq!(
-    //     "tedge",
-    //     users::get_user_by_uid(config_metadata.st_uid())
-    //         .unwrap()
-    //         .name()
-    // );
-    // assert_eq!(
-    //     "tedge",
-    //     users::get_group_by_gid(config_metadata.st_gid())
-    //         .unwrap()
-    //         .name()
-    // );
-    // assert_eq!(0o600, extract_mode(config_metadata.st_mode()));
+    assert_eq!(
+        "tedge",
+        users::get_user_by_uid(config_metadata.st_uid())
+            .unwrap()
+            .name()
+    );
+    assert_eq!(
+        "tedge",
+        users::get_group_by_gid(config_metadata.st_gid())
+            .unwrap()
+            .name()
+    );
+    assert_eq!(0o600, extract_mode(config_metadata.st_mode()));
 
     Ok(())
 }
