@@ -86,7 +86,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     tokio::spawn(publish_topic(
-        mqtt, c8y_msg, wait, height, iterations, template,
+        mqtt, c8y_msg, wait, height, iterations,
     ));
 
     select! {
