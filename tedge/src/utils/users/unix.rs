@@ -29,8 +29,7 @@ impl UserManager {
     }
 
     pub fn become_user(&self, username: &str) -> Result<UserGuard, super::UserSwitchError> {
-        if users::get_current_uid() == 0 {
-            // root has uid 0
+        if UserManager::running_as_root() {
             self.inner.lock().unwrap().become_user(username)?;
         }
 
