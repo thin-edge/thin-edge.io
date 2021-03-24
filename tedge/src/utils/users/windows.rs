@@ -1,9 +1,9 @@
-use std::rc::Rc;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct UserManager {
-    _force_not_send: PhantomData<Rc<()>>
+    _force_not_send: PhantomData<Rc<()>>,
 }
 
 pub struct UserGuard {}

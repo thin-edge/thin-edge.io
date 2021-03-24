@@ -23,8 +23,8 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
     let device_id = "test";
     let tedge_dir = tempfile::tempdir()?;
     let mosquitto_dir = tempfile::tempdir()?;
-    let cert_path = temp_path(&mosquitto_dir,"test-cert.pem");
-    let key_path = temp_path(&mosquitto_dir,"test-key.pem");
+    let cert_path = temp_path(&mosquitto_dir, "test-cert.pem");
+    let key_path = temp_path(&mosquitto_dir, "test-key.pem");
     let tedge_home = tedge_dir.path().to_str().unwrap();
     let mosquitto_home = mosquitto_dir.path().to_str().unwrap();
 
@@ -37,7 +37,10 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
 
     let tedge = env!("CARGO_BIN_EXE_tedge");
 
-    let mut chown_mosquitto = command_as_root(&mosquitto_home, &["chown", "mosquitto:mosquitto", &mosquitto_home])?;
+    let mut chown_mosquitto = command_as_root(
+        &mosquitto_home,
+        &["chown", "mosquitto:mosquitto", &mosquitto_home],
+    )?;
     let mut chown_tedge = command_as_root(&tedge_home, &["chown", "tedge:tedge", &tedge_home])?;
     let mut set_cert_path_cmd = command_as_root(
         &tedge_home,
