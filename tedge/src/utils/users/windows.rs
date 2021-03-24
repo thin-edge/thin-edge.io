@@ -6,7 +6,9 @@ pub struct UserManager {
     _force_not_send: PhantomData<Rc<()>>,
 }
 
-pub struct UserGuard {}
+pub struct UserGuard {
+    _force_not_send: PhantomData<Rc<()>>,
+}
 
 impl UserManager {
     pub fn new() -> UserManager {
@@ -20,6 +22,8 @@ impl UserManager {
     }
 
     pub fn become_user(&self, _username: &str) -> Result<UserGuard, super::UserSwitchError> {
-        Ok(UserGuard {})
+        Ok(UserGuard {
+            _force_not_send: PhantomData,
+        })
     }
 }
