@@ -31,6 +31,7 @@ impl C8y {
         )?;
 
         Ok(BridgeConfig {
+            common_mosquitto_config: CommonMosquittoConfig::default(),
             common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),

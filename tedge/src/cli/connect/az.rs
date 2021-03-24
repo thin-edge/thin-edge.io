@@ -33,6 +33,7 @@ impl Azure {
         )?;
 
         Ok(BridgeConfig {
+            common_mosquitto_config: CommonMosquittoConfig::default(),
             common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "az".into(),
             config_file: AZURE_CONFIG_FILENAME.to_string(),

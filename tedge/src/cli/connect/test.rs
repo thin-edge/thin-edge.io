@@ -6,6 +6,7 @@ const INCORRECT_PATH: &str = "/path";
 
 fn default_bridge_config() -> BridgeConfig {
     BridgeConfig {
+        common_mosquitto_config: CommonMosquittoConfig::default(),
         common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az/c8y".into(),
         config_file: "cfg".to_string(),
@@ -102,7 +103,6 @@ fn bridge_config_c8y_create() {
     let bridge = C8y::c8y_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "c8y".into(),
         config_file: "c8y-bridge.conf".into(),
         connection: "edge_to_c8y".into(),
@@ -140,6 +140,7 @@ fn bridge_config_c8y_create() {
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
         ],
+        ..default_bridge_config()
     };
 
     assert_eq!(bridge, expected);
@@ -151,7 +152,6 @@ fn bridge_config_serialize_with_cafile_correctly() {
     let bridge_root_cert_path = file.path().to_str().unwrap().to_owned();
 
     let bridge = BridgeConfig {
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "test".into(),
         config_file: "test-bridge.conf".into(),
         connection: "edge_to_test".into(),
@@ -163,6 +163,7 @@ fn bridge_config_serialize_with_cafile_correctly() {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         topics: vec![],
+        ..default_bridge_config()
     };
 
     let mut serialized_config = Vec::<u8>::new();
@@ -187,14 +188,6 @@ start_type automatic
 cleansession true
 notifications false
 bridge_attempt_unsubscribe false
-bind_address 127.0.0.1
-connection_messages true
-log_type error
-log_type warning
-log_type notice
-log_type information
-log_type subscribe
-log_type unsubscribe
 
 ### Topics
 "#,
@@ -209,7 +202,6 @@ fn bridge_config_serialize_with_capath_correctly() {
     let bridge_root_cert_path = dir.path().to_str().unwrap().to_owned();
 
     let bridge = BridgeConfig {
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "test".into(),
         config_file: "test-bridge.conf".into(),
         connection: "edge_to_test".into(),
@@ -221,6 +213,7 @@ fn bridge_config_serialize_with_capath_correctly() {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         topics: vec![],
+        ..default_bridge_config()
     };
     let mut serialized_config = Vec::<u8>::new();
     bridge.serialize(&mut serialized_config).unwrap();
@@ -244,14 +237,6 @@ start_type automatic
 cleansession true
 notifications false
 bridge_attempt_unsubscribe false
-bind_address 127.0.0.1
-connection_messages true
-log_type error
-log_type warning
-log_type notice
-log_type information
-log_type subscribe
-log_type unsubscribe
 
 ### Topics
 "#,
@@ -279,7 +264,6 @@ fn bridge_config_azure_create() {
     let bridge = Azure::azure_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
@@ -296,6 +280,7 @@ fn bridge_config_azure_create() {
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
             r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
         ],
+        ..default_bridge_config()
     };
     assert_eq!(bridge, expected);
 }
@@ -306,7 +291,6 @@ fn serialize() {
     let bridge_root_cert_path = file.path().to_str().unwrap().to_owned();
 
     let config = BridgeConfig {
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
@@ -321,6 +305,7 @@ fn serialize() {
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
         ],
+        ..default_bridge_config()
     };
 
     let mut buffer = Vec::new();
@@ -334,7 +319,7 @@ fn serialize() {
             .lines()
             .filter(|str| !str.is_empty() && !str.starts_with('#'))
             .count(),
-        23
+        15
     );
 
     assert!(contents.contains("connection edge_to_az"));
@@ -349,6 +334,24 @@ fn serialize() {
     assert!(contents.contains("cleansession true"));
     assert!(contents.contains("notifications false"));
     assert!(contents.contains("bridge_attempt_unsubscribe false"));
+
+    assert!(contents.contains("topic messages/events/ out 1 az/ devices/alpha/"));
+    assert!(contents.contains("topic messages/devicebound/# out 1 az/ devices/alpha/"));
+
+    let mut another_buffer = Vec::new();
+    config
+        .serialize_common_config(&mut another_buffer)
+        .expect("Writing config to file failed");
+
+    let contents = String::from_utf8(another_buffer).unwrap();
+    assert_eq!(
+        contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with('#'))
+            .count(),
+        8
+    );
+
     assert!(contents.contains("bind_address 127.0.0.1"));
     assert!(contents.contains("connection_messages true"));
 
@@ -358,9 +361,6 @@ fn serialize() {
     assert!(contents.contains("log_type information"));
     assert!(contents.contains("log_type subscribe"));
     assert!(contents.contains("log_type unsubscribe"));
-
-    assert!(contents.contains("topic messages/events/ out 1 az/ devices/alpha/"));
-    assert!(contents.contains("topic messages/devicebound/# out 1 az/ devices/alpha/"));
 }
 
 fn temp_file_with_content(content: &str) -> NamedTempFile {
