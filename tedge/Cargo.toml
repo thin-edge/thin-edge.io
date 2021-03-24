@@ -9,6 +9,7 @@ description = "tedge is the cli tool for thin-edge.io"
 
 [package.metadata.deb]
 depends = "mosquitto"
+maintainer-scripts = "../configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0.38"
@@ -16,6 +17,9 @@ chrono = "0.4.19"
 futures = "0.3.12"
 mqtt_client = {version = "0.1.0", path = "../common/mqtt_client" }
 rcgen = { version = "0.8.9", features = ["pem"] }
+reqwest = { version = "0.11.1", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
+rpassword = "5.0.1"
+rumqttc = { git = "https://github.com/bytebeamio/rumqtt" }
 serde = { version = "1.0.123", features = ["derive"] }
 structopt = "0.3.21"
 tempfile = "3.2.0"
@@ -26,12 +30,16 @@ url = "2.2.0"
 which = "4.0.2"
 x509-parser = "0.9.0"
 zeroize = "1.2.0"
+sha-1 = "0.9.4"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
 assert_matches = "1.4.0"
+mockito = "0.29.0"
 pem = "0.8.2"
 predicates = "1.0.6"
+crypto-hash = "0.3.4"
+base64 = "0.13.0"
 
 [features]
 integration-test = []
