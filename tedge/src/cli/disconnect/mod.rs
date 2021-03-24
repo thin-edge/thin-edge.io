@@ -3,10 +3,10 @@ use crate::cli::connect::{
 };
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
-use crate::utils::{paths, services};
+use crate::services;
+use crate::services::{mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, Service};
+use crate::utils::paths;
 use structopt::StructOpt;
-
-//const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
 #[derive(StructOpt, Debug)]
 pub enum TedgeDisconnectBridgeOpt {
@@ -46,7 +46,7 @@ pub struct DisconnectBridge {
 
 impl Command for DisconnectBridge {
     fn description(&self) -> String {
-        format!("execute 'tedge disconnect {}'", self.cloud_name)
+        format!("remove the bridge to disconnect {} cloud", self.cloud_name)
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
@@ -56,14 +56,33 @@ impl Command for DisconnectBridge {
 
 impl DisconnectBridge {
     fn stop_bridge(&self) -> Result<(), DisconnectBridgeError> {
-        // Check if bridge exists and stop with code 0 if it doesn't.
+        // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
+        if self.remove_bridge_config_file()? {
+            // Skip all following steps when bridge doesn't exit
+            return Ok(());
+        }
 
+        // Ignore failure
+        let _ = self.apply_changes_to_mosquitto();
+
+        // Only C8Y changes the status of tedge-mapper
+        if self.mapper {
+            self.stop_and_disable_tedge_mapper();
+        }
+
+        Ok(())
+    }
+
+    fn remove_bridge_config_file(&self) -> Result<bool, DisconnectBridgeError> {
+        // Check if bridge exists and stop with code 0 if it doesn't.
         let bridge_conf_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
         ])?;
+
         println!("Removing {} bridge.\n", self.cloud_name);
+        let mut bridge_not_exist = false;
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
@@ -73,7 +92,8 @@ impl DisconnectBridge {
             // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 println!("Bridge doesn't exist. Operation finished!");
-                return Ok(());
+                bridge_not_exist = true;
+                return Ok(bridge_not_exist);
             }
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(
@@ -82,28 +102,41 @@ impl DisconnectBridge {
             )),
         }?;
 
-        // Deviation from specification:
-        // * Check if mosquitto is running, restart only if it was active before, if not don't do anything.
+        Ok(bridge_not_exist)
+    }
+
+    // Deviation from specification:
+    // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
+    fn apply_changes_to_mosquitto(&self) -> Result<(), DisconnectBridgeError> {
         println!("Applying changes to mosquitto.\n");
-        if services::check_mosquitto_is_running()? {
-            services::mosquitto_restart_daemon()?;
+        if MosquittoService.is_active()? {
+            MosquittoService.restart()?;
+            println!("{} Bridge successfully disconnected!\n", self.cloud_name);
         }
-
-        println!("{} Bridge successfully disconnected!\n", self.cloud_name);
-
-        if self.mapper {
-            println!("Stopping tedge-mapper service.\n");
-            let _ = services::tedge_mapper_stop_daemon();
-
-            println!("Disabling tedge-mapper service.\n");
-            let _ = services::tedge_mapper_disable_daemon();
-
-            println!("tedge-mapper service successfully stopped and disabled!\n");
-        }
-
         Ok(())
     }
+
+    fn stop_and_disable_tedge_mapper(&self) {
+        let mut failed = false;
+
+        println!("Stopping tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.stop() {
+            println!("Failed to stop tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        println!("Disabling tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.disable() {
+            println!("Failed to disable tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        if !failed {
+            println!("tedge-mapper service successfully stopped and disabled!\n");
+        }
+    }
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum DisconnectBridgeError {
     #[error(transparent)]

@@ -2,7 +2,9 @@ use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
 
-use crate::utils::{paths, services};
+use crate::services;
+use crate::services::{mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, Service};
+use crate::utils::paths;
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
@@ -142,8 +144,8 @@ trait CheckConnection {
 
 impl BridgeConfig {
     fn new_bridge(&self) -> Result<(), ConnectError> {
-        println!("Checking if systemd and mosquitto are available.\n");
-        let _ = services::all_services_available()?;
+        println!("Checking if systemd is available.\n");
+        let _ = services::systemd_available()?;
 
         println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.bridge_config_exists()?;
@@ -158,7 +160,7 @@ impl BridgeConfig {
             return Err(err);
         }
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        if let Err(err) = services::mosquitto_restart_daemon() {
+        if let Err(err) = MosquittoService.restart() {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -171,7 +173,7 @@ impl BridgeConfig {
         ));
 
         println!("Persisting mosquitto on reboot.\n");
-        if let Err(err) = services::mosquitto_enable_daemon() {
+        if let Err(err) = MosquittoService.enable() {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -181,16 +183,10 @@ impl BridgeConfig {
         if self.mapper {
             println!("Checking if tedge-mapper is installed.\n");
 
-            if !(which("tedge_mapper")?.exists()) {
+            if which("tedge_mapper").is_err() {
                 println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
             } else {
-                println!("Starting tedge-mapper service.\n");
-                let _ = services::tedge_mapper_start_daemon();
-
-                println!("Persisting tedge-mapper on reboot.\n");
-                let _ = services::tedge_mapper_enable_daemon();
-
-                println!("tedge-mapper service successfully started and enabled!\n");
+                self.start_and_enable_tedge_mapper();
             }
         }
 
@@ -277,6 +273,7 @@ impl BridgeConfig {
             "bridge_attempt_unsubscribe {}",
             self.common_bridge_config.bridge_attempt_unsubscribe
         )?;
+        // Waiting for the fix in CIT-277. This comment out breaks some test cases.
         // writeln!(
         //     writer,
         //     "bind_address {}",
@@ -324,6 +321,26 @@ impl BridgeConfig {
             &self.config_file,
         ])?)
     }
+
+    fn start_and_enable_tedge_mapper(&self) {
+        let mut failed = false;
+
+        println!("Starting tedge-mapper service: ");
+        if let Err(err) = TedgeMapperService.restart() {
+            println!("Failed to stop tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        println!("Persisting tedge-mapper on reboot.\n");
+        if let Err(err) = TedgeMapperService.enable() {
+            println!("Failed to enable tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        if !failed {
+            println!("tedge-mapper service successfully started and enabled!\n");
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -349,8 +366,8 @@ pub enum ConnectError {
     #[error(transparent)]
     PersistError(#[from] PersistError),
 
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
-    SudoNotFound(#[from] which::Error),
+    #[error(transparent)]
+    MapperNotFound(#[from] which::Error),
 
     #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
