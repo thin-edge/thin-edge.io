@@ -26,3 +26,7 @@ mqtt_client = {version = "0.1.0", path = "../../common/mqtt_client" }
 tokio = { version = "1.1.0", features = ["full"] }
 tracing = { version = "0.1.25", features = ["attributes", "log"] }
 tracing-subscriber = "0.2.17"
+stats_alloc = { version = "0.1.8", optional = true }
+
+[features]
+memory-statistics = ["stats_alloc"]

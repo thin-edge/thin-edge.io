@@ -9,7 +9,7 @@ pub const ERRORS_TOPIC: &str = "tedge/errors";
 
 #[derive(Debug)]
 pub struct Mapper {
-    client: mqtt_client::Client,
+    client: std::sync::Arc<mqtt_client::Client>,
     in_topic: mqtt_client::Topic,
     out_topic: mqtt_client::Topic,
     err_topic: mqtt_client::Topic,
@@ -17,7 +17,7 @@ pub struct Mapper {
 
 impl Mapper {
     pub fn new_from_string(
-        client: mqtt_client::Client,
+        client: std::sync::Arc<mqtt_client::Client>,
         in_topic: &str,
         out_topic: &str,
         err_topic: &str,
@@ -31,7 +31,7 @@ impl Mapper {
     }
 
     fn new(
-        client: mqtt_client::Client,
+        client: std::sync::Arc<mqtt_client::Client>,
         in_topic: mqtt_client::Topic,
         out_topic: mqtt_client::Topic,
         err_topic: mqtt_client::Topic,
