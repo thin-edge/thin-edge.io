@@ -6,28 +6,42 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
-const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 
 pub struct C8y {}
 
 impl C8y {
-    pub fn c8y_bridge_config(config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+        let address = format!(
+            "{}:{}",
+            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
+            MQTT_TLS_PORT
+        );
+
+        let bridge_root_cert_path = config::get_config_value_or_default(
+            &config,
+            C8Y_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
+        let _ = config::update_config_with_value(
+            &mut config,
+            C8Y_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+
         Ok(BridgeConfig {
+            common_bridge_config: CommonBridgeConfig::default(),
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.to_string(),
             connection: "edge_to_c8y".into(),
-            address: config::get_config_value(&config, C8Y_URL)?,
+            address,
             remote_username: None,
-            bridge_cafile: config::get_config_value(&config, C8Y_ROOT_CERT_PATH)?,
+            bridge_root_cert_path,
             remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            try_private: false,
-            start_type: "automatic".into(),
-            cleansession: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
             topics: vec![
                 // Registration
                 r#"s/dcr in 2 c8y/ """#.into(),
@@ -69,7 +83,7 @@ impl C8y {
     async fn check_connection_async(&self) -> Result<(), ConnectError> {
         const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
         const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
-        const CLIENT_ID: &str = "check_connection";
+        const CLIENT_ID: &str = "check_connection_c8y";
 
         let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
         let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
@@ -102,7 +116,7 @@ impl C8y {
             match fut.await {
                 Ok(Ok(true)) => {
                     println!(
-                        " ... Received message.\nThe device is already registered in Cumulocity.\n",
+                        "Received expected response message, connection check is successful\n",
                     );
                     return Ok(());
                 }

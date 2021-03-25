@@ -447,7 +447,7 @@ pub struct CumulocityConfig {
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
-    root_cert_path: Option<String>,
+    pub root_cert_path: Option<String>,
 }
 
 #[serde(deny_unknown_fields)]
@@ -455,7 +455,7 @@ pub struct CumulocityConfig {
 pub struct AzureConfig {
     connect: Option<String>,
     url: Option<String>,
-    root_cert_path: Option<String>,
+    pub root_cert_path: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -475,11 +475,14 @@ pub enum ConfigError {
     #[error("Invalid characters found in home directory path")]
     InvalidCharacterInHomeDirectoryPath,
 
-    #[error("Provided url is invalid: {0}")]
-    InvalidUrl(String),
-
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
+
+    #[error(
+        r#"Provided URL: '{0}' contains scheme or port.
+    Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."#
+    )]
+    InvalidConfigUrl(String),
 
     #[error(
         r#"A value for `{key}` is missing.

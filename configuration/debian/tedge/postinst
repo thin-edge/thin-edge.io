@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+### Create groups
+if ! getent group tedge-users > /dev/null; then
+    addgroup --quiet tedge-users
+fi
+
+if ! getent group tedge > /dev/null; then
+    addgroup --quiet --system tedge
+fi
+
+### Create users
+# Create user tedge with no additional info(--gecos "") no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
+if ! getent passwd tedge > /dev/null; then
+    adduser --quiet --system --gecos "" --no-create-home --disabled-login --shell /sbin/nologin --ingroup tedge tedge
+fi
+
+### Create folders
+install -g tedge -o tedge -m 750 -d /etc/tedge
+
+# Create file in /etc/sudoers.d directory
+echo "%tedge-users   ALL = (ALL) /usr/bin/tedge" > /etc/sudoers.d/tedge-users
+
+### Below are automatically created script parts by cargo deb (Search for cargo deb DEBHELPER)
+#DEBHELPER#

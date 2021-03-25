@@ -37,7 +37,7 @@ pub enum TEdgeOpt {
     Connect(connect::TEdgeConnectOpt),
 
     /// Remove bridge connection for a provider
-    Disconnect(disconnect::DisconnectCmd),
+    Disconnect(disconnect::TedgeDisconnectBridgeOpt),
 
     /// Publish a message on a topic and subscribe a topic.
     Mqtt(mqtt::MqttCmd),

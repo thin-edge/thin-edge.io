@@ -5,8 +5,8 @@ name: hosted-build-debian-amd64
 on:
   # Only run, when a pull request is merged.
   # Trick: A merged pull request always results in a push.
-  push:
-    branches: [ main ]
+  #push:
+  #  branches: [ main ]
   workflow_dispatch:
     branches: [ main ]
 
