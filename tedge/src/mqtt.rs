@@ -1,4 +1,4 @@
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
@@ -84,7 +84,7 @@ impl Command for MqttCmd {
         }
     }
 
-    fn execute(&self) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,

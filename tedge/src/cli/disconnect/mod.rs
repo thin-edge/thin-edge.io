@@ -1,8 +1,9 @@
 use crate::cli::connect::{
     az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME, TEDGE_BRIDGE_CONF_DIR_PATH,
 };
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
+use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use structopt::StructOpt;
 
@@ -46,13 +47,13 @@ impl Command for DisconnectBridge {
         format!("execute 'tedge disconnect {}'", self.cloud_name)
     }
 
-    fn execute(&self) -> Result<(), anyhow::Error> {
-        Ok(self.stop_bridge()?)
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        Ok(self.stop_bridge(&context.user_manager)?)
     }
 }
 
 impl DisconnectBridge {
-    fn stop_bridge(&self) -> Result<(), DisconnectBridgeError> {
+    fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
         // Check if bridge exists and stop with code 0 if it doesn't.
 
         let bridge_conf_path = paths::build_path_from_home(&[
@@ -83,7 +84,7 @@ impl DisconnectBridge {
         // * Check if mosquitto is running, restart only if it was active before, if not don't do anything.
         println!("Applying changes to mosquitto.\n");
         if services::check_mosquitto_is_running()? {
-            services::mosquitto_restart_daemon()?;
+            services::mosquitto_restart_daemon(user_manager)?;
         }
 
         println!("{} Bridge successfully disconnected!", self.cloud_name);

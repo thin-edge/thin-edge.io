@@ -1,7 +1,8 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEdgeConfig};
 
+use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use std::path::Path;
 use structopt::StructOpt;
@@ -68,8 +69,8 @@ impl Command for BridgeCommand {
         )
     }
 
-    fn execute(&self) -> Result<(), anyhow::Error> {
-        self.bridge_config.new_bridge()?;
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        self.bridge_config.new_bridge(&context.user_manager)?;
         self.check_connection()?;
         Ok(())
     }
@@ -137,7 +138,7 @@ trait CheckConnection {
 }
 
 impl BridgeConfig {
-    fn new_bridge(&self) -> Result<(), ConnectError> {
+    fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
         println!("Checking if systemd and mosquitto are available.\n");
         let _ = services::all_services_available()?;
 
@@ -154,7 +155,7 @@ impl BridgeConfig {
             return Err(err);
         }
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        if let Err(err) = services::mosquitto_restart_daemon() {
+        if let Err(err) = services::mosquitto_restart_daemon(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -167,7 +168,7 @@ impl BridgeConfig {
         ));
 
         println!("Persisting mosquitto on reboot.\n");
-        if let Err(err) = services::mosquitto_enable_daemon() {
+        if let Err(err) = services::mosquitto_enable_daemon(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -329,9 +330,6 @@ pub enum ConnectError {
 
     #[error(transparent)]
     PersistError(#[from] PersistError),
-
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
-    SudoNotFound(#[from] which::Error),
 
     #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
