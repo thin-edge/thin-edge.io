@@ -1,4 +1,4 @@
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
@@ -155,7 +155,7 @@ impl Command for ConfigCmd {
 
     fn execute(
         &self,
-        _user_manager: crate::utils::users::UserManager,
+        _context: &ExecutionContext,
     ) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;

@@ -1,7 +1,7 @@
 use crate::cli::connect::{
     az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME, TEDGE_BRIDGE_CONF_DIR_PATH,
 };
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
 use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
@@ -47,8 +47,8 @@ impl Command for DisconnectBridge {
         format!("execute 'tedge disconnect {}'", self.cloud_name)
     }
 
-    fn execute(&self, user_manager: UserManager) -> Result<(), anyhow::Error> {
-        Ok(self.stop_bridge(&user_manager)?)
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        Ok(self.stop_bridge(&context.user_manager)?)
     }
 }
 

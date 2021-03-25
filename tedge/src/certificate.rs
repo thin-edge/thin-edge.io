@@ -4,7 +4,7 @@ use crate::config::{
 use crate::utils::users;
 use crate::utils::{paths, paths::PathsError};
 use crate::{
-    command::{BuildCommand, Command},
+    command::{BuildCommand, Command, ExecutionContext},
     utils,
 };
 use chrono::offset::Utc;
@@ -22,6 +22,7 @@ use std::{
 };
 use structopt::StructOpt;
 use x509_parser::prelude::Pem;
+use crate::utils::users::UserManager;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
@@ -140,7 +141,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -385,9 +386,9 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, user_manager: users::UserManager) -> Result<(), anyhow::Error> {
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        let () = self.create_test_certificate(&config, &user_manager)?;
+        let () = self.create_test_certificate(&config, &context.user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
@@ -398,7 +399,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let () = self.show_certificate()?;
         Ok(())
     }
@@ -409,8 +410,8 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, _user_manager: users::UserManager) -> Result<(), anyhow::Error> {
-        let () = self.remove_certificate()?;
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        let () = self.remove_certificate(&context.user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
@@ -532,7 +533,8 @@ fn show_thumbprint(pem: &Pem) -> Result<String, CertError> {
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self) -> Result<(), CertError> {
+    fn remove_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
+        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
         std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 

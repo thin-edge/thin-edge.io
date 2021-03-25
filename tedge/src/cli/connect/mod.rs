@@ -1,5 +1,5 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEdgeConfig};
 
 use crate::utils::users::UserManager;
@@ -69,8 +69,8 @@ impl Command for BridgeCommand {
         )
     }
 
-    fn execute(&self, user_manager: UserManager) -> Result<(), anyhow::Error> {
-        self.bridge_config.new_bridge(&user_manager)?;
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        self.bridge_config.new_bridge(&context.user_manager)?;
         self.check_connection()?;
         Ok(())
     }
