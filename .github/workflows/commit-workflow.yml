@@ -80,6 +80,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
       - name: Cargo clippy
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
