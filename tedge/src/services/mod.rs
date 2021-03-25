@@ -2,8 +2,9 @@ use crate::services::SystemdError::{
     ServiceNotFound, ServiceNotLoaded, SystemdNotAvailable, UnhandledReturnCode, UnspecificError,
 };
 use crate::utils::paths;
+use crate::utils::users::UserManager;
+use crate::utils::users::ROOT_USER;
 use std::process::ExitStatus;
-use which::which;
 
 pub mod mosquitto;
 pub mod tedge_mapper;
@@ -21,8 +22,8 @@ const SYSTEMCTL_BIN: &str = "systemctl";
 pub trait SystemdService {
     const SERVICE_NAME: &'static str;
 
-    fn stop(&self) -> Result<(), ServicesError> {
-        match call_systemd_subcmd(SystemCtlCmd::Stop, Self::SERVICE_NAME)? {
+    fn stop(&self, user_manager: &UserManager) -> Result<(), ServicesError> {
+        match call_systemd_subcmd_sudo(SystemCtlCmd::Stop, Self::SERVICE_NAME, user_manager)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
@@ -43,8 +44,8 @@ pub trait SystemdService {
     // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
     // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
     // systemctl stop command followed by systemctl start should be issued.
-    fn restart(&self) -> Result<(), ServicesError> {
-        match call_systemd_subcmd(SystemCtlCmd::Restart, Self::SERVICE_NAME)? {
+    fn restart(&self, user_manager: &UserManager) -> Result<(), ServicesError> {
+        match call_systemd_subcmd_sudo(SystemCtlCmd::Restart, Self::SERVICE_NAME, user_manager)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
@@ -60,8 +61,8 @@ pub trait SystemdService {
         }
     }
 
-    fn enable(&self) -> Result<(), ServicesError> {
-        match call_systemd_subcmd(SystemCtlCmd::Enable, Self::SERVICE_NAME)? {
+    fn enable(&self, user_manager: &UserManager) -> Result<(), ServicesError> {
+        match call_systemd_subcmd_sudo(SystemCtlCmd::Enable, Self::SERVICE_NAME, user_manager)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
@@ -72,8 +73,8 @@ pub trait SystemdService {
         }
     }
 
-    fn disable(&self) -> Result<(), ServicesError> {
-        match call_systemd_subcmd(SystemCtlCmd::Disable, Self::SERVICE_NAME)? {
+    fn disable(&self, user_manager: &UserManager) -> Result<(), ServicesError> {
+        match call_systemd_subcmd_sudo(SystemCtlCmd::Disable, Self::SERVICE_NAME, user_manager)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
@@ -128,18 +129,11 @@ pub enum ServicesError {
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
 
-    #[error("Couldn't find path to 'sudo'. Update $PATH variable with 'sudo' path.\n{0}")]
-    SudoNotFound(#[from] which::Error),
-
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
 }
 
-// Commands util functions
-fn cmd_nullstdio_args_with_code_with_sudo(
-    command: &str,
-    args: &[&str],
-) -> Result<ExitStatus, ServicesError> {
+fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ServicesError> {
     Ok(std::process::Command::new(command)
         .args(args)
         .stdout(std::process::Stdio::null())
@@ -147,14 +141,19 @@ fn cmd_nullstdio_args_with_code_with_sudo(
         .status()?)
 }
 
+fn call_systemd_subcmd_sudo(
+    systemctl_subcmd: SystemCtlCmd,
+    arg: &str,
+    user_manager: &UserManager,
+) -> Result<i32, ServicesError> {
+    let _root_guard = user_manager.become_user(ROOT_USER);
+    call_systemd_subcmd(systemctl_subcmd, arg)
+}
+
 fn call_systemd_subcmd(systemctl_subcmd: SystemCtlCmd, arg: &str) -> Result<i32, ServicesError> {
-    let sudo = paths::pathbuf_to_string(which("sudo")?)?;
-    cmd_nullstdio_args_with_code_with_sudo(
-        sudo.as_str(),
-        &[SYSTEMCTL_BIN, systemctl_subcmd.as_str(), arg],
-    )?
-    .code()
-    .ok_or(ServicesError::UnexpectedExitStatus)
+    cmd_nullstdio_args_with_code(SYSTEMCTL_BIN, &[systemctl_subcmd.as_str(), arg])?
+        .code()
+        .ok_or(ServicesError::UnexpectedExitStatus)
 }
 
 pub(crate) fn systemd_available() -> Result<(), ServicesError> {
@@ -229,15 +228,13 @@ mod tests {
     fn cmd_nullstdio_args_expected_exit_code_zero() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
         assert_eq!(
-            cmd_nullstdio_args_with_code_with_sudo("ls", &[])
-                .unwrap()
-                .code(),
+            cmd_nullstdio_args_with_code("ls", &[]).unwrap().code(),
             Some(0)
         );
     }
 
     #[test]
     fn cmd_nullstdio_args_command_not_exists() {
-        assert!(cmd_nullstdio_args_with_code_with_sudo("test-command", &[]).is_err())
+        assert!(cmd_nullstdio_args_with_code("test-command", &[]).is_err())
     }
 }

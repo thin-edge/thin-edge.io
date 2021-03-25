@@ -13,8 +13,12 @@ mod services;
 mod utils;
 
 use command::BuildCommand;
+use command::ExecutionContext;
 
 fn main() -> anyhow::Result<()> {
+    let context = ExecutionContext::new();
+    let _user_guard = context.user_manager.become_user(utils::users::TEDGE_USER)?;
+
     let opt = cli::Opt::from_args();
 
     let config = config::TEdgeConfig::from_default_config()
@@ -25,6 +29,6 @@ fn main() -> anyhow::Result<()> {
         .build_command(config)
         .with_context(|| "missing configuration parameter")?;
 
-    cmd.execute(opt.verbose)
+    cmd.execute(&context)
         .with_context(|| format!("failed to {}", cmd.description()))
 }

@@ -1,10 +1,11 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
-use crate::command::{BuildCommand, Command};
+use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
 };
 use crate::utils::paths;
+use crate::utils::users::UserManager;
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
@@ -19,6 +20,7 @@ use crate::config::{
     DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
+pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
@@ -70,8 +72,8 @@ impl Command for BridgeCommand {
         )
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        self.bridge_config.new_bridge()?;
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        self.bridge_config.new_bridge(&context.user_manager)?;
         self.check_connection()?;
         Ok(())
     }
@@ -88,25 +90,17 @@ impl BridgeCommand {
 }
 
 #[derive(Debug, PartialEq)]
-struct CommonBridgeConfig {
-    try_private: bool,
-    start_type: String,
-    clean_session: bool,
-    notifications: bool,
-    bridge_attempt_unsubscribe: bool,
+struct CommonMosquittoConfig {
+    config_file: String,
     bind_address: String,
     connection_messages: bool,
     log_types: Vec<String>,
 }
 
-impl Default for CommonBridgeConfig {
+impl Default for CommonMosquittoConfig {
     fn default() -> Self {
-        CommonBridgeConfig {
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
+        CommonMosquittoConfig {
+            config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
             bind_address: "127.0.0.1".into(),
             connection_messages: true,
             log_types: vec![
@@ -123,7 +117,7 @@ impl Default for CommonBridgeConfig {
 
 #[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
-    common_bridge_config: CommonBridgeConfig,
+    common_mosquitto_config: CommonMosquittoConfig,
     cloud_name: String,
     config_file: String,
     connection: String,
@@ -135,6 +129,11 @@ pub struct BridgeConfig {
     bridge_certfile: String,
     bridge_keyfile: String,
     use_mapper: bool,
+    try_private: bool,
+    start_type: String,
+    clean_session: bool,
+    notifications: bool,
+    bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
 }
 
@@ -143,7 +142,7 @@ trait CheckConnection {
 }
 
 impl BridgeConfig {
-    fn new_bridge(&self) -> Result<(), ConnectError> {
+    fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
         println!("Checking if systemd is available.\n");
         let _ = services::systemd_available()?;
 
@@ -160,7 +159,8 @@ impl BridgeConfig {
             return Err(err);
         }
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        if let Err(err) = MosquittoService.restart() {
+
+        if let Err(err) = MosquittoService.restart(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -173,7 +173,7 @@ impl BridgeConfig {
         ));
 
         println!("Persisting mosquitto on reboot.\n");
-        if let Err(err) = MosquittoService.enable() {
+        if let Err(err) = MosquittoService.enable(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -186,7 +186,7 @@ impl BridgeConfig {
             if which("tedge_mapper").is_err() {
                 println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
             } else {
-                self.start_and_enable_tedge_mapper();
+                self.start_and_enable_tedge_mapper(user_manager);
             }
         }
 
@@ -212,16 +212,39 @@ impl BridgeConfig {
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
-        let mut temp_file = NamedTempFile::new()?;
-        self.serialize(&mut temp_file)?;
-
         let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
 
+        let mut common_temp_file = NamedTempFile::new()?;
+        self.serialize_common_config(&mut common_temp_file)?;
+        let common_config_path = self.get_common_mosquitto_config_file_path()?;
+        let _ = paths::persist_tempfile(common_temp_file, &common_config_path)?;
+
+        let mut temp_file = NamedTempFile::new()?;
+        self.serialize(&mut temp_file)?;
         let config_path = self.get_bridge_config_file_path()?;
         let _ = paths::persist_tempfile(temp_file, &config_path)?;
+
+        Ok(())
+    }
+
+    fn serialize_common_config<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writeln!(
+            writer,
+            "bind_address {}",
+            self.common_mosquitto_config.bind_address
+        )?;
+        writeln!(
+            writer,
+            "connection_messages {}",
+            self.common_mosquitto_config.connection_messages
+        )?;
+
+        for log_type in &self.common_mosquitto_config.log_types {
+            writeln!(writer, "log_type {}", log_type)?;
+        }
 
         Ok(())
     }
@@ -248,45 +271,15 @@ impl BridgeConfig {
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
         writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
-        writeln!(
-            writer,
-            "try_private {}",
-            self.common_bridge_config.try_private
-        )?;
-        writeln!(
-            writer,
-            "start_type {}",
-            self.common_bridge_config.start_type
-        )?;
-        writeln!(
-            writer,
-            "cleansession {}",
-            self.common_bridge_config.clean_session
-        )?;
-        writeln!(
-            writer,
-            "notifications {}",
-            self.common_bridge_config.notifications
-        )?;
+        writeln!(writer, "try_private {}", self.try_private)?;
+        writeln!(writer, "start_type {}", self.start_type)?;
+        writeln!(writer, "cleansession {}", self.clean_session)?;
+        writeln!(writer, "notifications {}", self.notifications)?;
         writeln!(
             writer,
             "bridge_attempt_unsubscribe {}",
-            self.common_bridge_config.bridge_attempt_unsubscribe
+            self.bridge_attempt_unsubscribe
         )?;
-        writeln!(
-            writer,
-            "bind_address {}",
-            self.common_bridge_config.bind_address
-        )?;
-        writeln!(
-            writer,
-            "connection_messages {}",
-            self.common_bridge_config.connection_messages
-        )?;
-
-        for log_type in &self.common_bridge_config.log_types {
-            writeln!(writer, "log_type {}", log_type)?;
-        }
 
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {
@@ -321,17 +314,17 @@ impl BridgeConfig {
         ])?)
     }
 
-    fn start_and_enable_tedge_mapper(&self) {
+    fn start_and_enable_tedge_mapper(&self, user_manager: &UserManager) {
         let mut failed = false;
 
-        println!("Starting tedge-mapper service: ");
-        if let Err(err) = TedgeMapperService.restart() {
+        println!("Starting tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.restart(user_manager) {
             println!("Failed to stop tedge-mapper service: {:?}", err);
             failed = true;
         }
 
         println!("Persisting tedge-mapper on reboot.\n");
-        if let Err(err) = TedgeMapperService.enable() {
+        if let Err(err) = TedgeMapperService.enable(user_manager) {
             println!("Failed to enable tedge-mapper service: {:?}", err);
             failed = true;
         }
@@ -339,6 +332,14 @@ impl BridgeConfig {
         if !failed {
             println!("tedge-mapper service successfully started and enabled!\n");
         }
+    }
+
+    fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
+        Ok(paths::build_path_from_home(&[
+            TEDGE_HOME_DIR,
+            TEDGE_BRIDGE_CONF_DIR_PATH,
+            &self.common_mosquitto_config.config_file,
+        ])?)
     }
 }
 

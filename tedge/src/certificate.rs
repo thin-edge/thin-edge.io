@@ -1,9 +1,11 @@
 use crate::config::{
     ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
 };
+use crate::utils::users;
+use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
 use crate::{
-    command::{BuildCommand, Command},
+    command::{BuildCommand, Command, ExecutionContext},
     utils,
 };
 use chrono::offset::Utc;
@@ -139,7 +141,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -287,6 +289,9 @@ pub enum CertError {
 
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
+
+    #[error(transparent)]
+    UserSwitchError(#[from] users::UserSwitchError),
 }
 
 impl CertError {
@@ -381,9 +386,9 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
-        let () = self.create_test_certificate(&config)?;
+        let () = self.create_test_certificate(&config, &context.user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
@@ -394,7 +399,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let () = self.show_certificate()?;
         Ok(())
     }
@@ -405,8 +410,8 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        let () = self.remove_certificate()?;
+    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        let () = self.remove_certificate(&context.user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
     }
@@ -441,7 +446,12 @@ impl Default for TestCertConfig {
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(&self, config: &CertConfig) -> Result<(), CertError> {
+    fn create_test_certificate(
+        &self,
+        config: &CertConfig,
+        user_manager: &users::UserManager,
+    ) -> Result<(), CertError> {
+        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         check_identifier(&self.id)?;
 
         let cert_path = Path::new(&self.cert_path);
@@ -523,7 +533,8 @@ fn show_thumbprint(pem: &Pem) -> Result<String, CertError> {
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self) -> Result<(), CertError> {
+    fn remove_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
+        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
         std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
         std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 
@@ -656,14 +667,13 @@ fn build_upload_certificate_url(host: &str, tenant_id: &str) -> Result<Url, Cert
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
     use std::fs::File;
     use std::io::Cursor;
     use tempfile::*;
 
     extern crate base64;
-
-    use crypto_hash::{digest, Algorithm};
 
     #[test]
     fn basic_usage() {
@@ -679,7 +689,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .err()
             .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -701,7 +711,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .ok()
             .is_none());
 
@@ -724,7 +734,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -743,7 +753,7 @@ mod tests {
 
         //Create a certificate
         assert!(cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .err()
             .is_none());
 
@@ -753,7 +763,7 @@ mod tests {
             .unwrap();
         let thumbprint_sha1 = show_thumbprint(&pem).unwrap();
 
-        //Compute the thumbprint of the certificate using openssl
+        //Compute the thumbprint of the certificate using base64 and sha1
         let mut file = File::open(cert_path)
             .map_err(|err| err.to_string())
             .unwrap();
@@ -769,11 +779,10 @@ mod tests {
         //just decode the key contents
         let b64_bytes =
             base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let result = digest(Algorithm::SHA1, b64_bytes.as_ref());
-        let thumbprint_crypto: Vec<String> = result.iter().map(|b| format!("{:02X}", b)).collect();
+        let thumbprint_crypto = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
 
         //compare the two thumbprints
-        assert_eq!(thumbprint_sha1, thumbprint_crypto.concat());
+        assert_eq!(thumbprint_sha1, thumbprint_crypto.to_uppercase());
     }
 
     #[test]
@@ -810,7 +819,7 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default())
+            .create_test_certificate(&CertConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
