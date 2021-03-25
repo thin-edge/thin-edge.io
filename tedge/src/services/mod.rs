@@ -257,7 +257,12 @@ mod tests {
     #[should_panic]
     fn cmd_nullstdio_args_expected() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
-        assert_eq!(cmd_nullstdio_args_with_code_with_sudo("ls", &[]).unwrap().code(), Some(0));
+        assert_eq!(
+            cmd_nullstdio_args_with_code_with_sudo("ls", &[])
+                .unwrap()
+                .code(),
+            Some(0)
+        );
 
         if let Err(_err) = cmd_nullstdio_args_with_code_with_sudo("test-command", &[]) {
             panic!()
