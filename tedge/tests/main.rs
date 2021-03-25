@@ -1,3 +1,5 @@
+mod os_related;
+
 mod tests {
     use predicates::prelude::*;
     use std::path::Path; // Used for writing assertions
