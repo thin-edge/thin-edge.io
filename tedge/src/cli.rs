@@ -16,11 +16,6 @@ mod disconnect;
     about = clap::crate_description!()
 )]
 pub struct Opt {
-    // The number of occurrences of the `v` flag
-    /// Verbose mode (-v, -vv, -vvv, etc.)
-    #[structopt(short, parse(from_occurrences))]
-    pub verbose: u8,
-
     #[structopt(subcommand)]
     pub tedge: TEdgeOpt,
 }
