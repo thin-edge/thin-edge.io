@@ -139,7 +139,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -381,7 +381,7 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         let config = CertConfig::default();
         let () = self.create_test_certificate(&config)?;
         let () = self.update_tedge_config()?;
@@ -394,7 +394,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         let () = self.show_certificate()?;
         Ok(())
     }
@@ -405,7 +405,7 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         let () = self.remove_certificate()?;
         let () = self.update_tedge_config()?;
         Ok(())

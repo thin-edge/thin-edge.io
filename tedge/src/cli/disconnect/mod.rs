@@ -46,7 +46,7 @@ impl Command for DisconnectBridge {
         format!("execute 'tedge disconnect {}'", self.cloud_name)
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         Ok(self.stop_bridge()?)
     }
 }
