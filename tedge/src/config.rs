@@ -528,7 +528,7 @@ fn print_config_doc() {
 }
 
 impl TEdgeConfig {
-    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at `/etc/tedge/tedge.toml` and create a `TEdgeConfig` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {

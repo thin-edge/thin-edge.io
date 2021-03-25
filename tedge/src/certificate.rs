@@ -663,9 +663,10 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
-        let verbose = 0;
 
-        assert!(cmd.execute(verbose).err().is_none());
+        let config = CertConfig::default();
+
+        assert!(cmd.create_test_certificate(&config).err().is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
