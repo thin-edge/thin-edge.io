@@ -153,7 +153,10 @@ impl Command for ConfigCmd {
         }
     }
 
-    fn execute(&self, _user_manager: crate::utils::users::UserManager) -> Result<(), anyhow::Error> {
+    fn execute(
+        &self,
+        _user_manager: crate::utils::users::UserManager,
+    ) -> Result<(), anyhow::Error> {
         let mut config = TEdgeConfig::from_default_config()?;
         let mut config_updated = false;
 

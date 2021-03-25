@@ -84,7 +84,10 @@ impl Command for MqttCmd {
         }
     }
 
-    fn execute(&self, _user_manager: crate::utils::users::UserManager) -> Result<(), anyhow::Error> {
+    fn execute(
+        &self,
+        _user_manager: crate::utils::users::UserManager,
+    ) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,
