@@ -7,7 +7,6 @@ const INCORRECT_PATH: &str = "/path";
 fn default_bridge_config() -> BridgeConfig {
     BridgeConfig {
         common_mosquitto_config: CommonMosquittoConfig::default(),
-        common_bridge_config: CommonBridgeConfig::default(),
         cloud_name: "az/c8y".into(),
         config_file: "cfg".to_string(),
         connection: "edge_to_az/c8y".into(),
@@ -18,6 +17,11 @@ fn default_bridge_config() -> BridgeConfig {
         bridge_keyfile: "".into(),
         remote_clientid: "".into(),
         local_clientid: "".into(),
+        try_private: false,
+        start_type: "automatic".into(),
+        clean_session: true,
+        notifications: false,
+        bridge_attempt_unsubscribe: false,
         topics: vec![],
     }
 }
@@ -83,6 +87,7 @@ fn config_bridge_validate_wrong_key_path() {
 }
 
 use std::io::Write;
+use x509_parser::nom::lib::std::collections::HashSet;
 
 #[test]
 fn bridge_config_c8y_create() {
@@ -314,29 +319,31 @@ fn serialize() {
         .expect("Writing config to file failed");
 
     let contents = String::from_utf8(buffer).unwrap();
-    assert_eq!(
-        contents
-            .lines()
-            .filter(|str| !str.is_empty() && !str.starts_with('#'))
-            .count(),
-        15
-    );
+    let config_set: HashSet<&str> = contents
+        .lines()
+        .filter(|str| !str.is_empty() && !str.starts_with('#'))
+        .collect();
 
-    assert!(contents.contains("connection edge_to_az"));
-    assert!(contents.contains("remote_username test.test.io/alpha/?api-version=2018-06-30"));
-    assert!(contents.contains("address test.test.io:8883"));
-    assert!(contents.contains(&bridge_root_cert_path));
-    assert!(contents.contains("remote_clientid alpha"));
-    assert!(contents.contains("local_clientid Azure"));
-    assert!(contents.contains("bridge_certfile ./test-certificate.pem"));
-    assert!(contents.contains("bridge_keyfile ./test-private-key.pem"));
-    assert!(contents.contains("start_type automatic"));
-    assert!(contents.contains("cleansession true"));
-    assert!(contents.contains("notifications false"));
-    assert!(contents.contains("bridge_attempt_unsubscribe false"));
+    let mut expected = HashSet::new();
+    expected.insert("connection edge_to_az");
+    expected.insert("remote_username test.test.io/alpha/?api-version=2018-06-30");
+    expected.insert("address test.test.io:8883");
+    let bridge_capath = format!("bridge_cafile {}", bridge_root_cert_path);
+    expected.insert(&bridge_capath);
+    expected.insert("remote_clientid alpha");
+    expected.insert("local_clientid Azure");
+    expected.insert("bridge_certfile ./test-certificate.pem");
+    expected.insert("bridge_keyfile ./test-private-key.pem");
+    expected.insert("start_type automatic");
+    expected.insert("try_private false");
+    expected.insert("cleansession true");
+    expected.insert("notifications false");
+    expected.insert("bridge_attempt_unsubscribe false");
 
-    assert!(contents.contains("topic messages/events/ out 1 az/ devices/alpha/"));
-    assert!(contents.contains("topic messages/devicebound/# out 1 az/ devices/alpha/"));
+    expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
+    expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
+
+    assert_eq!(config_set, expected);
 
     let mut another_buffer = Vec::new();
     config
@@ -344,23 +351,24 @@ fn serialize() {
         .expect("Writing config to file failed");
 
     let contents = String::from_utf8(another_buffer).unwrap();
-    assert_eq!(
-        contents
-            .lines()
-            .filter(|str| !str.is_empty() && !str.starts_with('#'))
-            .count(),
-        8
-    );
+    let config_set: HashSet<&str> = contents
+        .lines()
+        .filter(|str| !str.is_empty() && !str.starts_with('#'))
+        .collect();
+    println!("{:?}", config_set);
+    let mut expected = HashSet::new();
 
-    assert!(contents.contains("bind_address 127.0.0.1"));
-    assert!(contents.contains("connection_messages true"));
+    expected.insert("bind_address 127.0.0.1");
+    expected.insert("connection_messages true");
 
-    assert!(contents.contains("log_type error"));
-    assert!(contents.contains("log_type warning"));
-    assert!(contents.contains("log_type notice"));
-    assert!(contents.contains("log_type information"));
-    assert!(contents.contains("log_type subscribe"));
-    assert!(contents.contains("log_type unsubscribe"));
+    expected.insert("log_type error");
+    expected.insert("log_type warning");
+    expected.insert("log_type notice");
+    expected.insert("log_type information");
+    expected.insert("log_type subscribe");
+    expected.insert("log_type unsubscribe");
+
+    assert_eq!(config_set, expected);
 }
 
 fn temp_file_with_content(content: &str) -> NamedTempFile {
