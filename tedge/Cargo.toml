@@ -31,6 +31,7 @@ which = "4.0.2"
 x509-parser = "0.9.0"
 zeroize = "1.2.0"
 sha-1 = "0.9.4"
+der-parser = "=5.0.1"
 
 [dev-dependencies]
 assert_cmd = "1.0.2"
