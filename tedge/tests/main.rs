@@ -1,3 +1,5 @@
+mod os_related;
+
 mod tests {
     use predicates::prelude::*;
     use std::path::Path; // Used for writing assertions
@@ -270,11 +272,11 @@ mod tests {
 
         let key_path = extract_config_value(&output_str, "device.key.path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
-        assert!(key_path.contains(".tedge"));
+        assert!(key_path.contains("tedge"));
 
         let cert_path = extract_config_value(&output_str, "device.cert.path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
-        assert!(cert_path.contains(".tedge"));
+        assert!(cert_path.contains("tedge"));
     }
 
     fn extract_config_value(output: &String, key: &str) -> String {

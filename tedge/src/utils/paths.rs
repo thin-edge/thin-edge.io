@@ -76,7 +76,7 @@ fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, 
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
 // Another alternative is to use deprecated env::home_dir() -1
 // https://github.com/rust-lang/rust/issues/71684
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .and_then(|home| if home.is_empty() { None } else { Some(home) })
         .map(PathBuf::from)
@@ -132,12 +132,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
     fn validate_path_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
         assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
     }
 
     #[test]
+    #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
     fn validate_parent_dir_non_existent() {
         let result = validate_parent_dir_exists(Path::new("/"));
         assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });

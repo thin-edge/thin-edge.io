@@ -14,6 +14,9 @@ mod utils;
 use command::BuildCommand;
 
 fn main() -> anyhow::Result<()> {
+    let user_manager = utils::users::UserManager::new();
+    let _user_guard = user_manager.become_user(utils::users::TEDGE_USER)?;
+
     let opt = cli::Opt::from_args();
 
     let config = config::TEdgeConfig::from_default_config()
@@ -24,6 +27,6 @@ fn main() -> anyhow::Result<()> {
         .build_command(config)
         .with_context(|| "missing configuration parameter")?;
 
-    cmd.execute(opt.verbose)
+    cmd.execute(opt.verbose, user_manager)
         .with_context(|| format!("failed to {}", cmd.description()))
 }
