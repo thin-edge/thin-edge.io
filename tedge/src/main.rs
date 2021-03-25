@@ -24,6 +24,6 @@ fn main() -> anyhow::Result<()> {
         .build_command(config)
         .with_context(|| "missing configuration parameter")?;
 
-    cmd.execute(opt.verbose)
+    cmd.execute()
         .with_context(|| format!("failed to {}", cmd.description()))
 }

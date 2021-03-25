@@ -15,7 +15,7 @@ use crate::config;
 ///        format!("say hello to '{}'", name),
 ///     }
 ///
-///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///     fn execute(&self) -> Result<(), anyhow::Error> {
 ///        println!("Hello {}!", name};
 ///        Ok(())
 ///     }
@@ -36,7 +36,7 @@ use crate::config;
 ///        format!("get the value of the configuration key '{}'", self.key),
 ///     }
 ///
-///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///     fn execute(&self) -> Result<(), anyhow::Error> {
 ///        match self.config.get_config_value(self.key)? {
 ///             Some(value) => println!("{}", value),
 ///             None => eprintln!("The configuration key `{}` is not set", self.key),
@@ -60,7 +60,7 @@ use crate::config;
 ///        format!("set the value of the configuration key '{}' to '{}'", self.key, self.value),
 ///     }
 ///
-///     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+///     fn execute(&self) -> Result<(), anyhow::Error> {
 ///        let mut config = TEdgeConfig::from_default_config()?;
 ///        config.set_config_value(self.key, self.value)?;
 ///        let _ = config.write_to_default_config()?;
@@ -87,7 +87,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self, verbose: u8) -> Result<(), anyhow::Error>;
+    fn execute(&self) -> Result<(), anyhow::Error>;
 
     fn into_boxed(self) -> Box<dyn Command>
     where
