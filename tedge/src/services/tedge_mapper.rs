@@ -1,7 +1,7 @@
-use super::Service;
+use super::SystemdService;
 
 pub struct TedgeMapperService;
 
-impl Service for TedgeMapperService {
+impl SystemdService for TedgeMapperService {
     const SERVICE_NAME: &'static str = "tedge-mapper";
 }

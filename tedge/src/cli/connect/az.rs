@@ -44,7 +44,7 @@ impl Azure {
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
-            mapper: false,
+            use_mapper: false,
             topics: vec![
                 pub_msg_topic,
                 sub_msg_topic,

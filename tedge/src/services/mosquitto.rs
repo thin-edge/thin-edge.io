@@ -1,7 +1,7 @@
-use super::Service;
+use super::SystemdService;
 
 pub struct MosquittoService;
 
-impl Service for MosquittoService {
+impl SystemdService for MosquittoService {
     const SERVICE_NAME: &'static str = "mosquitto";
 }

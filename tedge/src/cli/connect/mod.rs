@@ -1,9 +1,9 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEdgeConfig};
-
-use crate::services;
-use crate::services::{mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, Service};
+use crate::services::{
+    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+};
 use crate::utils::paths;
 use std::path::Path;
 use structopt::StructOpt;
@@ -134,7 +134,7 @@ pub struct BridgeConfig {
     local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
-    mapper: bool,
+    use_mapper: bool,
     topics: Vec<String>,
 }
 
@@ -180,7 +180,7 @@ impl BridgeConfig {
 
         println!("Successfully created bridge connection!\n");
 
-        if self.mapper {
+        if self.use_mapper {
             println!("Checking if tedge-mapper is installed.\n");
 
             if which("tedge_mapper").is_err() {
@@ -197,7 +197,7 @@ impl BridgeConfig {
     // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
         let path = self.get_bridge_config_file_path()?;
-        let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
+        let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         Ok(())
     }
 
@@ -365,14 +365,18 @@ pub enum ConnectError {
     #[error(transparent)]
     PersistError(#[from] PersistError),
 
-    #[error(transparent)]
-    MapperNotFound(#[from] which::Error),
-
     #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
+}
+
+fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
+    }
 }
 
 #[cfg(test)]

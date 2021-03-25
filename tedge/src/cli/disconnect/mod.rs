@@ -3,8 +3,9 @@ use crate::cli::connect::{
 };
 use crate::command::{BuildCommand, Command};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
-use crate::services;
-use crate::services::{mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, Service};
+use crate::services::{
+    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+};
 use crate::utils::paths;
 use structopt::StructOpt;
 
@@ -50,17 +51,17 @@ impl Command for DisconnectBridge {
     }
 
     fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
-        Ok(self.stop_bridge()?)
+        match self.stop_bridge() {
+            Ok(()) | Err(DisconnectBridgeError::BridgeFileDoesNotExist) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
 impl DisconnectBridge {
     fn stop_bridge(&self) -> Result<(), DisconnectBridgeError> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
-        if self.remove_bridge_config_file()? {
-            // Skip all following steps when bridge doesn't exit
-            return Ok(());
-        }
+        self.remove_bridge_config_file()?;
 
         // Ignore failure
         let _ = self.apply_changes_to_mosquitto();
@@ -73,7 +74,7 @@ impl DisconnectBridge {
         Ok(())
     }
 
-    fn remove_bridge_config_file(&self) -> Result<bool, DisconnectBridgeError> {
+    fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
         // Check if bridge exists and stop with code 0 if it doesn't.
         let bridge_conf_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
@@ -82,7 +83,6 @@ impl DisconnectBridge {
         ])?;
 
         println!("Removing {} bridge.\n", self.cloud_name);
-        let mut bridge_not_exist = false;
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
@@ -92,17 +92,14 @@ impl DisconnectBridge {
             // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 println!("Bridge doesn't exist. Operation finished!");
-                bridge_not_exist = true;
-                return Ok(bridge_not_exist);
+                Err(DisconnectBridgeError::BridgeFileDoesNotExist)
             }
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(
                 e,
                 bridge_conf_path,
             )),
-        }?;
-
-        Ok(bridge_not_exist)
+        }
     }
 
     // Deviation from specification:
@@ -153,4 +150,7 @@ pub enum DisconnectBridgeError {
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
+
+    #[error("Bridge file does not exist.")]
+    BridgeFileDoesNotExist,
 }

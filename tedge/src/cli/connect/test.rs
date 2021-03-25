@@ -17,7 +17,7 @@ fn default_bridge_config() -> BridgeConfig {
         bridge_keyfile: "".into(),
         remote_clientid: "".into(),
         local_clientid: "".into(),
-        mapper: true,
+        use_mapper: true,
         topics: vec![],
     }
 }
@@ -114,7 +114,7 @@ fn bridge_config_c8y_create() {
         local_clientid: "Cumulocity".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        mapper: true,
+        use_mapper: true,
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),
@@ -164,7 +164,7 @@ fn bridge_config_serialize_with_cafile_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        mapper: false,
+        use_mapper: false,
         topics: vec![],
     };
 
@@ -223,7 +223,7 @@ fn bridge_config_serialize_with_capath_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        mapper: false,
+        use_mapper: false,
         topics: vec![],
     };
     let mut serialized_config = Vec::<u8>::new();
@@ -294,7 +294,7 @@ fn bridge_config_azure_create() {
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        mapper: false,
+        use_mapper: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
@@ -322,7 +322,7 @@ fn serialize() {
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        mapper: false,
+        use_mapper: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),

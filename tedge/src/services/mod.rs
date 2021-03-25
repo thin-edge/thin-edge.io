@@ -1,6 +1,5 @@
 use crate::services::SystemdError::{
-    SystemdNotAvailable, SystemdServiceNotFound, SystemdServiceNotLoaded,
-    SystemdUnhandledReturnCode, SystemdUnspecificError,
+    ServiceNotFound, ServiceNotLoaded, SystemdNotAvailable, UnhandledReturnCode, UnspecificError,
 };
 use crate::utils::paths;
 use std::process::ExitStatus;
@@ -17,25 +16,25 @@ const SYSTEMCTL_ERROR_UNIT_IS_NOT_ACTIVE: ExitCode = 3;
 const SYSTEMCTL_ERROR_SERVICE_NOT_FOUND: ExitCode = 5;
 const SYSTEMCTL_ERROR_SERVICE_NOT_LOADED: ExitCode = 5;
 
-pub trait Service {
+const SYSTEMCTL_BIN: &str = "systemctl";
+
+pub trait SystemdService {
     const SERVICE_NAME: &'static str;
 
     fn stop(&self) -> Result<(), ServicesError> {
         match call_systemd_subcmd(SystemCtlCmd::Stop, Self::SERVICE_NAME)? {
             SYSTEMCTL_OK => Ok(()),
-            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(SystemdUnspecificError {
+            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
                 cmd: "stop",
                 hint: "Lacking permissions.",
             })),
             SYSTEMCTL_ERROR_SERVICE_NOT_LOADED => {
-                Err(ServicesError::SystemdError(SystemdServiceNotLoaded {
+                Err(ServicesError::SystemdError(ServiceNotLoaded {
                     service: Self::SERVICE_NAME,
                 }))
             }
-            code => Err(ServicesError::SystemdError(SystemdUnhandledReturnCode {
-                code,
-            })),
+            code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
         }
     }
 
@@ -47,47 +46,41 @@ pub trait Service {
     fn restart(&self) -> Result<(), ServicesError> {
         match call_systemd_subcmd(SystemCtlCmd::Restart, Self::SERVICE_NAME)? {
             SYSTEMCTL_OK => Ok(()),
-            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(SystemdUnspecificError {
+            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
                 cmd: "restart",
                 hint: "Lacking permissions or service's process exited with error code.",
             })),
             SYSTEMCTL_ERROR_SERVICE_NOT_FOUND => {
-                Err(ServicesError::SystemdError(SystemdServiceNotFound {
+                Err(ServicesError::SystemdError(ServiceNotFound {
                     service: Self::SERVICE_NAME,
                 }))
             }
-            code => Err(ServicesError::SystemdError(SystemdUnhandledReturnCode {
-                code,
-            })),
+            code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
         }
     }
 
     fn enable(&self) -> Result<(), ServicesError> {
         match call_systemd_subcmd(SystemCtlCmd::Enable, Self::SERVICE_NAME)? {
             SYSTEMCTL_OK => Ok(()),
-            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(SystemdUnspecificError {
+            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
                 cmd: "enable",
                 hint: "Lacking permissions.",
             })),
-            code => Err(ServicesError::SystemdError(SystemdUnhandledReturnCode {
-                code,
-            })),
+            code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
         }
     }
 
     fn disable(&self) -> Result<(), ServicesError> {
         match call_systemd_subcmd(SystemCtlCmd::Disable, Self::SERVICE_NAME)? {
             SYSTEMCTL_OK => Ok(()),
-            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(SystemdUnspecificError {
+            SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
                 cmd: "disable",
                 hint: "Lacking permissions.",
             })),
-            code => Err(ServicesError::SystemdError(SystemdUnhandledReturnCode {
-                code,
-            })),
+            code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
         }
     }
 
@@ -95,27 +88,25 @@ pub trait Service {
         match call_systemd_subcmd(SystemCtlCmd::IsActive, Self::SERVICE_NAME)? {
             SYSTEMCTL_OK => Ok(true),
             SYSTEMCTL_ERROR_UNIT_IS_NOT_ACTIVE => Ok(false),
-            code => Err(ServicesError::SystemdError(SystemdUnhandledReturnCode {
-                code,
-            })),
+            code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
         }
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemdError {
-    #[error("Systemd returned unspecific error for service {service} while performing to {cmd} it.\nHint: {hint}")]
-    SystemdUnspecificError {
+    #[error("Systemd returned unspecific error for service {service} while performing {cmd} it.\nHint: {hint}")]
+    UnspecificError {
         service: &'static str,
         cmd: &'static str,
         hint: &'static str,
     },
 
     #[error("Service {service} not found. Install {service} to use this command.")]
-    SystemdServiceNotFound { service: &'static str },
+    ServiceNotFound { service: &'static str },
 
     #[error("Service {service} not loaded.")]
-    SystemdServiceNotLoaded { service: &'static str },
+    ServiceNotLoaded { service: &'static str },
 
     #[error(
         "Systemd is not available on the system or elevated permissions have not been granted."
@@ -123,7 +114,7 @@ pub enum SystemdError {
     SystemdNotAvailable,
 
     #[error("Returned exit code: '{code:?}' for: systemd' is unhandled.")]
-    SystemdUnhandledReturnCode { code: i32 },
+    UnhandledReturnCode { code: i32 },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -144,14 +135,6 @@ pub enum ServicesError {
     UnexpectedExitStatus,
 }
 
-// Generic util functions
-pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
-    match err.kind() {
-        std::io::ErrorKind::NotFound => Ok(()),
-        _ => Err(err),
-    }
-}
-
 // Commands util functions
 fn cmd_nullstdio_args_with_code_with_sudo(
     command: &str,
@@ -168,14 +151,14 @@ fn call_systemd_subcmd(systemctl_subcmd: SystemCtlCmd, arg: &str) -> Result<i32,
     let sudo = paths::pathbuf_to_string(which("sudo")?)?;
     cmd_nullstdio_args_with_code_with_sudo(
         sudo.as_str(),
-        &[SystemCtlCmd::Cmd.as_str(), systemctl_subcmd.as_str(), arg],
+        &[SYSTEMCTL_BIN, systemctl_subcmd.as_str(), arg],
     )?
     .code()
     .ok_or(ServicesError::UnexpectedExitStatus)
 }
 
 pub(crate) fn systemd_available() -> Result<(), ServicesError> {
-    std::process::Command::new(SystemCtlCmd::Cmd.as_str())
+    std::process::Command::new(SYSTEMCTL_BIN)
         .arg(SystemCtlParam::Version.as_str())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -194,7 +177,6 @@ pub(crate) fn systemd_available() -> Result<(), ServicesError> {
 
 #[derive(Debug)]
 enum SystemCtlCmd {
-    Cmd,
     Enable,
     Disable,
     IsActive,
@@ -205,7 +187,6 @@ enum SystemCtlCmd {
 impl SystemCtlCmd {
     fn as_str(&self) -> &'static str {
         match self {
-            SystemCtlCmd::Cmd => "systemctl",
             SystemCtlCmd::Enable => "enable",
             SystemCtlCmd::Disable => "disable",
             SystemCtlCmd::IsActive => "is-active",
@@ -217,14 +198,7 @@ impl SystemCtlCmd {
 
 impl Into<String> for SystemCtlCmd {
     fn into(self) -> String {
-        match self {
-            SystemCtlCmd::Cmd => "systemctl".to_owned(),
-            SystemCtlCmd::Enable => "enable".to_owned(),
-            SystemCtlCmd::Disable => "disable".to_owned(),
-            SystemCtlCmd::IsActive => "is-active".to_owned(),
-            SystemCtlCmd::Stop => "stop".to_owned(),
-            SystemCtlCmd::Restart => "restart".to_owned(),
-        }
+        self.as_str().into()
     }
 }
 
@@ -243,9 +217,7 @@ impl SystemCtlParam {
 
 impl Into<String> for SystemCtlParam {
     fn into(self) -> String {
-        match self {
-            SystemCtlParam::Version => "--version".to_owned(),
-        }
+        self.as_str().into()
     }
 }
 
@@ -254,8 +226,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic]
-    fn cmd_nullstdio_args_expected() {
+    fn cmd_nullstdio_args_expected_exit_code_zero() {
         // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
         assert_eq!(
             cmd_nullstdio_args_with_code_with_sudo("ls", &[])
@@ -263,9 +234,10 @@ mod tests {
                 .code(),
             Some(0)
         );
+    }
 
-        if let Err(_err) = cmd_nullstdio_args_with_code_with_sudo("test-command", &[]) {
-            panic!()
-        }
+    #[test]
+    fn cmd_nullstdio_args_command_not_exists() {
+        assert!(cmd_nullstdio_args_with_code_with_sudo("test-command", &[]).is_err())
     }
 }
