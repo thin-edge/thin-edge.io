@@ -39,7 +39,6 @@ assert_matches = "1.4.0"
 mockito = "0.29.0"
 pem = "0.8.2"
 predicates = "1.0.6"
-crypto-hash = "0.3.4"
 base64 = "0.13.0"
 
 [features]
