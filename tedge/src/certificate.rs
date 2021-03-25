@@ -663,8 +663,6 @@ mod tests {
 
     extern crate base64;
 
-    use crypto_hash::{digest, Algorithm};
-
     #[test]
     fn basic_usage() {
         let dir = tempdir().unwrap();
@@ -769,11 +767,10 @@ mod tests {
         //just decode the key contents
         let b64_bytes =
             base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let result = digest(Algorithm::SHA1, b64_bytes.as_ref());
-        let thumbprint_crypto: Vec<String> = result.iter().map(|b| format!("{:02X}", b)).collect();
+        let thumbprint_crypto = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
 
         //compare the two thumbprints
-        assert_eq!(thumbprint_sha1, thumbprint_crypto.concat());
+        assert_eq!(thumbprint_sha1, thumbprint_crypto.to_uppercase());
     }
 
     #[test]
