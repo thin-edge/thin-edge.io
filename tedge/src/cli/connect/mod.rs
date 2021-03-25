@@ -67,7 +67,7 @@ impl Command for BridgeCommand {
         )
     }
 
-    fn execute(&self, _verbose: u8) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> Result<(), anyhow::Error> {
         self.bridge_config.new_bridge()?;
         self.check_connection()?;
         Ok(())
