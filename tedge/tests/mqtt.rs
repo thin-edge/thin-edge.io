@@ -1,10 +1,14 @@
 #[cfg(test)]
+#[cfg(feature = "mosquitto-available")]
 mod tests {
 
     // These test cases need mosquitto on localhost on GH hosted machine.
 
+    use assert_cmd::assert::OutputAssertExt;
+    use assert_cmd::Command;
+    use predicates::prelude::predicate;
+
     #[test]
-    #[cfg(feature = "mosquitto-available")]
     fn test_cli_pub_basic() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = Command::cargo_bin("tedge")?;
         let assert = cmd
@@ -17,7 +21,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "mosquitto-available")]
     fn test_cli_pub_qos() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = Command::cargo_bin("tedge")?;
         let assert = cmd
@@ -31,7 +34,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "mosquitto-available")]
     fn test_cli_sub_basic() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = Command::cargo_bin("tedge")?;
         let err = cmd
@@ -46,7 +48,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "mosquitto-available")]
     fn test_cli_sub_qos() -> Result<(), Box<dyn std::error::Error>> {
         let mut cmd = Command::cargo_bin("tedge")?;
         let err = cmd

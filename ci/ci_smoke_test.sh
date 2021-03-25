@@ -128,7 +128,7 @@ cat ~/.tedge/tedge.toml
 chmod 666 ~/.tedge/*.pem
 
 echo "Connect again"
-tedge -v connect c8y
+tedge connect c8y
 
 #Start Mapper in the Background
 tedge_mapper > ~/mapper.log 2>&1 &
