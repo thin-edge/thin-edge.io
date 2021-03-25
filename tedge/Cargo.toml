@@ -45,5 +45,6 @@ which = "4.0.2"
 
 [features]
 integration-test = []
-mosquitto-available = []
+mosquitto-available = []      # Enable tests requesting mosquitto installed
 root-access = []              # Enable tests requesting root access
+tedge-user = []               # Enable tests requesting a tedge user
