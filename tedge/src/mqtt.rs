@@ -84,10 +84,7 @@ impl Command for MqttCmd {
         }
     }
 
-    fn execute(
-        &self,
-        _context: &ExecutionContext,
-    ) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         match self {
             MqttCmd::Pub {
                 topic,

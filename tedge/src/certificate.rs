@@ -2,6 +2,7 @@ use crate::config::{
     ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
 };
 use crate::utils::users;
+use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
 use crate::{
     command::{BuildCommand, Command, ExecutionContext},
@@ -22,7 +23,6 @@ use std::{
 };
 use structopt::StructOpt;
 use x509_parser::prelude::Pem;
-use crate::utils::users::UserManager;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
