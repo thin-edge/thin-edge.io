@@ -273,12 +273,11 @@ impl BridgeConfig {
             "bridge_attempt_unsubscribe {}",
             self.common_bridge_config.bridge_attempt_unsubscribe
         )?;
-        // Waiting for the fix in CIT-277. This comment out breaks some test cases.
-        // writeln!(
-        //     writer,
-        //     "bind_address {}",
-        //     self.common_bridge_config.bind_address
-        // )?;
+        writeln!(
+            writer,
+            "bind_address {}",
+            self.common_bridge_config.bind_address
+        )?;
         writeln!(
             writer,
             "connection_messages {}",
