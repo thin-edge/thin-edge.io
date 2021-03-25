@@ -18,6 +18,7 @@ where
 #[test]
 #[cfg(feature = "mosquitto-available")]
 #[cfg(feature = "root-access")]
+#[cfg(feature = "tedge-user")]
 fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn std::error::Error>>
 {
     let device_id = "test";
