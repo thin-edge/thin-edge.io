@@ -16,6 +16,7 @@ use crate::config::{
     DEVICE_KEY_PATH, TEDGE_HOME_DIR,
 };
 
+pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
@@ -85,25 +86,17 @@ impl BridgeCommand {
 }
 
 #[derive(Debug, PartialEq)]
-struct CommonBridgeConfig {
-    try_private: bool,
-    start_type: String,
-    clean_session: bool,
-    notifications: bool,
-    bridge_attempt_unsubscribe: bool,
+struct CommonMosquittoConfig {
+    config_file: String,
     bind_address: String,
     connection_messages: bool,
     log_types: Vec<String>,
 }
 
-impl Default for CommonBridgeConfig {
+impl Default for CommonMosquittoConfig {
     fn default() -> Self {
-        CommonBridgeConfig {
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
+        CommonMosquittoConfig {
+            config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
             bind_address: "127.0.0.1".into(),
             connection_messages: true,
             log_types: vec![
@@ -120,7 +113,7 @@ impl Default for CommonBridgeConfig {
 
 #[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
-    common_bridge_config: CommonBridgeConfig,
+    common_mosquitto_config: CommonMosquittoConfig,
     cloud_name: String,
     config_file: String,
     connection: String,
@@ -131,6 +124,11 @@ pub struct BridgeConfig {
     local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
+    try_private: bool,
+    start_type: String,
+    clean_session: bool,
+    notifications: bool,
+    bridge_attempt_unsubscribe: bool,
     topics: Vec<String>,
 }
 
@@ -198,16 +196,39 @@ impl BridgeConfig {
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
-        let mut temp_file = NamedTempFile::new()?;
-        self.serialize(&mut temp_file)?;
-
         let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
 
+        let mut common_temp_file = NamedTempFile::new()?;
+        self.serialize_common_config(&mut common_temp_file)?;
+        let common_config_path = self.get_common_mosquitto_config_file_path()?;
+        let _ = paths::persist_tempfile(common_temp_file, &common_config_path)?;
+
+        let mut temp_file = NamedTempFile::new()?;
+        self.serialize(&mut temp_file)?;
         let config_path = self.get_bridge_config_file_path()?;
         let _ = paths::persist_tempfile(temp_file, &config_path)?;
+
+        Ok(())
+    }
+
+    fn serialize_common_config<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writeln!(
+            writer,
+            "bind_address {}",
+            self.common_mosquitto_config.bind_address
+        )?;
+        writeln!(
+            writer,
+            "connection_messages {}",
+            self.common_mosquitto_config.connection_messages
+        )?;
+
+        for log_type in &self.common_mosquitto_config.log_types {
+            writeln!(writer, "log_type {}", log_type)?;
+        }
 
         Ok(())
     }
@@ -234,45 +255,15 @@ impl BridgeConfig {
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
         writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
         writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
-        writeln!(
-            writer,
-            "try_private {}",
-            self.common_bridge_config.try_private
-        )?;
-        writeln!(
-            writer,
-            "start_type {}",
-            self.common_bridge_config.start_type
-        )?;
-        writeln!(
-            writer,
-            "cleansession {}",
-            self.common_bridge_config.clean_session
-        )?;
-        writeln!(
-            writer,
-            "notifications {}",
-            self.common_bridge_config.notifications
-        )?;
+        writeln!(writer, "try_private {}", self.try_private)?;
+        writeln!(writer, "start_type {}", self.start_type)?;
+        writeln!(writer, "cleansession {}", self.clean_session)?;
+        writeln!(writer, "notifications {}", self.notifications)?;
         writeln!(
             writer,
             "bridge_attempt_unsubscribe {}",
-            self.common_bridge_config.bridge_attempt_unsubscribe
+            self.bridge_attempt_unsubscribe
         )?;
-        writeln!(
-            writer,
-            "bind_address {}",
-            self.common_bridge_config.bind_address
-        )?;
-        writeln!(
-            writer,
-            "connection_messages {}",
-            self.common_bridge_config.connection_messages
-        )?;
-
-        for log_type in &self.common_bridge_config.log_types {
-            writeln!(writer, "log_type {}", log_type)?;
-        }
 
         writeln!(writer, "\n### Topics",)?;
         for topic in &self.topics {
@@ -304,6 +295,14 @@ impl BridgeConfig {
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
+        ])?)
+    }
+
+    fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
+        Ok(paths::build_path_from_home(&[
+            TEDGE_HOME_DIR,
+            TEDGE_BRIDGE_CONF_DIR_PATH,
+            &self.common_mosquitto_config.config_file,
         ])?)
     }
 }
