@@ -197,8 +197,11 @@ impl BridgeConfig {
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
-        let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
-
+        let dir_path = if UserManager::running_as_root() {
+            paths::build_path_from_home(&["/etc/tedge", TEDGE_BRIDGE_CONF_DIR_PATH])?
+        } else {
+            paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?
+        };
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
 
@@ -292,19 +295,35 @@ impl BridgeConfig {
     }
 
     fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
-            TEDGE_BRIDGE_CONF_DIR_PATH,
-            &self.config_file,
-        ])?)
+        if UserManager::running_as_root() {
+            Ok(paths::build_path_from_home(&[
+                "/etc/tedge",
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                &self.config_file,
+            ])?)
+        } else {
+            Ok(paths::build_path_from_home(&[
+                TEDGE_HOME_DIR,
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                &self.config_file,
+            ])?)
+        }
     }
 
     fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
-            TEDGE_BRIDGE_CONF_DIR_PATH,
-            &self.common_mosquitto_config.config_file,
-        ])?)
+        if UserManager::running_as_root() {
+            Ok(paths::build_path_from_home(&[
+                "/etc/tedge",
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                &self.common_mosquitto_config.config_file,
+            ])?)
+        } else {
+            Ok(paths::build_path_from_home(&[
+                TEDGE_HOME_DIR,
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                &self.common_mosquitto_config.config_file,
+            ])?)
+        }
     }
 }
 

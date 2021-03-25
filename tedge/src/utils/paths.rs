@@ -76,7 +76,7 @@ fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, 
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
 // Another alternative is to use deprecated env::home_dir() -1
 // https://github.com/rust-lang/rust/issues/71684
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .and_then(|home| if home.is_empty() { None } else { Some(home) })
         .map(PathBuf::from)

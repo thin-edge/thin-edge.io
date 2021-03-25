@@ -1,5 +1,8 @@
-use crate::command::{BuildCommand, Command, ExecutionContext};
-use crate::config::ConfigError::InvalidCharacterInHomeDirectoryPath;
+use crate::{
+    command::{BuildCommand, Command, ExecutionContext},
+    utils::users::UserManager,
+};
+use crate::{config::ConfigError::InvalidCharacterInHomeDirectoryPath, utils};
 use serde::{Deserialize, Serialize};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -14,8 +17,8 @@ const ETC_PATH: &str = "/etc";
 pub const TEDGE_ETC_DIR: &str = "tedge";
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
-const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
+const DEVICE_KEY_FILE: &str = "certs/tedge-private-key.pem";
+const DEVICE_CERT_FILE: &str = "certs/tedge-certificate.pem";
 
 pub const DEVICE_ID: &str = "device.id";
 pub const DEVICE_CERT_PATH: &str = "device.cert.path";
@@ -412,13 +415,23 @@ impl DeviceConfig {
     }
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        PathBuf::from_str(ETC_PATH)
-            .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
-            .join(TEDGE_ETC_DIR)
-            .join(file_name)
-            .to_str()
-            .map(|s| s.into())
-            .ok_or(InvalidCharacterInHomeDirectoryPath)
+        if UserManager::running_as_root() {
+            PathBuf::from_str(ETC_PATH)
+                .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
+                .join(TEDGE_ETC_DIR)
+                .join(file_name)
+                .to_str()
+                .map(|s| s.into())
+                .ok_or(InvalidCharacterInHomeDirectoryPath)
+        } else {
+            utils::paths::home_dir()
+                .unwrap()
+                .join(TEDGE_HOME_DIR)
+                .join(file_name)
+                .to_str()
+                .map(|s| s.into())
+                .ok_or(InvalidCharacterInHomeDirectoryPath)
+        }
     }
 
     fn with_defaults(self) -> Result<Self, ConfigError> {
@@ -495,10 +508,17 @@ pub enum ConfigError {
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    Ok(PathBuf::from_str(ETC_PATH)
-        .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
-        .join(TEDGE_ETC_DIR)
-        .join(TEDGE_CONFIG_FILE))
+    if UserManager::running_as_root() {
+        Ok(PathBuf::from_str(ETC_PATH)
+            .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
+            .join(TEDGE_ETC_DIR)
+            .join(TEDGE_CONFIG_FILE))
+    } else {
+        Ok(utils::paths::home_dir()
+            .unwrap()
+            .join(TEDGE_HOME_DIR)
+            .join(TEDGE_CONFIG_FILE))
+    }
 }
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
