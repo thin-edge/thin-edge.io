@@ -198,7 +198,7 @@ impl BridgeConfig {
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
         let dir_path = if UserManager::running_as_root() {
-            paths::build_path_from_home(&["/etc/tedge", TEDGE_BRIDGE_CONF_DIR_PATH])?
+            "/etc/tedge/bridges".to_owned()
         } else {
             paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?
         };
@@ -295,12 +295,12 @@ impl BridgeConfig {
     }
 
     fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
+        println!("{:?}", &self.config_file);
         if UserManager::running_as_root() {
-            Ok(paths::build_path_from_home(&[
-                "/etc/tedge",
-                TEDGE_BRIDGE_CONF_DIR_PATH,
-                &self.config_file,
-            ])?)
+            Ok(format!(
+                "/etc/tedge/{}/{}",
+                TEDGE_BRIDGE_CONF_DIR_PATH, &self.config_file,
+            ))
         } else {
             Ok(paths::build_path_from_home(&[
                 TEDGE_HOME_DIR,
@@ -312,11 +312,10 @@ impl BridgeConfig {
 
     fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
         if UserManager::running_as_root() {
-            Ok(paths::build_path_from_home(&[
-                "/etc/tedge",
-                TEDGE_BRIDGE_CONF_DIR_PATH,
-                &self.common_mosquitto_config.config_file,
-            ])?)
+            Ok(format!(
+                "/etc/tedge/{}/{}",
+                TEDGE_BRIDGE_CONF_DIR_PATH, COMMON_MOSQUITTO_CONFIG_FILENAME
+            ))
         } else {
             Ok(paths::build_path_from_home(&[
                 TEDGE_HOME_DIR,
