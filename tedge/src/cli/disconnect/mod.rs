@@ -55,7 +55,7 @@ impl DisconnectBridge {
         // Check if bridge exists and stop with code 0 if it doesn't.
 
         let bridge_conf_path = if UserManager::running_as_root() {
-            "/etc/tedge/mosquitto-conf".to_owned()
+            format!("/etc/tedge/mosquitto-conf/{}", &self.config_file,)
         } else {
             paths::build_path_from_home(&[
                 TEDGE_HOME_DIR,
