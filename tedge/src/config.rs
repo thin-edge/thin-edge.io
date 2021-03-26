@@ -415,23 +415,7 @@ impl DeviceConfig {
     }
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        if UserManager::running_as_root() {
-            PathBuf::from_str(ETC_PATH)
-                .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
-                .join(TEDGE_ETC_DIR)
-                .join(file_name)
-                .to_str()
-                .map(|s| s.into())
-                .ok_or(InvalidCharacterInDirectoryPath)
-        } else {
-            utils::paths::home_dir()
-                .ok_or(InvalidCharacterInDirectoryPath)?
-                .join(TEDGE_HOME_DIR)
-                .join(file_name)
-                .to_str()
-                .map(|s| s.into())
-                .ok_or(InvalidCharacterInDirectoryPath)
-        }
+        Ok(paths::build_path_for_sudo_or_user(&[file_name])?)
     }
 
     fn with_defaults(self) -> Result<Self, ConfigError> {
