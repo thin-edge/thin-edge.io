@@ -11,48 +11,6 @@ env:
 
 jobs:
 
-  cargo-test:
-
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose
-
-  cargo-build:
-
-    name: Run cargo build
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args:  --release
-
   cargo-fmt:
 
     name: Run cargo fmt
@@ -90,10 +48,55 @@ jobs:
         with:
           command: clippy
 
+  cargo-test:
+
+    name: Run cargo test
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose
+
+  cargo-build:
+
+    name: Run cargo build
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args:  --release
+
   cargo-tarpaulin:
 
     name: Run cargo tarpaulin
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy, cargo-build, cargo-test]
 
     steps:
 
@@ -132,6 +135,8 @@ jobs:
 
     name: Run cargo audit
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
 
     steps:
 
@@ -148,6 +153,7 @@ jobs:
 
     name: Run cargo outdated
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
 
