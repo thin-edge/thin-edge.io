@@ -2,7 +2,7 @@ use crate::{
     command::{BuildCommand, Command, ExecutionContext},
     utils::users::UserManager,
 };
-use crate::{config::ConfigError::InvalidCharacterInHomeDirectoryPath, utils};
+use crate::{config::ConfigError::InvalidCharacterInDirectoryPath, utils};
 use serde::{Deserialize, Serialize};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -17,8 +17,8 @@ const ETC_PATH: &str = "/etc";
 pub const TEDGE_ETC_DIR: &str = "tedge";
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_KEY_FILE: &str = "certs/tedge-private-key.pem";
-const DEVICE_CERT_FILE: &str = "certs/tedge-certificate.pem";
+const DEVICE_KEY_FILE: &str = "device-certs/tedge-private-key.pem";
+const DEVICE_CERT_FILE: &str = "device-certs/tedge-certificate.pem";
 
 pub const DEVICE_ID: &str = "device.id";
 pub const DEVICE_CERT_PATH: &str = "device.cert.path";
@@ -397,11 +397,11 @@ pub struct DeviceConfig {
     pub id: Option<String>,
 
     /// Path where the device's private key is stored.
-    /// Defaults to $HOME/.tedge/tedge-private.pem
+    /// Defaults to $HOME/.tedge/tedge-private.pem for user or /etc/tedge/device-certs/tedge-private.pem for system wide configuration.
     pub key_path: Option<String>,
 
     /// Path where the device's certificate is stored.
-    /// Defaults to $HOME/.tedge/tedge-certificate.crt
+    /// Defaults to $HOME/.tedge/tedge-certificate.crt for user or /etc/tedge/device-certs/tedge-certificate.crt for system wide configuration.
     pub cert_path: Option<String>,
 }
 
@@ -422,15 +422,15 @@ impl DeviceConfig {
                 .join(file_name)
                 .to_str()
                 .map(|s| s.into())
-                .ok_or(InvalidCharacterInHomeDirectoryPath)
+                .ok_or(InvalidCharacterInDirectoryPath)
         } else {
             utils::paths::home_dir()
-                .ok_or(InvalidCharacterInHomeDirectoryPath)?
+                .ok_or(InvalidCharacterInDirectoryPath)?
                 .join(TEDGE_HOME_DIR)
                 .join(file_name)
                 .to_str()
                 .map(|s| s.into())
-                .ok_or(InvalidCharacterInHomeDirectoryPath)
+                .ok_or(InvalidCharacterInDirectoryPath)
         }
     }
 
@@ -488,8 +488,8 @@ pub enum ConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
-    #[error("Invalid characters found in home directory path")]
-    InvalidCharacterInHomeDirectoryPath,
+    #[error("Invalid characters found in directory path")]
+    InvalidCharacterInDirectoryPath,
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
@@ -515,7 +515,7 @@ pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
             .join(TEDGE_CONFIG_FILE))
     } else {
         Ok(utils::paths::home_dir()
-            .ok_or(InvalidCharacterInHomeDirectoryPath)?
+            .ok_or(InvalidCharacterInDirectoryPath)?
             .join(TEDGE_HOME_DIR)
             .join(TEDGE_CONFIG_FILE))
     }
@@ -580,7 +580,7 @@ impl TEdgeConfig {
         }
     }
 
-    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
+    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml for user or /etc/tedge/tedge.toml for system configuration.
     pub fn write_to_default_config(&self) -> Result<(), ConfigError> {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }

@@ -21,7 +21,7 @@ pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
-pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 
 #[derive(StructOpt, Debug, PartialEq)]
@@ -198,7 +198,7 @@ impl BridgeConfig {
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
         let dir_path = if UserManager::running_as_root() {
-            "/etc/tedge/bridges".to_owned()
+            "/etc/tedge/mosquitto-conf".to_owned()
         } else {
             paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?
         };

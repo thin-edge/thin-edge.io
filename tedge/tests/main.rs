@@ -209,11 +209,11 @@ mod tests {
 
         let cert_path = temp_path(
             &temp_dir,
-            &join_paths(".tedge", "certs/tedge-certificate.pem"),
+            &join_paths(".tedge", "device-certs/tedge-certificate.pem"),
         );
         let key_path = temp_path(
             &temp_dir,
-            &join_paths(".tedge", "certs/tedge-private-key.pem"),
+            &join_paths(".tedge", "device-certs/tedge-private-key.pem"),
         );
 
         let mut get_device_id_cmd =
