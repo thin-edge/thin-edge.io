@@ -1,6 +1,6 @@
 # The `tedge cert` command
-
 The `tedge cert` command is used to create and manage device certificate.
+
 ```
 tedge-cert 0.1.0
 Create and manage device certificate
@@ -17,8 +17,9 @@ SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
     remove    Remove the device certificate
     show      Show the device certificate, if any
-```
+    upload    Upload root certificate
 
+```
 ## Create
 
 ```
@@ -26,18 +27,15 @@ tedge-cert-create 0.1.0
 Create a self-signed device certificate
 
 USAGE:
-    tedge cert create [OPTIONS] --id <id>
+    tedge cert create --device-id <id>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-        --cert-path <cert-path>    The path where the device certificate will be stored [default: ./tedge-
-                                   certificate.pem]
-        --id <id>                  The device identifier
-        --key-path <key-path>      The path where the device private key will be stored [default: ./tedge-private-
-                                   key.pem]
+        --device-id <id>    The device identifier to be used as the common name for the certificate
+
 ```
 
 ## Show
@@ -47,15 +45,12 @@ tedge-cert-show 0.1.0
 Show the device certificate, if any
 
 USAGE:
-    tedge cert show [OPTIONS]
+    tedge cert show
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
-OPTIONS:
-        --cert-path <cert-path>    The path where the device certificate will be stored [default: ./tedge-
-                                   certificate.pem]
 ```
 
 ## Remove
@@ -71,7 +66,22 @@ FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
-OPTIONS:
-        --cert-path <cert-path>    The path of the certificate to be removed [default: ./tedge-certificate.pem]
-        --key-path <key-path>      The path of the private key to be removed [default: ./tedge-private-key.pem]
+```
+
+## Upload
+
+```
+tedge-cert-upload 0.1.0
+Upload root certificate
+
+USAGE:
+    tedge cert upload <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+SUBCOMMANDS:
+    c8y     Upload root certificate to Cumulocity
+    help    Prints this message or the help of the given subcommand(s)
 ```
