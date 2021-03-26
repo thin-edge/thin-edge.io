@@ -1,21 +1,15 @@
 use crate::{
     command::{BuildCommand, Command, ExecutionContext},
-    utils::{paths, users::UserManager},
+    utils::paths,
 };
-use crate::{config::ConfigError::InvalidCharacterInDirectoryPath, utils};
+
 use serde::{Deserialize, Serialize};
+use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::{
-    fs::{create_dir_all, read_to_string},
-    str::FromStr,
-};
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
-const ETC_PATH: &str = "/etc";
-pub const TEDGE_ETC_DIR: &str = "tedge";
-pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "device-certs/tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "device-certs/tedge-certificate.pem";
@@ -474,9 +468,6 @@ pub enum ConfigError {
 
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
-
-    #[error("Invalid characters found in directory path")]
-    InvalidCharacterInDirectoryPath,
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
