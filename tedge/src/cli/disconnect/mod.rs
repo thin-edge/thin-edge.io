@@ -9,6 +9,7 @@ use crate::services::{
 use crate::utils::paths;
 use crate::utils::users::{UserManager, ROOT_USER};
 use structopt::StructOpt;
+use which::which;
 
 #[derive(StructOpt, Debug)]
 pub enum TedgeDisconnectBridgeOpt {
@@ -68,7 +69,7 @@ impl DisconnectBridge {
         let _ = self.apply_changes_to_mosquitto(user_manager);
 
         // Only C8Y changes the status of tedge-mapper
-        if self.use_mapper {
+        if self.use_mapper && which("tedge_mapper").is_ok() {
             self.stop_and_disable_tedge_mapper(user_manager);
         }
 
