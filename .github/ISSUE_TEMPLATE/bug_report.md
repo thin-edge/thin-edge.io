@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: ''
-labels: ''
+labels: 'bug'
 assignees: ''
 
 ---
@@ -22,8 +22,8 @@ If applicable, add screenshots to help explain your problem.
 **Environment (please complete the following information):**
  - OS [incl. version]
  - Hardware [incl. revision]
- - System-Architecture [e.g. result of uname -a]
- - Version [e.g. 22]
+ - System-Architecture [e.g. result of "uname -a"]
+ - thin-edge.io version [e.g. 0.1.0]
 
 **Additional context**
 Add any other context about the problem here.
