@@ -96,7 +96,7 @@ tedge cert show
 
 ls -lah ~/.tedge/
 
-tedge config set c8y.url octocat.eu-latest.cumulocity.com
+tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
 tedge config set c8y.root.cert.path /etc/ssl/certs/Go_Daddy_Class_2_CA.pem
 
@@ -125,12 +125,10 @@ cat /etc/mosquitto/mosquitto.conf
 
 cat ~/.tedge/tedge.toml
 
-chmod 666 ~/.tedge/c8y-trusted-root-certificates.pem
-
 chmod 666 ~/.tedge/*.pem
 
 echo "Connect again"
-tedge -v connect c8y
+tedge connect c8y
 
 #Start Mapper in the Background
 tedge_mapper > ~/mapper.log 2>&1 &

@@ -48,6 +48,7 @@ impl Azure {
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
+            use_mapper: false,
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
@@ -100,8 +101,8 @@ impl Azure {
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
         match fut.await {
             Ok(Ok(true)) => {
-                println!("Received expected response message, connection check is successful");
-                return Ok(());
+                println!("Received expected response message, connection check is successful.");
+                Ok(())
             }
             _err => {
                 println!("Warning: No response, bridge has been configured, but Azure connection check failed.\n",);

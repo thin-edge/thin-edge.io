@@ -46,6 +46,7 @@ impl C8y {
             local_clientid: "Cumulocity".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
             bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
+            use_mapper: true,
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
@@ -125,7 +126,7 @@ impl C8y {
             match fut.await {
                 Ok(Ok(true)) => {
                     println!(
-                        "Received expected response message, connection check is successful\n",
+                        "Received expected response message, connection check is successful.\n",
                     );
                     return Ok(());
                 }
