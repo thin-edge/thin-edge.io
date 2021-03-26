@@ -17,14 +17,14 @@ pub mod c8y;
 
 use crate::config::{
     AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
+    DEVICE_KEY_PATH,
 };
 
 pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
-pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 
 #[derive(StructOpt, Debug, PartialEq)]
@@ -212,7 +212,7 @@ impl BridgeConfig {
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
-        let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+        let dir_path = paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
@@ -307,8 +307,7 @@ impl BridgeConfig {
     }
 
     fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
+        Ok(paths::build_path_for_sudo_or_user(&[
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
         ])?)
@@ -335,8 +334,7 @@ impl BridgeConfig {
     }
 
     fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
+        Ok(paths::build_path_for_sudo_or_user(&[
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.common_mosquitto_config.config_file,
         ])?)

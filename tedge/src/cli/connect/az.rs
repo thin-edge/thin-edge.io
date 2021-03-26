@@ -12,6 +12,22 @@ pub struct Azure {}
 
 impl Azure {
     pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+        Self::assign_bridge_root_cert_path(&mut config)?;
+        config.write_to_default_config()?;
+        Self::new_config(&config)
+    }
+
+    pub fn assign_bridge_root_cert_path(config: &mut TEdgeConfig) -> Result<(), ConfigError> {
+        let bridge_root_cert_path = config::get_config_value_or_default(
+            &config,
+            AZURE_ROOT_CERT_PATH,
+            DEFAULT_ROOT_CERT_PATH,
+        )?;
+        let _ = config.set_config_value(AZURE_ROOT_CERT_PATH, bridge_root_cert_path)?;
+        Ok(())
+    }
+
+    pub fn new_config(config: &TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let az_url =
             config::parse_user_provided_address(config::get_config_value(&config, AZURE_URL)?)?;
         let address = format!("{}:{}", az_url, MQTT_TLS_PORT);
@@ -20,18 +36,6 @@ impl Azure {
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
-        let bridge_root_cert_path = config::get_config_value_or_default(
-            &config,
-            AZURE_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
-
-        let _ = config::update_config_with_value(
-            &mut config,
-            AZURE_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
-
         Ok(BridgeConfig {
             common_mosquitto_config: CommonMosquittoConfig::default(),
             cloud_name: "az".into(),
@@ -39,7 +43,7 @@ impl Azure {
             connection: "edge_to_az".into(),
             address,
             remote_username: Some(user_name),
-            bridge_root_cert_path,
+            bridge_root_cert_path: config::get_config_value(&config, AZURE_ROOT_CERT_PATH)?,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
             bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
