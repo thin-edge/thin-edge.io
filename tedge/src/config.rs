@@ -425,7 +425,7 @@ impl DeviceConfig {
                 .ok_or(InvalidCharacterInHomeDirectoryPath)
         } else {
             utils::paths::home_dir()
-                .unwrap()
+                .ok_or(InvalidCharacterInHomeDirectoryPath)?
                 .join(TEDGE_HOME_DIR)
                 .join(file_name)
                 .to_str()
@@ -515,7 +515,7 @@ pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
             .join(TEDGE_CONFIG_FILE))
     } else {
         Ok(utils::paths::home_dir()
-            .unwrap()
+            .ok_or(InvalidCharacterInHomeDirectoryPath)?
             .join(TEDGE_HOME_DIR)
             .join(TEDGE_CONFIG_FILE))
     }
