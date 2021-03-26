@@ -207,8 +207,14 @@ mod tests {
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        let cert_path = temp_path(&temp_dir, &join_paths(".tedge", "tedge-certificate.pem"));
-        let key_path = temp_path(&temp_dir, &join_paths(".tedge", "tedge-private-key.pem"));
+        let cert_path = temp_path(
+            &temp_dir,
+            &join_paths(".tedge", "certs/tedge-certificate.pem"),
+        );
+        let key_path = temp_path(
+            &temp_dir,
+            &join_paths(".tedge", "certs/tedge-private-key.pem"),
+        );
 
         let mut get_device_id_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.id"])?;
