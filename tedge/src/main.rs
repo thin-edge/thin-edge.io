@@ -9,6 +9,8 @@ mod cli;
 mod command;
 mod config;
 mod mqtt;
+mod settings;
+mod types;
 mod utils;
 
 use command::BuildCommand;

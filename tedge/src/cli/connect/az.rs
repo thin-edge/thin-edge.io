@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::ConfigError;
-use crate::utils::config;
+use crate::settings::*;
 use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -12,25 +12,20 @@ pub struct Azure {}
 
 impl Azure {
     pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
-        let az_url =
-            config::parse_user_provided_address(config::get_config_value(&config, AZURE_URL)?)?;
-        let address = format!("{}:{}", az_url, MQTT_TLS_PORT);
-        let clientid = config::get_config_value(&config, DEVICE_ID)?;
-        let user_name = format!("{}/{}/?api-version=2018-06-30", az_url, &clientid);
+        let az_url = GetConfigSetting::get(&AzureUrlSetting, &config)?;
+
+        let address = format!("{}:{}", az_url.as_str(), MQTT_TLS_PORT);
+        let clientid = DeviceIdSetting.get_string(&config)?;
+        let user_name = format!("{}/{}/?api-version=2018-06-30", az_url.as_str(), &clientid);
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
-        let bridge_root_cert_path = config::get_config_value_or_default(
-            &config,
-            AZURE_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
+        let bridge_root_cert_path =
+            AzureRootCertPathSetting.get_string_or_default(&config, DEFAULT_ROOT_CERT_PATH)?;
 
-        let _ = config::update_config_with_value(
-            &mut config,
-            AZURE_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
+        let () = AzureRootCertPathSetting.set_string(&mut config, DEFAULT_ROOT_CERT_PATH.into())?;
+
+        config.write_to_default_config()?;
 
         Ok(BridgeConfig {
             common_mosquitto_config: CommonMosquittoConfig::default(),
@@ -42,8 +37,8 @@ impl Azure {
             bridge_root_cert_path,
             remote_clientid: clientid,
             local_clientid: "Azure".into(),
-            bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
-            bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
+            bridge_certfile: DeviceCertPathSetting.get_string(&config)?,
+            bridge_keyfile: DeviceKeyPathSetting.get_string(&config)?,
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,

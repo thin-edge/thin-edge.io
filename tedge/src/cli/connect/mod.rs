@@ -12,10 +12,7 @@ use url::Url;
 pub mod az;
 pub mod c8y;
 
-use crate::config::{
-    AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
-};
+use crate::config::TEDGE_HOME_DIR;
 
 pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
