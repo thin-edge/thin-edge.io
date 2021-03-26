@@ -1,6 +1,6 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command, ExecutionContext};
-use crate::config::{ConfigError, TEdgeConfig};
+use tedge_config::*;
 
 use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
@@ -11,11 +11,6 @@ use url::Url;
 
 pub mod az;
 pub mod c8y;
-
-use crate::config::{
-    AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
-};
 
 pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
@@ -38,10 +33,7 @@ pub enum TEdgeConnectOpt {
 }
 
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(
-        self,
-        tedge_config: crate::config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, tedge_config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
                 bridge_config: C8y::c8y_bridge_config(tedge_config)?,

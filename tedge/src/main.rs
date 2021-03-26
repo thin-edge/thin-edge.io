@@ -7,7 +7,6 @@ use structopt::StructOpt;
 mod certificate;
 mod cli;
 mod command;
-mod config;
 mod mqtt;
 mod utils;
 
@@ -20,7 +19,7 @@ fn main() -> anyhow::Result<()> {
 
     let opt = cli::Opt::from_args();
 
-    let config = config::TEdgeConfig::from_default_config()
+    let config = tedge_config::TEdgeConfig::from_default_config()
         .with_context(|| "failed to read the tedge configuration")?;
 
     let cmd = opt

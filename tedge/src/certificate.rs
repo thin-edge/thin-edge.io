@@ -1,6 +1,3 @@
-use crate::config::{
-    ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
-};
 use crate::utils::users;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
@@ -22,6 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
+use tedge_config::*;
 use x509_parser::prelude::Pem;
 
 #[derive(StructOpt, Debug)]
@@ -86,22 +84,12 @@ impl BuildCommand for UploadCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             UploadCertOpt::C8y { username } => {
-                let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from(DEVICE_ID),
-                })?;
+                let device_id = config.query_string(DeviceIdSetting)?;
 
-                let path = PathBuf::try_from(config.device.cert_path.ok_or_else(|| {
-                    ConfigError::ConfigNotSet {
-                        key: String::from(DEVICE_CERT_PATH),
-                    }
-                })?)
-                .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
+                let path = PathBuf::try_from(config.query_string(DeviceCertPathSetting)?)
+                    .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
 
-                let host = utils::config::parse_user_provided_address(config.c8y.url.ok_or_else(
-                    || ConfigError::ConfigNotSet {
-                        key: String::from(C8Y_URL),
-                    },
-                )?)?;
+                let host = config.query_string(C8yUrlSetting)?.into();
 
                 Ok((UploadCertCmd {
                     device_id,
@@ -292,6 +280,9 @@ pub enum CertError {
 
     #[error(transparent)]
     UserSwitchError(#[from] users::UserSwitchError),
+
+    #[error(transparent)]
+    ConfigSettingError(#[from] ConfigSettingError),
 }
 
 impl CertError {
@@ -328,54 +319,33 @@ impl CertError {
 
 impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let cmd =
-            match self {
-                TEdgeCertOpt::Create { id } => {
-                    let cmd = CreateCertCmd {
-                        id,
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                        key_path: config.device.key_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+        let cmd = match self {
+            TEdgeCertOpt::Create { id } => {
+                let cmd = CreateCertCmd {
+                    id,
+                    cert_path: config.query_string(DeviceCertPathSetting)?,
+                    key_path: config.query_string(DeviceKeyPathSetting)?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Show => {
-                    let cmd = ShowCertCmd {
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+            TEdgeCertOpt::Show => {
+                let cmd = ShowCertCmd {
+                    cert_path: config.query_string(DeviceCertPathSetting)?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Remove => {
-                    let cmd = RemoveCertCmd {
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                        key_path: config.device.key_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+            TEdgeCertOpt::Remove => {
+                let cmd = RemoveCertCmd {
+                    cert_path: config.query_string(DeviceCertPathSetting)?,
+                    key_path: config.query_string(DeviceKeyPathSetting)?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Upload(cmd) => cmd.build_command(config)?,
-            };
+            TEdgeCertOpt::Upload(cmd) => cmd.build_command(config)?,
+        };
 
         Ok(cmd)
     }
@@ -493,9 +463,9 @@ impl CreateCertCmd {
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        config.device.id = Some(self.id.clone());
-        config.device.cert_path = Some(self.cert_path.clone());
-        config.device.key_path = Some(self.key_path.clone());
+        config.update(DeviceIdSetting, self.id.clone())?;
+        config.update(DeviceCertPathSetting, self.cert_path.clone())?;
+        config.update(DeviceKeyPathSetting, self.key_path.clone())?;
 
         let _ = config.write_to_default_config()?;
 
@@ -543,7 +513,7 @@ impl RemoveCertCmd {
 
     fn update_tedge_config(&self) -> Result<(), CertError> {
         let mut config = TEdgeConfig::from_default_config()?;
-        config.device.id = None;
+        config.unset(DeviceIdSetting)?;
 
         let _ = config.write_to_default_config()?;
 

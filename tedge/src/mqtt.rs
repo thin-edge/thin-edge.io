@@ -5,6 +5,7 @@ use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilte
 use std::process;
 use std::time::Duration;
 use structopt::StructOpt;
+use tedge_config::*;
 use tokio::{io::AsyncWriteExt, select};
 
 const DEFAULT_HOST: &str = "localhost";
@@ -56,10 +57,7 @@ pub enum MqttError {
 }
 
 impl BuildCommand for MqttCmd {
-    fn build_command(
-        self,
-        _config: crate::config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.
         // - see certificate.rs for an example

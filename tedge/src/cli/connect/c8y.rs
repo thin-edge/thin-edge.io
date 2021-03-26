@@ -1,6 +1,4 @@
 use super::*;
-use crate::config::ConfigError;
-use crate::utils::config;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -14,21 +12,16 @@ impl C8y {
     pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         let address = format!(
             "{}:{}",
-            config::parse_user_provided_address(config::get_config_value(&config, C8Y_URL)?)?,
+            config.query(C8yUrlSetting)?.as_str(),
             MQTT_TLS_PORT
         );
 
-        let bridge_root_cert_path = config::get_config_value_or_default(
-            &config,
-            C8Y_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
+        let bridge_root_cert_path =
+            config.query_string_or_default(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH)?;
 
-        let _ = config::update_config_with_value(
-            &mut config,
-            C8Y_ROOT_CERT_PATH,
-            DEFAULT_ROOT_CERT_PATH,
-        )?;
+        let () = config.update(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
+
+        config.write_to_default_config()?;
 
         Ok(BridgeConfig {
             common_mosquitto_config: CommonMosquittoConfig::default(),
@@ -38,10 +31,10 @@ impl C8y {
             address,
             remote_username: None,
             bridge_root_cert_path,
-            remote_clientid: config::get_config_value(&config, DEVICE_ID)?,
+            remote_clientid: config.query_string(DeviceIdSetting)?,
             local_clientid: "Cumulocity".into(),
-            bridge_certfile: config::get_config_value(&config, DEVICE_CERT_PATH)?,
-            bridge_keyfile: config::get_config_value(&config, DEVICE_KEY_PATH)?,
+            bridge_certfile: config.query_string(DeviceCertPathSetting)?,
+            bridge_keyfile: config.query_string(DeviceKeyPathSetting)?,
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,

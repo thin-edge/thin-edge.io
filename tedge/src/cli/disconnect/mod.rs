@@ -2,10 +2,10 @@ use crate::cli::connect::{
     az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME, TEDGE_BRIDGE_CONF_DIR_PATH,
 };
 use crate::command::{BuildCommand, Command, ExecutionContext};
-use crate::config::{ConfigError, TEDGE_HOME_DIR};
 use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use structopt::StructOpt;
+use tedge_config::*;
 
 //const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
 
@@ -18,10 +18,7 @@ pub enum TedgeDisconnectBridgeOpt {
 }
 
 impl BuildCommand for TedgeDisconnectBridgeOpt {
-    fn build_command(
-        self,
-        _tedge_config: crate::config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, _tedge_config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
                 config_file: C8Y_CONFIG_FILENAME.into(),
