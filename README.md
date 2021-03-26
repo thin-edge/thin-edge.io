@@ -91,6 +91,6 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more in
 
 Twitter - [@thin_edge_io](https://twitter.com/thin_edge_io)
 
-Email - [contact_thin_edge_io](mailto:contact_thin_edge_io@softwareag.com)
+Email - [contact_thin_edge_io](mailto:info@thin-edge.io)
 
 Website - [thin-edge.io](https://thin-edge.io)
