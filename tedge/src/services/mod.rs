@@ -27,7 +27,7 @@ pub trait SystemdService {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
-                cmd: "stop",
+                cmd: SystemCtlCmd::Stop.as_str(),
                 hint: "Lacking permissions.",
             })),
             SYSTEMCTL_ERROR_SERVICE_NOT_LOADED => {
@@ -49,7 +49,7 @@ pub trait SystemdService {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
-                cmd: "restart",
+                cmd: SystemCtlCmd::Restart.as_str(),
                 hint: "Lacking permissions or service's process exited with error code.",
             })),
             SYSTEMCTL_ERROR_SERVICE_NOT_FOUND => {
@@ -66,7 +66,7 @@ pub trait SystemdService {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
-                cmd: "enable",
+                cmd: SystemCtlCmd::Enable.as_str(),
                 hint: "Lacking permissions.",
             })),
             code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),
@@ -78,7 +78,7 @@ pub trait SystemdService {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(ServicesError::SystemdError(UnspecificError {
                 service: Self::SERVICE_NAME,
-                cmd: "disable",
+                cmd: SystemCtlCmd::Disable.as_str(),
                 hint: "Lacking permissions.",
             })),
             code => Err(ServicesError::SystemdError(UnhandledReturnCode { code })),

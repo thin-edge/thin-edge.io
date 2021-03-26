@@ -27,12 +27,12 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
-                mapper: true,
+                use_mapper: true,
             },
             TedgeDisconnectBridgeOpt::Az => DisconnectBridge {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
-                mapper: false,
+                use_mapper: false,
             },
         };
         Ok(cmd.into_boxed())
@@ -43,7 +43,7 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
 pub struct DisconnectBridge {
     config_file: String,
     cloud_name: String,
-    mapper: bool,
+    use_mapper: bool,
 }
 
 impl Command for DisconnectBridge {
@@ -68,7 +68,7 @@ impl DisconnectBridge {
         let _ = self.apply_changes_to_mosquitto(user_manager);
 
         // Only C8Y changes the status of tedge-mapper
-        if self.mapper {
+        if self.use_mapper {
             self.stop_and_disable_tedge_mapper(user_manager);
         }
 
