@@ -7,8 +7,6 @@ use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use structopt::StructOpt;
 
-//const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
-
 #[derive(StructOpt, Debug)]
 pub enum TedgeDisconnectBridgeOpt {
     /// Remove bridge connection to Cumulocity.
@@ -56,11 +54,16 @@ impl DisconnectBridge {
     fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
         // Check if bridge exists and stop with code 0 if it doesn't.
 
-        let bridge_conf_path = paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
-            TEDGE_BRIDGE_CONF_DIR_PATH,
-            &self.config_file,
-        ])?;
+        let bridge_conf_path = if UserManager::running_as_root() {
+            "/etc/tedge/bridges".to_owned()
+        } else {
+            paths::build_path_from_home(&[
+                TEDGE_HOME_DIR,
+                TEDGE_BRIDGE_CONF_DIR_PATH,
+                &self.config_file,
+            ])?
+        };
+
         println!("Removing {} bridge.\n", self.cloud_name);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
