@@ -3,11 +3,13 @@ use crate::cli::connect::{
 };
 use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEDGE_HOME_DIR};
-use crate::utils::users::UserManager;
-use crate::utils::{paths, services};
+use crate::services::{
+    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+};
+use crate::utils::paths;
+use crate::utils::users::{UserManager, ROOT_USER};
 use structopt::StructOpt;
-
-//const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+use which::which;
 
 #[derive(StructOpt, Debug)]
 pub enum TedgeDisconnectBridgeOpt {
@@ -26,41 +28,62 @@ impl BuildCommand for TedgeDisconnectBridgeOpt {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
+                use_mapper: true,
             },
             TedgeDisconnectBridgeOpt::Az => DisconnectBridge {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
+                use_mapper: false,
             },
         };
         Ok(cmd.into_boxed())
     }
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Debug)]
 pub struct DisconnectBridge {
     config_file: String,
     cloud_name: String,
+    use_mapper: bool,
 }
 
 impl Command for DisconnectBridge {
     fn description(&self) -> String {
-        format!("execute 'tedge disconnect {}'", self.cloud_name)
+        format!("remove the bridge to disconnect {} cloud", self.cloud_name)
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        Ok(self.stop_bridge(&context.user_manager)?)
+        match self.stop_bridge(&context.user_manager) {
+            Ok(()) | Err(DisconnectBridgeError::BridgeFileDoesNotExist) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
 impl DisconnectBridge {
     fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
-        // Check if bridge exists and stop with code 0 if it doesn't.
+        // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
+        self.remove_bridge_config_file()?;
 
+        // Ignore failure
+        let _ = self.apply_changes_to_mosquitto(user_manager);
+
+        // Only C8Y changes the status of tedge-mapper
+        if self.use_mapper && which("tedge_mapper").is_ok() {
+            self.stop_and_disable_tedge_mapper(user_manager);
+        }
+
+        Ok(())
+    }
+
+    fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
+        // Check if bridge exists and stop with code 0 if it doesn't.
         let bridge_conf_path = paths::build_path_from_home(&[
             TEDGE_HOME_DIR,
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
         ])?;
+
         println!("Removing {} bridge.\n", self.cloud_name);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
@@ -71,26 +94,52 @@ impl DisconnectBridge {
             // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 println!("Bridge doesn't exist. Operation finished!");
-                return Ok(());
+                Err(DisconnectBridgeError::BridgeFileDoesNotExist)
             }
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(
                 e,
                 bridge_conf_path,
             )),
-        }?;
-
-        // Deviation from specification:
-        // * Check if mosquitto is running, restart only if it was active before, if not don't do anything.
-        println!("Applying changes to mosquitto.\n");
-        if services::check_mosquitto_is_running()? {
-            services::mosquitto_restart_daemon(user_manager)?;
         }
+    }
 
-        println!("{} Bridge successfully disconnected!", self.cloud_name);
+    // Deviation from specification:
+    // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
+    fn apply_changes_to_mosquitto(
+        &self,
+        user_manager: &UserManager,
+    ) -> Result<(), DisconnectBridgeError> {
+        println!("Applying changes to mosquitto.\n");
+        if MosquittoService.is_active()? {
+            MosquittoService.restart(user_manager)?;
+            println!("{} Bridge successfully disconnected!\n", self.cloud_name);
+        }
         Ok(())
     }
+
+    fn stop_and_disable_tedge_mapper(&self, user_manager: &UserManager) {
+        let _root_guard = user_manager.become_user(ROOT_USER);
+        let mut failed = false;
+
+        println!("Stopping tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.stop(user_manager) {
+            println!("Failed to stop tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        println!("Disabling tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.disable(user_manager) {
+            println!("Failed to disable tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        if !failed {
+            println!("tedge-mapper service successfully stopped and disabled!\n");
+        }
+    }
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum DisconnectBridgeError {
     #[error(transparent)]
@@ -107,4 +156,7 @@ pub enum DisconnectBridgeError {
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
+
+    #[error("Bridge file does not exist.")]
+    BridgeFileDoesNotExist,
 }
