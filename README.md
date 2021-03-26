@@ -66,7 +66,7 @@ These are the systems that we currently test on. This does not mean that thin-ed
 <!-- ROADMAP -->
 # Roadmap
 
-See the [open issues](hhttps://github.com/thin-edge/thin-edge.io/issues) for a list of proposed features (and known issues).
+See the [open issues](https://github.com/thin-edge/thin-edge.io/issues) for a list of proposed features (and known issues).
 <br/>
 <br/>
 

@@ -2,7 +2,7 @@
 name = "tedge"
 version = "0.1.0"
 edition = "2018"
-authors = ["Software AG <thin-edge-team@softwareag.com>"]
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "tedge is the cli tool for thin-edge.io"
