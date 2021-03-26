@@ -17,10 +17,19 @@ if ! getent passwd tedge > /dev/null; then
 fi
 
 ### Create folders
-install -g tedge -o tedge -m 750 -d /etc/tedge
+install -g tedge -o tedge -m 755 -d /etc/tedge
+install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
+install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
 
-# Create file in /etc/sudoers.d directory
+### Add include to mosquitto.conf so tedge specific conf will be loaded
+echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
+
+### Create file in /etc/sudoers.d directory
 echo "%tedge-users   ALL = (ALL) /usr/bin/tedge" > /etc/sudoers.d/tedge-users
+
+if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+    echo "%tedge-users   ALL = (ALL) NOPASSWD: /usr/bin/tedge" > /etc/sudoers.d/tedge-users-nopasswd
+fi
 
 ### Below are automatically created script parts by cargo deb (Search for cargo deb DEBHELPER)
 #DEBHELPER#
