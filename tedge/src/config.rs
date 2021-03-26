@@ -1,6 +1,6 @@
 use crate::{
     command::{BuildCommand, Command, ExecutionContext},
-    utils::users::UserManager,
+    utils::{paths, users::UserManager},
 };
 use crate::{config::ConfigError::InvalidCharacterInDirectoryPath, utils};
 use serde::{Deserialize, Serialize};
@@ -488,6 +488,9 @@ pub enum ConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
+    #[error(transparent)]
+    PathsError(#[from] paths::PathsError),
+
     #[error("Invalid characters found in directory path")]
     InvalidCharacterInDirectoryPath,
 
@@ -508,17 +511,9 @@ pub enum ConfigError {
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    if UserManager::running_as_root() {
-        Ok(PathBuf::from_str(ETC_PATH)
-            .expect("Path conversion failed unexpectedly!") // This is Infallible that means it should never happen.
-            .join(TEDGE_ETC_DIR)
-            .join(TEDGE_CONFIG_FILE))
-    } else {
-        Ok(utils::paths::home_dir()
-            .ok_or(InvalidCharacterInDirectoryPath)?
-            .join(TEDGE_HOME_DIR)
-            .join(TEDGE_CONFIG_FILE))
-    }
+    Ok(paths::build_path_for_sudo_or_user_as_path(&[
+        TEDGE_CONFIG_FILE,
+    ])?)
 }
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {

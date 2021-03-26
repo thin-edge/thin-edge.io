@@ -2,7 +2,7 @@ use crate::cli::connect::{
     az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME, TEDGE_BRIDGE_CONF_DIR_PATH,
 };
 use crate::command::{BuildCommand, Command, ExecutionContext};
-use crate::config::{ConfigError, TEDGE_HOME_DIR};
+use crate::config::ConfigError;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, services};
 use structopt::StructOpt;
@@ -54,15 +54,8 @@ impl DisconnectBridge {
     fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
         // Check if bridge exists and stop with code 0 if it doesn't.
 
-        let bridge_conf_path = if UserManager::running_as_root() {
-            format!("/etc/tedge/mosquitto-conf/{}", &self.config_file,)
-        } else {
-            paths::build_path_from_home(&[
-                TEDGE_HOME_DIR,
-                TEDGE_BRIDGE_CONF_DIR_PATH,
-                &self.config_file,
-            ])?
-        };
+        let bridge_conf_path =
+            paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH, &self.config_file])?;
 
         println!("Removing {} bridge.\n", self.cloud_name);
         match std::fs::remove_file(&bridge_conf_path) {
