@@ -2,10 +2,16 @@ use std::{
     ffi::OsString,
     fs::File,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
-use crate::utils::paths::PathsError::RelativePathNotPermitted;
 use tempfile::{NamedTempFile, PersistError};
+
+use super::users::UserManager;
+
+const ETC_PATH: &str = "/etc";
+pub const TEDGE_ETC_DIR: &str = "tedge";
+pub const TEDGE_HOME_DIR: &str = ".tedge";
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
@@ -37,8 +43,8 @@ pub enum PathsError {
     RelativePathNotPermitted { path: OsString },
 }
 
-pub fn build_path_from_home<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
-    build_path_from_home_as_path(paths).and_then(pathbuf_to_string)
+pub fn build_path_for_sudo_or_user<T: AsRef<Path>>(paths: &[T]) -> Result<String, PathsError> {
+    build_path_for_sudo_or_user_as_path(paths).and_then(pathbuf_to_string)
 }
 
 pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
@@ -61,13 +67,21 @@ pub fn persist_tempfile(file: NamedTempFile, path_to: &str) -> Result<(), PathsE
     Ok(())
 }
 
-fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, PathsError> {
-    let home_dir = home_dir().ok_or(PathsError::HomeDirNotFound)?;
+pub fn build_path_for_sudo_or_user_as_path<T: AsRef<Path>>(
+    paths: &[T],
+) -> Result<PathBuf, PathsError> {
+    let mut final_path: PathBuf = if UserManager::running_as_root() {
+        PathBuf::from_str(ETC_PATH).unwrap().join(TEDGE_ETC_DIR)
+    } else {
+        home_dir()
+            .ok_or(PathsError::HomeDirNotFound)?
+            .join(TEDGE_HOME_DIR)
+    };
 
-    let mut final_path: PathBuf = home_dir;
     for path in paths {
         final_path.push(path);
     }
+
     Ok(final_path)
 }
 
@@ -76,7 +90,7 @@ fn build_path_from_home_as_path<T: AsRef<Path>>(paths: &[T]) -> Result<PathBuf, 
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
 // Another alternative is to use deprecated env::home_dir() -1
 // https://github.com/rust-lang/rust/issues/71684
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .and_then(|home| if home.is_empty() { None } else { Some(home) })
         .map(PathBuf::from)
@@ -101,7 +115,7 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
 
 pub fn validate_parent_dir_exists(path: &Path) -> Result<(), PathsError> {
     if path.is_relative() {
-        Err(RelativePathNotPermitted { path: path.into() })
+        Err(PathsError::RelativePathNotPermitted { path: path.into() })
     } else {
         match path.parent() {
             None => Err(PathsError::ParentDirNotFound { path: path.into() }),

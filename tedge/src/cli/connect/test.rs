@@ -93,20 +93,18 @@ use x509_parser::nom::lib::std::collections::HashSet;
 #[test]
 fn bridge_config_c8y_create() {
     let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-            [c8y]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
-
-    let config_file = temp_file_with_content(toml_config);
+        [c8y]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
+    let config_file = temp_file_with_content(&toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = C8y::c8y_bridge_config(config).unwrap();
+    let bridge = C8y::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         cloud_name: "c8y".into(),
@@ -257,20 +255,19 @@ bridge_attempt_unsubscribe false
 #[test]
 fn bridge_config_azure_create() {
     let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-            [azure]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
+        [azure]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
 
     let config_file = temp_file_with_content(toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = Azure::azure_bridge_config(config).unwrap();
+    let bridge = Azure::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         cloud_name: "az".into(),
