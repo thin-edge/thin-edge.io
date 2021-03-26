@@ -1,4 +1,4 @@
-use std::os::linux::fs::MetadataExt;
+use std::os::unix::fs::MetadataExt;
 
 fn command_as_root<I, S>(
     home_dir: &str,
@@ -72,45 +72,37 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
 
     assert_eq!(
         "mosquitto",
-        users::get_user_by_uid(cert_metadata.st_uid())
-            .unwrap()
-            .name()
+        users::get_user_by_uid(cert_metadata.uid()).unwrap().name()
     );
     assert_eq!(
         "mosquitto",
-        users::get_group_by_gid(cert_metadata.st_gid())
-            .unwrap()
-            .name()
+        users::get_group_by_gid(cert_metadata.gid()).unwrap().name()
     );
-    assert_eq!(0o444, extract_mode(cert_metadata.st_mode()));
+    assert_eq!(0o444, extract_mode(cert_metadata.mode()));
 
     assert_eq!(
         "mosquitto",
-        users::get_user_by_uid(key_metadata.st_uid())
-            .unwrap()
-            .name()
+        users::get_user_by_uid(key_metadata.uid()).unwrap().name()
     );
     assert_eq!(
         "mosquitto",
-        users::get_group_by_gid(key_metadata.st_gid())
-            .unwrap()
-            .name()
+        users::get_group_by_gid(key_metadata.gid()).unwrap().name()
     );
-    assert_eq!(0o400, extract_mode(key_metadata.st_mode()));
+    assert_eq!(0o400, extract_mode(key_metadata.mode()));
 
     assert_eq!(
         "tedge",
-        users::get_user_by_uid(config_metadata.st_uid())
+        users::get_user_by_uid(config_metadata.uid())
             .unwrap()
             .name()
     );
     assert_eq!(
         "tedge",
-        users::get_group_by_gid(config_metadata.st_gid())
+        users::get_group_by_gid(config_metadata.gid())
             .unwrap()
             .name()
     );
-    assert_eq!(0o600, extract_mode(config_metadata.st_mode()));
+    assert_eq!(0o600, extract_mode(config_metadata.mode()));
 
     Ok(())
 }

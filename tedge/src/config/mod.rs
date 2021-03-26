@@ -129,61 +129,9 @@ impl TEdgeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{settings::*, types::*};
     use assert_matches::assert_matches;
-
-    #[test]
-    fn test_macro_creates_valid_keys_correctly() {
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
-    }
-
-    #[test]
-    fn test_macro_creates_valid_writable_keys_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.id"),
-            false
-        );
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.cert.path"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_get_key_properties_correctly() {
-        assert_eq!(
-            TEdgeConfig::get_key_properties("device.id").unwrap().mode,
-            ConfigKeyMode::ReadOnly
-        );
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url").unwrap().mode,
-            ConfigKeyMode::ReadWrite
-        );
-        let c8y_url_description =
-            "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url")
-                .unwrap()
-                .description,
-            c8y_url_description
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_get_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_get().contains("device.id"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_set_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_set().contains("device.id"),
-            false
-        );
-    }
+    use std::convert::TryFrom;
 
     #[test]
     fn test_parse_config_with_all_values() {
@@ -211,10 +159,16 @@ connect = "false"
         assert_eq!(config.device.key_path.unwrap(), "/path/to/key");
         assert_eq!(config.device.cert_path.unwrap(), "/path/to/cert");
 
-        assert_eq!(config.c8y.url.unwrap(), "your-tenant.cumulocity.com");
+        assert_eq!(
+            config.c8y.url.unwrap().as_str(),
+            "your-tenant.cumulocity.com"
+        );
         assert_eq!(config.c8y.root_cert_path.unwrap(), "/path/to/c8y/root/cert");
 
-        assert_eq!(config.azure.url.unwrap(), "MyAzure.azure-devices.net");
+        assert_eq!(
+            config.azure.url.unwrap().as_str(),
+            "MyAzure.azure-devices.net"
+        );
         assert_eq!(
             config.azure.root_cert_path.unwrap(),
             "/path/to/azure/root/cert"
@@ -247,7 +201,7 @@ root_cert_path = "/path/to/azure/root/cert"
         assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
 
         assert_eq!(
-            config.c8y.url.as_ref().unwrap(),
+            config.c8y.url.as_ref().unwrap().as_str(),
             "your-tenant.cumulocity.com"
         );
         assert_eq!(
@@ -256,7 +210,7 @@ root_cert_path = "/path/to/azure/root/cert"
         );
 
         assert_eq!(
-            config.azure.url.as_ref().unwrap(),
+            config.azure.url.as_ref().unwrap().as_str(),
             "MyAzure.azure-devices.net"
         );
         assert_eq!(
@@ -269,9 +223,9 @@ root_cert_path = "/path/to/azure/root/cert"
         let updated_azure_url = "OtherAzure.azure-devices.net";
 
         config.device.id = Some(updated_device_id.to_string());
-        config.c8y.url = Some(updated_c8y_url.to_string());
+        config.c8y.url = Some(ConnectUrl::try_from(updated_c8y_url.to_string()).unwrap());
         config.c8y.root_cert_path = None;
-        config.azure.url = Some(updated_azure_url.to_string());
+        config.azure.url = Some(ConnectUrl::try_from(updated_azure_url.to_string()).unwrap());
         config.azure.root_cert_path = None;
 
         config
@@ -283,10 +237,13 @@ root_cert_path = "/path/to/azure/root/cert"
         assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
         assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
 
-        assert_eq!(config.c8y.url.as_ref().unwrap(), updated_c8y_url);
+        assert_eq!(config.c8y.url.as_ref().unwrap().as_str(), updated_c8y_url);
         assert!(config.c8y.root_cert_path.is_none());
 
-        assert_eq!(config.azure.url.as_ref().unwrap(), updated_azure_url);
+        assert_eq!(
+            config.azure.url.as_ref().unwrap().as_str(),
+            updated_azure_url
+        );
         assert!(config.azure.root_cert_path.is_none());
     }
 
@@ -348,7 +305,10 @@ url = "your-tenant.cumulocity.com"
         let config_file = temp_file_with_content(toml_conf);
         let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
-        assert_eq!(config.c8y.url.unwrap(), "your-tenant.cumulocity.com");
+        assert_eq!(
+            config.c8y.url.unwrap().as_str(),
+            "your-tenant.cumulocity.com"
+        );
 
         assert!(config.device.id.is_none());
         assert_eq!(
@@ -423,35 +383,6 @@ hello="tedge"
     }
 
     #[test]
-    fn test_set_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
-        assert_matches!(
-            config
-                .set_config_value("invalid.key", "dummy-value".into())
-                .unwrap_err(),
-            ConfigError::InvalidConfigKey { .. }
-        );
-    }
-
-    #[test]
-    fn test_get_config_key_invalid_key() {
-        let config = TEdgeConfig::from_default_config().unwrap();
-        assert_matches!(
-            config.get_config_value("invalid.key").unwrap_err(),
-            ConfigError::InvalidConfigKey { .. }
-        );
-    }
-
-    #[test]
-    fn test_unset_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
-        assert_matches!(
-            config.unset_config_value("invalid.key").unwrap_err(),
-            ConfigError::InvalidConfigKey { .. }
-        );
-    }
-
-    #[test]
     fn test_crud_config_value() {
         let toml_conf = r#"
 [device]
@@ -475,64 +406,58 @@ root_cert_path = "/path/to/azure/root/cert"
         let original_device_key_path = "/path/to/key".to_string();
         let original_device_cert_path = "/path/to/cert".to_string();
         assert_eq!(
-            config.get_config_value(DEVICE_ID).unwrap().unwrap(),
+            DeviceIdSetting.get_string(&config).unwrap(),
             original_device_id
         );
         assert_eq!(
-            config.get_config_value(DEVICE_KEY_PATH).unwrap().unwrap(),
+            DeviceKeyPathSetting.get_string(&config).unwrap(),
             original_device_key_path
         );
         assert_eq!(
-            config.get_config_value(DEVICE_CERT_PATH).unwrap().unwrap(),
+            DeviceCertPathSetting.get_string(&config).unwrap(),
             original_device_cert_path
         );
 
         let original_c8y_url = "your-tenant.cumulocity.com".to_string();
         let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
         assert_eq!(
-            config.get_config_value(C8Y_URL).unwrap().unwrap(),
+            C8yUrlSetting.get(&config).unwrap().as_str(),
             original_c8y_url
         );
         assert_eq!(
-            config
-                .get_config_value(C8Y_ROOT_CERT_PATH)
-                .unwrap()
-                .unwrap(),
+            C8yRootCertPathSetting.get_string(&config).unwrap(),
             original_c8y_root_cert_path
         );
 
-        let updated_device_id = "XYZ1234".to_string();
+        // let updated_device_id = "XYZ1234".to_string();
         let updated_c8y_url = "other-tenant.cumulocity.com".to_string();
 
-        config
-            .set_config_value(DEVICE_ID, updated_device_id.clone())
+        // DeviceIdSetting.set_string(&mut config, updated_device_id.clone()).unwrap();
+        C8yUrlSetting
+            .set_string(&mut config, updated_c8y_url.clone())
             .unwrap();
-        config
-            .set_config_value(C8Y_URL, updated_c8y_url.clone())
-            .unwrap();
-        config.unset_config_value(C8Y_ROOT_CERT_PATH).unwrap();
+        C8yRootCertPathSetting.unset(&mut config).unwrap();
 
+        /*
         assert_eq!(
             config.get_config_value(DEVICE_ID).unwrap().unwrap(),
             updated_device_id
         );
+        */
         assert_eq!(
-            config.get_config_value(DEVICE_KEY_PATH).unwrap().unwrap(),
+            DeviceKeyPathSetting.get_string(&config).unwrap(),
             original_device_key_path
         );
         assert_eq!(
-            config.get_config_value(DEVICE_CERT_PATH).unwrap().unwrap(),
+            DeviceCertPathSetting.get_string(&config).unwrap(),
             original_device_cert_path
         );
 
         assert_eq!(
-            config.get_config_value(C8Y_URL).unwrap().unwrap(),
+            C8yUrlSetting.get(&config).unwrap().as_str(),
             updated_c8y_url
         );
-        assert!(config
-            .get_config_value(C8Y_ROOT_CERT_PATH)
-            .unwrap()
-            .is_none());
+        assert!(C8yRootCertPathSetting.get_string(&config).is_err());
     }
 
     #[test]
@@ -560,33 +485,27 @@ root_cert_path = "/path/to/azure/root/cert"
 
         // read
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            AzureUrlSetting.get(&config).unwrap().as_str(),
             original_azure_url
         );
         assert_eq!(
-            config
-                .get_config_value(AZURE_ROOT_CERT_PATH)
-                .unwrap()
-                .unwrap(),
+            AzureRootCertPathSetting.get_string(&config).unwrap(),
             original_azure_root_cert_path
         );
 
         // set
         let updated_azure_url = "OtherAzure.azure-devices.net".to_string();
-        config
-            .set_config_value(AZURE_URL, updated_azure_url.clone())
+        AzureUrlSetting
+            .set_string(&mut config, updated_azure_url.clone())
             .unwrap();
         assert_eq!(
-            config.get_config_value(AZURE_URL).unwrap().unwrap(),
+            AzureUrlSetting.get(&config).unwrap().as_str(),
             updated_azure_url
         );
 
         // unset
-        config.unset_config_value(AZURE_ROOT_CERT_PATH).unwrap();
-        assert!(config
-            .get_config_value(AZURE_ROOT_CERT_PATH)
-            .unwrap()
-            .is_none());
+        AzureRootCertPathSetting.unset(&mut config).unwrap();
+        assert!(AzureRootCertPathSetting.get_string(&config).is_err());
     }
 
     fn temp_file_with_content(content: &str) -> NamedTempFile {
