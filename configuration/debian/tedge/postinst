@@ -17,7 +17,7 @@ if ! getent passwd tedge > /dev/null; then
 fi
 
 ### Create folders
-install -g tedge -o tedge -m 750 -d /etc/tedge
+install -g tedge -o tedge -m 755 -d /etc/tedge
 install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
 install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
 
