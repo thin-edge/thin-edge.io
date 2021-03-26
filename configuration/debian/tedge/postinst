@@ -21,12 +21,6 @@ install -g tedge -o tedge -m 755 -d /etc/tedge
 install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
 install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
 
-
-if  grep -q "$STRING" "$FILE" ; then
-         echo 'the string exists' ; 
-else
-         echo 'the string does not exist' ; 
-fi
 ### Add include to mosquitto.conf so tedge specific conf will be loaded
 if ! grep -q "/etc/tedge/mosquitto-conf" "/etc/mosquitto/mosquitto.conf" ;
 then
