@@ -361,9 +361,7 @@ fn serialize() {
     println!("{:?}", config_set);
     let mut expected = HashSet::new();
 
-    expected.insert("bind_address 127.0.0.1");
     expected.insert("connection_messages true");
-
     expected.insert("log_type error");
     expected.insert("log_type warning");
     expected.insert("log_type notice");

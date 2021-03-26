@@ -92,7 +92,6 @@ impl BridgeCommand {
 #[derive(Debug, PartialEq)]
 struct CommonMosquittoConfig {
     config_file: String,
-    bind_address: String,
     connection_messages: bool,
     log_types: Vec<String>,
 }
@@ -101,7 +100,6 @@ impl Default for CommonMosquittoConfig {
     fn default() -> Self {
         CommonMosquittoConfig {
             config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
-            bind_address: "127.0.0.1".into(),
             connection_messages: true,
             log_types: vec![
                 "error".into(),
@@ -232,11 +230,6 @@ impl BridgeConfig {
     }
 
     fn serialize_common_config<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writeln!(
-            writer,
-            "bind_address {}",
-            self.common_mosquitto_config.bind_address
-        )?;
         writeln!(
             writer,
             "connection_messages {}",
