@@ -292,7 +292,6 @@ impl BridgeConfig {
     }
 
     fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
-        println!("{:?}", &self.config_file);
         Ok(paths::build_path_for_sudo_or_user(&[
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
