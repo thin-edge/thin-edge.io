@@ -1,7 +1,7 @@
 # Reference Guides
 The Thin-Edge command-line interface (tedge CLI) is a set of commands used to create and manage Thin-Edge resources.
 
-Following section show the `tedge cli` options.
+Following sections show the tedge sub commands.
 
 * [`tegde` command](../references/tedge.md)
 * [`tedge cert` command](../references/tedge-cert.md)
