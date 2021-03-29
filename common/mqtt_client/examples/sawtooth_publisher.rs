@@ -42,7 +42,6 @@ const C8Y_TEMPLATE_RESTART: &str = "510";
 // cargo run --example sawtooth_publisher 100 100 100 flux
 // cargo run --example sawtooth_publisher 1000 10 10 sawmill
 
-
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
