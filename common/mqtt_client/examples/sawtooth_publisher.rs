@@ -39,22 +39,16 @@ const C8Y_TEMPLATE_RESTART: &str = "510";
 
 // sawtooth_publisher <wait_time_ms> <height> <iterations> <template>
 //
-// cargo run --example sawtooth_publisher 100 9 2 210
-// cargo run --example sawtooth_publisher 100 9 2 211
-// cargo run --example sawtooth_publisher 100 9 2 212
-// cargo run --example sawtooth_publisher 100 9 2 200,value_a,T
-// cargo run --example sawtooth_publisher 100 9 2 200,value_b,T
+// cargo run --example sawtooth_publisher 100 100 100 flux
+// cargo run --example sawtooth_publisher 1000 10 10 sawmill
 
-// c8y Thin Edge Json Template:
-// '{ "pressure": 250 }'
-// '{ "Skromet_1": 23, "Skromet_2": 24, "Skromet_3": 25, "Skromet_4": 99, "Skromet_5": 88}'
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     // wait time, template, tooth-height,
     if args.len() != 5 {
-        println!("Usage: sawtooth_publisher <wait_time_ms> <height> <iterations> <template>");
+        println!("Usage: sawtooth_publisher <wait_time_ms> <height> <iterations> <template: sawmill|flux>");
         panic!("Errof: Not enough Command line Arguments");
     }
     let wait: i32 = args[1].parse().expect("Cannot parse wait time");
@@ -85,7 +79,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = Instant::now();
 
-    tokio::spawn(publish_topic(mqtt, c8y_msg, wait, height, iterations));
+    if template == "flux" {
+        tokio::spawn(publish_topic(mqtt, c8y_msg, wait, height, iterations));
+    } else if template == "sawmill" {
+        tokio::spawn(publish_multi_topic(mqtt, c8y_msg, wait, height, iterations));
+    } else {
+        println!("Wrong template");
+        panic!("Exiting");
+    };
 
     select! {
         _ = listen_command(commands).fuse() => (),
@@ -128,6 +129,46 @@ async fn publish_topic(
             debug!("{}", payload);
 
             mqtt.publish(Message::new(&c8y_msg, payload)).await?;
+            Delay::new(Duration::from_millis(u64::try_from(wait).unwrap())).await;
+            std::io::stdout().flush().expect("Flush failed");
+        }
+        println!("Iteraton: {}", iteration);
+    }
+    println!();
+
+    mqtt.disconnect().await?;
+    Ok(())
+}
+
+async fn publish_multi_topic(
+    mqtt: Client,
+    c8y_msg: Topic,
+    wait: i32,
+    height: i32,
+    iterations: i32,
+) -> Result<(), mqtt_client::Error> {
+    info!("Publishing temperature measurements");
+    println!();
+    let series_name = "\"Sawmill [S]\"";
+    let series_count = 10;
+    for iteration in 0..iterations {
+        for value in 0..height {
+            let mut series: String = String::new();
+            for s in 0..series_count {
+                series += &format!(
+                    "\"saw_{}\": {} ,",
+                    s,
+                    (value + s * height / series_count) % height
+                );
+            }
+            let seriesx = &series.trim_end_matches(',');
+
+            let payload = format!("{{ {}: {{ {} }} }}", series_name, seriesx);
+            debug!("{} ", value);
+            debug!("{}", payload);
+
+            mqtt.publish(Message::new(&c8y_msg, payload)).await?;
+
             Delay::new(Duration::from_millis(u64::try_from(wait).unwrap())).await;
             std::io::stdout().flush().expect("Flush failed");
         }
