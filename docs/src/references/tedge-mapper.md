@@ -4,7 +4,7 @@ This document lists the mqtt topics that are supported by the thin-edge.
 
 ## Thin Edge JSON Mqtt Topics
  To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on 
- **/tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and sends
+ **tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and sends
  them to the specific destination cloud.
  
 ## Cumulocity Mqtt Topics
@@ -26,16 +26,17 @@ direction
    t = template  
    cr = credentials  
 
-                                                   
+   ### SmartREST2 topics
+   All Cumulocity topics have been prefixed with c8y/.  
    * Registration topics  
-     c8y/s/dcr  - Subscribe to registration topic    
-     c8y/s/ucr  - Publish registration topic  
+     c8y/s/dcr     
+     c8y/s/ucr    
  
-   * Templates topics   
+   * Creating template topics   
      c8y/s/dt   
      c8y/s/ut/#  
 
-  * Static templates    
+   * Static templates    
     c8y/s/us    
     c8y/t/us   
     c8y/q/us  
@@ -43,25 +44,24 @@ direction
     c8y/s/ds  
     c8y/s/os  
 
-  * Debug topics  
+   * Debug topics  
     c8y/s/e  
 
-  * SmartRest2 topics  
+   * Custom template topics  
     c8y/s/uc/#   
     c8y/t/uc/#  
     c8y/q/uc/#   
     c8y/c/uc/#   
     c8y/s/dc/#  
-    c8ys/oc/#  
-
- * c8y JSON topics  
+    
+ ### C8Y JSON topics  
     c8y/measurement/measurements/create  
     c8y/error  
 
 ## Azure Mqtt Topics  
 To send or to receive the messages from a Thin Edge device to Azure cloud over mqtt, clients should use the below topics.  
 
- * az/messages/events/  - Use this topic to send the messages from device to cloud.    
+ * az/messages/events/  - Use this topic to send the messages device to cloud.    
  * az/messages/devicebound/# - Use this topic to subscribe for the messages that were sent from cloud to device.     
  
  The Azure mqtt topics look as below  
