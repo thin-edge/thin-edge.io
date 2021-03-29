@@ -8,5 +8,5 @@ Following section show the `tedge cli` options.
 * [`tedge config` command](../references/tedge-config.md)
 * [`tedge connect` command](../references/tedge-connect.md)
 * [`tedge disconnect` command](../references/tedge-disconnect.md)
-* [`tedge mapper` daemon](../references/tedge-mapper.md)
+* [`tedge_mapper` daemon](../references/tedge-mapper.md)
 * [`tedge mqtt` command](../references/tedge-mqtt.md)
