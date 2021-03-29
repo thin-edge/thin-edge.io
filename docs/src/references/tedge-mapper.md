@@ -1,6 +1,6 @@
 # The `tedge-mapper` daemon
 
-This document lists the mqtt topics that are supported by the thin-edge.
+This document lists the mqtt topics that are supported by the thin-edge.io.
 
 ## Thin Edge JSON Mqtt Topics
  To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on   
