@@ -1,5 +1,5 @@
 # The `tedge cert` command
-The `tedge cert` command is used to create and manage device certificate.
+The `tedge cert` command is used to create and manage device certificates.
 
 ```
 tedge-cert 0.1.0
