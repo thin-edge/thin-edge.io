@@ -8,5 +8,7 @@ Following sections show the tedge sub commands.
 * [`tedge config` command](../references/tedge-config.md)
 * [`tedge connect` command](../references/tedge-connect.md)
 * [`tedge disconnect` command](../references/tedge-disconnect.md)
-* [`tedge_mapper` daemon](../references/tedge-mapper.md)
 * [`tedge mqtt` command](../references/tedge-mqtt.md)
+
+
+* [`Bridged Topics` daemon](../references/bridged-topics.md)

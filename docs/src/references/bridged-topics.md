@@ -1,4 +1,4 @@
-# The `tedge-mapper` daemon
+# The `bridged-topics`
 
 This document lists the mqtt topics that are supported by the thin-edge.io.
 

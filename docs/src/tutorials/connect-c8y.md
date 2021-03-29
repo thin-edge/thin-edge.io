@@ -121,5 +121,5 @@ You should observe a "temperature measurement" graph with the new data point.
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from Cumulocity](../references/tedge-mapper.md)
+* or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md)
   if you prefer to use directly Cumulocity specific formats and protocols.
