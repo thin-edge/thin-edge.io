@@ -358,10 +358,11 @@ fn serialize() {
         .lines()
         .filter(|str| !str.is_empty() && !str.starts_with('#'))
         .collect();
-    println!("{:?}", config_set);
     let mut expected = HashSet::new();
 
+    expected.insert("bind_interface lo");
     expected.insert("connection_messages true");
+
     expected.insert("log_type error");
     expected.insert("log_type warning");
     expected.insert("log_type notice");
