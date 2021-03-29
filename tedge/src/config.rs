@@ -472,7 +472,7 @@ pub enum ConfigError {
     )]
     ConfigNotSet { key: String },
 
-    #[error(r#"device.id can be set with 'tedge cert create --device-id <value>'"#)]
+    #[error(r#"A value for `device.id` is missing. It can be set with 'tedge cert create --device-id <value>'"#)]
     DeviceIdNotSet,
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
