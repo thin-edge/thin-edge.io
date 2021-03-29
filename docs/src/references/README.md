@@ -11,4 +11,4 @@ Following sections show the tedge sub commands.
 * [`tedge mqtt` command](../references/tedge-mqtt.md)
 
 
-* [`Bridged Topics` daemon](../references/bridged-topics.md)
+* [`Bridged Topics`](../references/bridged-topics.md)
