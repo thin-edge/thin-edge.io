@@ -17,6 +17,7 @@ fn default_bridge_config() -> BridgeConfig {
         bridge_keyfile: "".into(),
         remote_clientid: "".into(),
         local_clientid: "".into(),
+        use_mapper: true,
         try_private: false,
         start_type: "automatic".into(),
         clean_session: true,
@@ -92,20 +93,18 @@ use x509_parser::nom::lib::std::collections::HashSet;
 #[test]
 fn bridge_config_c8y_create() {
     let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-            [c8y]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
-
-    let config_file = temp_file_with_content(toml_config);
+        [c8y]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
+    let config_file = temp_file_with_content(&toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = C8y::c8y_bridge_config(config).unwrap();
+    let bridge = C8y::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         cloud_name: "c8y".into(),
@@ -118,6 +117,7 @@ fn bridge_config_c8y_create() {
         local_clientid: "Cumulocity".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: true,
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),
@@ -167,6 +167,7 @@ fn bridge_config_serialize_with_cafile_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: false,
         topics: vec![],
         ..default_bridge_config()
     };
@@ -217,6 +218,7 @@ fn bridge_config_serialize_with_capath_correctly() {
         local_clientid: "test".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: false,
         topics: vec![],
         ..default_bridge_config()
     };
@@ -253,20 +255,19 @@ bridge_attempt_unsubscribe false
 #[test]
 fn bridge_config_azure_create() {
     let toml_config = r#"
-            [device]
-            id = "alpha"
-            cert_path = "./test-certificate.pem"
-            key_path = "./test-private-key.pem"
+        [device]
+        id = "alpha"
+        cert_path = "./test-certificate.pem"
+        key_path = "./test-private-key.pem"
 
-            [azure]
-            url = "test.test.io"
-            root_cert_path = "./test_root.pem"
-            connect = "true"
-            "#;
+        [azure]
+        url = "test.test.io"
+        root_cert_path = "./test_root.pem"
+        "#;
 
     let config_file = temp_file_with_content(toml_config);
     let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-    let bridge = Azure::azure_bridge_config(config).unwrap();
+    let bridge = Azure::new_config(&config).unwrap();
 
     let expected = BridgeConfig {
         cloud_name: "az".into(),
@@ -279,6 +280,7 @@ fn bridge_config_azure_create() {
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
@@ -306,6 +308,7 @@ fn serialize() {
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),

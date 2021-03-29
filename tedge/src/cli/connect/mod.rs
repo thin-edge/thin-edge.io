@@ -1,27 +1,30 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
 use crate::command::{BuildCommand, Command, ExecutionContext};
 use crate::config::{ConfigError, TEdgeConfig};
-
+use crate::services::{
+    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+};
+use crate::utils::paths;
 use crate::utils::users::UserManager;
-use crate::utils::{paths, services};
 use std::path::Path;
 use structopt::StructOpt;
 use tempfile::{NamedTempFile, PersistError};
 use url::Url;
+use which::which;
 
 pub mod az;
 pub mod c8y;
 
 use crate::config::{
     AZURE_ROOT_CERT_PATH, AZURE_URL, C8Y_ROOT_CERT_PATH, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID,
-    DEVICE_KEY_PATH, TEDGE_HOME_DIR,
+    DEVICE_KEY_PATH,
 };
 
 pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
-pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";
+pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 
 #[derive(StructOpt, Debug, PartialEq)]
@@ -125,6 +128,7 @@ pub struct BridgeConfig {
     local_clientid: String,
     bridge_certfile: String,
     bridge_keyfile: String,
+    use_mapper: bool,
     try_private: bool,
     start_type: String,
     clean_session: bool,
@@ -139,8 +143,8 @@ trait CheckConnection {
 
 impl BridgeConfig {
     fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
-        println!("Checking if systemd and mosquitto are available.\n");
-        let _ = services::all_services_available()?;
+        println!("Checking if systemd is available.\n");
+        let _ = services::systemd_available()?;
 
         println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.bridge_config_exists()?;
@@ -155,7 +159,8 @@ impl BridgeConfig {
             return Err(err);
         }
         println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
-        if let Err(err) = services::mosquitto_restart_daemon(user_manager) {
+
+        if let Err(err) = MosquittoService.restart(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
@@ -168,12 +173,22 @@ impl BridgeConfig {
         ));
 
         println!("Persisting mosquitto on reboot.\n");
-        if let Err(err) = services::mosquitto_enable_daemon(user_manager) {
+        if let Err(err) = MosquittoService.enable(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
 
-        println!("Successfully created bridge connection!");
+        println!("Successfully created bridge connection!\n");
+
+        if self.use_mapper {
+            println!("Checking if tedge-mapper is installed.\n");
+
+            if which("tedge_mapper").is_err() {
+                println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            } else {
+                self.start_and_enable_tedge_mapper(user_manager);
+            }
+        }
 
         Ok(())
     }
@@ -182,7 +197,7 @@ impl BridgeConfig {
     // (don't use '?' with the call to this function to preserve original error).
     fn clean_up(&self) -> Result<(), ConnectError> {
         let path = self.get_bridge_config_file_path()?;
-        let _ = std::fs::remove_file(&path).or_else(services::ok_if_not_found)?;
+        let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
         Ok(())
     }
 
@@ -197,7 +212,7 @@ impl BridgeConfig {
     }
 
     fn write_bridge_config_to_file(&self) -> Result<(), ConnectError> {
-        let dir_path = paths::build_path_from_home(&[TEDGE_HOME_DIR, TEDGE_BRIDGE_CONF_DIR_PATH])?;
+        let dir_path = paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH])?;
 
         // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
         let _ = paths::create_directories(&dir_path)?;
@@ -292,16 +307,34 @@ impl BridgeConfig {
     }
 
     fn get_bridge_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
+        Ok(paths::build_path_for_sudo_or_user(&[
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.config_file,
         ])?)
     }
 
+    fn start_and_enable_tedge_mapper(&self, user_manager: &UserManager) {
+        let mut failed = false;
+
+        println!("Starting tedge-mapper service.\n");
+        if let Err(err) = TedgeMapperService.restart(user_manager) {
+            println!("Failed to stop tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        println!("Persisting tedge-mapper on reboot.\n");
+        if let Err(err) = TedgeMapperService.enable(user_manager) {
+            println!("Failed to enable tedge-mapper service: {:?}", err);
+            failed = true;
+        }
+
+        if !failed {
+            println!("tedge-mapper service successfully started and enabled!\n");
+        }
+    }
+
     fn get_common_mosquitto_config_file_path(&self) -> Result<String, ConnectError> {
-        Ok(paths::build_path_from_home(&[
-            TEDGE_HOME_DIR,
+        Ok(paths::build_path_for_sudo_or_user(&[
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.common_mosquitto_config.config_file,
         ])?)
@@ -336,6 +369,13 @@ pub enum ConnectError {
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),
+}
+
+fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
+    }
 }
 
 #[cfg(test)]
