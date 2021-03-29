@@ -1,5 +1,8 @@
-use crate::command::{BuildCommand, Command, ExecutionContext};
-use crate::config::ConfigError::{HomeDirectoryNotFound, InvalidCharacterInHomeDirectoryPath};
+use crate::{
+    command::{BuildCommand, Command, ExecutionContext},
+    utils::paths,
+};
+
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
@@ -7,10 +10,9 @@ use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
-pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
-const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
+const DEVICE_KEY_FILE: &str = "device-certs/tedge-private-key.pem";
+const DEVICE_CERT_FILE: &str = "device-certs/tedge-certificate.pem";
 
 pub const DEVICE_ID: &str = "device.id";
 pub const DEVICE_CERT_PATH: &str = "device.cert.path";
@@ -389,11 +391,11 @@ pub struct DeviceConfig {
     pub id: Option<String>,
 
     /// Path where the device's private key is stored.
-    /// Defaults to $HOME/.tedge/tedge-private.pem
+    /// Defaults to $HOME/.tedge/tedge-private.pem for user or /etc/tedge/device-certs/tedge-private.pem for system wide configuration.
     pub key_path: Option<String>,
 
     /// Path where the device's certificate is stored.
-    /// Defaults to $HOME/.tedge/tedge-certificate.crt
+    /// Defaults to $HOME/.tedge/tedge-certificate.crt for user or /etc/tedge/device-certs/tedge-certificate.crt for system wide configuration.
     pub cert_path: Option<String>,
 }
 
@@ -407,12 +409,7 @@ impl DeviceConfig {
     }
 
     fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        home_dir()?
-            .join(TEDGE_HOME_DIR)
-            .join(file_name)
-            .to_str()
-            .map(|s| s.into())
-            .ok_or(InvalidCharacterInHomeDirectoryPath)
+        Ok(paths::build_path_for_sudo_or_user(&[file_name])?)
     }
 
     fn with_defaults(self) -> Result<Self, ConfigError> {
@@ -469,11 +466,8 @@ pub enum ConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
-    #[error("Home directory not found")]
-    HomeDirectoryNotFound,
-
-    #[error("Invalid characters found in home directory path")]
-    InvalidCharacterInHomeDirectoryPath,
+    #[error(transparent)]
+    PathsError(#[from] paths::PathsError),
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
@@ -491,14 +485,10 @@ pub enum ConfigError {
     ConfigNotSet { key: String },
 }
 
-pub fn home_dir() -> Result<PathBuf, ConfigError> {
-    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
-    #![allow(deprecated)]
-    std::env::home_dir().ok_or(HomeDirectoryNotFound)
-}
-
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
+    Ok(paths::build_path_for_sudo_or_user_as_path(&[
+        TEDGE_CONFIG_FILE,
+    ])?)
 }
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
@@ -528,7 +518,7 @@ fn print_config_doc() {
 }
 
 impl TEdgeConfig {
-    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at `/etc/tedge/tedge.toml` and create a `TEdgeConfig` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
     pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
@@ -560,7 +550,7 @@ impl TEdgeConfig {
         }
     }
 
-    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
+    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml for user or /etc/tedge/tedge.toml for system configuration.
     pub fn write_to_default_config(&self) -> Result<(), ConfigError> {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
@@ -895,7 +885,10 @@ hello="tedge"
 
     #[test]
     fn test_set_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config
                 .set_config_value("invalid.key", "dummy-value".into())
@@ -906,7 +899,10 @@ hello="tedge"
 
     #[test]
     fn test_get_config_key_invalid_key() {
-        let config = TEdgeConfig::from_default_config().unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config.get_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }
@@ -915,7 +911,10 @@ hello="tedge"
 
     #[test]
     fn test_unset_config_key_invalid_key() {
-        let mut config = TEdgeConfig::from_default_config().unwrap();
+        let toml_conf = "[device]";
+
+        let config_file = temp_file_with_content(toml_conf);
+        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
         assert_matches!(
             config.unset_config_value("invalid.key").unwrap_err(),
             ConfigError::InvalidConfigKey { .. }

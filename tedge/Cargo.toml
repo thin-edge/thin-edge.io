@@ -2,47 +2,46 @@
 name = "tedge"
 version = "0.1.0"
 edition = "2018"
-authors = ["Software AG <thin-edge-team@softwareag.com>"]
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "tedge is the cli tool for thin-edge.io"
 
 [package.metadata.deb]
 depends = "mosquitto"
-maintainer-scripts = "../configuration/debian/tedge"
+maintainer-scripts = "configuration/debian/tedge"
 
 [dependencies]
-anyhow = "1.0.38"
-chrono = "0.4.19"
-futures = "0.3.12"
-mqtt_client = {version = "0.1.0", path = "../common/mqtt_client" }
-rcgen = { version = "0.8.9", features = ["pem"] }
-reqwest = { version = "0.11.1", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
-rpassword = "5.0.1"
-serde = { version = "1.0.123", features = ["derive"] }
-structopt = "0.3.21"
-tempfile = "3.2.0"
-thiserror = "1.0.23"
-tokio = { version = "1.1.1", features = ["rt", "signal", "io-util", "sync"] }
-toml = "0.5.8"
-url = "2.2.0"
-which = "4.0.2"
-x509-parser = "0.9.0"
-zeroize = "1.2.0"
-sha-1 = "0.9.4"
-der-parser = "=5.0.1"
+anyhow = "1.0"
+chrono = "0.4"
+futures = "0.3"
+mqtt_client = {path = "../common/mqtt_client" }
+rcgen = { version = "0.8", features = ["pem"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
+rpassword = "5.0"
+serde = { version = "1.0", features = ["derive"] }
+structopt = "0.3"
+tempfile = "3.2"
+thiserror = "1.0"
+tokio = { version = "1.1", features = ["rt", "signal", "io-util", "sync"] }
+toml = "0.5"
+url = "2.2"
+which = "4.0"
+x509-parser = "0.9"
+zeroize = "1.2"
+sha-1 = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 users = "0.11.0"
 
 [dev-dependencies]
-assert_cmd = "1.0.2"
-assert_matches = "1.4.0"
-base64 = "0.13.0"
-mockito = "0.29.0"
-pem = "0.8.2"
-predicates = "1.0.6"
-which = "4.0.2"
+assert_cmd = "1.0"
+assert_matches = "1.4"
+mockito = "0.29"
+pem = "0.8"
+predicates = "1.0"
+base64 = "0.13"
+which = "4.0"
 
 [features]
 integration-test = []
