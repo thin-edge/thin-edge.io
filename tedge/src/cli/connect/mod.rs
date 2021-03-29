@@ -67,7 +67,7 @@ pub struct BridgeCommand {
 impl Command for BridgeCommand {
     fn description(&self) -> String {
         format!(
-            "Create bridge to connect {} cloud",
+            "create bridge to connect {} cloud.",
             self.bridge_config.local_clientid
         )
     }
@@ -149,7 +149,7 @@ impl BridgeConfig {
         println!("Checking if configuration for requested bridge already exists.\n");
         let _ = self.bridge_config_exists()?;
 
-        println!("Validate the bridge certificates.\n");
+        println!("Validating the bridge certificates.\n");
         self.validate()?;
 
         println!("Saving configuration for requested bridge.\n");
@@ -158,12 +158,13 @@ impl BridgeConfig {
             let _ = self.clean_up();
             return Err(err);
         }
-        println!("Restarting mosquitto, [requires elevated permission], authorise when asked.\n");
 
+        println!("Restarting mosquitto service.\n");
         if let Err(err) = MosquittoService.restart(user_manager) {
             self.clean_up()?;
             return Err(err.into());
         }
+
         println!(
             "Awaiting mosquitto to start. This may take up to {} seconds.\n",
             MOSQUITTO_RESTART_TIMEOUT_SECONDS
