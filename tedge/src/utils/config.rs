@@ -5,7 +5,7 @@ pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, Confi
         if key == DEVICE_ID {
             ConfigError::DeviceIdNotSet
         } else {
-            ConfigError::ConfigNotSet { key: "key2".into() }
+            ConfigError::ConfigNotSet { key: key.into() }
         }
     })
 }

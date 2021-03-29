@@ -458,13 +458,13 @@ pub struct AzureConfig {
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("TOML parse error")]
-    TOMLParseError(#[from] toml::de::Error),
+    TomlParseError(#[from] toml::de::Error),
 
     #[error("TOML serialization error")]
-    InvalidTOMLError(#[from] toml::ser::Error),
+    InvalidTomlError(#[from] toml::ser::Error),
 
     #[error("I/O error")]
-    IOError(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
 
     #[error(
         r#"A value for `{key}` is missing.
@@ -484,11 +484,8 @@ pub enum ConfigError {
     )]
     InvalidConfigUrl(String),
 
-    #[error(
-        r#"A value for `{key}` is missing.
-    A value can be set with `tedge config set {key} <value>`"#
-    )]
-    ConfigNotSet { key: String },
+    #[error(transparent)]
+    PathsError(#[from] paths::PathsError),
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
@@ -551,7 +548,7 @@ impl TEdgeConfig {
                     let default: TEdgeConfig = Default::default();
                     Ok(default.with_defaults()?)
                 }
-                _ => Err(ConfigError::IOError(err)),
+                _ => Err(ConfigError::IoError(err)),
             },
         }
     }
@@ -869,7 +866,7 @@ hello="tedge"
         let result = TEdgeConfig::from_custom_config(config_file.path());
         assert_matches!(
             result.unwrap_err(),
-            ConfigError::TOMLParseError(_),
+            ConfigError::TomlParseError(_),
             "Expected the parsing to fail with TOMLParseError"
         );
     }
@@ -884,7 +881,7 @@ hello="tedge"
         let result = TEdgeConfig::from_custom_config(config_file.path());
         assert_matches!(
             result.unwrap_err(),
-            ConfigError::TOMLParseError(_),
+            ConfigError::TomlParseError(_),
             "Expected the parsing to fail with TOMLParseError"
         );
     }
