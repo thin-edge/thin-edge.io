@@ -1,18 +1,12 @@
 # Reference Guides
-tedge 0.1.0
-tedge is the cli tool for thin-edge.io
+The Thin-Edge command-line interface (tedge CLI) is a set of commands used to create and manage Thin-Edge resources.
 
-USAGE:
-    tedge <SUBCOMMAND>
+Following section show the `tedge cli` options.
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-SUBCOMMANDS:
-    cert          Create and manage device certificate
-    config        Configure Thin Edge
-    connect       Connect to connector provider
-    disconnect    Remove bridge connection for a provider
-    help          Prints this message or the help of the given subcommand(s)
-    mqtt          Publish a message on a topic and subscribe a topic
+* [`tegde` command](../references/tedge.md)
+* [`tedge cert`](../references/tedge-cert.md)
+* [`tedge config`](../references/tedge-config.md)
+* [`tedge connect`](../references/tedge-connect.md)
+* [`tedge disconnect`](../references/tedge-disconnect.md)
+* [`tedge mapper`](../references/tedge-mapper.md)
+* [`tedge mqtt`](../references/tedge-mqtt.md)
