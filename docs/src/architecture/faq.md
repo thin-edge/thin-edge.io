@@ -2,40 +2,41 @@
 
 ## Design principles
 The primary goal of thin-edge.io is to simplify the connection of edge devices to the cloud
-by proving secure and reliable cloud connectivity as well as a device management agent
+by providing a secure and reliable cloud connectivity as well as a device management agent.
 The primary goal of thin-edge.io is the ability to build IoT applications
 around a large diversity of components provided by independent actors.
 
 For that purpose, thin-edge.io focuses on:
 
 * __Interoperability__ -
-  Thin-edge.io let the users integrate components producing or consuming telemetry data,
+  Thin-edge.io lets the users integrate components producing or consuming telemetry data,
   northbound with cloud platforms, southbound with sensors
-  as well as for east-west communications between analytics components.
+  as well as for east-west communication between analytics components.
 * __Flexibility__ -
-  Thin-edge.io let integrate component provided by different IoT actors,
+  Thin-edge.io lets users integrate component provided by different IoT actors,
   not even originally designed with thin-edge.io in-mind,
   using various technologies and programming languages.
 * __Security__ -
-  Thin-edge.io provides secure and stable foundations for cloud connections, software updates, device connectivity.
+  Thin-edge.io provides a secure and stable foundation for cloud connections, software/firmware updates,
+  and remote device management.
 * __Reliability__ -
-  Thin-edge.io components resist chaotic environments as network outages and process restarts.
+  Thin-edge.io components can survive in chaotic environments as network outages and process restarts happen.
 * __Efficiency__ -
-  Thin-edge.io let build applications that run on constrained device hardware and limited bandwidth networks.
+  Thin-edge.io lets users build applications that can run on constrained device hardware and with limited bandwidth networks.
 * __Multi-cloud__ -
-  Thin-edge.io connects edge device with multiple clouds.
-  The actual cloud used can be decided during at run-time by the end-user.
+  Thin-edge.io enables users to connect their edge devices with multiple clouds.
+  The actual cloud used can be decided at run-time by the end-user.
 
 ## Why is thin-edge.io an executable binary and not a library?
 Interoperability of software components can be addressed along very different approaches.
-Thin-edge.io uses dynamic and loose inter process communication (IPC) using messages exchange over a MQTT bus.
+Thin-edge.io uses dynamic and loose inter-process communication (IPC) using messages exchange over an MQTT bus.
 
-In the past and still today, many clouds provide a library (SDK) to help you connecting your code to the cloud.
+In the past and even today, many clouds provide a library (SDK) to help you connect your code to the cloud.
 
-In thin-edge.io we decided to not follow this approach because:
+In thin-edge.io we decided not to follow this approach because:
 * Libraries are **programming language dependent**,
-  and thus developing a library for a number of  programming languages always excludes developers in the other
-  remaining programming languages. Additionally the effort to support many libraries (C, C++, Rust, Python, etc) is huge,
+  and thus developing a library for a number of  programming languages always excludes developers using other
+  programming languages. Additionally the effort to support many libraries (C, C++, Rust, Python, etc) is huge,
   including adding new features, testing, documentation, examples, stackoverflow.
   Essentially we would create multiple small user groups instead of one large user group.
 * Using an IPC mechanism (and not a library) makes it easier to **dynamically plug** together components during runtime
@@ -48,29 +49,29 @@ In thin-edge.io we decided to not follow this approach because:
 ## Why does thin-edge.io use MQTT for IPC?
 [MQTT](https://mqtt.org/) is a lightweight and flexible messaging protocol widely used by IoT applications.
 
-We were looking for a wide-used, performant IPC mechanism and we investigated a number of alternatives.
-In the end, we decided using MQTT. Reasons include:
+We were looking for a widely-used, performant IPC mechanism and we investigated a number of alternatives.
+In the end, we decided to use MQTT for the following reasons:
 * The approach is used by other industrial IoT organisations and software,
   for example by [Open Industry 4.0 Alliance](https://openindustry4.com/).
 * Existing components (like [Node-RED](https://nodered.org/) or [collectd](https://collectd.org/) )
-  that support MQTT can integrated easily. In this case, thin-edge.io acts as an MQTT proxy:
+  that support MQTT can be easily integrated. In this case, thin-edge.io acts as an MQTT proxy:
   existing components connect to the local MQTT bus of thin-edge.io,
   and thin-edge.io routes the messages to different clouds in a secure and reliable manner.  
-* MQTT is message oriented and bi-directional, which matches well the event oriented programming model of industrial IoT.
-* MQTT is available for many platforms, including Linux and Windows.
+* MQTT is message oriented and bi-directional, which matches well with the event oriented programming model of industrial IoT.
+* MQTT is available on many platforms, including Linux and Windows.
 * MQTT client libraries are available for 25+ programming languages (see [MQTT.org](https://mqtt.org/software/)]) 
 * MQTT overhead is relatively small in terms of client libary size and network overhead.
 * MQTT is message payload agnostic which enables sending not only JSON messages, but also text, CSV or binary data.  
 
-Alternatives consider where: DBus, gRPC, REST over HTTP. 
+Alternatives considered where: DBus, gRPC and REST over HTTP. 
 
 For additional details see [thin-edge.io MQTT bus](./mqtt-bus.md).
 
 ## Why does thin-edge.io use MQTT for cloud communication?
 
 [MQTT](https://mqtt.org/) is a lightweight and flexible messaging protocol widely used by IoT applications.
-Nearly all the IoT cloud provide an MQTT endpoint to consume and publish messages from a fleet of devices.
-Therefore, MQTT was an optional choice for edge to cloud communication.
+Nearly all the IoT cloud platforms provide an MQTT endpoint to consume and publish messages from a fleet of devices.
+Therefore, MQTT was an obvious choice for edge to cloud communication.
 
 Using MQTT for cloud communication is not mandatory. You are free to add additional protocols beside MQTT:
 Because thin-edge.io has an internal bus, you can implement a bridge to another protocol (e.g. LWM2M or plain HTTPS).
@@ -85,7 +86,7 @@ Notably, it features [duck typing](https://en.wikipedia.org/wiki/Duck_typing),
 a flexible way to group different data fields that can be read
 by consumers with different expectations over the message content.
 For instance, a consumer expecting a temperature can process messages
-where the temperature measurements are produced along other kind of measurements.
+where the temperature measurements are produced along with other kinds of measurements.
 
 Additionally, JSON is supported by most (if not all) cloud vendors, which makes the transformation easier.
 
@@ -104,4 +105,4 @@ One reason is that Rust does not have (by default) a garbage collector. Instead,
 
 Note that, even if the core of thin-edge.io is written in Rust,
 any programming language can be used to implement thin-edge.io components.
-For that, one just needs a MQTT library.
+For that, one just needs an MQTT library that lets them interact with the thin-edge.io MQTT broker.
