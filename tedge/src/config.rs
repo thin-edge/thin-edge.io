@@ -466,8 +466,14 @@ pub enum ConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
-    #[error(transparent)]
-    PathsError(#[from] paths::PathsError),
+    #[error(
+        r#"A value for `{key}` is missing.
+    A value can be set with `tedge config set {key} <value>`"#
+    )]
+    ConfigNotSet { key: String },
+
+    #[error(r#"device.id can be set with 'tedge cert create --device-id <value>'"#)]
+    DeviceIdNotSet,
 
     #[error("The provided config key: {key} is not a valid Thin Edge configuration key")]
     InvalidConfigKey { key: String },
