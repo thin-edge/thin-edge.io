@@ -30,8 +30,6 @@ appendtofile() {
     fi
 }
 
-TIMEZONE=$1
-
 if [ -z $C8YDEVICE ]; then
     echo "Error: Please supply your device name as environment variable C8YDEVICE"
     exit 1
@@ -66,13 +64,6 @@ if [ -z $C8YPASS ]; then
     exit 1
 else
     echo "Your password: HIDDEN"
-fi
-
-if [ -z $TIMEZONE ]; then
-    echo "Error: Please supply your timezone"
-    exit 1
-else
-    echo "Your timezone: $TIMEZONE"
 fi
 
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
@@ -115,7 +106,7 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID -z $TIMEZONE
+./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
@@ -128,5 +119,5 @@ chmod +x ./examples/sawtooth_publisher
 cp ./examples/sawtooth_publisher ~/
 
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID -z $TIMEZONE
+./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
