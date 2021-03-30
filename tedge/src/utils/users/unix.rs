@@ -4,17 +4,18 @@ use std::sync::Mutex;
 /// The `UserManager` allows the process to switch from one unix user to another.
 ///
 /// * If the process is running as root, then the method `UserManager::become_user()`
-///   is effective and the process can switch back and force to different users.
+///   is effective and the process can switch back and forth to different users.
 /// * If the process is not running as root, then the method `UserManager::become_user()`
-///   has no effects. Note that no error is raised.
+///   has no effect. Note that no error is raised.
 ///
 ///   The rational is that a `tedge` command running as root (i.e. using `sudo tedge`)
-///   has a fine grain control over the different operations and files,
-///   while the unprivileged `tedge` command creates all the files using the former user.
+///   has a fine grained control over the different operations and files,
+///   while the unprivileged `tedge` command never switches to a different user
+///   and has to manipulate all the system resources with the initial user.
 ///
 #[derive(Clone)]
 pub struct UserManager {
-    // This implementation can never thread-safe because the current user is a global concept for the process.
+    // This implementation can never be thread-safe because the current user is a global concept for the process.
     // If one thread changes the user, it affects another thread that might have wanted a different user.
     // So, let's use Rc rather than Arc to force !Send.
     inner: Rc<Mutex<InnerUserManager>>,
@@ -32,7 +33,7 @@ impl UserManager {
     /// But be warned, the compiler will not prevent you to call it twice.
     /// If you do so, one thread might be switched by another thread to some un-expected user.
     ///
-    /// This struct is not `Send` amd cannot be shared between thread.
+    /// This struct is not `Send` and cannot be shared between thread.
     pub fn new() -> UserManager {
         UserManager {
             inner: Rc::new(Mutex::new(InnerUserManager {
@@ -57,7 +58,7 @@ impl UserManager {
 
     /// Switch the effective user of the running process.
     ///
-    /// This method returns a guard. As long as the guard is owner by the caller,
+    /// This method returns a guard. As long as the guard is owned by the caller,
     /// the process is running under the requested user. When the guard is dropped,
     /// then the process switches back to the former user. These calls can be stacked.
     ///
@@ -89,9 +90,8 @@ impl UserManager {
     ///
     /// For example, running as root, the process can read the configuration file as the tedge user,
     /// then create a private key as mosquitto and restart mosquitto using systemd as root.
-    /// The same process, running as the `pi` user, operates as `pi` for all the operations.
-    /// Hence, the configuration files and the private key are to be owned by `pi`. Similarly,
-    /// the mosquitto process has to be run as `pi`.
+    /// The same process, running as the a regular user, operates as this initial user for all the operations,
+    /// reading its own configuration file, creating its own private certificate and running its own mosquitto instance.
     ///
     ///  The function returns a `UserSwitchError` if the given user is unknown.
     ///
@@ -172,7 +172,7 @@ impl InnerUserManager {
     }
 }
 
-/// Materialize the fact the process is running under a user different from the former one.
+/// Materialize the fact that the process is running under a user different from the former one.
 /// On drop the process switches back to the former user.
 ///
 /// Such a guard implements the RAII pattern and provides no methods beyond `drop`.
@@ -184,8 +184,7 @@ impl InnerUserManager {
 ///     // Create the certificate on behalf of mosquitto.
 ///
 ///     Ok(())
-///     // Here, the _user_guard is dropped and the process switches back to the former user.
-/// }
+/// } // Here, the _user_guard is dropped and the process switches back to the former user.
 pub struct UserGuard {
     user_manager: UserManager,
 }
