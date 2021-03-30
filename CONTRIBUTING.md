@@ -56,7 +56,7 @@ which will automatically generate a sign-off statement in the form:
  
 By adding this sign-off statement, you are certifying:
  
-*By signing-off on this Submission, I agree to be bound by the terms of the **then current CONTRIBUTOR LICENSE AGREEMENT** located at https://github.com/SoftwareAG/contributing, **which I have read and understood** and I agree that this Submission constitutes a "Contribution" under this Agreement.*
+*By signing-off on this Submission, I agree to be bound by the terms of the **then current CONTRIBUTOR LICENSE AGREEMENT** located at https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTOR-LICENSE-AGREEMENT.md, **which I have read and understood** and I agree that this Submission constitutes a "Contribution" under this Agreement.*
  
 ## Note on Privacy
 Please note that this project and any contributions to it are public and that a record of all contributions (including any personal information submitted with it, including a sign-off) is maintained indefinitely and may be redistributed consistent with this project or the open source license(s) involved.
