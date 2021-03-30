@@ -360,7 +360,8 @@ fn serialize() {
         .collect();
     let mut expected = HashSet::new();
 
-    expected.insert("bind_interface lo");
+    expected.insert("listener 1883 localhost");
+    expected.insert("allow_anonymous true");
     expected.insert("connection_messages true");
 
     expected.insert("log_type error");

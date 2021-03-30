@@ -92,7 +92,8 @@ impl BridgeCommand {
 #[derive(Debug, PartialEq)]
 struct CommonMosquittoConfig {
     config_file: String,
-    bind_interface: String,
+    listener: String,
+    allow_anonymous: bool,
     connection_messages: bool,
     log_types: Vec<String>,
 }
@@ -101,7 +102,8 @@ impl Default for CommonMosquittoConfig {
     fn default() -> Self {
         CommonMosquittoConfig {
             config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
-            bind_interface: "lo".into(),
+            listener: "1883 localhost".into(),
+            allow_anonymous: true,
             connection_messages: true,
             log_types: vec![
                 "error".into(),
@@ -232,10 +234,11 @@ impl BridgeConfig {
     }
 
     fn serialize_common_config<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writeln!(writer, "listener {}", self.common_mosquitto_config.listener)?;
         writeln!(
             writer,
-            "bind_interface {}",
-            self.common_mosquitto_config.bind_interface
+            "allow_anonymous {}",
+            self.common_mosquitto_config.allow_anonymous
         )?;
         writeln!(
             writer,
