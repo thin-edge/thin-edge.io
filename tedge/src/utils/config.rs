@@ -1,9 +1,13 @@
-use crate::config::{ConfigError, TEdgeConfig};
+use crate::config::{ConfigError, TEdgeConfig, DEVICE_ID};
 
 pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConfigError> {
-    config
-        .get_config_value(key)?
-        .ok_or_else(|| ConfigError::ConfigNotSet { key: key.into() })
+    config.get_config_value(key)?.ok_or_else(|| {
+        if key == DEVICE_ID {
+            ConfigError::DeviceIdNotSet
+        } else {
+            ConfigError::ConfigNotSet { key: key.into() }
+        }
+    })
 }
 
 pub fn get_config_value_or_default(
