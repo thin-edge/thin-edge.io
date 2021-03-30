@@ -129,5 +129,5 @@ More info about sending telemetry to Azure can be found [Here](https://docs.micr
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from Azure](../references/bridged-topics.md#Azure-Mqtt-Topics)
+* or have a detailed view of the [topics mapped to and from Azure](../references/bridged-topics.md#azure-mqtt-topics)
   if you prefer to use directly Azure specific formats and protocols.
