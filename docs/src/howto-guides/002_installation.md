@@ -34,7 +34,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/archive/<package>_<version>_
 where:
 > `version` -> thin-edge.io version in x.x.x format
 >
-> `arch` -> architecture type [amd64, armhf]
+> `arch` -> architecture type (amd64, armhf)
 
 Eg:
 
@@ -82,4 +82,3 @@ dpkg -i mapper_0.1.0_amd64
 
 1. [How to register?](./003_registration.md)
 2. [How to connect?](./004_connect.md)
-3. [How to use mapper?](...)
