@@ -17,4 +17,7 @@ pub enum ConfigError {
 
     #[error(transparent)]
     ConfigSettingError(#[from] crate::ConfigSettingError),
+
+    #[error("Config file not found: {0}")]
+    ConfigFileNotFound(std::path::PathBuf),
 }

@@ -5,71 +5,18 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 mod data;
+mod defaults;
 mod settings;
 pub use data::*;
+use defaults::*;
 
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
-const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
-impl DeviceConfig {
-    fn default_cert_path() -> Result<String, ConfigError> {
-        Self::path_in_cert_directory(DEVICE_CERT_FILE)
-    }
-
-    fn default_key_path() -> Result<String, ConfigError> {
-        Self::path_in_cert_directory(DEVICE_KEY_FILE)
-    }
-
-    fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
-        home_dir()?
-            .join(TEDGE_HOME_DIR)
-            .join(file_name)
-            .to_str()
-            .map(|s| s.into())
-            .ok_or(ConfigError::InvalidCharacterInHomeDirectoryPath)
-    }
-
-    fn with_defaults(self) -> Result<Self, ConfigError> {
-        let key_path = match self.key_path {
-            None => Self::default_key_path()?,
-            Some(val) => val,
-        };
-
-        let cert_path = match self.cert_path {
-            None => Self::default_cert_path()?,
-            Some(val) => val,
-        };
-
-        Ok(DeviceConfig {
-            key_path: Some(key_path),
-            cert_path: Some(cert_path),
-            ..self
-        })
-    }
-}
-
-fn home_dir() -> Result<PathBuf, ConfigError> {
-    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
-    #![allow(deprecated)]
-    std::env::home_dir().ok_or(ConfigError::HomeDirectoryNotFound)
-}
-
-pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
-    Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
-}
+// assign_default
+// preload_config
 
 impl TEdgeConfig {
-    fn with_defaults(self) -> Result<Self, ConfigError> {
-        let device_config = self.device.with_defaults()?;
-
-        Ok(TEdgeConfig {
-            device: device_config,
-            ..self
-        })
-    }
-
     /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
@@ -87,16 +34,9 @@ impl TEdgeConfig {
     ///
     pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
-            Ok(content) => {
-                let mut tedge_config = toml::from_str::<TEdgeConfig>(content.as_str())?;
-                tedge_config.device = tedge_config.device.with_defaults()?;
-                Ok(tedge_config)
-            }
+            Ok(content) => Ok(toml::from_str::<TEdgeConfig>(content.as_str())?.assign_defaults()?),
             Err(err) => match err.kind() {
-                ErrorKind::NotFound => {
-                    let default: TEdgeConfig = Default::default();
-                    Ok(default.with_defaults()?)
-                }
+                ErrorKind::NotFound => Ok(TEdgeConfig::default().assign_defaults()?),
                 _ => Err(ConfigError::IOError(err)),
             },
         }
@@ -120,6 +60,16 @@ impl TEdgeConfig {
             Err(err) => Err(err.error.into()),
         }
     }
+}
+
+fn home_dir() -> Result<PathBuf, ConfigError> {
+    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
+    #![allow(deprecated)]
+    std::env::home_dir().ok_or(ConfigError::HomeDirectoryNotFound)
+}
+
+fn tedge_config_path() -> Result<PathBuf, ConfigError> {
+    Ok(home_dir()?.join(TEDGE_HOME_DIR).join(TEDGE_CONFIG_FILE))
 }
 
 #[cfg(test)]
@@ -255,11 +205,11 @@ id = "ABCD1234"
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(
             config.device.cert_path.clone().unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
+            default_device_cert_path().unwrap()
         );
         assert_eq!(
             config.device.key_path.clone().unwrap(),
-            DeviceConfig::default_key_path().unwrap()
+            default_device_key_path().unwrap()
         );
 
         assert!(config.c8y.url.is_none());
@@ -279,11 +229,11 @@ id = "ABCD1234"
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(
             config.device.cert_path.clone().unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
+            default_device_cert_path().unwrap()
         );
         assert_eq!(
             config.device.key_path.clone().unwrap(),
-            DeviceConfig::default_key_path().unwrap()
+            default_device_key_path().unwrap()
         );
 
         assert!(config.azure.url.is_none());
@@ -308,11 +258,11 @@ url = "your-tenant.cumulocity.com"
         assert!(config.device.id.is_none());
         assert_eq!(
             config.device.cert_path.unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
+            default_device_cert_path().unwrap()
         );
         assert_eq!(
             config.device.key_path.unwrap(),
-            DeviceConfig::default_key_path().unwrap()
+            default_device_key_path().unwrap()
         );
     }
 
@@ -324,11 +274,11 @@ url = "your-tenant.cumulocity.com"
         assert!(config.device.id.is_none());
         assert_eq!(
             config.device.cert_path.clone().unwrap(),
-            DeviceConfig::default_cert_path().unwrap()
+            default_device_cert_path().unwrap()
         );
         assert_eq!(
             config.device.key_path.clone().unwrap(),
-            DeviceConfig::default_key_path().unwrap()
+            default_device_key_path().unwrap()
         );
 
         assert!(config.c8y.url.is_none());
