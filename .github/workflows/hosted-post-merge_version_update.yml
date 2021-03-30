@@ -1,0 +1,31 @@
+name: hosted-post-merge_version_update
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  versioning:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - run: |
+          git config --global user.email "versioneer@actions.io"
+          git config --global user.name "Versioneer"
+
+      - name: Install cargo-release
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-release
+
+      - name: Increment version and tag
+        uses: actions-rs/cargo@v1
+        with:
+          command: release
+          args: patch --skip-publish -vv --no-dev-version --no-confirm
