@@ -1,6 +1,7 @@
 name: hosted-post-merge_version_update
 on:
   pull_request:
+    branches: [main]
     types: [closed]
 
 env:
