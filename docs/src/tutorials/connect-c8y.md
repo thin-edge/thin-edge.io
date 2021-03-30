@@ -135,7 +135,7 @@ Try 2 / 2: Sending a message to Cumulocity. Received expected response message, 
 
 ## Sending your first telemetry data
 
-Sending data to Cumulocity is done using [MQTT](../architecture/mqtt-bus.md) over topics prefixed with `c8y`.
+Sending data to Cumulocity is done using MQTT over topics prefixed with `c8y`.
 Any messages sent to one of these topics will be forwarded to Cumulocity.
 The messages are expected to have a format specific to each topic.
 Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
@@ -154,5 +154,5 @@ You should observe a "temperature measurement" graph with the new data point.
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from Cumulocity](../references/tedge-mapper.md)
+* or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.

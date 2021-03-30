@@ -17,11 +17,11 @@ or [Azure IoT](tutorials/connect-azure.md) (10 minutes).
 2) You will then be able to [send telemetry data](tutorials/send-thin-edge-data.md) to the cloud
 using a [cloud-agnostic message format](architecture/thin-edge-json.md) (5 minutes).
 3) The next step is to write your own telemetry component, using your preferred programming language,
-say [Rust](tutorials/my-thin-edge-rust.md) or [Python](tutorials/my-thin-edge-python.md) (1 hour).
+say Rust or Python.
 
 ## Grow your skills
 
-* Explore the [tutorials and use-cases](tutorials/).
-* Understand the [architecture](architecture/).
-* Use the [how-to guides](howto-guides/) on a daily basis.
-* Refer to the [reference guides](references/) for any in-depth details.
+* Explore the [tutorials and use-cases](tutorials/README.md).
+* Understand the [architecture](architecture/README.md).
+* Use the [how-to guides](howto-guides/README.md) on a daily basis.
+* Refer to the [reference guides](references/README.md) for any in-depth details.
