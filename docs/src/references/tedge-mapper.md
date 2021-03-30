@@ -1,1 +1,0 @@
-# The `tedge-mapper` daemon
