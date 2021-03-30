@@ -71,9 +71,6 @@ PATH=$PATH:/usr/sbin
 
 echo "Disconnect old bridge"
 
-# Kill mapper - may fail if not running
-sudo killall tedge_mapper
-
 # Disconnect - may fail if not there
 sudo tedge disconnect c8y
 
