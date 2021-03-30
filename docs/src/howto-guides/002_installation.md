@@ -11,7 +11,7 @@ thin-edge.io has single dependency and it is `mosquitto` used for communication 
 apt install mosquitto
 ```
 
-> Note: Some OSes may require you to use `sudo` to install packages:
+> Note: Some OSes may require you to use `sudo` to install packages.
 
 ```shell
 sudo apt install mosquitto
@@ -78,8 +78,17 @@ Eg:
 dpkg -i mapper_0.1.0_amd64
 ```
 
+### Add your user to `tedge-users` group
+
+During the installation process, `tedge-users` group is automatically created.
+For the security enhancement, the users in `tedge-users` group are allowed to run `tedge` with sudo.
+You can run this command to add your user to the group.
+
+```shell
+sudo adduser <user> tedge-users
+``` 
+
 ## Next steps
 
 1. [How to register?](./003_registration.md)
 2. [How to connect?](./004_connect.md)
-3. [How to use mapper?](...)

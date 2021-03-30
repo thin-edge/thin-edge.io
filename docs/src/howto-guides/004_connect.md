@@ -1,16 +1,16 @@
 # How to connect?
 
-## Connect to Cumulocity IoT​
+## Connect to Cumulocity IoT
 
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
-> Note: Some of the commands require elevated permissions to enable system services e.g. [`tedge connect`](../references/tedge-connect.md) needs to enable `mosquitto` server.
+> Note: `tedge connect` requires `sudo` privilege.
 
 ___
 
 Configure required parameters for thin-edge.io with [`tedge config set`](../references/tedge-config.md):
 
 ```shell
-tedge config set c8y.url example.cumulocity.com​
+sudo tedge config set c8y.url example.cumulocity.com
 ```
 
 > Tip: If you you are unsure which parameters are required for the command to work run the command and it will tell you which parameters are missing.
@@ -29,7 +29,7 @@ tedge config set c8y.url example.cumulocity.com​
 
 ___
 
-Next step is to upload self-signed certificate, which is not needed in production with root cert!​
+Next step is to upload self-signed certificate, which is not needed in production with root cert!
 You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guides/10.7.0-beta/device-sdk/mqtt/#device-certificates) or with [`tedge cert upload`](../references/tedge-cert.md) as described below.
 
 > Note: This command takes parameter `user`, this is due to upload mechanism to Cumulocity cloud which uses username and password for authentication.
@@ -37,7 +37,7 @@ You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guide
 > After issuing this command you are going to be prompted for a password. Users usernames and passwords are not stored in configuration due to security.
 
 ```shell
-$ tedge cert upload c8y –-user <username>
+$ sudo tedge cert upload c8y –-user <username>
 Password:
 ```
 
@@ -48,34 +48,35 @@ ___
 
 To create bridge use [`tedge connect`](../references/tedge-connect.md):
 
-> Note: This command requires elevated permission.
-
 ```shell
-$ tedge connect c8y
-Checking if systemd and mosquitto are available.
+$ sudo tedge connect c8y
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Creating configuration for requested bridge.
+Validating the bridge certificates.
 
 Saving configuration for requested bridge.
 
-Restarting mosquitto, [requires elevated permission], authorise when asked.
+Restarting mosquitto service.
 
-[sudo] password for user:
 Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Sending packets to check connection.
-Registering the device in Cumulocity if the device is not yet registered.
-This may take up to 10 seconds per try.
-
-Try 1 / 2: Sending a message to Cumulocity. ... Received message.
-The device is connected to Cumulocity.
 
 Persisting mosquitto on reboot.
 
-Saving configuration.
 Successfully created bridge connection!
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper service.
+
+Persisting tedge-mapper on reboot.
+
+tedge-mapper service successfully started and enabled!
+
+Sending packets to check connection. This may take up to 10 seconds.
+
+Try 1 / 2: Sending a message to Cumulocity. Received expected response message, connection check is successful.
 ```
 
 ### Errors
@@ -85,12 +86,12 @@ Successfully created bridge connection!
 If connection has already been established following error may appear:
 
 ```shell
-$ tedge connect c8y
-Checking if systemd and mosquitto are available.
+$ sudo tedge connect c8y
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Error: failed to execute `tedge connect`.
+Error: failed to create bridge to connect Cumulocity cloud.
 
 Caused by:
     Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.
@@ -99,13 +100,22 @@ Caused by:
 To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../references/tedge-disconnect.md):
 
 ```shell
-$ tedge disconnect c8y
-Removing c8y bridge.
+$ sudo tedge disconnect c8y
+Removing Cumulocity bridge.
 
 Applying changes to mosquitto.
 
-Bridge successfully disconnected!
+Cumulocity Bridge successfully disconnected!
+
+Stopping tedge-mapper service.
+
+Disabling tedge-mapper service.
+
+tedge-mapper service successfully stopped and disabled!
+
 ```
+
+> Note: `tedge disconnect c8y` also stops and disable **tedge-mapper** service if it is installed on the device.
 
 And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to create new bridge.
 
@@ -114,32 +124,36 @@ And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to c
 Sample output of tedge connect when this error occurs:
 
 ```shell
-$ tedge connect c8y
-Checking if systemd and mosquitto are available.
+$ sudo tedge connect c8y
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Creating configuration for requested bridge.
+Validating the bridge certificates.
 
 Saving configuration for requested bridge.
 
-Restarting mosquitto, [requires elevated permission], authorise when asked.
+Restarting mosquitto service.
 
-[sudo] password for user:
 Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Sending packets to check connection.
-Registering the device in Cumulocity if the device is not yet registered.
-This may take up to 10 seconds per try.
-
-Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, its normal to get no response in the first try.
-Try 2 / 2: Sending a message to Cumulocity. ... No response.
-Warning: Bridge has been configured, but Cumulocity connection check failed.
 
 Persisting mosquitto on reboot.
 
-Saving configuration.
 Successfully created bridge connection!
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper service.
+
+Persisting tedge-mapper on reboot.
+
+tedge-mapper service successfully started and enabled!
+
+Sending packets to check connection. This may take up to 10 seconds.
+
+Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, it's normal to get no response in the first try.
+Try 2 / 2: Sending a message to Cumulocity. ... No response. 
+Warning: Bridge has been configured, but Cumulocity connection check failed.
 ```
 
 This error may be caused by some of the following reasons:
@@ -159,7 +173,7 @@ Bridge configuration is correct but the connection couldn't be established to un
 To retry start with [`tedge disconnect c8y`](../references/tedge-disconnect.md) removing this bridge:
 
 ```shell
-tedge disconnect c8y
+sudo tedge disconnect c8y
 ```
 
 When this is done, issue [`tedge connect c8y`](../references/tedge-connect.md) again.
@@ -170,45 +184,57 @@ Sample output:
 
 ```shell
 $ tedge connect c8y
-Checking if systemd and mosquitto are available.
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Creating configuration for requested bridge.
+Validating the bridge certificates.
 
 Saving configuration for requested bridge.
 
-Error: failed to execute `tedge connect`.
+Error: failed to create bridge to connect Cumulocity cloud.
 
 Caused by:
-    0: File Error. Check permissions for /home/makrist/.tedge/bridges/c8y-bridge.conf.
+    0: File Error. Check permissions for /etc/tedge/mosquitto-conf/tedge-mosquitto.conf.
     1: failed to persist temporary file: Permission denied (os error 13)
+    2: Permission denied (os error 13)
 ```
 
-tedge connect cannot access location to create the bridge configuration (`/home/user/.tedge/bridges`), check permissions for the directory and adjust it to allow the tedge connect to access it.
+tedge connect cannot access location to create the bridge configuration (`/etc/tedge/mosquitto-conf`), check permissions for the directory and adjust it to allow the tedge connect to access it.
 
 Example of incorrect permissions:
 
 ```shell
-$ ls -l
-total 32
-dr--r--r-- 2 user user 4096 Dec  31 11:40 bridges
+$ ls -l /etc/tedge
+dr--r--r-- 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 ```
 
-If this comes up please use provided script to fix permissions: fix_permissions.sh
+You should give it the permission 755.
+```shell
+$ ls -l /etc/tedge
+drwxr-xr-x 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
+```
 
 #### mosquitto and systemd check fails
 
 Sample output:
 
 ```shell
-$ tedge connect c8y
-Checking if systemd and mosquitto are available.
+$ sudo tedge connect c8y
+Checking if systemd is available.
 
-Error: failed to execute `tedge connect`.
+Checking if configuration for requested bridge already exists.
+
+Validating the bridge certificates.
+
+Saving configuration for requested bridge.
+
+Restarting mosquitto service.
+
+Error: failed to create bridge to connect Cumulocity cloud.
 
 Caused by:
-    mosquitto is not installed on the system. Install mosquitto to use this command.
+    Service mosquitto not found. Install mosquitto to use this command.
 ```
 
 mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](./002_installation.md) to install mosquitto and try again.

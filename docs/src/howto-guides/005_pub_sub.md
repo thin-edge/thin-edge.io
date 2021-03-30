@@ -9,13 +9,13 @@ Command [`tedge mqtt pub`](../references/tedge-mqtt.md) can be used to publish M
 Example:
 
 ```shell
-tedge mqtt pub 'tedge/measurements' '{​​​​ "temperature": 21.3 }'​​​
+tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'
 ```
 
 `tedge mqtt pub` supports setting of QoS for MQTT messages:
 
 ```shell
-tedge mqtt pub 'tedge/measurements' '{​​​​ "temperature": 21.3 }' --qos 2
+tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }' --qos 2
 ```
 
 ## Subscribe
@@ -32,7 +32,7 @@ Or you can subscribe to any topic on the server using wildcard (`#`) topic:
 tedge mqtt sub '#'
 ```
 
-Now use `tedge mqtt pub 'tedge/measurements' '{​​​​ "temperature": 21.3 }'` to publish message on `tedge/measurements` topic with payload `{​​​​ "temperature": 21.3 }`.
+Now use `tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'` to publish message on `tedge/measurements` topic with payload `{ "temperature": 21.3 }`.
 
 All messages from sub command are printed to `stdout` and can be captured to a file if you need to:
 

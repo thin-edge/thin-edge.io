@@ -24,6 +24,25 @@ You can now to use [`tegde` command](../references/tedge.md) to:
 * [connect the device](connect-c8y.md#connect-the-device), and
 * [send your first telemetry data](#sending-your-first-telemetry-data).
 
+## Configure the device
+
+To connect the device to the Cumulocity IoT, one needs to set the URL of your Cumulocity IoT tenant and the root certificate as below.
+
+Set the URL of your Cumulocity IoT tenant.
+
+```
+$ sudo tedge config set c8y.url your-tenant.cumulocity.com
+```
+
+Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
+
+```
+$ sudo tedge config set c8y.root.cert.path /etc/ssl/certs
+```
+
+This will set the root certificate path of the Cumulocity IoT.
+In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [Here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+
 ## Create the certificate
 
 The `tedge cert create` command creates a self-signed certificate which can be used for testing purpose.
@@ -34,18 +53,19 @@ This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is actually the device with that identity. 
 
 ```
-$ tedge cert create --id my-device
+$ sudo tedge cert create --device-id my-device
 ```
 
 You can then check the content of that certificate.
 
 ```
-$ tedge cert show
-Device certificate: /home/pi/.tedge/tedge-certificate.pem
+$ sudo tedge cert show
+Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
 Valid from: Tue, 09 Feb 2021 17:16:52 +0000
 Valid up to: Tue, 11 May 2021 17:16:52 +0000
+Thumbprint: CDBF4EC17AA02829CAC4E4C86ABB82B0FE423D3E
 ```
 
 You may notice that the issuer of this certificate is the device itself.
@@ -62,15 +82,12 @@ in order to see this list for your Cumulocity tenant.
 
 Here, the device certificate is self-signed and has to be directly trusted by Certificate.
 This can be done:
-* either with the GUI: upload the certificate from your device (`/home/pi/.tedge/tedge-certificate.pem`)
+* either with the GUI: upload the certificate from your device (`/etc/tedge/device-certs/tedge-certificate.pem`)
   to your tenant "Device Management/Management/Trusted certificates".
-* or using the `tedge cert register c8y` command.
+* or using the `tedge cert upload c8y` command.
 
 ```
-$ tedge cert register c8y \
-  --url <your instance url> \
-  --tenant <your tenant id>\
-  --user <your user name>
+$ sudo tedge cert upload c8y --user <username>
 ```
 
 ## Connect the device
@@ -80,24 +97,40 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the cloud,
 * to forward local messages to the cloud and vice versa.
 
+Also, if you have installed `tedge_mapper`, this command starts and enables the tedge_mapper systemd service.
+At last, it sends packets to Cumulocity to check the connection.
+If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
+
 ```
-$ target/release/tedge connect c8y --id my-device
-Checking if systemd and mosquitto are available.
+$ sudo tedge connect c8y
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Checking configuration for requested bridge.
+Validating the bridge certificates.
 
-Creating configuration for requested bridge.
+Saving configuration for requested bridge.
 
-Restarting MQTT Server, [requires elevated permission], please authorise if asked.
+Restarting mosquitto service.
 
-Awaiting MQTT Server to start. This may take few seconds.
+Awaiting mosquitto to start. This may take up to 5 seconds.
 
-Sending packets to check connection.
-Persisting MQTT Server on reboot.
+Persisting mosquitto on reboot.
 
-Successully created bridge connection!
+Successfully created bridge connection!
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper service.
+
+Persisting tedge-mapper on reboot.
+
+tedge-mapper service successfully started and enabled!
+
+Sending packets to check connection. This may take up to 10 seconds.
+
+Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, it's normal to get no response in the first try.
+Try 2 / 2: Sending a message to Cumulocity. Received expected response message, connection check is successful.
 ```
 
 ## Sending your first telemetry data
