@@ -26,7 +26,7 @@
     - [The `tedge cert` command](./references/tedge-cert.md)
     - [The `tedge connect` command](./references/tedge-connect.md)
     - [The `tedge mqtt` command](./references/tedge-mqtt.md)
-    - [The Bridged Topics daemon](./references/bridged-topics.md)
+    - [The Bridged Topics](./references/bridged-topics.md)
     
 ## Architecture
 - [Architecture](architecture/README.md)
