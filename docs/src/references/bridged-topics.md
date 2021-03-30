@@ -58,9 +58,9 @@ MQTT clients on Thin Edge device must use the below topics to communicate with t
 The Azure topics are prefixed by `az/`.   
 
  * `az/messages/events/`  - Use this topic to send the messages from device to cloud.   
- The messages are forwarded to the Azure topic named devices/{device_id}/messages/events/
+ The messages are forwarded to the Azure topic named `devices/{device_id}/messages/events/`
  where device_id is the Thin Edge device id.
    
  * `az/messages/devicebound/#` - Use this topic to subscribe for the messages that were sent from cloud to device.
- Any message published by Azure on one the subtopics of devices/{device_id}/messages/devicebound/#
+ Any message published by Azure on one the subtopics of `devices/{device_id}/messages/devicebound/#`
  is republished here.
