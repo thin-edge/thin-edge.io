@@ -34,7 +34,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/archive/<package>_<version>_
 where:
 > `version` -> thin-edge.io version in x.x.x format
 >
-> `arch` -> architecture type [amd64, armhf]
+> `arch` -> architecture type (amd64, armhf)
 
 Eg:
 

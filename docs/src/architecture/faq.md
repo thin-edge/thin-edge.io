@@ -65,8 +65,6 @@ In the end, we decided to use MQTT for the following reasons:
 
 Alternatives considered where: DBus, gRPC and REST over HTTP. 
 
-For additional details see [thin-edge.io MQTT bus](./mqtt-bus.md).
-
 ## Why does thin-edge.io use MQTT for cloud communication?
 
 [MQTT](https://mqtt.org/) is a lightweight and flexible messaging protocol widely used by IoT applications.
