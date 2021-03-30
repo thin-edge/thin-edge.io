@@ -4,10 +4,8 @@
 use anyhow::Context;
 use structopt::StructOpt;
 
-mod certificate;
 mod cli;
 mod command;
-mod mqtt;
 mod utils;
 
 use command::BuildCommand;
