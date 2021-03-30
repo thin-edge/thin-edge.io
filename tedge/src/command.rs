@@ -16,7 +16,7 @@ use crate::utils::users::UserManager;
 ///        format!("say hello to '{}'", name),
 ///     }
 ///
-///     fn execute(&self) -> Result<(), anyhow::Error> {
+///     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
 ///        println!("Hello {}!", name};
 ///        Ok(())
 ///     }
@@ -24,7 +24,7 @@ use crate::utils::users::UserManager;
 /// ```
 ///
 /// If a command needs some context, say the tedge configuration,
-/// this context can be provided to the command.
+/// this context can be provided to the command struct.
 ///
 /// ```
 /// struct GetConfigKey {
@@ -37,7 +37,7 @@ use crate::utils::users::UserManager;
 ///        format!("get the value of the configuration key '{}'", self.key),
 ///     }
 ///
-///     fn execute(&self) -> Result<(), anyhow::Error> {
+///     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
 ///        match self.config.get_config_value(self.key)? {
 ///             Some(value) => println!("{}", value),
 ///             None => eprintln!("The configuration key `{}` is not set", self.key),
@@ -61,7 +61,7 @@ use crate::utils::users::UserManager;
 ///        format!("set the value of the configuration key '{}' to '{}'", self.key, self.value),
 ///     }
 ///
-///     fn execute(&self) -> Result<(), anyhow::Error> {
+///     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
 ///        let mut config = TEdgeConfig::from_default_config()?;
 ///        config.set_config_value(self.key, self.value)?;
 ///        let _ = config.write_to_default_config()?;
@@ -75,8 +75,21 @@ pub trait Command {
     /// This description is displayed to the end user in case of an error, to give the context of that error.
     fn description(&self) -> String;
 
-    /// Execute this command.
+    /// Execute this command in a given execution context.
     ///
+    /// The execution context provides a user manager that can be used to switch to a specific user.
+    ///
+    /// ```
+    ///     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    ///        let _user_guard = context.user_manager.become_user("mosquitto")?;
+    ///
+    ///        // this code is executed on behalf of the `mosquitto` user
+    ///
+    ///        Ok(())
+    ///     }
+    /// ```
+    ///
+    /// The errors returned by this method must be concrete `anyhow::Error` values.
     /// The simplest way to implement a specific `anyhow::Error` type is to derive the `thiserror::Error`.
     /// Doing so, the command specific error type implements `Into<anyhow::Error>`
     /// and such errors can then be returned with no explicit conversion from the `run()` method.
@@ -90,6 +103,16 @@ pub trait Command {
     /// ```
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error>;
 
+    /// Helper method to be used in the `BuildCommand` trait.
+    ///
+    /// The `BuildCommand::build_command()` method has to return a box around a new command.
+    ///
+    /// ```
+    /// fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    ///     let cmd = GetConfigKey { config, key };
+    ///     Ok(cmd.into_boxed())
+    /// }
+    /// ```
     fn into_boxed(self) -> Box<dyn Command>
     where
         Self: Sized + 'static,
@@ -116,7 +139,7 @@ pub trait Command {
 ///
 /// impl BuildCommand for ConfigCmd {
 ///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-///        match self {
+///        let cmd = match self {
 ///            ConfigCmd::Set { key, value } => SetConfigKey {
 ///                config,
 ///                key,
@@ -127,6 +150,7 @@ pub trait Command {
 ///                key,
 ///            },
 ///        }
+///        Ok(cmd.into_boxed())
 ///     }
 /// }
 /// ```
@@ -137,11 +161,28 @@ pub trait BuildCommand {
     ) -> Result<Box<dyn Command>, config::ConfigError>;
 }
 
+/// The execution context of a command.
+///
+/// It provides a user manager that can be used to switch to a specific user.
+///
+/// ```
+///     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+///        let _user_guard = context.user_manager.become_user("mosquitto")?;
+///
+///        // this code is executed on behalf of the `mosquitto` user
+///
+///        Ok(())
+///     }
+/// ```
 pub struct ExecutionContext {
     pub user_manager: UserManager,
 }
 
 impl ExecutionContext {
+    /// Build a new execution context.
+    ///
+    /// Such a context MUST be created only once,
+    /// in practice in the `main()` function.
     pub fn new() -> ExecutionContext {
         ExecutionContext {
             user_manager: UserManager::new(),
