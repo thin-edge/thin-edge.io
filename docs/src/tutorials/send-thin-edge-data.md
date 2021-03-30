@@ -46,11 +46,12 @@ and see if your temperature measurement is appearing in the dashboard.
 
 You can represent measurements that are far more complex than the single-valued ones described above using the Thin Edge JSON format.
 
-A multi-valued measurement like `coordinate` that consists of `x`, `y` and `z` coordinate values can be represented as follows:
+A multi-valued measurement like `three_phase_current` that consists of `L1`, `L2` and `L3` values,
+representing the current on each phase can be represented as follows:
 
 ```json
 {
-  "current": {
+  "three_phase_current": {
     "L1": 9.5,
     "L2": 10.3,
     "L3": 8.8
