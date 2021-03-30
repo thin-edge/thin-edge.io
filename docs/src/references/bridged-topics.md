@@ -1,11 +1,11 @@
-# The `bridged-topics`
+# The bridged topics
 
 This document lists the mqtt topics that are supported by the thin-edge.io.
 
 ## Thin Edge JSON Mqtt Topics
- To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on   
- **tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and     
- send them to the cloud that the device has been connected to by the `tedge connect` command.  
+To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on   
+**tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and     
+send them to the cloud that the device has been connected to by the `tedge connect` command.  
  
 ## Cumulocity Mqtt Topics
 The topics follow the below format  
@@ -14,13 +14,13 @@ The topics follow the below format
 | Protocol | Direction | Type |
 |----------|-----------|-------| 
 | s = standard  | u = upstream | s =  static (built-in)          
-| t = transient | d = downstream |c = custom (device-defined
+| t = transient | d = downstream |c = custom (device-defined)
 |               |  e = error| d = default (defined in connect)
 |               |           | t = template
 |               |           | cr = credentials
                                
-   ### SmartREST2 topics
-   All Cumulocity topics have been prefixed by c8y/.  
+   ### SmartREST2.0 topics
+   All Cumulocity topics have been prefixed by `c8y/`.  
    * Registration topics  
      c8y/s/dcr     
      c8y/s/ucr    
@@ -54,7 +54,7 @@ The topics follow the below format
 You can find more information about Cumulocity topics [Here](https://tech.forums.softwareag.com/t/cumulocity-iot-tips-and-tricks-mqtt-cheat-sheet/237187)  
 
 ## Azure Mqtt Topics  
-Mqtt clients on Thin Edge device must use the below topics to communicate with the Azure cloud.   
+MQTT clients on Thin Edge device must use the below topics to communicate with the Azure cloud.   
 The Azure topics are prefixed by `az/`.   
 
  * `az/messages/events/`  - Use this topic to send the messages from device to cloud.   
