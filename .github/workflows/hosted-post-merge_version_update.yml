@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - run: |
-          git config --global user.email "versioneer@actions.io"
+          git config --global user.email "info@thin-edge.io"
           git config --global user.name "Versioneer"
 
       - name: Install cargo-release
