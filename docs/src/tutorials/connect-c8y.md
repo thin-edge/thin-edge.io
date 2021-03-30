@@ -102,7 +102,7 @@ Successully created bridge connection!
 
 ## Sending your first telemetry data
 
-Sending data to Cumulocity is done using [MQTT](../architecture/mqtt-bus.md) over topics prefixed with `c8y`.
+Sending data to Cumulocity is done using MQTT over topics prefixed with `c8y`.
 Any messages sent to one of these topics will be forwarded to Cumulocity.
 The messages are expected to have a format specific to each topic.
 Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
