@@ -9,4 +9,4 @@ Following sections show the tedge sub commands.
 * [`tedge connect` command](../references/tedge-connect.md)
 * [`tedge disconnect` command](../references/tedge-disconnect.md)
 * [`tedge mqtt` command](../references/tedge-mqtt.md)
-* [Bridged Topics daemon](../references/bridged-topics.md)
+* [Bridged Topics](../references/bridged-topics.md)
