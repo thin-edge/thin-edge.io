@@ -80,9 +80,16 @@ dpkg -i mapper_0.1.0_amd64
 
 ### Add your user to `tedge-users` group
 
-During the installation process, `tedge-users` group is automatically created.
-For the security enhancement, the users in `tedge-users` group are allowed to run `tedge` with sudo.
-You can run this command to add your user to the group.
+During the installation process, a `tedge-users` group is automatically created.
+
+For enhancement of security, only users in the `tedge-users` group are allowed to configure `tedge`.
+The `tedge` command needs to be run using sudo.
+Users in the group `tedge-users` can call `tedge` as sudo which is needed for setup.
+
+For a user to be able to use tedge without being granted a global sudo access,
+this user can be added to the tedge-users group.
+
+Run this command to add your user to the group.
 
 ```shell
 sudo adduser <user> tedge-users

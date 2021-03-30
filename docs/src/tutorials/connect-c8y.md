@@ -41,7 +41,8 @@ $ sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Cumulocity IoT.
-In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+In most of the Linux flavors, the certificate will be present in /etc/ssl/certs.
+If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 
 ## Create the certificate
 

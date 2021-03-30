@@ -10,7 +10,8 @@ sudo tedge cert create --device-id alpha
 
 > Note: `tegde cert` requires `sudo` privilege. This command provides no output on success.
 
-[`tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`), to use custom location refer to [`tedge config`](../references/tedge-config.md).
+[`sudo tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
+To use a custom location, refer to [`tedge config`](../references/tedge-config.md).
 
 Now you should have a certificate in the `/etc/tedge/device-certs/` directory.
 

@@ -29,7 +29,7 @@ sudo tedge config set c8y.url example.cumulocity.com
 
 ___
 
-Next step is to upload self-signed certificate, which is not needed in production with root cert!
+The next step is to have the device certificate trusted by Cumulocity. This is done by uploading the certificate of the signee.
 You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guides/10.7.0-beta/device-sdk/mqtt/#device-certificates) or with [`tedge cert upload`](../references/tedge-cert.md) as described below.
 
 > Note: This command takes parameter `user`, this is due to upload mechanism to Cumulocity cloud which uses username and password for authentication.
