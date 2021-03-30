@@ -840,6 +840,10 @@ mod tests {
 
         #[test]
         fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
+            if measurement == "time" || measurement == "type" {
+                // Skip this test case, since the random measurement name happens to be a reserved key.
+                return Ok(());
+            }
             let input = format!(r#"{{"time": "2013-06-22T17:03:14.000+02:00",
                         "{}": 123
                       }}"#, measurement);

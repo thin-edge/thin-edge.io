@@ -358,10 +358,10 @@ fn serialize() {
         .lines()
         .filter(|str| !str.is_empty() && !str.starts_with('#'))
         .collect();
-    println!("{:?}", config_set);
     let mut expected = HashSet::new();
 
-    expected.insert("bind_address 127.0.0.1");
+    expected.insert("listener 1883 localhost");
+    expected.insert("allow_anonymous true");
     expected.insert("connection_messages true");
 
     expected.insert("log_type error");
