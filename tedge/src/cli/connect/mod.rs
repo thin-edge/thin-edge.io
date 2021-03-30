@@ -13,7 +13,6 @@ pub mod az;
 pub mod c8y;
 
 pub const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
-const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "bridges";

@@ -77,6 +77,27 @@ impl QuerySetting<C8yRootCertPathSetting> for TEdgeConfig {
     }
 }
 
+const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+
+impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
+    fn query_with_default(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<String> {
+        Ok(self.azure
+            .root_cert_path
+            .clone()
+            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
+    }
+}
+
+impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfig {
+    fn query_with_default(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
+        Ok(self.c8y
+            .root_cert_path
+            .clone()
+            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
+    }
+}
+
+
 impl UpdateSetting<DeviceIdSetting> for TEdgeConfig {
     fn update(&mut self, _setting: DeviceIdSetting, value: String) -> ConfigSettingResult<()> {
         self.device.id = Some(value);

@@ -16,10 +16,8 @@ impl C8y {
             MQTT_TLS_PORT
         );
 
-        let bridge_root_cert_path =
-            config.query_string_or_default(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH)?;
-
-        let () = config.update(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
+        let bridge_root_cert_path = config.query_with_default(C8yRootCertPathSetting)?;
+        let () = config.update(C8yRootCertPathSetting, bridge_root_cert_path.clone())?;
 
         config.write_to_default_config()?;
 

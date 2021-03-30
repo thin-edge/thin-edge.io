@@ -5,20 +5,13 @@ pub trait QuerySetting<T: ConfigSetting> {
     fn query(&self, setting: T) -> ConfigSettingResult<T::Value>;
 }
 
+// XXX: Alternatively return the default from `QuerySetting::query`.
+pub trait QuerySettingWithDefault<T: ConfigSetting> {
+    fn query_with_default(&self, setting: T) -> ConfigSettingResult<T::Value>;
+}
+
 pub trait QueryStringSetting<T: ConfigSetting>: QuerySetting<T> {
     fn query_string(&self, setting: T) -> ConfigSettingResult<String>;
-
-    fn query_string_or_default(
-        &self,
-        setting: T,
-        default: impl Into<String>,
-    ) -> ConfigSettingResult<String> {
-        match self.query_string(setting) {
-            Ok(s) => Ok(s),
-            Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(default.into()),
-            Err(err) => Err(err),
-        }
-    }
 }
 
 pub trait UpdateSetting<T: ConfigSetting> {

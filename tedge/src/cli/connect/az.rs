@@ -13,15 +13,13 @@ impl Azure {
         let az_url = config.query(AzureUrlSetting)?;
 
         let address = format!("{}:{}", az_url.as_str(), MQTT_TLS_PORT);
-        let clientid = config.query_string(DeviceIdSetting)?;
+        let clientid = config.query(DeviceIdSetting)?;
         let user_name = format!("{}/{}/?api-version=2018-06-30", az_url.as_str(), &clientid);
         let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", clientid);
         let sub_msg_topic = format!("messages/devicebound/# out 1 az/ devices/{}/", clientid);
 
-        let bridge_root_cert_path =
-            config.query_string_or_default(AzureRootCertPathSetting, DEFAULT_ROOT_CERT_PATH)?;
-
-        let () = config.update(AzureRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
+        let bridge_root_cert_path = config.query_with_default(AzureRootCertPathSetting)?;
+        let () = config.update(AzureRootCertPathSetting, bridge_root_cert_path.clone())?;
 
         config.write_to_default_config()?;
 
