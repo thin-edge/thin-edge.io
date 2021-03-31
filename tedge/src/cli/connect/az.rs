@@ -72,15 +72,15 @@ impl Azure {
 
     #[tokio::main]
     async fn check_connection_async(&self) -> Result<(), ConnectError> {
-        const AZURE_TOPIC_DEVICETWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
-        const AZURE_TOPIC_DEVICETWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
+        const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
+        const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
         const CLIENT_ID: &str = "check_connection_az";
 
-        let devicetwin_pub_topic = Topic::new(AZURE_TOPIC_DEVICETWIN_UPSTREAM)?;
-        let devicetwin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICETWIN_DOWNSTREAM)?;
+        let device_twin_pub_topic = Topic::new(AZURE_TOPIC_DEVICE_TWIN_UPSTREAM)?;
+        let device_twin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM)?;
 
         let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
-        let mut device_twin_response = mqtt.subscribe(devicetwin_sub_filter).await?;
+        let mut device_twin_response = mqtt.subscribe(device_twin_sub_filter).await?;
 
         let (sender, mut receiver) = tokio::sync::oneshot::channel();
 
@@ -95,7 +95,7 @@ impl Azure {
             }
         });
 
-        mqtt.publish(Message::new(&devicetwin_pub_topic, "".to_string()))
+        mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string()))
             .await?;
 
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
