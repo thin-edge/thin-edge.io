@@ -10,39 +10,39 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Examples
 /// ```ignore
-/// /// Read the default tedge.toml file into a TEdgeConfig object
-/// let config: TEdgeConfig = TEdgeConfig::from_default_config().unwrap();
+/// /// Read the default tedge.toml file into a TEdgeConfigDto object
+/// let config: TEdgeConfigDto = TEdgeConfigDto::from_default_config().unwrap();
 ///
-/// /// Fetch the device config from the TEdgeConfig object
-/// let device_config: DeviceConfig = config.device;
-/// /// Fetch the device id from the DeviceConfig object
+/// /// Fetch the device config from the TEdgeConfigDto object
+/// let device_config: DeviceConfigDto = config.device;
+/// /// Fetch the device id from the DeviceConfigDto object
 /// let device_id = device_config.id.unwrap();
 ///
-/// /// Fetch the Cumulocity config from the TEdgeConfig object
-/// let cumulocity_config: CumulocityConfig = config.c8y;
-/// /// Fetch the Cumulocity URL from the CumulocityConfig object
+/// /// Fetch the Cumulocity config from the TEdgeConfigDto object
+/// let cumulocity_config: CumulocityConfigDto = config.c8y;
+/// /// Fetch the Cumulocity URL from the CumulocityConfigDto object
 /// let cumulocity_url = cumulocity_config.url.unwrap();
 /// ```
 ///
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct TEdgeConfig {
+pub struct TEdgeConfigDto {
     /// Captures the device specific configurations
     #[serde(default)]
-    pub(crate) device: DeviceConfig,
+    pub(crate) device: DeviceConfigDto,
 
     /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
-    pub(crate) c8y: CumulocityConfig,
+    pub(crate) c8y: CumulocityConfigDto,
     #[serde(default)]
-    pub(crate) azure: AzureConfig,
+    pub(crate) azure: AzureConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct DeviceConfig {
+pub(crate) struct DeviceConfigDto {
     /// The unique id of the device
     pub(crate) id: Option<String>,
 
@@ -59,7 +59,7 @@ pub(crate) struct DeviceConfig {
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct CumulocityConfig {
+pub(crate) struct CumulocityConfigDto {
     /// Preserves the current status of the connection
     connect: Option<String>,
 
@@ -73,7 +73,7 @@ pub(crate) struct CumulocityConfig {
 
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct AzureConfig {
+pub(crate) struct AzureConfigDto {
     connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<String>,

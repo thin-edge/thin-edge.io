@@ -13,18 +13,15 @@ use defaults::*;
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 
-// assign_default
-// preload_config
-
-impl TEdgeConfig {
-    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfig` out of it
+impl TEdgeConfigDto {
+    /// Parse the configuration file at `$HOME/.tedge/tedge.toml` and create a `TEdgeConfigDto` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
-    pub fn from_default_config() -> Result<TEdgeConfig, ConfigError> {
+    pub fn from_default_config() -> Result<TEdgeConfigDto, ConfigError> {
         Self::from_custom_config(tedge_config_path()?.as_path())
     }
 
-    /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
+    /// Parse the configuration file at the provided `path` and create a `TEdgeConfigDto` out of it
     /// The retrieved configuration will have default values applied to any unconfigured field
     /// for which a default value is available.
     ///
@@ -32,22 +29,24 @@ impl TEdgeConfig {
     ///
     /// * `path` - Path to a thin edge configuration TOML file
     ///
-    pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
+    pub fn from_custom_config(path: &Path) -> Result<TEdgeConfigDto, ConfigError> {
         match read_to_string(path) {
-            Ok(content) => Ok(toml::from_str::<TEdgeConfig>(content.as_str())?.assign_defaults()?),
+            Ok(content) => {
+                Ok(toml::from_str::<TEdgeConfigDto>(content.as_str())?.assign_defaults()?)
+            }
             Err(err) => match err.kind() {
-                ErrorKind::NotFound => Ok(TEdgeConfig::default().assign_defaults()?),
+                ErrorKind::NotFound => Ok(TEdgeConfigDto::default().assign_defaults()?),
                 _ => Err(ConfigError::IOError(err)),
             },
         }
     }
 
-    /// Persists this `TEdgeConfig` to $HOME/.tedge/tedge.toml
+    /// Persists this `TEdgeConfigDto` to $HOME/.tedge/tedge.toml
     pub fn write_to_default_config(&self) -> Result<(), ConfigError> {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
 
-    /// Persists this `TEdgeConfig` to the `path` provided
+    /// Persists this `TEdgeConfigDto` to the `path` provided
     fn write_to_custom_config(&self, path: &Path) -> Result<(), ConfigError> {
         let toml = toml::to_string_pretty(&self)?;
         let mut file = NamedTempFile::new()?;
@@ -98,7 +97,7 @@ connect = "false"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         assert_eq!(config.device.id.unwrap(), "ABCD1234");
         assert_eq!(config.device.key_path.unwrap(), "/path/to/key");
@@ -140,7 +139,7 @@ root_cert_path = "/path/to/azure/root/cert"
         // Using a TempPath let's close the file (this is required on Windows for that test to work).
         let config_file_path = temp_file_with_content(toml_conf).into_temp_path();
 
-        let mut config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
+        let mut config = TEdgeConfigDto::from_custom_config(config_file_path.as_ref()).unwrap();
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
         assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
@@ -176,7 +175,7 @@ root_cert_path = "/path/to/azure/root/cert"
         config
             .write_to_custom_config(config_file_path.as_ref())
             .unwrap();
-        let config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file_path.as_ref()).unwrap();
 
         assert_eq!(config.device.id.as_ref().unwrap(), updated_device_id);
         assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
@@ -200,7 +199,7 @@ id = "ABCD1234"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(
@@ -224,7 +223,7 @@ id = "ABCD1234"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
         assert_eq!(
@@ -248,7 +247,7 @@ url = "your-tenant.cumulocity.com"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         assert_eq!(
             config.c8y.url.unwrap().as_str(),
@@ -269,7 +268,7 @@ url = "your-tenant.cumulocity.com"
     #[test]
     fn test_parse_config_empty_file() {
         let config_file = NamedTempFile::new().unwrap();
-        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         assert!(config.device.id.is_none());
         assert_eq!(
@@ -289,7 +288,7 @@ url = "your-tenant.cumulocity.com"
 
     #[test]
     fn test_parse_config_no_config_file() {
-        let config = TEdgeConfig::from_custom_config(Path::new("/non/existent/path")).unwrap();
+        let config = TEdgeConfigDto::from_custom_config(Path::new("/non/existent/path")).unwrap();
 
         assert!(config.device.id.is_none());
         assert!(config.c8y.url.is_none());
@@ -304,7 +303,7 @@ hello="tedge"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let result = TEdgeConfig::from_custom_config(config_file.path());
+        let result = TEdgeConfigDto::from_custom_config(config_file.path());
         assert_matches!(
             result.unwrap_err(),
             ConfigError::TOMLParseError(_),
@@ -319,7 +318,7 @@ hello="tedge"
         "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let result = TEdgeConfig::from_custom_config(config_file.path());
+        let result = TEdgeConfigDto::from_custom_config(config_file.path());
         assert_matches!(
             result.unwrap_err(),
             ConfigError::TOMLParseError(_),
@@ -345,7 +344,7 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let mut config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         let original_device_id = "ABCD1234".to_string();
         let original_device_key_path = "/path/to/key".to_string();
@@ -422,7 +421,7 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+        let mut config = TEdgeConfigDto::from_custom_config(config_file.path()).unwrap();
 
         let original_azure_url = "MyAzure.azure-devices.net".to_string();
         let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();

@@ -8,7 +8,7 @@ pub trait AssignDefaults: Sized {
     fn assign_defaults(self) -> Result<Self, ConfigError>;
 }
 
-impl AssignDefaults for TEdgeConfig {
+impl AssignDefaults for TEdgeConfigDto {
     fn assign_defaults(self) -> Result<Self, ConfigError> {
         let device_config = self.device.assign_defaults()?;
 
@@ -19,7 +19,7 @@ impl AssignDefaults for TEdgeConfig {
     }
 }
 
-impl AssignDefaults for DeviceConfig {
+impl AssignDefaults for DeviceConfigDto {
     fn assign_defaults(self) -> Result<Self, ConfigError> {
         let key_path = match self.key_path {
             None => default_device_key_path()?,
@@ -31,7 +31,7 @@ impl AssignDefaults for DeviceConfig {
             Some(val) => val,
         };
 
-        Ok(DeviceConfig {
+        Ok(DeviceConfigDto {
             key_path: Some(key_path),
             cert_path: Some(cert_path),
             ..self

@@ -1,6 +1,6 @@
 use crate::*;
 
-impl QuerySetting<AzureUrlSetting> for TEdgeConfig {
+impl QuerySetting<AzureUrlSetting> for TEdgeConfigDto {
     fn query(&self, _setting: AzureUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.azure
             .url
@@ -11,7 +11,7 @@ impl QuerySetting<AzureUrlSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<C8yUrlSetting> for TEdgeConfig {
+impl QuerySetting<C8yUrlSetting> for TEdgeConfigDto {
     fn query(&self, _setting: C8yUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.c8y
             .url
@@ -22,7 +22,7 @@ impl QuerySetting<C8yUrlSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<DeviceIdSetting> for TEdgeConfig {
+impl QuerySetting<DeviceIdSetting> for TEdgeConfigDto {
     fn query(&self, _setting: DeviceIdSetting) -> ConfigSettingResult<String> {
         self.device
             .id
@@ -33,7 +33,7 @@ impl QuerySetting<DeviceIdSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<DeviceCertPathSetting> for TEdgeConfig {
+impl QuerySetting<DeviceCertPathSetting> for TEdgeConfigDto {
     fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<String> {
         self.device
             .cert_path
@@ -44,7 +44,7 @@ impl QuerySetting<DeviceCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<DeviceKeyPathSetting> for TEdgeConfig {
+impl QuerySetting<DeviceKeyPathSetting> for TEdgeConfigDto {
     fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<String> {
         self.device
             .key_path
@@ -55,7 +55,7 @@ impl QuerySetting<DeviceKeyPathSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<AzureRootCertPathSetting> for TEdgeConfig {
+impl QuerySetting<AzureRootCertPathSetting> for TEdgeConfigDto {
     fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<String> {
         self.azure
             .root_cert_path
@@ -66,7 +66,7 @@ impl QuerySetting<AzureRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySetting<C8yRootCertPathSetting> for TEdgeConfig {
+impl QuerySetting<C8yRootCertPathSetting> for TEdgeConfigDto {
     fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
         self.c8y
             .root_cert_path
@@ -79,7 +79,7 @@ impl QuerySetting<C8yRootCertPathSetting> for TEdgeConfig {
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
-impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
+impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfigDto {
     fn query_with_default(
         &self,
         _setting: AzureRootCertPathSetting,
@@ -92,7 +92,7 @@ impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfig {
+impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfigDto {
     fn query_with_default(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
         Ok(self
             .c8y
@@ -102,28 +102,28 @@ impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl UpdateSetting<DeviceIdSetting> for TEdgeConfig {
+impl UpdateSetting<DeviceIdSetting> for TEdgeConfigDto {
     fn update(&mut self, _setting: DeviceIdSetting, value: String) -> ConfigSettingResult<()> {
         self.device.id = Some(value);
         Ok(())
     }
 }
 
-impl UpdateSetting<AzureUrlSetting> for TEdgeConfig {
+impl UpdateSetting<AzureUrlSetting> for TEdgeConfigDto {
     fn update(&mut self, _setting: AzureUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
         self.azure.url = Some(value);
         Ok(())
     }
 }
 
-impl UpdateSetting<C8yUrlSetting> for TEdgeConfig {
+impl UpdateSetting<C8yUrlSetting> for TEdgeConfigDto {
     fn update(&mut self, _setting: C8yUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
         self.c8y.url = Some(value);
         Ok(())
     }
 }
 
-impl UpdateSetting<DeviceCertPathSetting> for TEdgeConfig {
+impl UpdateSetting<DeviceCertPathSetting> for TEdgeConfigDto {
     fn update(
         &mut self,
         _setting: DeviceCertPathSetting,
@@ -134,14 +134,14 @@ impl UpdateSetting<DeviceCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl UpdateSetting<DeviceKeyPathSetting> for TEdgeConfig {
+impl UpdateSetting<DeviceKeyPathSetting> for TEdgeConfigDto {
     fn update(&mut self, _setting: DeviceKeyPathSetting, value: String) -> ConfigSettingResult<()> {
         self.device.key_path = Some(value);
         Ok(())
     }
 }
 
-impl UpdateSetting<AzureRootCertPathSetting> for TEdgeConfig {
+impl UpdateSetting<AzureRootCertPathSetting> for TEdgeConfigDto {
     fn update(
         &mut self,
         _setting: AzureRootCertPathSetting,
@@ -152,7 +152,7 @@ impl UpdateSetting<AzureRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl UpdateSetting<C8yRootCertPathSetting> for TEdgeConfig {
+impl UpdateSetting<C8yRootCertPathSetting> for TEdgeConfigDto {
     fn update(
         &mut self,
         _setting: C8yRootCertPathSetting,
@@ -163,49 +163,49 @@ impl UpdateSetting<C8yRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl UnsetSetting<AzureRootCertPathSetting> for TEdgeConfig {
+impl UnsetSetting<AzureRootCertPathSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<()> {
         self.azure.root_cert_path = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<C8yRootCertPathSetting> for TEdgeConfig {
+impl UnsetSetting<C8yRootCertPathSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<()> {
         self.c8y.root_cert_path = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<DeviceIdSetting> for TEdgeConfig {
+impl UnsetSetting<DeviceIdSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
         self.device.id = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<DeviceKeyPathSetting> for TEdgeConfig {
+impl UnsetSetting<DeviceKeyPathSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<()> {
         self.device.key_path = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<DeviceCertPathSetting> for TEdgeConfig {
+impl UnsetSetting<DeviceCertPathSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<()> {
         self.device.cert_path = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<C8yUrlSetting> for TEdgeConfig {
+impl UnsetSetting<C8yUrlSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: C8yUrlSetting) -> ConfigSettingResult<()> {
         self.c8y.url = None;
         Ok(())
     }
 }
 
-impl UnsetSetting<AzureUrlSetting> for TEdgeConfig {
+impl UnsetSetting<AzureUrlSetting> for TEdgeConfigDto {
     fn unset(&mut self, _setting: AzureUrlSetting) -> ConfigSettingResult<()> {
         self.azure.url = None;
         Ok(())
