@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
+const TEDGE_HOME_DIR: &str = ".tedge";
 
+// XXX: Move to TEdgeConfig
 pub trait AssignDefaults: Sized {
     fn assign_defaults(self) -> Result<Self, ConfigError>;
 }
@@ -12,7 +14,7 @@ impl AssignDefaults for TEdgeConfigDto {
     fn assign_defaults(self) -> Result<Self, ConfigError> {
         let device_config = self.device.assign_defaults()?;
 
-        Ok(TEdgeConfig {
+        Ok(TEdgeConfigDto {
             device: device_config,
             ..self
         })
