@@ -11,7 +11,9 @@ const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 #[derive(Debug)]
-pub struct TEdgeConfig(TEdgeConfigDto);
+pub struct TEdgeConfig {
+    data: TEdgeConfigDto,
+}
 
 // For now, just proxy settings to the underlying TEdgeConfigDto.
 impl<T: ConfigSetting> QuerySetting<T> for TEdgeConfig
@@ -19,7 +21,7 @@ where
     TEdgeConfigDto: QuerySetting<T>,
 {
     fn query(&self, setting: T) -> ConfigSettingResult<T::Value> {
-        self.0.query(setting)
+        self.data.query(setting)
     }
 }
 
@@ -29,7 +31,7 @@ where
     TEdgeConfigDto: UpdateSetting<T>,
 {
     fn update(&mut self, setting: T, value: T::Value) -> ConfigSettingResult<()> {
-        self.0.update(setting, value)
+        self.data.update(setting, value)
     }
 }
 
@@ -39,13 +41,13 @@ where
     TEdgeConfigDto: UnsetSetting<T>,
 {
     fn unset(&mut self, setting: T) -> ConfigSettingResult<()> {
-        self.0.unset(setting)
+        self.data.unset(setting)
     }
 }
 
 impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
     fn query_with_default(&self, setting: AzureRootCertPathSetting) -> ConfigSettingResult<String> {
-        match self.0.query(setting) {
+        match self.data.query(setting) {
             Ok(value) => Ok(value),
             Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(DEFAULT_ROOT_CERT_PATH.into()),
             Err(other) => Err(other),
@@ -55,7 +57,7 @@ impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
 
 impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfig {
     fn query_with_default(&self, setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
-        match self.0.query(setting) {
+        match self.data.query(setting) {
             Ok(value) => Ok(value),
             Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(DEFAULT_ROOT_CERT_PATH.into()),
             Err(other) => Err(other),
@@ -105,13 +107,14 @@ impl TEdgeConfig {
     }
 
     fn load_from(path: &Path) -> Result<TEdgeConfig, ConfigError> {
-        match read_to_string(path) {
-            Ok(content) => Ok(Self(toml::from_str::<TEdgeConfigDto>(content.as_str())?)),
+        let data = match read_to_string(path) {
+            Ok(content) => toml::from_str::<TEdgeConfigDto>(content.as_str())?,
             Err(err) => match err.kind() {
-                ErrorKind::NotFound => Ok(Self(TEdgeConfigDto::default())),
-                _ => Err(ConfigError::IOError(err)),
+                ErrorKind::NotFound => TEdgeConfigDto::default(),
+                _ => Err(ConfigError::IOError(err))?,
             },
-        }
+        };
+        Ok(Self { data })
     }
 
     /// Persists this `TEdgeConfigDto` to $HOME/.tedge/tedge.toml
@@ -121,17 +124,17 @@ impl TEdgeConfig {
 
     #[cfg(test)]
     fn data(&self) -> &TEdgeConfigDto {
-        &self.0
+        &self.data
     }
 
     #[cfg(test)]
     fn data_mut(&mut self) -> &mut TEdgeConfigDto {
-        &mut self.0
+        &mut self.data
     }
 
     /// Persists this `TEdgeConfigDto` to the `path` provided
     fn write_to_custom_config(&self, path: &Path) -> Result<(), ConfigError> {
-        let toml = toml::to_string_pretty(&self.0)?;
+        let toml = toml::to_string_pretty(&self.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
         if !path.exists() {
