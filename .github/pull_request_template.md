@@ -20,7 +20,7 @@ _Put an `x` in the boxes that apply. You can also fill these out after creating 
 - [ ] I have read the [CONTRIBUTING](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTING.md) doc
 - [ ] I have signed the [CLA](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTOR-LICENSE-AGREEMENT.md) (in all commits with git commit -s)
 - [ ] I ran `cargo fmt` as mentioned in [CODING_GUIDELINES](https://github.com/thin-edge/thin-edge.io/blob/main/CODING_GUIDELINES.md)
-- [ ] I used cargo clippy as mentioned in [CODING_GUIDELINES](https://github.com/thin-edge/thin-edge.io/blob/main/CODING_GUIDELINES.md)
+- [ ] I used `cargo clippy` as mentioned in [CODING_GUIDELINES](https://github.com/thin-edge/thin-edge.io/blob/main/CODING_GUIDELINES.md)
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have added necessary documentation (if appropriate)
 
