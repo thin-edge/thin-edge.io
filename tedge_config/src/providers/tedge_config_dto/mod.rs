@@ -19,7 +19,7 @@ pub struct TEdgeConfigDto {
 /// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct DeviceConfigDto {
+struct DeviceConfigDto {
     /// The unique id of the device
     id: Option<String>,
 
@@ -36,7 +36,7 @@ pub(crate) struct DeviceConfigDto {
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct CumulocityConfigDto {
+struct CumulocityConfigDto {
     /// Preserves the current status of the connection
     connect: Option<String>,
 
@@ -50,7 +50,7 @@ pub(crate) struct CumulocityConfigDto {
 
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct AzureConfigDto {
+struct AzureConfigDto {
     connect: Option<String>,
     url: Option<ConnectUrl>,
     root_cert_path: Option<String>,
