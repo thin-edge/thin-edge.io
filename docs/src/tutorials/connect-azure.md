@@ -113,7 +113,7 @@ Received expected response message, connection check is successful.
 
 ## Sending your first telemetry data
 
-Sending data to Azure is done using [MQTT](../architecture/mqtt-bus.md) over topics prefixed with `az`.
+Sending data to Azure is done using MQTT over topics prefixed with `az`.
 Any messages sent on the topic will be forwarded to Azure.
 Here, we use `tedge mqtt pub az/messages/events/` a message to be understood as a temperature of 20 Degree.
 

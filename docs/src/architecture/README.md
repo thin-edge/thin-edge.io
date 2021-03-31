@@ -14,14 +14,14 @@ Built around an extensible architecture,
 thin-edge.io can be extended in various programming languages.
 Here are the key aspects of the thin-edge.io architecture:
 
-1. The components are processes exchanging messages over an [MQTT bus](./mqtt-bus.md)
+1. The components are processes exchanging messages over an MQTT bus.
 
 2. The MQTT bus is connected to the cloud, forwarding the messages published on cloud specific topics. 
 
 2. A [canonical data format](thin-edge-json.md) let the components exchange telemetry data independently of the connected cloud.
 This is an optional feature, and the components are free to also use cloud specific data formats.
 
-3. The [mapper processes](./mapper.md) are responsible for translating the canonical data format into cloud specific messages and vice versa.
+3. The mapper processes are responsible for translating the canonical data format into cloud specific messages and vice versa.
 
 
 ![Overview](./thin-edge-overview.png)
