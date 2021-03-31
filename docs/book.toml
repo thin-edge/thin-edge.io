@@ -4,3 +4,9 @@ authors = []
 language = "en"
 multilingual = false
 src = "src"
+
+[output.linkcheck]
+follow-web-links = false
+traverse-parent-directories = false
+warning-policy = "warn"
+exclude = [ 'README.md' ]

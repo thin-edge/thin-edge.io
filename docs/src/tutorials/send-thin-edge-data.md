@@ -35,7 +35,6 @@ When connected to a cloud provider, a message mapper component for that cloud pr
 listening to any measurements published to `tedge/measurements`.
 The mapper, on receipt of these Thin Edge JSON measurements, will map those measurements to their equivalent
 cloud provider native representation and send it to that cloud.
-Refer to [Cloud Message Mapper Architecture](../architecture/mapper.md) for more details on the mapper component.
 
 For example, when the device is connected to Cumulocity, the Cumulocity mapper component will be performing these actions.
 To check if these measurements have reached Cumulocity, login to your Cumulocity dashboard and navigate to
