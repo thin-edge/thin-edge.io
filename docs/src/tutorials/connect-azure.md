@@ -10,7 +10,7 @@ The focus is here on connecting the device to Azure IoT.
 See this [tutorial](connect-c8y.md), if you want to connect Cumulocity IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
-* Create a Azure **IoT Hub** in Azure portal as described [Here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
+* Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
 * [Install `thin-edge.io` on your device](../howto-guides/002_installation.md).
 
 You can now use [`tegde` command](../references/tedge.md) to:
@@ -69,7 +69,7 @@ Here provide the configuration parameters that are required to create the device
 Upon successfully saved the configuration a new device has been created on the IoT Hub.
 The new device can be seen on the IoT Hub portal by navigating to "Explores"->"IoT Devices".
 
-More info about registering a device can be found [Here](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
+More info about registering a device can be found [here](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
 
 ## Configure the device
 
@@ -90,7 +90,7 @@ sudo tedge config set azure.root.cert.path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Azure IoT Hub.
-In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [Here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
 
 ## Connect the device
 
@@ -134,7 +134,7 @@ $ tedge mqtt pub az/messages/events '{"temperature": 20}'
 ```
 To view the messages that were sent from the device to the cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
 
-More info about sending telemetry to Azure can be found [Here](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-dotnet)
+More info about sending telemetry to Azure can be found [here](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-dotnet)
 
 ## Next Steps
 

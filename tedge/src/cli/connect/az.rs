@@ -76,11 +76,11 @@ impl Azure {
         const AZURE_TOPIC_DEVICETWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
         const CLIENT_ID: &str = "check_connection_az";
 
-        let template_pub_topic = Topic::new(AZURE_TOPIC_DEVICETWIN_UPSTREAM)?;
-        let template_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICETWIN_DOWNSTREAM)?;
+        let devicetwin_pub_topic = Topic::new(AZURE_TOPIC_DEVICETWIN_UPSTREAM)?;
+        let devicetwin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICETWIN_DOWNSTREAM)?;
 
         let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
-        let mut device_twin_response = mqtt.subscribe(template_sub_filter).await?;
+        let mut device_twin_response = mqtt.subscribe(devicetwin_sub_filter).await?;
 
         let (sender, mut receiver) = tokio::sync::oneshot::channel();
 
@@ -95,7 +95,7 @@ impl Azure {
             }
         });
 
-        mqtt.publish(Message::new(&template_pub_topic, "".to_string()))
+        mqtt.publish(Message::new(&devicetwin_pub_topic, "".to_string()))
             .await?;
 
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
