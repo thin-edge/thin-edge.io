@@ -5,13 +5,15 @@ Thanks for taking the time to contribute to thin-edge.io!
 
 Contributing is not limited to writing code and submitting a PR. Feel free to submit an [issue](https://github.com/thin-edge/thin-edge.io/issues) or comment on an existing one to report a bug, provide feedback, or suggest a new feature. You can also join us on GitHub Discussions.
 
-Of course, contributing code is more than welcome!  f you're planning to submit a  PR to implement a new feature or fix a bug, please open an issue that explains the change and the motivation for it. .
+Of course, contributing code is more than welcome! If you're planning to submit a PR to implement a new feature or fix a bug, please open an issue that explains the change and the motivation for it.
 
-If you're interested in contributing documentation, please note the following:
+If you are interested in contributing documentation, please note the following:
 
 
 - Doc issues are labeled with the `doc` label.
-- The thin-edge.io docs content is in the docs/ directory.
+- The thin-edge.io docs content is in the `docs/src/` directory.
+
+<br/>
 
 # Pull request and git commit guidance
 
@@ -39,9 +41,9 @@ Once a PR has the necessary approvals, it can be merged. Here’s how the merge 
 
 - If the PR is a single logical commit, the merger should use the “Rebase and merge” option. This keeps the git commit history very clean and simple and eliminates noise from "merge commits."
 - If the PR is more than one logical commit, the merger should use the “Create a merge commit” option.
-- If the PR consists of more than one commit because the author added commits to address feedback, the commits should be squashed into a single commit (or more than one logical commit, if it is a big feature that needs more commits). This can be achieved in one of two ways:  
-  - The merger can use the “Squash and merge” option. If they do this, the merger is responsible for cleaning up the commit message according to the previously stated commit message guidance.
-  - The pull request author, after getting the requisite approvals, can reorganize the commits as they see fit (using, for example, git rebase -i) and re-push.
+- If the PR consists of more than one commit because the author added commits to address feedback, the commits should be squashed into a single commit (or more than one logical commit, if it is a big feature that needs more commits). This can be achieved by the “Squash and merge” option. If they do this, the merger is responsible for cleaning up the commit message according to the previously stated commit message guidance.
+<br/>
+<br/>
 # Contributor License Agreement
 We do not want to bother you with too much legalese, but there are two pages you have to read carefully, this page and the CONTRIBUTOR LICENSE AGREEMENT.
  
