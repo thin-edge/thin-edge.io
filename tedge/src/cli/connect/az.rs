@@ -21,7 +21,7 @@ impl Azure {
         let bridge_root_cert_path = config.query_with_default(AzureRootCertPathSetting)?;
         let () = config.update(AzureRootCertPathSetting, bridge_root_cert_path.clone())?;
 
-        config.write_to_default_config()?;
+        config.persist()?;
 
         Ok(BridgeConfig {
             common_mosquitto_config: CommonMosquittoConfig::default(),

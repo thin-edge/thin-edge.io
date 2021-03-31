@@ -1,7 +1,7 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tedge_config::*;
 use tempfile::NamedTempFile;
 
@@ -25,7 +25,9 @@ connect = "false"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::new("/home/user/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
     assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
@@ -78,7 +80,9 @@ root_cert_path = "/path/to/azure/root/cert"
     let updated_azure_url = "OtherAzure.azure-devices.net";
 
     {
-        let mut config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
+        let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+            .from_custom_config(config_file_path.as_ref())
+            .unwrap();
         assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
         assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
         assert_eq!(
@@ -121,13 +125,13 @@ root_cert_path = "/path/to/azure/root/cert"
             )
             .unwrap();
         config.unset(AzureRootCertPathSetting).unwrap();
-        config
-            .write_to_custom_config(config_file_path.as_ref())
-            .unwrap();
+        config.persist().unwrap();
     }
 
     {
-        let config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
+        let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+            .from_custom_config(config_file_path.as_ref())
+            .unwrap();
 
         assert_eq!(config.query(DeviceIdSetting).unwrap(), updated_device_id);
         assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
@@ -164,24 +168,18 @@ id = "ABCD1234"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
     assert_eq!(
         config.query(DeviceCertPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-certificate.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-certificate.pem"
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-private-key.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-private-key.pem"
     );
 
     assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
@@ -199,24 +197,18 @@ id = "ABCD1234"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
     assert_eq!(
         config.query(DeviceCertPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-certificate.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-certificate.pem"
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-private-key.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-private-key.pem"
     );
 
     assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
@@ -234,7 +226,9 @@ url = "your-tenant.cumulocity.com"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     assert_eq!(
         config.query(C8yUrlSetting).unwrap().as_str(),
@@ -244,43 +238,29 @@ url = "your-tenant.cumulocity.com"
     assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
     assert_eq!(
         config.query(DeviceCertPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-certificate.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-certificate.pem"
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-private-key.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-private-key.pem"
     );
 }
 
 #[test]
 fn test_parse_config_empty_file() {
     let config_file = NamedTempFile::new().unwrap();
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
     assert_eq!(
         config.query(DeviceCertPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-certificate.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-certificate.pem"
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting).unwrap(),
-        home_dir()
-            .join(".tedge")
-            .join("tedge-private-key.pem")
-            .to_str()
-            .unwrap()
+        "/home/tedge/.tedge/tedge-private-key.pem"
     );
 
     assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
@@ -297,7 +277,9 @@ fn test_parse_config_empty_file() {
 
 #[test]
 fn test_parse_config_no_config_file() {
-    let config = TEdgeConfig::from_custom_config(Path::new("/non/existent/path")).unwrap();
+    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(Path::new("/non/existent/path"))
+        .unwrap();
 
     assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
     assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
@@ -312,7 +294,8 @@ hello="tedge"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let result = TEdgeConfig::from_custom_config(config_file.path());
+    let result =
+        TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
         ConfigError::TOMLParseError(_),
@@ -327,7 +310,8 @@ fn test_parse_invalid_toml_file() {
         "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let result = TEdgeConfig::from_custom_config(config_file.path());
+    let result =
+        TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
         ConfigError::TOMLParseError(_),
@@ -353,7 +337,9 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     let original_device_id = "ABCD1234".to_string();
     let original_device_key_path = "/path/to/key".to_string();
@@ -426,7 +412,9 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path())
+        .unwrap();
 
     let original_azure_url = "MyAzure.azure-devices.net".to_string();
     let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();
@@ -459,10 +447,4 @@ fn temp_file_with_content(content: &str) -> NamedTempFile {
     let file = NamedTempFile::new().unwrap();
     file.as_file().write_all(content.as_bytes()).unwrap();
     file
-}
-
-fn home_dir() -> PathBuf {
-    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
-    #![allow(deprecated)]
-    std::env::home_dir().unwrap()
 }

@@ -17,7 +17,11 @@ fn main() -> anyhow::Result<()> {
 
     let opt = cli::Opt::from_args();
 
-    let config = tedge_config::TEdgeConfig::from_default_config()
+    let config_manager = tedge_config::TEdgeConfigManager::try_default()
+        .with_context(|| "failed to initialize the configuration manager")?;
+
+    let config = config_manager
+        .from_default_config()
         .with_context(|| "failed to read the tedge configuration")?;
 
     let cmd = opt

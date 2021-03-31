@@ -3,16 +3,17 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs::create_dir_all;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
-pub struct TomlConfigFileManager<T> {
+#[derive(Debug)]
+pub struct TomlConfigFile<T> {
     path: PathBuf,
     data: T,
     dirty: bool,
 }
 
-impl<T> TomlConfigFileManager<T>
+impl<T> TomlConfigFile<T>
 where
     T: DeserializeOwned,
 {
@@ -34,25 +35,48 @@ where
     }
 }
 
-impl<T> TomlConfigFileManager<T>
+impl<T> TomlConfigFile<T>
+where
+    T: DeserializeOwned + Default,
+{
+    pub fn from_file_or_default(path: PathBuf) -> Result<Self, ConfigError> {
+        match Self::from_file(path.clone()) {
+            Ok(file) => Ok(file),
+            Err(ConfigError::ConfigFileNotFound(..)) => Ok(Self {
+                path,
+                data: T::default(),
+                dirty: true,
+            }),
+            Err(err) => Err(err),
+        }
+    }
+}
+
+impl<T> TomlConfigFile<T>
 where
     T: Serialize,
 {
     pub fn persist(&mut self) -> Result<(), ConfigError> {
+        self.write_to(&self.path)?;
+        self.undirty();
+        Ok(())
+    }
+
+    fn write_to(&self, path: &Path) -> Result<(), ConfigError> {
         let toml = toml::to_string_pretty(&self.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
         if !self.path.exists() {
             create_dir_all(self.path.parent().unwrap())?;
         }
-        match file.persist(&self.path) {
+        match file.persist(path) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
         }
     }
 }
 
-impl<T> TomlConfigFileManager<T> {
+impl<T> TomlConfigFile<T> {
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
@@ -60,9 +84,13 @@ impl<T> TomlConfigFileManager<T> {
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }
+
+    fn undirty(&mut self) {
+        self.dirty = false;
+    }
 }
 
-impl<T, S: ConfigSetting> QuerySetting<S> for TomlConfigFileManager<T>
+impl<T, S: ConfigSetting> QuerySetting<S> for TomlConfigFile<T>
 where
     T: QuerySetting<S>,
 {
@@ -71,7 +99,7 @@ where
     }
 }
 
-impl<T, S: ConfigSetting> UpdateSetting<S> for TomlConfigFileManager<T>
+impl<T, S: ConfigSetting> UpdateSetting<S> for TomlConfigFile<T>
 where
     T: UpdateSetting<S>,
 {
@@ -81,7 +109,7 @@ where
     }
 }
 
-impl<T, S: ConfigSetting> UnsetSetting<S> for TomlConfigFileManager<T>
+impl<T, S: ConfigSetting> UnsetSetting<S> for TomlConfigFile<T>
 where
     T: UnsetSetting<S>,
 {

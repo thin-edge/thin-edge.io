@@ -19,7 +19,7 @@ impl C8y {
         let bridge_root_cert_path = config.query_with_default(C8yRootCertPathSetting)?;
         let () = config.update(C8yRootCertPathSetting, bridge_root_cert_path.clone())?;
 
-        config.write_to_default_config()?;
+        config.persist()?;
 
         Ok(BridgeConfig {
             common_mosquitto_config: CommonMosquittoConfig::default(),

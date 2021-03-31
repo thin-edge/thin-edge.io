@@ -5,7 +5,7 @@ use tedge_config::*;
 pub struct SetConfigCommand {
     pub key: ReadWriteConfigKey,
     pub value: String,
-    pub config: TEdgeConfig,
+    pub config_manager: TEdgeConfigManager,
 }
 
 impl Command for SetConfigCommand {
@@ -19,11 +19,11 @@ impl Command for SetConfigCommand {
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         // XXX: change to execute(self)
-        let mut config = TEdgeConfig::from_default_config()?;
+        let mut config = self.config_manager.from_default_config()?;
 
         self.key
             .set_config_value(&mut config, self.value.clone().into())?;
-        config.write_to_default_config()?;
+        config.persist()?;
         Ok(())
     }
 }

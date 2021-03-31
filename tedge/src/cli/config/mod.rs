@@ -10,12 +10,17 @@ impl BuildCommand for cli::ConfigCmd {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         Ok(match self {
             cli::ConfigCmd::Get { key } => commands::GetConfigCommand { key, config }.into_boxed(),
-            cli::ConfigCmd::Set { key, value } => {
-                commands::SetConfigCommand { key, value, config }.into_boxed()
+            cli::ConfigCmd::Set { key, value } => commands::SetConfigCommand {
+                key,
+                value,
+                config_manager: TEdgeConfigManager::try_default()?,
             }
-            cli::ConfigCmd::Unset { key } => {
-                commands::UnsetConfigCommand { key, config }.into_boxed()
+            .into_boxed(),
+            cli::ConfigCmd::Unset { key } => commands::UnsetConfigCommand {
+                key,
+                config_manager: TEdgeConfigManager::try_default()?,
             }
+            .into_boxed(),
             cli::ConfigCmd::List { is_all, is_doc } => commands::ListConfigCommand {
                 is_all,
                 is_doc,

@@ -4,7 +4,7 @@ use tedge_config::*;
 
 pub struct UnsetConfigCommand {
     pub key: UnsettableConfigKey,
-    pub config: TEdgeConfig,
+    pub config_manager: TEdgeConfigManager,
 }
 
 impl Command for UnsetConfigCommand {
@@ -16,11 +16,11 @@ impl Command for UnsetConfigCommand {
     }
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        // XXX
-        let mut config = TEdgeConfig::from_default_config()?;
+        // XXX: We cannot call persist, because persist requires &mut
+        let mut config = self.config_manager.from_default_config()?;
 
         self.key.unset_config_value(&mut config)?;
-        config.write_to_default_config()?;
+        config.persist()?;
         Ok(())
     }
 }

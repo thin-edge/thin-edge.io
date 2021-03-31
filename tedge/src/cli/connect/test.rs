@@ -104,7 +104,10 @@ fn bridge_config_c8y_create() {
             "#;
 
     let config_file = temp_file_with_content(toml_config);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::try_default()
+        .unwrap()
+        .from_custom_config(config_file.path())
+        .unwrap();
     let bridge = C8y::c8y_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
@@ -265,7 +268,10 @@ fn bridge_config_azure_create() {
             "#;
 
     let config_file = temp_file_with_content(toml_config);
-    let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
+    let config = TEdgeConfigManager::try_default()
+        .unwrap()
+        .from_custom_config(config_file.path())
+        .unwrap();
     let bridge = Azure::azure_bridge_config(config).unwrap();
 
     let expected = BridgeConfig {
