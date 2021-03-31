@@ -6,7 +6,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="thin-edge.io">
+  <a href="https://thin-edge.io">
     <img src="images/thin-edge-logo.png" alt="Logo">
   </a>
 
