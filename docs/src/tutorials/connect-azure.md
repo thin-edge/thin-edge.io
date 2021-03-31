@@ -90,7 +90,7 @@ sudo tedge config set azure.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_R
 ```
 
 This will set the root certificate path of the Azure IoT Hub.
-In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [here](https://www.digicert.com/kb/digicert-root-certificates.htm).
 
 ## Connect the device
 
