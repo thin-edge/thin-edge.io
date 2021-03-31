@@ -204,7 +204,7 @@ pub fn parse_qos(src: &str) -> Result<QoS, MqttError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::mqtt::parse_qos;
+    use crate::cli::mqtt::parse_qos;
     use mqtt_client::QoS;
 
     #[test]
