@@ -6,6 +6,8 @@ use tempfile::NamedTempFile;
 
 pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
+const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
+const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
 /*
 pub trait TEdgeConfigurable:
@@ -80,12 +82,35 @@ impl TEdgeConfig {
     /// * `path` - Path to a thin edge configuration TOML file
     ///
     pub fn from_custom_config(path: &Path) -> Result<TEdgeConfig, ConfigError> {
+        let mut config = Self::load_from(path)?;
+        config.update_if_not_set(DeviceKeyPathSetting, default_device_key_path()?)?;
+        config.update_if_not_set(DeviceCertPathSetting, default_device_cert_path()?)?;
+        Ok(config)
+    }
+
+    fn update_if_not_set<T: ConfigSetting + Copy>(
+        &mut self,
+        setting: T,
+        value: T::Value,
+    ) -> Result<(), ConfigError>
+    where
+        Self: QuerySetting<T> + UpdateSetting<T>,
+    {
+        match self.query(setting) {
+            Err(ConfigSettingError::ConfigNotSet { .. }) => {
+                self.update(setting, value)?;
+                Ok(())
+            }
+            Err(other) => Err(other.into()),
+            Ok(_ok) => Ok(()),
+        }
+    }
+
+    fn load_from(path: &Path) -> Result<TEdgeConfig, ConfigError> {
         match read_to_string(path) {
-            Ok(content) => Ok(Self(
-                toml::from_str::<TEdgeConfigDto>(content.as_str())?.assign_defaults()?,
-            )),
+            Ok(content) => Ok(Self(toml::from_str::<TEdgeConfigDto>(content.as_str())?)),
             Err(err) => match err.kind() {
-                ErrorKind::NotFound => Ok(Self(TEdgeConfigDto::default().assign_defaults()?)),
+                ErrorKind::NotFound => Ok(Self(TEdgeConfigDto::default())),
                 _ => Err(ConfigError::IOError(err)),
             },
         }
@@ -96,10 +121,12 @@ impl TEdgeConfig {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
 
+    #[cfg(test)]
     fn data(&self) -> &TEdgeConfigDto {
         &self.0
     }
 
+    #[cfg(test)]
     fn data_mut(&mut self) -> &mut TEdgeConfigDto {
         &mut self.0
     }
@@ -117,6 +144,23 @@ impl TEdgeConfig {
             Err(err) => Err(err.error.into()),
         }
     }
+}
+
+fn default_device_key_path() -> Result<String, ConfigError> {
+    path_in_cert_directory(DEVICE_KEY_FILE)
+}
+
+fn default_device_cert_path() -> Result<String, ConfigError> {
+    path_in_cert_directory(DEVICE_CERT_FILE)
+}
+
+fn path_in_cert_directory(file_name: &str) -> Result<String, ConfigError> {
+    home_dir()?
+        .join(TEDGE_HOME_DIR)
+        .join(file_name)
+        .to_str()
+        .map(|s| s.into())
+        .ok_or(ConfigError::InvalidCharacterInHomeDirectoryPath)
 }
 
 fn home_dir() -> Result<PathBuf, ConfigError> {
