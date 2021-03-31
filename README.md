@@ -1,4 +1,4 @@
-[![GitHub](https://img.shields.io/github/license/thin-edge/thin-edge.io)](LICENSE.txt)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
 
 
