@@ -29,7 +29,7 @@ fn print_config_doc() {
     }
 }
 
-fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
+fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), TEdgeConfigError> {
     let mut keys_without_values: Vec<&str> = Vec::new();
     for config_key in ConfigKeyRegistry::all().iter() {
         match (config_key.get_value)(config) {

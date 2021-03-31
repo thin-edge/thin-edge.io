@@ -32,7 +32,10 @@ pub enum TEdgeConnectOpt {
 }
 
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(self, tedge_config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(
+        self,
+        tedge_config: TEdgeConfig,
+    ) -> Result<Box<dyn Command>, TEdgeConfigError> {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
                 bridge_config: C8y::c8y_bridge_config(tedge_config)?,
@@ -305,7 +308,7 @@ pub enum ConnectError {
     Certificate,
 
     #[error(transparent)]
-    Configuration(#[from] ConfigError),
+    Configuration(#[from] TEdgeConfigError),
 
     #[error("Connection is already established. To remove existing connection use 'tedge disconnect {cloud}' and try again.",)]
     ConfigurationExists { cloud: String },

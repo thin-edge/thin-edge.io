@@ -39,7 +39,7 @@ pub enum TEdgeOpt {
 }
 
 impl BuildCommand for TEdgeOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, TEdgeConfigError> {
         match self {
             TEdgeOpt::Cert(opt) => opt.build_command(config),
             TEdgeOpt::Config(opt) => opt.build_command(config),

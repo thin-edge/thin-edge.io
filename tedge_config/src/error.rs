@@ -1,5 +1,5 @@
 #[derive(thiserror::Error, Debug)]
-pub enum ConfigError {
+pub enum TEdgeConfigError {
     #[error("TOML parse error")]
     TOMLParseError(#[from] toml::de::Error),
 

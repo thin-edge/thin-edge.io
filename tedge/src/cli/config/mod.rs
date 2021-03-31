@@ -7,7 +7,7 @@ mod commands;
 pub mod config_keys;
 
 impl BuildCommand for cli::ConfigCmd {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, TEdgeConfigError> {
         Ok(match self {
             cli::ConfigCmd::Get { key } => commands::GetConfigCommand { key, config }.into_boxed(),
             cli::ConfigCmd::Set { key, value } => commands::SetConfigCommand {

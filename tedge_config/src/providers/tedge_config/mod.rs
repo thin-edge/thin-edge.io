@@ -69,13 +69,13 @@ impl TEdgeConfig {
     ///
     /// * `path` - Path to a thin edge configuration TOML file
     ///
-    pub(crate) fn from_file(path: &Path) -> Result<TEdgeConfig, ConfigError> {
+    pub(crate) fn from_file(path: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
         Ok(Self {
             file: TomlConfigFile::from_file_or_default(path.into())?,
         })
     }
 
-    pub fn persist(&mut self) -> Result<(), ConfigError> {
+    pub fn persist(&mut self) -> Result<(), TEdgeConfigError> {
         Ok(self.file.persist()?)
     }
 
@@ -83,7 +83,7 @@ impl TEdgeConfig {
         &mut self,
         setting: T,
         value: T::Value,
-    ) -> Result<(), ConfigError>
+    ) -> Result<(), TEdgeConfigError>
     where
         Self: QuerySetting<T> + UpdateSetting<T>,
     {

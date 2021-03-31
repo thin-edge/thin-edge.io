@@ -81,7 +81,7 @@ pub enum UploadCertOpt {
 }
 
 impl BuildCommand for UploadCertOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, TEdgeConfigError> {
         match self {
             UploadCertOpt::C8y { username } => {
                 let device_id = config.query(DeviceIdSetting)?;
@@ -240,7 +240,7 @@ pub enum CertError {
     KeyAlreadyExists { path: String },
 
     #[error(transparent)]
-    ConfigError(#[from] ConfigError),
+    ConfigError(#[from] TEdgeConfigError),
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
@@ -318,7 +318,7 @@ impl CertError {
 }
 
 impl BuildCommand for TEdgeCertOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, TEdgeConfigError> {
         let cmd = match self {
             TEdgeCertOpt::Create { id } => {
                 let cmd = CreateCertCmd {

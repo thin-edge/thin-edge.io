@@ -9,7 +9,7 @@ const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct Azure {}
 
 impl Azure {
-    pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, TEdgeConfigError> {
         let az_url = config.query(AzureUrlSetting)?;
 
         let address = format!("{}:{}", az_url.as_str(), MQTT_TLS_PORT);

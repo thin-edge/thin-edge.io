@@ -57,7 +57,7 @@ pub enum MqttError {
 }
 
 impl BuildCommand for MqttCmd {
-    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, TEdgeConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.
         // - see certificate.rs for an example

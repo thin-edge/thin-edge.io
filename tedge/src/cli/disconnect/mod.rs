@@ -18,7 +18,10 @@ pub enum TedgeDisconnectBridgeOpt {
 }
 
 impl BuildCommand for TedgeDisconnectBridgeOpt {
-    fn build_command(self, _tedge_config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(
+        self,
+        _tedge_config: TEdgeConfig,
+    ) -> Result<Box<dyn Command>, TEdgeConfigError> {
         let cmd = match self {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -91,7 +94,7 @@ impl DisconnectBridge {
 #[derive(thiserror::Error, Debug)]
 pub enum DisconnectBridgeError {
     #[error(transparent)]
-    Configuration(#[from] ConfigError),
+    Configuration(#[from] TEdgeConfigError),
 
     #[error("File operation error. Check permissions for {1}.")]
     FileOperationFailed(#[source] std::io::Error, String),

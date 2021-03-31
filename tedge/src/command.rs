@@ -133,7 +133,7 @@ pub trait BuildCommand {
     fn build_command(
         self,
         config: tedge_config::TEdgeConfig,
-    ) -> Result<Box<dyn Command>, tedge_config::ConfigError>;
+    ) -> Result<Box<dyn Command>, tedge_config::TEdgeConfigError>;
 }
 
 pub struct ExecutionContext {

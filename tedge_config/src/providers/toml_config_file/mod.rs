@@ -17,7 +17,7 @@ impl<T> TomlConfigFile<T>
 where
     T: DeserializeOwned,
 {
-    pub fn from_file(path: PathBuf) -> Result<Self, ConfigError> {
+    pub fn from_file(path: PathBuf) -> Result<Self, TEdgeConfigError> {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 let data = toml::from_slice::<T>(bytes.as_slice())?;
@@ -28,9 +28,9 @@ where
                 })
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                Err(ConfigError::ConfigFileNotFound(path))
+                Err(TEdgeConfigError::ConfigFileNotFound(path))
             }
-            Err(err) => Err(ConfigError::IOError(err)),
+            Err(err) => Err(TEdgeConfigError::IOError(err)),
         }
     }
 }
@@ -39,10 +39,10 @@ impl<T> TomlConfigFile<T>
 where
     T: DeserializeOwned + Default,
 {
-    pub fn from_file_or_default(path: PathBuf) -> Result<Self, ConfigError> {
+    pub fn from_file_or_default(path: PathBuf) -> Result<Self, TEdgeConfigError> {
         match Self::from_file(path.clone()) {
             Ok(file) => Ok(file),
-            Err(ConfigError::ConfigFileNotFound(..)) => Ok(Self {
+            Err(TEdgeConfigError::ConfigFileNotFound(..)) => Ok(Self {
                 path,
                 data: T::default(),
                 dirty: true,
@@ -56,13 +56,13 @@ impl<T> TomlConfigFile<T>
 where
     T: Serialize,
 {
-    pub fn persist(&mut self) -> Result<(), ConfigError> {
+    pub fn persist(&mut self) -> Result<(), TEdgeConfigError> {
         self.write_to(&self.path)?;
         self.undirty();
         Ok(())
     }
 
-    fn write_to(&self, path: &Path) -> Result<(), ConfigError> {
+    fn write_to(&self, path: &Path) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&self.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;

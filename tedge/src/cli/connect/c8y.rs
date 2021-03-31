@@ -9,7 +9,7 @@ pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 pub struct C8y {}
 
 impl C8y {
-    pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, TEdgeConfigError> {
         let address = format!(
             "{}:{}",
             config.query(C8yUrlSetting)?.as_str(),

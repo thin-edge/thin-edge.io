@@ -298,7 +298,7 @@ hello="tedge"
         TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
-        ConfigError::TOMLParseError(_),
+        TEdgeConfigError::TOMLParseError(_),
         "Expected the parsing to fail with TOMLParseError"
     );
 }
@@ -314,7 +314,7 @@ fn test_parse_invalid_toml_file() {
         TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
-        ConfigError::TOMLParseError(_),
+        TEdgeConfigError::TOMLParseError(_),
         "Expected the parsing to fail with TOMLParseError"
     );
 }
