@@ -84,12 +84,12 @@ impl BuildCommand for UploadCertOpt {
     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             UploadCertOpt::C8y { username } => {
-                let device_id = config.query_string(DeviceIdSetting)?;
+                let device_id = config.query(DeviceIdSetting)?;
 
-                let path = PathBuf::try_from(config.query_string(DeviceCertPathSetting)?)
+                let path = PathBuf::try_from(config.query(DeviceCertPathSetting)?)
                     .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
 
-                let host = config.query_string(C8yUrlSetting)?.into();
+                let host = config.query(C8yUrlSetting)?.into();
 
                 Ok((UploadCertCmd {
                     device_id,
@@ -323,23 +323,23 @@ impl BuildCommand for TEdgeCertOpt {
             TEdgeCertOpt::Create { id } => {
                 let cmd = CreateCertCmd {
                     id,
-                    cert_path: config.query_string(DeviceCertPathSetting)?,
-                    key_path: config.query_string(DeviceKeyPathSetting)?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
+                    key_path: config.query(DeviceKeyPathSetting)?,
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertOpt::Show => {
                 let cmd = ShowCertCmd {
-                    cert_path: config.query_string(DeviceCertPathSetting)?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertOpt::Remove => {
                 let cmd = RemoveCertCmd {
-                    cert_path: config.query_string(DeviceCertPathSetting)?,
-                    key_path: config.query_string(DeviceKeyPathSetting)?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
+                    key_path: config.query(DeviceKeyPathSetting)?,
                 };
                 cmd.into_boxed()
             }
