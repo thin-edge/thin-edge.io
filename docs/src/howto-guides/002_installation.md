@@ -23,12 +23,12 @@ When all dependencies are in place you can proceed with installation of `thin-ed
 
 ### Package download
 
-thin-edge.io package is in thin-edge.io repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases/).
+thin-edge.io package is in thin-edge.io repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
 
 To download the package from github repository use following command (use desired version):
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/archive/<package>_<version>_<arch>.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_<version>_<arch>.deb
 ```
 
 where:
@@ -39,13 +39,13 @@ where:
 Eg:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/archive/tedge_0.1.0_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_0.1.0_armhf.deb
 ```
 
 and for `mapper`:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/archive/mapper_0.1.0_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_mapper_0.1.0_armhf.deb
 ```
 
 ### Package installation
@@ -57,25 +57,25 @@ Now, we have downloaded the package we can proceed to installation. First we wil
 To install `tedge` use following command:
 
 ```shell
-dpkg -i tedge_<version>_<arch>
+dpkg -i tedge_<version>_<arch>.deb
 ```
 
 Eg:
 
 ```shell
-dpkg -i tedge_0.1.0_amd64
+dpkg -i tedge_0.1.0_armhf.deb
 ```
 
 To install mapper for thin-edge.io do:
 
 ```shell
-dpkg -i mapper_<version>_<arch>
+dpkg -i tedge_mapper_<version>_<arch>.deb
 ```
 
 Eg:
 
 ```shell
-dpkg -i mapper_0.1.0_amd64
+dpkg -i tedge_mapper_0.1.0_armhf.deb
 ```
 
 ### Add your user to `tedge-users` group
