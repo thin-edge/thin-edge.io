@@ -11,7 +11,7 @@ thin-edge.io has single dependency and it is `mosquitto` used for communication 
 apt install mosquitto
 ```
 
-> Note: Some OSes may require you to use `sudo` to install packages:
+> Note: Some OSes may require you to use `sudo` to install packages.
 
 ```shell
 sudo apt install mosquitto
@@ -77,6 +77,19 @@ Eg:
 ```shell
 dpkg -i tedge_mapper_0.1.0_armhf.deb
 ```
+
+### Add your user to `tedge-users` group
+
+During the installation process, a `tedge-users` group is automatically created,
+in order to ease the administration of who can use the `sudo tegde` command on the device.
+Indeed, the `tedge` command needs to be run using `sudo`.
+So, unless all the users are granted sudo privileges, you have to add a user to the `tedge-users` group for that user to be able to use `tedge`.
+
+Run this command to add a user to the group.
+
+```shell
+sudo adduser <user> tedge-users
+``` 
 
 ## Next steps
 

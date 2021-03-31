@@ -5,18 +5,19 @@
 To create new certificate you can use [`tedge cert create`](../references/tedge-cert.md) thin-edge.io command:
 
 ```shell
-tedge cert create --device-id alpha
+sudo tedge cert create --device-id alpha
 ```
 
-> Note: This command provides no output on success.
+> Note: `tegde cert` requires `sudo` privilege. This command provides no output on success.
 
-[`tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/home/user/.tedge/`), to use custom location refer to [`tedge config`](../references/tedge-config.md).
+[`sudo tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
+To use a custom location, refer to [`tedge config`](../references/tedge-config.md).
 
-Now you should have a certificate in the `/home/user/.tedge/` directory.
+Now you should have a certificate in the `/etc/tedge/device-certs/` directory.
 
 ```shell
-$ ls ~/.tedge/
-/home/user/.tedge/tedge-certificate.pem
+$ ls /etc/tedge/device-certs/
+/etc/tedge/device-certs/tedge-certificate.pem
 ```
 
 ### Errors
@@ -30,7 +31,7 @@ Error: failed to create a test certificate for the device alpha.
 
 Caused by:
     A certificate already exists and would be overwritten.
-            Existing file: "/home/user/.tedge/tedge-certificate.pem"
+            Existing file: "/etc/tedge/device-certs/tedge-certificate.pem"
             Run `tegde cert remove` first to generate a new certificate.
 ```
 
@@ -39,7 +40,7 @@ Caused by:
 Follow the instruction to remove the existing certificate and issue [`tedge cert remove`](../references/tedge-cert.md):
 
 ```shell
-tegde cert remove
+sudo tegde cert remove
 ```
 
 and try [`tedge cert create`](../references/tedge-cert.md) once again.

@@ -1,6 +1,6 @@
 # Connect your device to Azure IoT
 
-The very first step to enable `thin-edge.io` is to connect your device to the cloud.
+The very first step to enable **thin-edge.io** is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
@@ -30,7 +30,7 @@ This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is the device with that identity.
 
 ```
-$ tedge cert create --id my-device
+$ sudo tedge cert create --device-id my-device
 ```
 
 ## Show certificate details
@@ -38,20 +38,19 @@ $ tedge cert create --id my-device
 You can then check the content of that certificate.
 
 ```
-$ tedge cert show
-Device certificate: /home/ubuntu/.tedge/tedge-certificate.pem
+$ sudo tedge cert show
+Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
 Valid from: Tue, 09 Mar 2021 14:10:30 +0000
 Valid up to: Thu, 10 Mar 2022 14:10:30 +0000
 Thumbprint: 860218AD0A996004449521E2713C28F67B5EA580
-
 ```
 
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 The Thumbprint is the Sha1sum of the certificate. This is required for registering the
-a device using the self-signed certificate on Azure IoT Hub.
+device using the self-signed certificate on Azure IoT Hub.
 To use a certificate signed by your Certificate Authority,
 see the reference guide of [`tedge cert`](../references/tedge-cert.md).
 
@@ -73,12 +72,25 @@ The new device can be seen on the IoT Hub portal by navigating to "Explores"->"I
 More info about registering a device can be found [Here](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
 
 ## Configure the device
+
 To connect the device to the Azure IoT Hub, one needs to set the URL/Hostname of the IoT Hub and the root certificate of the IoT Hub as below.
-* `tedge config set azure.url your-iot-hub-name.azure-devices.net`.
-   The URL/Hostname can be found in the Azure web portal, clicking on the overview section of your IoT Hub.
-* `tedge config set azure.root.cert.path /etc/ssl/certs`.
-   This will set the root certificate path of the Azure IoT Hub.
-   In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [Here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
+
+Set the URL/Hostname of your Azure IoT Hub.   
+
+```
+sudo tedge config set azure.url your-iot-hub-name.azure-devices.net
+```
+
+The URL/Hostname can be found in the Azure web portal, clicking on the overview section of your IoT Hub.
+
+Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
+
+```
+sudo tedge config set azure.root.cert.path /etc/ssl/certs
+```
+
+This will set the root certificate path of the Azure IoT Hub.
+In most of the Linux flavors, the certificate will be present in /etc/ssl/certs. If not found download it from [Here](https://cacerts.digicert.com/BaltimoreCyberTrustRoot.crt).
 
 ## Connect the device
 
@@ -88,17 +100,17 @@ This command configures the MQTT broker:
 * to forward local messages to the cloud and vice versa.
 
 ```
-$ target/release/tedge connect az
+$ sudo tedge connect az
 
-Checking if systemd and mosquitto are available.
+Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
 
-Validate the bridge certificates.
+Validating the bridge certificates.
 
 Saving configuration for requested bridge.
 
-Restarting mosquitto, [requires elevated permission], authorise when asked.
+Restarting mosquitto service.
 
 Awaiting mosquitto to start. This may take up to 5 seconds.
 
