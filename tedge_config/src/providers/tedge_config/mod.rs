@@ -8,19 +8,7 @@ pub const TEDGE_HOME_DIR: &str = ".tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
-
-/*
-pub trait TEdgeConfigurable:
-    QuerySetting<DeviceIdSetting>
-    + QuerySetting<DeviceKeyPathSetting>
-    + QuerySetting<DeviceCertPathSetting>
-    + QuerySetting<C8yUrlSetting>
-    + QuerySetting<C8yRootCertPathSetting>
-    + QuerySetting<AzureUrlSetting>
-    + QuerySetting<AzureRootCertPathSetting>
-{
-}
-*/
+const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 #[derive(Debug)]
 pub struct TEdgeConfig(TEdgeConfigDto);
@@ -32,16 +20,6 @@ where
 {
     fn query(&self, setting: T) -> ConfigSettingResult<T::Value> {
         self.0.query(setting)
-    }
-}
-
-// For now, just proxy settings to the underlying TEdgeConfigDto.
-impl<T: ConfigSetting> QuerySettingWithDefault<T> for TEdgeConfig
-where
-    TEdgeConfigDto: QuerySettingWithDefault<T>,
-{
-    fn query_with_default(&self, setting: T) -> ConfigSettingResult<T::Value> {
-        self.0.query_with_default(setting)
     }
 }
 
@@ -62,6 +40,26 @@ where
 {
     fn unset(&mut self, setting: T) -> ConfigSettingResult<()> {
         self.0.unset(setting)
+    }
+}
+
+impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfig {
+    fn query_with_default(&self, setting: AzureRootCertPathSetting) -> ConfigSettingResult<String> {
+        match self.0.query(setting) {
+            Ok(value) => Ok(value),
+            Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(DEFAULT_ROOT_CERT_PATH.into()),
+            Err(other) => Err(other),
+        }
+    }
+}
+
+impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfig {
+    fn query_with_default(&self, setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
+        match self.0.query(setting) {
+            Ok(value) => Ok(value),
+            Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(DEFAULT_ROOT_CERT_PATH.into()),
+            Err(other) => Err(other),
+        }
     }
 }
 

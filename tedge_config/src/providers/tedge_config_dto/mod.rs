@@ -1,8 +1,6 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
-
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
 /// as well as the IoT cloud provider specific configurations.
@@ -155,29 +153,6 @@ impl QuerySetting<C8yRootCertPathSetting> for TEdgeConfigDto {
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: C8yRootCertPathSetting::EXTERNAL_KEY,
             })
-    }
-}
-
-impl QuerySettingWithDefault<AzureRootCertPathSetting> for TEdgeConfigDto {
-    fn query_with_default(
-        &self,
-        _setting: AzureRootCertPathSetting,
-    ) -> ConfigSettingResult<String> {
-        Ok(self
-            .azure
-            .root_cert_path
-            .clone()
-            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
-    }
-}
-
-impl QuerySettingWithDefault<C8yRootCertPathSetting> for TEdgeConfigDto {
-    fn query_with_default(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
-        Ok(self
-            .c8y
-            .root_cert_path
-            .clone()
-            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
     }
 }
 
