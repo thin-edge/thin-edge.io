@@ -3,6 +3,13 @@ use std::convert::TryFrom;
 
 pub trait QuerySetting<T: ConfigSetting> {
     fn query(&self, setting: T) -> ConfigSettingResult<T::Value>;
+    fn query_optional(&self, setting: T) -> ConfigSettingResult<Option<T::Value>> {
+        match self.query(setting) {
+            Ok(value) => Ok(Some(value)),
+            Err(ConfigSettingError::ConfigNotSet { .. }) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 // XXX: Alternatively return the default from `QuerySetting::query`.

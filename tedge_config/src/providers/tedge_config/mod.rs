@@ -10,6 +10,10 @@ const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
+/// Represents the complete configuration of a thin edge device.
+/// This configuration is a wrapper over the device specific configurations
+/// as well as the IoT cloud provider specific configurations.
+///
 #[derive(Debug)]
 pub struct TEdgeConfig {
     data: TEdgeConfigDto,
@@ -122,16 +126,6 @@ impl TEdgeConfig {
         self.write_to_custom_config(tedge_config_path()?.as_path())
     }
 
-    #[cfg(test)]
-    fn data(&self) -> &TEdgeConfigDto {
-        &self.data
-    }
-
-    #[cfg(test)]
-    fn data_mut(&mut self) -> &mut TEdgeConfigDto {
-        &mut self.data
-    }
-
     /// Persists this `TEdgeConfigDto` to the `path` provided
     fn write_to_custom_config(&self, path: &Path) -> Result<(), ConfigError> {
         let toml = toml::to_string_pretty(&self.data)?;
@@ -200,28 +194,30 @@ connect = "false"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let cfg = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
-        assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
-        assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
-        assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
+        assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
+        assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
+        assert_eq!(
+            config.query(DeviceCertPathSetting).unwrap(),
+            "/path/to/cert"
+        );
 
         assert_eq!(
-            config.c8y.url.as_ref().unwrap().as_str(),
+            config.query(C8yUrlSetting).unwrap().as_str(),
             "your-tenant.cumulocity.com"
         );
         assert_eq!(
-            config.c8y.root_cert_path.as_ref().unwrap(),
+            config.query(C8yRootCertPathSetting).unwrap(),
             "/path/to/c8y/root/cert"
         );
 
         assert_eq!(
-            config.azure.url.as_ref().unwrap().as_str(),
+            config.query(AzureUrlSetting).unwrap().as_str(),
             "MyAzure.azure-devices.net"
         );
         assert_eq!(
-            config.azure.root_cert_path.as_ref().unwrap(),
+            config.query(AzureRootCertPathSetting).unwrap(),
             "/path/to/azure/root/cert"
         );
     }
@@ -251,55 +247,81 @@ root_cert_path = "/path/to/azure/root/cert"
         let updated_azure_url = "OtherAzure.azure-devices.net";
 
         {
-            let mut cfg = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
-            let config = cfg.data_mut();
-            assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
-            assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
-            assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
+            let mut config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
+            assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
+            assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
+            assert_eq!(
+                config.query(DeviceCertPathSetting).unwrap(),
+                "/path/to/cert"
+            );
 
             assert_eq!(
-                config.c8y.url.as_ref().unwrap().as_str(),
+                config.query(C8yUrlSetting).unwrap().as_str(),
                 "your-tenant.cumulocity.com"
             );
             assert_eq!(
-                config.c8y.root_cert_path.as_ref().unwrap(),
+                config.query(C8yRootCertPathSetting).unwrap(),
                 "/path/to/c8y/root/cert"
             );
 
             assert_eq!(
-                config.azure.url.as_ref().unwrap().as_str(),
+                config.query(AzureUrlSetting).unwrap().as_str(),
                 "MyAzure.azure-devices.net"
             );
             assert_eq!(
-                config.azure.root_cert_path.as_ref().unwrap(),
+                config.query(AzureRootCertPathSetting).unwrap(),
                 "/path/to/azure/root/cert"
             );
 
-            config.device.id = Some(updated_device_id.to_string());
-            config.c8y.url = Some(ConnectUrl::try_from(updated_c8y_url.to_string()).unwrap());
-            config.c8y.root_cert_path = None;
-            config.azure.url = Some(ConnectUrl::try_from(updated_azure_url.to_string()).unwrap());
-            config.azure.root_cert_path = None;
-            cfg.write_to_custom_config(config_file_path.as_ref())
+            config
+                .update(DeviceIdSetting, updated_device_id.to_string())
+                .unwrap();
+            config
+                .update(
+                    C8yUrlSetting,
+                    ConnectUrl::try_from(updated_c8y_url.to_string()).unwrap(),
+                )
+                .unwrap();
+            config.unset(C8yRootCertPathSetting).unwrap();
+            config
+                .update(
+                    AzureUrlSetting,
+                    ConnectUrl::try_from(updated_azure_url.to_string()).unwrap(),
+                )
+                .unwrap();
+            config.unset(AzureRootCertPathSetting).unwrap();
+            config
+                .write_to_custom_config(config_file_path.as_ref())
                 .unwrap();
         }
 
         {
-            let cfg = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
-            let config = cfg.data();
+            let config = TEdgeConfig::from_custom_config(config_file_path.as_ref()).unwrap();
 
-            assert_eq!(config.device.id.as_ref().unwrap(), updated_device_id);
-            assert_eq!(config.device.key_path.as_ref().unwrap(), "/path/to/key");
-            assert_eq!(config.device.cert_path.as_ref().unwrap(), "/path/to/cert");
-
-            assert_eq!(config.c8y.url.as_ref().unwrap().as_str(), updated_c8y_url);
-            assert!(config.c8y.root_cert_path.is_none());
+            assert_eq!(config.query(DeviceIdSetting).unwrap(), updated_device_id);
+            assert_eq!(config.query(DeviceKeyPathSetting).unwrap(), "/path/to/key");
+            assert_eq!(
+                config.query(DeviceCertPathSetting).unwrap(),
+                "/path/to/cert"
+            );
 
             assert_eq!(
-                config.azure.url.as_ref().unwrap().as_str(),
+                config.query(C8yUrlSetting).unwrap().as_str(),
+                updated_c8y_url
+            );
+            assert!(config
+                .query_optional(C8yRootCertPathSetting)
+                .unwrap()
+                .is_none());
+
+            assert_eq!(
+                config.query(AzureUrlSetting).unwrap().as_str(),
                 updated_azure_url
             );
-            assert!(config.azure.root_cert_path.is_none());
+            assert!(config
+                .query_optional(AzureRootCertPathSetting)
+                .unwrap()
+                .is_none());
         }
     }
 
@@ -311,21 +333,23 @@ id = "ABCD1234"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let cfg = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
-        assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
+        assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
-            default_device_cert_path().unwrap()
+            config.query(DeviceCertPathSetting).unwrap(),
+            default_device_cert_path().unwrap() // XXX
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
-            default_device_key_path().unwrap()
+            config.query(DeviceKeyPathSetting).unwrap(),
+            default_device_key_path().unwrap() // XXX
         );
 
-        assert!(config.c8y.url.is_none());
-        assert!(config.c8y.root_cert_path.is_none());
+        assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
+        assert!(config
+            .query_optional(C8yRootCertPathSetting)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -336,21 +360,23 @@ id = "ABCD1234"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let cfg = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
-        assert_eq!(config.device.id.as_ref().unwrap(), "ABCD1234");
+        assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
-            default_device_cert_path().unwrap()
+            config.query(DeviceCertPathSetting).unwrap(),
+            default_device_cert_path().unwrap() // XXX
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
-            default_device_key_path().unwrap()
+            config.query(DeviceKeyPathSetting).unwrap(),
+            default_device_key_path().unwrap() // XXX
         );
 
-        assert!(config.azure.url.is_none());
-        assert!(config.azure.root_cert_path.is_none());
+        assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
+        assert!(config
+            .query_optional(AzureRootCertPathSetting)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -361,21 +387,20 @@ url = "your-tenant.cumulocity.com"
 "#;
 
         let config_file = temp_file_with_content(toml_conf);
-        let cfg = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
         assert_eq!(
-            config.c8y.url.as_ref().unwrap().as_str(),
+            config.query(C8yUrlSetting).unwrap().as_str(),
             "your-tenant.cumulocity.com"
         );
 
-        assert!(config.device.id.is_none());
+        assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
+            config.query(DeviceCertPathSetting).unwrap(),
             default_device_cert_path().unwrap()
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
+            config.query(DeviceKeyPathSetting).unwrap(),
             default_device_key_path().unwrap()
         );
     }
@@ -383,32 +408,36 @@ url = "your-tenant.cumulocity.com"
     #[test]
     fn test_parse_config_empty_file() {
         let config_file = NamedTempFile::new().unwrap();
-        let cfg = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(config_file.path()).unwrap();
 
-        assert!(config.device.id.is_none());
+        assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
         assert_eq!(
-            config.device.cert_path.clone().unwrap(),
+            config.query(DeviceCertPathSetting).unwrap(),
             default_device_cert_path().unwrap()
         );
         assert_eq!(
-            config.device.key_path.clone().unwrap(),
+            config.query(DeviceKeyPathSetting).unwrap(),
             default_device_key_path().unwrap()
         );
 
-        assert!(config.c8y.url.is_none());
-        assert!(config.c8y.root_cert_path.is_none());
-        assert!(config.azure.url.is_none());
-        assert!(config.azure.root_cert_path.is_none());
+        assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
+        assert!(config
+            .query_optional(C8yRootCertPathSetting)
+            .unwrap()
+            .is_none());
+        assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
+        assert!(config
+            .query_optional(AzureRootCertPathSetting)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn test_parse_config_no_config_file() {
-        let cfg = TEdgeConfig::from_custom_config(Path::new("/non/existent/path")).unwrap();
-        let config = cfg.data();
+        let config = TEdgeConfig::from_custom_config(Path::new("/non/existent/path")).unwrap();
 
-        assert!(config.device.id.is_none());
-        assert!(config.c8y.url.is_none());
+        assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
+        assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
     }
 
     #[test]
