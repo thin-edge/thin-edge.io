@@ -57,25 +57,25 @@ Now, we have downloaded the package we can proceed to installation. First we wil
 To install `tedge` use following command:
 
 ```shell
-dpkg -i tedge_<version>_<arch>
+dpkg -i tedge_<version>_<arch>.deb
 ```
 
 Eg:
 
 ```shell
-dpkg -i tedge_0.1.0_armhf
+dpkg -i tedge_0.1.0_armhf.deb
 ```
 
 To install mapper for thin-edge.io do:
 
 ```shell
-dpkg -i tedge_mapper_<version>_<arch>
+dpkg -i tedge_mapper_<version>_<arch>.deb
 ```
 
 Eg:
 
 ```shell
-dpkg -i tedge_mapper_0.1.0_armhf
+dpkg -i tedge_mapper_0.1.0_armhf.deb
 ```
 
 ## Next steps
