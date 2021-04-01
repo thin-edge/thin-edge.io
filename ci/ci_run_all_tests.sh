@@ -17,11 +17,14 @@ set -e
 
 cd $TEBASEDIR
 
+# Check if clients are installed
+dpkg -s mosquitto-clients
+
 # Run all PySys tests
 
-python3 -m venv ~/env-pysys
+python3 -mvenv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run -v DEBUG
+pysys.py run
 deactivate

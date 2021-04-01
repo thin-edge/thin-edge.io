@@ -2,13 +2,13 @@
 name: build-workflow
 
 on:
-  # Only run, when a pull request is merged.
-  # Trick: A merged pull request always results in a push.
-  # That is also triggered in the users repo when enabled
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["commit-workflow"]
+    branches: [main, continuous_integration]
+    types:
+      - completed
   workflow_dispatch:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,6 +19,7 @@ jobs:
 
     name: Build tedge and mapper Debian packages for amd64
     runs-on: Ubuntu-20.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
@@ -68,6 +69,8 @@ jobs:
 
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     env:
       TARGET: armv7-unknown-linux-gnueabihf
 

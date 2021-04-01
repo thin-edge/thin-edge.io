@@ -44,6 +44,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Cert(opt) => opt.build_command(config),
             TEdgeOpt::Config(opt) => opt.build_command(config),
             TEdgeOpt::Connect(opt) => opt.build_command(config),
+
             TEdgeOpt::Disconnect(opt) => opt.build_command(config),
             TEdgeOpt::Mqtt(opt) => opt.build_command(config),
         }

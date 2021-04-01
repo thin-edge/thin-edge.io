@@ -1,0 +1,27 @@
+name: replace-cert-workflow
+
+on:
+  workflow_dispatch:
+    branches: [ main, continuous_integration]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  replace-cert:
+    runs-on: [self-hosted, Linux, ARM]
+
+    steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: Script
+          run: ./ci/replace-cert.sh $TIMEZONE
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TIMEZONE: 01:00
