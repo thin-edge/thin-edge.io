@@ -1,0 +1,167 @@
+name: commit-workflow
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  cargo-fmt:
+
+    name: Run cargo fmt
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: -- --check
+
+  cargo-clippy:
+
+    name: Run cargo clippy
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: clippy
+
+  cargo-test:
+
+    name: Run cargo test
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose
+
+  cargo-build:
+
+    name: Run cargo build
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args:  --release
+
+  cargo-tarpaulin:
+
+    name: Run cargo tarpaulin
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install libssl
+        run: sudo apt install libssl-dev
+
+      - name: Cargo install tarpaulin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-tarpaulin
+
+      - name: Cargo tarpaulin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: tarpaulin
+          args: -v --out Html
+
+      - name: upload report
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tarpaulin-coverage
+          path: tarpaulin-report.html
+
+  cargo-audit:
+
+    name: Run cargo audit
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo audit
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: audit
+
+  cargo-outdated:
+
+    name: Run cargo outdated
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
