@@ -175,7 +175,8 @@ pub trait BuildCommand {
 ///     }
 /// ```
 pub struct ExecutionContext {
-    pub user_manager: UserManager,
+    pub user_manager: UserManager, // XXX
+    pub privileged_executor: Box<dyn crate::privsep::PrivilegedCommandExecutor>,
 }
 
 impl ExecutionContext {
@@ -183,9 +184,12 @@ impl ExecutionContext {
     ///
     /// Such a context MUST be created only once,
     /// in practice in the `main()` function.
-    pub fn new() -> ExecutionContext {
+    pub fn new(
+        privileged_executor: Box<dyn crate::privsep::PrivilegedCommandExecutor>,
+    ) -> ExecutionContext {
         ExecutionContext {
-            user_manager: UserManager::new(),
+            privileged_executor,
+            user_manager: UserManager::new(), // XXX
         }
     }
 }
