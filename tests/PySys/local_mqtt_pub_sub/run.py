@@ -21,7 +21,7 @@ class PySysTest(BaseTest):
         sudo = "/usr/bin/sudo"
 
         sub = self.startProcess(
-            command = sudo,
+            command=sudo,
             arguments=[tedge, "mqtt", "sub", "atopic"],
             stdouterr="tedge_sub",
             background=True,
@@ -32,18 +32,21 @@ class PySysTest(BaseTest):
         time.sleep(0.1)
 
         pub = self.startProcess(
-            command = sudo,
+            command=sudo,
             arguments=[tedge, "mqtt", "pub", "atopic", "amessage"],
             stdouterr="tedge_pub2",
         )
 
         pub = self.startProcess(
-            command= sudo,
+            command=sudo,
             arguments=[tedge, "mqtt", "pub", "atopic", "the message"],
             stdouterr="tedge_pub3",
         )
-        pub = self.startProcess(
-            command= sudo,
+
+        # Kill the subscriber process explicitly with sudo as PySys does
+        # not have the rights to do it
+        kill = self.startProcess(
+            command=sudo,
             arguments=["kill", "-9", str(sub.pid)],
             stdouterr="kill_out",
         )
@@ -51,4 +54,3 @@ class PySysTest(BaseTest):
     def validate(self):
         self.assertGrep("tedge_sub.out", "amessage", contains=True)
         self.assertGrep("tedge_sub.out", "the message", contains=True)
-
