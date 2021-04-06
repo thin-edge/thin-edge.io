@@ -15,13 +15,15 @@ pub struct TEdgeConfigRepository {
     tedge_home: PathBuf,
 }
 
-/// XXX: Hard coding a concrete error type in a generic trait is aweful.
 pub trait ConfigRepository<T> {
-    fn load(&self) -> Result<T, TEdgeConfigError>;
-    fn store(&self, config: T) -> Result<(), TEdgeConfigError>;
+    type Error;
+    fn load(&self) -> Result<T, Self::Error>;
+    fn store(&self, config: T) -> Result<(), Self::Error>;
 }
 
 impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
+    type Error = TEdgeConfigError;
+
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let config = self.read_file_or_default(self.config_file_name().into())?;
         Ok(self.fixup_config(config)?)
