@@ -82,7 +82,7 @@ echo "Configuring Bridge"
 
 sudo tedge cert remove
 
-sudo tedge cert create --device-id=$C8YDEVICEID
+sudo tedge cert create --device-id=$C8YDEVICE
 
 sudo tedge cert show
 
