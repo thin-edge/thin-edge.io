@@ -1746,6 +1746,7 @@ dependencies = [
  "serde",
  "sha-1",
  "structopt",
+ "tedge_config",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1755,6 +1756,17 @@ dependencies = [
  "which",
  "x509-parser",
  "zeroize",
+]
+
+[[package]]
+name = "tedge_config"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]
