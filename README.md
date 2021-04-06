@@ -11,7 +11,7 @@
   </a>
 
   <h3 align="center">The open edge framework for lightweight IoT devices</h3>
-  <p align="center"><a href="thin-edge.io">thin-edge.io</a></p>
+  <p align="center"><a href="https://thin-edge.io">thin-edge.io</a></p>
   <br />
   <br />
 </p>
