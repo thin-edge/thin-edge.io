@@ -1,5 +1,4 @@
 use crate::*;
-use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
@@ -29,13 +28,11 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         Ok(self.fixup_config(config)?)
     }
 
+    // XXX: Explicitly set the file permissions in this function and file ownership!
     fn store(&self, config: TEdgeConfig) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
-        if !self.tedge_home.exists() {
-            create_dir_all(&self.tedge_home)?;
-        }
         match file.persist(self.config_file_name()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
