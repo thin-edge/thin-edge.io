@@ -150,7 +150,14 @@ impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
         let client = reqwest::blocking::Client::new();
 
-        let password = rpassword::read_password_from_tty(Some("Enter password: "))?;
+        // Temporary workaround
+        // let password = rpassword::read_password_from_tty(Some("Enter password: "))?;
+
+        // Now run with sudo -E and set the password
+        let password = match std::env::var("C8YPASS") {
+            Ok(val) => val,
+            Err(_) => panic!("Cannot find environment variable C8YPASS!"),
+        };
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
