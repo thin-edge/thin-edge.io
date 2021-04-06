@@ -53,16 +53,6 @@ impl TEdgeConfigRepository {
         self.tedge_home.join(TEDGE_CONFIG_FILE)
     }
 
-    /*
-    fn fixup_config(&self, mut config: TEdgeConfig) -> Result<TEdgeConfig, TEdgeConfigError> {
-        config.update_if_not_set(DeviceKeyPathSetting, self.default_device_key_path()?)?;
-        config.update_if_not_set(DeviceCertPathSetting, self.default_device_cert_path()?)?;
-        config.update_if_not_set(AzureRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
-        config.update_if_not_set(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
-        Ok(config)
-    }
-    */
-
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
     ///
     /// #Arguments
