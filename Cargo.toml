@@ -5,6 +5,7 @@ members = [
     "tedge",
     "mapper/tedge_mapper",
     "mapper/cumulocity/c8y_translator_lib",
+    "mapper/tedge_json",
 ]
 
 [profile.release]
