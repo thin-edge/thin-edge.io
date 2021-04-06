@@ -25,7 +25,7 @@ connect = "false"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfigManager::new("/home/user/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/user/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -80,7 +80,7 @@ root_cert_path = "/path/to/azure/root/cert"
     let updated_azure_url = "OtherAzure.azure-devices.net";
 
     {
-        let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        let mut config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
             .from_custom_config(config_file_path.as_ref())
             .unwrap();
         assert_eq!(config.query(DeviceIdSetting).unwrap(), "ABCD1234");
@@ -129,7 +129,7 @@ root_cert_path = "/path/to/azure/root/cert"
     }
 
     {
-        let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+        let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
             .from_custom_config(config_file_path.as_ref())
             .unwrap();
 
@@ -168,7 +168,7 @@ id = "ABCD1234"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -197,7 +197,7 @@ id = "ABCD1234"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -226,7 +226,7 @@ url = "your-tenant.cumulocity.com"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -249,7 +249,7 @@ url = "your-tenant.cumulocity.com"
 #[test]
 fn test_parse_config_empty_file() {
     let config_file = NamedTempFile::new().unwrap();
-    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -277,7 +277,7 @@ fn test_parse_config_empty_file() {
 
 #[test]
 fn test_parse_config_no_config_file() {
-    let config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(Path::new("/non/existent/path"))
         .unwrap();
 
@@ -294,8 +294,8 @@ hello="tedge"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let result =
-        TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
+    let result = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
         TEdgeConfigError::TOMLParseError(_),
@@ -310,8 +310,8 @@ fn test_parse_invalid_toml_file() {
         "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let result =
-        TEdgeConfigManager::new("/home/tedge/.tedge".into()).from_custom_config(config_file.path());
+    let result = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
+        .from_custom_config(config_file.path());
     assert_matches!(
         result.unwrap_err(),
         TEdgeConfigError::TOMLParseError(_),
@@ -337,7 +337,7 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let mut config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 
@@ -412,7 +412,7 @@ root_cert_path = "/path/to/azure/root/cert"
 "#;
 
     let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfigManager::new("/home/tedge/.tedge".into())
+    let mut config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
         .from_custom_config(config_file.path())
         .unwrap();
 

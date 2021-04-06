@@ -1,4 +1,4 @@
-use crate::{config_setting::*, types::*};
+use crate::{config_setting::*, models::*};
 
 ///
 /// Identifier of the device within the fleet. It must be globally
@@ -10,7 +10,7 @@ use crate::{config_setting::*, types::*};
 pub struct DeviceIdSetting;
 
 impl ConfigSetting for DeviceIdSetting {
-    const EXTERNAL_KEY: &'static str = "device.id";
+    const KEY: &'static str = "device.id";
 
     const DESCRIPTION: &'static str = concat!(
         "Identifier of the device within the fleet. It must be ",
@@ -28,7 +28,7 @@ impl ConfigSetting for DeviceIdSetting {
 pub struct DeviceKeyPathSetting;
 
 impl ConfigSetting for DeviceKeyPathSetting {
-    const EXTERNAL_KEY: &'static str = "device.key.path";
+    const KEY: &'static str = "device.key.path";
 
     const DESCRIPTION: &'static str =
         "Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem";
@@ -45,7 +45,7 @@ impl ConfigSetting for DeviceKeyPathSetting {
 pub struct DeviceCertPathSetting;
 
 impl ConfigSetting for DeviceCertPathSetting {
-    const EXTERNAL_KEY: &'static str = "device.cert.path";
+    const KEY: &'static str = "device.cert.path";
 
     const DESCRIPTION: &'static str =
         "Path to the certificate file. Example: /home/user/.tedge/tedge-certificate.crt";
@@ -62,7 +62,7 @@ impl ConfigSetting for DeviceCertPathSetting {
 pub struct C8yUrlSetting;
 
 impl ConfigSetting for C8yUrlSetting {
-    const EXTERNAL_KEY: &'static str = "c8y.url";
+    const KEY: &'static str = "c8y.url";
 
     const DESCRIPTION: &'static str =
         "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
@@ -78,7 +78,7 @@ impl ConfigSetting for C8yUrlSetting {
 pub struct C8yRootCertPathSetting;
 
 impl ConfigSetting for C8yRootCertPathSetting {
-    const EXTERNAL_KEY: &'static str = "c8y.root_cert_path";
+    const KEY: &'static str = "c8y.root_cert_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Cumulocity root certificate(s) are located. ",
@@ -97,7 +97,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
 pub struct AzureUrlSetting;
 
 impl ConfigSetting for AzureUrlSetting {
-    const EXTERNAL_KEY: &'static str = "device.id";
+    const KEY: &'static str = "device.id";
 
     const DESCRIPTION: &'static str = concat!(
         "Tenant endpoint URL of Azure IoT tenant. ",
@@ -116,7 +116,7 @@ impl ConfigSetting for AzureUrlSetting {
 pub struct AzureRootCertPathSetting;
 
 impl ConfigSetting for AzureRootCertPathSetting {
-    const EXTERNAL_KEY: &'static str = "azure.root_cert_path";
+    const KEY: &'static str = "azure.root_cert_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Azure IoT root certificate(s) are located. ",
