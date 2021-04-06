@@ -18,6 +18,9 @@ pub enum TEdgeConfigError {
     #[error(transparent)]
     ConfigSettingError(#[from] crate::ConfigSettingError),
 
+    #[error(transparent)]
+    InvalidConfigUrl(#[from] crate::models::InvalidConnectUrl),
+
     #[error("Config file not found: {0}")]
     ConfigFileNotFound(std::path::PathBuf),
 }

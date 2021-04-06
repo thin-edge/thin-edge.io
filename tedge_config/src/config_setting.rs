@@ -37,16 +37,6 @@ pub enum ConfigSettingError {
     )]
     ConfigNotSet { key: &'static str },
 
-    // XXX
-    #[error(
-        r#"Provided URL: '{0}' contains scheme or port.
-    Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."#
-    )]
-    InvalidConfigUrl(String),
-
     #[error("Readonly setting")]
     ReadonlySetting,
-
-    #[error("Infallible Error")]
-    Infallible(#[from] std::convert::Infallible),
 }

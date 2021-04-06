@@ -99,15 +99,9 @@ root_cert_path = "/path/to/azure/root/cert"
             "/path/to/azure/root/cert"
         );
 
-        config.update(
-            C8yUrlSetting,
-            ConnectUrl::try_from(updated_c8y_url.to_string()).unwrap(),
-        )?;
+        config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
         config.unset(C8yRootCertPathSetting)?;
-        config.update(
-            AzureUrlSetting,
-            ConnectUrl::try_from(updated_azure_url.to_string()).unwrap(),
-        )?;
+        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
         config.unset(AzureRootCertPathSetting)?;
         config_repo.store(config)?;
     }
@@ -174,7 +168,7 @@ id = "ABCD1234"
         tempdir.path().join("tedge-private-key.pem")
     );
 
-    assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
+    assert_matches!(config.query_optional(AzureUrlSetting), Ok(None));
     assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
     Ok(())
 }
@@ -225,7 +219,7 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     assert!(config.query_optional(C8yUrlSetting)?.is_none());
     assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
 
-    assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
+    assert_matches!(config.query_optional(AzureUrlSetting), Ok(None));
     assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
     Ok(())
 }
@@ -309,7 +303,7 @@ root_cert_path = "/path/to/azure/root/cert"
         original_device_cert_path
     );
 
-    let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com").unwrap();
+    let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com")?;
     let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
     assert_eq!(config.query(C8yUrlSetting)?, original_c8y_url);
     assert_eq!(
@@ -317,7 +311,7 @@ root_cert_path = "/path/to/azure/root/cert"
         original_c8y_root_cert_path
     );
 
-    let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com").unwrap();
+    let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com")?;
 
     config.update(C8yUrlSetting, updated_c8y_url.clone())?;
 
@@ -357,7 +351,7 @@ root_cert_path = "/path/to/azure/root/cert"
     let tempdir = create_temp_tedge_config(toml_conf)?;
     let mut config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
 
-    let original_azure_url = ConnectUrl::try_from("MyAzure.azure-devices.net").unwrap();
+    let original_azure_url = ConnectUrl::try_from("MyAzure.azure-devices.net")?;
     let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();
 
     // read
@@ -368,7 +362,7 @@ root_cert_path = "/path/to/azure/root/cert"
     );
 
     // set
-    let updated_azure_url = ConnectUrl::try_from("OtherAzure.azure-devices.net").unwrap();
+    let updated_azure_url = ConnectUrl::try_from("OtherAzure.azure-devices.net")?;
     config.update(AzureUrlSetting, updated_azure_url.clone())?;
 
     assert_eq!(config.query(AzureUrlSetting)?, updated_azure_url);
