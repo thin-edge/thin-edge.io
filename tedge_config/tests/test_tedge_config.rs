@@ -1,7 +1,6 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
-use std::path::PathBuf;
 use tedge_config::*;
 use tempfile::TempDir;
 
@@ -135,12 +134,12 @@ id = "ABCD1234"
 
     assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
     assert_eq!(
-        PathBuf::from(config.query(DeviceCertPathSetting)?),
-        tempdir.path().join("tedge-certificate.pem")
+        config.query(DeviceCertPathSetting)?,
+        "/etc/ssl/certs/tedge-certificate.pem"
     );
     assert_eq!(
-        PathBuf::from(config.query(DeviceKeyPathSetting)?),
-        tempdir.path().join("tedge-private-key.pem")
+        config.query(DeviceKeyPathSetting)?,
+        "/etc/ssl/certs/tedge-private-key.pem"
     );
 
     assert!(config.query_optional(C8yUrlSetting)?.is_none());
@@ -160,12 +159,12 @@ id = "ABCD1234"
 
     assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
     assert_eq!(
-        PathBuf::from(config.query(DeviceCertPathSetting)?),
-        tempdir.path().join("tedge-certificate.pem")
+        config.query(DeviceCertPathSetting)?,
+        "/etc/ssl/certs/tedge-certificate.pem"
     );
     assert_eq!(
-        PathBuf::from(config.query(DeviceKeyPathSetting)?),
-        tempdir.path().join("tedge-private-key.pem")
+        config.query(DeviceKeyPathSetting)?,
+        "/etc/ssl/certs/tedge-private-key.pem"
     );
 
     assert_matches!(config.query_optional(AzureUrlSetting), Ok(None));
@@ -190,12 +189,12 @@ url = "your-tenant.cumulocity.com"
 
     assert!(config.query_optional(DeviceIdSetting)?.is_none());
     assert_eq!(
-        PathBuf::from(config.query(DeviceCertPathSetting)?),
-        tempdir.path().join("tedge-certificate.pem")
+        config.query(DeviceCertPathSetting)?,
+        "/etc/ssl/certs/tedge-certificate.pem"
     );
     assert_eq!(
-        PathBuf::from(config.query(DeviceKeyPathSetting)?),
-        tempdir.path().join("tedge-private-key.pem")
+        config.query(DeviceKeyPathSetting)?,
+        "/etc/ssl/certs/tedge-private-key.pem",
     );
     Ok(())
 }
@@ -208,12 +207,12 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     assert!(config.query_optional(DeviceIdSetting)?.is_none());
 
     assert_eq!(
-        PathBuf::from(config.query(DeviceCertPathSetting)?),
-        tempdir.path().join("tedge-certificate.pem")
+        config.query(DeviceCertPathSetting)?,
+        "/etc/ssl/certs/tedge-certificate.pem"
     );
     assert_eq!(
-        PathBuf::from(config.query(DeviceKeyPathSetting)?),
-        tempdir.path().join("tedge-private-key.pem")
+        config.query(DeviceKeyPathSetting)?,
+        "/etc/ssl/certs/tedge-private-key.pem",
     );
 
     assert!(config.query_optional(C8yUrlSetting)?.is_none());

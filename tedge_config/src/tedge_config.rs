@@ -1,6 +1,9 @@
 use crate::*;
 
-const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+const DEFAULT_DEVICE_CERT_PATH: &str = "/etc/ssl/certs/tedge-certificate.pem";
+const DEFAULT_DEVICE_KEY_PATH: &str = "/etc/ssl/certs/tedge-private-key.pem";
+const DEFAULT_AZURE_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+const DEFAULT_C8Y_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
@@ -9,26 +12,6 @@ const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 #[derive(Debug)]
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
-}
-
-impl TEdgeConfig {
-    pub fn update_if_not_set<T: ConfigSetting + Copy>(
-        &mut self,
-        setting: T,
-        value: T::Value,
-    ) -> Result<(), TEdgeConfigError>
-    where
-        Self: ConfigSettingAccessor<T>,
-    {
-        match self.query(setting) {
-            Err(ConfigSettingError::ConfigNotSet { .. }) => {
-                self.update(setting, value)?;
-                Ok(())
-            }
-            Err(other) => Err(other.into()),
-            Ok(_ok) => Ok(()),
-        }
-    }
 }
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
@@ -97,13 +80,12 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<String> {
-        self.data
+        Ok(self
+            .data
             .device
             .cert_path
             .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: DeviceCertPathSetting::KEY,
-            })
+            .unwrap_or_else(|| DEFAULT_DEVICE_CERT_PATH.into()))
     }
 
     fn update(
@@ -123,13 +105,12 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
 
 impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<String> {
-        self.data
+        Ok(self
+            .data
             .device
             .key_path
             .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: DeviceKeyPathSetting::KEY,
-            })
+            .unwrap_or_else(|| DEFAULT_DEVICE_KEY_PATH.into()))
     }
 
     fn update(&mut self, _setting: DeviceKeyPathSetting, value: String) -> ConfigSettingResult<()> {
@@ -150,7 +131,7 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
             .azure
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
+            .unwrap_or_else(|| DEFAULT_AZURE_ROOT_CERT_PATH.into()))
     }
 
     fn update(
@@ -175,7 +156,7 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
             .c8y
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.into()))
+            .unwrap_or_else(|| DEFAULT_C8Y_ROOT_CERT_PATH.into()))
     }
 
     fn update(

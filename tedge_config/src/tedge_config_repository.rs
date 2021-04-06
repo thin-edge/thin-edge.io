@@ -5,8 +5,6 @@ use tempfile::NamedTempFile;
 
 const TEDGE_DEFAULT_LOCATION: &str = "/etc/tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
-const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
@@ -25,7 +23,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let config = self.read_file_or_default(self.config_file_name().into())?;
-        Ok(self.fixup_config(config)?)
+        Ok(config)
     }
 
     // XXX: Explicitly set the file permissions in this function and file ownership!
@@ -55,11 +53,15 @@ impl TEdgeConfigRepository {
         self.tedge_home.join(TEDGE_CONFIG_FILE)
     }
 
+    /*
     fn fixup_config(&self, mut config: TEdgeConfig) -> Result<TEdgeConfig, TEdgeConfigError> {
         config.update_if_not_set(DeviceKeyPathSetting, self.default_device_key_path()?)?;
         config.update_if_not_set(DeviceCertPathSetting, self.default_device_cert_path()?)?;
+        config.update_if_not_set(AzureRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
+        config.update_if_not_set(C8yRootCertPathSetting, DEFAULT_ROOT_CERT_PATH.into())?;
         Ok(config)
     }
+    */
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
     ///
@@ -88,21 +90,5 @@ impl TEdgeConfigRepository {
             }),
             Err(err) => Err(err),
         }
-    }
-
-    fn default_device_key_path(&self) -> Result<String, TEdgeConfigError> {
-        self.path_in_cert_directory(DEVICE_KEY_FILE)
-    }
-
-    fn default_device_cert_path(&self) -> Result<String, TEdgeConfigError> {
-        self.path_in_cert_directory(DEVICE_CERT_FILE)
-    }
-
-    fn path_in_cert_directory(&self, file_name: &str) -> Result<String, TEdgeConfigError> {
-        self.tedge_home
-            .join(file_name)
-            .to_str()
-            .map(|s| s.into())
-            .ok_or(TEdgeConfigError::InvalidCharacterInHomeDirectoryPath)
     }
 }
