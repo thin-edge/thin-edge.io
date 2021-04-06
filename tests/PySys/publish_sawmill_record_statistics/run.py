@@ -19,7 +19,7 @@ class PySysTest(BaseTest):
         if serv_mosq.exitStatus!=0:
             self.abort(FAILED)
 
-        # Check if mosquitto is running well
+        # Check if tedge-mapper is running well
         serv_mosq = self.startProcess(
             command="/usr/sbin/service",
             arguments=["tedge-mapper", "status"],
@@ -34,15 +34,6 @@ class PySysTest(BaseTest):
             arguments=["-x", "mosquitto"],
             stdouterr="serv_mosq"
         )
-
-        with open(proc_mos.stdout) as pidfile:
-            mpid = int(pidfile.read().strip())
-        self.log.info(f"Pid of mosquitto {mpid}")
-
-        self.pid_mosquitto = 10
-
-
-
 
     def execute(self):
         self.log.info("Execute")
