@@ -21,14 +21,10 @@ pub trait ConfigSettingAccessor<T: ConfigSetting> {
     }
 
     /// Update a configuration setting
-    fn update(&mut self, _setting: T, _value: T::Value) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting)
-    }
+    fn update(&mut self, _setting: T, _value: T::Value) -> ConfigSettingResult<()>;
 
     /// Unset a configuration setting / reset to default
-    fn unset(&mut self, _setting: T) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting)
-    }
+    fn unset(&mut self, _setting: T) -> ConfigSettingResult<()>;
 }
 
 pub type ConfigSettingResult<T> = Result<T, ConfigSettingError>;

@@ -30,6 +30,14 @@ impl TryFrom<String> for ConnectUrl {
     }
 }
 
+impl TryFrom<&str> for ConnectUrl {
+    type Error = InvalidConnectUrl;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        ConnectUrl::try_from(input.to_string())
+    }
+}
+
 impl ConnectUrl {
     pub fn as_str(&self) -> &str {
         self.0.as_str()

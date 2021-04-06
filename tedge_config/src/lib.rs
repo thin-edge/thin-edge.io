@@ -13,6 +13,3 @@ pub use self::settings::*;
 pub use self::tedge_config::*;
 use self::tedge_config_dto::*;
 pub use self::tedge_config_repository::*;
-
-// XXX: This should really go away.
-pub const TEDGE_HOME_DIR: &str = ".tedge";

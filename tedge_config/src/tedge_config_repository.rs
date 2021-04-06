@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
+const TEDGE_DEFAULT_LOCATION: &str = "/etc/tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 const DEVICE_KEY_FILE: &str = "tedge-private-key.pem";
 const DEVICE_CERT_FILE: &str = "tedge-certificate.pem";
@@ -42,9 +43,8 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 }
 
 impl TEdgeConfigRepository {
-    // XXX: Remove
     pub fn from_default_location() -> Result<Self, TEdgeConfigError> {
-        Ok(Self::from_dir(home_dir()?.join(crate::TEDGE_HOME_DIR)))
+        Ok(Self::from_dir(TEDGE_DEFAULT_LOCATION))
     }
 
     pub fn from_dir(tedge_home: impl Into<PathBuf>) -> Self {
@@ -107,10 +107,4 @@ impl TEdgeConfigRepository {
             .map(|s| s.into())
             .ok_or(TEdgeConfigError::InvalidCharacterInHomeDirectoryPath)
     }
-}
-
-fn home_dir() -> Result<PathBuf, TEdgeConfigError> {
-    // The usage of this deprecated method is temporary as this whole function will be replaced with the util function being added in CIT-137.
-    #![allow(deprecated)]
-    std::env::home_dir().ok_or(TEdgeConfigError::HomeDirectoryNotFound)
 }

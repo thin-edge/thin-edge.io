@@ -1,7 +1,7 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tedge_config::*;
 use tempfile::TempDir;
 
@@ -179,111 +179,104 @@ id = "ABCD1234"
     Ok(())
 }
 
-/*
-
 #[test]
-fn test_parse_config_missing_device_configuration() {
+fn test_parse_config_missing_device_configuration() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [c8y]
 url = "your-tenant.cumulocity.com"
 "#;
 
-    let config_file = temp_file_with_content(toml_conf);
-    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path())
-        .unwrap();
+    let tempdir = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
 
     assert_eq!(
-        config.query(C8yUrlSetting).unwrap().as_str(),
+        config.query(C8yUrlSetting)?.as_str(),
         "your-tenant.cumulocity.com"
     );
 
-    assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
+    assert!(config.query_optional(DeviceIdSetting)?.is_none());
     assert_eq!(
-        config.query(DeviceCertPathSetting).unwrap(),
-        "/home/tedge/.tedge/tedge-certificate.pem"
+        PathBuf::from(config.query(DeviceCertPathSetting)?),
+        tempdir.path().join("tedge-certificate.pem")
     );
     assert_eq!(
-        config.query(DeviceKeyPathSetting).unwrap(),
-        "/home/tedge/.tedge/tedge-private-key.pem"
+        PathBuf::from(config.query(DeviceKeyPathSetting)?),
+        tempdir.path().join("tedge-private-key.pem")
     );
+    Ok(())
 }
 
 #[test]
-fn test_parse_config_empty_file() {
-    let config_file = NamedTempFile::new().unwrap();
-    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path())
-        .unwrap();
+fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
+    let tempdir = create_temp_tedge_config("")?;
+    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
+    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+
     assert_eq!(
-        config.query(DeviceCertPathSetting).unwrap(),
-        "/home/tedge/.tedge/tedge-certificate.pem"
+        PathBuf::from(config.query(DeviceCertPathSetting)?),
+        tempdir.path().join("tedge-certificate.pem")
     );
     assert_eq!(
-        config.query(DeviceKeyPathSetting).unwrap(),
-        "/home/tedge/.tedge/tedge-private-key.pem"
+        PathBuf::from(config.query(DeviceKeyPathSetting)?),
+        tempdir.path().join("tedge-private-key.pem")
     );
 
-    assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
-    assert!(config
-        .query_optional(C8yRootCertPathSetting)
-        .unwrap()
-        .is_none());
+    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+
     assert!(config.query_optional(AzureUrlSetting).unwrap().is_none());
-    assert!(config
-        .query_optional(AzureRootCertPathSetting)
-        .unwrap()
-        .is_none());
+    assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
+    Ok(())
 }
 
 #[test]
-fn test_parse_config_no_config_file() {
-    let config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(Path::new("/non/existent/path"))
-        .unwrap();
+fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
+    let config = TEdgeConfigRepository::from_dir("/non/existent/path").load()?;
 
-    assert!(config.query_optional(DeviceIdSetting).unwrap().is_none());
-    assert!(config.query_optional(C8yUrlSetting).unwrap().is_none());
+    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    Ok(())
 }
 
 #[test]
-fn test_parse_unsupported_keys() {
+fn test_parse_unsupported_keys() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 hey="tedge"
 [c8y]
 hello="tedge"
 "#;
 
-    let config_file = temp_file_with_content(toml_conf);
-    let result = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path());
+    let tempdir = create_temp_tedge_config(toml_conf)?;
+    let result = TEdgeConfigRepository::from_dir(tempdir.path()).load();
+
     assert_matches!(
         result.unwrap_err(),
         TEdgeConfigError::TOMLParseError(_),
         "Expected the parsing to fail with TOMLParseError"
     );
+    Ok(())
 }
 
 #[test]
-fn test_parse_invalid_toml_file() {
+fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
         <abcde>
         "#;
 
-    let config_file = temp_file_with_content(toml_conf);
-    let result = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path());
+    let tempdir = create_temp_tedge_config(toml_conf)?;
+    let result = TEdgeConfigRepository::from_dir(tempdir.path()).load();
+
     assert_matches!(
         result.unwrap_err(),
         TEdgeConfigError::TOMLParseError(_),
         "Expected the parsing to fail with TOMLParseError"
     );
+    Ok(())
 }
 
 #[test]
-fn test_crud_config_value() {
+fn test_crud_config_value() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
 id = "ABCD1234"
@@ -299,66 +292,53 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
 
-    let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path())
-        .unwrap();
+    let tempdir = create_temp_tedge_config(toml_conf)?;
+    let mut config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
 
     let original_device_id = "ABCD1234".to_string();
     let original_device_key_path = "/path/to/key".to_string();
     let original_device_cert_path = "/path/to/cert".to_string();
-    assert_eq!(config.query(DeviceIdSetting).unwrap(), original_device_id);
+
+    assert_eq!(config.query(DeviceIdSetting)?, original_device_id);
     assert_eq!(
-        config.query(DeviceKeyPathSetting).unwrap(),
+        config.query(DeviceKeyPathSetting)?,
         original_device_key_path
     );
     assert_eq!(
-        config.query(DeviceCertPathSetting).unwrap(),
+        config.query(DeviceCertPathSetting)?,
         original_device_cert_path
     );
 
-    let original_c8y_url = "your-tenant.cumulocity.com".to_string();
+    let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com").unwrap();
     let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
+    assert_eq!(config.query(C8yUrlSetting)?, original_c8y_url);
     assert_eq!(
-        config.query_string(C8yUrlSetting).unwrap(),
-        original_c8y_url
-    );
-    assert_eq!(
-        config.query_string(C8yRootCertPathSetting).unwrap(),
+        config.query(C8yRootCertPathSetting)?,
         original_c8y_root_cert_path
     );
 
-    // let updated_device_id = "XYZ1234".to_string();
-    let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com".to_string()).unwrap();
+    let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com").unwrap();
 
-    // DeviceIdSetting.set_string(&mut config, updated_device_id.clone()).unwrap();
-    config
-        .update(C8yUrlSetting, updated_c8y_url.clone())
-        .unwrap();
+    config.update(C8yUrlSetting, updated_c8y_url.clone())?;
 
-    config.unset(C8yRootCertPathSetting).unwrap();
+    config.unset(C8yRootCertPathSetting)?;
 
-    /*
     assert_eq!(
-        config.get_config_value(DEVICE_ID).unwrap().unwrap(),
-        updated_device_id
-    );
-    */
-    assert_eq!(
-        config.query(DeviceKeyPathSetting).unwrap(),
+        config.query(DeviceKeyPathSetting)?,
         original_device_key_path
     );
     assert_eq!(
-        config.query(DeviceCertPathSetting).unwrap(),
+        config.query(DeviceCertPathSetting)?,
         original_device_cert_path
     );
 
-    assert_eq!(config.query(C8yUrlSetting).unwrap(), updated_c8y_url);
-    assert!(config.query(C8yRootCertPathSetting).is_err());
+    assert_eq!(config.query(C8yUrlSetting)?, updated_c8y_url);
+    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+    Ok(())
 }
 
 #[test]
-fn test_crud_config_value_azure() {
+fn test_crud_config_value_azure() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
 id = "ABCD1234"
@@ -374,38 +354,31 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
 
-    let config_file = temp_file_with_content(toml_conf);
-    let mut config = TEdgeConfigRepository::new("/home/tedge/.tedge".into())
-        .from_custom_config(config_file.path())
-        .unwrap();
+    let tempdir = create_temp_tedge_config(toml_conf)?;
+    let mut config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
 
-    let original_azure_url = "MyAzure.azure-devices.net".to_string();
+    let original_azure_url = ConnectUrl::try_from("MyAzure.azure-devices.net").unwrap();
     let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();
 
     // read
+    assert_eq!(config.query(AzureUrlSetting)?, original_azure_url);
     assert_eq!(
-        config.query_string(AzureUrlSetting).unwrap(),
-        original_azure_url
-    );
-    assert_eq!(
-        config.query_string(AzureRootCertPathSetting).unwrap(),
+        config.query(AzureRootCertPathSetting)?,
         original_azure_root_cert_path
     );
 
     // set
-    let updated_azure_url =
-        ConnectUrl::try_from("OtherAzure.azure-devices.net".to_string()).unwrap();
-    config
-        .update(AzureUrlSetting, updated_azure_url.clone())
-        .unwrap();
+    let updated_azure_url = ConnectUrl::try_from("OtherAzure.azure-devices.net").unwrap();
+    config.update(AzureUrlSetting, updated_azure_url.clone())?;
 
-    assert_eq!(config.query(AzureUrlSetting).unwrap(), updated_azure_url);
+    assert_eq!(config.query(AzureUrlSetting)?, updated_azure_url);
 
     // unset
-    config.unset(AzureRootCertPathSetting).unwrap();
-    assert!(config.query_string(AzureRootCertPathSetting).is_err());
+    config.unset(AzureRootCertPathSetting)?;
+
+    assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
+    Ok(())
 }
-*/
 
 fn create_temp_tedge_config(content: &str) -> std::io::Result<TempDir> {
     let dir = TempDir::new()?;

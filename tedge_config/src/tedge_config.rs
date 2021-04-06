@@ -42,16 +42,13 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
             })
     }
 
-    /*
-    fn update(&mut self, _setting: DeviceIdSetting, value: String) -> ConfigSettingResult<()> {
-        self.device.id = Some(value);
-        Ok(())
+    fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
+        Err(ConfigSettingError::ReadonlySetting)
     }
+
     fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
-        self.device.id = None;
-        Ok(())
+        Err(ConfigSettingError::ReadonlySetting)
     }
-    */
 }
 
 impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
