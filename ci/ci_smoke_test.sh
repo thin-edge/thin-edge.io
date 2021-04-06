@@ -80,7 +80,13 @@ set -e
 
 echo "Configuring Bridge"
 
+sudo tedge cert remove
+
+sudo tedge cert create --device-id=$C8YDEVICEID
+
 sudo tedge cert show
+
+sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 sudo tedge config list
 
