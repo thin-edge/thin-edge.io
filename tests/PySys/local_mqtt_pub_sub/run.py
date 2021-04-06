@@ -8,9 +8,9 @@ Validate local publishing and subscribing:
 
 Given a configured system
 When we start the bridge and the mapper
-When we start tedge sub in the background
-When we start tedge pub to publish a message
-When we start tedge pub to publish another message
+When we start tedge sub with sudo in the background
+When we start tedge pub with sudo to publish a message
+When we start tedge pub with sudo to publish another message
 Then we find the messages in the output of tedge sub
 """
 
