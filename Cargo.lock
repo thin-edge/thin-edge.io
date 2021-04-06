@@ -255,6 +255,7 @@ dependencies = [
  "json",
  "pretty_assertions",
  "proptest",
+ "tedge_json",
  "thiserror",
 ]
 
@@ -1758,6 +1759,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_json"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "json",
+ "thiserror",
+]
+
+[[package]]
 name = "tedge_mapper"
 version = "0.1.0"
 dependencies = [
@@ -1766,6 +1776,7 @@ dependencies = [
  "env_logger",
  "log",
  "mqtt_client",
+ "tedge_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
