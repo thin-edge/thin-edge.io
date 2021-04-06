@@ -43,12 +43,14 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 
 impl TEdgeConfigRepository {
     // XXX: Remove
-    pub fn try_default() -> Result<Self, TEdgeConfigError> {
+    pub fn from_default_location() -> Result<Self, TEdgeConfigError> {
         Ok(Self::from_dir(home_dir()?.join(crate::TEDGE_HOME_DIR)))
     }
 
-    pub fn from_dir(tedge_home: PathBuf) -> Self {
-        Self { tedge_home }
+    pub fn from_dir(tedge_home: impl Into<PathBuf>) -> Self {
+        Self {
+            tedge_home: tedge_home.into(),
+        }
     }
 
     fn config_file_name(&self) -> PathBuf {
