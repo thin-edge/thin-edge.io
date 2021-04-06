@@ -78,6 +78,7 @@ pub enum UploadCertOpt {
     C8y {
         #[structopt(long = "user")]
         /// Provided username should be a Cumulocity user with tenant management permissions.
+        /// The password is requested on /dev/tty, unless the $C8YPASS env var is set to the user password.
         username: String,
     },
 }
@@ -150,7 +151,12 @@ impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
         let client = reqwest::blocking::Client::new();
 
-        let password = rpassword::read_password_from_tty(Some("Enter password: "))?;
+        // Read the password from /dev/tty
+        // Unless a password is provided using the `C8YPASS` env var.
+        let password = match std::env::var("C8YPASS") {
+            Ok(password) => password,
+            Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
+        };
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
