@@ -4,32 +4,43 @@
 use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
+use serde::{Serialize, Deserialize};
+use serde_json;
 
 /// ThinEdgeJson is represented in this struct
 /// Since json does not understand DateTime format, the time stamp is represented as a string
 /// Before populating the struct members the thinedge json values and names will be validated
 
+#[derive(Serialize, Deserialize)]
 pub struct ThinEdgeJson {
     pub timestamp: String,
     pub values: Vec<ThinEdgeValue>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum ThinEdgeValue {
     Single(SingleValueMeasurement),
     Multi(MultiValueMeasurement),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct SingleValueMeasurement {
     pub name: String,
-    pub value: f64,
+    pub value: f64, 
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct MultiValueMeasurement {
     pub name: String,
     pub values: Vec<SingleValueMeasurement>,
 }
 
+
 impl ThinEdgeJson {
+    pub fn read_from_bytes(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
+        Ok(ThinEdgeJson::from_utf8(input, Utc::now())?.serialize_thin_edge())
+    }
+
     pub fn from_utf8(
         input: &[u8],
         timestamp: DateTime<Utc>,
@@ -116,6 +127,14 @@ impl ThinEdgeJson {
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
         }
+    }
+
+    pub fn serialize_thin_edge(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap()
+    }
+
+    pub fn deserialize_thin_edge(data: Vec<u8>) -> Self  {
+        serde_json::from_slice(&data).unwrap()
     }
 }
 
@@ -289,6 +308,288 @@ extern crate pretty_assertions;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thin_edge_json_reject_invalid_utf8() {
+        let input = b"temperature\xc3\x28";
+
+        let expected_error =
+            r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 11: temperature..."#;
+        let output = ThinEdgeJson::read_from_bytes(input);
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_non_utf8_input() {
+        let input = b"\xc3\x28";
+
+        let expected_error = r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 0: ..."#;
+        let output = ThinEdgeJson::read_from_bytes(input);
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_arrays() {
+        let input = r"[50,23]";
+
+        let expected_error = r#"Invalid Thin Edge measurement: it cannot be an array: [50,23]"#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_nested_arrays() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": [50,60,70]
+          }"#;
+
+        let expected_error =
+            r#"Not a number: the "temperature" value must be a number, not an array."#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_string_value() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": 50,
+           "pressure": "20"
+          }"#;
+
+        let expected_error =
+            r#"Not a number: the "pressure" value must be a number, not a string."#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_huge_number() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": 10e99999
+          }"#;
+
+        let expected_error = r#"Number out-of-range: the "temperature" value is too large to be represented as a float64."#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_round_tiny_number() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": 10e-9999999999
+          }"#;
+
+        let expected_output = r#"{
+             "type": "ThinEdgeMeasurement",
+             "time": "2013-06-22T17:03:14.000+02:00",
+             "temperature": {
+                 "temperature": {
+                    "value": 0
+                 }
+            }
+        }"#;
+
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let actual_output = String::from_utf8(output.unwrap())
+            .unwrap()
+            .split_whitespace()
+            .collect::<String>();
+
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            actual_output
+        );
+    }
+
+    #[test]
+    fn thin_edge_json_reject_boolean_value() {
+        let string_value_thin_edge_json = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": true,
+           "pressure": 220
+          }"#;
+
+        let expected_output =
+            r#"Not a number: the "temperature" value must be a number, not a boolean."#;
+        let output = ThinEdgeJson::read_from_bytes(
+            &String::from(string_value_thin_edge_json).into_bytes(),
+        );
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_reject_deep_hierarchy() {
+        let multi_level_heirarchy = r#"{
+                "location": {
+                      "latitude": 32.54,
+                      "longitude": -117.67,
+                      "altitude": 98.6,
+                      "area": {
+                         "breadth": 32.54,
+                         "depth": 117.67
+                      }
+                  },
+                "pressure": 98
+        }"#;
+        let expected_output =
+            r#"More than 2 nested levels: the record for "area" must be flattened."#;
+        let output =
+        ThinEdgeJson::read_from_bytes(&String::from(multi_level_heirarchy).into_bytes());
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_reject_measurement_named_type() {
+        let string_value_thin_edge_json = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "type": 40,
+           "pressure": 220
+          }"#;
+
+        let expected_output = r#"Invalid measurement name: "type" is a reserved word."#;
+        let output = ThinEdgeJson::read_from_bytes(
+            &String::from(string_value_thin_edge_json).into_bytes(),
+        );
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_reject_number_for_time() {
+        let string_value_thin_edge_json = r#"{
+           "time": 40,
+           "pressure": 220
+          }"#;
+
+        let expected_output = r#"Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number."#;
+        let output = ThinEdgeJson::read_from_bytes(
+            &String::from(string_value_thin_edge_json).into_bytes(),
+        );
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_output, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_invalid_json() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "pressure": 220;
+          }"#;
+
+        let expected_error = r#"Invalid JSON: Unexpected character: ; at (3:27): {"time":"2013-06-22T17:03:14.000+02:00","pressure":220;}"#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_partial_json() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+        "#;
+
+        let expected_error =
+            r#"Invalid JSON: Unexpected end of JSON: {"time":"2013-06-22T17:03:14.000+02:00","#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_empty_record() {
+        let input = "{}";
+
+        let expected_error =
+            "Empty Thin Edge measurement: it must contain at least one measurement";
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_just_time() {
+        let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00"
+        }"#;
+
+        let expected_error =
+            "Empty Thin Edge measurement: it must contain at least one measurement";
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_empty_measurement() {
+        let input = r#"{
+           "foo" : {}
+        }"#;
+
+        let expected_error =
+            r#"Empty Thin Edge measurement: "foo" must contain at least one measurement"#;
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_partial_timestamp() {
+        let input = r#"{
+           "time" : "2013-06-22",
+           "pressure": 220
+          }"#;
+
+        let expected_error = "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22\": premature end of input";
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+    #[test]
+    fn thin_edge_json_reject_invalid_timestamp() {
+        let input = r#"{
+           "time" : "2013-06-22 3am",
+           "pressure": 220
+          }"#;
+
+        let expected_error =
+            "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22 3am\": input contains invalid characters";
+        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
+
+        let error = output.unwrap_err();
+        assert_eq!(expected_error, error.to_string());
+    }
+
+
+
     #[test]
     fn prefix_fn_removes_extra_chars() {
         let input = "薄いエッジ";
