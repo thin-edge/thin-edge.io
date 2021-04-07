@@ -19,7 +19,7 @@ stop-on-upgrade = false
 
 [dependencies]
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
-tedge_json = {path = "../../mapper/tedge_json"}
+thin_edge_json = {path = "../../mapper/thin_edge_json"}
 chrono = "0.4"
 env_logger = "0.8"
 log = "0.4"

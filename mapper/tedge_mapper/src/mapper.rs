@@ -1,6 +1,4 @@
 use c8y_translator_lib::CumulocityJson;
-//use tedge_json::ThinEdgeJsonError;
-
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
 
@@ -90,7 +88,7 @@ impl Mapper {
         Ok(())
     }
 
-    fn map(input: &[u8]) -> Result<Vec<u8>, tedge_json::ThinEdgeJsonError> {
+    fn map(input: &[u8]) -> Result<Vec<u8>, thin_edge_json::ThinEdgeJsonError> {
         CumulocityJson::from_thin_edge_json(input)
     }
 }

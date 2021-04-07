@@ -1,5 +1,5 @@
 [package]
-name = "tedge_json"
+name = "thin_edge_json"
 version = "0.1.0"
 edition = "2018"
 
