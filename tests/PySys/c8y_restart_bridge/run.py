@@ -7,6 +7,10 @@ import sys
 sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
 
+"""
+So far just use the EnvironmentC8y nothing else
+"""
+
 class PySysTest(EnvironmentC8y):
 
     def setup(self):

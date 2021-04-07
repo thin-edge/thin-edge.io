@@ -12,6 +12,19 @@ class EnvironmentC8y(BaseTest):
         self.log.info("EnvironmentC8y Setup")
         self.addCleanupFunction(self.mycleanup)
 
+        # Check if tedge-mapper is in active
+        serv_mapper = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["tedge-mapper", "status"],
+            stdouterr="serv_mapper1",
+            expectedExitStatus='==3',
+        )
+
+        if serv_mapper.exitStatus!=3:
+            self.log.error("The tedge-mapper service is running")
+            self.abort(FAILED)
+
+        # Connect the bridge
         connect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y"],
@@ -23,7 +36,8 @@ class EnvironmentC8y(BaseTest):
         serv_mosq = self.startProcess(
             command="/usr/sbin/service",
             arguments=["mosquitto", "status"],
-            stdouterr="serv_mosq2"
+            stdouterr="serv_mosq2",
+            expectedExitStatus='==0',
         )
 
         if serv_mosq.exitStatus!=0:
@@ -52,7 +66,8 @@ class EnvironmentC8y(BaseTest):
         serv_mosq = self.startProcess(
             command="/usr/sbin/service",
             arguments=["mosquitto", "status"],
-            stdouterr="serv_mosq"
+            stdouterr="serv_mosq",
+            expectedExitStatus='==0',
         )
 
         if serv_mosq.exitStatus!=0:
@@ -63,7 +78,8 @@ class EnvironmentC8y(BaseTest):
         serv_mapper = self.startProcess(
             command="/usr/sbin/service",
             arguments=["tedge-mapper", "status"],
-            stdouterr="serv_mapper1"
+            stdouterr="serv_mapper1",
+            expectedExitStatus='==0',
         )
 
         if serv_mapper.exitStatus!=0:
@@ -74,6 +90,7 @@ class EnvironmentC8y(BaseTest):
     def mycleanup(self):
         self.log.info("EnvironmentC8y Cleanup")
 
+        # Disconnect Bridge
         disconnect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
