@@ -4,8 +4,7 @@
 use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
-use serde::{Serialize, Deserialize};
-use serde_json;
+use serde::{Deserialize, Serialize};
 
 /// ThinEdgeJson is represented in this struct
 /// Since json does not understand DateTime format, the time stamp is represented as a string
@@ -26,7 +25,7 @@ pub enum ThinEdgeValue {
 #[derive(Serialize, Deserialize)]
 pub struct SingleValueMeasurement {
     pub name: String,
-    pub value: f64, 
+    pub value: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,7 +33,6 @@ pub struct MultiValueMeasurement {
     pub name: String,
     pub values: Vec<SingleValueMeasurement>,
 }
-
 
 impl ThinEdgeJson {
     pub fn read_from_bytes(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
@@ -133,7 +131,7 @@ impl ThinEdgeJson {
         serde_json::to_vec(self).unwrap()
     }
 
-    pub fn deserialize_thin_edge(data: Vec<u8>) -> Self  {
+    pub fn deserialize_thin_edge(data: Vec<u8>) -> Self {
         serde_json::from_slice(&data).unwrap()
     }
 }
@@ -147,9 +145,7 @@ impl SingleValueMeasurement {
             };
             Ok(single_value)
         } else {
-            Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber {
-                name: name.into(),
-            })
+            Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber { name: name.into() })
         }
     }
 }
@@ -169,19 +165,18 @@ impl MultiValueMeasurement {
                     single_values.push(single_value_measurement);
                 }
                 JsonValue::Object(_object) => {
-                    return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy {
-                        name: k.into(),
-                    })
+                    return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy { name: k.into() })
                 }
                 value => {
-                    return Err(ThinEdgeJsonError::new_invalid_json_value(&name.into(), value));
+                    return Err(ThinEdgeJsonError::new_invalid_json_value(
+                        &name.into(),
+                        value,
+                    ));
                 }
             }
         }
         if single_values.is_empty() {
-            Err(ThinEdgeJsonError::EmptyThinEdgeJson {
-                name: name.into(),
-            })
+            Err(ThinEdgeJsonError::EmptyThinEdgeJson { name: name.into() })
         } else {
             Ok(MultiValueMeasurement {
                 name: name.into(),
@@ -299,7 +294,6 @@ impl ThinEdgeJsonError {
         }
     }
 }
-
 
 #[cfg(test)]
 #[macro_use]
@@ -428,9 +422,8 @@ mod tests {
 
         let expected_output =
             r#"Not a number: the "temperature" value must be a number, not a boolean."#;
-        let output = ThinEdgeJson::read_from_bytes(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output =
+            ThinEdgeJson::read_from_bytes(&String::from(string_value_thin_edge_json).into_bytes());
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -453,7 +446,7 @@ mod tests {
         let expected_output =
             r#"More than 2 nested levels: the record for "area" must be flattened."#;
         let output =
-        ThinEdgeJson::read_from_bytes(&String::from(multi_level_heirarchy).into_bytes());
+            ThinEdgeJson::read_from_bytes(&String::from(multi_level_heirarchy).into_bytes());
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
     }
@@ -467,9 +460,8 @@ mod tests {
           }"#;
 
         let expected_output = r#"Invalid measurement name: "type" is a reserved word."#;
-        let output = ThinEdgeJson::read_from_bytes(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output =
+            ThinEdgeJson::read_from_bytes(&String::from(string_value_thin_edge_json).into_bytes());
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -483,9 +475,8 @@ mod tests {
           }"#;
 
         let expected_output = r#"Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number."#;
-        let output = ThinEdgeJson::read_from_bytes(
-            &String::from(string_value_thin_edge_json).into_bytes(),
-        );
+        let output =
+            ThinEdgeJson::read_from_bytes(&String::from(string_value_thin_edge_json).into_bytes());
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -587,8 +578,6 @@ mod tests {
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
     }
-
-
 
     #[test]
     fn prefix_fn_removes_extra_chars() {

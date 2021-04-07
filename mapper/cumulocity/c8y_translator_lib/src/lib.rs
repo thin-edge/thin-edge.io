@@ -269,7 +269,7 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-       
+
         #[test]
         fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
             if measurement == "time" || measurement == "type" {
