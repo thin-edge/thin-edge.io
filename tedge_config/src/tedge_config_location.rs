@@ -20,9 +20,9 @@ const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 /// This allows run `sudo tedge -c '$HOME/.tedge/tedge.toml ...` where the defaults are picked up
 /// correctly.
 ///
-/// The choice, where we find `tedge.toml` OTOH is based on the executing user AND the env `$HOME`.
-/// But once we have found `tedge.toml`, we never ever have to care about the executing user
-/// (except when `chown`ing files...).
+/// The choice, where to find `tedge.toml` on the other hand is based on the executing user AND the
+/// env `$HOME`.  But once we have found `tedge.toml`, we never again have to care about the
+/// executing user (except when `chown`ing files...).
 ///
 #[derive(Debug, Clone)]
 pub struct TEdgeConfigLocation {
@@ -67,7 +67,8 @@ impl TEdgeConfigLocation {
 
     /// `tedge.toml` is located in `$HOME/.tedge/tedge.toml`. All defaults are relative to the
     /// `$HOME/.tedge` directory.
-    pub fn from_user_home_location(home_path: PathBuf) -> Self {
+    /// XXX: @didier-wenzek What should be the defaults in this case?
+    pub fn from_users_home_location(home_path: PathBuf) -> Self {
         Self {
             tedge_config_path: home_path.join(".tedge").join(TEDGE_CONFIG_FILE),
             default_device_cert_path: unimplemented!(),
