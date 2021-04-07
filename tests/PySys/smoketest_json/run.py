@@ -9,9 +9,10 @@ from environment_c8y import EnvironmentC8y
 import time
 
 """
-Run the smoketest for JSON publishing with
-a size of 400, 20ms delay
+Run the smoketest for JSON publishing with defaults 
+a size of 20, 100ms delay
 """
+
 
 class PySysTest(EnvironmentC8y):
     def setup(self):
@@ -32,15 +33,13 @@ class PySysTest(EnvironmentC8y):
 
         sub = self.startPython(
             arguments=[ cmd,
-                "-m", "REST",
+                "-m", "JSON",
                 "-pub", self.project.exampledir,
                 "-u", self.project.username,
                 "-t", self.project.tennant,
                 "-pass", self.project.c8ypass,
                 "-id", self.project.deviceid,
-                "-o", "15", # burst should take 8000ms
-                "-d", "20", # delay in ms
-                "-s", "400", # samples
+                "-o", str(self.timeslot),
                 ],
             stdouterr="stdout",
         )

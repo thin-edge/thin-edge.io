@@ -33,7 +33,7 @@ class PySysTest(EnvironmentC8y):
 
         sub = self.startPython(
             arguments=[ cmd,
-                "-m", "JSON",
+                "-m", "REST",
                 "-pub", self.project.exampledir,
                 "-u", self.project.username,
                 "-t", self.project.tennant,

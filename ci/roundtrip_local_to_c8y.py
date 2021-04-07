@@ -22,7 +22,9 @@ import requests
 # Warning: the list begins with the earliest one
 PAGE_SIZE = "500"
 
-CMD_PUBLISH_REST = "tedge mqtt pub c8y/s/us 211,%i"
+# sudo is currently needed to avoid "User's Home Directory not found."
+CMD_PUBLISH_REST = "sudo tedge mqtt pub c8y/s/us 211,%i"
+
 CMD_PUBLISH_JSON = "sawtooth_publisher %s %s 1 flux"
 
 
