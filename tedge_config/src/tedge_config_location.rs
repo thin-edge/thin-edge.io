@@ -24,74 +24,56 @@ const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 /// But once we have found `tedge.toml`, we never ever have to care about the executing user
 /// (except when `chown`ing files...).
 ///
-/// # NOTES
-///
-/// Why this is no trait? We need to `clone` a config location, and cloning a `Box<dyn>` is
-/// difficult (you can use `dyn_clone` or have your own function `clone() -> Box<dyn ...>` of
-/// course).
-///
 #[derive(Debug, Clone)]
-pub enum TEdgeConfigLocation {
-    /// `tedge.toml` is located in `/etc/tedge`. All defaults are based on system locations.
-    SystemLocation { etc_path: PathBuf },
-
-    /// `tedge.toml` is located in `$HOME/.tedge/tedge.toml`. All defaults are relative to the
-    /// `$HOME/.tedge` directory.
-    UserLocation { home_path: PathBuf },
-}
-
-impl TEdgeConfigLocation {
-    pub fn default_system_location() -> Self {
-        Self::SystemLocation {
-            etc_path: DEFAULT_ETC_PATH.into(),
-        }
-    }
-}
-
-impl TEdgeConfigLocation {
+pub struct TEdgeConfigLocation {
     /// Full path to `tedge.toml`.
-    pub(crate) fn tedge_config_path(&self) -> PathBuf {
-        match self {
-            Self::SystemLocation { etc_path } => etc_path.join("tedge").join(TEDGE_CONFIG_FILE),
-            Self::UserLocation { home_path } => home_path.join(".tedge").join(TEDGE_CONFIG_FILE),
-        }
-    }
+    pub tedge_config_path: PathBuf,
 
     /// Default device cert path
-    pub(crate) fn default_device_cert_path(&self) -> PathBuf {
-        match self {
-            Self::SystemLocation { etc_path } => etc_path
+    pub default_device_cert_path: PathBuf,
+
+    /// Default device key path
+    pub default_device_key_path: PathBuf,
+
+    /// Default path for azure root certificates
+    pub default_azure_root_cert_path: PathBuf,
+
+    /// Default path for c8y root certificates
+    pub default_c8y_root_cert_path: PathBuf,
+}
+
+impl TEdgeConfigLocation {
+    /// `tedge.toml` is located in `/etc/tedge`. All defaults are based on system locations.
+    pub fn from_default_system_location() -> Self {
+        Self::from_system_location(DEFAULT_ETC_PATH.into())
+    }
+
+    /// `tedge.toml` is located in `${etc_path}/tedge`. All defaults are based on system locations.
+    pub fn from_system_location(etc_path: PathBuf) -> Self {
+        Self {
+            tedge_config_path: etc_path.join("tedge").join(TEDGE_CONFIG_FILE),
+            default_device_cert_path: etc_path
                 .join("ssl")
                 .join("certs")
                 .join("tedge-certificate.pem"),
-            Self::UserLocation { home_path: _ } => unimplemented!(),
-        }
-    }
-
-    /// Default device key path
-    pub(crate) fn default_device_key_path(&self) -> PathBuf {
-        match self {
-            Self::SystemLocation { etc_path } => etc_path
+            default_device_key_path: etc_path
                 .join("ssl")
                 .join("certs")
                 .join("tedge-private-key.pem"),
-            Self::UserLocation { home_path: _ } => unimplemented!(),
+            default_azure_root_cert_path: etc_path.join("ssl").join("certs"),
+            default_c8y_root_cert_path: etc_path.join("ssl").join("certs"),
         }
     }
 
-    /// Default path for azure root certificates
-    pub(crate) fn default_azure_root_cert_path(&self) -> PathBuf {
-        match self {
-            Self::SystemLocation { etc_path } => etc_path.join("ssl").join("certs"),
-            Self::UserLocation { home_path: _ } => unimplemented!(),
-        }
-    }
-
-    /// Default path for c8y root certificates
-    pub(crate) fn default_c8y_root_cert_path(&self) -> PathBuf {
-        match self {
-            Self::SystemLocation { etc_path } => etc_path.join("ssl").join("certs"),
-            Self::UserLocation { home_path: _ } => unimplemented!(),
+    /// `tedge.toml` is located in `$HOME/.tedge/tedge.toml`. All defaults are relative to the
+    /// `$HOME/.tedge` directory.
+    pub fn from_user_home_location(home_path: PathBuf) -> Self {
+        Self {
+            tedge_config_path: home_path.join(".tedge").join(TEDGE_CONFIG_FILE),
+            default_device_cert_path: unimplemented!(),
+            default_device_key_path: unimplemented!(),
+            default_azure_root_cert_path: unimplemented!(),
+            default_c8y_root_cert_path: unimplemented!(),
         }
     }
 }

@@ -19,7 +19,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     type Error = TEdgeConfigError;
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config = self.read_file_or_default(self.config_location.tedge_config_path())?;
+        let config = self.read_file_or_default(self.config_location.tedge_config_path.clone())?;
         Ok(config)
     }
 
@@ -28,7 +28,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         let toml = toml::to_string_pretty(&config.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
-        match file.persist(self.config_location.tedge_config_path()) {
+        match file.persist(self.config_location.tedge_config_path.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
         }
