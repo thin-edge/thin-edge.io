@@ -29,11 +29,6 @@ pub struct MultiValueMeasurement {
     pub values: Vec<SingleValueMeasurement>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct CumulocityJson {
-    c8y_json: JsonValue,
-}
-
 impl ThinEdgeJson {
     pub fn from_utf8(
         input: &[u8],
@@ -282,6 +277,38 @@ impl ThinEdgeJsonError {
             JsonValue::Array(_) => "an array",
             JsonValue::Boolean(_) => "a boolean",
             JsonValue::Null => "null",
+        }
+    }
+}
+
+
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn prefix_fn_removes_extra_chars() {
+        let input = "薄いエッジ";
+        assert_eq!(input.len(), 15);
+        assert_eq!(input_prefix(input, 1), "薄");
+    }
+
+    #[test]
+    fn prefix_fn_let_unchanged_short_inputs() {
+        let input = "FØØ";
+        assert_eq!(input.len(), 5);
+        assert_eq!(input_prefix(input, 4), input);
+    }
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn prefix_doesnt_crash(input in "\\PC*") {
+            let _ = input_prefix(&input, 10);
         }
     }
 }

@@ -1764,6 +1764,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "json",
+ "pretty_assertions",
+ "proptest",
  "thiserror",
 ]
 
