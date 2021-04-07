@@ -3,7 +3,6 @@ from pysys.constants import *
 from pysys.basetest import BaseTest
 
 import sys
-
 sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
 
@@ -29,4 +28,4 @@ class PySysTest(EnvironmentC8y):
 
     def mycleanup(self):
         super().mycleanup()
-        self.log.info("Cleanup")
+        self.log.info("MyCleanup")

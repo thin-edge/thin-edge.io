@@ -2,35 +2,22 @@ import pysys
 from pysys.constants import *
 from pysys.basetest import BaseTest
 
+import sys
+sys.path.append('environments')
+from environment_c8y import EnvironmentC8y
+
 # This test relies on a already working bridge
 
-class PySysTest(BaseTest):
+class PySysTest(EnvironmentC8y):
     def setup(self):
+        super().setup()
         self.log.info("Setup")
         self.addCleanupFunction(self.mycleanup)
 
-        # Check if mosquitto is running well
-        serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["mosquitto", "status"],
-            stdouterr="serv_mosq"
-        )
-
-        if serv_mosq.exitStatus!=0:
-            self.abort(FAILED)
-
-        # Check if mosquitto is running well
-        serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
-            stdouterr="serv_tedge"
-        )
-
-        if serv_mosq.exitStatus!=0:
-            self.abort(FAILED)
-
     def execute(self):
+        super().execute()
         self.log.info("Execute")
+
         publisher = self.project.exampledir + "/sawtooth_publisher"
         cmd = os.path.expanduser(publisher)
 
@@ -41,8 +28,10 @@ class PySysTest(BaseTest):
         )
 
     def validate(self):
+        super().validate()
         self.log.info("Validate - Do it")
 
 
     def mycleanup(self):
+        super().mycleanup()
         self.log.info("My Cleanup")
