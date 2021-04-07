@@ -5,7 +5,7 @@ from pysys.constants import *
 import time
 
 """
-Validate command line option config list
+Validate command line option config: get set unset
 
 Note: Setting the device id is only allowed with tedge cert create.
 """
@@ -114,6 +114,21 @@ class PySysTest(BaseTest):
             valuenew = self.get_config_key(key)
             self.assertThat("valueold == valuenew", valueold=valueold, valuenew=valuenew)
 
+        # special case: device.id unset is not allowed
+        proc = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge,"config", "unset", "device.id"],
+            stdouterr="tedge_unset_device_id",
+            expectedExitStatus='!=0',
+        )
+
+        # special case: device.id unset is not allowed
+        proc = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge,"config", "set", "device.id", "anotherid"],
+            stdouterr="tedge_set_device_id",
+            expectedExitStatus='!=0',
+        )
 
     def validate(self):
         self.addOutcome(PASSED)
