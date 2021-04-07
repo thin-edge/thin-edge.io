@@ -14,6 +14,9 @@ configdict = {"device.key.path":"", "device.cert.path":"",
         "c8y.url":"", "c8y.root.cert.path":"",
         "azure.url":"", "azure.root.cert.path":""}
 
+DEFAULTKEYPATH="/etc/tedge/device-certs/tedge-private-key.pem"
+DEFAULTCERTPATH="/etc/tedge/device-certs/tedge-certificate.pem"
+
 class PySysTest(BaseTest):
 
     def get_config_key(self, key):
@@ -87,8 +90,16 @@ class PySysTest(BaseTest):
         # check if they are unset
         for key in configdict.keys():
             valueread = self.get_config_key(key)
-            # Check disabled due to: https://cumulocity.atlassian.net/browse/CIT-320
-            #self.assertThat("expect == valueread", expect=None, valueread=valueread)
+
+            # Some values have defaults that are set instead of nothing:
+            if key == "device.key.path":
+                self.assertThat("expect == valueread", expect=DEFAULTKEYPATH,
+                    valueread=valueread)
+            elif key== "device.cert.path":
+                self.assertThat("expect == valueread", expect=DEFAULTCERTPATH,
+                    valueread=valueread)
+            else:
+                self.assertThat("expect == valueread", expect=None, valueread=valueread)
 
         # set them again to the old value
         for key in configdict.keys():
