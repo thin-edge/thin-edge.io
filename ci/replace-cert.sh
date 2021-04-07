@@ -54,13 +54,6 @@ else
     echo "Your password: HIDDEN"
 fi
 
-if [ -z $TIMEZONE ]; then
-    echo "Error: Please supply your timezone"
-    exit 1
-else
-    echo "Your timezone: $TIMEZONE"
-fi
-
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
@@ -84,32 +77,11 @@ sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
 DATE=$(date -u +"%Y-%m-%d_%H:%M")
 
-sudo tedge cert create --device-id $C8YDEVICE-$DATE
-#sudo tedge cert create --device-id octocatrpi3
+#sudo tedge cert create --device-id $C8YDEVICE-$DATE
+sudo tedge cert create --device-id octocatrpi3
 
-# apt-get install expect
-sudo expect -c "
-spawn tedge cert upload c8y --user $C8YUSERNAME
-expect \"Enter password:\"
-send \"$C8YPASS\r\"
-interact
-"
-
-sudo expect -c "
-spawn sudo tedge cert upload c8y --user $C8YUSERNAME
-expect \"Enter password:\"
-send \"$C8YPASS\r\"
-interact
-"
-
-expect -c "
-spawn sudo tedge cert upload c8y --user $C8YUSERNAME
-expect \"Enter password:\"
-send \"$C8YPASS\r\"
-interact
-"
-
-echo "Configuring Bridge"
+sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 sudo tedge cert show
+
 sudo tedge config list
