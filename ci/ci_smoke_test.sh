@@ -30,8 +30,6 @@ appendtofile() {
     fi
 }
 
-TIMEZONE=$1
-
 if [ -z $C8YDEVICE ]; then
     echo "Error: Please supply your device name as environment variable C8YDEVICE"
     exit 1
@@ -68,23 +66,13 @@ else
     echo "Your password: HIDDEN"
 fi
 
-if [ -z $TIMEZONE ]; then
-    echo "Error: Please supply your timezone"
-    exit 1
-else
-    echo "Your timezone: $TIMEZONE"
-fi
-
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
 echo "Disconnect old bridge"
 
-# Kill mapper - may fail if not running
-killall tedge_mapper
-
 # Disconnect - may fail if not there
-tedge disconnect c8y
+sudo tedge disconnect c8y
 
 # From now on exit if a command exits with a non-zero status.
 # Commands above are allowed to fail
@@ -92,46 +80,16 @@ set -e
 
 echo "Configuring Bridge"
 
-tedge cert show
+sudo tedge cert show
 
-ls -lah ~/.tedge/
+sudo tedge config list
 
-tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
-
-tedge config set c8y.root.cert.path /etc/ssl/certs/Go_Daddy_Class_2_CA.pem
-
-# Store permissions for later
-ATTR=$(stat -c "%a" /etc/mosquitto/mosquitto.conf)
-
-# Set r/w permissions, so that we can access the file
-sudo chmod 666 /etc/mosquitto/mosquitto.conf
-
-FILE="/etc/mosquitto/mosquitto.conf"
-
-appendtofile "include_dir /home/$USER/.tedge/bridges" $FILE
-appendtofile "log_type debug" $FILE
-appendtofile "log_type error" $FILE
-appendtofile "log_type warning" $FILE
-appendtofile "log_type notice" $FILE
-appendtofile "log_type information" $FILE
-appendtofile "log_type subscribe" $FILE
-appendtofile "log_type unsubscribe" $FILE
-appendtofile "connection_messages true" $FILE
-
-# Set proper access right again
-sudo chmod $ATTR /etc/mosquitto/mosquitto.conf
+sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
 cat /etc/mosquitto/mosquitto.conf
 
-cat ~/.tedge/tedge.toml
-
-chmod 666 ~/.tedge/*.pem
-
 echo "Connect again"
-tedge connect c8y
-
-#Start Mapper in the Background
-tedge_mapper > ~/mapper.log 2>&1 &
+sudo tedge connect c8y
 
 echo "Start smoke tests"
 
@@ -145,7 +103,7 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID -z $TIMEZONE
+./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
@@ -158,5 +116,5 @@ chmod +x ./examples/sawtooth_publisher
 cp ./examples/sawtooth_publisher ~/
 
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID -z $TIMEZONE
+./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
