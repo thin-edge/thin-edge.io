@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
+use std::path::PathBuf;
 use tedge_config::*;
 use tempfile::TempDir;
 
@@ -23,12 +24,18 @@ root_cert_path = "/path/to/azure/root/cert"
 connect = "false"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::new(config_location).load()?;
 
     assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
-    assert_eq!(config.query(DeviceKeyPathSetting)?, "/path/to/key");
-    assert_eq!(config.query(DeviceCertPathSetting)?, "/path/to/cert");
+    assert_eq!(
+        config.query(DeviceKeyPathSetting)?,
+        PathBuf::from("/path/to/key")
+    );
+    assert_eq!(
+        config.query(DeviceCertPathSetting)?,
+        PathBuf::from("/path/to/cert")
+    );
 
     assert_eq!(
         config.query(C8yUrlSetting)?.as_str(),
@@ -36,7 +43,7 @@ connect = "false"
     );
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
-        "/path/to/c8y/root/cert"
+        PathBuf::from("/path/to/c8y/root/cert")
     );
 
     assert_eq!(
@@ -45,7 +52,7 @@ connect = "false"
     );
     assert_eq!(
         config.query(AzureRootCertPathSetting)?,
-        "/path/to/azure/root/cert"
+        PathBuf::from("/path/to/azure/root/cert")
     );
 
     Ok(())
@@ -68,8 +75,12 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let config_repo = TEdgeConfigRepository::from_dir(tempdir.path());
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config_repo = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_c8y_root_cert_path: PathBuf::from("default_c8y_root_cert_path"),
+        default_azure_root_cert_path: PathBuf::from("default_azure_root_cert_path"),
+        ..config_location
+    });
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
@@ -77,8 +88,14 @@ root_cert_path = "/path/to/azure/root/cert"
     {
         let mut config = config_repo.load()?;
         assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
-        assert_eq!(config.query(DeviceKeyPathSetting)?, "/path/to/key");
-        assert_eq!(config.query(DeviceCertPathSetting)?, "/path/to/cert");
+        assert_eq!(
+            config.query(DeviceKeyPathSetting)?,
+            PathBuf::from("/path/to/key")
+        );
+        assert_eq!(
+            config.query(DeviceCertPathSetting)?,
+            PathBuf::from("/path/to/cert")
+        );
 
         assert_eq!(
             config.query(C8yUrlSetting)?.as_str(),
@@ -86,7 +103,7 @@ root_cert_path = "/path/to/azure/root/cert"
         );
         assert_eq!(
             config.query(C8yRootCertPathSetting)?,
-            "/path/to/c8y/root/cert"
+            PathBuf::from("/path/to/c8y/root/cert")
         );
 
         assert_eq!(
@@ -95,7 +112,7 @@ root_cert_path = "/path/to/azure/root/cert"
         );
         assert_eq!(
             config.query(AzureRootCertPathSetting)?,
-            "/path/to/azure/root/cert"
+            PathBuf::from("/path/to/azure/root/cert")
         );
 
         config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
@@ -109,19 +126,30 @@ root_cert_path = "/path/to/azure/root/cert"
         let config = config_repo.load()?;
 
         assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
-        assert_eq!(config.query(DeviceKeyPathSetting)?, "/path/to/key");
-        assert_eq!(config.query(DeviceCertPathSetting)?, "/path/to/cert");
+        assert_eq!(
+            config.query(DeviceKeyPathSetting)?,
+            PathBuf::from("/path/to/key")
+        );
+        assert_eq!(
+            config.query(DeviceCertPathSetting)?,
+            PathBuf::from("/path/to/cert")
+        );
 
         assert_eq!(config.query(C8yUrlSetting)?.as_str(), updated_c8y_url);
-        assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+        assert_eq!(
+            config.query(C8yRootCertPathSetting)?,
+            PathBuf::from("default_c8y_root_cert_path")
+        );
 
         assert_eq!(config.query(AzureUrlSetting)?.as_str(), updated_azure_url);
-        assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
+        assert_eq!(
+            config.query(AzureRootCertPathSetting)?,
+            PathBuf::from("default_azure_root_cert_path")
+        );
     }
 
     Ok(())
 }
-
 #[test]
 fn test_parse_config_missing_c8y_configuration() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
@@ -129,21 +157,30 @@ fn test_parse_config_missing_c8y_configuration() -> Result<(), TEdgeConfigError>
 id = "ABCD1234"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_device_cert_path: PathBuf::from("/etc/ssl/certs/tedge-certificate.pem"),
+        default_device_key_path: PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
+        default_c8y_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        ..config_location
+    })
+    .load()?;
 
     assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
-        "/etc/ssl/certs/tedge-certificate.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-certificate.pem")
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
-        "/etc/ssl/certs/tedge-private-key.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-private-key.pem")
     );
 
     assert!(config.query_optional(C8yUrlSetting)?.is_none());
-    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(C8yRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
     Ok(())
 }
 
@@ -154,21 +191,30 @@ fn test_parse_config_missing_azure_configuration() -> Result<(), TEdgeConfigErro
 id = "ABCD1234"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_device_cert_path: PathBuf::from("/etc/ssl/certs/tedge-certificate.pem"),
+        default_device_key_path: PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
+        default_c8y_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        ..config_location
+    })
+    .load()?;
 
     assert_eq!(config.query(DeviceIdSetting)?, "ABCD1234");
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
-        "/etc/ssl/certs/tedge-certificate.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-certificate.pem")
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
-        "/etc/ssl/certs/tedge-private-key.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-private-key.pem")
     );
 
     assert_matches!(config.query_optional(AzureUrlSetting), Ok(None));
-    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(C8yRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
     Ok(())
 }
 
@@ -179,8 +225,13 @@ fn test_parse_config_missing_device_configuration() -> Result<(), TEdgeConfigErr
 url = "your-tenant.cumulocity.com"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_device_cert_path: PathBuf::from("/etc/ssl/certs/tedge-certificate.pem"),
+        default_device_key_path: PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
+        ..config_location
+    })
+    .load()?;
 
     assert_eq!(
         config.query(C8yUrlSetting)?.as_str(),
@@ -190,42 +241,62 @@ url = "your-tenant.cumulocity.com"
     assert!(config.query_optional(DeviceIdSetting)?.is_none());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
-        "/etc/ssl/certs/tedge-certificate.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-certificate.pem")
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
-        "/etc/ssl/certs/tedge-private-key.pem",
+        PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
     Ok(())
 }
 
 #[test]
 fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
-    let tempdir = create_temp_tedge_config("")?;
-    let config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let toml_conf = "";
+
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_device_cert_path: PathBuf::from("/etc/ssl/certs/tedge-certificate.pem"),
+        default_device_key_path: PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
+        default_c8y_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        default_azure_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        ..config_location
+    })
+    .load()?;
 
     assert!(config.query_optional(DeviceIdSetting)?.is_none());
 
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
-        "/etc/ssl/certs/tedge-certificate.pem"
+        PathBuf::from("/etc/ssl/certs/tedge-certificate.pem")
     );
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
-        "/etc/ssl/certs/tedge-private-key.pem",
+        PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
     assert!(config.query_optional(C8yUrlSetting)?.is_none());
-    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(C8yRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
 
     assert_matches!(config.query_optional(AzureUrlSetting), Ok(None));
-    assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(AzureRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
     Ok(())
 }
 
 #[test]
 fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
-    let config = TEdgeConfigRepository::from_dir("/non/existent/path").load()?;
+    let config_location = TEdgeConfigLocation {
+        tedge_config_path: PathBuf::from("/non/existent/path"),
+        ..dummy_tedge_config_location()
+    };
+
+    let config = TEdgeConfigRepository::new(config_location).load()?;
 
     assert!(config.query_optional(DeviceIdSetting)?.is_none());
     assert!(config.query_optional(C8yUrlSetting)?.is_none());
@@ -240,8 +311,8 @@ hey="tedge"
 hello="tedge"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let result = TEdgeConfigRepository::from_dir(tempdir.path()).load();
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let result = TEdgeConfigRepository::new(config_location).load();
 
     assert_matches!(
         result,
@@ -257,8 +328,8 @@ fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
         <abcde>
         "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let result = TEdgeConfigRepository::from_dir(tempdir.path()).load();
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let result = TEdgeConfigRepository::new(config_location).load();
 
     assert_matches!(
         result,
@@ -285,12 +356,16 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let mut config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let mut config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_c8y_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        ..config_location
+    })
+    .load()?;
 
     let original_device_id = "ABCD1234".to_string();
-    let original_device_key_path = "/path/to/key".to_string();
-    let original_device_cert_path = "/path/to/cert".to_string();
+    let original_device_key_path = PathBuf::from("/path/to/key");
+    let original_device_cert_path = PathBuf::from("/path/to/cert");
 
     assert_eq!(config.query(DeviceIdSetting)?, original_device_id);
     assert_eq!(
@@ -303,7 +378,7 @@ root_cert_path = "/path/to/azure/root/cert"
     );
 
     let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com")?;
-    let original_c8y_root_cert_path = "/path/to/c8y/root/cert".to_string();
+    let original_c8y_root_cert_path = PathBuf::from("/path/to/c8y/root/cert");
     assert_eq!(config.query(C8yUrlSetting)?, original_c8y_url);
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
@@ -326,7 +401,10 @@ root_cert_path = "/path/to/azure/root/cert"
     );
 
     assert_eq!(config.query(C8yUrlSetting)?, updated_c8y_url);
-    assert_eq!(config.query(C8yRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(C8yRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
     Ok(())
 }
 
@@ -347,11 +425,15 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
 
-    let tempdir = create_temp_tedge_config(toml_conf)?;
-    let mut config = TEdgeConfigRepository::from_dir(tempdir.path()).load()?;
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let mut config = TEdgeConfigRepository::new(TEdgeConfigLocation {
+        default_azure_root_cert_path: PathBuf::from("/etc/ssl/certs"),
+        ..config_location
+    })
+    .load()?;
 
     let original_azure_url = ConnectUrl::try_from("MyAzure.azure-devices.net")?;
-    let original_azure_root_cert_path = "/path/to/azure/root/cert".to_string();
+    let original_azure_root_cert_path = PathBuf::from("/path/to/azure/root/cert");
 
     // read
     assert_eq!(config.query(AzureUrlSetting)?, original_azure_url);
@@ -369,14 +451,31 @@ root_cert_path = "/path/to/azure/root/cert"
     // unset
     config.unset(AzureRootCertPathSetting)?;
 
-    assert_eq!(config.query(AzureRootCertPathSetting)?, "/etc/ssl/certs");
+    assert_eq!(
+        config.query(AzureRootCertPathSetting)?,
+        PathBuf::from("/etc/ssl/certs")
+    );
     Ok(())
 }
 
-fn create_temp_tedge_config(content: &str) -> std::io::Result<TempDir> {
+fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempDir, TEdgeConfigLocation)> {
     let dir = TempDir::new()?;
     let file_path = dir.path().join("tedge.toml");
-    let mut file = std::fs::File::create(file_path)?;
+    let mut file = std::fs::File::create(&file_path)?;
     file.write_all(content.as_bytes())?;
-    Ok(dir)
+    let config_location = TEdgeConfigLocation {
+        tedge_config_path: file_path,
+        ..dummy_tedge_config_location()
+    };
+    Ok((dir, config_location))
+}
+
+fn dummy_tedge_config_location() -> TEdgeConfigLocation {
+    TEdgeConfigLocation {
+        tedge_config_path: PathBuf::from("/dev/null"),
+        default_device_cert_path: PathBuf::from("/dev/null"),
+        default_device_key_path: PathBuf::from("/dev/null"),
+        default_c8y_root_cert_path: PathBuf::from("/dev/null"),
+        default_azure_root_cert_path: PathBuf::from("/dev/null"),
+    }
 }
