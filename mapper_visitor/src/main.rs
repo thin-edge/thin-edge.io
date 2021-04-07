@@ -15,7 +15,9 @@ fn main() -> Result<(), MeasurementError> {
             .and_hms(0, 0, 0),
     );
 
-    MeasurementBuilder::new(&mut c8y_json_serializer)
+    let mut builder = MeasurementBuilder::new(&mut c8y_json_serializer);
+
+    builder = builder
         .start()?
         .measurement_type("c8y")?
         // A single value measurement
@@ -25,8 +27,15 @@ fn main() -> Result<(), MeasurementError> {
         .measurement_data("x", 123.0)?
         .measurement_data("y", 123.0)?
         .measurement_data("z", 123.0)?
-        .end_group()?
-        .end()?;
+        .end_group()?;
+
+    builder = builder.start_group("loop")?;
+
+    for i in 1..10 {
+        builder = builder.measurement_data(&format!("k_{}", i), (i * 13) as f64)?;
+    }
+
+    let () = builder.end_group()?.end()?;
 
     println!("{}", String::from_utf8(c8y_json_serializer.data()).unwrap());
 
