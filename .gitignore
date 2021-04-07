@@ -12,4 +12,5 @@
 tests/PySys/**/*.log
 tests/PySys/**/*.out
 tests/PySys/**/*.err
+**/__pycache__
 
