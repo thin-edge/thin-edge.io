@@ -124,3 +124,5 @@ cp ./examples/sawtooth_publisher ~/
 # Uses thin-edge JSON for publishing
 ./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
+# Disconnect the bridge
+sudo tedge disconnect c8y
