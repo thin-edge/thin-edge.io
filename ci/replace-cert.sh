@@ -79,6 +79,8 @@ DATE=$(date -u +"%Y-%m-%d_%H:%M")
 
 #sudo tedge cert create --device-id $C8YDEVICE-$DATE
 sudo tedge cert create --device-id octocatrpi3
+#sudo tedge cert create --device-id eulatestisonoe
+
 
 sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
