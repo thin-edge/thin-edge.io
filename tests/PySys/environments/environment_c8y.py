@@ -1,0 +1,94 @@
+import pysys
+from pysys.constants import *
+from pysys.basetest import BaseTest
+
+class EnvironmentC8y(BaseTest):
+
+    def setup(self):
+
+        self.tedge = "/usr/bin/tedge"
+        self.sudo = "/usr/bin/sudo"
+
+        self.log.info("EnvironmentC8y Setup")
+        self.addCleanupFunction(self.mycleanup)
+
+        connect = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y"],
+            stdouterr="tedge_connect",
+            expectedExitStatus='==0',
+        )
+
+        # Check if mosquitto is running well
+        serv_mosq = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["mosquitto", "status"],
+            stdouterr="serv_mosq2"
+        )
+
+        if serv_mosq.exitStatus!=0:
+            self.log.error("The Mosquitto service is not running")
+            self.abort(FAILED)
+
+        # Check if tedge-mapper is active again
+        serv_mapper = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["tedge-mapper", "status"],
+            stdouterr="serv_mapper3"
+        )
+
+        if serv_mapper.exitStatus!=0:
+            self.log.error("The tedge-mapper service is not running")
+            self.abort(FAILED)
+
+
+    def execute(self):
+        self.log.info("EnvironmentC8y Execute")
+
+    def validate(self):
+        self.log.info("EnvironmentC8y Validate")
+
+        # Check if mosquitto is running well
+        serv_mosq = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["mosquitto", "status"],
+            stdouterr="serv_mosq"
+        )
+
+        if serv_mosq.exitStatus!=0:
+            self.log.error("The Mosquitto service is not running")
+            self.abort(FAILED)
+
+        # Check if tedge-mapper is active
+        serv_mapper = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["tedge-mapper", "status"],
+            stdouterr="serv_mapper1"
+        )
+
+        if serv_mapper.exitStatus!=0:
+            self.log.error("The tedge-mapper service is not running")
+            self.abort(FAILED)
+
+
+    def mycleanup(self):
+        self.log.info("EnvironmentC8y Cleanup")
+
+        disconnect = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="tedge_disconnect",
+            expectedExitStatus='==0',
+        )
+
+        # Check if tedge-mapper is inactive
+        serv_mosq = self.startProcess(
+            command="/usr/sbin/service",
+            arguments=["tedge-mapper", "status"],
+            stdouterr="serv_mapper2",
+            expectedExitStatus='==3',
+        )
+
+        if serv_mosq.exitStatus!=3:
+            self.log.error("The tedge-mapper service is running")
+            self.abort(FAILED)
