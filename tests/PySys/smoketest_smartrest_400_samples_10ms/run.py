@@ -38,7 +38,7 @@ class PySysTest(EnvironmentC8y):
                 "-t", self.project.tennant,
                 "-pass", self.project.c8ypass,
                 "-id", self.project.deviceid,
-                "-o", "15", # burst should take ?ms
+                "-o", "30", # burst should take ?ms
                 "-d", "10", # delay in ms
                 "-s", "400", # samples
                 ],
