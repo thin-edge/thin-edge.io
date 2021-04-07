@@ -383,36 +383,6 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_json_round_tiny_number() {
-        let input = r#"{
-           "time" : "2013-06-22T17:03:14.000+02:00",
-           "temperature": 10e-9999999999
-          }"#;
-
-        let expected_output = r#"{
-             "type": "ThinEdgeMeasurement",
-             "time": "2013-06-22T17:03:14.000+02:00",
-             "temperature": {
-                 "temperature": {
-                    "value": 0
-                 }
-            }
-        }"#;
-
-        let output = ThinEdgeJson::read_from_bytes(&String::from(input).into_bytes());
-
-        let actual_output = String::from_utf8(output.unwrap())
-            .unwrap()
-            .split_whitespace()
-            .collect::<String>();
-
-        assert_eq!(
-            expected_output.split_whitespace().collect::<String>(),
-            actual_output
-        );
-    }
-
-    #[test]
     fn thin_edge_json_reject_boolean_value() {
         let string_value_thin_edge_json = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
