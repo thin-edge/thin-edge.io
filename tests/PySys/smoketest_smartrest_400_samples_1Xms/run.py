@@ -10,7 +10,9 @@ import time
 
 """
 Run the smoketest for JSON publishing with
-a size of 400, 10ms delay
+a size of 400, Xms delay
+
+X=15ms
 """
 
 class PySysTest(EnvironmentC8y):
@@ -38,8 +40,8 @@ class PySysTest(EnvironmentC8y):
                 "-t", self.project.tennant,
                 "-pass", self.project.c8ypass,
                 "-id", self.project.deviceid,
-                "-o", "30", # burst should take ?ms
-                "-d", "10", # delay in ms
+                "-o", "40", # burst should take ?ms
+                "-d", "15", # delay in ms
                 "-s", "400", # samples
                 ],
             stdouterr="stdout",
