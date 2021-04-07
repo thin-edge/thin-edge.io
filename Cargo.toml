@@ -6,6 +6,7 @@ members = [
     "tedge_config",
     "mapper/tedge_mapper",
     "mapper/cumulocity/c8y_translator_lib",
+    "mapper/thin_edge_json",
 ]
 
 [profile.release]
