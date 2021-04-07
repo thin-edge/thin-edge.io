@@ -545,28 +545,10 @@ mod tests {
         assert_eq!(expected_error, error.to_string());
     }
 
-    #[test]
-    fn prefix_fn_removes_extra_chars() {
-        let input = "薄いエッジ";
-        assert_eq!(input.len(), 15);
-        assert_eq!(tedge_json::input_prefix(input, 1), "薄");
-    }
-
-    #[test]
-    fn prefix_fn_let_unchanged_short_inputs() {
-        let input = "FØØ";
-        assert_eq!(input.len(), 5);
-        assert_eq!(tedge_json::input_prefix(input, 4), input);
-    }
-
     use proptest::prelude::*;
 
     proptest! {
-        #[test]
-        fn prefix_doesnt_crash(input in "\\PC*") {
-            let _ = tedge_json::input_prefix(&input, 10);
-        }
-
+       
         #[test]
         fn it_works_for_any_measurement(measurement in r#"[a-z]{3,6}"#) {
             if measurement == "time" || measurement == "type" {

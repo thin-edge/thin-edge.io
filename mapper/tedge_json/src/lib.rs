@@ -120,24 +120,24 @@ impl ThinEdgeJson {
 }
 
 impl SingleValueMeasurement {
-    pub fn new(name: &str, value: f64) -> Result<Self, ThinEdgeJsonError> {
+    fn new(name: impl Into<String>, value: f64) -> Result<Self, ThinEdgeJsonError> {
         if value == 0.0 || value.is_normal() {
             let single_value = SingleValueMeasurement {
-                name: String::from(name),
+                name: name.into(),
                 value,
             };
             Ok(single_value)
         } else {
             Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber {
-                name: String::from(name),
+                name: name.into(),
             })
         }
     }
 }
 
 impl MultiValueMeasurement {
-    pub fn new(
-        name: &str,
+    fn new(
+        name: impl Into<String>,
         multi_value_obj: &json::object::Object,
     ) -> Result<Self, ThinEdgeJsonError> {
         let mut single_values = vec![];
@@ -151,28 +151,28 @@ impl MultiValueMeasurement {
                 }
                 JsonValue::Object(_object) => {
                     return Err(ThinEdgeJsonError::InvalidThinEdgeHierarchy {
-                        name: String::from(k),
+                        name: k.into(),
                     })
                 }
                 value => {
-                    return Err(ThinEdgeJsonError::new_invalid_json_value(name, value));
+                    return Err(ThinEdgeJsonError::new_invalid_json_value(&name.into(), value));
                 }
             }
         }
         if single_values.is_empty() {
             Err(ThinEdgeJsonError::EmptyThinEdgeJson {
-                name: String::from(name),
+                name: name.into(),
             })
         } else {
             Ok(MultiValueMeasurement {
-                name: String::from(name),
+                name: name.into(),
                 values: single_values,
             })
         }
     }
 }
 
-pub fn input_prefix(input: &str, len: usize) -> String {
+fn input_prefix(input: &str, len: usize) -> String {
     input
         .chars()
         .filter(|c| !c.is_whitespace())
