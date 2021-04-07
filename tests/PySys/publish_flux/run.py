@@ -7,7 +7,7 @@ from pysys.basetest import BaseTest
 class PySysTest(BaseTest):
     def setup(self):
         self.log.info("Setup")
-        self.addCleanupFunction(self.cleanup)
+        self.addCleanupFunction(self.mycleanup)
 
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
@@ -44,5 +44,5 @@ class PySysTest(BaseTest):
         self.log.info("Validate - Do it")
 
 
-    def cleanup(self):
-        self.log.info("Cleanup")
+    def mycleanup(self):
+        self.log.info("My Cleanup")

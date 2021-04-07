@@ -9,7 +9,7 @@ import time
 class PySysTest(BaseTest):
     def setup(self):
         self.log.info("Setup")
-        self.addCleanupFunction(self.cleanup)
+        self.addCleanupFunction(self.mycleanup)
 
         # bad hack
         time.sleep(20)
@@ -46,5 +46,5 @@ class PySysTest(BaseTest):
         self.assertGrep('stdout.out', expr='Data verification PASSED', contains=True)
         self.assertGrep('stdout.out', expr='Timestamp verification PASSED', contains=True)
 
-    def cleanup(self):
-        self.log.info("Cleanup")
+    def mycleanup(self):
+        self.log.info("MyCleanup")
