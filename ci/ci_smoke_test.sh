@@ -86,11 +86,13 @@ sudo tedge cert create --device-id=$C8YDEVICE
 
 sudo tedge cert show
 
-sudo -E tedge cert upload c8y --user $C8YUSERNAME
+sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
+
+sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
 sudo tedge config list
 
-sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
+sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
 
