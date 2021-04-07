@@ -119,8 +119,7 @@ sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
 #tedge config set device.id $DEVICE
 
-#tedge config set c8y.root.cert.path /etc/ssl/certs
-#sudo tedge config set c8y.root.cert.path /etc/ssl/certs/Go_Daddy_Class_2_CA.pem
+sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
 #sudo chmod 777 /etc/mosquitto/mosquitto.conf
 
