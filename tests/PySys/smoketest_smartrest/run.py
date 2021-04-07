@@ -15,19 +15,10 @@ class PySysTest(EnvironmentC8y):
         super().setup()
         self.log.info("Setup")
         self.addCleanupFunction(self.mycleanup)
+        self.timeslot = 10
 
-        # bad hack
-        time.sleep(20)
-
-        # Check if mosquitto is running well
-        serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["mosquitto", "status"],
-            stdouterr="serv_mosq"
-        )
-
-        if serv_mosq.exitStatus!=0:
-            self.abort(FAILED)
+        # bad hack to wait until the receive window is empty again
+        time.sleep(self.timeslot)
 
     def execute(self):
         super().execute()
@@ -43,7 +34,9 @@ class PySysTest(EnvironmentC8y):
                 "-u", self.project.username,
                 "-t", self.project.tennant,
                 "-pass", self.project.c8ypass,
-                "-id", self.project.deviceid],
+                "-id", self.project.deviceid,
+                "-o", str(self.timeslot),
+                ],
             stdouterr="stdout",
         )
 
