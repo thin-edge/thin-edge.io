@@ -3,13 +3,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
-const TEDGE_DEFAULT_LOCATION: &str = "/etc/tedge";
-const TEDGE_CONFIG_FILE: &str = "tedge.toml";
-
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
 pub struct TEdgeConfigRepository {
-    tedge_home: PathBuf,
+    config_location: TEdgeConfigLocation,
 }
 
 pub trait ConfigRepository<T> {
@@ -22,7 +19,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     type Error = TEdgeConfigError;
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config = self.read_file_or_default(self.config_file_name().into())?;
+        let config = self.read_file_or_default(self.config_location.tedge_config_path())?;
         Ok(config)
     }
 
@@ -31,7 +28,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         let toml = toml::to_string_pretty(&config.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
-        match file.persist(self.config_file_name()) {
+        match file.persist(self.config_location.tedge_config_path()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
         }
@@ -39,18 +36,8 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 }
 
 impl TEdgeConfigRepository {
-    pub fn from_default_location() -> Result<Self, TEdgeConfigError> {
-        Ok(Self::from_dir(TEDGE_DEFAULT_LOCATION))
-    }
-
-    pub fn from_dir(tedge_home: impl Into<PathBuf>) -> Self {
-        Self {
-            tedge_home: tedge_home.into(),
-        }
-    }
-
-    fn config_file_name(&self) -> PathBuf {
-        self.tedge_home.join(TEDGE_CONFIG_FILE)
+    pub fn new(config_location: TEdgeConfigLocation) -> Self {
+        Self { config_location }
     }
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
@@ -63,7 +50,7 @@ impl TEdgeConfigRepository {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 let data = toml::from_slice::<TEdgeConfigDto>(bytes.as_slice())?;
-                Ok(TEdgeConfig { data })
+                self.make_tedge_config(data)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 Err(TEdgeConfigError::ConfigFileNotFound(path))
@@ -75,10 +62,17 @@ impl TEdgeConfigRepository {
     fn read_file_or_default(&self, path: PathBuf) -> Result<TEdgeConfig, TEdgeConfigError> {
         match self.read_file(path.clone()) {
             Ok(file) => Ok(file),
-            Err(TEdgeConfigError::ConfigFileNotFound(..)) => Ok(TEdgeConfig {
-                data: TEdgeConfigDto::default(),
-            }),
+            Err(TEdgeConfigError::ConfigFileNotFound(..)) => {
+                self.make_tedge_config(TEdgeConfigDto::default())
+            }
             Err(err) => Err(err),
         }
+    }
+
+    fn make_tedge_config(&self, data: TEdgeConfigDto) -> Result<TEdgeConfig, TEdgeConfigError> {
+        Ok(TEdgeConfig {
+            data,
+            config_location: self.config_location.clone(),
+        })
     }
 }

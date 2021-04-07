@@ -1,9 +1,5 @@
 use crate::*;
-
-const DEFAULT_DEVICE_CERT_PATH: &str = "/etc/ssl/certs/tedge-certificate.pem";
-const DEFAULT_DEVICE_KEY_PATH: &str = "/etc/ssl/certs/tedge-private-key.pem";
-const DEFAULT_AZURE_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
-const DEFAULT_C8Y_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+use std::path::PathBuf;
 
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
@@ -12,6 +8,7 @@ const DEFAULT_C8Y_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 #[derive(Debug)]
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
+    pub(crate) config_location: TEdgeConfigLocation,
 }
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
@@ -79,19 +76,19 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<String> {
+    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<PathBuf> {
         Ok(self
             .data
             .device
             .cert_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_DEVICE_CERT_PATH.into()))
+            .unwrap_or_else(|| self.config_location.default_device_cert_path()))
     }
 
     fn update(
         &mut self,
         _setting: DeviceCertPathSetting,
-        value: String,
+        value: PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.device.cert_path = Some(value);
         Ok(())
@@ -104,16 +101,20 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<String> {
+    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<PathBuf> {
         Ok(self
             .data
             .device
             .key_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_DEVICE_KEY_PATH.into()))
+            .unwrap_or_else(|| self.config_location.default_device_key_path()))
     }
 
-    fn update(&mut self, _setting: DeviceKeyPathSetting, value: String) -> ConfigSettingResult<()> {
+    fn update(
+        &mut self,
+        _setting: DeviceKeyPathSetting,
+        value: PathBuf,
+    ) -> ConfigSettingResult<()> {
         self.data.device.key_path = Some(value);
         Ok(())
     }
@@ -125,19 +126,19 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<String> {
+    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<PathBuf> {
         Ok(self
             .data
             .azure
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_AZURE_ROOT_CERT_PATH.into()))
+            .unwrap_or_else(|| self.config_location.default_azure_root_cert_path()))
     }
 
     fn update(
         &mut self,
         _setting: AzureRootCertPathSetting,
-        value: String,
+        value: PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.azure.root_cert_path = Some(value);
         Ok(())
@@ -150,19 +151,19 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<String> {
+    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<PathBuf> {
         Ok(self
             .data
             .c8y
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| DEFAULT_C8Y_ROOT_CERT_PATH.into()))
+            .unwrap_or_else(|| self.config_location.default_c8y_root_cert_path()))
     }
 
     fn update(
         &mut self,
         _setting: C8yRootCertPathSetting,
-        value: String,
+        value: PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = Some(value);
         Ok(())
