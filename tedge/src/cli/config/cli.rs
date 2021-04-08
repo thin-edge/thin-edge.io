@@ -7,15 +7,13 @@ use structopt::StructOpt;
 pub enum ConfigCmd {
     /// Get the value of the provided configuration key
     Get {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_get())]
+        /// Configuration key. Run `tedge config list --doc` for available keys
         key: ConfigKey,
     },
 
     /// Set or update the provided configuration key with the given value
     Set {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
+        /// Configuration key. Run `tedge config list --doc` for available keys
         key: WritableConfigKey,
 
         /// Configuration value.
@@ -24,8 +22,7 @@ pub enum ConfigCmd {
 
     /// Unset the provided configuration key
     Unset {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
+        /// Configuration key. Run `tedge config list --doc` for available keys
         key: WritableConfigKey,
     },
 
