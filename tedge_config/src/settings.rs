@@ -79,7 +79,7 @@ impl ConfigSetting for C8yUrlSetting {
 pub struct C8yRootCertPathSetting;
 
 impl ConfigSetting for C8yRootCertPathSetting {
-    const KEY: &'static str = "c8y.root_cert_path";
+    const KEY: &'static str = "c8y.root.cert.path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Cumulocity root certificate(s) are located. ",
@@ -98,7 +98,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
 pub struct AzureUrlSetting;
 
 impl ConfigSetting for AzureUrlSetting {
-    const KEY: &'static str = "device.id";
+    const KEY: &'static str = "azure.url";
 
     const DESCRIPTION: &'static str = concat!(
         "Tenant endpoint URL of Azure IoT tenant. ",
@@ -117,7 +117,7 @@ impl ConfigSetting for AzureUrlSetting {
 pub struct AzureRootCertPathSetting;
 
 impl ConfigSetting for AzureRootCertPathSetting {
-    const KEY: &'static str = "azure.root_cert_path";
+    const KEY: &'static str = "azure.root.cert.path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Azure IoT root certificate(s) are located. ",
