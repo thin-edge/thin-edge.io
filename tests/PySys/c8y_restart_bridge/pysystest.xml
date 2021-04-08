@@ -1,17 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <pysystest type="auto">
-  
-  <description> 
-	<title></title>    
+
+  <description>
+	<title></title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
   </description>
-
-  <!-- uncomment this to skip the test:  
-  <skipped reason=""/> 
-  -->
-  
   <classification>
 	<groups inherit="true">
 	  <group></group>
@@ -19,14 +14,12 @@
 	<modes inherit="true">
 	</modes>
   </classification>
-
   <data>
 	<class name="PySysTest" module="run"/>
   </data>
-
   <traceability>
 	<requirements>
-	  <requirement id=""/>     
+	  <requirement id=""/>
 	</requirements>
   </traceability>
 </pysystest>
