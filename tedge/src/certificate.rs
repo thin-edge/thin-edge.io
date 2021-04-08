@@ -8,13 +8,8 @@ use crate::{
     command::{BuildCommand, Command, ExecutionContext},
     utils,
 };
-use chrono::offset::Utc;
-use chrono::Duration;
-use rcgen::Certificate;
-use rcgen::CertificateParams;
-use rcgen::RcgenError;
+use certificate::{PemCertificate, KeyCertPair, NewCertificateConfig};
 use reqwest::{StatusCode, Url};
-use sha1::{Digest, Sha1};
 use std::{
     convert::TryFrom,
     fs::{File, OpenOptions},
@@ -22,7 +17,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
-use x509_parser::prelude::Pem;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
@@ -213,18 +207,6 @@ impl UploadCertCmd {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertError {
-    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name"#)]
-    InvalidCharacter { name: String },
-
-    #[error(r#"The empty string cannot be used as a name"#)]
-    EmptyName,
-
-    #[error(
-        r#"The string '{name:?}' is more than {} characters long and cannot be used as a name"#,
-        MAX_CN_SIZE
-    )]
-    TooLongName { name: String },
-
     #[error(
         r#"A certificate already exists and would be overwritten.
         Existing file: {path:?}
@@ -269,14 +251,8 @@ pub enum CertError {
     #[error("Invalid device.key.path path: {0}")]
     KeyPathError(PathsError),
 
-    #[error("Cryptography related error")]
-    CryptographyError(#[from] RcgenError),
-
-    #[error("PEM file format error")]
-    PemError(#[from] x509_parser::error::PEMError),
-
-    #[error("X509 file format error: {0}")]
-    X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
+    #[error(transparent)]
+    CertificateError(#[from] certificate::CertificateError),
 
     #[error(
         r#"Certificate read error at: {1:?}
@@ -393,7 +369,7 @@ impl Command for CreateCertCmd {
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        let config = CertConfig::default();
+        let config = NewCertificateConfig::default();
         let () = self.create_test_certificate(&config, &context.user_manager)?;
         let () = self.update_tedge_config()?;
         Ok(())
@@ -423,42 +399,13 @@ impl Command for RemoveCertCmd {
     }
 }
 
-struct CertConfig {
-    test_cert: TestCertConfig,
-}
-
-struct TestCertConfig {
-    validity_period_days: u32,
-    organization_name: String,
-    organizational_unit_name: String,
-}
-
-impl Default for CertConfig {
-    fn default() -> Self {
-        CertConfig {
-            test_cert: TestCertConfig::default(),
-        }
-    }
-}
-
-impl Default for TestCertConfig {
-    fn default() -> Self {
-        TestCertConfig {
-            validity_period_days: 365,
-            organization_name: "Thin Edge".into(),
-            organizational_unit_name: "Test Device".into(),
-        }
-    }
-}
-
 impl CreateCertCmd {
     fn create_test_certificate(
         &self,
-        config: &CertConfig,
+        config: &NewCertificateConfig,
         user_manager: &users::UserManager,
     ) -> Result<(), CertError> {
         let _user_guard = user_manager.become_user(users::BROKER_USER)?;
-        check_identifier(&self.id)?;
 
         let cert_path = Path::new(&self.cert_path);
         let key_path = Path::new(&self.key_path);
@@ -472,9 +419,9 @@ impl CreateCertCmd {
         let mut key_file =
             create_new_file(&self.key_path).map_err(|err| err.key_context(&self.key_path))?;
 
-        let cert = new_selfsigned_certificate(&config, &self.id)?;
+        let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
 
-        let cert_pem = cert.serialize_pem()?;
+        let cert_pem = cert.certificate_pem_string()?;
         cert_file.write_all(cert_pem.as_bytes())?;
         cert_file.sync_all()?;
 
@@ -486,7 +433,7 @@ impl CreateCertCmd {
             paths::set_permission(&key_file, 0o600)?;
 
             // Zero the private key on drop
-            let cert_key = zeroize::Zeroizing::new(cert.serialize_private_key_pem());
+            let cert_key = cert.private_key_pem_string()?;
             key_file.write_all(cert_key.as_bytes())?;
             key_file.sync_all()?;
 
@@ -500,8 +447,6 @@ impl CreateCertCmd {
     fn update_tedge_config(&self) -> Result<(), CertError> {
         let mut config = TEdgeConfig::from_default_config()?;
         config.device.id = Some(self.id.clone());
-        config.device.cert_path = Some(self.cert_path.clone());
-        config.device.key_path = Some(self.key_path.clone());
 
         let _ = config.write_to_default_config()?;
 
@@ -512,30 +457,21 @@ impl CreateCertCmd {
 impl ShowCertCmd {
     fn show_certificate(&self) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
-        let pem = read_pem(cert_path).map_err(|err| err.cert_context(cert_path))?;
-        let x509 = extract_certificate(&pem)?;
-        let tbs_certificate = x509.tbs_certificate;
+        let pem = PemCertificate::from_pem_file(cert_path).map_err(|err|
+            match err {
+                certificate::CertificateError::IoError (from) =>
+                    CertError::IoError(from).cert_context(cert_path),
+                from => CertError::CertificateError(from),
+            })?;
 
         println!("Device certificate: {}", cert_path);
-        println!("Subject: {}", tbs_certificate.subject.to_string());
-        println!("Issuer: {}", tbs_certificate.issuer.to_string());
-        println!(
-            "Valid from: {}",
-            tbs_certificate.validity.not_before.to_rfc2822()
-        );
-        println!(
-            "Valid up to: {}",
-            tbs_certificate.validity.not_after.to_rfc2822()
-        );
-        println!("Thumbprint: {}", show_thumbprint(&pem)?);
+        println!("Subject: {}", pem.subject()?);
+        println!("Issuer: {}", pem.issuer()?);
+        println!("Valid from: {}", pem.not_before()?);
+        println!("Valid up to: {}", pem.not_after()?);
+        println!("Thumbprint: {}", pem.thumbprint()?);
         Ok(())
     }
-}
-
-fn show_thumbprint(pem: &Pem) -> Result<String, CertError> {
-    let bytes = Sha1::digest(&pem.contents).as_slice().to_vec();
-    let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();
-    Ok(strs.concat())
 }
 
 impl RemoveCertCmd {
@@ -564,40 +500,6 @@ fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
     }
 }
 
-const MAX_CN_SIZE: usize = 64;
-
-fn check_identifier(id: &str) -> Result<(), CertError> {
-    if id.is_empty() {
-        return Err(CertError::EmptyName);
-    } else if id.len() > MAX_CN_SIZE {
-        return Err(CertError::TooLongName { name: id.into() });
-    } else if id.contains(char::is_control) {
-        return Err(CertError::InvalidCharacter { name: id.into() });
-    }
-
-    Ok(())
-}
-
-fn extract_certificate(
-    pem: &x509_parser::pem::Pem,
-) -> Result<x509_parser::certificate::X509Certificate, CertError> {
-    let x509 = pem.parse_x509().map_err(|err| {
-        // The x509 error is wrapped into a `nom::Err`
-        // and cannot be extracted without pattern matching on that type
-        // So one simply extract the error as a string,
-        // to avoid a dependency on the `nom` crate.
-        let x509_error_string = format!("{}", err);
-        CertError::X509Error(x509_error_string)
-    })?;
-    Ok(x509)
-}
-
-fn read_pem(path: &str) -> Result<x509_parser::pem::Pem, CertError> {
-    let file = std::fs::File::open(path)?;
-    let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
-    Ok(pem)
-}
-
 fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
     let path = path.as_ref();
     let path = utils::paths::pathbuf_to_string(path.to_owned())?;
@@ -612,32 +514,6 @@ fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
 
 fn create_new_file(path: &str) -> Result<File, CertError> {
     Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
-}
-
-fn new_selfsigned_certificate(config: &CertConfig, id: &str) -> Result<Certificate, RcgenError> {
-    let mut distinguished_name = rcgen::DistinguishedName::new();
-    distinguished_name.push(rcgen::DnType::CommonName, id);
-    distinguished_name.push(
-        rcgen::DnType::OrganizationName,
-        &config.test_cert.organization_name,
-    );
-    distinguished_name.push(
-        rcgen::DnType::OrganizationalUnitName,
-        &config.test_cert.organizational_unit_name,
-    );
-
-    let today = Utc::now();
-    let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-    let not_after = today + Duration::days(config.test_cert.validity_period_days.into());
-
-    let mut params = CertificateParams::default();
-    params.distinguished_name = distinguished_name;
-    params.not_before = not_before;
-    params.not_after = not_after;
-    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
-    params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
-
-    Certificate::from_params(params)
 }
 
 fn get_tenant_id_blocking(
@@ -676,10 +552,7 @@ mod tests {
     use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
     use std::fs::File;
-    use std::io::Cursor;
     use tempfile::*;
-
-    extern crate base64;
 
     #[test]
     fn basic_usage() {
@@ -695,7 +568,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
             .err()
             .is_none());
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -717,7 +590,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CertConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
             .ok()
             .is_none());
 
@@ -740,78 +613,11 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
-    #[test]
-    fn check_certificate_thumbprint_b64_decode_sha1() {
-        let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-thumbprint-device-cert.pem");
-        let key_path = temp_file_path(&dir, "my-thumbprint-device-key.pem");
-        let id = "my-device-id";
-        let cmd = CreateCertCmd {
-            id: String::from(id),
-            cert_path: cert_path.clone(),
-            key_path: key_path.clone(),
-        };
-
-        //Create a certificate
-        assert!(cmd
-            .create_test_certificate(&CertConfig::default(), &UserManager::new())
-            .err()
-            .is_none());
-
-        //Compute the thumbprint of the certificate
-        let pem = read_pem(&cert_path)
-            .map_err(|err| err.cert_context(&cert_path))
-            .unwrap();
-        let thumbprint_sha1 = show_thumbprint(&pem).unwrap();
-
-        //Compute the thumbprint of the certificate using base64 and sha1
-        let mut file = File::open(cert_path)
-            .map_err(|err| err.to_string())
-            .unwrap();
-        let pem_cont = file_content(&mut file);
-
-        //Remove new line and carriage return characters
-        let cert_cont = pem_cont.replace(&['\r', '\n'][..], "");
-
-        //Read the certificate contents, except the header and footer
-        let header_len = "-----BEGIN CERTIFICATE-----".len();
-        let footer_len = "-----END CERTIFICATE-----".len();
-
-        //just decode the key contents
-        let b64_bytes =
-            base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let thumbprint_crypto = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
-
-        //compare the two thumbprints
-        assert_eq!(thumbprint_sha1, thumbprint_crypto.to_uppercase());
-    }
-
-    #[test]
-    fn check_thumbprint_static_certificate() {
-        let cert_content = r#"-----BEGIN CERTIFICATE-----
-MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
-EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
-MzA5MTQxMDMwWhcNMjIwMzEwMTQxMDMwWjA7MQ8wDQYDVQQDDAZteS10YnIxEjAQ
-BgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwWTATBgcqhkjO
-PQIBBggqhkjOPQMBBwNCAAR6DVDOQ9ey3TX4tD2V0zCYe8GtmUHekNZZX6P+lUXx
-886P/Kkyra0xCYKam2me2VzdLMc4X5cpRkybVa0XH/WCozIwMDAdBgNVHQ4EFgQU
-Iz8LzGgzHjqsvB+ppPsVa+xf2bYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
-AgNIADBFAiEAhMAATBcZqE3Li1TZCzDoweBxRw1WD6gaSAcrsIWuW94CIHuR5ZG7
-ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
------END CERTIFICATE-----
-"#;
-        let expected_thumbprint = "860218AD0A996004449521E2713C28F67B5EA580";
-
-        let reader = Cursor::new(cert_content.as_bytes());
-        let (pem, _bytes_read) = Pem::read(reader).expect("Reading PEM failed");
-        let thumbprint = show_thumbprint(&pem).unwrap();
-        assert_eq!(thumbprint, expected_thumbprint);
-    }
 
     #[test]
     fn create_key_in_non_existent_directory() {
@@ -825,7 +631,7 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CertConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }

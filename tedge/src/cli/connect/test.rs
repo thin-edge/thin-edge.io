@@ -88,7 +88,7 @@ fn config_bridge_validate_wrong_key_path() {
 }
 
 use std::io::Write;
-use x509_parser::nom::lib::std::collections::HashSet;
+use std::collections::HashSet;
 
 #[test]
 fn bridge_config_c8y_create() {
