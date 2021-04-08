@@ -3,7 +3,10 @@
 """
 This is a hack to do a full roundtrip of data from thin-edge to c8y and back.
 
-It publishes numbers from 0..19 and expects to read them back from the cloud.
+It publishes a sequence of numbers and expects to read them back from the cloud.
+For thin-edge JSON the sawtooth publisher is used to publish.
+For SmartREST the tedge is used to publish.
+
 
 Call example:
 ./roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id>
@@ -124,7 +127,6 @@ def check_timestamps(timestamps, laststamp):
             laststamp = tstampiso
         if tstampiso == laststamp:
             laststamp = tstampiso
-            # print("Warning", tstampiso, "is equal to", laststamp)
             warning += 1
         else:
             print("Oops", tstampiso, "is smaller than", laststamp)
@@ -152,15 +154,14 @@ def assert_values(
     response = req.json()
 
     assert "statistics" in response
-    # print(response["statistics"])
-    pageSize = response["statistics"]["pageSize"]
+    page_size = response["statistics"]["pageSize"]
 
     amount = len(req.json()["measurements"])
 
     print(f"Found {amount} recorded values: ")
 
-    if pageSize == amount:
-        print(f"Got {amount} values: your page size {pageSize} is probably to small!")
+    if page_size == amount:
+        print(f"Got {amount} values: your page size {page_size} is probably to small!")
         sys.exit(1)
 
     values = []
@@ -169,7 +170,6 @@ def assert_values(
     assert "measurements" in response
 
     for i in response["measurements"]:
-        # print(i["source"])
         source = i["source"]["id"]
         assert source == device_id
 
@@ -215,7 +215,8 @@ def assert_values(
     check_timestamps(timestamps, time_from)
 
 
-if __name__ == "__main__":
+def main():
+    """The 'main' function"""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--mode", help="Mode JSON or REST")
@@ -258,3 +259,7 @@ if __name__ == "__main__":
     assert_values(
         mode, user, device_id, password, tenant, verbose, publish_amount, timeslot
     )
+
+
+if __name__ == "__main__":
+    main()
