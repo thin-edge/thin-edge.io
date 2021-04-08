@@ -92,6 +92,8 @@ sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
 sudo tedge config list
 
+# Note: This will always upload a new certificate. From time to time
+# we should delete the old ones in c8y
 sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
@@ -126,5 +128,3 @@ cp ./examples/sawtooth_publisher ~/
 # Uses thin-edge JSON for publishing
 ./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
 
-# Disconnect the bridge
-sudo tedge disconnect c8y
