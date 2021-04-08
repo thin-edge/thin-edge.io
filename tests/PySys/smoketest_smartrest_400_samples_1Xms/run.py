@@ -9,10 +9,16 @@ from environment_c8y import EnvironmentC8y
 import time
 
 """
-Run the smoketest for JSON publishing with
-a size of 400, Xms delay
+Roundtrip test C8y 400 samples 1Xms delay
 
-X=15ms
+Given a configured system with configured certificate
+When we derive from EnvironmentC8y
+When we run the smoketest for REST publishing with defaults a size of 400, 10ms delay
+Then we validate the data from C8y
+
+X=15ms : Works good
+#X=10ms : We observe dataloss ocationally
+TODO : Further investigation necessary
 """
 
 class PySysTest(EnvironmentC8y):

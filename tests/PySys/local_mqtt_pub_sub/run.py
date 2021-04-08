@@ -10,6 +10,7 @@ Given a configured system
 When we start tedge sub with sudo in the background
 When we start tedge pub with sudo to publish a message
 When we start tedge pub with sudo to publish another message
+Then we kill tedge sub with sudo as it is running with a different user account
 Then we find the messages in the output of tedge sub
 """
 
@@ -26,7 +27,9 @@ class PySysTest(BaseTest):
         )
 
         # Wait for a small amount of time to give tedge sub time
-        # to initialize
+        # to initialize. This is a heuristic measure.
+        # Without an additional wait we observe failures in 1% of the test
+        # runs.
         time.sleep(0.1)
 
         pub = self.startProcess(

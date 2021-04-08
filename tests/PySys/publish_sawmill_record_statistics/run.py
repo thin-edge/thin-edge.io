@@ -6,7 +6,20 @@ import sys
 sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
 
-# This test relies on a already working bridge
+"""
+Publish sawmill and record process statistics
+
+Given a configured system with configured certificate
+When we derive from EnvironmentC8y
+When we publish with the sawtooth_publisher with 100ms cycle time and publish
+    6 times 100 values to the Sawmill topic (10 on each publish) (60s).
+When we record the output of mosquittos $SYS/# topic
+When we record the /proc/pid/status of mosquitto
+When we record the /proc/pid/status of tedge-mapper
+When we upload the data to the github action for further analysis (not done here)
+
+TODO : Add validation procedure
+"""
 
 class PySysTest(EnvironmentC8y):
     def setup(self):

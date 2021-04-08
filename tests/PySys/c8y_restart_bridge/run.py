@@ -7,7 +7,16 @@ sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
 
 """
-So far just use the EnvironmentC8y nothing else
+Bridge restart
+
+Given a configured system with configured certificate
+When we setup EnvironmentC8y
+When we validate EnvironmentC8y
+When we cleanup EnvironmentC8y
+Then then the test has passed
+
+So far just use the EnvironmentC8y nothing else:
+see ../environment/environment_c8y
 """
 
 class PySysTest(EnvironmentC8y):

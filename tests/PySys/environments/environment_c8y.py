@@ -2,6 +2,14 @@ import pysys
 from pysys.constants import *
 from pysys.basetest import BaseTest
 
+"""
+Environment to manage automated connect and disconnect to c8y
+
+Tests that derive from class EnvironmentC8y use automated connect and
+disconnect to Cumulocity. Additional checks are made for the status of
+service mosquitto and service tedge-mapper.
+"""
+
 class EnvironmentC8y(BaseTest):
 
     def setup(self):

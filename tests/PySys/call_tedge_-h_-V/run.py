@@ -5,7 +5,12 @@ import time
 
 """
 Validate command line option -h -V
-This should return a non zero exit status and complain
+
+Given a running system
+When we call tedge -h -V
+Then we find the string USAGE: in the output of stderr
+
+Note: This should probably return a non zero exit status and complain
 """
 
 

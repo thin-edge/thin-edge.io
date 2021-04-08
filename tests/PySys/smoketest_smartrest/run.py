@@ -9,10 +9,13 @@ from environment_c8y import EnvironmentC8y
 import time
 
 """
-Run the smoketest for JSON publishing with defaults 
-a size of 20, 100ms delay
-"""
+Roundtrip test C8y 20 samples 100ms delay
 
+Given a configured system with configured certificate
+When we derive from EnvironmentC8y
+When we run the smoketest for REST publishing with defaults a size of 20, 100ms delay
+Then we validate the data from C8y
+"""
 
 class PySysTest(EnvironmentC8y):
     def setup(self):

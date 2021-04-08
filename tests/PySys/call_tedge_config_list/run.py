@@ -5,9 +5,31 @@ from pysys.constants import *
 import time
 
 """
-Validate command line option config: get set unset
+Validate command line options config: get set unset
+
+Given a running system
+When we call tedge config list
+Then then we get exit code 0
+
+When we get and store the keys for later
+When we unset all keys
+Then we check if they are unset
+
+When we override all keys with a string
+Then we check if the key holds the string
+
+When we set them again to the old value
+Then we verify that the keys have the same value that was stored in the beginning
+
+When we set device.id
+Then we get a non zero exit code (not allowed to set)
+When we unset device.id
+Then we get a non zero exit code (not allowed to unset)
+
 
 Note: Setting the device id is only allowed with tedge cert create.
+Note: This is probably a bit complex for a test
+Note: When this test is aborted the configuration might be invalid
 """
 
 configdict = {"device.key.path":"", "device.cert.path":"",
@@ -58,9 +80,6 @@ class PySysTest(BaseTest):
             stdouterr="tedge_set_config_key",
             expectedExitStatus='==0',
         )
-        with open(proc.stdout) as data:
-            value = data.read()
-        return value
 
     def execute(self):
         self.tedge = "/usr/bin/tedge"
@@ -101,14 +120,22 @@ class PySysTest(BaseTest):
             else:
                 self.assertThat("expect == valueread", expect=None, valueread=valueread)
 
+        # override all keys with a string
+        for key in configdict.keys():
+            expect = "failfailfail"
+            self.set_config_key(key, expect)
+            vread = self.get_config_key(key)
+            self.assertThat("value == vread", value=expect, vread=vread)
+
         # set them again to the old value
         for key in configdict.keys():
-            value = self.set_config_key(key, configdict[key])
+            self.set_config_key(key, configdict[key])
 
         # print the keys for reference
         for key in configdict.keys():
             self.log.info(configdict[key])
 
+        # verify that the keys have the same value that was stored in the beginning
         for key in configdict.keys():
             valueold = configdict[key]
             valuenew = self.get_config_key(key)

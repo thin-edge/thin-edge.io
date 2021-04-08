@@ -6,7 +6,19 @@ import sys
 sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
 
-# This test relies on a already working bridge
+"""
+Publish to flux topic
+
+Given a configured system with configured certificate
+When we derive from EnvironmentC8y
+When we publish with the sawtooth_publisher with 100ms cycle time and publish
+    5 times 100 values to the Flux topic.
+Then we manually observe the data in C8y
+
+TODO : Add validation procedure
+"""
+
+
 
 class PySysTest(EnvironmentC8y):
     def setup(self):

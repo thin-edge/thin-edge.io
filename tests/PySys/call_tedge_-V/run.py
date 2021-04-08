@@ -5,10 +5,14 @@ import time
 
 """
 Validate command line option -V
-Note: this is a static check and needs to be updated
-when a version switch occurs.
-"""
 
+Note: this is a static check and needs to be updated when a
+version switch occurs.
+
+Given a running system
+When we call tedge -V
+Then we find the string tedge 0.1.0 in the output
+"""
 
 class PySysTest(BaseTest):
     def execute(self):

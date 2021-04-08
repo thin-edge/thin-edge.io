@@ -20,10 +20,7 @@ Disabled due to this issue:
 12:45:27 INFO    Error: failed to read the tedge configuration
 12:45:27 INFO    Caused by:
 12:45:27 INFO        User's Home Directory not found.
-
-
 """
-
 
 class PySysTest(BaseTest):
     def execute(self):
@@ -38,7 +35,9 @@ class PySysTest(BaseTest):
         )
 
         # Wait for a small amount of time to give tedge sub time
-        # to initialize
+        # to initialize. This is a heuristic measure.
+        # Without an additional wait we observe failures in 1% of the test
+        # runs.
         time.sleep(0.1)
 
         pub = self.startProcess(
