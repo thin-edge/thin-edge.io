@@ -20,9 +20,10 @@ class PySysTest(EnvironmentC8y):
         super().setup()
         self.log.info("Setup")
         self.addCleanupFunction(self.mycleanup)
-        self.timeslot = 10
+        self.timeslot = 15
 
-        # bad hack to wait until the receive window is empty again
+        # Bad hack to wait until the receive window is empty again.
+        # Otherwise, we might download data from a previous test
         time.sleep(self.timeslot)
 
     def execute(self):
@@ -40,7 +41,7 @@ class PySysTest(EnvironmentC8y):
                 "-t", self.project.tennant,
                 "-pass", self.project.c8ypass,
                 "-id", self.project.deviceid,
-                "-o", "40", # burst should take ?ms
+                "-o", "35", # burst should take ?ms
                 "-d", "15", # delay in ms
                 "-s", "400", # samples
                 ],
