@@ -33,7 +33,9 @@ def act(path_publisher, mode, publish_amount, delay):
 
     if mode == "JSON":
         print("Act: Publishing values with temperature_publisher")
-        ret = os.system(os.path.join(path_publisher, CMD_PUBLISH_JSON%(delay,publish_amount)))
+        ret = os.system(
+            os.path.join(path_publisher, CMD_PUBLISH_JSON % (delay, publish_amount))
+        )
         if ret != 0:
             print("Error cannot run publisher")
             sys.exit(1)
@@ -45,7 +47,7 @@ def act(path_publisher, mode, publish_amount, delay):
             if ret != 0:
                 print("Error cannot run publisher")
                 sys.exit(1)
-            time.sleep( delay / 1000 )
+            time.sleep(delay / 1000)
     else:
         sys.exit(1)
 
@@ -60,8 +62,8 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot):
     time_to = datetime.utcnow().replace(microsecond=0)
     time_from = time_to - timedelta(seconds=timeslot)
 
-    date_from = time_from.isoformat(sep="T") + 'Z'
-    date_to = time_to.isoformat(sep="T") + 'Z'
+    date_from = time_from.isoformat(sep="T") + "Z"
+    date_to = time_to.isoformat(sep="T") + "Z"
 
     print(f"Gathering values from {time_from} to {time_to}")
 
@@ -122,7 +124,7 @@ def check_timestamps(timestamps, laststamp):
             laststamp = tstampiso
         if tstampiso == laststamp:
             laststamp = tstampiso
-            #print("Warning", tstampiso, "is equal to", laststamp)
+            # print("Warning", tstampiso, "is equal to", laststamp)
             warning += 1
         else:
             print("Oops", tstampiso, "is smaller than", laststamp)
@@ -138,7 +140,9 @@ def check_timestamps(timestamps, laststamp):
         sys.exit(1)
 
 
-def assert_values(mode, user, device_id, password, tenant, verbose, publish_amount, timeslot):
+def assert_values(
+    mode, user, device_id, password, tenant, verbose, publish_amount, timeslot
+):
     """Assert: Retrieving data via REST interface"""
 
     print("Assert: Retrieving data via REST interface")
@@ -147,8 +151,8 @@ def assert_values(mode, user, device_id, password, tenant, verbose, publish_amou
 
     response = req.json()
 
-    assert "statistics"  in response
-    #print(response["statistics"])
+    assert "statistics" in response
+    # print(response["statistics"])
     pageSize = response["statistics"]["pageSize"]
 
     amount = len(req.json()["measurements"])
@@ -162,16 +166,16 @@ def assert_values(mode, user, device_id, password, tenant, verbose, publish_amou
     values = []
     timestamps = []
 
-    assert "measurements"  in response
+    assert "measurements" in response
 
-    for i in response ["measurements"]:
-        #print(i["source"])
+    for i in response["measurements"]:
+        # print(i["source"])
         source = i["source"]["id"]
         assert source == device_id
 
         if mode == "JSON":
 
-            assert i["type"]  == "ThinEdgeMeasurement"
+            assert i["type"] == "ThinEdgeMeasurement"
 
             try:
                 value = i["Flux [F]"]["Flux [F]"]["value"]
@@ -180,7 +184,7 @@ def assert_values(mode, user, device_id, password, tenant, verbose, publish_amou
                 sys.exit(1)
         elif mode == "REST":
 
-            assert i["type"]  == "c8y_TemperatureMeasurement"
+            assert i["type"] == "c8y_TemperatureMeasurement"
 
             try:
                 value = i["c8y_TemperatureMeasurement"]["T"]["value"]
@@ -220,10 +224,14 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tenant", help="C8y tenant")
     parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
-    parser.add_argument('--verbose', '-v', action='count', default=0)
-    parser.add_argument('--size', '-s', type=int,  help="Amount of values to publish", default=20)
-    parser.add_argument('--slot', '-o', type=int, help="Timeslot size", default=10)
-    parser.add_argument('--delay', '-d', type=int, help="Delay between publishs", default=100)
+    parser.add_argument("--verbose", "-v", action="count", default=0)
+    parser.add_argument(
+        "--size", "-s", type=int, help="Amount of values to publish", default=20
+    )
+    parser.add_argument("--slot", "-o", type=int, help="Timeslot size", default=10)
+    parser.add_argument(
+        "--delay", "-d", type=int, help="Delay between publishs", default=100
+    )
     args = parser.parse_args()
 
     mode = args.mode
@@ -241,10 +249,12 @@ if __name__ == "__main__":
     if verbose:
         print(f"Mode: {mode}")
         print(f"Using path for publisher: {path_publisher}")
-        print(f"Using user name: HIDDEN")
-        print(f"Using tenant-id: HIDDEN")
-        print(f"Using device-id: HIDDEN")
+        print("Using user name: HIDDEN")
+        print("Using tenant-id: HIDDEN")
+        print("Using device-id: HIDDEN")
 
     act(path_publisher, mode, publish_amount, delay)
 
-    assert_values(mode, user, device_id, password, tenant, verbose, publish_amount, timeslot)
+    assert_values(
+        mode, user, device_id, password, tenant, verbose, publish_amount, timeslot
+    )
