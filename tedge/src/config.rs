@@ -44,7 +44,7 @@ pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
 /// ```
 ///
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct TEdgeConfig {
     /// Captures the device specific configurations
     #[serde(default)]
@@ -220,7 +220,7 @@ impl TEdgeConfig {
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct DeviceConfig {
     /// The unique id of the device
     pub id: Option<String>,
@@ -269,7 +269,7 @@ impl DeviceConfig {
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CumulocityConfig {
     /// Preserves the current status of the connection
     connect: Option<String>,
@@ -283,7 +283,7 @@ pub struct CumulocityConfig {
 }
 
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct AzureConfig {
     connect: Option<String>,
     url: Option<String>,
