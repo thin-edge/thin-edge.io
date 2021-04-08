@@ -5,11 +5,9 @@ This is a hack to do a full roundtrip of data from thin-edge to c8y and back.
 
 It publishes numbers from 0..19 and expects to read them back from the cloud.
 
-TODO: Work on timezone management
-
 Call example:
-./roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id> -z 01:00
-./roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id> -z 01:00
+./roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id>
+./roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id>
 """
 
 import argparse
@@ -28,7 +26,7 @@ PAGE_SIZE = "200"
 TIMESLOT = 10
 
 CMD_PUBLISH_REST = "tedge mqtt pub c8y/s/us 211,%i"
-CMD_PUBLISH_JSON = "sawtooth_publisher 100 20 1 fix_json_publishing"
+CMD_PUBLISH_JSON = "sawtooth_publisher 100 20 1 flux"
 
 
 def act(path_publisher, mode):
@@ -57,20 +55,20 @@ def act(path_publisher, mode):
     time.sleep(2)
 
 
-def retrieve_data(user, device_id, password, zone, tenant, verbose):
+def retrieve_data(user, device_id, password, tenant, verbose):
     """Download via REST"""
 
-    time_to = datetime.fromtimestamp(int(time.time()))
+    time_to = datetime.utcnow().replace(microsecond=0)
     time_from = time_to - timedelta(seconds=TIMESLOT)
 
-    date_from = time_from.isoformat(sep="T") + zone
-    date_to = time_to.isoformat(sep="T") + zone
+    date_from = time_from.isoformat(sep="T") + 'Z'
+    date_to = time_to.isoformat(sep="T") + 'Z'
 
     print(f"Gathering values from {time_from} to {time_to}")
 
     # example date format:
-    # date_from = '2021-02-15T13:00:00%2B01:00'
-    # date_to = '2021-02-15T14:00:00%2B01:00'
+    # date_from = '2021-02-15T13:00:00Z'
+    # date_to = '2021-02-15T14:00:00Z'
 
     # TODO Add command line parameter: cloud = 'latest.stage.c8y.io'
     cloud = "eu-latest.cumulocity.com"
@@ -119,11 +117,6 @@ def check_timestamps(timestamps, laststamp):
 
         tstampiso = datetime.fromisoformat(tstamp)
 
-        # Add one hour to convert the timezone to the place where
-        # the Rpi lives (Germany)
-        # TODO: Make this work for Rpis elsewhere
-        tstampiso += timedelta(hours=1)
-
         if tstampiso > laststamp:
             laststamp = tstampiso
         else:
@@ -137,12 +130,12 @@ def check_timestamps(timestamps, laststamp):
         sys.exit(1)
 
 
-def assert_values(mode, user, device_id, password, zone, tenant, verbose):
+def assert_values(mode, user, device_id, password, tenant, verbose):
     """Assert: Retrieving data via REST interface"""
 
     print("Assert: Retrieving data via REST interface")
 
-    req, time_from = retrieve_data(user, device_id, password, zone, tenant, verbose)
+    req, time_from = retrieve_data(user, device_id, password, tenant, verbose)
 
     amount = len(req.json()["measurements"])
 
@@ -198,7 +191,6 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tenant", help="C8y tenant")
     parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
-    parser.add_argument("-z", "--zone", help="Timezone e.g. 01:00 or 00:00 ")
     parser.add_argument('--verbose', '-v', action='count', default=0)
     args = parser.parse_args()
 
@@ -210,8 +202,6 @@ if __name__ == "__main__":
     tenant = args.tenant
     password = args.password
     device_id = args.id
-    # E.g. '%2B01:00' # UTC +1 (CET) Works for Germany
-    zone = "%2B" + args.zone
 
     if verbose:
         print(f"Mode: {mode}")
@@ -219,8 +209,7 @@ if __name__ == "__main__":
         print(f"Using user name: HIDDEN")
         print(f"Using tenant-id: HIDDEN")
         print(f"Using device-id: HIDDEN")
-        print(f"Using timezone adjustment: {args.zone}")
 
     act(path_publisher, mode)
 
-    assert_values(mode, user, device_id, password, zone, tenant, verbose)
+    assert_values(mode, user, device_id, password, tenant, verbose)
