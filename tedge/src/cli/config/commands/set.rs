@@ -1,26 +1,26 @@
-use crate::cli::config::WritableConfigKey;
+use crate::cli::config::ConfigKey;
 use crate::command::{Command, ExecutionContext};
-use crate::config::*;
+use tedge_config::*;
 
 pub struct SetConfigCommand {
-    pub key: WritableConfigKey,
+    pub config_key: ConfigKey,
     pub value: String,
     pub config: TEdgeConfig,
+    pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for SetConfigCommand {
     fn description(&self) -> String {
         format!(
             "set the configuration key: {} with value: {}.",
-            self.key.as_str(),
-            self.value
+            self.config_key.key, self.value
         )
     }
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let mut config = self.config.clone();
-        config.set_config_value(self.key.as_str(), self.value.to_string())?;
-        config.write_to_default_config()?;
+        let () = (self.config_key.set)(&mut config, self.value.to_string())?;
+        self.config_repository.store(config)?;
         Ok(())
     }
 }

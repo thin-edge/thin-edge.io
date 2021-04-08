@@ -1,3 +1,4 @@
+use crate::models::FilePath;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_ETC_PATH: &str = "/etc";
@@ -30,16 +31,16 @@ pub struct TEdgeConfigLocation {
     pub tedge_config_path: PathBuf,
 
     /// Default device cert path
-    pub default_device_cert_path: PathBuf,
+    pub default_device_cert_path: FilePath,
 
     /// Default device key path
-    pub default_device_key_path: PathBuf,
+    pub default_device_key_path: FilePath,
 
     /// Default path for azure root certificates
-    pub default_azure_root_cert_path: PathBuf,
+    pub default_azure_root_cert_path: FilePath,
 
     /// Default path for c8y root certificates
-    pub default_c8y_root_cert_path: PathBuf,
+    pub default_c8y_root_cert_path: FilePath,
 }
 
 impl TEdgeConfigLocation {
@@ -56,12 +57,14 @@ impl TEdgeConfigLocation {
             tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
             default_device_cert_path: tedge_path
                 .join("device-certs")
-                .join("tedge-certificate.pem"),
+                .join("tedge-certificate.pem")
+                .into(),
             default_device_key_path: tedge_path
                 .join("device-certs")
-                .join("tedge-private-key.pem"),
-            default_azure_root_cert_path: etc_path.join("ssl").join("certs"),
-            default_c8y_root_cert_path: etc_path.join("ssl").join("certs"),
+                .join("tedge-private-key.pem")
+                .into(),
+            default_azure_root_cert_path: etc_path.join("ssl").join("certs").into(),
+            default_c8y_root_cert_path: etc_path.join("ssl").join("certs").into(),
         }
     }
 
@@ -74,12 +77,14 @@ impl TEdgeConfigLocation {
             tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
             default_device_cert_path: tedge_path
                 .join("device-certs")
-                .join("tedge-certificate.pem"),
+                .join("tedge-certificate.pem")
+                .into(),
             default_device_key_path: tedge_path
                 .join("device-certs")
-                .join("tedge-private-key.pem"),
-            default_azure_root_cert_path: etc_path.join("ssl").join("certs"),
-            default_c8y_root_cert_path: etc_path.join("ssl").join("certs"),
+                .join("tedge-private-key.pem")
+                .into(),
+            default_azure_root_cert_path: etc_path.join("ssl").join("certs").into(),
+            default_c8y_root_cert_path: etc_path.join("ssl").join("certs").into(),
         }
     }
 }
@@ -93,19 +98,19 @@ fn test_from_default_system_location() {
     );
     assert_eq!(
         config_location.default_device_cert_path,
-        PathBuf::from("/etc/tedge/device-certs/tedge-certificate.pem")
+        FilePath::from("/etc/tedge/device-certs/tedge-certificate.pem")
     );
     assert_eq!(
         config_location.default_device_key_path,
-        PathBuf::from("/etc/tedge/device-certs/tedge-private-key.pem")
+        FilePath::from("/etc/tedge/device-certs/tedge-private-key.pem")
     );
     assert_eq!(
         config_location.default_azure_root_cert_path,
-        PathBuf::from("/etc/ssl/certs")
+        FilePath::from("/etc/ssl/certs")
     );
     assert_eq!(
         config_location.default_c8y_root_cert_path,
-        PathBuf::from("/etc/ssl/certs")
+        FilePath::from("/etc/ssl/certs")
     );
 }
 
@@ -119,21 +124,21 @@ fn test_from_system_location() {
     );
     assert_eq!(
         config_location.default_device_cert_path,
-        PathBuf::from("/usr/local/etc/tedge/device-certs/tedge-certificate.pem")
+        FilePath::from("/usr/local/etc/tedge/device-certs/tedge-certificate.pem")
     );
     assert_eq!(
         config_location.default_device_key_path,
-        PathBuf::from("/usr/local/etc/tedge/device-certs/tedge-private-key.pem")
+        FilePath::from("/usr/local/etc/tedge/device-certs/tedge-private-key.pem")
     );
     // XXX: This should actually be "/etc/ssl/certs".
     assert_eq!(
         config_location.default_azure_root_cert_path,
-        PathBuf::from("/usr/local/etc/ssl/certs")
+        FilePath::from("/usr/local/etc/ssl/certs")
     );
     // XXX: This should actually be "/etc/ssl/certs".
     assert_eq!(
         config_location.default_c8y_root_cert_path,
-        PathBuf::from("/usr/local/etc/ssl/certs")
+        FilePath::from("/usr/local/etc/ssl/certs")
     );
 }
 
@@ -146,18 +151,18 @@ fn test_from_users_home_location() {
     );
     assert_eq!(
         config_location.default_device_cert_path,
-        PathBuf::from("/home/user/.tedge/device-certs/tedge-certificate.pem")
+        FilePath::from("/home/user/.tedge/device-certs/tedge-certificate.pem")
     );
     assert_eq!(
         config_location.default_device_key_path,
-        PathBuf::from("/home/user/.tedge/device-certs/tedge-private-key.pem")
+        FilePath::from("/home/user/.tedge/device-certs/tedge-private-key.pem")
     );
     assert_eq!(
         config_location.default_azure_root_cert_path,
-        PathBuf::from("/etc/ssl/certs")
+        FilePath::from("/etc/ssl/certs")
     );
     assert_eq!(
         config_location.default_c8y_root_cert_path,
-        PathBuf::from("/etc/ssl/certs")
+        FilePath::from("/etc/ssl/certs")
     );
 }

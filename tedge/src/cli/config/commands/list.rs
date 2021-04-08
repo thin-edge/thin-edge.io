@@ -1,10 +1,13 @@
+use crate::cli::config::config_key::*;
 use crate::command::{Command, ExecutionContext};
-use crate::config::*;
+use crate::config::ConfigError;
+use tedge_config::*;
 
 pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
     pub config: TEdgeConfig,
+    pub config_keys: Vec<ConfigKey>,
 }
 
 impl Command for ListConfigCommand {
@@ -14,22 +17,30 @@ impl Command for ListConfigCommand {
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         if self.is_doc {
-            print_config_doc()
+            print_config_doc(&self.config_keys);
         } else {
-            print_config_list(&self.config, self.is_all)?;
+            print_config_list(&self.config_keys, &self.config, self.is_all)?;
         }
 
         Ok(())
     }
 }
 
-fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
-    let mut keys_without_values: Vec<&str> = Vec::new();
-    for key in TEdgeConfig::valid_keys() {
-        let opt = config.get_config_value(key)?;
-        match opt {
-            Some(value) => println!("{}={}", key, value),
-            None => keys_without_values.push(key),
+fn print_config_list(
+    config_keys: &[ConfigKey],
+    config: &TEdgeConfig,
+    all: bool,
+) -> Result<(), ConfigError> {
+    let mut keys_without_values: Vec<String> = Vec::new();
+    for config_key in config_keys {
+        match (config_key.get)(config) {
+            Ok(value) => {
+                println!("{}={}", config_key.key, value);
+            }
+            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
+                keys_without_values.push(config_key.key.into());
+            }
+            Err(err) => Err(err)?,
         }
     }
     if all && !keys_without_values.is_empty() {
@@ -41,10 +52,8 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
     Ok(())
 }
 
-fn print_config_doc() {
-    for key in TEdgeConfig::valid_keys() {
-        // key is pre-defined surely
-        let desc = TEdgeConfig::get_key_properties(key).unwrap().description;
-        println!("{:<30} {}", key, desc);
+fn print_config_doc(config_keys: &[ConfigKey]) {
+    for config_key in config_keys {
+        println!("{:<30} {}", config_key.key, config_key.description);
     }
 }

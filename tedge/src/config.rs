@@ -57,18 +57,6 @@ pub struct TEdgeConfig {
     pub azure: AzureConfig,
 }
 
-// for macro
-#[derive(Debug, PartialEq)]
-pub enum ConfigKeyMode {
-    ReadOnly,
-    ReadWrite,
-}
-
-pub struct ConfigKeyProperties {
-    pub mode: ConfigKeyMode,
-    pub description: &'static str,
-}
-
 ///
 /// This macro creates accessor functions for a `struct` to set and get the value of (possibly
 /// nested) fields given a string as key. It also creates functions to test if a key is valid or
@@ -82,10 +70,6 @@ pub struct ConfigKeyProperties {
 /// - _get_config_value (get a value given a key)
 /// - _set_config_value (set a value)
 /// - get_key_properties (get ConfigKeyProperties of a key)
-/// - valid_keys (list of valid keys)
-/// - valid_writable_keys (list of writable keys)
-/// - valid_keys_help_message_for_get (create a help message for structopt when `-h` is specified with get)
-/// - valid_keys_help_message_for_set (create a help message for structopt when `-h` is specified with set/unset)
 ///
 /// # Basic Usage
 ///
@@ -128,15 +112,6 @@ pub struct ConfigKeyProperties {
 /// assert_eq!(my.is_valid_key("c"), false);
 /// ```
 ///
-// We need to hide read-only keys from the help message of set/unset.
-macro_rules! hide_key {
-    ($str:literal, ReadOnly) => {
-        ""
-    };
-    ($str:literal, ReadWrite) => {
-        $str
-    };
-}
 
 macro_rules! config_keys {
     ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $type:tt, $desc:literal ) )* }) => {
@@ -158,28 +133,6 @@ macro_rules! config_keys {
                      )*
                      _ => Err(ConfigError::InvalidConfigKey { key: key.into() }),
                 }
-            }
-
-            pub fn get_key_properties(key: &str) -> Option<ConfigKeyProperties> {
-                match key {
-                    $( $str => Some(ConfigKeyProperties{mode: ConfigKeyMode::$type, description: $desc}), )*
-                    _ => None,
-                }
-            }
-
-            pub fn valid_keys() -> Vec<&'static str> {
-                vec![
-                    $( $str , )*
-                ]
-            }
-
-            pub fn valid_writable_keys() -> Vec<&'static str> {
-                vec![
-                    $( hide_key!($str, $type) , )*
-                ]
-                .into_iter()
-                .filter(|str| ! str.is_empty())
-                .collect()
             }
 
         }
@@ -314,6 +267,12 @@ pub enum ConfigError {
 
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
+
+    #[error(transparent)]
+    TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error(transparent)]
+    TEdgeConfigSettingError(#[from] tedge_config::ConfigSettingError),
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
@@ -396,44 +355,6 @@ impl TEdgeConfig {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-
-    #[test]
-    fn test_macro_creates_valid_keys_correctly() {
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
-    }
-
-    #[test]
-    fn test_macro_creates_valid_writable_keys_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.id"),
-            false
-        );
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.cert.path"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_get_key_properties_correctly() {
-        assert_eq!(
-            TEdgeConfig::get_key_properties("device.id").unwrap().mode,
-            ConfigKeyMode::ReadOnly
-        );
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url").unwrap().mode,
-            ConfigKeyMode::ReadWrite
-        );
-        let c8y_url_description =
-            "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url")
-                .unwrap()
-                .description,
-            c8y_url_description
-        );
-    }
 
     #[test]
     fn test_parse_config_with_all_values() {

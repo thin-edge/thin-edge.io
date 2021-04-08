@@ -1,5 +1,4 @@
 use crate::{config_setting::*, models::*};
-use std::path::PathBuf;
 
 ///
 /// Identifier of the device within the fleet. It must be globally
@@ -34,7 +33,7 @@ impl ConfigSetting for DeviceKeyPathSetting {
     const DESCRIPTION: &'static str =
         "Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem";
 
-    type Value = PathBuf;
+    type Value = FilePath;
 }
 
 ///
@@ -51,7 +50,7 @@ impl ConfigSetting for DeviceCertPathSetting {
     const DESCRIPTION: &'static str =
         "Path to the certificate file. Example: /home/user/.tedge/tedge-certificate.crt";
 
-    type Value = PathBuf;
+    type Value = FilePath;
 }
 
 ///
@@ -86,7 +85,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
         "Example: /home/user/.tedge/c8y-trusted-root-certificates.pem"
     );
 
-    type Value = PathBuf;
+    type Value = FilePath;
 }
 
 ///
@@ -124,5 +123,5 @@ impl ConfigSetting for AzureRootCertPathSetting {
         "Example: /home/user/.tedge/azure-trusted-root-certificates.pem"
     );
 
-    type Value = PathBuf;
+    type Value = FilePath;
 }

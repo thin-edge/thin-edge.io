@@ -1,24 +1,25 @@
-use crate::cli::config::WritableConfigKey;
+use crate::cli::config::ConfigKey;
 use crate::command::{Command, ExecutionContext};
-use crate::config::*;
+use tedge_config::*;
 
 pub struct UnsetConfigCommand {
-    pub key: WritableConfigKey,
+    pub config_key: ConfigKey,
     pub config: TEdgeConfig,
+    pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for UnsetConfigCommand {
     fn description(&self) -> String {
         format!(
             "unset the configuration value for key: {}",
-            self.key.as_str()
+            self.config_key.key
         )
     }
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let mut config = self.config.clone();
-        config.unset_config_value(self.key.as_str())?;
-        config.write_to_default_config()?;
+        let () = (self.config_key.unset)(&mut config)?;
+        self.config_repository.store(config)?;
         Ok(())
     }
 }
