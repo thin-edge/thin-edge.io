@@ -1,25 +1,33 @@
 use crate::cli::config::ConfigKey;
 use crate::command::{Command, ExecutionContext};
-use crate::config::*;
 
 pub struct GetConfigCommand {
-    pub key: ConfigKey,
-    pub config: TEdgeConfig,
+    pub config_key: ConfigKey,
+    pub config: tedge_config::TEdgeConfig,
 }
 
 impl Command for GetConfigCommand {
     fn description(&self) -> String {
-        format!("get the configuration value for key: {}", self.key.as_str())
+        format!(
+            "get the configuration value for key: {}",
+            self.config_key.key
+        )
     }
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        match self.config.get_config_value(self.key.as_str())? {
-            None => println!(
-                "The provided config key: '{}' is not set",
-                self.key.as_str()
-            ),
-            Some(value) => println!("{}", value),
+        match (self.config_key.get)(&self.config) {
+            Ok(value) => {
+                println!("{}", value);
+            }
+            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
+                println!(
+                    "The provided config key: '{}' is not set",
+                    self.config_key.key
+                );
+            }
+            Err(err) => return Err(err.into()),
         }
+
         Ok(())
     }
 }
