@@ -1,3 +1,4 @@
+import os
 import pysys
 from pysys.basetest import BaseTest
 

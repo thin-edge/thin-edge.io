@@ -2,6 +2,7 @@ import pysys
 from pysys.constants import *
 from pysys.basetest import BaseTest
 
+import os
 import sys
 sys.path.append('environments')
 from environment_c8y import EnvironmentC8y
