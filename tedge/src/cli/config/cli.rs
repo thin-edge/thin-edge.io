@@ -1,7 +1,8 @@
 use crate::cli::config::{commands::*, config_key::*};
-use crate::command::{BuildCommand, Command};
+use crate::command::*;
 use crate::config::*;
 use structopt::StructOpt;
+use tedge_config::ConfigRepository;
 
 #[derive(StructOpt, Debug)]
 pub enum ConfigCmd {
@@ -39,12 +40,9 @@ pub enum ConfigCmd {
 }
 
 impl BuildCommand for ConfigCmd {
-    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        use tedge_config::ConfigRepository;
-        let config_repository = tedge_config::TEdgeConfigRepository::new(
-            tedge_config::TEdgeConfigLocation::from_default_system_location(),
-        );
-        let config = config_repository.load()?;
+    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+        let config = context.config_repository.load()?;
+        let config_repository = context.config_repository;
 
         match self {
             ConfigCmd::Get { key } => Ok(GetConfigCommand {

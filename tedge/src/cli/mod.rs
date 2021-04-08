@@ -1,6 +1,6 @@
 use crate::certificate;
-use crate::command::{BuildCommand, Command};
-use crate::config::{ConfigError, TEdgeConfig};
+use crate::command::{BuildCommand, BuildCommandContext, Command};
+use crate::config::ConfigError;
 use crate::mqtt;
 use structopt::clap;
 use structopt::StructOpt;
@@ -39,13 +39,13 @@ pub enum TEdgeOpt {
 }
 
 impl BuildCommand for TEdgeOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            TEdgeOpt::Cert(opt) => opt.build_command(config),
-            TEdgeOpt::Config(opt) => opt.build_command(config),
-            TEdgeOpt::Connect(opt) => opt.build_command(config),
-            TEdgeOpt::Disconnect(opt) => opt.build_command(config),
-            TEdgeOpt::Mqtt(opt) => opt.build_command(config),
+            TEdgeOpt::Cert(opt) => opt.build_command(context),
+            TEdgeOpt::Config(opt) => opt.build_command(context),
+            TEdgeOpt::Connect(opt) => opt.build_command(context),
+            TEdgeOpt::Disconnect(opt) => opt.build_command(context),
+            TEdgeOpt::Mqtt(opt) => opt.build_command(context),
         }
     }
 }
