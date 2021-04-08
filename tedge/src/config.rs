@@ -182,13 +182,6 @@ macro_rules! config_keys {
                 .collect()
             }
 
-            pub fn valid_keys_help_message_for_get() -> &'static str {
-                concat!("[", $( " ", $str ),*, " ]")
-            }
-
-            pub fn valid_keys_help_message_for_set() -> &'static str {
-                concat!("[", $( hide_key!($str, $type) , " "), *, "]")
-            }
         }
     }
 }
@@ -439,22 +432,6 @@ mod tests {
                 .unwrap()
                 .description,
             c8y_url_description
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_get_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_get().contains("device.id"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_set_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_set().contains("device.id"),
-            false
         );
     }
 
