@@ -1,11 +1,11 @@
 use crate::certificate;
 use crate::command::{BuildCommand, Command};
-use crate::config;
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::mqtt;
 use structopt::clap;
 use structopt::StructOpt;
 
+mod config;
 mod connect;
 mod disconnect;
 
