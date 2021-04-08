@@ -1,4 +1,4 @@
-use crate::command::{BuildCommand, Command, ExecutionContext};
+use crate::command::{BuildCommand, BuildCommandContext, Command, ExecutionContext};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
@@ -58,7 +58,7 @@ pub enum MqttError {
 impl BuildCommand for MqttCmd {
     fn build_command(
         self,
-        _config: crate::config::TEdgeConfig,
+        _context: BuildCommandContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.

@@ -5,7 +5,7 @@ use crate::utils::users;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
 use crate::{
-    command::{BuildCommand, Command, ExecutionContext},
+    command::{BuildCommand, BuildCommandContext, Command, ExecutionContext},
     utils,
 };
 use chrono::offset::Utc;
@@ -84,7 +84,9 @@ pub enum UploadCertOpt {
 }
 
 impl BuildCommand for UploadCertOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+        let config = context.config;
+
         match self {
             UploadCertOpt::C8y { username } => {
                 let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
@@ -333,55 +335,54 @@ impl CertError {
 }
 
 impl BuildCommand for TEdgeCertOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let cmd =
-            match self {
-                TEdgeCertOpt::Create { id } => {
-                    let cmd = CreateCertCmd {
-                        id,
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                        key_path: config.device.key_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+        let cmd = match self {
+            TEdgeCertOpt::Create { id } => {
+                let cmd = CreateCertCmd {
+                    id,
+                    cert_path: context.config.device.cert_path.ok_or_else(|| {
+                        ConfigError::ConfigNotSet {
+                            key: String::from(DEVICE_CERT_PATH),
+                        }
+                    })?,
+                    key_path: context.config.device.key_path.ok_or_else(|| {
+                        ConfigError::ConfigNotSet {
+                            key: String::from(DEVICE_KEY_PATH),
+                        }
+                    })?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Show => {
-                    let cmd = ShowCertCmd {
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+            TEdgeCertOpt::Show => {
+                let cmd = ShowCertCmd {
+                    cert_path: context.config.device.cert_path.ok_or_else(|| {
+                        ConfigError::ConfigNotSet {
+                            key: String::from(DEVICE_CERT_PATH),
+                        }
+                    })?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Remove => {
-                    let cmd = RemoveCertCmd {
-                        cert_path: config.device.cert_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_CERT_PATH),
-                            }
-                        })?,
-                        key_path: config.device.key_path.ok_or_else(|| {
-                            ConfigError::ConfigNotSet {
-                                key: String::from(DEVICE_KEY_PATH),
-                            }
-                        })?,
-                    };
-                    cmd.into_boxed()
-                }
+            TEdgeCertOpt::Remove => {
+                let cmd = RemoveCertCmd {
+                    cert_path: context.config.device.cert_path.ok_or_else(|| {
+                        ConfigError::ConfigNotSet {
+                            key: String::from(DEVICE_CERT_PATH),
+                        }
+                    })?,
+                    key_path: context.config.device.key_path.ok_or_else(|| {
+                        ConfigError::ConfigNotSet {
+                            key: String::from(DEVICE_KEY_PATH),
+                        }
+                    })?,
+                };
+                cmd.into_boxed()
+            }
 
-                TEdgeCertOpt::Upload(cmd) => cmd.build_command(config)?,
-            };
+            TEdgeCertOpt::Upload(cmd) => cmd.build_command(context)?,
+        };
 
         Ok(cmd)
     }

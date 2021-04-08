@@ -138,15 +138,15 @@ pub trait Command {
 /// }
 ///
 /// impl BuildCommand for ConfigCmd {
-///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+///     fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
 ///        let cmd = match self {
 ///            ConfigCmd::Set { key, value } => SetConfigKey {
-///                config,
+///                config: context.config,
 ///                key,
 ///                value,
 ///            },
 ///            ConfigCmd::Get { key } => GetConfigKey {
-///                config,
+///                config: context.config,
 ///                key,
 ///            },
 ///        }
@@ -157,8 +157,15 @@ pub trait Command {
 pub trait BuildCommand {
     fn build_command(
         self,
-        config: config::TEdgeConfig,
+        context: BuildCommandContext,
     ) -> Result<Box<dyn Command>, config::ConfigError>;
+}
+
+/// The context for `BuildCommand`
+///
+pub struct BuildCommandContext {
+    pub config: config::TEdgeConfig,
+    pub config_repository: tedge_config::TEdgeConfigRepository,
 }
 
 /// The execution context of a command.
