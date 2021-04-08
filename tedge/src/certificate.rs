@@ -8,7 +8,7 @@ use crate::{
     command::{BuildCommand, Command, ExecutionContext},
     utils,
 };
-use certificate::{PemCertificate, KeyCertPair, NewCertificateConfig};
+use certificate::{KeyCertPair, NewCertificateConfig, PemCertificate};
 use reqwest::{StatusCode, Url};
 use std::{
     convert::TryFrom,
@@ -457,12 +457,12 @@ impl CreateCertCmd {
 impl ShowCertCmd {
     fn show_certificate(&self) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
-        let pem = PemCertificate::from_pem_file(cert_path).map_err(|err|
-            match err {
-                certificate::CertificateError::IoError (from) =>
-                    CertError::IoError(from).cert_context(cert_path),
-                from => CertError::CertificateError(from),
-            })?;
+        let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
+            certificate::CertificateError::IoError(from) => {
+                CertError::IoError(from).cert_context(cert_path)
+            }
+            from => CertError::CertificateError(from),
+        })?;
 
         println!("Device certificate: {}", cert_path);
         println!("Subject: {}", pem.subject()?);
@@ -617,7 +617,6 @@ mod tests {
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
-
 
     #[test]
     fn create_key_in_non_existent_directory() {

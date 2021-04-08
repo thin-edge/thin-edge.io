@@ -87,8 +87,8 @@ fn config_bridge_validate_wrong_key_path() {
     assert!(config.validate().is_err());
 }
 
-use std::io::Write;
 use std::collections::HashSet;
+use std::io::Write;
 
 #[test]
 fn bridge_config_c8y_create() {

@@ -14,13 +14,13 @@ impl PemCertificate {
     pub fn from_pem_file(path: &str) -> Result<PemCertificate, CertificateError> {
         let file = std::fs::File::open(path)?;
         let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
-        Ok(PemCertificate { pem  })
+        Ok(PemCertificate { pem })
     }
 
     pub fn from_pem_string(content: &str) -> Result<PemCertificate, CertificateError> {
         let file = std::io::Cursor::new(content.as_bytes());
         let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
-        Ok(PemCertificate { pem  })
+        Ok(PemCertificate { pem })
     }
 
     pub fn subject(&self) -> Result<String, CertificateError> {
@@ -62,7 +62,6 @@ impl PemCertificate {
         })?;
         Ok(x509)
     }
-
 }
 
 pub struct KeyCertPair {
@@ -70,15 +69,14 @@ pub struct KeyCertPair {
 }
 
 impl KeyCertPair {
-
-    pub fn new_selfsigned_certificate(config: &NewCertificateConfig, id: &str) -> Result<KeyCertPair, CertificateError> {
+    pub fn new_selfsigned_certificate(
+        config: &NewCertificateConfig,
+        id: &str,
+    ) -> Result<KeyCertPair, CertificateError> {
         let () = KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
-        distinguished_name.push(
-            rcgen::DnType::OrganizationName,
-            &config.organization_name,
-        );
+        distinguished_name.push(rcgen::DnType::OrganizationName, &config.organization_name);
         distinguished_name.push(
             rcgen::DnType::OrganizationalUnitName,
             &config.organizational_unit_name,
@@ -95,7 +93,9 @@ impl KeyCertPair {
         params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
-        Ok(KeyCertPair { certificate: Certificate::from_params(params)? })
+        Ok(KeyCertPair {
+            certificate: Certificate::from_params(params)?,
+        })
     }
 
     pub fn certificate_pem_string(&self) -> Result<String, CertificateError> {
@@ -110,7 +110,10 @@ impl KeyCertPair {
         if id.is_empty() {
             return Err(CertificateError::EmptyName);
         } else if id.len() > max_cn_size {
-            return Err(CertificateError::TooLongName { name: id.into(), max_cn_size });
+            return Err(CertificateError::TooLongName {
+                name: id.into(),
+                max_cn_size,
+            });
         } else if id.contains(char::is_control) {
             return Err(CertificateError::InvalidCharacter { name: id.into() });
         }
@@ -130,7 +133,7 @@ pub enum CertificateError {
     #[error(
     r#"The string '{name:?}' is more than {max_cn_size} characters long and cannot be used as a name"#
     )]
-    TooLongName { name: String , max_cn_size: usize,},
+    TooLongName { name: String, max_cn_size: usize },
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
@@ -163,7 +166,6 @@ impl Default for NewCertificateConfig {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,11 +175,15 @@ mod tests {
         // Create a certificate key pair
         let id = "my-device-id";
         let config = NewCertificateConfig::default();
-        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id).expect("Fail to create a certificate");
+        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+            .expect("Fail to create a certificate");
 
         // Read the certificate pem
-        let pem_string = keypair.certificate_pem_string().expect("Fail to read the certificate PEM");
-        let pem = PemCertificate::from_pem_string(&pem_string).expect("Fail to decode the certificate PEM");
+        let pem_string = keypair
+            .certificate_pem_string()
+            .expect("Fail to read the certificate PEM");
+        let pem = PemCertificate::from_pem_string(&pem_string)
+            .expect("Fail to decode the certificate PEM");
 
         // Compute the thumbprint of the certificate using this crate
         let thumbprint = pem.thumbprint().expect("Fail to compute the thumbprint");
@@ -219,5 +225,4 @@ ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
         let thumbprint = pem.thumbprint().expect("Extracting thumbprint failed");
         assert_eq!(thumbprint, expected_thumbprint);
     }
-
 }
