@@ -63,30 +63,14 @@ echo "Preparing"
 # adding sbin seems to be necessary for non raspbian debians
 PATH=$PATH:/usr/sbin
 
-# kill mapper
-#sudo killall tedge_mapper
-
 # Disconnect may fail if not there
 sudo tedge disconnect c8y
 
 set -e
 
-#cd ~/
-
-# Avoid deleting the tedge.toml as the device id is only set when
-# the certificate is created.
-#rm -rf .tedge
-
-#cd ~/thin-edge.io
-
-#git pull origin main
-
-#cargo clean
-
 rm -f ~/thin-edge.io/target/debian/*.deb
 
 echo "Building"
-
 
 cd ~/thin-edge.io
 
@@ -100,55 +84,34 @@ sudo dpkg -P mosquitto tedge tedge_mapper
 echo "Installing"
 
 sudo apt-get --assume-yes install mosquitto
-#sudo apt-get install mosquitto libcjson1 libmosquitto1
 
 ls -lah /etc/mosquitto/
 
 sudo dpkg -i ~/thin-edge.io/target/debian/*.deb
 
-echo "Configuring"
+echo "Configuring Bridge"
 
-#mkdir ~/.tedge
+sudo tedge cert remove
 
-#cp ~/certificate/tedge-certificate.pem ~/.tedge/
-#cp ~/certificate/tedge-private-key.pem ~/.tedge/
+sudo tedge cert create --device-id=$C8YDEVICE
 
 sudo tedge cert show
 
 sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
-#tedge config set device.id $DEVICE
-
 sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
-#sudo chmod 777 /etc/mosquitto/mosquitto.conf
+sudo tedge config list
 
-#FILE="/etc/mosquitto/mosquitto.conf"
-
-#appendtofile "include_dir /home/$USER/.tedge/bridges" $FILE
-#appendtofile "log_type debug" $FILE
-
-#appendtofile "log_type error" $FILE
-#appendtofile "log_type warning" $FILE
-#appendtofile "log_type notice" $FILE
-#appendtofile "log_type information" $FILE
-#appendtofile "log_type subscribe" $FILE
-#appendtofile "log_type unsubscribe" $FILE
-#appendtofile "connection_messages true" $FILE
-
-#sudo chmod 644 /etc/mosquitto/mosquitto.conf
+# Note: This will always upload a new certificate. From time to time
+# we should delete the old ones in c8y
+sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
-#cat ~/.tedge/tedge.toml
-
-#chmod 666 ~/.tedge/*.pem
 
 echo "Connect again"
 
 sudo tedge connect c8y
-
-# Start Mapper in the Background
-#sudo tedge_mapper > ~/mapper.log 2>&1 &
 
 cd ~/thin-edge.io
 
@@ -173,4 +136,6 @@ sleep 12
 
 # Uses thin-edge JSON
 ./ci/roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/debug/examples/ -u $USERNAME -t $TENNANT -pass $C8YPASS -id $DEVID
+
+sudo tedge disconnect c8y
 
