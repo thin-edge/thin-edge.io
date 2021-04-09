@@ -22,6 +22,7 @@ Disabled due to this issue:
 12:45:27 INFO        User's Home Directory not found.
 """
 
+
 class PySysTest(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
@@ -29,7 +30,7 @@ class PySysTest(BaseTest):
 
         sub = self.startProcess(
             command=tedge,
-            arguments=[ "mqtt", "sub", "atopic"],
+            arguments=["mqtt", "sub", "atopic"],
             stdouterr="tedge_sub",
             background=True,
         )
@@ -42,17 +43,16 @@ class PySysTest(BaseTest):
 
         pub = self.startProcess(
             command=tedge,
-            arguments=[ "mqtt", "pub", "atopic", "amessage"],
+            arguments=["mqtt", "pub", "atopic", "amessage"],
             stdouterr="tedge_pub2",
         )
 
         pub = self.startProcess(
             command=tedge,
-            arguments=[ "mqtt", "pub", "atopic", "the message"],
+            arguments=["mqtt", "pub", "atopic", "the message"],
             stdouterr="tedge_pub3",
         )
 
     def validate(self):
         self.assertGrep("tedge_sub.out", "amessage", contains=True)
         self.assertGrep("tedge_sub.out", "the message", contains=True)
-

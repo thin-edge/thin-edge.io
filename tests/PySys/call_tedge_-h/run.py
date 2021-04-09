@@ -22,7 +22,7 @@ class PySysTest(BaseTest):
             command=tedge,
             arguments=["-h"],
             stdouterr="tedge",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
 
     def validate(self):
