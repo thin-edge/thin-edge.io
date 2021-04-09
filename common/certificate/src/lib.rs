@@ -29,6 +29,20 @@ impl PemCertificate {
         Ok(x509.tbs_certificate.subject.to_string())
     }
 
+    pub fn subject_common_name(&self) -> Result<String, CertificateError> {
+        let x509 = PemCertificate::extract_certificate(&self.pem)?;
+        let subject = x509.tbs_certificate.subject;
+        let cn =
+            subject.iter_common_name()
+            .next().map(|cn| cn.as_str());
+
+        match cn {
+            None => Ok(String::from("")),
+            Some(Ok(name)) => Ok(name.to_owned()),
+            Some(Err(err)) => Err(PemCertificate::wrap_x509_error(err))
+        }
+    }
+
     pub fn issuer(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
         Ok(x509.tbs_certificate.issuer.to_string())
@@ -62,6 +76,11 @@ impl PemCertificate {
             CertificateError::X509Error(x509_error_string)
         })?;
         Ok(x509)
+    }
+
+    fn wrap_x509_error(err: x509_parser::error::X509Error) -> CertificateError {
+        let x509_error_string = format!("{}", err);
+        CertificateError::X509Error(x509_error_string)
     }
 }
 
@@ -203,6 +222,25 @@ mod tests {
         let pem = pem_of_keypair(&keypair);
         let subject = pem.subject().expect("Fail to extract the subject");
         assert_eq!(subject, "CN=device-serial-number, O=Acme, OU=IoT");
+    }
+
+    #[test]
+    fn self_signed_cert_common_name_is_the_device_id() {
+        // Create a certificate with a given subject
+        let mut config = NewCertificateConfig::default();
+        config.organization_name = "Acme".to_owned();
+        config.organizational_unit_name = "IoT".to_owned();
+        let device_id = "device-identifier";
+
+        let keypair = KeyCertPair::new_selfsigned_certificate(&config, device_id)
+            .expect("Fail to create a certificate");
+
+        // Check the subject's common_name
+        let pem = pem_of_keypair(&keypair);
+        let common_name = pem
+            .subject_common_name()
+            .expect("Fail to extract the common name");
+        assert_eq!(common_name, device_id);
     }
 
     #[test]
