@@ -41,8 +41,17 @@ dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
 dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
 
 rm -R /tmp/tedge
-echo ""
-echo "To administrate your thin-edge.io installation your user has to be part of the group 'tedge-users'."
-echo "You can add your user to this group with the command${BLUE} 'adduser <your-user> tedge-users'${COLORRESET}.\n"
 
-echo "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
+# Test if tedge command is there and working
+tedge help > /dev/null
+if [ $? -eq 0 ]
+then
+    echo "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
+    echo ""
+    echo "To administrate your thin-edge.io installation your user has to be part of the group 'tedge-users'."
+    echo "You can add your user to this group with the command${BLUE} 'adduser <your-user> tedge-users'${COLORRESET}.\n"
+
+    echo "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
+else
+    echo "Something went wrong in the installation process please try the manual installation steps instead:\n https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
+fi
