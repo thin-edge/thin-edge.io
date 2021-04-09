@@ -12,6 +12,7 @@ depends = "mosquitto"
 maintainer-scripts = "configuration/debian/tedge"
 
 [dependencies]
+tedge-cli = {path = "../crates/tedge_cli"}
 anyhow = "1.0"
 chrono = "0.4"
 futures = "0.3"
