@@ -13,7 +13,8 @@ env:
 
 jobs:
 
-  install-amd64:
+  install-and-use-amd64:
+
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -65,7 +66,8 @@ jobs:
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_hosted
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_HOSTED }}
 
-  install-rpi:
+  install-and-use-rpi:
+
     runs-on: [self-hosted, Linux, ARM]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
