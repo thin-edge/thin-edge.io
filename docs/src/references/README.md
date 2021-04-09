@@ -3,7 +3,7 @@ The thin-edge.io command-line interface (tedge CLI) is a set of commands used to
 
 Following sections show the tedge sub commands.
 
-* [`tegde` command](../references/tedge.md)
+* [`tedge` command](../references/tedge.md)
 * [`tedge cert` command](../references/tedge-cert.md)
 * [`tedge config` command](../references/tedge-config.md)
 * [`tedge connect` command](../references/tedge-connect.md)
