@@ -46,7 +46,7 @@ impl ThinEdgeJson {
     ) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         match json::parse(&json_string) {
             Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj, timestamp),
-            Err(err) => Err(ThinEdgeJsonError::new_invalid_json(json_string, err)), 
+            Err(err) => Err(ThinEdgeJsonError::new_invalid_json(json_string, err)),
         }
     }
 
@@ -113,7 +113,6 @@ impl ThinEdgeJson {
                         from: err,
                     }
                 })?;
-               // println!("time is ---->{}",result.to_rfc3339());
                 Ok(result)
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
