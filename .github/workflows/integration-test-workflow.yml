@@ -45,6 +45,26 @@ jobs:
         - name: run tedge help
           run: tedge --help
 
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: examples
+            path: examples
+
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test.sh
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+
   install-rpi:
     runs-on: [self-hosted, Linux, ARM]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
