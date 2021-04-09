@@ -23,7 +23,7 @@ class PySysTest(BaseTest):
             arguments=["-h"],
             arguments=["-V"],
             stdouterr="tedge",
-            expectedExitStatus='==1',
+            expectedExitStatus="==1",
         )
 
     def validate(self):

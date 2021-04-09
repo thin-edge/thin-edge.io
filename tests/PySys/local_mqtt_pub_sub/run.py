@@ -14,6 +14,7 @@ Then we kill tedge sub with sudo as it is running with a different user account
 Then we find the messages in the output of tedge sub
 """
 
+
 class PySysTest(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"

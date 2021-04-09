@@ -32,21 +32,26 @@ Note: This is probably a bit complex for a test
 Note: When this test is aborted the configuration might be invalid
 """
 
-configdict = {"device.key.path":"", "device.cert.path":"",
-        "c8y.url":"", "c8y.root.cert.path":"",
-        "azure.url":"", "azure.root.cert.path":""}
+configdict = {
+    "device.key.path": "",
+    "device.cert.path": "",
+    "c8y.url": "",
+    "c8y.root.cert.path": "",
+    "azure.url": "",
+    "azure.root.cert.path": "",
+}
 
-DEFAULTKEYPATH="/etc/tedge/device-certs/tedge-private-key.pem"
-DEFAULTCERTPATH="/etc/tedge/device-certs/tedge-certificate.pem"
+DEFAULTKEYPATH = "/etc/tedge/device-certs/tedge-private-key.pem"
+DEFAULTCERTPATH = "/etc/tedge/device-certs/tedge-certificate.pem"
+
 
 class PySysTest(BaseTest):
-
     def get_config_key(self, key):
         proc = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge,"config", "get", key],
+            arguments=[self.tedge, "config", "get", key],
             stdouterr="tedge_get_config_key",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
         with open(proc.stdout) as data:
             value = data.read().strip()
@@ -61,9 +66,9 @@ class PySysTest(BaseTest):
     def unset_config_key(self, key):
         proc = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge,"config", "unset", key],
+            arguments=[self.tedge, "config", "unset", key],
             stdouterr="tedge_unset_config_key",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
         with open(proc.stdout) as data:
             value = data.read()
@@ -76,9 +81,9 @@ class PySysTest(BaseTest):
 
         proc = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge,"config", "set", key, value],
+            arguments=[self.tedge, "config", "set", key, value],
             stdouterr="tedge_set_config_key",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
 
     def execute(self):
@@ -90,7 +95,7 @@ class PySysTest(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "config", "list"],
             stdouterr="tedge",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
 
         # get and store the keys for later
@@ -112,11 +117,13 @@ class PySysTest(BaseTest):
 
             # Some values have defaults that are set instead of nothing:
             if key == "device.key.path":
-                self.assertThat("expect == valueread", expect=DEFAULTKEYPATH,
-                    valueread=valueread)
-            elif key== "device.cert.path":
-                self.assertThat("expect == valueread", expect=DEFAULTCERTPATH,
-                    valueread=valueread)
+                self.assertThat(
+                    "expect == valueread", expect=DEFAULTKEYPATH, valueread=valueread
+                )
+            elif key == "device.cert.path":
+                self.assertThat(
+                    "expect == valueread", expect=DEFAULTCERTPATH, valueread=valueread
+                )
             else:
                 self.assertThat("expect == valueread", expect=None, valueread=valueread)
 
@@ -139,24 +146,25 @@ class PySysTest(BaseTest):
         for key in configdict.keys():
             valueold = configdict[key]
             valuenew = self.get_config_key(key)
-            self.assertThat("valueold == valuenew", valueold=valueold, valuenew=valuenew)
+            self.assertThat(
+                "valueold == valuenew", valueold=valueold, valuenew=valuenew
+            )
 
         # special case: device.id unset is not allowed
         proc = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge,"config", "unset", "device.id"],
+            arguments=[self.tedge, "config", "unset", "device.id"],
             stdouterr="tedge_unset_device_id",
-            expectedExitStatus='!=0',
+            expectedExitStatus="!=0",
         )
 
         # special case: device.id unset is not allowed
         proc = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge,"config", "set", "device.id", "anotherid"],
+            arguments=[self.tedge, "config", "set", "device.id", "anotherid"],
             stdouterr="tedge_set_device_id",
-            expectedExitStatus='!=0',
+            expectedExitStatus="!=0",
         )
 
     def validate(self):
         self.addOutcome(PASSED)
-

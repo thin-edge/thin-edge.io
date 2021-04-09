@@ -22,10 +22,14 @@ class PySysTest(BaseTest):
             command=tedge,
             arguments=["nope"],
             stdouterr="tedge",
-            expectedExitStatus='==1',
+            expectedExitStatus="==1",
         )
 
     def validate(self):
         self.assertGrep("tedge.err", "error: Found argument", contains=True)
-        self.assertGrep("tedge.err", "which wasn't expected, or isn't valid in this context", contains=True)
+        self.assertGrep(
+            "tedge.err",
+            "which wasn't expected, or isn't valid in this context",
+            contains=True,
+        )
         self.assertGrep("tedge.err", "USAGE:", contains=True)

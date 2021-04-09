@@ -14,6 +14,7 @@ When we call tedge -V
 Then we find the string tedge 0.1.0 in the output
 """
 
+
 class PySysTest(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
@@ -22,9 +23,8 @@ class PySysTest(BaseTest):
             command=tedge,
             arguments=["-V"],
             stdouterr="tedge",
-            expectedExitStatus='==0',
+            expectedExitStatus="==0",
         )
 
     def validate(self):
         self.assertGrep("tedge.out", "tedge 0.1.0", contains=True)
-
