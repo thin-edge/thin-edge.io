@@ -53,7 +53,7 @@ jobs:
             workflow: build-workflow.yml
             workflow_conclusion: success
             branch: continuous_integration
-            name: examples
+            name: examples_amd64
             path: examples
 
         - name: Run Smoke Test
