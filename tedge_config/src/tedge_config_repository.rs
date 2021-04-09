@@ -28,6 +28,13 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         let toml = toml::to_string_pretty(&config.data)?;
         let mut file = NamedTempFile::new()?;
         file.write_all(toml.as_bytes())?;
+
+        // Create $HOME/.tedge or /etc/tedge directory if it does not exist
+        if !self.config_location.tedge_path().exists() {
+            let () = std::fs::create_dir(self.config_location.tedge_path())?;
+            // XXX: Correctly assign permissions
+        }
+
         match file.persist(self.config_location.tedge_config_path.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
