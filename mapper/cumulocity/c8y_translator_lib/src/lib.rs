@@ -39,14 +39,8 @@ impl CumulocityJson {
 
     ///Convert from thinedgejson to c8y_json
     pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, ThinEdgeJsonError> {
-        let utc_time_now: DateTime<Utc> = Utc::now();
-        let timestamp =
-            DateTime::parse_from_rfc3339(&utc_time_now.to_rfc3339()).map_err(|err| {
-                ThinEdgeJsonError::InvalidTimestamp {
-                    value: String::from(utc_time_now.to_rfc3339()),
-                    from: err,
-                }
-            })?;
+        let local_time_now: DateTime<Local> = Local::now();
+        let timestamp = local_time_now.with_timezone(local_time_now.offset());
         let c8y_vec = Self::from_thin_edge_json_with_timestamp(input, timestamp)?;
         Ok(c8y_vec)
     }
