@@ -52,7 +52,7 @@ class PySysTest(EnvironmentC8y):
                 "-id",
                 self.project.deviceid,
                 "-o",
-                "8",  # burst should take 4000ms
+                "10",  # burst should take 4000ms
                 "-d",
                 "10",  # delay in ms
                 "-s",
