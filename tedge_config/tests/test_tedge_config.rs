@@ -473,6 +473,7 @@ fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempDir, TEdgeCon
 fn dummy_tedge_config_location() -> TEdgeConfigLocation {
     TEdgeConfigLocation {
         tedge_config_path: PathBuf::from("/dev/null"),
+        tedge_path: PathBuf::from("/dev/null"),
         default_device_cert_path: FilePath::from("/dev/null"),
         default_device_key_path: FilePath::from("/dev/null"),
         default_c8y_root_cert_path: FilePath::from("/dev/null"),

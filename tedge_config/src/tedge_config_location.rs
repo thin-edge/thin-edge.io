@@ -30,6 +30,9 @@ pub struct TEdgeConfigLocation {
     /// Full path to `tedge.toml`.
     pub tedge_config_path: PathBuf,
 
+    /// Directory where `tedge.toml` is located.
+    pub tedge_path: PathBuf,
+
     /// Default device cert path
     pub default_device_cert_path: FilePath,
 
@@ -49,12 +52,17 @@ impl TEdgeConfigLocation {
         Self::from_system_location(DEFAULT_ETC_PATH)
     }
 
+    pub fn tedge_path(&self) -> &Path {
+        &self.tedge_path
+    }
+
     /// `tedge.toml` is located in `${etc_path}/tedge`. All defaults are based on system locations.
     pub fn from_system_location(etc_path: impl AsRef<Path>) -> Self {
         let etc_path = etc_path.as_ref();
         let tedge_path = etc_path.join("tedge");
         Self {
             tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
+            tedge_path: tedge_path.clone(),
             default_device_cert_path: tedge_path
                 .join("device-certs")
                 .join("tedge-certificate.pem")
@@ -75,6 +83,7 @@ impl TEdgeConfigLocation {
         let tedge_path = home_path.as_ref().join(".tedge");
         Self {
             tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
+            tedge_path: tedge_path.clone(),
             default_device_cert_path: tedge_path
                 .join("device-certs")
                 .join("tedge-certificate.pem")
@@ -96,6 +105,7 @@ fn test_from_default_system_location() {
         config_location.tedge_config_path,
         PathBuf::from("/etc/tedge/tedge.toml")
     );
+    assert_eq!(config_location.tedge_path(), PathBuf::from("/etc/tedge"));
     assert_eq!(
         config_location.default_device_cert_path,
         FilePath::from("/etc/tedge/device-certs/tedge-certificate.pem")
@@ -123,6 +133,11 @@ fn test_from_system_location() {
         PathBuf::from("/usr/local/etc/tedge/tedge.toml")
     );
     assert_eq!(
+        config_location.tedge_path(),
+        PathBuf::from("/usr/local/etc/tedge")
+    );
+
+    assert_eq!(
         config_location.default_device_cert_path,
         FilePath::from("/usr/local/etc/tedge/device-certs/tedge-certificate.pem")
     );
@@ -148,6 +163,10 @@ fn test_from_users_home_location() {
     assert_eq!(
         config_location.tedge_config_path,
         PathBuf::from("/home/user/.tedge/tedge.toml")
+    );
+    assert_eq!(
+        config_location.tedge_path(),
+        PathBuf::from("/home/user/.tedge")
     );
     assert_eq!(
         config_location.default_device_cert_path,
