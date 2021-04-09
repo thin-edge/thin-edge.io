@@ -228,7 +228,7 @@ pub enum CertError {
     #[error(
         r#"A certificate already exists and would be overwritten.
         Existing file: {path:?}
-        Run `tegde cert remove` first to generate a new certificate.
+        Run `tedge cert remove` first to generate a new certificate.
     "#
     )]
     CertificateAlreadyExists { path: String },
@@ -236,7 +236,7 @@ pub enum CertError {
     #[error(
         r#"No certificate has been attached to that device.
         Missing file: {path:?}
-        Run `tegde cert create` to generate a new certificate.
+        Run `tedge cert create` to generate a new certificate.
     "#
     )]
     CertificateNotFound { path: String },
@@ -244,7 +244,7 @@ pub enum CertError {
     #[error(
         r#"No private key has been attached to that device.
         Missing file: {path:?}
-        Run `tegde cert create` to generate a new key and certificate.
+        Run `tedge cert create` to generate a new key and certificate.
     "#
     )]
     KeyNotFound { path: String },
@@ -252,7 +252,7 @@ pub enum CertError {
     #[error(
         r#"A private key already exists and would be overwritten.
         Existing file: {path:?}
-        Run `tegde cert remove` first to generate a new certificate and private key.
+        Run `tedgde cert remove` first to generate a new certificate and private key.
     "#
     )]
     KeyAlreadyExists { path: String },
