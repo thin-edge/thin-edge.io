@@ -32,8 +32,8 @@ cd tests/PySys/
 
 # Don't use -V this will might reveal secret credentials
 
-pysys.py run --record
+#pysys.py run --record
 
-#pysys.py run --record -c 100 c8y_restart_bridge
+pysys.py run --record -c 100 c8y_restart_bridge 
 
 deactivate
