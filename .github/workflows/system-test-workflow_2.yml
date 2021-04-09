@@ -11,7 +11,6 @@ env:
 jobs:
   build:
     runs-on: [self-hosted, Linux, ARM]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
@@ -31,9 +30,3 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi
 
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results
-        path: tests/
