@@ -1,4 +1,5 @@
 use chrono::offset::Utc;
+use chrono::DateTime;
 use chrono::Duration;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
@@ -73,6 +74,16 @@ impl KeyCertPair {
         config: &NewCertificateConfig,
         id: &str,
     ) -> Result<KeyCertPair, CertificateError> {
+        let today = Utc::now();
+        let not_before = today - Duration::days(1); // Ensure the certificate is valid today
+        KeyCertPair::new_selfsigned_certificate_at(config, id, not_before)
+    }
+
+    pub fn new_selfsigned_certificate_at(
+        config: &NewCertificateConfig,
+        id: &str,
+        not_before: DateTime<Utc>,
+    ) -> Result<KeyCertPair, CertificateError> {
         let () = KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
@@ -82,9 +93,7 @@ impl KeyCertPair {
             &config.organizational_unit_name,
         );
 
-        let today = Utc::now();
-        let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-        let not_after = today + Duration::days(config.validity_period_days.into());
+        let not_after = not_before + Duration::days(config.validity_period_days.into());
 
         let mut params = CertificateParams::default();
         params.distinguished_name = distinguished_name;
@@ -169,6 +178,88 @@ impl Default for NewCertificateConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pem_of_keypair(keypair: &KeyCertPair) -> PemCertificate {
+        let pem_string = keypair
+            .certificate_pem_string()
+            .expect("Fail to read the certificate PEM");
+        let pem = PemCertificate::from_pem_string(&pem_string)
+            .expect("Fail to decode the certificate PEM");
+        pem
+    }
+
+    #[test]
+    fn self_signed_cert_subject_is_the_device() {
+        // Create a certificate with a given subject
+        let mut config = NewCertificateConfig::default();
+        config.organization_name = "Acme".to_owned();
+        config.organizational_unit_name = "IoT".to_owned();
+        let id = "device-serial-number";
+
+        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+            .expect("Fail to create a certificate");
+
+        // Check the subject
+        let pem = pem_of_keypair(&keypair);
+        let subject = pem.subject().expect("Fail to extract the subject");
+        assert_eq!(subject, "CN=device-serial-number, O=Acme, OU=IoT");
+    }
+
+    #[test]
+    fn self_signed_cert_issuer_is_the_device() {
+        // Create a certificate with a given subject
+        let mut config = NewCertificateConfig::default();
+        config.organization_name = "Acme".to_owned();
+        config.organizational_unit_name = "IoT".to_owned();
+        let id = "device-serial-number";
+
+        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+            .expect("Fail to create a certificate");
+
+        // Check the issuer
+        let pem = pem_of_keypair(&keypair);
+        let issuer = pem.issuer().expect("Fail to extract the issuer");
+        assert_eq!(issuer, "CN=device-serial-number, O=Acme, OU=IoT");
+    }
+
+    #[test]
+    fn self_signed_cert_no_before_is_birthdate() {
+        // Create a certificate with a given birthdate.
+        let config = NewCertificateConfig::default();
+        let id = "some-id";
+        let birthdate = DateTime::parse_from_rfc3339("2021-03-31T16:39:57+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
+            .expect("Fail to create a certificate");
+
+        // Check the not_before date
+        let pem = pem_of_keypair(&keypair);
+        let not_before = pem
+            .not_before()
+            .expect("Fail to extract the not_before date");
+        assert_eq!(not_before, "Wed, 31 Mar 2021 15:39:57 +0000");
+    }
+
+    #[test]
+    fn self_signed_cert_no_after_is_related_to_birthdate() {
+        // Create a certificate with a given birthdate.
+        let mut config = NewCertificateConfig::default();
+        config.validity_period_days = 10;
+        let id = "some-id";
+        let birthdate = DateTime::parse_from_rfc3339("2021-03-31T16:39:57+01:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
+            .expect("Fail to create a certificate");
+
+        // Check the not_after date
+        let pem = pem_of_keypair(&keypair);
+        let not_after = pem.not_after().expect("Fail to extract the not_after date");
+        assert_eq!(not_after, "Sat, 10 Apr 2021 15:39:57 +0000");
+    }
 
     #[test]
     fn check_certificate_thumbprint_b64_decode_sha1() {
