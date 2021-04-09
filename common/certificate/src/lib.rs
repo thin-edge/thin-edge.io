@@ -32,14 +32,12 @@ impl PemCertificate {
     pub fn subject_common_name(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
         let subject = x509.tbs_certificate.subject;
-        let cn =
-            subject.iter_common_name()
-            .next().map(|cn| cn.as_str());
+        let cn = subject.iter_common_name().next().map(|cn| cn.as_str());
 
         match cn {
             None => Ok(String::from("")),
             Some(Ok(name)) => Ok(name.to_owned()),
-            Some(Err(err)) => Err(PemCertificate::wrap_x509_error(err))
+            Some(Err(err)) => Err(PemCertificate::wrap_x509_error(err)),
         }
     }
 
