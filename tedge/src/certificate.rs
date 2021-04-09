@@ -252,7 +252,7 @@ pub enum CertError {
     #[error(
         r#"A private key already exists and would be overwritten.
         Existing file: {path:?}
-        Run `tedgde cert remove` first to generate a new certificate and private key.
+        Run `tedge cert remove` first to generate a new certificate and private key.
     "#
     )]
     KeyAlreadyExists { path: String },
