@@ -113,6 +113,7 @@ impl ThinEdgeJson {
                         from: err,
                     }
                 })?;
+               // println!("time is ---->{}",result.to_rfc3339());
                 Ok(result)
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),

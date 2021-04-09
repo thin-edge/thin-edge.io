@@ -179,14 +179,14 @@ mod tests {
     #[test]
     fn check_thin_edge_translation_with_timestamp() {
         let single_value_thin_edge_json = r#"{
-                  "time" : "2013-06-22T17:03:14+02:00",
+                  "time" : "2013-06-22T17:03:14.123+02:00",
                   "temperature": 23,
                   "pressure": 220
                }"#;
 
         let expected_output = r#"{
                      "type": "ThinEdgeMeasurement",
-                     "time": "2013-06-22T17:03:14+02:00",
+                     "time": "2013-06-22T17:03:14.123+02:00",
                      "temperature": {
                          "temperature": {
                                "value": 23
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn thin_edge_json_round_tiny_number() {
         let input = r#"{
-           "time" : "2013-06-22T17:03:14+02:00",
+           "time" : "2013-06-22T17:03:14.000+02:00",
            "temperature": 10e-9999999999
           }"#;
 
@@ -313,10 +313,10 @@ mod tests {
                 // Skip this test case, since the random measurement name happens to be a reserved key.
                 return Ok(());
             }
-            let input = format!(r#"{{"time": "2013-06-22T17:03:14+02:00",
+            let input = format!(r#"{{"time": "2013-06-22T17:03:14.453+02:00",
                         "{}": 123
                       }}"#, measurement);
-            let time = "2013-06-22T17:03:14+02:00";
+            let time = "2013-06-22T17:03:14.453+02:00";
             let expected_output = format!(r#"{{
                   "type": "ThinEdgeMeasurement",
                   "time": "{}",
