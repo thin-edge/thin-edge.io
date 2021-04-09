@@ -3,7 +3,8 @@ import pysys
 from pysys.basetest import BaseTest
 
 import sys
-sys.path.append('environments')
+
+sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
@@ -21,6 +22,7 @@ When we upload the data to the github action for further analysis (not done here
 TODO : Add validation procedure
 """
 
+
 class PySysTest(EnvironmentC8y):
     def setup(self):
         super().setup()
@@ -32,22 +34,28 @@ class PySysTest(EnvironmentC8y):
         self.log.info("Execute")
 
         sub = self.startProcess(
-            command = "/usr/bin/mosquitto_sub",
+            command="/usr/bin/mosquitto_sub",
             arguments=["-v", "-h", "localhost", "-t", "$SYS/#"],
             stdouterr="mosquitto_sub_stdout",
             background=True,
         )
 
         stats_mosquitto = self.startProcess(
-            command = "/bin/sh",
-            arguments = ["-c", "while true; do cat /proc/$(pgrep -x mosquitto)/status; sleep 1; done"],
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x mosquitto)/status; sleep 1; done",
+            ],
             stdouterr="stats_mosquitto_stdout",
             background=True,
         )
 
         stats_mapper = self.startProcess(
-            command = "/bin/sh",
-            arguments = ["-c", "while true; do cat /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done"],
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done",
+            ],
             stdouterr="stats_mapper_stdout",
             background=True,
         )
@@ -56,16 +64,15 @@ class PySysTest(EnvironmentC8y):
         cmd = os.path.expanduser(publisher)
 
         pub = self.startProcess(
-            command = cmd,
+            command=cmd,
             # run for one minute
-            arguments=[ "100", "100", "6", "sawmill"],
-            stdouterr="stdout_sawmill"
+            arguments=["100", "100", "6", "sawmill"],
+            stdouterr="stdout_sawmill",
         )
 
     def validate(self):
         super().validate()
         self.log.info("Validate - Do it")
-
 
     def mycleanup(self):
         super().mycleanup()

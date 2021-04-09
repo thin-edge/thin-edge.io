@@ -4,7 +4,8 @@ from pysys.basetest import BaseTest
 
 import os
 import sys
-sys.path.append('environments')
+
+sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 import time
@@ -17,6 +18,7 @@ When we derive from EnvironmentC8y
 When we run the smoketest for REST publishing with defaults a size of 20, 100ms delay
 Then we validate the data from C8y
 """
+
 
 class PySysTest(EnvironmentC8y):
     def setup(self):
@@ -36,23 +38,33 @@ class PySysTest(EnvironmentC8y):
         cmd = os.path.expanduser(script)
 
         sub = self.startPython(
-            arguments=[ cmd,
-                "-m", "REST",
-                "-pub", self.project.exampledir,
-                "-u", self.project.username,
-                "-t", self.project.tennant,
-                "-pass", self.project.c8ypass,
-                "-id", self.project.deviceid,
-                "-o", str(self.timeslot),
-                ],
+            arguments=[
+                cmd,
+                "-m",
+                "REST",
+                "-pub",
+                self.project.exampledir,
+                "-u",
+                self.project.username,
+                "-t",
+                self.project.tennant,
+                "-pass",
+                self.project.c8ypass,
+                "-id",
+                self.project.deviceid,
+                "-o",
+                str(self.timeslot),
+            ],
             stdouterr="stdout",
         )
 
     def validate(self):
         super().validate()
         self.log.info("Validate")
-        self.assertGrep('stdout.out', expr='Data verification PASSED', contains=True)
-        self.assertGrep('stdout.out', expr='Timestamp verification PASSED', contains=True)
+        self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
+        self.assertGrep(
+            "stdout.out", expr="Timestamp verification PASSED", contains=True
+        )
 
     def mycleanup(self):
         super().mycleanup()

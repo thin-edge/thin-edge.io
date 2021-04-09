@@ -3,7 +3,8 @@ from pysys.constants import *
 from pysys.basetest import BaseTest
 
 import sys
-sys.path.append('environments')
+
+sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
@@ -19,8 +20,8 @@ So far just use the EnvironmentC8y nothing else:
 see ../environment/environment_c8y
 """
 
-class PySysTest(EnvironmentC8y):
 
+class PySysTest(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
@@ -33,7 +34,9 @@ class PySysTest(EnvironmentC8y):
     def validate(self):
         super().validate()
         self.log.info("Validate")
-        self.assertGrep("tedge_connect.out", "connection check is successful.", contains=True)
+        self.assertGrep(
+            "tedge_connect.out", "connection check is successful.", contains=True
+        )
         fail = "Warning: Bridge has been configured, but Cumulocity connection check failed."
         self.assertGrep("tedge_connect.out", fail, contains=False)
 

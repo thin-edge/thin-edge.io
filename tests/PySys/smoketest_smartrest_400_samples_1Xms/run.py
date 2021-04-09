@@ -3,7 +3,8 @@ import pysys
 from pysys.basetest import BaseTest
 
 import sys
-sys.path.append('environments')
+
+sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 import time
@@ -20,6 +21,7 @@ X=15ms : Works good
 #X=10ms : We observe dataloss ocationally
 TODO : Further investigation necessary
 """
+
 
 class PySysTest(EnvironmentC8y):
     def setup(self):
@@ -40,25 +42,37 @@ class PySysTest(EnvironmentC8y):
         cmd = os.path.expanduser(script)
 
         sub = self.startPython(
-            arguments=[ cmd,
-                "-m", "REST",
-                "-pub", self.project.exampledir,
-                "-u", self.project.username,
-                "-t", self.project.tennant,
-                "-pass", self.project.c8ypass,
-                "-id", self.project.deviceid,
-                "-o", "35", # burst should take ?ms
-                "-d", "15", # delay in ms
-                "-s", "400", # samples
-                ],
+            arguments=[
+                cmd,
+                "-m",
+                "REST",
+                "-pub",
+                self.project.exampledir,
+                "-u",
+                self.project.username,
+                "-t",
+                self.project.tennant,
+                "-pass",
+                self.project.c8ypass,
+                "-id",
+                self.project.deviceid,
+                "-o",
+                "35",  # burst should take ?ms
+                "-d",
+                "15",  # delay in ms
+                "-s",
+                "400",  # samples
+            ],
             stdouterr="stdout",
         )
 
     def validate(self):
         super().validate()
         self.log.info("Validate")
-        self.assertGrep('stdout.out', expr='Data verification PASSED', contains=True)
-        self.assertGrep('stdout.out', expr='Timestamp verification PASSED', contains=True)
+        self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
+        self.assertGrep(
+            "stdout.out", expr="Timestamp verification PASSED", contains=True
+        )
 
     def mycleanup(self):
         super().mycleanup()

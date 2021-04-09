@@ -3,7 +3,8 @@ import pysys
 from pysys.basetest import BaseTest
 
 import sys
-sys.path.append('environments')
+
+sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
@@ -17,7 +18,6 @@ Then we manually observe the data in C8y
 
 TODO : Add validation procedure
 """
-
 
 
 class PySysTest(EnvironmentC8y):
@@ -34,15 +34,12 @@ class PySysTest(EnvironmentC8y):
         cmd = os.path.expanduser(publisher)
 
         pub = self.startProcess(
-            command = cmd,
-            arguments=[ "100", "100", "5", "flux"],
-            stdouterr="stdout"
+            command=cmd, arguments=["100", "100", "5", "flux"], stdouterr="stdout"
         )
 
     def validate(self):
         super().validate()
         self.log.info("Validate - Do it")
-
 
     def mycleanup(self):
         super().mycleanup()
