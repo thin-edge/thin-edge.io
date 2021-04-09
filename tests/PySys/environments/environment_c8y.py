@@ -31,8 +31,11 @@ class EnvironmentC8y(BaseTest):
             self.log.error("The tedge-mapper service is running")
             self.abort(FAILED)
 
+    def execute(self):
+        self.log.info("EnvironmentC8y Execute")
+
         # Connect the bridge
-        connect = self.startProcess(
+        self.connect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y"],
             stdouterr="tedge_connect",
@@ -61,10 +64,6 @@ class EnvironmentC8y(BaseTest):
         if serv_mapper.exitStatus!=0:
             self.log.error("The tedge-mapper service is not running")
             self.abort(FAILED)
-
-
-    def execute(self):
-        self.log.info("EnvironmentC8y Execute")
 
     def validate(self):
         self.log.info("EnvironmentC8y Validate")
