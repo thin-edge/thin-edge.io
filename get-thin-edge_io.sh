@@ -18,7 +18,7 @@ then
     exit 0
 fi
 
-if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64"]
+if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]
 then
     echo "${BLUE}Installing for architecture $ARCH ${COLORRESET}"
 else
