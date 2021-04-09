@@ -24,6 +24,12 @@
 		<writer classname="pysys.writer.ci.TravisCIWriter"></writer>
 
 		<writer classname="pysys.writer.console.ConsoleSummaryResultsWriter"></writer>
+
+		<writer classname="TextResultsWriter" module="pysys.writer" file="testsummary.log">
+			<property name="outputDir" value="${root}"/>
+		</writer>
+
+
 	</writers>
 
 	<default-file-encodings>

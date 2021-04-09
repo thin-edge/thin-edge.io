@@ -20,6 +20,9 @@ cd $TEBASEDIR
 # Check if clients are installed
 dpkg -s mosquitto-clients
 
+# Install necessary packages
+sudo apt install -y junitparser
+
 # Run all PySys tests
 
 python3 -mvenv ~/env-pysys
@@ -35,5 +38,9 @@ cd tests/PySys/
 pysys.py run --record
 
 #pysys.py run --record -c 100 c8y_restart_bridge
+
+junitparser merge __pysys_junit_xml/* all_tests_junit.xml
+
+junit2html all_tests_junit.xml all_tests_junit.html
 
 deactivate
