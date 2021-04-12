@@ -30,14 +30,16 @@ CMD_PUBLISH_REST = "sudo tedge mqtt pub c8y/s/us 211,%i"
 
 CMD_PUBLISH_JSON = "sawtooth_publisher %s %s 1 flux"
 
-def is_timezone_aware(stamp):#:datetime):
+
+def is_timezone_aware(stamp):  #:datetime):
     # determine if object is timezone aware or naive
     # https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
 
-    if stamp.tzinfo !=  None and stamp.tzinfo.utcoffset(stamp) != None:
+    if stamp.tzinfo != None and stamp.tzinfo.utcoffset(stamp) != None:
         return True
     else:
         return False
+
 
 def act(path_publisher, mode, publish_amount, delay):
     """Act: Publishing values with temperature_publisher"""
@@ -66,8 +68,10 @@ def act(path_publisher, mode, publish_amount, delay):
 
     time.sleep(3)
 
-def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
-    -> Tuple[requests.models.Response, datetime]:
+
+def retrieve_data(
+    user, device_id, password, tenant, verbose, timeslot
+) -> Tuple[requests.models.Response, datetime]:
     """Download via REST"""
 
     time_to = datetime.now(timezone.utc).replace(microsecond=0)
@@ -84,7 +88,12 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
     cloud = "eu-latest.cumulocity.com"
 
     url = f"https://{user}.{cloud}/measurement/measurements"
-    payload = {'source': device_id, 'pageSize':PAGE_SIZE, 'dateFrom':date_from, 'dateTo':date_to}
+    payload = {
+        "source": device_id,
+        "pageSize": PAGE_SIZE,
+        "dateFrom": date_from,
+        "dateTo": date_to,
+    }
     auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
     header = {b"Authorization": b"Basic " + base64.b64encode(auth)}
 
@@ -97,7 +106,7 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
     req = requests.get(url, params=payload, headers=header)
 
     if verbose:
-        print('Requested URL:', req.url)
+        print("Requested URL:", req.url)
 
     if req.status_code != 200:
         print("Http request failed !!!")
@@ -127,8 +136,8 @@ def check_timestamps(timestamps, laststamp):
             # dateutil.parser.isoparse is available in the third-party package dateutil.
             # https://dateutil.readthedocs.io/en/stable/parser.html#dateutil.parser.isoparse
 
-            tstamp=tstamp[:-1]
-            tstamp += '+00:00'
+            tstamp = tstamp[:-1]
+            tstamp += "+00:00"
 
         tstampiso = datetime.fromisoformat(tstamp)
 
@@ -154,6 +163,7 @@ def check_timestamps(timestamps, laststamp):
         return False
 
     return True
+
 
 def assert_values(
     mode, user, device_id, password, tenant, verbose, publish_amount, timeslot
