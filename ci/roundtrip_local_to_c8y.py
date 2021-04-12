@@ -35,10 +35,8 @@ def is_timezone_aware(stamp):#:datetime):
     # https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
 
     if stamp.tzinfo !=  None and stamp.tzinfo.utcoffset(stamp) != None:
-        print("Timezone aware", stamp)
         return True
     else:
-        print("Not timezone aware: Naive", stamp)
         return False
 
 def act(path_publisher, mode, publish_amount, delay):
