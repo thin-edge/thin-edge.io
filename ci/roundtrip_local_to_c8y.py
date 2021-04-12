@@ -32,13 +32,11 @@ CMD_PUBLISH_JSON = "sawtooth_publisher %s %s 1 flux"
 
 
 def is_timezone_aware(stamp):  #:datetime):
-    # determine if object is timezone aware or naive
-    # https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
+    """determine if object is timezone aware or naive
+    See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
+    """
 
-    if stamp.tzinfo != None and stamp.tzinfo.utcoffset(stamp) != None:
-        return True
-    else:
-        return False
+    return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
 def act(path_publisher, mode, publish_amount, delay):
