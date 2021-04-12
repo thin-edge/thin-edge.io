@@ -115,6 +115,8 @@ def check_timestamps(timestamps, laststamp):
 
     failed = False
 
+    warning = 0
+
     for tstamp in timestamps:
         # All timestamps seem to be in UTC time -> will end with 'Z'
         # fromisoformat does not seem to cope with the Z, so we remove it
@@ -127,13 +129,13 @@ def check_timestamps(timestamps, laststamp):
 
         tstampiso = datetime.fromisoformat(tstamp)
 
-        warning = 0
 
         if tstampiso > laststamp:
             laststamp = tstampiso
-        if tstampiso == laststamp:
-            laststamp = tstampiso
+        elif tstampiso == laststamp:
             warning += 1
+            print("Warning", tstampiso, "is equal to", laststamp)
+            laststamp = tstampiso
         else:
             print("Oops", tstampiso, "is smaller than", laststamp)
             failed = True
@@ -147,6 +149,7 @@ def check_timestamps(timestamps, laststamp):
         print("Timestamp verification FAILED")
         sys.exit(1)
 
+    return True
 
 def assert_values(
     mode, user, device_id, password, tenant, verbose, publish_amount, timeslot
