@@ -21,7 +21,8 @@ cd $TEBASEDIR
 dpkg -s mosquitto-clients
 
 # Install necessary packages
-sudo apt install -y junitparser
+# TODO: Not available on buster
+# sudo apt install -y junitparser
 
 # Run all PySys tests
 
@@ -39,8 +40,10 @@ pysys.py run --record
 
 #pysys.py run --record -c 100 c8y_restart_bridge
 
-junitparser merge __pysys_junit_xml/* all_tests_junit.xml
+# TODO: Not available on buster
+#junitparser merge __pysys_junit_xml/* all_tests_junit.xml
 
-junit2html all_tests_junit.xml all_tests_junit.html
+# TODO: Not available on buster
+#junit2html all_tests_junit.xml all_tests_junit.html
 
 deactivate
