@@ -50,12 +50,12 @@ def test_check_timestamps_equal_tz_aware():
     ret = check_timestamps(timestamps, laststamp)
     assert ret == True
 
-#def test_check_timestamps_tz_aware_different_timezone():
-#    timestamps = ['2021-01-01T01:02:00.001+02:00',
-#                  '2021-01-01T01:02:00.002+02:00']
-#    laststamp = datetime(2021, 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-#    ret = check_timestamps(timestamps, laststamp)
-#    assert ret == True
+def test_check_timestamps_tz_aware_different_timezone():
+    timestamps = ['2021-01-01T03:00:00.002+02:00',
+                  '2021-01-01T03:00:00.003+02:00']
+    laststamp = datetime(2021, 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    ret = check_timestamps(timestamps, laststamp)
+    assert ret == True
 
 def test_check_timestamps_too_early():
     timestamps = ['2021-01-01T01:00:00.002Z',
