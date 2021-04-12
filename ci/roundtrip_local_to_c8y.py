@@ -151,7 +151,7 @@ def check_timestamps(timestamps, laststamp):
         print("Timestamp verification PASSED")
     else:
         print("Timestamp verification FAILED")
-        sys.exit(1)
+        return False
 
     return True
 
@@ -225,7 +225,9 @@ def assert_values(
         print("Data verification FAILED")
         sys.exit(1)
 
-    check_timestamps(timestamps, time_from)
+    ret = check_timestamps(timestamps, time_from)
+    if not ret:
+        sys.exit(1)
 
 
 def main():
