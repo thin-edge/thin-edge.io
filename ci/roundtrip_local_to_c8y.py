@@ -15,7 +15,7 @@ Call example:
 
 import argparse
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 import time
@@ -72,29 +72,22 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
     -> Tuple[requests.models.Response, datetime]:
     """Download via REST"""
 
-    time_to = datetime.utcnow().replace(microsecond=0)
+    time_to = datetime.now(timezone.utc).replace(microsecond=0)
     time_from = time_to - timedelta(seconds=timeslot)
 
-    date_from = time_from.isoformat(sep="T") + "Z"
-    date_to = time_to.isoformat(sep="T") + "Z"
+    assert is_timezone_aware(time_from)
+
+    date_from = time_from.isoformat(sep="T")
+    date_to = time_to.isoformat(sep="T")
 
     print(f"Gathering values from {time_from} to {time_to}")
-
-    # example date format:
-    # date_from = '2021-02-15T13:00:00Z'
-    # date_to = '2021-02-15T14:00:00Z'
 
     # TODO Add command line parameter: cloud = 'latest.stage.c8y.io'
     cloud = "eu-latest.cumulocity.com"
 
-    url = (
-        f"https://{user}.{cloud}/measurement/measurements?"
-        f"source={device_id}&pageSize={PAGE_SIZE}&"
-        f"dateFrom={date_from}&dateTo={date_to}"
-    )
-
+    url = f"https://{user}.{cloud}/measurement/measurements"
+    payload = {'source': device_id, 'pageSize':PAGE_SIZE, 'dateFrom':date_from, 'dateTo':date_to}
     auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
-
     header = {b"Authorization": b"Basic " + base64.b64encode(auth)}
 
     if verbose:
@@ -103,7 +96,10 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
     # TODO Add authorisation style as command line parameter
     # req = requests.get(url, auth=(user, password))
 
-    req = requests.get(url, headers=header)
+    req = requests.get(url, params=payload, headers=header)
+
+    if verbose:
+        print('Requested URL:', req.url)
 
     if req.status_code != 200:
         print("Http request failed !!!")
