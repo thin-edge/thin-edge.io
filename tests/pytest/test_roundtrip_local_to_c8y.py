@@ -9,6 +9,16 @@ sys.path.append("ci")
 from roundtrip_local_to_c8y import check_timestamps, is_timezone_aware
 
 
+def test_check_timestamps_increasing_ms():
+    timestamps = ['2021-01-01T01:00:00.001+00:00',
+                  '2021-01-01T01:00:00.002+00:00',
+                  '2021-01-01T01:00:00.003+00:00',
+                  '2021-01-01T01:00:00.004+00:00',
+                  '2021-01-01T01:00:00.005+00:00']
+    laststamp = datetime(2021, 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    ret = check_timestamps(timestamps, laststamp)
+    assert ret == True
+
 def test_is_timezone_aware():
     stamp = datetime.fromisoformat('2021-01-01T01:00:00.001+00:00')
     assert is_timezone_aware(stamp) == True
