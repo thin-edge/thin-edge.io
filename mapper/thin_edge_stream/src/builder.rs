@@ -28,15 +28,15 @@ pub trait GroupedMeasurementCollector {
 }
 
 pub trait MeasurementBuilder {
-    fn build<C,E,D>(&self, collector: C) -> Result<D,E>
-        where C : MeasurementCollector<Error = E, Data = D>
-    ;
+    fn build<C, E, D>(&self, collector: C) -> Result<D, E>
+    where
+        C: MeasurementCollector<Error = E, Data = D>;
 }
 
 pub trait GroupedMeasurementBuilder {
-    fn build<C,E,D>(&self, collector: C) -> Result<D,E>
-        where C : GroupedMeasurementCollector<Error = E, Data = D>
-    ;
+    fn build<C, E, D>(&self, collector: C) -> Result<D, E>
+    where
+        C: GroupedMeasurementCollector<Error = E, Data = D>;
 }
 
 #[derive(thiserror::Error, Debug)]

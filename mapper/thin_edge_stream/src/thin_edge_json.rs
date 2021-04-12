@@ -1,7 +1,7 @@
-use chrono::{DateTime, FixedOffset};
-use crate::builder::GroupedMeasurementCollector;
 use crate::builder::GroupedMeasurementBuilder;
+use crate::builder::GroupedMeasurementCollector;
 use crate::builder::MeasurementCollectorError;
+use chrono::{DateTime, FixedOffset};
 
 pub struct ThinEdgeJson {
     pub timestamp: DateTime<FixedOffset>,
@@ -24,8 +24,9 @@ pub struct MultiValueMeasurement {
 }
 
 impl GroupedMeasurementBuilder for ThinEdgeJson {
-    fn build<C,E,D>(&self, mut collector: C) -> Result<D,E>
-        where C : GroupedMeasurementCollector<Error = E, Data = D>
+    fn build<C, E, D>(&self, mut collector: C) -> Result<D, E>
+    where
+        C: GroupedMeasurementCollector<Error = E, Data = D>,
     {
         collector.start()?;
         collector.timestamp(self.timestamp)?;
@@ -34,7 +35,7 @@ impl GroupedMeasurementBuilder for ThinEdgeJson {
             match value {
                 ThinEdgeValue::Single(ref measurement) => {
                     collector.measurement(&measurement.name, measurement.value)?;
-                },
+                }
                 ThinEdgeValue::Multi(group) => {
                     collector.start_group(&group.name)?;
                     for sub_measurement in group.values.iter() {
@@ -56,8 +57,11 @@ pub struct ThinEdgeJsonBuilder {
 
 impl ThinEdgeJsonBuilder {
     pub fn new(timestamp: DateTime<FixedOffset>) -> ThinEdgeJsonBuilder {
-        let data = ThinEdgeJson { timestamp, values: vec![] };
-        ThinEdgeJsonBuilder { data , group: None }
+        let data = ThinEdgeJson {
+            timestamp,
+            values: vec![],
+        };
+        ThinEdgeJsonBuilder { data, group: None }
     }
 }
 
@@ -97,7 +101,10 @@ impl GroupedMeasurementCollector for ThinEdgeJsonBuilder {
         match self.group {
             Some(_) => Err(MeasurementCollectorError::UnexpectedStartOfGroup.into()),
             None => {
-                let group = MultiValueMeasurement { name: name.to_owned(), values: vec![] };
+                let group = MultiValueMeasurement {
+                    name: name.to_owned(),
+                    values: vec![],
+                };
                 self.group = Some(group);
                 Ok(())
             }

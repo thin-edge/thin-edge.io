@@ -1,7 +1,7 @@
-use std::io::Write;
-use chrono::{DateTime, FixedOffset};
 use crate::builder::GroupedMeasurementCollector;
 use crate::builder::MeasurementCollectorError;
+use chrono::{DateTime, FixedOffset};
+use std::io::Write;
 
 /// Serialize a series of measurements into a ThinEdgeJson byte-string.
 ///
@@ -58,7 +58,8 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
         if self.needs_separator {
             self.buffer.push(b',');
         }
-        self.buffer.write_fmt(format_args!("\"time\":\"{}\"", value.to_rfc3339()))?;
+        self.buffer
+            .write_fmt(format_args!("\"time\":\"{}\"", value.to_rfc3339()))?;
         self.needs_separator = true;
         Ok(())
     }
@@ -67,7 +68,8 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
         if self.needs_separator {
             self.buffer.push(b',');
         }
-        self.buffer.write_fmt(format_args!("\"{}\":{}", name, value))?;
+        self.buffer
+            .write_fmt(format_args!("\"{}\":{}", name, value))?;
         self.needs_separator = true;
         Ok(())
     }
@@ -86,7 +88,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
     }
 
     fn end_group(&mut self) -> Result<(), Self::Error> {
-        if ! self.is_within_group {
+        if !self.is_within_group {
             return Err(MeasurementCollectorError::UnexpectedEndOfGroup.into());
         }
 

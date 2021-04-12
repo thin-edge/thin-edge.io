@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use chrono::{DateTime, FixedOffset};
 use crate::builder::GroupedMeasurementCollector;
 use crate::builder::MeasurementCollector;
+use chrono::{DateTime, FixedOffset};
+use std::collections::HashMap;
 
 pub struct ThinEdgeJsonMap {
     pub timestamp: DateTime<FixedOffset>,
-    pub values: HashMap<String,Measurement>,
+    pub values: HashMap<String, Measurement>,
 }
 
 pub enum Measurement {
     Single(f64),
-    Multi(HashMap<String,f64>),
+    Multi(HashMap<String, f64>),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -22,15 +22,17 @@ pub enum ThinEdgeJsonMapError {
     DuplicatedSubMeasurement(String, String),
 }
 
-
 pub struct ThinEdgeJsonMapBuilder {
     data: ThinEdgeJsonMap,
 }
 
 impl ThinEdgeJsonMapBuilder {
     pub fn new(timestamp: DateTime<FixedOffset>) -> ThinEdgeJsonMapBuilder {
-        let data = ThinEdgeJsonMap { timestamp, values: HashMap::new() };
-        ThinEdgeJsonMapBuilder { data  }
+        let data = ThinEdgeJsonMap {
+            timestamp,
+            values: HashMap::new(),
+        };
+        ThinEdgeJsonMapBuilder { data }
     }
 }
 
@@ -70,14 +72,12 @@ impl GroupedMeasurementCollector for ThinEdgeJsonMapBuilder {
                 let group = Measurement::Multi(HashMap::new());
                 self.data.values.insert(key, group);
                 Ok(())
-            },
-            Some (Measurement::Multi(_)) => {
+            }
+            Some(Measurement::Multi(_)) => {
                 // group already created
                 Ok(())
             }
-            Some (Measurement::Single(_)) => {
-                Err(ThinEdgeJsonMapError::DuplicatedMeasurement(key))
-            }
+            Some(Measurement::Single(_)) => Err(ThinEdgeJsonMapError::DuplicatedMeasurement(key)),
         }
     }
 
@@ -117,17 +117,17 @@ impl MeasurementCollector for ThinEdgeJsonMapBuilder {
     fn sub_measurement(&mut self, group: &str, name: &str, value: f64) -> Result<(), Self::Error> {
         let key = group.to_owned();
 
-        if ! self.data.values.contains_key(&key) {
-            self.data.values.insert(key.clone(), Measurement::Multi(HashMap::new()));
+        if !self.data.values.contains_key(&key) {
+            self.data
+                .values
+                .insert(key.clone(), Measurement::Multi(HashMap::new()));
         }
 
         let group = match self.data.values.get_mut(&key) {
-            Some (Measurement::Multi(group)) => {
-                group
-            },
+            Some(Measurement::Multi(group)) => group,
             _ => {
                 return Err(ThinEdgeJsonMapError::DuplicatedMeasurement(key));
-            },
+            }
         };
 
         let sub_key = name.to_owned();
@@ -137,6 +137,5 @@ impl MeasurementCollector for ThinEdgeJsonMapBuilder {
 
         group.insert(sub_key, value);
         Ok(())
-
     }
 }
