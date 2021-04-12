@@ -102,7 +102,7 @@ impl Command for MqttCmd {
                 topic,
                 qos,
                 no_topic,
-            } => subscribe(topic, *qos, no_topic)?,
+            } => subscribe(topic, *qos, *no_topic)?,
         }
         Ok(())
     }
@@ -155,7 +155,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
 }
 
 #[tokio::main]
-async fn subscribe(topic: &str, qos: QoS, no_topic: &bool) -> Result<(), MqttError> {
+async fn subscribe(topic: &str, qos: QoS, no_topic: bool) -> Result<(), MqttError> {
     let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
     let mqtt = Client::connect(client_id.as_str(), &config).await?;
@@ -198,8 +198,8 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
     Ok(())
 }
 
-async fn handle_message(message: Message, no_topic: &bool) -> Result<(), MqttError> {
-    if *no_topic {
+async fn handle_message(message: Message, no_topic: bool) -> Result<(), MqttError> {
+    if no_topic {
         let s = format!("{}", String::from_utf8(message.payload)?);
         async_println(&s).await?;
     } else {
