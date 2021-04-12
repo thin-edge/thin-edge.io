@@ -8,7 +8,7 @@ To create new certificate you can use [`tedge cert create`](../references/tedge-
 sudo tedge cert create --device-id alpha
 ```
 
-> Note: `tegde cert` requires `sudo` privilege. This command provides no output on success.
+> Note: `tedge cert` requires `sudo` privilege. This command provides no output on success.
 
 [`sudo tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
 To use a custom location, refer to [`tedge config`](../references/tedge-config.md).
@@ -32,7 +32,7 @@ Error: failed to create a test certificate for the device alpha.
 Caused by:
     A certificate already exists and would be overwritten.
             Existing file: "/etc/tedge/device-certs/tedge-certificate.pem"
-            Run `tegde cert remove` first to generate a new certificate.
+            Run `tedge cert remove` first to generate a new certificate.
 ```
 
 > Warning! Removing a certificate can break the bridge and more seriously delete a certificate that was a CA-signed certificate.
@@ -40,7 +40,7 @@ Caused by:
 Follow the instruction to remove the existing certificate and issue [`tedge cert remove`](../references/tedge-cert.md):
 
 ```shell
-sudo tegde cert remove
+sudo tedge cert remove
 ```
 
 and try [`tedge cert create`](../references/tedge-cert.md) once again.
