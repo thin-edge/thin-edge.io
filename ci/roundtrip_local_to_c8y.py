@@ -118,18 +118,17 @@ def check_timestamps(timestamps, laststamp):
     assert is_timezone_aware(laststamp)
 
     for tstamp in timestamps:
-        # All timestamps seem to be in UTC time -> will end with 'Z'
-        # fromisoformat does not seem to cope with the Z, so we remove it
-        #
-        # This does not support parsing arbitrary ISO 8601 strings - it is
-        # only intended as the inverse operation of datetime.isoformat().
-        #
-        # See here: dateutil.parser.isoparse is available in the third-party package dateutil.
-        # https://dateutil.readthedocs.io/en/stable/parser.html#dateutil.parser.isoparse
 
         if tstamp.endswith("Z"):
-            print("Error: Timestamp verification: Z is not expected")
-            sys.exit(1)
+            # fromisoformat does not seem to cope with the Z, so we remove it
+            # Workaround: remove the Z and make the timestamp UTC aware
+            #
+            # Alternativelyuse:
+            # dateutil.parser.isoparse is available in the third-party package dateutil.
+            # https://dateutil.readthedocs.io/en/stable/parser.html#dateutil.parser.isoparse
+
+            tstamp=tstamp[:-1]
+            tstamp += '+00:00'
 
         tstampiso = datetime.fromisoformat(tstamp)
 
