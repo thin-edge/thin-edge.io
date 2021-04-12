@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 import os
 import sys
 import time
-
+from typing import Tuple
 import requests
 
 # Warning: the list begins with the earliest one
@@ -68,8 +68,8 @@ def act(path_publisher, mode, publish_amount, delay):
 
     time.sleep(3)
 
-
-def retrieve_data(user, device_id, password, tenant, verbose, timeslot):
+def retrieve_data(user, device_id, password, tenant, verbose, timeslot) \
+    -> Tuple[requests.models.Response, datetime]:
     """Download via REST"""
 
     time_to = datetime.utcnow().replace(microsecond=0)
