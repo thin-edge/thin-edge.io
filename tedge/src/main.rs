@@ -12,7 +12,7 @@ mod mqtt;
 mod services;
 mod utils;
 
-use command::{BuildCommand, BuildCommandContext, ExecutionContext};
+use command::{BuildCommand, BuildContext, ExecutionContext};
 
 fn main() -> anyhow::Result<()> {
     let context = ExecutionContext::new();
@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
 
-    let build_context = BuildCommandContext {
+    let build_context = BuildContext {
         config,
         config_repository,
     };

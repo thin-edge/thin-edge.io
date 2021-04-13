@@ -5,7 +5,7 @@ use crate::utils::users;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
 use crate::{
-    command::{BuildCommand, BuildCommandContext, Command, ExecutionContext},
+    command::{BuildCommand, BuildContext, Command, ExecutionContext},
     utils,
 };
 use certificate::{KeyCertPair, NewCertificateConfig, PemCertificate};
@@ -78,7 +78,7 @@ pub enum UploadCertOpt {
 }
 
 impl BuildCommand for UploadCertOpt {
-    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.config;
 
         match self {
@@ -311,7 +311,7 @@ impl CertError {
 }
 
 impl BuildCommand for TEdgeCertOpt {
-    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             TEdgeCertOpt::Create { id } => {
                 let cmd = CreateCertCmd {

@@ -40,7 +40,7 @@ pub enum ConfigCmd {
 }
 
 impl BuildCommand for ConfigCmd {
-    fn build_command(self, context: BuildCommandContext) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.config_repository.load()?;
         let config_repository = context.config_repository;
 

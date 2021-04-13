@@ -1,5 +1,5 @@
 use crate::cli::connect::{az::Azure, c8y::C8y};
-use crate::command::{BuildCommand, BuildCommandContext, Command, ExecutionContext};
+use crate::command::{BuildCommand, BuildContext, Command, ExecutionContext};
 use crate::config::{ConfigError, TEdgeConfig};
 use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
@@ -43,7 +43,7 @@ pub enum TEdgeConnectOpt {
 impl BuildCommand for TEdgeConnectOpt {
     fn build_command(
         self,
-        context: BuildCommandContext,
+        context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
             TEdgeConnectOpt::C8y => BridgeCommand {
