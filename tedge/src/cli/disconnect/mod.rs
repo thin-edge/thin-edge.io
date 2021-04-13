@@ -1,7 +1,7 @@
 use crate::cli::connect::{
     az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME, TEDGE_BRIDGE_CONF_DIR_PATH,
 };
-use crate::command::{BuildCommand, Command, ExecutionContext};
+use crate::command::{BuildCommand, BuildContext, Command, ExecutionContext};
 use crate::config::ConfigError;
 use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
@@ -22,7 +22,7 @@ pub enum TedgeDisconnectBridgeOpt {
 impl BuildCommand for TedgeDisconnectBridgeOpt {
     fn build_command(
         self,
-        _tedge_config: crate::config::TEdgeConfig,
+        _context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
             TedgeDisconnectBridgeOpt::C8y => DisconnectBridge {
