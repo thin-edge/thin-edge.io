@@ -1,6 +1,6 @@
 use crate::cli::mqtt::{publish::MqttPublishCommand, subscribe::MqttSubscribeCommand, MqttError};
-use crate::command::{BuildCommand, Command};
-use mqtt_client::QoS;
+use crate::command::{BuildCommand, BuildContext, Command};
+use mqtt_client::{QoS, Topic};
 use std::time::Duration;
 use structopt::StructOpt;
 
@@ -32,14 +32,14 @@ pub enum TEdgeMqttCli {
         qos: QoS,
         /// Avoid printing the message topics on the console
         #[structopt(long = "no-topic")]
-        no_topic: bool,
+        hide_topic: bool,
     },
 }
 
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(
         self,
-        _config: crate::config::TEdgeConfig,
+        _context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = {
             match self {
@@ -48,7 +48,7 @@ impl BuildCommand for TEdgeMqttCli {
                     message,
                     qos,
                 } => MqttPublishCommand {
-                    topic,
+                    topic: Topic::new(topic.as_str())?,
                     message,
                     qos,
                     mqtt_config: mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT),
@@ -59,11 +59,11 @@ impl BuildCommand for TEdgeMqttCli {
                 TEdgeMqttCli::Sub {
                     topic,
                     qos,
-                    no_topic,
+                    hide_topic,
                 } => MqttSubscribeCommand {
                     topic,
                     qos,
-                    no_topic,
+                    hide_topic,
                     mqtt_config: mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT),
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                 }

@@ -8,7 +8,7 @@ use tokio::{io::AsyncWriteExt, select};
 pub struct MqttSubscribeCommand {
     pub topic: String,
     pub qos: QoS,
-    pub no_topic: bool,
+    pub hide_topic: bool,
     pub mqtt_config: mqtt_client::Config,
     pub client_id: String,
 }
@@ -52,7 +52,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
 
             maybe_message = messages.next().fuse() => {
                 match maybe_message {
-                    Some(message) =>  handle_message(message, cmd.no_topic).await?,
+                    Some(message) =>  handle_message(message, cmd.hide_topic).await?,
                     None => break
                  }
             }
@@ -69,8 +69,8 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
     Ok(())
 }
 
-async fn handle_message(message: Message, no_topic: bool) -> Result<(), MqttError> {
-    if no_topic {
+async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
+    if hide_topic {
         let s = String::from_utf8(message.payload)?.to_string();
         async_println(&s).await?;
     } else {

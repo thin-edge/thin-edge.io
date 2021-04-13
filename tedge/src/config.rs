@@ -273,6 +273,9 @@ pub enum ConfigError {
 
     #[error(transparent)]
     TEdgeConfigSettingError(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    MqttClientError(#[from] mqtt_client::Error),
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {

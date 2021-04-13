@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::select;
 
 pub struct MqttPublishCommand {
-    pub topic: String,
+    pub topic: Topic,
     pub message: String,
     pub qos: QoS,
     pub mqtt_config: mqtt_client::Config,
@@ -18,7 +18,7 @@ impl Command for MqttPublishCommand {
     fn description(&self) -> String {
         format!(
             "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",
-            self.message, self.topic, self.qos
+            self.message, self.topic.name, self.qos
         )
     }
 
@@ -35,9 +35,7 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
         .connect(cmd.client_id.as_str())
         .await?;
 
-    let tpc = Topic::new(cmd.topic.as_str())?;
-    let message = Message::new(&tpc, cmd.message.as_str()).qos(cmd.qos);
-
+    let message = Message::new(&cmd.topic, cmd.message.as_str()).qos(cmd.qos);
     let res = try_publish(&mut mqtt, message).await;
 
     // In case we don't have a connection, disconnect might block until there is a connection,
