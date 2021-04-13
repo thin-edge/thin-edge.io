@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
+const TEDGE_CONFIG_FILE_TMP: &str = "tedge.toml.tmp";
 
 /// Information about where `tedge.toml` is located.
 ///
@@ -47,6 +48,10 @@ impl TEdgeConfigLocation {
     }
     pub fn tedge_config_file_path(&self) -> &Path {
         &self.tedge_config_file_path
+    }
+
+    pub fn temporary_tedge_config_file_path(&self) -> impl AsRef<Path> {
+        self.tedge_config_root_path.join(TEDGE_CONFIG_FILE_TMP)
     }
 }
 
