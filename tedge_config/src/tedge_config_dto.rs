@@ -4,7 +4,7 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct TEdgeConfigDto {
     /// Captures the device specific configurations
     #[serde(default)]
@@ -20,7 +20,7 @@ pub(crate) struct TEdgeConfigDto {
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct DeviceConfigDto {
     /// The unique id of the device
     pub(crate) id: Option<String>,
@@ -37,7 +37,7 @@ pub(crate) struct DeviceConfigDto {
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct CumulocityConfigDto {
     /// Preserves the current status of the connection
     pub(crate) connect: Option<String>,
@@ -51,7 +51,7 @@ pub(crate) struct CumulocityConfigDto {
 }
 
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,

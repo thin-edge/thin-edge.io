@@ -5,7 +5,7 @@ use std::convert::{TryFrom, TryInto};
 /// This configuration is a wrapper over the device specific configurations
 /// as well as the IoT cloud provider specific configurations.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
     pub(crate) config_location: TEdgeConfigLocation,

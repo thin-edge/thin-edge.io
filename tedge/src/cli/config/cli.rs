@@ -53,13 +53,11 @@ impl BuildCommand for ConfigCmd {
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
                 config_key: key,
                 value,
-                config,
                 config_repository,
             }
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
                 config_key: key,
-                config,
                 config_repository,
             }
             .into_boxed()),
