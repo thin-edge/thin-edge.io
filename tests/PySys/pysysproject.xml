@@ -10,7 +10,6 @@
     <property name="tennant" value="${env.C8YTENANT}" />
     <property name="deviceid" value="${env.C8YDEVICEID}" />
     <property name="device" value="${env.C8YDEVICE}" />
-    <property name="timezone" value="${env.TIMEZONE}" />
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
 			<property name="destDir" value="__pysys_output_archives/"/>

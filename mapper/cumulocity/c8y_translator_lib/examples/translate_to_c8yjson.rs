@@ -47,7 +47,7 @@ fn multi_value_translation() {
 
 fn thin_edge_translation_with_type_and_time_stamp() {
     let single_value_thin_edge_json_with_type_and_time = r#"   {
-     "time" : "2013-06-22T17:03:14.000+02:00",
+     "time" : "2013-06-22T17:03:14.100+02:00",
      "temperature": 23,
      "pressure": 220
     }"#;
