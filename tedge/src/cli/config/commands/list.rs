@@ -40,7 +40,7 @@ fn print_config_list(
             Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
                 keys_without_values.push(config_key.key.into());
             }
-            Err(err) => Err(err)?,
+            Err(err) => return Err(err.into()),
         }
     }
     if all && !keys_without_values.is_empty() {

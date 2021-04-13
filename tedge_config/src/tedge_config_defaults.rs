@@ -46,7 +46,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
                 .join("tedge-private-key.pem")
                 .into(),
             default_azure_root_cert_path: system_cert_path.clone().into(),
-            default_c8y_root_cert_path: system_cert_path.clone().into(),
+            default_c8y_root_cert_path: system_cert_path.into(),
         }
     }
 }

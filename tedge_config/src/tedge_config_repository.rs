@@ -37,7 +37,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
             // XXX: Correctly assign permissions
         }
 
-        match file.persist(self.config_location.tedge_config_file_path().clone()) {
+        match file.persist(self.config_location.tedge_config_file_path()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
         }
@@ -80,7 +80,7 @@ impl TEdgeConfigRepository {
     }
 
     fn read_file_or_default(&self, path: PathBuf) -> Result<TEdgeConfig, TEdgeConfigError> {
-        match self.read_file(path.clone()) {
+        match self.read_file(path) {
             Ok(file) => Ok(file),
             Err(TEdgeConfigError::ConfigFileNotFound(..)) => {
                 self.make_tedge_config(TEdgeConfigDto::default())
