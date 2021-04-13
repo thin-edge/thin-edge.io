@@ -51,7 +51,7 @@ class PySysTest(EnvironmentC8y):
                 "-u",
                 self.project.username,
                 "-t",
-                self.project.tennant,
+                self.project.tenant,
                 "-pass",
                 self.project.c8ypass,
                 "-id",
