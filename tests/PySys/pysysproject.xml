@@ -7,7 +7,7 @@
     <property name="exampledir" value="${env.EXAMPLEDIR}" />
     <property name="username" value="${env.C8YUSERNAME}" />
     <property name="c8ypass" value="${env.C8YPASS}" />
-    <property name="tennant" value="${env.C8YTENANT}" />
+    <property name="tenant" value="${env.C8YTENANT}" />
     <property name="deviceid" value="${env.C8YDEVICEID}" />
     <property name="device" value="${env.C8YDEVICE}" />
 	<writers>
