@@ -11,6 +11,7 @@ When we call tedge -h -V
 Then we find the string USAGE: in the output of stderr
 
 Note: This should probably return a non zero exit status and complain
+See also: https://cumulocity.atlassian.net/browse/CIT-318
 """
 
 
