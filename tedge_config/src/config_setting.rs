@@ -42,7 +42,7 @@ pub trait ConfigSettingAccessorStringExt<T: ConfigSetting>: ConfigSettingAccesso
     }
 
     /// Update a configuration setting from a String value
-    fn update_string(&mut self, _setting: T, _value: String) -> ConfigSettingResult<()>;
+    fn update_string(&mut self, setting: T, value: String) -> ConfigSettingResult<()>;
 }
 
 pub type ConfigSettingResult<T> = Result<T, ConfigSettingError>;
