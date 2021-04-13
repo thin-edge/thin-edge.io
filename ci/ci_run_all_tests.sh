@@ -26,8 +26,7 @@ dpkg -s mosquitto-clients
 
 # Run all PySys tests
 
-python3 -mvenv ~/env-pysys
-
+python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 
 pip3 install -r tests/requirements.txt

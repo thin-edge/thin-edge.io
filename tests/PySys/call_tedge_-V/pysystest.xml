@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title></title>
+	<title>Validate command line option -V</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
