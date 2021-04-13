@@ -1,159 +1,91 @@
-use crate::models::FilePath;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
 
-/// Information about where `tedge.toml` is located and the defaults that are based
-/// on that location.
+/// Information about where `tedge.toml` is located.
 ///
 /// Broadly speaking, we distinguish two different locations:
 ///
-/// - System-wide locations under `/etc/tedge`
+/// - System-wide locations under `/etc/tedge` or `/usr/local/etc/tedge`.
 /// - User-local locations under `$HOME/.tedge`
 ///
-/// We DO NOT base the defaults on the currently executing user. Instead, we base
-/// the defaults on the location of the `tedge.toml` file. If it is located in
-/// `/etc`, regardless of the executing user, we use defaults that use system-wide
-/// locations (e.g. `/etc/ssl/certs`). Whereas if `tedge.toml` is located in a users
-/// home directory, we base the defaults on locations within the users home directory.
-///
-/// This allows run `sudo tedge -c '$HOME/.tedge/tedge.toml ...` where the defaults are picked up
-/// correctly.
-///
-/// The choice, where to find `tedge.toml` on the other hand is based on the executing user AND the
-/// env `$HOME`.  But once we have found `tedge.toml`, we never again have to care about the
-/// executing user (except when `chown`ing files...).
-///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TEdgeConfigLocation {
-    /// Full path to `tedge.toml`.
-    pub tedge_config_path: PathBuf,
+    /// Root directory where `tedge.toml` and other tedge related configuration files are located.
+    pub tedge_config_root_path: PathBuf,
 
-    /// Directory where `tedge.toml` is located.
-    pub tedge_path: PathBuf,
-
-    /// Default device cert path
-    pub default_device_cert_path: FilePath,
-
-    /// Default device key path
-    pub default_device_key_path: FilePath,
-
-    /// Default path for azure root certificates
-    pub default_azure_root_cert_path: FilePath,
-
-    /// Default path for c8y root certificates
-    pub default_c8y_root_cert_path: FilePath,
+    /// Full path to the `tedge.toml` file.
+    pub tedge_config_file_path: PathBuf,
 }
 
 impl TEdgeConfigLocation {
-    /// `tedge.toml` is located in `/etc/tedge`. All defaults are based on system locations.
+    pub fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
+        Self {
+            tedge_config_root_path: tedge_config_root_path.as_ref().to_path_buf(),
+            tedge_config_file_path: tedge_config_root_path.as_ref().join(TEDGE_CONFIG_FILE),
+        }
+    }
+
+    /// `tedge.toml` is located in `/etc/tedge`.
     pub fn from_default_system_location() -> Self {
-        Self::from_system_location(DEFAULT_ETC_PATH)
+        Self::from_custom_root(Path::new(DEFAULT_ETC_PATH).join("tedge"))
     }
 
-    pub fn tedge_path(&self) -> &Path {
-        &self.tedge_path
+    /// `tedge.toml` is located in `${etc_path}/tedge`.
+    pub fn from_custom_etc_location(custom_etc_path: impl AsRef<Path>) -> Self {
+        Self::from_custom_root(custom_etc_path.as_ref().join("tedge"))
     }
 
-    /// `tedge.toml` is located in `${etc_path}/tedge`. All defaults are based on system locations.
-    pub fn from_system_location(etc_path: impl AsRef<Path>) -> Self {
-        let etc_path = etc_path.as_ref();
-        let tedge_path = etc_path.join("tedge");
-        Self {
-            tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
-            tedge_path: tedge_path.clone(),
-            default_device_cert_path: tedge_path
-                .join("device-certs")
-                .join("tedge-certificate.pem")
-                .into(),
-            default_device_key_path: tedge_path
-                .join("device-certs")
-                .join("tedge-private-key.pem")
-                .into(),
-            default_azure_root_cert_path: etc_path.join("ssl").join("certs").into(),
-            default_c8y_root_cert_path: etc_path.join("ssl").join("certs").into(),
-        }
-    }
-
-    /// `tedge.toml` is located in `$HOME/.tedge/tedge.toml`. All defaults are relative to the
-    /// `$HOME/.tedge` directory.
+    /// `tedge.toml` is located in `${home_path}/.tedge`.
     pub fn from_users_home_location(home_path: impl AsRef<Path>) -> Self {
-        let etc_path = Path::new(DEFAULT_ETC_PATH);
-        let tedge_path = home_path.as_ref().join(".tedge");
-        Self {
-            tedge_config_path: tedge_path.join(TEDGE_CONFIG_FILE),
-            tedge_path: tedge_path.clone(),
-            default_device_cert_path: tedge_path
-                .join("device-certs")
-                .join("tedge-certificate.pem")
-                .into(),
-            default_device_key_path: tedge_path
-                .join("device-certs")
-                .join("tedge-private-key.pem")
-                .into(),
-            default_azure_root_cert_path: etc_path.join("ssl").join("certs").into(),
-            default_c8y_root_cert_path: etc_path.join("ssl").join("certs").into(),
-        }
+        Self::from_custom_root(home_path.as_ref().join(".tedge"))
     }
+
+    pub fn tedge_config_root_path(&self) -> &Path {
+        &self.tedge_config_root_path
+    }
+    pub fn tedge_config_file_path(&self) -> &Path {
+        &self.tedge_config_file_path
+    }
+}
+
+#[test]
+fn test_from_custom_root() {
+    let config_location = TEdgeConfigLocation::from_custom_root("/opt/etc/tedge");
+    assert_eq!(
+        config_location.tedge_config_root_path,
+        PathBuf::from("/opt/etc/tedge")
+    );
+    assert_eq!(
+        config_location.tedge_config_file_path,
+        PathBuf::from("/opt/etc/tedge/tedge.toml")
+    );
 }
 
 #[test]
 fn test_from_default_system_location() {
     let config_location = TEdgeConfigLocation::from_default_system_location();
     assert_eq!(
-        config_location.tedge_config_path,
+        config_location.tedge_config_root_path,
+        PathBuf::from("/etc/tedge")
+    );
+    assert_eq!(
+        config_location.tedge_config_file_path,
         PathBuf::from("/etc/tedge/tedge.toml")
-    );
-    assert_eq!(config_location.tedge_path(), PathBuf::from("/etc/tedge"));
-    assert_eq!(
-        config_location.default_device_cert_path,
-        FilePath::from("/etc/tedge/device-certs/tedge-certificate.pem")
-    );
-    assert_eq!(
-        config_location.default_device_key_path,
-        FilePath::from("/etc/tedge/device-certs/tedge-private-key.pem")
-    );
-    assert_eq!(
-        config_location.default_azure_root_cert_path,
-        FilePath::from("/etc/ssl/certs")
-    );
-    assert_eq!(
-        config_location.default_c8y_root_cert_path,
-        FilePath::from("/etc/ssl/certs")
     );
 }
 
 #[test]
-fn test_from_system_location() {
-    // "/usr/local/etc" is often used for installed services on FreeBSD
-    let config_location = TEdgeConfigLocation::from_system_location("/usr/local/etc");
+fn test_from_custom_etc_location() {
+    let config_location = TEdgeConfigLocation::from_custom_etc_location("/usr/local/etc");
     assert_eq!(
-        config_location.tedge_config_path,
-        PathBuf::from("/usr/local/etc/tedge/tedge.toml")
-    );
-    assert_eq!(
-        config_location.tedge_path(),
+        config_location.tedge_config_root_path,
         PathBuf::from("/usr/local/etc/tedge")
     );
-
     assert_eq!(
-        config_location.default_device_cert_path,
-        FilePath::from("/usr/local/etc/tedge/device-certs/tedge-certificate.pem")
-    );
-    assert_eq!(
-        config_location.default_device_key_path,
-        FilePath::from("/usr/local/etc/tedge/device-certs/tedge-private-key.pem")
-    );
-    // XXX: This should actually be "/etc/ssl/certs".
-    assert_eq!(
-        config_location.default_azure_root_cert_path,
-        FilePath::from("/usr/local/etc/ssl/certs")
-    );
-    // XXX: This should actually be "/etc/ssl/certs".
-    assert_eq!(
-        config_location.default_c8y_root_cert_path,
-        FilePath::from("/usr/local/etc/ssl/certs")
+        config_location.tedge_config_file_path,
+        PathBuf::from("/usr/local/etc/tedge/tedge.toml")
     );
 }
 
@@ -161,27 +93,11 @@ fn test_from_system_location() {
 fn test_from_users_home_location() {
     let config_location = TEdgeConfigLocation::from_users_home_location("/home/user");
     assert_eq!(
-        config_location.tedge_config_path,
-        PathBuf::from("/home/user/.tedge/tedge.toml")
-    );
-    assert_eq!(
-        config_location.tedge_path(),
+        config_location.tedge_config_root_path,
         PathBuf::from("/home/user/.tedge")
     );
     assert_eq!(
-        config_location.default_device_cert_path,
-        FilePath::from("/home/user/.tedge/device-certs/tedge-certificate.pem")
-    );
-    assert_eq!(
-        config_location.default_device_key_path,
-        FilePath::from("/home/user/.tedge/device-certs/tedge-private-key.pem")
-    );
-    assert_eq!(
-        config_location.default_azure_root_cert_path,
-        FilePath::from("/etc/ssl/certs")
-    );
-    assert_eq!(
-        config_location.default_c8y_root_cert_path,
-        FilePath::from("/etc/ssl/certs")
+        config_location.tedge_config_file_path,
+        PathBuf::from("/home/user/.tedge/tedge.toml")
     );
 }

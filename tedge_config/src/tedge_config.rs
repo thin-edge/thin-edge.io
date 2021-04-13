@@ -9,6 +9,7 @@ use std::convert::{TryFrom, TryInto};
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
     pub(crate) config_location: TEdgeConfigLocation,
+    pub(crate) config_defaults: TEdgeConfigDefaults,
 }
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
@@ -92,7 +93,7 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
             .device
             .cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_device_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_device_cert_path.clone()))
     }
 
     fn update(
@@ -117,7 +118,7 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
             .device
             .key_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_device_key_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_device_key_path.clone()))
     }
 
     fn update(
@@ -142,7 +143,7 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
             .azure
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_azure_root_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_azure_root_cert_path.clone()))
     }
 
     fn update(
@@ -167,7 +168,7 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
             .c8y
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_c8y_root_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_c8y_root_cert_path.clone()))
     }
 
     fn update(

@@ -7,6 +7,7 @@ use tempfile::NamedTempFile;
 ///
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
+    config_defaults: TEdgeConfigDefaults,
 }
 
 pub trait ConfigRepository<T> {
@@ -19,7 +20,8 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     type Error = TEdgeConfigError;
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config = self.read_file_or_default(self.config_location.tedge_config_path.clone())?;
+        let config =
+            self.read_file_or_default(self.config_location.tedge_config_file_path().into())?;
         Ok(config)
     }
 
@@ -30,12 +32,12 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         file.write_all(toml.as_bytes())?;
 
         // Create $HOME/.tedge or /etc/tedge directory if it does not exist
-        if !self.config_location.tedge_path().exists() {
-            let () = std::fs::create_dir(self.config_location.tedge_path())?;
+        if !self.config_location.tedge_config_root_path.exists() {
+            let () = std::fs::create_dir(self.config_location.tedge_config_root_path())?;
             // XXX: Correctly assign permissions
         }
 
-        match file.persist(self.config_location.tedge_config_path.clone()) {
+        match file.persist(self.config_location.tedge_config_file_path().clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(err.error.into()),
         }
@@ -44,7 +46,18 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 
 impl TEdgeConfigRepository {
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
-        Self { config_location }
+        let config_defaults = TEdgeConfigDefaults::from(&config_location);
+        Self::new_with_defaults(config_location, config_defaults)
+    }
+
+    pub fn new_with_defaults(
+        config_location: TEdgeConfigLocation,
+        config_defaults: TEdgeConfigDefaults,
+    ) -> Self {
+        Self {
+            config_location,
+            config_defaults,
+        }
     }
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
@@ -80,6 +93,7 @@ impl TEdgeConfigRepository {
         Ok(TEdgeConfig {
             data,
             config_location: self.config_location.clone(),
+            config_defaults: self.config_defaults.clone(),
         })
     }
 }
