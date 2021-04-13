@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "common/certificate",
     "common/mqtt_client",
     "tedge",
     "tedge_config",

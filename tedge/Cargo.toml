@@ -13,10 +13,10 @@ maintainer-scripts = "configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0"
+certificate = {path = "../common/certificate" }
 chrono = "0.4"
 futures = "0.3"
 mqtt_client = {path = "../common/mqtt_client" }
-rcgen = { version = "0.8", features = ["pem"] }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -27,9 +27,6 @@ tokio = { version = "1.1", features = ["rt", "signal", "io-util", "sync"] }
 toml = "0.5"
 url = "2.2"
 which = "4.0"
-x509-parser = "0.9"
-zeroize = "1.2"
-sha-1 = "0.9"
 tedge_config = { path = "../tedge_config" }
 
 [target.'cfg(unix)'.dependencies]
@@ -41,7 +38,6 @@ assert_matches = "1.4"
 mockito = "0.29"
 pem = "0.8"
 predicates = "1.0"
-base64 = "0.13"
 which = "4.0"
 
 [features]

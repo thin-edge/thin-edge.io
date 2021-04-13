@@ -258,9 +258,7 @@ mod tests {
         get_c8y_root_cert_path_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'c8y.root.cert.path' is not set",
-            ));
+            .stdout(predicate::str::contains("/etc/ssl/cert"));
 
         Ok(())
     }
