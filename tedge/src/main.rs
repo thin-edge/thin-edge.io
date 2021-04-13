@@ -8,7 +8,6 @@ mod certificate;
 mod cli;
 mod command;
 mod config;
-mod mqtt;
 mod services;
 mod utils;
 

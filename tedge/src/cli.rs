@@ -2,12 +2,12 @@ use crate::certificate;
 use crate::command::{BuildCommand, Command};
 use crate::config;
 use crate::config::{ConfigError, TEdgeConfig};
-use crate::mqtt;
 use structopt::clap;
 use structopt::StructOpt;
 
 mod connect;
 mod disconnect;
+mod mqtt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -35,7 +35,7 @@ pub enum TEdgeOpt {
     Disconnect(disconnect::TedgeDisconnectBridgeOpt),
 
     /// Publish a message on a topic and subscribe a topic.
-    Mqtt(mqtt::MqttCmd),
+    Mqtt(mqtt::TEdgeMqttCli),
 }
 
 impl BuildCommand for TEdgeOpt {
