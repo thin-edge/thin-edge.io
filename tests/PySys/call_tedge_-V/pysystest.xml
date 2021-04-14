@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate local publishing and subscribing</title>
+	<title>Validate command line option -V</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
