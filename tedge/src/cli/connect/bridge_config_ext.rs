@@ -1,5 +1,4 @@
 use crate::cli::connect::*;
-use crate::command::{Command, ExecutionContext};
 use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
 };
@@ -10,42 +9,8 @@ use tempfile::NamedTempFile;
 use url::Url;
 use which::which;
 
-pub trait CheckConnection {
-    fn check_connection(&self) -> Result<(), ConnectError>;
-}
-
-pub struct BridgeCommand {
-    pub bridge_config: BridgeConfig,
-    pub check_connection: Box<dyn CheckConnection>,
-}
-
-impl Command for BridgeCommand {
-    fn description(&self) -> String {
-        format!(
-            "create bridge to connect {} cloud.",
-            self.bridge_config.local_clientid
-        )
-    }
-
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        self.bridge_config.new_bridge(&context.user_manager)?;
-        self.check_connection()?;
-        Ok(())
-    }
-}
-
-impl BridgeCommand {
-    fn check_connection(&self) -> Result<(), ConnectError> {
-        println!(
-            "Sending packets to check connection. This may take up to {} seconds.\n",
-            WAIT_FOR_CHECK_SECONDS
-        );
-        Ok(self.check_connection.check_connection()?)
-    }
-}
-
 impl BridgeConfig {
-    fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
+    pub fn new_bridge(&self, user_manager: &UserManager) -> Result<(), ConnectError> {
         println!("Checking if systemd is available.\n");
         let _ = services::systemd_available()?;
 
@@ -122,7 +87,8 @@ impl BridgeConfig {
         let _ = paths::create_directories(&dir_path)?;
 
         let mut common_temp_file = NamedTempFile::new()?;
-        self.serialize_common_config(&mut common_temp_file)?;
+        self.common_mosquitto_config
+            .serialize(&mut common_temp_file)?;
         let common_config_path = self.get_common_mosquitto_config_file_path()?;
         let _ = paths::persist_tempfile(common_temp_file, &common_config_path)?;
 
@@ -134,80 +100,18 @@ impl BridgeConfig {
         Ok(())
     }
 
-    pub fn serialize_common_config<W: std::io::Write>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<()> {
-        writeln!(writer, "listener {}", self.common_mosquitto_config.listener)?;
-        writeln!(
-            writer,
-            "allow_anonymous {}",
-            self.common_mosquitto_config.allow_anonymous
-        )?;
-        writeln!(
-            writer,
-            "connection_messages {}",
-            self.common_mosquitto_config.connection_messages
-        )?;
-
-        for log_type in &self.common_mosquitto_config.log_types {
-            writeln!(writer, "log_type {}", log_type)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writeln!(writer, "### Bridge",)?;
-        writeln!(writer, "connection {}", self.connection)?;
-        //write azure specific configuration to file
-        match &self.remote_username {
-            Some(name) => {
-                writeln!(writer, "remote_username {}", name)?;
-            }
-            None => {}
-        }
-        writeln!(writer, "address {}", self.address)?;
-
-        if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
-            writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
-        } else {
-            writeln!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
-        }
-
-        writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
-        writeln!(writer, "local_clientid {}", self.local_clientid)?;
-        writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
-        writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
-        writeln!(writer, "try_private {}", self.try_private)?;
-        writeln!(writer, "start_type {}", self.start_type)?;
-        writeln!(writer, "cleansession {}", self.clean_session)?;
-        writeln!(writer, "notifications {}", self.notifications)?;
-        writeln!(
-            writer,
-            "bridge_attempt_unsubscribe {}",
-            self.bridge_attempt_unsubscribe
-        )?;
-
-        writeln!(writer, "\n### Topics",)?;
-        for topic in &self.topics {
-            writeln!(writer, "topic {}", topic)?;
-        }
-        Ok(())
-    }
-
     pub fn validate(&self) -> Result<(), ConnectError> {
         Url::parse(&self.address)?;
 
-        if !Path::new(&self.bridge_root_cert_path).exists() {
+        if !self.bridge_root_cert_path.as_ref().exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !Path::new(&self.bridge_certfile).exists() {
+        if !self.bridge_certfile.as_ref().exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !Path::new(&self.bridge_keyfile).exists() {
+        if !self.bridge_keyfile.as_ref().exists() {
             return Err(ConnectError::Certificate);
         }
 
@@ -246,5 +150,12 @@ impl BridgeConfig {
             TEDGE_BRIDGE_CONF_DIR_PATH,
             &self.common_mosquitto_config.config_file,
         ])?)
+    }
+}
+
+fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
     }
 }

@@ -20,16 +20,15 @@ impl BuildCommand for TEdgeConnectOpt {
         self,
         context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
-        let cmd = match self {
-            TEdgeConnectOpt::C8y => BridgeCommand {
-                bridge_config: C8y::c8y_bridge_config(context.config)?,
-                check_connection: Box::new(C8y),
-            },
-            TEdgeConnectOpt::Az => BridgeCommand {
-                bridge_config: Azure::azure_bridge_config(context.config)?,
-                check_connection: Box::new(Azure),
-            },
-        };
-        Ok(cmd.into_boxed())
+        Ok(match self {
+            TEdgeConnectOpt::C8y => ConnectC8yCommand {
+                config_repository: context.config_repository,
+            }
+            .into_boxed(),
+            TEdgeConnectOpt::Az => ConnectAzureCommand {
+                config_repository: context.config_repository,
+            }
+            .into_boxed(),
+        })
     }
 }
