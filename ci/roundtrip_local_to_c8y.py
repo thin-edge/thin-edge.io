@@ -15,11 +15,11 @@ Call example:
 
 import argparse
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 import time
-
+from typing import Tuple
 import requests
 
 # Warning: the list begins with the earliest one
@@ -29,6 +29,14 @@ PAGE_SIZE = "500"
 CMD_PUBLISH_REST = "sudo tedge mqtt pub c8y/s/us 211,%i"
 
 CMD_PUBLISH_JSON = "sawtooth_publisher %s %s 1 flux"
+
+
+def is_timezone_aware(stamp):  #:datetime):
+    """determine if object is timezone aware or naive
+    See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
+    """
+
+    return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
 def act(path_publisher, mode, publish_amount, delay):
@@ -59,32 +67,32 @@ def act(path_publisher, mode, publish_amount, delay):
     time.sleep(3)
 
 
-def retrieve_data(user, device_id, password, tenant, verbose, timeslot):
+def retrieve_data(
+    user, device_id, password, tenant, verbose, timeslot
+) -> Tuple[requests.models.Response, datetime]:
     """Download via REST"""
 
-    time_to = datetime.utcnow().replace(microsecond=0)
+    time_to = datetime.now(timezone.utc).replace(microsecond=0)
     time_from = time_to - timedelta(seconds=timeslot)
 
-    date_from = time_from.isoformat(sep="T") + "Z"
-    date_to = time_to.isoformat(sep="T") + "Z"
+    assert is_timezone_aware(time_from)
+
+    date_from = time_from.isoformat(sep="T")
+    date_to = time_to.isoformat(sep="T")
 
     print(f"Gathering values from {time_from} to {time_to}")
-
-    # example date format:
-    # date_from = '2021-02-15T13:00:00Z'
-    # date_to = '2021-02-15T14:00:00Z'
 
     # TODO Add command line parameter: cloud = 'latest.stage.c8y.io'
     cloud = "eu-latest.cumulocity.com"
 
-    url = (
-        f"https://{user}.{cloud}/measurement/measurements?"
-        f"source={device_id}&pageSize={PAGE_SIZE}&"
-        f"dateFrom={date_from}&dateTo={date_to}"
-    )
-
+    url = f"https://{user}.{cloud}/measurement/measurements"
+    payload = {
+        "source": device_id,
+        "pageSize": PAGE_SIZE,
+        "dateFrom": date_from,
+        "dateTo": date_to,
+    }
     auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
-
     header = {b"Authorization": b"Basic " + base64.b64encode(auth)}
 
     if verbose:
@@ -93,7 +101,10 @@ def retrieve_data(user, device_id, password, tenant, verbose, timeslot):
     # TODO Add authorisation style as command line parameter
     # req = requests.get(url, auth=(user, password))
 
-    req = requests.get(url, headers=header)
+    req = requests.get(url, params=payload, headers=header)
+
+    if verbose:
+        print("Requested URL:", req.url)
 
     if req.status_code != 200:
         print("Http request failed !!!")
@@ -109,25 +120,33 @@ def check_timestamps(timestamps, laststamp):
 
     failed = False
 
+    warning = 0
+
+    assert is_timezone_aware(laststamp)
+
     for tstamp in timestamps:
-        # All timestamps seem to be in UTC time -> will end with 'Z'
-        # fromisoformat does not seem to cope with the Z, so we remove it
 
         if tstamp.endswith("Z"):
+            # fromisoformat does not seem to cope with the Z, so we remove it
+            # Workaround: remove the Z and make the timestamp UTC aware
+            #
+            # Alternativelyuse:
+            # dateutil.parser.isoparse is available in the third-party package dateutil.
+            # https://dateutil.readthedocs.io/en/stable/parser.html#dateutil.parser.isoparse
+
             tstamp = tstamp[:-1]
-        else:
-            print("Timestamp verification: Z is missing")
-            failed = True
+            tstamp += "+00:00"
 
         tstampiso = datetime.fromisoformat(tstamp)
 
-        warning = 0
+        assert is_timezone_aware(tstampiso)
 
         if tstampiso > laststamp:
             laststamp = tstampiso
-        if tstampiso == laststamp:
-            laststamp = tstampiso
+        elif tstampiso == laststamp:
             warning += 1
+            print("Warning", tstampiso, "is equal to", laststamp)
+            laststamp = tstampiso
         else:
             print("Oops", tstampiso, "is smaller than", laststamp)
             failed = True
@@ -139,7 +158,9 @@ def check_timestamps(timestamps, laststamp):
         print("Timestamp verification PASSED")
     else:
         print("Timestamp verification FAILED")
-        sys.exit(1)
+        return False
+
+    return True
 
 
 def assert_values(
@@ -212,7 +233,9 @@ def assert_values(
         print("Data verification FAILED")
         sys.exit(1)
 
-    check_timestamps(timestamps, time_from)
+    ret = check_timestamps(timestamps, time_from)
+    if not ret:
+        sys.exit(1)
 
 
 def main():
