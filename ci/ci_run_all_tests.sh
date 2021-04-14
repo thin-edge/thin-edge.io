@@ -35,7 +35,7 @@ pip3 install -r tests/requirements.txt
 
 cd tests/PySys/
 
-# Don't use -V this will might reveal secret credentials
+# Don't use -v DEBUG as this will might reveal secret credentials
 
 pysys.py run --record
 

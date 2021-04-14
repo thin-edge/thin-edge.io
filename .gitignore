@@ -19,4 +19,3 @@ tests/PySys/*.html
 tests/PySys/*.xml
 tests/PySys/*.log
 **/__pycache__
-
