@@ -1,26 +1,4 @@
-use crate::config::{ConfigError, TEdgeConfig, DEVICE_ID};
-
-pub fn get_config_value(config: &TEdgeConfig, key: &str) -> Result<String, ConfigError> {
-    config.get_config_value(key)?.ok_or_else(|| {
-        if key == DEVICE_ID {
-            ConfigError::DeviceIdNotSet
-        } else {
-            ConfigError::ConfigNotSet { key: key.into() }
-        }
-    })
-}
-
-pub fn get_config_value_or_default(
-    config: &TEdgeConfig,
-    key: &str,
-    default: &str,
-) -> Result<String, ConfigError> {
-    let value = config
-        .get_config_value(key)?
-        .unwrap_or_else(|| default.into());
-
-    Ok(value)
-}
+use crate::config::ConfigError;
 
 pub fn parse_user_provided_address(input: String) -> Result<String, ConfigError> {
     if input.contains(':') {
