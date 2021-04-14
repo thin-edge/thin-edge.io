@@ -15,6 +15,8 @@
 
 set -e
 
+export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=/usr/bin/arm-linux-gnueabihf-gcc
+
 cd $TEBASEDIR
 cd common/mqtt_client
 cargo test --features integration-test
