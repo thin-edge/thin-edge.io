@@ -9,25 +9,25 @@ use crate::{
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
-pub enum TedgeDisconnectBridgeCli {
+pub enum TEdgeDisconnectBridgeCli {
     /// Remove bridge connection to Cumulocity.
     C8y,
     /// Remove bridge connection to Azure.
     Az,
 }
 
-impl BuildCommand for TedgeDisconnectBridgeCli {
+impl BuildCommand for TEdgeDisconnectBridgeCli {
     fn build_command(
         self,
         _context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
-            TedgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
+            TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
                 use_mapper: true,
             },
-            TedgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
+            TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
                 use_mapper: false,
