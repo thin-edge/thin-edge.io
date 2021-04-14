@@ -17,7 +17,9 @@ set -e
 
 cd $TEBASEDIR
 
-# Check if clients are installed
+# Check if clients are installed. If not, run:
+# sudo apt-get install mosquitto-clients
+
 dpkg -s mosquitto-clients
 
 # Install necessary packages
