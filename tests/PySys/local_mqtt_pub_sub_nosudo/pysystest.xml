@@ -22,4 +22,5 @@
 	  <requirement id=""/>
 	</requirements>
   </traceability>
+  <skipped reason="Issue with tedge and pysys: User's Home Directory not found."/>
 </pysystest>
