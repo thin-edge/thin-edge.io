@@ -1,5 +1,5 @@
-use super::*;
-use crate::config::ConfigError;
+use crate::cli::connect::*;
+use crate::config::{ConfigError, TEdgeConfig};
 use crate::utils::config;
 use mqtt_client::{Client, Message, Topic};
 use std::time::Duration;
@@ -8,7 +8,7 @@ use tokio::time::timeout;
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 
-pub struct C8y {}
+pub struct C8y;
 
 impl C8y {
     pub fn c8y_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {

@@ -1,5 +1,5 @@
-use super::*;
-use crate::config::ConfigError;
+use crate::cli::connect::*;
+use crate::config::{ConfigError, TEdgeConfig};
 use crate::utils::config;
 use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::time::Duration;
@@ -8,7 +8,7 @@ use tokio::time::timeout;
 pub const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub struct Azure {}
+pub struct Azure;
 
 impl Azure {
     pub fn azure_bridge_config(mut config: TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
