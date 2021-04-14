@@ -1,4 +1,4 @@
-use crate::cli::connect::COMMON_MOSQUITTO_CONFIG_FILENAME;
+const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
 #[derive(Debug, PartialEq)]
 pub struct CommonMosquittoConfig {

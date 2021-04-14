@@ -18,6 +18,9 @@ const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
+const MQTT_TLS_PORT: u16 = 8883;
+const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
     pub config_repository: TEdgeConfigRepository,
