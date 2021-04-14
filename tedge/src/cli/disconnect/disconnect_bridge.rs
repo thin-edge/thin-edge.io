@@ -1,22 +1,23 @@
-use crate::cli::connect::TEDGE_BRIDGE_CONF_DIR_PATH;
-use crate::command::{Command, ExecutionContext};
-use crate::services::{
-    mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+use crate::{
+    cli::{connect::TEDGE_BRIDGE_CONF_DIR_PATH, disconnect::error::DisconnectBridgeError},
+    command::{Command, ExecutionContext},
+    services::{mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService},
+    utils::{
+        paths,
+        users::{UserManager, ROOT_USER},
+    },
 };
-use crate::utils::paths;
-use crate::utils::users::{UserManager, ROOT_USER};
+
 use which::which;
 
-use super::error::DisconnectBridgeError;
-
 #[derive(Debug)]
-pub struct DisconnectBridge {
-    pub(crate) config_file: String,
-    cloud_name: String,
-    use_mapper: bool,
+pub struct DisconnectBridgeCommand {
+    pub config_file: String,
+    pub cloud_name: String,
+    pub use_mapper: bool,
 }
 
-impl Command for DisconnectBridge {
+impl Command for DisconnectBridgeCommand {
     fn description(&self) -> String {
         format!("remove the bridge to disconnect {} cloud", self.cloud_name)
     }
@@ -29,7 +30,7 @@ impl Command for DisconnectBridge {
     }
 }
 
-impl DisconnectBridge {
+impl DisconnectBridgeCommand {
     fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         self.remove_bridge_config_file()?;

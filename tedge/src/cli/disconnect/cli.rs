@@ -1,9 +1,11 @@
 use crate::{
-    cli::connect::{az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME},
+    cli::{
+        connect::{az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME},
+        disconnect::disconnect_bridge::DisconnectBridgeCommand,
+    },
     command::{BuildCommand, BuildContext, Command},
 };
 
-use super::bridge::DisconnectBridge;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -20,12 +22,12 @@ impl BuildCommand for TedgeDisconnectBridgeCli {
         _context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         let cmd = match self {
-            TedgeDisconnectBridgeCli::C8y => DisconnectBridge {
+            TedgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
                 use_mapper: true,
             },
-            TedgeDisconnectBridgeCli::Az => DisconnectBridge {
+            TedgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
                 use_mapper: false,
