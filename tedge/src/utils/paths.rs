@@ -113,7 +113,8 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn validate_parent_dir_exists(path: &Path) -> Result<(), PathsError> {
+pub fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
+    let path = path.as_ref();
     if path.is_relative() {
         Err(PathsError::RelativePathNotPermitted { path: path.into() })
     } else {
