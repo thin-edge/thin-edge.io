@@ -1,13 +1,8 @@
-use crate::{
-    command::{BuildCommand, Command, ExecutionContext},
-    utils::paths,
-};
-
+use crate::utils::paths;
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, read_to_string};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
 use tempfile::NamedTempFile;
 
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
@@ -24,166 +19,6 @@ pub const C8Y_ROOT_CERT_PATH: &str = "c8y.root.cert.path";
 // CIT-221 will use them. Remove the prefix `_` later
 pub const AZURE_URL: &str = "azure.url";
 pub const AZURE_ROOT_CERT_PATH: &str = "azure.root.cert.path";
-
-/// Wrapper type for configuration keys.
-#[derive(Debug, Clone)]
-pub struct ConfigKey(pub String);
-
-impl ConfigKey {
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl std::str::FromStr for ConfigKey {
-    type Err = String;
-
-    fn from_str(key: &str) -> Result<Self, Self::Err> {
-        match TEdgeConfig::get_key_properties(key) {
-            Some(_) => Ok(ConfigKey(key.into())),
-            _ => Err(format!(
-                "Invalid key `{}'. Valid keys are: [{}].",
-                key,
-                TEdgeConfig::valid_keys().join(", ")
-            )),
-        }
-    }
-}
-
-/// Wrapper type for updatable (Read-Write mode) configuration keys.
-#[derive(Debug, Clone)]
-pub struct WritableConfigKey(pub String);
-
-impl WritableConfigKey {
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl std::str::FromStr for WritableConfigKey {
-    type Err = String;
-
-    fn from_str(key: &str) -> Result<Self, Self::Err> {
-        match TEdgeConfig::get_key_properties(key) {
-            Some(ConfigKeyProperties {
-                mode: ConfigKeyMode::ReadWrite,
-                ..
-            }) => Ok(WritableConfigKey(key.into())),
-            _ => {
-                if key == DEVICE_ID {
-                    Err(format!(
-                        "Invalid key `{}'. Valid keys are: [{}].\n\
-                Setting the device id is only allowed with tedge cert create. \
-                To set 'device.id', use `tedge cert create --device-id <id>`.",
-                        key,
-                        TEdgeConfig::valid_writable_keys().join(", ")
-                    ))
-                } else {
-                    Err(format!(
-                        "Invalid key `{}'. Valid keys are: [{}].",
-                        key,
-                        TEdgeConfig::valid_writable_keys().join(", ")
-                    ))
-                }
-            }
-        }
-    }
-}
-
-#[derive(StructOpt, Debug)]
-pub enum ConfigCmd {
-    /// Set or update the provided configuration key with the given value
-    Set {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
-        key: WritableConfigKey,
-
-        /// Configuration value.
-        value: String,
-    },
-
-    /// Unset the provided configuration key
-    Unset {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_set())]
-        key: WritableConfigKey,
-    },
-
-    /// Get the value of the provided configuration key
-    Get {
-        /// Configuration key.
-        #[structopt(help = TEdgeConfig::valid_keys_help_message_for_get())]
-        key: ConfigKey,
-    },
-
-    /// Print the configuration keys and their values
-    List {
-        /// Prints all the configuration keys, even those without a configured value
-        #[structopt(long = "all")]
-        is_all: bool,
-
-        /// Prints all keys and descriptions with example values
-        #[structopt(long = "doc")]
-        is_doc: bool,
-    },
-}
-
-impl BuildCommand for ConfigCmd {
-    fn build_command(self, _config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        // Temporary implementation
-        // - should return a specific command, not self.
-        // - see certificate.rs for an example
-        Ok(self.into_boxed())
-    }
-}
-
-impl Command for ConfigCmd {
-    fn description(&self) -> String {
-        match self {
-            ConfigCmd::Set { key, value } => format!(
-                "set the configuration key: {} with value: {}.",
-                key.as_str(),
-                value
-            ),
-            ConfigCmd::Get { key } => {
-                format!("get the configuration value for key: {}", key.as_str())
-            }
-            ConfigCmd::Unset { key } => {
-                format!("unset the configuration value for key: {}", key.as_str())
-            }
-            ConfigCmd::List { .. } => String::from("list the configuration keys and values"),
-        }
-    }
-
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        let mut config = TEdgeConfig::from_default_config()?;
-        let mut config_updated = false;
-
-        match self {
-            ConfigCmd::Get { key } => match config.get_config_value(key.as_str())? {
-                None => println!("The provided config key: '{}' is not set", key.as_str()),
-                Some(value) => println!("{}", value),
-            },
-            ConfigCmd::Set { key, value } => {
-                config.set_config_value(key.as_str(), value.to_string())?;
-                config_updated = true;
-            }
-            ConfigCmd::Unset { key } => {
-                config.unset_config_value(key.as_str())?;
-                config_updated = true;
-            }
-            ConfigCmd::List { is_all, is_doc } => match is_doc {
-                true => print_config_doc(),
-                false => print_config_list(&config, *is_all)?,
-            },
-        }
-
-        if config_updated {
-            config.write_to_default_config()?;
-        }
-        Ok(())
-    }
-}
 
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
@@ -209,7 +44,7 @@ impl Command for ConfigCmd {
 /// ```
 ///
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct TEdgeConfig {
     /// Captures the device specific configurations
     #[serde(default)]
@@ -220,18 +55,6 @@ pub struct TEdgeConfig {
     pub c8y: CumulocityConfig,
     #[serde(default)]
     pub azure: AzureConfig,
-}
-
-// for macro
-#[derive(Debug, PartialEq)]
-enum ConfigKeyMode {
-    ReadOnly,
-    ReadWrite,
-}
-
-struct ConfigKeyProperties {
-    mode: ConfigKeyMode,
-    description: &'static str,
 }
 
 ///
@@ -247,10 +70,6 @@ struct ConfigKeyProperties {
 /// - _get_config_value (get a value given a key)
 /// - _set_config_value (set a value)
 /// - get_key_properties (get ConfigKeyProperties of a key)
-/// - valid_keys (list of valid keys)
-/// - valid_writable_keys (list of writable keys)
-/// - valid_keys_help_message_for_get (create a help message for structopt when `-h` is specified with get)
-/// - valid_keys_help_message_for_set (create a help message for structopt when `-h` is specified with set/unset)
 ///
 /// # Basic Usage
 ///
@@ -293,15 +112,6 @@ struct ConfigKeyProperties {
 /// assert_eq!(my.is_valid_key("c"), false);
 /// ```
 ///
-// We need to hide read-only keys from the help message of set/unset.
-macro_rules! hide_key {
-    ($str:literal, ReadOnly) => {
-        ""
-    };
-    ($str:literal, ReadWrite) => {
-        $str
-    };
-}
 
 macro_rules! config_keys {
     ($ty:ty { $( $str:literal => ( $( $key:ident ).* , $type:tt, $desc:literal ) )* }) => {
@@ -325,35 +135,6 @@ macro_rules! config_keys {
                 }
             }
 
-            fn get_key_properties(key: &str) -> Option<ConfigKeyProperties> {
-                match key {
-                    $( $str => Some(ConfigKeyProperties{mode: ConfigKeyMode::$type, description: $desc}), )*
-                    _ => None,
-                }
-            }
-
-            fn valid_keys() -> Vec<&'static str> {
-                vec![
-                    $( $str , )*
-                ]
-            }
-
-            fn valid_writable_keys() -> Vec<&'static str> {
-                vec![
-                    $( hide_key!($str, $type) , )*
-                ]
-                .into_iter()
-                .filter(|str| ! str.is_empty())
-                .collect()
-            }
-
-            fn valid_keys_help_message_for_get() -> &'static str {
-                concat!("[", $( " ", $str ),*, " ]")
-            }
-
-            fn valid_keys_help_message_for_set() -> &'static str {
-                concat!("[", $( hide_key!($str, $type) , " "), *, "]")
-            }
         }
     }
 }
@@ -385,7 +166,7 @@ impl TEdgeConfig {
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct DeviceConfig {
     /// The unique id of the device
     pub id: Option<String>,
@@ -434,7 +215,7 @@ impl DeviceConfig {
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CumulocityConfig {
     /// Preserves the current status of the connection
     connect: Option<String>,
@@ -448,7 +229,7 @@ pub struct CumulocityConfig {
 }
 
 #[serde(deny_unknown_fields)]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct AzureConfig {
     connect: Option<String>,
     url: Option<String>,
@@ -486,38 +267,18 @@ pub enum ConfigError {
 
     #[error(transparent)]
     PathsError(#[from] paths::PathsError),
+
+    #[error(transparent)]
+    TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error(transparent)]
+    TEdgeConfigSettingError(#[from] tedge_config::ConfigSettingError),
 }
 
 pub fn tedge_config_path() -> Result<PathBuf, ConfigError> {
     Ok(paths::build_path_for_sudo_or_user_as_path(&[
         TEDGE_CONFIG_FILE,
     ])?)
-}
-
-fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
-    let mut keys_without_values: Vec<&str> = Vec::new();
-    for key in TEdgeConfig::valid_keys() {
-        let opt = config.get_config_value(key)?;
-        match opt {
-            Some(value) => println!("{}={}", key, value),
-            None => keys_without_values.push(key),
-        }
-    }
-    if all && !keys_without_values.is_empty() {
-        println!();
-        for key in keys_without_values {
-            println!("{}=", key);
-        }
-    }
-    Ok(())
-}
-
-fn print_config_doc() {
-    for key in TEdgeConfig::valid_keys() {
-        // key is pre-defined surely
-        let desc = TEdgeConfig::get_key_properties(key).unwrap().description;
-        println!("{:<30} {}", key, desc);
-    }
 }
 
 impl TEdgeConfig {
@@ -594,60 +355,6 @@ impl TEdgeConfig {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-
-    #[test]
-    fn test_macro_creates_valid_keys_correctly() {
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device.id"), true);
-        assert_eq!(TEdgeConfig::valid_keys().contains(&"device-id"), false);
-    }
-
-    #[test]
-    fn test_macro_creates_valid_writable_keys_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.id"),
-            false
-        );
-        assert_eq!(
-            TEdgeConfig::valid_writable_keys().contains(&"device.cert.path"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_get_key_properties_correctly() {
-        assert_eq!(
-            TEdgeConfig::get_key_properties("device.id").unwrap().mode,
-            ConfigKeyMode::ReadOnly
-        );
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url").unwrap().mode,
-            ConfigKeyMode::ReadWrite
-        );
-        let c8y_url_description =
-            "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
-        assert_eq!(
-            TEdgeConfig::get_key_properties("c8y.url")
-                .unwrap()
-                .description,
-            c8y_url_description
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_get_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_get().contains("device.id"),
-            true
-        );
-    }
-
-    #[test]
-    fn test_macro_help_message_for_set_correctly() {
-        assert_eq!(
-            TEdgeConfig::valid_keys_help_message_for_set().contains("device.id"),
-            false
-        );
-    }
 
     #[test]
     fn test_parse_config_with_all_values() {

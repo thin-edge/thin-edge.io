@@ -1,4 +1,4 @@
-use crate::command::{BuildCommand, Command, ExecutionContext};
+use crate::command::{BuildCommand, BuildContext, Command, ExecutionContext};
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Config, Message, MessageStream, QoS, Topic, TopicFilter};
@@ -34,6 +34,9 @@ pub enum MqttCmd {
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
+        /// Avoid printing the message topics on the console
+        #[structopt(long = "no-topic")]
+        no_topic: bool,
     },
 }
 
@@ -58,7 +61,7 @@ pub enum MqttError {
 impl BuildCommand for MqttCmd {
     fn build_command(
         self,
-        _config: crate::config::TEdgeConfig,
+        _context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         // Temporary implementation
         // - should return a specific command, not self.
@@ -78,7 +81,11 @@ impl Command for MqttCmd {
                 "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",
                 message, topic, qos
             ),
-            MqttCmd::Sub { topic, qos } => {
+            MqttCmd::Sub {
+                topic,
+                qos,
+                no_topic: _,
+            } => {
                 format!("subscribe the topic \"{}\" with QoS \"{:?}\".", topic, qos)
             }
         }
@@ -91,7 +98,11 @@ impl Command for MqttCmd {
                 message,
                 qos,
             } => publish(topic, message, *qos)?,
-            MqttCmd::Sub { topic, qos } => subscribe(topic, *qos)?,
+            MqttCmd::Sub {
+                topic,
+                qos,
+                no_topic,
+            } => subscribe(topic, *qos, *no_topic)?,
         }
         Ok(())
     }
@@ -144,7 +155,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
 }
 
 #[tokio::main]
-async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
+async fn subscribe(topic: &str, qos: QoS, no_topic: bool) -> Result<(), MqttError> {
     let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
     let mqtt = Client::connect(client_id.as_str(), &config).await?;
@@ -170,7 +181,7 @@ async fn subscribe(topic: &str, qos: QoS) -> Result<(), MqttError> {
 
             maybe_message = messages.next().fuse() => {
                 match maybe_message {
-                    Some(message) =>  handle_message(message).await?,
+                    Some(message) =>  handle_message(message, no_topic).await?,
                     None => break
                  }
             }
@@ -187,10 +198,19 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
     Ok(())
 }
 
-async fn handle_message(message: Message) -> Result<(), MqttError> {
-    let s = String::from_utf8(message.payload)?;
+async fn handle_message(message: Message, no_topic: bool) -> Result<(), MqttError> {
+    if no_topic {
+        let s = format!("{}", String::from_utf8(message.payload)?);
+        async_println(&s).await?;
+    } else {
+        let s = format!(
+            "[{}] {}",
+            message.topic.name,
+            String::from_utf8(message.payload)?
+        );
+        async_println(&s).await?;
+    }
 
-    async_println(&s).await?;
     Ok(())
 }
 
