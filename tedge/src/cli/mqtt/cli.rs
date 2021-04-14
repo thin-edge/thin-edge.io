@@ -87,8 +87,8 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
 
 #[cfg(test)]
 mod tests {
-    use mqtt_client::QoS;
     use super::parse_qos;
+    use mqtt_client::QoS;
 
     #[test]
     fn test_parse_qos_at_most_once() {
