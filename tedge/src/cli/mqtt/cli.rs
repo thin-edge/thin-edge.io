@@ -85,23 +85,29 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
     }
 }
 
-#[test]
-fn test_parse_qos_at_most_once() {
-    let input_qos = "0";
-    let expected_qos = QoS::AtMostOnce;
-    assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
-}
+#[cfg(test)]
+mod tests {
+    use mqtt_client::QoS;
+    use super::parse_qos;
 
-#[test]
-fn test_parse_qos_at_least_once() {
-    let input_qos = "1";
-    let expected_qos = QoS::AtLeastOnce;
-    assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
-}
+    #[test]
+    fn test_parse_qos_at_most_once() {
+        let input_qos = "0";
+        let expected_qos = QoS::AtMostOnce;
+        assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
+    }
 
-#[test]
-fn test_parse_qos_exactly_once() {
-    let input_qos = "2";
-    let expected_qos = QoS::ExactlyOnce;
-    assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
+    #[test]
+    fn test_parse_qos_at_least_once() {
+        let input_qos = "1";
+        let expected_qos = QoS::AtLeastOnce;
+        assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
+    }
+
+    #[test]
+    fn test_parse_qos_exactly_once() {
+        let input_qos = "2";
+        let expected_qos = QoS::ExactlyOnce;
+        assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
+    }
 }
