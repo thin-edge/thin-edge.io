@@ -1,7 +1,7 @@
 use crate::*;
+use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
-use tempfile::NamedTempFile;
+use std::path::{Path, PathBuf};
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
@@ -25,23 +25,42 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         Ok(config)
     }
 
-    // XXX: Explicitly set the file permissions in this function and file ownership!
+    // TODO: Explicitly set the file permissions in this function and file ownership!
     fn store(&self, config: TEdgeConfig) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config.data)?;
-        let mut file = NamedTempFile::new()?;
-        file.write_all(toml.as_bytes())?;
 
-        // Create $HOME/.tedge or /etc/tedge directory if it does not exist
+        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !self.config_location.tedge_config_root_path.exists() {
-            let () = std::fs::create_dir(self.config_location.tedge_config_root_path())?;
-            // XXX: Correctly assign permissions
+            let () = fs::create_dir(self.config_location.tedge_config_root_path())?;
         }
 
-        match file.persist(self.config_location.tedge_config_file_path()) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.error.into()),
-        }
+        let () = atomically_write_file(
+            self.config_location.temporary_tedge_config_file_path(),
+            self.config_location.tedge_config_file_path(),
+            toml.as_bytes(),
+        )?;
+        Ok(())
     }
+}
+
+fn atomically_write_file(
+    tempfile: impl AsRef<Path>,
+    dest: impl AsRef<Path>,
+    content: &[u8],
+) -> std::io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tempfile.as_ref())?;
+    if let Err(err) = file.write_all(content) {
+        let _ = fs::remove_file(tempfile);
+        return Err(err);
+    }
+    if let Err(err) = fs::rename(tempfile.as_ref(), dest) {
+        let _ = fs::remove_file(tempfile);
+        return Err(err);
+    }
+    Ok(())
 }
 
 impl TEdgeConfigRepository {
