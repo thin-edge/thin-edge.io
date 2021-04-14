@@ -42,37 +42,32 @@ impl CommonMosquittoConfig {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
+#[test]
+fn test_serialize() -> anyhow::Result<()> {
+    let common_mosquitto_config = CommonMosquittoConfig::default();
 
-    #[test]
-    fn test_serialize() -> anyhow::Result<()> {
-        let common_mosquitto_config = CommonMosquittoConfig::default();
+    let mut buffer = Vec::new();
+    common_mosquitto_config.serialize(&mut buffer)?;
 
-        let mut buffer = Vec::new();
-        common_mosquitto_config.serialize(&mut buffer)?;
+    let contents = String::from_utf8(buffer).unwrap();
+    let config_set: std::collections::HashSet<&str> = contents
+        .lines()
+        .filter(|str| !str.is_empty() && !str.starts_with('#'))
+        .collect();
+    let mut expected = std::collections::HashSet::new();
 
-        let contents = String::from_utf8(buffer).unwrap();
-        let config_set: std::collections::HashSet<&str> = contents
-            .lines()
-            .filter(|str| !str.is_empty() && !str.starts_with('#'))
-            .collect();
-        let mut expected = std::collections::HashSet::new();
+    expected.insert("listener 1883 localhost");
+    expected.insert("allow_anonymous true");
+    expected.insert("connection_messages true");
 
-        expected.insert("listener 1883 localhost");
-        expected.insert("allow_anonymous true");
-        expected.insert("connection_messages true");
+    expected.insert("log_type error");
+    expected.insert("log_type warning");
+    expected.insert("log_type notice");
+    expected.insert("log_type information");
+    expected.insert("log_type subscribe");
+    expected.insert("log_type unsubscribe");
 
-        expected.insert("log_type error");
-        expected.insert("log_type warning");
-        expected.insert("log_type notice");
-        expected.insert("log_type information");
-        expected.insert("log_type subscribe");
-        expected.insert("log_type unsubscribe");
+    assert_eq!(config_set, expected);
 
-        assert_eq!(config_set, expected);
-
-        Ok(())
-    }
+    Ok(())
 }

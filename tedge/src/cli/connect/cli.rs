@@ -21,14 +21,17 @@ impl BuildCommand for TEdgeConnectOpt {
         context: BuildContext,
     ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
         Ok(match self {
-            TEdgeConnectOpt::C8y => ConnectC8yCommand {
+            TEdgeConnectOpt::C8y => ConnectCommand {
                 config_repository: context.config_repository,
-            }
-            .into_boxed(),
-            TEdgeConnectOpt::Az => ConnectAzureCommand {
+                cloud: Cloud::C8y,
+                common_mosquitto_config: CommonMosquittoConfig::default(),
+            },
+            TEdgeConnectOpt::Az => ConnectCommand {
                 config_repository: context.config_repository,
-            }
-            .into_boxed(),
-        })
+                cloud: Cloud::Azure,
+                common_mosquitto_config: CommonMosquittoConfig::default(),
+            },
+        }
+        .into_boxed())
     }
 }

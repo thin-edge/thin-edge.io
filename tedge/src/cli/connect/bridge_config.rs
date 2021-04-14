@@ -1,9 +1,9 @@
-use crate::cli::connect::CommonMosquittoConfig;
-use tedge_config::{ConnectUrl, FilePath};
+use crate::cli::connect::ConnectError;
+use tedge_config::FilePath;
+use url::Url;
 
 #[derive(Debug, PartialEq)]
 pub struct BridgeConfig {
-    pub common_mosquitto_config: CommonMosquittoConfig,
     pub cloud_name: String,
     pub config_file: String,
     pub connection: String,
@@ -23,128 +23,7 @@ pub struct BridgeConfig {
     pub topics: Vec<String>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct BridgeConfigParams {
-    pub connect_url: ConnectUrl,
-    pub mqtt_tls_port: u16,
-    pub config_file: String,
-    pub remote_clientid: String,
-    pub bridge_root_cert_path: FilePath,
-    pub bridge_certfile: FilePath,
-    pub bridge_keyfile: FilePath,
-}
-
 impl BridgeConfig {
-    pub fn new_for_c8y(params: BridgeConfigParams) -> Self {
-        let BridgeConfigParams {
-            connect_url,
-            mqtt_tls_port,
-            config_file,
-            bridge_root_cert_path,
-            remote_clientid,
-            bridge_certfile,
-            bridge_keyfile,
-        } = params;
-
-        let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
-
-        Self {
-            common_mosquitto_config: CommonMosquittoConfig::default(),
-            cloud_name: "c8y".into(),
-            config_file,
-            connection: "edge_to_c8y".into(),
-            address,
-            remote_username: None,
-            bridge_root_cert_path,
-            remote_clientid,
-            local_clientid: "Cumulocity".into(),
-            bridge_certfile,
-            bridge_keyfile,
-            use_mapper: true,
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            topics: vec![
-                // Registration
-                r#"s/dcr in 2 c8y/ """#.into(),
-                r#"s/ucr out 2 c8y/ """#.into(),
-                // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
-                // Static templates
-                r#"s/us out 2 c8y/ """#.into(),
-                r#"t/us out 2 c8y/ """#.into(),
-                r#"q/us out 2 c8y/ """#.into(),
-                r#"c/us out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
-                r#"s/os in 2 c8y/ """#.into(),
-                // Debug
-                r#"s/e in 0 c8y/ """#.into(),
-                // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
-                r#"s/oc/# in 2 c8y/ """#.into(),
-                // c8y JSON
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
-            ],
-        }
-    }
-
-    pub fn new_for_azure(params: BridgeConfigParams) -> Self {
-        let BridgeConfigParams {
-            connect_url,
-            mqtt_tls_port,
-            config_file,
-            bridge_root_cert_path,
-            remote_clientid,
-            bridge_certfile,
-            bridge_keyfile,
-        } = params;
-
-        let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
-        let user_name = format!(
-            "{}/{}/?api-version=2018-06-30",
-            connect_url.as_str(),
-            remote_clientid
-        );
-        let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", remote_clientid);
-        let sub_msg_topic = format!(
-            "messages/devicebound/# out 1 az/ devices/{}/",
-            remote_clientid
-        );
-        Self {
-            common_mosquitto_config: CommonMosquittoConfig::default(),
-            cloud_name: "az".into(),
-            config_file,
-            connection: "edge_to_az".into(),
-            address,
-            remote_username: Some(user_name),
-            bridge_root_cert_path,
-            remote_clientid,
-            local_clientid: "Azure".into(),
-            bridge_certfile,
-            bridge_keyfile,
-            use_mapper: false,
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            topics: vec![
-                pub_msg_topic,
-                sub_msg_topic,
-                r##"twin/res/# in 1 az/ $iothub/"##.into(),
-                r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
-            ],
-        }
-    }
-
     pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge")?;
         writeln!(writer, "connection {}", self.connection)?;
@@ -183,128 +62,33 @@ impl BridgeConfig {
         }
         Ok(())
     }
+
+    pub fn validate(&self) -> Result<(), ConnectError> {
+        Url::parse(&self.address)?;
+
+        if !self.bridge_root_cert_path.as_ref().exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        if !self.bridge_certfile.as_ref().exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        if !self.bridge_keyfile.as_ref().exists() {
+            return Err(ConnectError::Certificate);
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::convert::TryFrom;
-    use tempfile::NamedTempFile;
-
-    #[test]
-    fn test_new_for_c8y() -> anyhow::Result<()> {
-        let params = BridgeConfigParams {
-            connect_url: ConnectUrl::try_from("test.test.io")?,
-            mqtt_tls_port: 8883,
-            config_file: "c8y-bridge.conf".into(),
-            remote_clientid: "alpha".into(),
-            bridge_root_cert_path: "./test_root.pem".into(),
-            bridge_certfile: "./test-certificate.pem".into(),
-            bridge_keyfile: "./test-private-key.pem".into(),
-        };
-
-        let bridge = BridgeConfig::new_for_c8y(params);
-
-        let expected = BridgeConfig {
-            cloud_name: "c8y".into(),
-            config_file: "c8y-bridge.conf".into(),
-            connection: "edge_to_c8y".into(),
-            address: "test.test.io:8883".into(),
-            remote_username: None,
-            bridge_root_cert_path: "./test_root.pem".into(),
-            remote_clientid: "alpha".into(),
-            local_clientid: "Cumulocity".into(),
-            bridge_certfile: "./test-certificate.pem".into(),
-            bridge_keyfile: "./test-private-key.pem".into(),
-            use_mapper: true,
-            topics: vec![
-                // Registration
-                r#"s/dcr in 2 c8y/ """#.into(),
-                r#"s/ucr out 2 c8y/ """#.into(),
-                // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
-                // Static templates
-                r#"s/us out 2 c8y/ """#.into(),
-                r#"t/us out 2 c8y/ """#.into(),
-                r#"q/us out 2 c8y/ """#.into(),
-                r#"c/us out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
-                r#"s/os in 2 c8y/ """#.into(),
-                // Debug
-                r#"s/e in 0 c8y/ """#.into(),
-                // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
-                r#"s/oc/# in 2 c8y/ """#.into(),
-                // c8y JSON
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
-            ],
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            common_mosquitto_config: CommonMosquittoConfig::default(),
-        };
-
-        assert_eq!(bridge, expected);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_new_for_azure() -> anyhow::Result<()> {
-        let params = BridgeConfigParams {
-            connect_url: ConnectUrl::try_from("test.test.io")?,
-            mqtt_tls_port: 8883,
-            config_file: "az-bridge.conf".into(),
-            remote_clientid: "alpha".into(),
-            bridge_root_cert_path: "./test_root.pem".into(),
-            bridge_certfile: "./test-certificate.pem".into(),
-            bridge_keyfile: "./test-private-key.pem".into(),
-        };
-
-        let bridge = BridgeConfig::new_for_azure(params);
-
-        let expected = BridgeConfig {
-            cloud_name: "az".into(),
-            config_file: "az-bridge.conf".to_string(),
-            connection: "edge_to_az".into(),
-            address: "test.test.io:8883".into(),
-            remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
-            bridge_root_cert_path: "./test_root.pem".into(),
-            remote_clientid: "alpha".into(),
-            local_clientid: "Azure".into(),
-            bridge_certfile: "./test-certificate.pem".into(),
-            bridge_keyfile: "./test-private-key.pem".into(),
-            use_mapper: false,
-            topics: vec![
-                r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
-                r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
-                r##"twin/res/# in 1 az/ $iothub/"##.into(),
-                r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
-            ],
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            common_mosquitto_config: CommonMosquittoConfig::default(),
-        };
-
-        assert_eq!(bridge, expected);
-
-        Ok(())
-    }
 
     #[test]
     fn test_serialize_with_cafile_correctly() -> anyhow::Result<()> {
-        let file = NamedTempFile::new()?;
+        let file = tempfile::NamedTempFile::new()?;
         let bridge_root_cert_path: FilePath = file.path().into();
 
         let bridge = BridgeConfig {
@@ -325,7 +109,6 @@ mod test {
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            common_mosquitto_config: CommonMosquittoConfig::default(),
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -383,7 +166,6 @@ bridge_attempt_unsubscribe false
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            common_mosquitto_config: CommonMosquittoConfig::default(),
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config).unwrap();
@@ -417,7 +199,7 @@ bridge_attempt_unsubscribe false
 
     #[test]
     fn test_serialize() -> anyhow::Result<()> {
-        let file = NamedTempFile::new()?;
+        let file = tempfile::NamedTempFile::new()?;
         let bridge_root_cert_path: FilePath = file.path().into();
 
         let config = BridgeConfig {
@@ -441,7 +223,6 @@ bridge_attempt_unsubscribe false
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            common_mosquitto_config: CommonMosquittoConfig::default(),
         };
 
         let mut buffer = Vec::new();
@@ -475,5 +256,101 @@ bridge_attempt_unsubscribe false
         assert_eq!(config_set, expected);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_validate_ok() -> anyhow::Result<()> {
+        let ca_file = tempfile::NamedTempFile::new().unwrap();
+        let bridge_ca_path: FilePath = ca_file.path().into();
+
+        let cert_file = tempfile::NamedTempFile::new().unwrap();
+        let bridge_certfile: FilePath = cert_file.path().into();
+
+        let key_file = tempfile::NamedTempFile::new().unwrap();
+        let bridge_keyfile: FilePath = key_file.path().into();
+
+        let correct_url = "http://test.com";
+
+        let config = BridgeConfig {
+            address: correct_url.into(),
+            bridge_root_cert_path: bridge_ca_path,
+            bridge_certfile,
+            bridge_keyfile,
+            ..default_bridge_config()
+        };
+
+        assert!(config.validate().is_ok());
+
+        Ok(())
+    }
+
+    // XXX: This test is flawed as it is not clear what it tests.
+    // It can fail due to either `incorrect_url` OR `non_existent_path`.
+    #[test]
+    fn test_validate_wrong_url() {
+        let incorrect_url = "noturl";
+        let non_existent_path = "/path/that/does/not/exist";
+
+        let config = BridgeConfig {
+            address: incorrect_url.into(),
+            bridge_certfile: non_existent_path.into(),
+            bridge_keyfile: non_existent_path.into(),
+            ..default_bridge_config()
+        };
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_wrong_cert_path() {
+        let correct_url = "http://test.com";
+        let non_existent_path = "/path/that/does/not/exist";
+
+        let config = BridgeConfig {
+            address: correct_url.into(),
+            bridge_certfile: non_existent_path.into(),
+            bridge_keyfile: non_existent_path.into(),
+            ..default_bridge_config()
+        };
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_wrong_key_path() {
+        let cert_file = tempfile::NamedTempFile::new().unwrap();
+        let bridge_certfile: FilePath = cert_file.path().into();
+        let correct_url = "http://test.com";
+        let non_existent_path = "/path/that/does/not/exist";
+
+        let config = BridgeConfig {
+            address: correct_url.into(),
+            bridge_certfile,
+            bridge_keyfile: non_existent_path.into(),
+            ..default_bridge_config()
+        };
+
+        assert!(config.validate().is_err());
+    }
+    fn default_bridge_config() -> BridgeConfig {
+        BridgeConfig {
+            cloud_name: "az/c8y".into(),
+            config_file: "cfg".to_string(),
+            connection: "edge_to_az/c8y".into(),
+            address: "".into(),
+            remote_username: None,
+            bridge_root_cert_path: "".into(),
+            bridge_certfile: "".into(),
+            bridge_keyfile: "".into(),
+            remote_clientid: "".into(),
+            local_clientid: "".into(),
+            use_mapper: true,
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            notifications: false,
+            bridge_attempt_unsubscribe: false,
+            topics: vec![],
+        }
     }
 }
