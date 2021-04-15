@@ -49,6 +49,7 @@ impl Command for ConnectCommand {
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let mut config = self.config_repository.load()?;
+        // XXX: Do we really need to persist the defaults?
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
             Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
