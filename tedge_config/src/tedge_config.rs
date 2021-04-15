@@ -59,32 +59,6 @@ fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> Con
     }
 }
 
-impl ConfigSettingAccessor<WritableDeviceIdSetting> for TEdgeConfig {
-    fn query(&self, _setting: WritableDeviceIdSetting) -> ConfigSettingResult<String> {
-        self.data
-            .device
-            .id
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: WritableDeviceIdSetting::KEY,
-            })
-    }
-
-    fn update(
-        &mut self,
-        _setting: WritableDeviceIdSetting,
-        value: String,
-    ) -> ConfigSettingResult<()> {
-        self.data.device.id = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: WritableDeviceIdSetting) -> ConfigSettingResult<()> {
-        self.data.device.id = None;
-        Ok(())
-    }
-}
-
 impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
     fn query(&self, _setting: AzureUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.data
