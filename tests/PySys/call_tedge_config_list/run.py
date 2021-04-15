@@ -43,6 +43,7 @@ configdict = {
 
 DEFAULTKEYPATH = "/etc/tedge/device-certs/tedge-private-key.pem"
 DEFAULTCERTPATH = "/etc/tedge/device-certs/tedge-certificate.pem"
+DEFAULTROOTCERTPATH = "/etc/ssl/certs"
 
 
 class PySysTest(BaseTest):
@@ -114,7 +115,7 @@ class PySysTest(BaseTest):
         # check if they are unset
         for key in configdict.keys():
             valueread = self.get_config_key(key)
-
+            self.log.debug(f"Key: {key} Value: {valueread}")
             # Some values have defaults that are set instead of nothing:
             if key == "device.key.path":
                 self.assertThat(
@@ -123,6 +124,18 @@ class PySysTest(BaseTest):
             elif key == "device.cert.path":
                 self.assertThat(
                     "expect == valueread", expect=DEFAULTCERTPATH, valueread=valueread
+                )
+            elif key == "c8y.root.cert.path":
+                self.assertThat(
+                    "expect == valueread",
+                    expect=DEFAULTROOTCERTPATH,
+                    valueread=valueread,
+                )
+            elif key == "azure.root.cert.path":
+                self.assertThat(
+                    "expect == valueread",
+                    expect=DEFAULTROOTCERTPATH,
+                    valueread=valueread,
                 )
             else:
                 self.assertThat("expect == valueread", expect=None, valueread=valueread)
