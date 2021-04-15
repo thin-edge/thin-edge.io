@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Represents a path to a file or directory.
 ///
@@ -36,5 +36,17 @@ impl TryInto<String> for FilePath {
             .into_os_string()
             .into_string()
             .map_err(FilePathToStringConversionFailure)
+    }
+}
+
+impl AsRef<Path> for FilePath {
+    fn as_ref(&self) -> &Path {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for FilePath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_string_lossy())
     }
 }
