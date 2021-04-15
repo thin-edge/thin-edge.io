@@ -64,6 +64,8 @@ impl BridgeConfig {
     }
 
     pub fn validate(&self) -> Result<(), ConnectError> {
+        // XXX: This is actually wrong. Our address looks like this: `domain:port`
+        // `Url::parse` will treat `domain` as `schema` ...
         Url::parse(&self.address)?;
 
         if !self.bridge_root_cert_path.as_ref().exists() {
