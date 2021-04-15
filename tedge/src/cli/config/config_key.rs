@@ -43,7 +43,6 @@ impl ConfigKey {
             config_key!(DeviceKeyPathSetting),
             config_key!(DeviceCertPathSetting),
             config_key!(C8yUrlSetting),
-            config_key!(C8yUrlSetting),
             config_key!(C8yRootCertPathSetting),
             config_key!(AzureUrlSetting),
             config_key!(AzureRootCertPathSetting),

@@ -1,6 +1,4 @@
-use crate::config::{
-    ConfigError, TEdgeConfig, C8Y_URL, DEVICE_CERT_PATH, DEVICE_ID, DEVICE_KEY_PATH,
-};
+use crate::config::ConfigError;
 use crate::utils::users;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
@@ -11,12 +9,12 @@ use crate::{
 use certificate::{KeyCertPair, NewCertificateConfig, PemCertificate};
 use reqwest::{StatusCode, Url};
 use std::{
-    convert::TryFrom,
     fs::{File, OpenOptions},
     io::prelude::*,
-    path::{Path, PathBuf},
+    path::Path,
 };
 use structopt::StructOpt;
+use tedge_config::*;
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeCertOpt {
@@ -43,25 +41,31 @@ pub struct CreateCertCmd {
     id: String,
 
     /// The path where the device certificate will be stored
-    cert_path: String,
+    cert_path: FilePath,
 
     /// The path where the device private key will be stored
-    key_path: String,
+    key_path: FilePath,
+
+    /// The config repository for updating the TEdgeConfig
+    config_repository: TEdgeConfigRepository,
 }
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
     /// The path where the device certificate will be stored
-    cert_path: String,
+    cert_path: FilePath,
 }
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
     /// The path of the certificate to be removed
-    cert_path: String,
+    cert_path: FilePath,
 
     /// The path of the private key to be removed
-    key_path: String,
+    key_path: FilePath,
+
+    /// The config repository for updating the TEdgeConfig
+    config_repository: TEdgeConfigRepository,
 }
 
 #[derive(StructOpt, Debug)]
@@ -79,35 +83,16 @@ pub enum UploadCertOpt {
 
 impl BuildCommand for UploadCertOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.config;
+        let config = context.config_repository.load()?;
 
         match self {
-            UploadCertOpt::C8y { username } => {
-                let device_id = config.device.id.ok_or_else(|| ConfigError::ConfigNotSet {
-                    key: String::from(DEVICE_ID),
-                })?;
-
-                let path = PathBuf::try_from(config.device.cert_path.ok_or_else(|| {
-                    ConfigError::ConfigNotSet {
-                        key: String::from(DEVICE_CERT_PATH),
-                    }
-                })?)
-                .expect("Path conversion failed unexpectedly!"); // This is Infallible that means it should never happen.
-
-                let host = utils::config::parse_user_provided_address(config.c8y.url.ok_or_else(
-                    || ConfigError::ConfigNotSet {
-                        key: String::from(C8Y_URL),
-                    },
-                )?)?;
-
-                Ok((UploadCertCmd {
-                    device_id,
-                    path,
-                    host,
-                    username,
-                })
-                .into_boxed())
-            }
+            UploadCertOpt::C8y { username } => Ok((UploadCertCmd {
+                device_id: config.query(DeviceIdSetting)?,
+                path: config.query(DeviceCertPathSetting)?,
+                host: config.query(C8yUrlSetting)?,
+                username,
+            })
+            .into_boxed()),
         }
     }
 }
@@ -128,8 +113,8 @@ struct UploadCertBody {
 
 struct UploadCertCmd {
     device_id: String,
-    path: PathBuf,
-    host: String,
+    path: FilePath,
+    host: ConnectUrl,
     username: String,
 }
 
@@ -160,7 +145,7 @@ impl UploadCertCmd {
         // and therefore we need to get tenant_id.
         let tenant_id = get_tenant_id_blocking(
             &client,
-            build_get_tenant_id_url(&self.host)?,
+            build_get_tenant_id_url(self.host.as_str())?,
             &self.username,
             &password,
         )?;
@@ -173,7 +158,7 @@ impl UploadCertCmd {
         tenant_id: &str,
         password: &str,
     ) -> Result<(), CertError> {
-        let post_url = build_upload_certificate_url(&self.host, tenant_id)?;
+        let post_url = build_upload_certificate_url(self.host.as_str(), tenant_id)?;
 
         let post_body = UploadCertBody {
             auto_registration_enabled: true,
@@ -215,7 +200,7 @@ pub enum CertError {
         Run `tedge cert remove` first to generate a new certificate.
     "#
     )]
-    CertificateAlreadyExists { path: String },
+    CertificateAlreadyExists { path: FilePath },
 
     #[error(
         r#"No certificate has been attached to that device.
@@ -223,7 +208,7 @@ pub enum CertError {
         Run `tedge cert create` to generate a new certificate.
     "#
     )]
-    CertificateNotFound { path: String },
+    CertificateNotFound { path: FilePath },
 
     #[error(
         r#"No private key has been attached to that device.
@@ -231,7 +216,7 @@ pub enum CertError {
         Run `tedge cert create` to generate a new key and certificate.
     "#
     )]
-    KeyNotFound { path: String },
+    KeyNotFound { path: FilePath },
 
     #[error(
         r#"A private key already exists and would be overwritten.
@@ -239,7 +224,7 @@ pub enum CertError {
         Run `tedge cert remove` first to generate a new certificate and private key.
     "#
     )]
-    KeyAlreadyExists { path: String },
+    KeyAlreadyExists { path: FilePath },
 
     #[error(transparent)]
     ConfigError(#[from] ConfigError),
@@ -280,15 +265,11 @@ pub enum CertError {
 
 impl CertError {
     /// Improve the error message in case the error in a IO error on the certificate file.
-    fn cert_context(self, path: &str) -> CertError {
+    fn cert_context(self, path: FilePath) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    CertError::CertificateAlreadyExists { path: path.into() }
-                }
-                std::io::ErrorKind::NotFound => {
-                    CertError::CertificateNotFound { path: path.into() }
-                }
+                std::io::ErrorKind::AlreadyExists => CertError::CertificateAlreadyExists { path },
+                std::io::ErrorKind::NotFound => CertError::CertificateNotFound { path },
                 _ => self,
             },
             _ => self,
@@ -296,13 +277,11 @@ impl CertError {
     }
 
     /// Improve the error message in case the error in a IO error on the private key file.
-    fn key_context(self, path: &str) -> CertError {
+    fn key_context(self, path: FilePath) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    CertError::KeyAlreadyExists { path: path.into() }
-                }
-                std::io::ErrorKind::NotFound => CertError::KeyNotFound { path: path.into() },
+                std::io::ErrorKind::AlreadyExists => CertError::KeyAlreadyExists { path },
+                std::io::ErrorKind::NotFound => CertError::KeyNotFound { path },
                 _ => self,
             },
             _ => self,
@@ -312,47 +291,31 @@ impl CertError {
 
 impl BuildCommand for TEdgeCertOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
+        let config = context.config_repository.load()?;
+
         let cmd = match self {
             TEdgeCertOpt::Create { id } => {
                 let cmd = CreateCertCmd {
                     id,
-                    cert_path: context.config.device.cert_path.ok_or_else(|| {
-                        ConfigError::ConfigNotSet {
-                            key: String::from(DEVICE_CERT_PATH),
-                        }
-                    })?,
-                    key_path: context.config.device.key_path.ok_or_else(|| {
-                        ConfigError::ConfigNotSet {
-                            key: String::from(DEVICE_KEY_PATH),
-                        }
-                    })?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
+                    key_path: config.query(DeviceKeyPathSetting)?,
+                    config_repository: context.config_repository,
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertOpt::Show => {
                 let cmd = ShowCertCmd {
-                    cert_path: context.config.device.cert_path.ok_or_else(|| {
-                        ConfigError::ConfigNotSet {
-                            key: String::from(DEVICE_CERT_PATH),
-                        }
-                    })?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertOpt::Remove => {
                 let cmd = RemoveCertCmd {
-                    cert_path: context.config.device.cert_path.ok_or_else(|| {
-                        ConfigError::ConfigNotSet {
-                            key: String::from(DEVICE_CERT_PATH),
-                        }
-                    })?,
-                    key_path: context.config.device.key_path.ok_or_else(|| {
-                        ConfigError::ConfigNotSet {
-                            key: String::from(DEVICE_KEY_PATH),
-                        }
-                    })?,
+                    cert_path: config.query(DeviceCertPathSetting)?,
+                    key_path: config.query(DeviceKeyPathSetting)?,
+                    config_repository: context.config_repository,
                 };
                 cmd.into_boxed()
             }
@@ -408,17 +371,14 @@ impl CreateCertCmd {
     ) -> Result<(), CertError> {
         let _user_guard = user_manager.become_user(users::BROKER_USER)?;
 
-        let cert_path = Path::new(&self.cert_path);
-        let key_path = Path::new(&self.key_path);
-
-        paths::validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
-        paths::validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
+        paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
+        paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
         // Creating files with permission 644
-        let mut cert_file =
-            create_new_file(&self.cert_path).map_err(|err| err.cert_context(&self.cert_path))?;
-        let mut key_file =
-            create_new_file(&self.key_path).map_err(|err| err.key_context(&self.key_path))?;
+        let mut cert_file = create_new_file(&self.cert_path)
+            .map_err(|err| err.cert_context(self.cert_path.clone()))?;
+        let mut key_file = create_new_file(&self.key_path)
+            .map_err(|err| err.key_context(self.key_path.clone()))?;
 
         let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
 
@@ -445,11 +405,11 @@ impl CreateCertCmd {
         Ok(())
     }
 
-    fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = TEdgeConfig::from_default_config()?;
-        config.device.id = Some(self.id.clone());
+    fn update_tedge_config(&self) -> Result<(), ConfigError> {
+        let mut config = self.config_repository.load()?;
+        config.update(WritableDeviceIdSetting, self.id.clone())?;
 
-        let _ = config.write_to_default_config()?;
+        let () = self.config_repository.store(config)?;
 
         Ok(())
     }
@@ -457,15 +417,14 @@ impl CreateCertCmd {
 
 impl ShowCertCmd {
     fn show_certificate(&self) -> Result<(), CertError> {
-        let cert_path = &self.cert_path;
-        let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
+        let pem = PemCertificate::from_pem_file(&self.cert_path).map_err(|err| match err {
             certificate::CertificateError::IoError(from) => {
-                CertError::IoError(from).cert_context(cert_path)
+                CertError::IoError(from).cert_context(self.cert_path.clone())
             }
             from => CertError::CertificateError(from),
         })?;
 
-        println!("Device certificate: {}", cert_path);
+        println!("Device certificate: {}", self.cert_path);
         println!("Subject: {}", pem.subject()?);
         println!("Issuer: {}", pem.issuer()?);
         println!("Valid from: {}", pem.not_before()?);
@@ -484,12 +443,11 @@ impl RemoveCertCmd {
         Ok(())
     }
 
-    fn update_tedge_config(&self) -> Result<(), CertError> {
-        let mut config = TEdgeConfig::from_default_config()?;
-        config.device.id = None;
+    fn update_tedge_config(&self) -> Result<(), ConfigError> {
+        let mut config = self.config_repository.load()?;
+        config.unset(WritableDeviceIdSetting)?;
 
-        let _ = config.write_to_default_config()?;
-
+        let () = self.config_repository.store(config)?;
         Ok(())
     }
 }
@@ -513,7 +471,7 @@ fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
     Ok(content)
 }
 
-fn create_new_file(path: &str) -> Result<File, CertError> {
+fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
     Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
 }
 
@@ -552,7 +510,7 @@ mod tests {
     use super::*;
     use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
-    use std::fs::File;
+    use std::fs;
     use tempfile::*;
 
     #[test]
@@ -561,33 +519,45 @@ mod tests {
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
+        let config_repository =
+            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            config_repository,
         };
 
-        assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
-            .err()
-            .is_none());
+        assert_matches!(
+            cmd.create_test_certificate(&NewCertificateConfig::default(), &UserManager::new()),
+            Ok(())
+        );
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
         assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
     }
 
     #[test]
     fn check_certificate_is_not_overwritten() {
+        let dir = tempdir().unwrap();
+
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let key_path = temp_file_path(&dir, "my-device-key.pem");
+
         let cert_content = "some cert content";
         let key_content = "some key content";
-        let cert_file = temp_file_with_content(cert_content);
-        let key_file = temp_file_with_content(key_content);
-        let id = "my-device-id";
+
+        fs::write(&cert_path, cert_content).unwrap();
+        fs::write(&key_path, key_content).unwrap();
+
+        let config_repository =
+            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
-            id: String::from(id),
-            cert_path: String::from(cert_file.path().to_str().unwrap()),
-            key_path: String::from(key_file.path().to_str().unwrap()),
+            id: "my-device-id".into(),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+            config_repository,
         };
 
         assert!(cmd
@@ -595,22 +565,23 @@ mod tests {
             .ok()
             .is_none());
 
-        let mut cert_file = cert_file.reopen().unwrap();
-        assert_eq!(file_content(&mut cert_file), cert_content);
-
-        let mut key_file = key_file.reopen().unwrap();
-        assert_eq!(file_content(&mut key_file), key_content);
+        assert_eq!(fs::read(&cert_path).unwrap(), cert_content.as_bytes());
+        assert_eq!(fs::read(&key_path).unwrap(), key_content.as_bytes());
     }
 
     #[test]
     fn create_certificate_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let cert_path = FilePath::from("/non/existent/cert/path");
+        let config_repository =
+            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
-            id: "my-device-id".to_string(),
-            cert_path: "/non/existent/cert/path".to_string(),
+            id: "my-device-id".into(),
+            cert_path,
             key_path,
+            config_repository,
         };
 
         let cert_error = cmd
@@ -623,11 +594,15 @@ mod tests {
     fn create_key_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let key_path = FilePath::from("/non/existent/key/path");
+        let config_repository =
+            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
-            id: "my-device-id".to_string(),
+            id: "my-device-id".into(),
             cert_path,
-            key_path: "/non/existent/key/path".to_string(),
+            key_path,
+            config_repository,
         };
 
         let cert_error = cmd
@@ -735,26 +710,12 @@ mod tests {
         assert_matches!(result, CertError::UrlParseError(url::ParseError::EmptyHost));
     }
 
-    fn temp_file_path(dir: &TempDir, filename: &str) -> String {
-        String::from(dir.path().join(filename).to_str().unwrap())
+    fn temp_file_path(dir: &TempDir, filename: &str) -> FilePath {
+        dir.path().join(filename).into()
     }
 
-    fn temp_file_with_content(content: &str) -> NamedTempFile {
-        let file = NamedTempFile::new().unwrap();
-        file.as_file().write_all(content.as_bytes()).unwrap();
-        file
-    }
-
-    fn file_content(file: &mut File) -> String {
-        let mut content = String::new();
-        file.read_to_string(&mut content).unwrap();
-        content
-    }
-
-    fn parse_pem_file(path: &str) -> Result<pem::Pem, String> {
-        let mut file = File::open(path).map_err(|err| err.to_string())?;
-        let content = file_content(&mut file);
-
+    fn parse_pem_file(path: impl AsRef<Path>) -> Result<pem::Pem, String> {
+        let content = fs::read(path).map_err(|err| err.to_string())?;
         pem::parse(content).map_err(|err| err.to_string())
     }
 }
