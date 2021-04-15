@@ -1,8 +1,9 @@
-use crate::cli::connect::{az::*, c8y::*};
 use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
-
 use structopt::StructOpt;
+
+const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeDisconnectBridgeCli {
