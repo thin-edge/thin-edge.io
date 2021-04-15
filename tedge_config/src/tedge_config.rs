@@ -1,4 +1,5 @@
 use crate::*;
+use certificate::{CertificateError, PemCertificate};
 use std::convert::{TryFrom, TryInto};
 
 /// Represents the complete configuration of a thin edge device.
@@ -14,13 +15,13 @@ pub struct TEdgeConfig {
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceIdSetting) -> ConfigSettingResult<String> {
-        self.data
-            .device
-            .id
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: DeviceIdSetting::KEY,
-            })
+        let cert_path = self.query(DeviceCertPathSetting)?;
+        let pem = PemCertificate::from_pem_file(cert_path)
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        let device_id = pem
+            .subject_common_name()
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        Ok(device_id)
     }
 
     fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
@@ -39,6 +40,22 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
                 "To set 'device.id', use `tedge cert create --device-id <id>`."
             ),
         })
+    }
+}
+
+fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ConfigSettingError {
+    match &err {
+        CertificateError::IoError(io_err) => match io_err.kind() {
+            std::io::ErrorKind::NotFound => ConfigSettingError::ConfigNotSet { key },
+            _ => ConfigSettingError::DerivationFailed {
+                key,
+                cause: format!("{}", err),
+            },
+        },
+        _ => ConfigSettingError::DerivationFailed {
+            key,
+            cause: format!("{}", err),
+        },
     }
 }
 
