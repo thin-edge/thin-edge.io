@@ -1,12 +1,12 @@
-use crate::cli::connect::*;
 use crate::cli::disconnect::error::*;
 use crate::command::*;
 use crate::services::{
     mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
 };
 use crate::utils::{paths, users::*};
-
 use which::which;
+
+const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {

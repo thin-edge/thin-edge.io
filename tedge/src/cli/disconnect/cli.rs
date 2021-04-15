@@ -1,8 +1,9 @@
-use crate::cli::connect::{az::*, c8y::*};
 use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
-
 use structopt::StructOpt;
+
+const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
+const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 
 #[derive(StructOpt, Debug)]
 pub enum TEdgeDisconnectBridgeCli {
@@ -13,10 +14,7 @@ pub enum TEdgeDisconnectBridgeCli {
 }
 
 impl BuildCommand for TEdgeDisconnectBridgeCli {
-    fn build_command(
-        self,
-        _context: BuildContext,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, _context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let cmd = match self {
             TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_file: C8Y_CONFIG_FILENAME.into(),
