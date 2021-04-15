@@ -1,6 +1,6 @@
 use crate::cli::config::{commands::*, config_key::*};
 use crate::command::*;
-use crate::config::*;
+use crate::ConfigError;
 use structopt::StructOpt;
 use tedge_config::ConfigRepository;
 

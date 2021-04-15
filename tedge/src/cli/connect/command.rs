@@ -1,11 +1,11 @@
 use crate::cli::connect::*;
 use crate::command::{Command, ExecutionContext};
-use crate::config::ConfigError;
 use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
 };
 use crate::utils::paths;
 use crate::utils::users::UserManager;
+use crate::ConfigError;
 use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;

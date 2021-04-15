@@ -1,11 +1,10 @@
-use crate::config::*;
 use crate::services;
 use crate::utils::paths;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DisconnectBridgeError {
     #[error(transparent)]
-    Configuration(#[from] ConfigError),
+    Configuration(#[from] crate::ConfigError),
 
     #[error("File operation error. Check permissions for {1}.")]
     FileOperationFailed(#[source] std::io::Error, String),

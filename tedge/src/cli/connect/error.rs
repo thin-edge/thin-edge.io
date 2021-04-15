@@ -4,7 +4,7 @@ pub enum ConnectError {
     Certificate,
 
     #[error(transparent)]
-    Configuration(#[from] crate::config::ConfigError),
+    Configuration(#[from] crate::ConfigError),
 
     #[error("Connection is already established. To remove existing connection use 'tedge disconnect {cloud}' and try again.",)]
     ConfigurationExists { cloud: String },

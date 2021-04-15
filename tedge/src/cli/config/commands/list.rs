@@ -1,6 +1,6 @@
 use crate::cli::config::config_key::*;
 use crate::command::{Command, ExecutionContext};
-use crate::config::ConfigError;
+use crate::ConfigError;
 use tedge_config::*;
 
 pub struct ListConfigCommand {

@@ -16,10 +16,7 @@ pub enum TEdgeConnectOpt {
 }
 
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(
-        self,
-        context: BuildContext,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(match self {
             TEdgeConnectOpt::C8y => ConnectCommand {
                 config_repository: context.config_repository,

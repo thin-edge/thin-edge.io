@@ -1,7 +1,7 @@
-use crate::config::ConfigError;
 use crate::utils::users;
 use crate::utils::users::UserManager;
 use crate::utils::{paths, paths::PathsError};
+use crate::ConfigError;
 use crate::{
     command::{BuildCommand, BuildContext, Command, ExecutionContext},
     utils,

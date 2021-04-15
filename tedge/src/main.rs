@@ -7,9 +7,11 @@ use structopt::StructOpt;
 mod certificate;
 mod cli;
 mod command;
-mod config;
+mod error;
 mod services;
 mod utils;
+
+type ConfigError = crate::error::TEdgeError;
 
 use command::{BuildCommand, BuildContext, ExecutionContext};
 
@@ -19,9 +21,6 @@ fn main() -> anyhow::Result<()> {
     let _user_guard = context.user_manager.become_user(utils::users::TEDGE_USER)?;
 
     let opt = cli::Opt::from_args();
-
-    let config = config::TEdgeConfig::from_default_config()
-        .with_context(|| "failed to read the tedge configuration")?;
 
     let tedge_config_location = if crate::utils::users::UserManager::running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
@@ -33,10 +32,7 @@ fn main() -> anyhow::Result<()> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
 
-    let build_context = BuildContext {
-        config,
-        config_repository,
-    };
+    let build_context = BuildContext { config_repository };
 
     let cmd = opt
         .tedge
