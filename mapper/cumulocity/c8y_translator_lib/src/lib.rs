@@ -41,6 +41,185 @@ pub struct MultiValueMeasurement {
     values: Vec<SingleValueMeasurement>,
 }
 
+#[derive(Debug, Clone)]
+pub enum MeasurementStreamItem<'a> {
+    MeasurementType {
+        typename: &'a str,
+    },
+    Timestamp {
+        timestamp: &'a str, /*chrono::DateTime<chrono::FixedOffset>*/
+    },
+    MeasurementData {
+        key: &'a str,
+        value: f64,
+    },
+    StartMeasurementGroup {
+        key: &'a str,
+    },
+    EndMeasurementGroup,
+}
+
+enum ThinEdgeIteratorState {
+    Start,
+    AtValue {
+        index: usize,
+        sub_index: Option<usize>,
+    },
+    End,
+}
+
+pub struct ThinEdgeIterator<'a> {
+    thin_edge_json: &'a ThinEdgeJson,
+    state: ThinEdgeIteratorState,
+}
+
+impl<'a> Iterator for ThinEdgeIterator<'a> {
+    type Item = MeasurementStreamItem<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.current();
+        self.state = self.next_state();
+        item
+    }
+}
+
+impl<'a> ThinEdgeIterator<'a> {
+    fn current(&self) -> Option<MeasurementStreamItem<'a>> {
+        match self.state {
+            ThinEdgeIteratorState::Start => Some(MeasurementStreamItem::Timestamp {
+                timestamp: self.thin_edge_json.timestamp.as_str(),
+            }),
+
+            ThinEdgeIteratorState::AtValue { index, sub_index } => {
+                match self.thin_edge_json.values.get(index) {
+                    Some(ThinEdgeValue::Single(single)) => {
+                        Some(MeasurementStreamItem::MeasurementData {
+                            key: single.name.as_str(),
+                            value: single.value,
+                        })
+                    }
+                    Some(ThinEdgeValue::Multi(multi)) => match sub_index {
+                        None => Some(MeasurementStreamItem::StartMeasurementGroup {
+                            key: multi.name.as_str(),
+                        }),
+                        Some(idx) => match multi.values.get(idx) {
+                            Some(single) => Some(MeasurementStreamItem::MeasurementData {
+                                key: single.name.as_str(),
+                                value: single.value,
+                            }),
+                            None => Some(MeasurementStreamItem::EndMeasurementGroup),
+                        },
+                    },
+                    None => None,
+                }
+            }
+
+            ThinEdgeIteratorState::End => None,
+        }
+    }
+
+    fn next_state(&self) -> ThinEdgeIteratorState {
+        match self.state {
+            ThinEdgeIteratorState::Start => ThinEdgeIteratorState::AtValue {
+                index: 0,
+                sub_index: None,
+            },
+            ThinEdgeIteratorState::AtValue { index, sub_index } => {
+                match self.thin_edge_json.values.get(index) {
+                    Some(ThinEdgeValue::Single(_single)) => ThinEdgeIteratorState::AtValue {
+                        index: index + 1,
+                        sub_index: None,
+                    },
+                    Some(ThinEdgeValue::Multi(multi)) => match sub_index {
+                        None => ThinEdgeIteratorState::AtValue {
+                            index,
+                            sub_index: Some(0),
+                        },
+                        Some(idx) => match multi.values.get(idx) {
+                            Some(_single) => ThinEdgeIteratorState::AtValue {
+                                index,
+                                sub_index: Some(idx + 1),
+                            },
+                            None => ThinEdgeIteratorState::AtValue {
+                                index: index + 1,
+                                sub_index: None,
+                            },
+                        },
+                    },
+                    None => ThinEdgeIteratorState::End,
+                }
+            }
+
+            ThinEdgeIteratorState::End => ThinEdgeIteratorState::End,
+        }
+    }
+}
+
+impl ThinEdgeJson {
+    pub fn iter(&self) -> ThinEdgeIterator {
+        ThinEdgeIterator {
+            thin_edge_json: self,
+            state: ThinEdgeIteratorState::Start,
+        }
+    }
+}
+
+#[test]
+fn test_iterator() -> Result<(), ThinEdgeJsonError> {
+    use assert_matches::*;
+
+    let input = r#"{
+           "time" : "2013-06-22T17:03:14.000+02:00",
+           "temperature": 10.0,
+           "location": {
+            "x": 1.0,
+            "y": 2.0
+           }
+     }"#;
+
+    let thin_edge_json = ThinEdgeJson::from_utf8(input.as_bytes(), chrono::Utc::now())?;
+    let mut iter = thin_edge_json.iter();
+
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::Timestamp {
+            timestamp: "2013-06-22T17:03:14.000+02:00"
+        })
+    );
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::MeasurementData {
+            key: "temperature",
+            value
+        }) if value == 10.0
+    );
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::StartMeasurementGroup { key: "location" })
+    );
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::MeasurementData {
+            key: "x",
+            value
+        }) if value == 1.0
+    );
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::MeasurementData {
+            key: "y",
+            value
+        }) if value == 2.0
+    );
+    assert_matches!(
+        iter.next(),
+        Some(MeasurementStreamItem::EndMeasurementGroup)
+    );
+    assert_matches!(iter.next(), None);
+
+    Ok(())
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct CumulocityJson {
     c8y_json: JsonValue,
