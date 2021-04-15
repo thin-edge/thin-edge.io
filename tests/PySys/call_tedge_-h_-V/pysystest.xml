@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate local publishing and subscribing</title>
+	<title>Validate command line option -h -V</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -22,4 +22,5 @@
 	  <requirement id=""/>
 	</requirements>
   </traceability>
+  <skipped reason="Disabled, see https://cumulocity.atlassian.net/browse/CIT-318"/>
 </pysystest>

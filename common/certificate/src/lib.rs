@@ -5,6 +5,7 @@ use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
 use sha1::{Digest, Sha1};
+use std::path::Path;
 use zeroize::Zeroizing;
 
 pub struct PemCertificate {
@@ -12,7 +13,7 @@ pub struct PemCertificate {
 }
 
 impl PemCertificate {
-    pub fn from_pem_file(path: &str) -> Result<PemCertificate, CertificateError> {
+    pub fn from_pem_file(path: impl AsRef<Path>) -> Result<PemCertificate, CertificateError> {
         let file = std::fs::File::open(path)?;
         let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
         Ok(PemCertificate { pem })
