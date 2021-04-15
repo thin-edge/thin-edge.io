@@ -1,10 +1,6 @@
-use crate::{
-    cli::{
-        connect::{az::AZURE_CONFIG_FILENAME, c8y::C8Y_CONFIG_FILENAME},
-        disconnect::disconnect_bridge::DisconnectBridgeCommand,
-    },
-    command::{BuildCommand, BuildContext, Command},
-};
+use crate::cli::connect::{az::*, c8y::*};
+use crate::cli::disconnect::disconnect_bridge::*;
+use crate::command::*;
 
 use structopt::StructOpt;
 
