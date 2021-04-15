@@ -34,9 +34,9 @@ pub enum MqttCmd {
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
-        /// Avoid printing the message topics on the console
-        #[structopt(long = "no-topic")]
-        no_topic: bool,
+        /// Print only the MQTT message to the console and not the topic
+        #[structopt(short, long)]
+        brief: bool,
     },
 }
 
@@ -84,7 +84,7 @@ impl Command for MqttCmd {
             MqttCmd::Sub {
                 topic,
                 qos,
-                no_topic: _,
+                brief: _,
             } => {
                 format!("subscribe the topic \"{}\" with QoS \"{:?}\".", topic, qos)
             }
@@ -98,11 +98,7 @@ impl Command for MqttCmd {
                 message,
                 qos,
             } => publish(topic, message, *qos)?,
-            MqttCmd::Sub {
-                topic,
-                qos,
-                no_topic,
-            } => subscribe(topic, *qos, *no_topic)?,
+            MqttCmd::Sub { topic, qos, brief } => subscribe(topic, *qos, *brief)?,
         }
         Ok(())
     }
@@ -155,7 +151,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
 }
 
 #[tokio::main]
-async fn subscribe(topic: &str, qos: QoS, no_topic: bool) -> Result<(), MqttError> {
+async fn subscribe(topic: &str, qos: QoS, brief: bool) -> Result<(), MqttError> {
     let client_id = format!("{}-{}", SUB_CLIENT_PREFIX, process::id());
     let config = Config::new(DEFAULT_HOST, DEFAULT_PORT).clean_session();
     let mqtt = Client::connect(client_id.as_str(), &config).await?;
@@ -181,7 +177,7 @@ async fn subscribe(topic: &str, qos: QoS, no_topic: bool) -> Result<(), MqttErro
 
             maybe_message = messages.next().fuse() => {
                 match maybe_message {
-                    Some(message) =>  handle_message(message, no_topic).await?,
+                    Some(message) =>  handle_message(message, brief).await?,
                     None => break
                  }
             }
@@ -198,8 +194,8 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
     Ok(())
 }
 
-async fn handle_message(message: Message, no_topic: bool) -> Result<(), MqttError> {
-    if no_topic {
+async fn handle_message(message: Message, brief: bool) -> Result<(), MqttError> {
+    if brief {
         let s = format!("{}", String::from_utf8(message.payload)?);
         async_println(&s).await?;
     } else {

@@ -29,7 +29,7 @@ class PySysTest(BaseTest):
 
         sub2 = self.startProcess(
             command=sudo,
-            arguments=[tedge, "mqtt", "sub", "--no-topic", "atopic"],
+            arguments=[tedge, "mqtt", "sub", "--brief", "atopic"],
             stdouterr="tedge_sub_no_topic",
             background=True,
         )
