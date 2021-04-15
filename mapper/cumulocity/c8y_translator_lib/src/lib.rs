@@ -77,80 +77,72 @@ impl<'a> Iterator for ThinEdgeIterator<'a> {
     type Item = MeasurementStreamItem<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = self.current();
-        self.state = self.next_state();
-        item
-    }
-}
-
-impl<'a> ThinEdgeIterator<'a> {
-    fn current(&self) -> Option<MeasurementStreamItem<'a>> {
         match self.state {
-            ThinEdgeIteratorState::Start => Some(MeasurementStreamItem::Timestamp {
-                timestamp: self.thin_edge_json.timestamp.as_str(),
-            }),
+            ThinEdgeIteratorState::Start => {
+                self.state = ThinEdgeIteratorState::AtValue {
+                    index: 0,
+                    sub_index: None,
+                };
 
+                Some(MeasurementStreamItem::Timestamp {
+                    timestamp: self.thin_edge_json.timestamp.as_str(),
+                })
+            }
             ThinEdgeIteratorState::AtValue { index, sub_index } => {
                 match self.thin_edge_json.values.get(index) {
                     Some(ThinEdgeValue::Single(single)) => {
+                        self.state = ThinEdgeIteratorState::AtValue {
+                            index: index + 1,
+                            sub_index: None,
+                        };
                         Some(MeasurementStreamItem::MeasurementData {
                             key: single.name.as_str(),
                             value: single.value,
                         })
                     }
                     Some(ThinEdgeValue::Multi(multi)) => match sub_index {
-                        None => Some(MeasurementStreamItem::StartMeasurementGroup {
-                            key: multi.name.as_str(),
-                        }),
-                        Some(idx) => match multi.values.get(idx) {
-                            Some(single) => Some(MeasurementStreamItem::MeasurementData {
-                                key: single.name.as_str(),
-                                value: single.value,
-                            }),
-                            None => Some(MeasurementStreamItem::EndMeasurementGroup),
-                        },
-                    },
-                    None => None,
-                }
-            }
-
-            ThinEdgeIteratorState::End => None,
-        }
-    }
-
-    fn next_state(&self) -> ThinEdgeIteratorState {
-        match self.state {
-            ThinEdgeIteratorState::Start => ThinEdgeIteratorState::AtValue {
-                index: 0,
-                sub_index: None,
-            },
-            ThinEdgeIteratorState::AtValue { index, sub_index } => {
-                match self.thin_edge_json.values.get(index) {
-                    Some(ThinEdgeValue::Single(_single)) => ThinEdgeIteratorState::AtValue {
-                        index: index + 1,
-                        sub_index: None,
-                    },
-                    Some(ThinEdgeValue::Multi(multi)) => match sub_index {
-                        None => ThinEdgeIteratorState::AtValue {
-                            index,
-                            sub_index: Some(0),
-                        },
-                        Some(idx) => match multi.values.get(idx) {
-                            Some(_single) => ThinEdgeIteratorState::AtValue {
+                        None => {
+                            self.state = ThinEdgeIteratorState::AtValue {
                                 index,
-                                sub_index: Some(idx + 1),
-                            },
-                            None => ThinEdgeIteratorState::AtValue {
-                                index: index + 1,
-                                sub_index: None,
-                            },
+                                sub_index: Some(0),
+                            };
+
+                            Some(MeasurementStreamItem::StartMeasurementGroup {
+                                key: multi.name.as_str(),
+                            })
+                        }
+                        Some(idx) => match multi.values.get(idx) {
+                            Some(single) => {
+                                self.state = ThinEdgeIteratorState::AtValue {
+                                    index,
+                                    sub_index: Some(idx + 1),
+                                };
+
+                                Some(MeasurementStreamItem::MeasurementData {
+                                    key: single.name.as_str(),
+                                    value: single.value,
+                                })
+                            }
+                            None => {
+                                self.state = ThinEdgeIteratorState::AtValue {
+                                    index: index + 1,
+                                    sub_index: None,
+                                };
+                                Some(MeasurementStreamItem::EndMeasurementGroup)
+                            }
                         },
                     },
-                    None => ThinEdgeIteratorState::End,
+                    None => {
+                        self.state = ThinEdgeIteratorState::End;
+                        None
+                    }
                 }
             }
 
-            ThinEdgeIteratorState::End => ThinEdgeIteratorState::End,
+            ThinEdgeIteratorState::End => {
+                self.state = ThinEdgeIteratorState::End;
+                None
+            }
         }
     }
 }
