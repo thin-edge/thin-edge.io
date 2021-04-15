@@ -146,8 +146,8 @@ bridge_attempt_unsubscribe false
     }
 
     #[test]
-    fn test_serialize_with_capath_correctly() {
-        let dir = tempfile::TempDir::new().unwrap();
+    fn test_serialize_with_capath_correctly() -> anyhow::Result<()> {
+        let dir = tempfile::TempDir::new()?;
         let bridge_root_cert_path: FilePath = dir.path().into();
 
         let bridge = BridgeConfig {
@@ -170,7 +170,7 @@ bridge_attempt_unsubscribe false
             bridge_attempt_unsubscribe: false,
         };
         let mut serialized_config = Vec::<u8>::new();
-        bridge.serialize(&mut serialized_config).unwrap();
+        bridge.serialize(&mut serialized_config)?;
 
         let bridge_capath = format!("bridge_capath {}", bridge_root_cert_path);
         let mut expected = r#"### Bridge
@@ -197,6 +197,8 @@ bridge_attempt_unsubscribe false
         );
 
         assert_eq!(serialized_config, expected.as_bytes());
+
+        Ok(())
     }
 
     #[test]
@@ -262,13 +264,13 @@ bridge_attempt_unsubscribe false
 
     #[test]
     fn test_validate_ok() -> anyhow::Result<()> {
-        let ca_file = tempfile::NamedTempFile::new().unwrap();
+        let ca_file = tempfile::NamedTempFile::new()?;
         let bridge_ca_path: FilePath = ca_file.path().into();
 
-        let cert_file = tempfile::NamedTempFile::new().unwrap();
+        let cert_file = tempfile::NamedTempFile::new()?;
         let bridge_certfile: FilePath = cert_file.path().into();
 
-        let key_file = tempfile::NamedTempFile::new().unwrap();
+        let key_file = tempfile::NamedTempFile::new()?;
         let bridge_keyfile: FilePath = key_file.path().into();
 
         let correct_url = "http://test.com";
@@ -319,8 +321,8 @@ bridge_attempt_unsubscribe false
     }
 
     #[test]
-    fn test_validate_wrong_key_path() {
-        let cert_file = tempfile::NamedTempFile::new().unwrap();
+    fn test_validate_wrong_key_path() -> anyhow::Result<()> {
+        let cert_file = tempfile::NamedTempFile::new()?;
         let bridge_certfile: FilePath = cert_file.path().into();
         let correct_url = "http://test.com";
         let non_existent_path = "/path/that/does/not/exist";
@@ -333,6 +335,8 @@ bridge_attempt_unsubscribe false
         };
 
         assert!(config.validate().is_err());
+
+        Ok(())
     }
     fn default_bridge_config() -> BridgeConfig {
         BridgeConfig {
