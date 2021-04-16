@@ -25,21 +25,20 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
     }
 
     fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting {
-            message: concat!(
-                "Setting the device id is only allowed with `tedge cert create`.\n",
-                "To set 'device.id', use `tedge cert create --device-id <id>`."
-            ),
-        })
+        Err(device_id_read_only_error())
     }
 
     fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting {
-            message: concat!(
-                "Setting the device id is only allowed with `tedge cert create`.\n",
-                "To set 'device.id', use `tedge cert create --device-id <id>`."
-            ),
-        })
+        Err(device_id_read_only_error())
+    }
+}
+
+fn device_id_read_only_error() -> ConfigSettingError {
+    ConfigSettingError::ReadonlySetting {
+        message: concat!(
+            "The device id is read from the device id and cannot be set directly.\n",
+            "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+        ),
     }
 }
 

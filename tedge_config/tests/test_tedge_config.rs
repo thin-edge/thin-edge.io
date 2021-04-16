@@ -8,7 +8,6 @@ use tempfile::TempDir;
 fn test_parse_config_with_all_values() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
-id = "ABCD1234"
 key_path = "/path/to/key"
 cert_path = "/path/to/cert"
 
@@ -158,7 +157,6 @@ root_cert_path = "/path/to/azure/root/cert"
 fn test_parse_config_missing_c8y_configuration() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
-id = "ABCD1234"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -194,7 +192,6 @@ id = "ABCD1234"
 fn test_parse_config_missing_azure_configuration() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
-id = "ABCD1234"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
