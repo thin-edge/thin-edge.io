@@ -33,9 +33,9 @@ Current MSRV is `1.46.0`.
 ### Cross compilation toolchain (optional)
 
 thin-edge.io can be compiled for target architecture on non-target device, this is called cross compilation.
-Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called `cargo cross`.
+Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called [cargo cross](https://github.com/rust-embedded/cross).
 
-To install `cargo cross`:
+To install [cargo cross](https://github.com/rust-embedded/cross):
 
 ```shell
 cargo install cross
@@ -43,9 +43,9 @@ cargo install cross
 
 ### Debian packaging (optional)
 
-We use `cargo deb` to build our debian packages, the tool takes care of all the work to package thin-edge.io.
+We use [cargo deb](https://github.com/mmstick/cargo-deb) to build our debian packages, the tool takes care of all the work to package thin-edge.io.
 
-To install `cargo deb` use:
+To install [cargo deb](https://github.com/mmstick/cargo-deb) use:
 
 ```shell
 cargo install cargo-deb
@@ -121,7 +121,7 @@ total 2948
 
 ## Cross compiling
 
-To create binaries which can run on different platform than one you are currently on you can use `cargo cross`:
+To create binaries which can run on different platform than one you are currently on you can use [cargo cross](https://github.com/rust-embedded/cross):
 
 ```shell
 cross build --target armv7-unknown-linux-gnueabihf
