@@ -36,7 +36,7 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
 fn device_id_read_only_error() -> ConfigSettingError {
     ConfigSettingError::ReadonlySetting {
         message: concat!(
-            "The device id is read from the device id and cannot be set directly.\n",
+            "The device id is read from the device certificate and cannot be set directly.\n",
             "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
         ),
     }
