@@ -1,6 +1,6 @@
 # Building thin-edge.io
 
-## Installing tools
+## Installing toolchain
 
 ### Rust toolchain
 
@@ -31,15 +31,24 @@ thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stabl
 
 Current MSRV is `1.46.0`.
 
+### Cross compilation toolchain
+
+thin-edge.io can be compiled for target architecture on non-target device, this is called cross compilation. Currently we support Raspberry Pi 3 building for `armv7` architecture with Rust's cross compilation toolchain called `cargo cross`.
+To install `cargo cross`:
+
+```shell
+cargo install cross
+```
+
 ## Compiling
 
 To build thin-edge.io we are using `cargo`.
 
-As we are using a cargo workspace for all our crates all binaries are put in `./target/` directory with target's name eg: `./target/debug` or `./target/armv7-unknown-linux-gnueabihf` dependent on the type of build.
+As we are using  `cargo workspace` for all our crates. All compiled files are put in `./target/` directory with target's name eg: `./target/debug` or `./target/release` for native builds and for cross compiled targets `./target/architecture/debug` or `./target/architecture/release` dependent on the target of the build.
 
 ### Compiling dev
 
-To compile in dev mode we use following command:
+To compile dev profile (with debug symbols) we use following command:
 
 ```shell
 cargo build
@@ -49,17 +58,20 @@ Build artifacts can be found in `./target/debug` and will include executables:
 
 ```shell
 $ ls ./target/debug/ted*
--rwxrwxr-x   2 user user 108549968 Jan 1 00:00 tedge
--rw-rw-r--   1 user user      3442 Jan 1 00:00 tedge.d
--rwxrwxr-x   2 user user  62168456 Jan 1 00:00 tedge_mapper
--rw-rw-r--   1 user user       411 Jan 1 00:00 tedge_mapper.d
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
 
 Binaries can be run eg: `./target/debug/tedge`.
+Alternatively, you can use `cargo` to build and run executable in a single command:
+
+```shell
+cargo run --bin tedge
+```
 
 ### Compiling release
 
-To compile in dev mode we use following command:
+To compile release profile we use following command:
 
 ```shell
 cargo build --release
@@ -68,14 +80,34 @@ cargo build --release
 Build artifacts can be found in `./target/release` and will include executables:
 
 ```shell
-$ ls ./target/debug/ted*
--rwxrwxr-x   2 user user 108549968 Jan 1 00:00 tedge
--rw-rw-r--   1 user user      3442 Jan 1 00:00 tedge.d
--rwxrwxr-x   2 user user  62168456 Jan 1 00:00 tedge_mapper
--rw-rw-r--   1 user user       411 Jan 1 00:00 tedge_mapper.d
+$ ls ./target/release/ted*
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
 
 Binaries can be run eg: `./target/release/tedge`.
+
+## Cross compiling
+
+To create binaries which can run on different platform than one you are currently on you can use `cargo cross`:
+
+```shell
+cross build --target armv7-unknown-linux-gnueabihf
+```
+
+Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` and will include executables:
+
+```shell
+$ ls ./target/armv7-unknown-linux-gnueabihf/debug/ted*
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
+```
+
+To cross compile release version of the binaries just add `--release` to the above command like so:
+
+```shell
+cross build --target armv7-unknown-linux-gnueabihf --release
+```
 
 ## Running tests
 
