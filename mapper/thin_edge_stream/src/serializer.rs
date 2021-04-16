@@ -1,5 +1,5 @@
-use crate::builder::GroupedMeasurementCollector;
-use crate::builder::MeasurementCollectorError;
+use crate::measurement::GroupedMeasurementConsumer;
+use crate::measurement::MeasurementStreamError;
 use chrono::{DateTime, FixedOffset};
 use std::io::Write;
 
@@ -18,7 +18,7 @@ pub enum ThinEdgeJsonSerializationError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MeasurementCollectorError(#[from] MeasurementCollectorError),
+    MeasurementCollectorError(#[from] MeasurementStreamError),
 }
 
 impl ThinEdgeJsonSerializer {
@@ -31,7 +31,7 @@ impl ThinEdgeJsonSerializer {
     }
 }
 
-impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
+impl GroupedMeasurementConsumer for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
     type Data = Vec<u8>;
 
@@ -43,7 +43,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
 
     fn end(mut self) -> Result<Self::Data, Self::Error> {
         if self.is_within_group {
-            return Err(MeasurementCollectorError::UnexpectedEndOfData.into());
+            return Err(MeasurementStreamError::UnexpectedEndOfData.into());
         }
 
         self.buffer.push(b'}');
@@ -52,7 +52,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
 
     fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
         if self.is_within_group {
-            return Err(MeasurementCollectorError::UnexpectedTimestamp.into());
+            return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
         if self.needs_separator {
@@ -76,7 +76,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
 
     fn start_group(&mut self, group: &str) -> Result<(), Self::Error> {
         if self.is_within_group {
-            return Err(MeasurementCollectorError::UnexpectedStartOfGroup.into());
+            return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
         if self.needs_separator {
@@ -89,7 +89,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonSerializer {
 
     fn end_group(&mut self) -> Result<(), Self::Error> {
         if !self.is_within_group {
-            return Err(MeasurementCollectorError::UnexpectedEndOfGroup.into());
+            return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
         self.buffer.push(b'}');

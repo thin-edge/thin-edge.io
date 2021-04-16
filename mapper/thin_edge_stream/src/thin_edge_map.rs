@@ -1,5 +1,5 @@
-use crate::builder::GroupedMeasurementCollector;
-use crate::builder::MeasurementCollector;
+use crate::measurement::GroupedMeasurementConsumer;
+use crate::measurement::MeasurementConsumer;
 use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
 
@@ -36,7 +36,7 @@ impl ThinEdgeJsonMapBuilder {
     }
 }
 
-impl GroupedMeasurementCollector for ThinEdgeJsonMapBuilder {
+impl GroupedMeasurementConsumer for ThinEdgeJsonMapBuilder {
     type Error = ThinEdgeJsonMapError;
     type Data = ThinEdgeJsonMap;
 
@@ -86,7 +86,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonMapBuilder {
     }
 }
 
-impl MeasurementCollector for ThinEdgeJsonMapBuilder {
+impl MeasurementConsumer for ThinEdgeJsonMapBuilder {
     type Error = ThinEdgeJsonMapError;
     type Data = ThinEdgeJsonMap;
 

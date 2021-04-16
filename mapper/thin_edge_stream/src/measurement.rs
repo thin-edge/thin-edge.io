@@ -1,6 +1,6 @@
 use chrono::{DateTime, FixedOffset};
 
-pub trait MeasurementCollector {
+pub trait MeasurementConsumer {
     type Error;
     type Data;
 
@@ -13,7 +13,7 @@ pub trait MeasurementCollector {
     fn sub_measurement(&mut self, group: &str, name: &str, value: f64) -> Result<(), Self::Error>;
 }
 
-pub trait GroupedMeasurementCollector {
+pub trait GroupedMeasurementConsumer {
     type Error;
     type Data;
 
@@ -27,20 +27,20 @@ pub trait GroupedMeasurementCollector {
     fn end_group(&mut self) -> Result<(), Self::Error>;
 }
 
-pub trait MeasurementBuilder {
+pub trait MeasurementProducer {
     fn build<C, E, D>(&self, collector: C) -> Result<D, E>
     where
-        C: MeasurementCollector<Error = E, Data = D>;
+        C: MeasurementConsumer<Error = E, Data = D>;
 }
 
-pub trait GroupedMeasurementBuilder {
+pub trait GroupedMeasurementProducer {
     fn build<C, E, D>(&self, collector: C) -> Result<D, E>
     where
-        C: GroupedMeasurementCollector<Error = E, Data = D>;
+        C: GroupedMeasurementConsumer<Error = E, Data = D>;
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum MeasurementCollectorError {
+pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
     UnexpectedTimestamp,
 

@@ -1,6 +1,6 @@
-use crate::builder::GroupedMeasurementBuilder;
-use crate::builder::GroupedMeasurementCollector;
-use crate::builder::MeasurementCollectorError;
+use crate::measurement::GroupedMeasurementProducer;
+use crate::measurement::GroupedMeasurementConsumer;
+use crate::measurement::MeasurementStreamError;
 use chrono::{DateTime, FixedOffset};
 
 pub struct ThinEdgeJson {
@@ -23,10 +23,10 @@ pub struct MultiValueMeasurement {
     pub values: Vec<SingleValueMeasurement>,
 }
 
-impl GroupedMeasurementBuilder for ThinEdgeJson {
+impl GroupedMeasurementProducer for ThinEdgeJson {
     fn build<C, E, D>(&self, mut collector: C) -> Result<D, E>
     where
-        C: GroupedMeasurementCollector<Error = E, Data = D>,
+        C: GroupedMeasurementConsumer<Error = E, Data = D>,
     {
         collector.start()?;
         collector.timestamp(self.timestamp)?;
@@ -68,10 +68,10 @@ impl ThinEdgeJsonBuilder {
 #[derive(thiserror::Error, Debug)]
 pub enum ThinEdgeJsonBuilderError {
     #[error(transparent)]
-    MeasurementCollectorError(#[from] MeasurementCollectorError),
+    MeasurementCollectorError(#[from] MeasurementStreamError),
 }
 
-impl GroupedMeasurementCollector for ThinEdgeJsonBuilder {
+impl GroupedMeasurementConsumer for ThinEdgeJsonBuilder {
     type Error = ThinEdgeJsonBuilderError;
     type Data = ThinEdgeJson;
 
@@ -99,7 +99,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonBuilder {
 
     fn start_group(&mut self, name: &str) -> Result<(), Self::Error> {
         match self.group {
-            Some(_) => Err(MeasurementCollectorError::UnexpectedStartOfGroup.into()),
+            Some(_) => Err(MeasurementStreamError::UnexpectedStartOfGroup.into()),
             None => {
                 let group = MultiValueMeasurement {
                     name: name.to_owned(),
@@ -113,7 +113,7 @@ impl GroupedMeasurementCollector for ThinEdgeJsonBuilder {
 
     fn end_group(&mut self) -> Result<(), Self::Error> {
         match self.group.take() {
-            None => Err(MeasurementCollectorError::UnexpectedEndOfGroup.into()),
+            None => Err(MeasurementStreamError::UnexpectedEndOfGroup.into()),
             Some(group) => {
                 let items = ThinEdgeValue::Multi(group);
                 self.data.values.push(items);
