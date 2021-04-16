@@ -31,6 +31,7 @@
 * [Install thin-edge.io on your device](docs/src/howto-guides/002_installation.md)
 * [Connect your device to Cumulocity](docs/src/tutorials/connect-c8y.md)
 * [Connect your device to Azure](docs/src/tutorials/connect-azure.md)
+* [How to build from source](./BUILDING.md)
 * [**Explore the Docs**](docs/src/SUMMARY.md)
 <br/>
 <br/>

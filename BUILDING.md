@@ -4,9 +4,8 @@
 
 ### Rust toolchain
 
-To install Rust please follow [Official installation guide](https://www.rust-lang.org/tools/install).
-To get started you need Cargo's bin directory (`$HOME/.cargo/bin`) in your PATH
-environment variable.
+To install Rust follow [Official installation guide](https://www.rust-lang.org/tools/install).
+To get started you need Cargo's bin directory (`$HOME/.cargo/bin`) in your `PATH` environment variable.
 
 ```shell
 export PATH=$PATH:$HOME/.cargo/bin
@@ -31,20 +30,32 @@ thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stabl
 
 Current MSRV is `1.46.0`.
 
-### Cross compilation toolchain
+### Cross compilation toolchain (optional)
 
-thin-edge.io can be compiled for target architecture on non-target device, this is called cross compilation. Currently we support Raspberry Pi 3 building for `armv7` architecture with Rust's cross compilation toolchain called `cargo cross`.
+thin-edge.io can be compiled for target architecture on non-target device, this is called cross compilation.
+Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called `cargo cross`.
+
 To install `cargo cross`:
 
 ```shell
 cargo install cross
 ```
 
+### Debian packaging (optional)
+
+We use `cargo deb` to build our debian packages, the tool takes care of all the work to package thin-edge.io.
+
+To install `cargo deb` use:
+
+```shell
+cargo install cargo-deb
+```
+
 ## Compiling
 
 To build thin-edge.io we are using `cargo`.
 
-As we are using  `cargo workspace` for all our crates. All compiled files are put in `./target/` directory with target's name eg: `./target/debug` or `./target/release` for native builds and for cross compiled targets `./target/architecture/debug` or `./target/architecture/release` dependent on the target of the build.
+As we are using  `cargo workspace` for all our crates. All compiled files are put in `./target/` directory with target's name eg: `./target/debug` or `./target/release` for native builds and for cross compiled targets `./target/<architecture>/debug` or `./target/<architecture>/release` dependent on the target of the build.
 
 ### Compiling dev
 
@@ -57,7 +68,7 @@ cargo build
 Build artifacts can be found in `./target/debug` and will include executables:
 
 ```shell
-$ ls ./target/debug/ted*
+$ ls ./target/debug/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
@@ -80,12 +91,33 @@ cargo build --release
 Build artifacts can be found in `./target/release` and will include executables:
 
 ```shell
-$ ls ./target/release/ted*
+$ ls ./target/release/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
 
 Binaries can be run eg: `./target/release/tedge`.
+
+## Building deb package
+
+Currently thin-edge.io contains 2 binaries, `tedge` (cli) and `tedge_mapper` which are packaged as separate debian packages. To create following commands are to be issued:
+
+```shell
+cargo deb -p tedge
+```
+
+```shell
+cargo deb -p tedge_mapper
+```
+
+All resulting packages are going to be in: `./target/debian/` directory:
+
+```shell
+$ ls ./target/debian -l
+total 2948
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.1.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.1.0_amd64.deb
+```
 
 ## Cross compiling
 
