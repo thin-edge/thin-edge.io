@@ -57,7 +57,7 @@ cargo build
 Build artifacts can be found in `./target/debug` and will include executables:
 
 ```shell
-$ ls ./target/debug/ted*
+$ ls ./target/debug/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
@@ -98,7 +98,7 @@ cross build --target armv7-unknown-linux-gnueabihf
 Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` and will include executables:
 
 ```shell
-$ ls ./target/armv7-unknown-linux-gnueabihf/debug/ted*
+$ ls ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
