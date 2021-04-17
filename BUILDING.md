@@ -1,5 +1,21 @@
 # Building thin-edge.io
 
+## Get the code
+
+thin-edge.io code is in git repository on github to acquire the code use following command:
+
+* via SSH:
+
+```shell
+git clone git@github.com:thin-edge/thin-edge.io.git
+```
+
+* or via HTTPS:
+
+```shell
+git clone https://github.com/thin-edge/thin-edge.io.git
+```
+
 ## Installing toolchain
 
 ### Rust toolchain
