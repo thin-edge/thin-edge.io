@@ -1,4 +1,3 @@
-// use crate::certificate2;
 use crate::command::{BuildCommand, BuildContext, Command};
 use structopt::clap;
 use structopt::StructOpt;
