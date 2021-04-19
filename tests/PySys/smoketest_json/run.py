@@ -29,6 +29,10 @@ class PySysTest(EnvironmentC8y):
         # bad hack to wait until the receive window is empty again
         time.sleep(self.timeslot)
 
+
+        # even worse hack to see if Cumulocity refuses when we disconnect and connect to fast
+        time.sleep(20)
+
     def execute(self):
         super().execute()
         self.log.info("Execute")
