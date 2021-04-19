@@ -15,16 +15,16 @@ class EnvironmentC8y(BaseTest):
 
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
-
+        self.systemctl = "/usr/bin/systemctl"
         self.log.info("EnvironmentC8y Setup")
         self.addCleanupFunction(self.mycleanup)
 
         # Check if tedge-mapper is in active
         serv_mapper = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
             stdouterr="serv_mapper1",
-            expectedExitStatus="==3",
+            expectedExitStatus="==3", # 3: disabled
         )
 
         if serv_mapper.exitStatus != 3:
@@ -41,8 +41,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["mosquitto", "status"],
+            command=self.systemctl,
+            arguments=["status", "mosquitto"],
             stdouterr="serv_mosq2",
             expectedExitStatus="==0",
         )
@@ -53,8 +53,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if tedge-mapper is active again
         serv_mapper = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
             stdouterr="serv_mapper3",
         )
 
@@ -71,8 +71,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["mosquitto", "status"],
+            command=self.systemctl,
+            arguments=["status", "mosquitto"],
             stdouterr="serv_mosq",
             expectedExitStatus="==0",
         )
@@ -83,8 +83,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if tedge-mapper is active
         serv_mapper = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
             stdouterr="serv_mapper1",
             expectedExitStatus="==0",
         )
@@ -106,8 +106,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if tedge-mapper is inactive
         serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
             stdouterr="serv_mapper2",
             expectedExitStatus="==3",
         )
