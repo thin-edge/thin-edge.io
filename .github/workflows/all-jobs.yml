@@ -345,7 +345,7 @@ jobs:
   install-and-use-amd64:
 
     runs-on: Ubuntu-20.04
-    needs: [syncy-build]
+    needs: [sync-build]
 
     steps:
         - name: checkout
@@ -398,7 +398,7 @@ jobs:
   install-and-use-rpi:
 
     runs-on: [self-hosted, Linux, ARM]
-    needs: [syncy-build]
+    needs: [sync-build]
 
     steps:
         - name: checkout
@@ -459,7 +459,7 @@ jobs:
 
   system-test:
     runs-on: [self-hosted, Linux, ARM]
-    needs: [syncy-integration]
+    needs: [sync-integration]
 
     steps:
 
