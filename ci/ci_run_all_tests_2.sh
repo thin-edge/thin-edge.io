@@ -34,6 +34,7 @@ cd tests/PySys/
 
 #pysys.py run --record
 
-pysys.py run --record -c 100 c8y_restart_bridge 
+#pysys.py run --record -c 20 c8y_restart_bridge
+pysys.py run --record -c 20 smoketest_json
 
 deactivate
