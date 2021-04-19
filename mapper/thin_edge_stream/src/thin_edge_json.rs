@@ -1,5 +1,5 @@
-use crate::measurement::GroupedMeasurementProducer;
 use crate::measurement::GroupedMeasurementConsumer;
+use crate::measurement::GroupedMeasurementProducer;
 use crate::measurement::MeasurementStreamError;
 use chrono::{DateTime, FixedOffset};
 
