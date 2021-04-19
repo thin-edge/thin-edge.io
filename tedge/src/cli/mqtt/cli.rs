@@ -37,10 +37,7 @@ pub enum TEdgeMqttCli {
 }
 
 impl BuildCommand for TEdgeMqttCli {
-    fn build_command(
-        self,
-        _context: BuildContext,
-    ) -> Result<Box<dyn Command>, crate::config::ConfigError> {
+    fn build_command(self, _context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {

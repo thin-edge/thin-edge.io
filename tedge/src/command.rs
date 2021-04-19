@@ -1,4 +1,3 @@
-use crate::config;
 use crate::utils::users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
@@ -155,13 +154,12 @@ pub trait Command {
 /// }
 /// ```
 pub trait BuildCommand {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, config::ConfigError>;
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError>;
 }
 
 /// The context for `BuildCommand`
 ///
 pub struct BuildContext {
-    pub config: config::TEdgeConfig,
     pub config_repository: tedge_config::TEdgeConfigRepository,
 }
 

@@ -47,6 +47,9 @@ impl AsRef<Path> for FilePath {
 
 impl std::fmt::Display for FilePath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.to_string_lossy())
+        match self.0.to_str() {
+            Some(s) => write!(f, "{}", s),
+            None => Err(std::fmt::Error),
+        }
     }
 }
