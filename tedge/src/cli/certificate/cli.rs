@@ -22,7 +22,7 @@ pub enum TEdgeCertCli {
     Remove,
 
     /// Upload root certificate
-    Upload(UploadCertOpt),
+    Upload(UploadCertCli),
 }
 
 impl BuildCommand for TEdgeCertCli {
@@ -64,7 +64,7 @@ impl BuildCommand for TEdgeCertCli {
 }
 
 #[derive(StructOpt, Debug)]
-pub enum UploadCertOpt {
+pub enum UploadCertCli {
     /// Upload root certificate to Cumulocity
     ///
     /// The command will upload root certificate to Cumulocity.
@@ -76,12 +76,12 @@ pub enum UploadCertOpt {
     },
 }
 
-impl BuildCommand for UploadCertOpt {
+impl BuildCommand for UploadCertCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.config_repository.load()?;
 
         match self {
-            UploadCertOpt::C8y { username } => Ok((UploadCertCmd {
+            UploadCertCli::C8y { username } => Ok((UploadCertCmd {
                 device_id: config.query(DeviceIdSetting)?,
                 path: config.query(DeviceCertPathSetting)?,
                 host: config.query(C8yUrlSetting)?,
