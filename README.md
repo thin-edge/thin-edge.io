@@ -2,6 +2,8 @@
 [![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
 
 
+Inofficial:
+
 ![commit-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/commit-workflow.yml/badge.svg)
 
 ![build-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)
@@ -9,6 +11,17 @@
 ![integration-test-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)
 
 ![system-test-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)
+
+Official:
+
+![commit-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml/badge.svg)
+
+![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)
+
+![integration-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)
+
+![system-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)
+
 
 
 <!-- PROJECT LOGO -->
