@@ -92,13 +92,6 @@ jobs:
           command: build
           args: --release --examples --target=${{ env.TARGET }}
 
-      - name: build examples for amd64
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release --examples
-
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
