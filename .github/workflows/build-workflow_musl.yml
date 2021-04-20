@@ -1,0 +1,114 @@
+
+name: build-workflow-musl
+
+on:
+  workflow_run:
+    workflows: ["commit-workflow"]
+    branches: [main, continuous_integration]
+    types:
+      - completed
+  workflow_dispatch:
+    branches: [ main, continuous_integration ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build_armv7_musl:
+
+    name: Build tedge and mapper Debian for armv7 musl
+    runs-on: Ubuntu-20.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    env:
+      TARGET: armv7-unknown-linux-musleabihf
+
+    steps:
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ env.TARGET}}
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: install cargo-strip
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-strip
+
+      - name: build cross release for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ env.TARGET }}
+
+      - name: strip binaries (cargo deb fails to strip)
+        # TODO This does not seem to work right
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: strip
+
+      - name: build tedge debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build tedge_mapper debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build examples
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --examples --target=${{ env.TARGET }}
+
+      - name: build examples for amd64
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: --release --examples
+
+      - name: upload debian packages as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-packages-armhf_musl
+          path: target/${{ env.TARGET }}/debian/*.deb
+
+      - name: upload examples as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples-armhf_musl
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
