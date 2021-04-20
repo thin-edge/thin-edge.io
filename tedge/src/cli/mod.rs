@@ -1,8 +1,8 @@
-use crate::certificate;
 use crate::command::{BuildCommand, BuildContext, Command};
 use structopt::clap;
 use structopt::StructOpt;
 
+mod certificate;
 mod config;
 mod connect;
 mod disconnect;
@@ -22,7 +22,7 @@ pub struct Opt {
 #[derive(StructOpt, Debug)]
 pub enum TEdgeOpt {
     /// Create and manage device certificate
-    Cert(certificate::TEdgeCertOpt),
+    Cert(certificate::TEdgeCertCli),
 
     /// Configure Thin Edge.
     Config(config::ConfigCmd),

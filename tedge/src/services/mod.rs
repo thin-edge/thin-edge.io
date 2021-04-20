@@ -195,9 +195,9 @@ impl SystemCtlCmd {
     }
 }
 
-impl Into<String> for SystemCtlCmd {
-    fn into(self) -> String {
-        self.as_str().into()
+impl From<SystemCtlCmd> for String {
+    fn from(val: SystemCtlCmd) -> Self {
+        val.as_str().into()
     }
 }
 
@@ -214,9 +214,9 @@ impl SystemCtlParam {
     }
 }
 
-impl Into<String> for SystemCtlParam {
-    fn into(self) -> String {
-        self.as_str().into()
+impl From<SystemCtlParam> for String {
+    fn from(val: SystemCtlParam) -> Self {
+        val.as_str().into()
     }
 }
 
