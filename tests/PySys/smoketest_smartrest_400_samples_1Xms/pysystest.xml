@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title></title>
+	<title>Roundtrip test C8y 400 samples 1Xms delay</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>

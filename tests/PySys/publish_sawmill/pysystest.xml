@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title></title>
+	<title>Publish to sawmill topic</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
