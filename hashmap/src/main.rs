@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 //mod tej_serializer;
-pub trait MeasurementCollector {
+pub trait MeasurementConsumer {
     type Error;
     type Data;
+    fn start(&mut self) -> Result<(), Self::Error>;
+    fn end(&mut self) -> Result<(), Self::Error>;
     fn timestamp(&mut self, value: String) -> Result<(), Self::Error>;
     fn measurement(
         &mut self,
@@ -11,6 +13,8 @@ pub trait MeasurementCollector {
         name: &str,
         value: f64,
     ) -> Result<(), Self::Error>;
+    fn start_group(&mut self, group: &str) -> Result<(), Self::Error>;
+    fn end_group(&mut self) -> Result<(), Self::Error>;
 }
 #[derive(Debug)]
 pub struct ThinEdgeJsonMap {
@@ -41,9 +45,18 @@ impl ThinEdgeJsonMap {
     }
 }
 
-impl MeasurementCollector for ThinEdgeJsonMap {
+impl MeasurementConsumer for ThinEdgeJsonMap {
     type Error = ThinEdgeJsonMapError;
     type Data = ThinEdgeJsonMap;
+
+    fn start(&mut self) -> Result<(), Self::Error> {
+       
+        Ok(())
+    }
+
+    fn end(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     fn timestamp(&mut self, value: String) -> Result<(), Self::Error> {
         self.timestamp = value;
@@ -84,19 +97,20 @@ impl MeasurementCollector for ThinEdgeJsonMap {
             }
         }
     }
+
+    fn start_group(&mut self, _group: &str) -> Result<(), Self::Error> {
+       
+        Ok(())
+    }
+
+    fn end_group(&mut self) -> Result<(), Self::Error> {
+       
+        Ok(())
+    }
 }
 
 use std::io::Write;
-pub trait MeasurementConsumer {
-    type Error;
-    type Data;
-    fn start(&mut self) -> Result<(), Self::Error>;
-    fn end(&mut self) -> Result<(), Self::Error>;
-    fn timestamp(&mut self, value: String) -> Result<(), Self::Error>;
-    fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error>;
-    fn start_group(&mut self, group: &str) -> Result<(), Self::Error>;
-    fn end_group(&mut self) -> Result<(), Self::Error>;
-}
+
 /// Serialize a series of measurements into a ThinEdgeJson byte-string.
 /// Perform no check beyond the fact that groups are properly closed.
 pub struct ThinEdgeJsonSerializer {
@@ -172,7 +186,7 @@ impl MeasurementConsumer for ThinEdgeJsonSerializer {
         Ok(())
     }
 
-    fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
+    fn measurement(&mut self, _grpname: Option<&str>, name: &str, value: f64) -> Result<(), Self::Error> {
         if self.needs_separator {
             self.buffer.push(b',');
         }
@@ -207,7 +221,8 @@ impl MeasurementConsumer for ThinEdgeJsonSerializer {
 }
 
 fn main() {
-    println!("Hello, world!");
+    
+    //Produce the TEJ from raw data
     let mut tej_producer = ThinEdgeJsonMap::new();
     tej_producer.timestamp("4-20-2020".into()).unwrap();
     tej_producer.measurement(None, "temperature", 25.0).unwrap();
@@ -233,16 +248,17 @@ fn main() {
     for (key, value) in tej_producer.values.iter() {
         match value {
             Measurement::Single(sv) => {
-                t_serializer.measurement(key,*sv);
+                t_serializer.measurement(None,key,*sv);
             }
             Measurement::Multi(m) => {
                 t_serializer.start_group(key);
                 for (key, value) in m.iter() {
-                    t_serializer.measurement(key, *value);
+                    t_serializer.measurement(None,key, *value);
                 }
                 t_serializer.end_group();
             }
         }
     }
+    //Prints the serialized TEJ Message
     t_serializer.end();
 }
