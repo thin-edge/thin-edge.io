@@ -104,4 +104,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: examples-armhf_musl
-          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+          path: target/armv7-unknown-linux-musleabihf/release/examples/sawtooth_publisher
