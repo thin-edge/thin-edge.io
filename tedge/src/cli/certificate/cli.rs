@@ -54,7 +54,17 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Upload(cmd) => cmd.build_command(context)?,
+            TEdgeCertCli::Upload(cmd) => {
+                let cmd = match cmd {
+                    UploadCertCli::C8y { username } => UploadCertCmd {
+                        device_id: config.query(DeviceIdSetting)?,
+                        path: config.query(DeviceCertPathSetting)?,
+                        host: config.query(C8yUrlSetting)?,
+                        username,
+                    },
+                };
+                cmd.into_boxed()
+            }
         };
 
         Ok(cmd)
@@ -72,20 +82,4 @@ pub enum UploadCertCli {
         /// The password is requested on /dev/tty, unless the $C8YPASS env var is set to the user password.
         username: String,
     },
-}
-
-impl BuildCommand for UploadCertCli {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.config_repository.load()?;
-
-        match self {
-            UploadCertCli::C8y { username } => Ok((UploadCertCmd {
-                device_id: config.query(DeviceIdSetting)?,
-                path: config.query(DeviceCertPathSetting)?,
-                host: config.query(C8yUrlSetting)?,
-                username,
-            })
-            .into_boxed()),
-        }
-    }
 }
