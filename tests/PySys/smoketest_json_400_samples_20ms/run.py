@@ -5,7 +5,7 @@ from pysys.basetest import BaseTest
 import sys
 
 sys.path.append("environments")
-from environment_c8y import EnvironmentC8y
+from environment_roundtrip_c8y import Environment_roundtrip_c8y
 
 import time
 
@@ -19,12 +19,9 @@ Then we validate the data from C8y
 """
 
 
-class PySysTest(EnvironmentC8y):
+class PySysTest(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.log.info("Setup")
-        self.addCleanupFunction(self.mycleanup)
-        self.timeslot = 10
 
         # bad hack to wait until the receive window is empty again
         time.sleep(self.timeslot)
@@ -33,12 +30,9 @@ class PySysTest(EnvironmentC8y):
         super().execute()
         self.log.info("Execute")
 
-        script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
-        cmd = os.path.expanduser(script)
-
         sub = self.startPython(
             arguments=[
-                cmd,
+                self.cmd,
                 "-m",
                 "JSON",
                 "-pub",
@@ -63,12 +57,7 @@ class PySysTest(EnvironmentC8y):
 
     def validate(self):
         super().validate()
-        self.log.info("Validate")
-        self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
-        self.assertGrep(
-            "stdout.out", expr="Timestamp verification PASSED", contains=True
-        )
 
     def mycleanup(self):
         super().mycleanup()
-        self.log.info("MyCleanup")
+
