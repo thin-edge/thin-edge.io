@@ -63,4 +63,7 @@ pub enum ConfigSettingError {
 
     #[error("Conversion into String failed")]
     ConversionIntoStringFailed,
+
+    #[error("Derivation for `{key}` failed: {cause}")]
+    DerivationFailed { key: &'static str, cause: String },
 }

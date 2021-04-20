@@ -1,7 +1,8 @@
-use crate::command::{Command, ExecutionContext};
-use tedge_config::*;
-
 use super::error::CertError;
+use crate::command::{Command, ExecutionContext};
+
+use certificate::PemCertificate;
+use tedge_config::*;
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
@@ -22,15 +23,12 @@ impl Command for ShowCertCmd {
 
 impl ShowCertCmd {
     fn show_certificate(&self) -> Result<(), CertError> {
-        let pem =
-            certificate::PemCertificate::from_pem_file(&self.cert_path).map_err(
-                |err| match err {
-                    certificate::CertificateError::IoError(from) => {
-                        CertError::IoError(from).cert_context(self.cert_path.clone())
-                    }
-                    from => CertError::CertificateError(from),
-                },
-            )?;
+        let pem = PemCertificate::from_pem_file(&self.cert_path).map_err(|err| match err {
+            certificate::CertificateError::IoError(from) => {
+                CertError::IoError(from).cert_context(self.cert_path.clone())
+            }
+            from => CertError::CertificateError(from),
+        })?;
 
         println!("Device certificate: {}", self.cert_path);
         println!("Subject: {}", pem.subject()?);

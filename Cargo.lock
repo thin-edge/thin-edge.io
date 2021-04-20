@@ -1779,6 +1779,7 @@ name = "tedge_config"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "certificate",
  "serde",
  "tempfile",
  "thiserror",

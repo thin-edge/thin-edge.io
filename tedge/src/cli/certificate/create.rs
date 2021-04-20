@@ -20,9 +20,6 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: FilePath,
-
-    /// The config repository for updating the TEdgeConfig
-    pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for CreateCertCmd {
@@ -33,7 +30,6 @@ impl Command for CreateCertCmd {
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let config = NewCertificateConfig::default();
         let () = self.create_test_certificate(&config, &context.user_manager)?;
-        let () = self.update_tedge_config()?;
         Ok(())
     }
 }
@@ -79,15 +75,6 @@ impl CreateCertCmd {
 
         Ok(())
     }
-
-    fn update_tedge_config(&self) -> Result<(), crate::ConfigError> {
-        let mut config = self.config_repository.load()?;
-        config.update(WritableDeviceIdSetting, self.id.clone())?;
-
-        let () = self.config_repository.store(config)?;
-
-        Ok(())
-    }
 }
 
 fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
@@ -108,14 +95,11 @@ mod tests {
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
-        let config_repository =
-            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            config_repository,
         };
 
         assert_matches!(
@@ -139,14 +123,10 @@ mod tests {
         fs::write(&cert_path, cert_content).unwrap();
         fs::write(&key_path, key_content).unwrap();
 
-        let config_repository =
-            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
-
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            config_repository,
         };
 
         assert!(cmd
@@ -163,14 +143,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let cert_path = FilePath::from("/non/existent/cert/path");
-        let config_repository =
-            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            config_repository,
         };
 
         let cert_error = cmd
@@ -184,14 +161,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = FilePath::from("/non/existent/key/path");
-        let config_repository =
-            TEdgeConfigRepository::new(TEdgeConfigLocation::from_custom_root(&dir));
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            config_repository,
         };
 
         let cert_error = cmd

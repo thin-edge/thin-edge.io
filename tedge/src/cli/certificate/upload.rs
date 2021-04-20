@@ -1,3 +1,4 @@
+use super::error::CertError;
 use crate::{
     command::{Command, ExecutionContext},
     utils,
@@ -7,8 +8,6 @@ use reqwest::{StatusCode, Url};
 use std::{io::prelude::*, path::Path};
 
 use tedge_config::*;
-
-use super::error::CertError;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
