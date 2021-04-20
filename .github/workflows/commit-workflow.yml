@@ -72,6 +72,14 @@ jobs:
           command: test
           args: --verbose
 
+      - name: Notify Teams
+        uses: opsless/ms-teams-github-actions@0.2.3
+        # https://github.com/opsless/ms-teams-github-actions
+        if: always() # to let this step always run even if previous step failed
+        with:
+          github-token: ${{ github.token }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI }}
+
   cargo-build:
 
     name: Run cargo build
@@ -167,21 +175,3 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: outdated
-
-  notifying-teams:
-
-    name: Notify Teams
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Notify Teams
-        uses: opsless/ms-teams-github-actions@main
-        # https://github.com/opsless/ms-teams-github-actions
-        if: always() # to let this step always run even if previous step failed
-        with:
-          github-token: ${{ github.token }}
-          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI }}
