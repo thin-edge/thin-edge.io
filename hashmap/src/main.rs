@@ -17,7 +17,7 @@ pub trait MeasurementConsumer {
     fn end_group(&mut self) -> Result<(), Self::Error>;
 }
 #[derive(Debug)]
-pub struct ThinEdgeJsonMap {
+pub struct MeasurementMap {
     pub timestamp: String,
     pub values: HashMap<String, Measurement>,
 }
@@ -36,21 +36,43 @@ pub enum ThinEdgeJsonMapError {
     DuplicatedSubMeasurement(String, String),
 }
 
-impl ThinEdgeJsonMap {
+impl MeasurementMap {
     fn new() -> Self {
         Self {
             timestamp: "4-20-2021".into(),
             values: HashMap::new(),
         }
     }
+
+    fn serialize_tej(&self) -> Vec<u8> {
+        let mut t_serializer = ThinEdgeJsonSerializer::new();
+        t_serializer.start();
+        t_serializer.timestamp(self.timestamp.clone());
+        for (key, value) in self.values.iter() {
+            match value {
+                Measurement::Single(sv) => {
+                    t_serializer.measurement(None, key, *sv);
+                }
+                Measurement::Multi(m) => {
+                    t_serializer.start_group(key);
+                    for (key, value) in m.iter() {
+                        t_serializer.measurement(None, key, *value);
+                    }
+                    t_serializer.end_group();
+                }
+            }
+        }
+        //Prints the serialized TEJ Message
+        t_serializer.end();
+        t_serializer.tej_serailized()
+    }
 }
 
-impl MeasurementConsumer for ThinEdgeJsonMap {
+impl MeasurementConsumer for MeasurementMap {
     type Error = ThinEdgeJsonMapError;
-    type Data = ThinEdgeJsonMap;
+    type Data = MeasurementMap;
 
     fn start(&mut self) -> Result<(), Self::Error> {
-       
         Ok(())
     }
 
@@ -99,12 +121,10 @@ impl MeasurementConsumer for ThinEdgeJsonMap {
     }
 
     fn start_group(&mut self, _group: &str) -> Result<(), Self::Error> {
-       
         Ok(())
     }
 
     fn end_group(&mut self) -> Result<(), Self::Error> {
-       
         Ok(())
     }
 }
@@ -151,6 +171,9 @@ impl ThinEdgeJsonSerializer {
             needs_separator: false,
         }
     }
+    fn tej_serailized(&mut self) -> Vec<u8> {
+        self.buffer.clone()
+    }
 }
 
 impl MeasurementConsumer for ThinEdgeJsonSerializer {
@@ -168,7 +191,7 @@ impl MeasurementConsumer for ThinEdgeJsonSerializer {
         }
 
         self.buffer.push(b'}');
-        println!("vector {:#?}", std::str::from_utf8(&self.buffer));
+        //println!("vector {:#?}", std::str::from_utf8(&self.buffer));
         Ok(())
     }
 
@@ -186,7 +209,12 @@ impl MeasurementConsumer for ThinEdgeJsonSerializer {
         Ok(())
     }
 
-    fn measurement(&mut self, _grpname: Option<&str>, name: &str, value: f64) -> Result<(), Self::Error> {
+    fn measurement(
+        &mut self,
+        _grpname: Option<&str>,
+        name: &str,
+        value: f64,
+    ) -> Result<(), Self::Error> {
         if self.needs_separator {
             self.buffer.push(b',');
         }
@@ -221,9 +249,8 @@ impl MeasurementConsumer for ThinEdgeJsonSerializer {
 }
 
 fn main() {
-    
     //Produce the TEJ from raw data
-    let mut tej_producer = ThinEdgeJsonMap::new();
+    let mut tej_producer = MeasurementMap::new();
     tej_producer.timestamp("4-20-2020".into()).unwrap();
     tej_producer.measurement(None, "temperature", 25.0).unwrap();
     tej_producer
@@ -239,26 +266,8 @@ fn main() {
         .measurement(Some("location"), "alti", 2100.5)
         .unwrap();
 
-    println!("values--->{:#?}", tej_producer);
+    println!("Deserialized Tej=> {:#?}", tej_producer);
 
-    //Serialize the TEJ to u8 bytes
-    let mut t_serializer = ThinEdgeJsonSerializer::new();
-    t_serializer.start();
-    t_serializer.timestamp(tej_producer.timestamp);
-    for (key, value) in tej_producer.values.iter() {
-        match value {
-            Measurement::Single(sv) => {
-                t_serializer.measurement(None,key,*sv);
-            }
-            Measurement::Multi(m) => {
-                t_serializer.start_group(key);
-                for (key, value) in m.iter() {
-                    t_serializer.measurement(None,key, *value);
-                }
-                t_serializer.end_group();
-            }
-        }
-    }
-    //Prints the serialized TEJ Message
-    t_serializer.end();
+    //Serialize the TEJ to u8 bytes    
+    println!("Serialized Tej=> {:?}", std::str::from_utf8(&tej_producer.serialize_tej()));
 }
