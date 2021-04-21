@@ -26,7 +26,7 @@ TODO : Further investigation necessary
 class SmoketestSmartRest400Samples1Xms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = '400'
-        self.delay = '15'
-        self.timeslot = '35'
+        self.samples = "400"
+        self.delay = "15"
+        self.timeslot = "35"
         self.style = "REST"

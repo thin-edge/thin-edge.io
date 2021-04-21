@@ -22,7 +22,7 @@ Then we validate the data from C8y
 class SmoketestJson400Samples10ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = '400'
-        self.delay = '10'
-        self.timeslot = '15'
+        self.samples = "400"
+        self.delay = "10"
+        self.timeslot = "15"
         self.style = "JSON"
