@@ -5,7 +5,7 @@ from pysys.basetest import BaseTest
 import sys
 
 sys.path.append("environments")
-from environment_c8y import EnvironmentC8y
+from environment_roundtrip_c8y import Environment_roundtrip_c8y
 
 import time
 
@@ -19,56 +19,11 @@ Then we validate the data from C8y
 """
 
 
-class PySysTest(EnvironmentC8y):
+class SmoketestJson400Samples20ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.log.info("Setup")
-        self.addCleanupFunction(self.mycleanup)
-        self.timeslot = 10
+        self.samples = '400'
+        self.delay = '10'
+        self.timeslot = '20'
+        self.style = "JSON"
 
-        # bad hack to wait until the receive window is empty again
-        time.sleep(self.timeslot)
-
-    def execute(self):
-        super().execute()
-        self.log.info("Execute")
-
-        script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
-        cmd = os.path.expanduser(script)
-
-        sub = self.startPython(
-            arguments=[
-                cmd,
-                "-m",
-                "JSON",
-                "-pub",
-                self.project.exampledir,
-                "-u",
-                self.project.username,
-                "-t",
-                self.project.tenant,
-                "-pass",
-                self.project.c8ypass,
-                "-id",
-                self.project.deviceid,
-                "-o",
-                "15",  # burst should take 8000ms
-                "-d",
-                "20",  # delay in ms
-                "-s",
-                "400",  # samples
-            ],
-            stdouterr="stdout",
-        )
-
-    def validate(self):
-        super().validate()
-        self.log.info("Validate")
-        self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
-        self.assertGrep(
-            "stdout.out", expr="Timestamp verification PASSED", contains=True
-        )
-
-    def mycleanup(self):
-        super().mycleanup()
-        self.log.info("MyCleanup")

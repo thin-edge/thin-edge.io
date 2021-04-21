@@ -5,7 +5,7 @@ from pysys.basetest import BaseTest
 import sys
 
 sys.path.append("environments")
-from environment_c8y import EnvironmentC8y
+from environment_roundtrip_c8y import Environment_roundtrip_c8y
 
 import time
 
@@ -19,7 +19,7 @@ Then we validate the data from C8y
 """
 
 
-class PySysTest(EnvironmentC8y):
+class SmoketestJson400Samples10ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
@@ -52,7 +52,7 @@ class PySysTest(EnvironmentC8y):
                 "-id",
                 self.project.deviceid,
                 "-o",
-                "10",  # burst should take 4000ms
+                "8",  # burst should take 4000ms
                 "-d",
                 "10",  # delay in ms
                 "-s",

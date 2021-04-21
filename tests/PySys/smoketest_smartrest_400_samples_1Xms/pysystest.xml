@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title></title>
+	<title>Smoketest Smart Rest 400 Samples 1Xms Delay</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PySysTest" module="run"/>
+	<class name="SmoketestSmartRest400Samples1Xms" module="run"/>
   </data>
   <traceability>
 	<requirements>

@@ -1,46 +1,36 @@
+
 import os
 import pysys
 from pysys.basetest import BaseTest
 
 import sys
 
-sys.path.append("environments")
-from environment_roundtrip_c8y import Environment_roundtrip_c8y
+from environment_c8y import EnvironmentC8y
 
 import time
 
-"""
-Roundtrip test C8y
 
-Given a configured system with configured certificate
-When we derive from EnvironmentC8y
-When we run the smoketest for JSON publishing with defaults a size of 20, 100ms delay
-Then we validate the data from C8y
-"""
-
-
-class SmokeTestJson(Environment_roundtrip_c8y):
+class Environment_roundtrip_c8y(EnvironmentC8y):
     def setup(self):
         super().setup()
-        self.log.info("Setup")
+        self.log.debug("C8y Roundtrip Setup")
         self.addCleanupFunction(self.mycleanup)
-        self.timeslot = 10
-
-        # bad hack to wait until the receive window is empty again
-        time.sleep(self.timeslot)
 
     def execute(self):
         super().execute()
-        self.log.info("Execute")
+        self.log.debug("C8y Roundtrip Execute")
 
-        script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
-        cmd = os.path.expanduser(script)
+        self.script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
+        self.cmd = os.path.expanduser(self.script)
+
+        # bad hack to wait until the receive window is empty again
+        time.sleep(int(self.timeslot))
 
         sub = self.startPython(
             arguments=[
-                cmd,
+                self.cmd,
                 "-m",
-                "JSON",
+                self.style,
                 "-pub",
                 self.project.exampledir,
                 "-u",
@@ -52,14 +42,18 @@ class SmokeTestJson(Environment_roundtrip_c8y):
                 "-id",
                 self.project.deviceid,
                 "-o",
-                str(self.timeslot),
+                self.timeslot,
+                "-d",
+                self.delay,
+                "-s",
+                self.samples,
             ],
             stdouterr="stdout",
         )
 
     def validate(self):
         super().validate()
-        self.log.info("Validate")
+        self.log.debug("C8y Roundtrip Validate")
         self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
         self.assertGrep(
             "stdout.out", expr="Timestamp verification PASSED", contains=True
@@ -67,4 +61,5 @@ class SmokeTestJson(Environment_roundtrip_c8y):
 
     def mycleanup(self):
         super().mycleanup()
-        self.log.info("MyCleanup")
+        self.log.debug("C8y Roundtrip MyCleanup")
+
