@@ -13,12 +13,12 @@ import time
 class Environment_roundtrip_c8y(EnvironmentC8y):
     def setup(self):
         super().setup()
-        self.log.info("C8y Roundtrip Setup")
+        self.log.debug("C8y Roundtrip Setup")
         self.addCleanupFunction(self.mycleanup)
 
     def execute(self):
         super().execute()
-        self.log.info("C8y Roundtrip Execute")
+        self.log.debug("C8y Roundtrip Execute")
 
         self.script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
         self.cmd = os.path.expanduser(self.script)
@@ -53,7 +53,7 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
 
     def validate(self):
         super().validate()
-        self.log.info("C8y Roundtrip Validate")
+        self.log.debug("C8y Roundtrip Validate")
         self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
         self.assertGrep(
             "stdout.out", expr="Timestamp verification PASSED", contains=True
@@ -61,5 +61,5 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
 
     def mycleanup(self):
         super().mycleanup()
-        self.log.info("C8y Roundtrip MyCleanup")
+        self.log.debug("C8y Roundtrip MyCleanup")
 

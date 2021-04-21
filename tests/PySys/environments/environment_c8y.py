@@ -12,6 +12,7 @@ service mosquitto and service tedge-mapper.
 
 class EnvironmentC8y(BaseTest):
     def setup(self):
+        self.log.debug("EnvironmentC8y Setup")
 
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
@@ -49,10 +50,10 @@ class EnvironmentC8y(BaseTest):
         )
 
     def execute(self):
-        self.log.info("EnvironmentC8y Execute")
+        self.log.debug("EnvironmentC8y Execute")
 
     def validate(self):
-        self.log.info("EnvironmentC8y Validate")
+        self.log.debug("EnvironmentC8y Validate")
 
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
@@ -69,7 +70,7 @@ class EnvironmentC8y(BaseTest):
         )
 
     def mycleanup(self):
-        self.log.info("EnvironmentC8y Cleanup")
+        self.log.debug("EnvironmentC8y Cleanup")
 
         # Disconnect Bridge
         disconnect = self.startProcess(
