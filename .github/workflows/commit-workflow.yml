@@ -44,11 +44,11 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: clippy
+#      - name: Cargo clippy
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: clippy
 
   cargo-test:
 
