@@ -2,7 +2,7 @@ pub mod error;
 pub mod systemd;
 
 pub use self::error::*;
-pub use self::systemd::SystemdServiceManager;
+pub use self::systemd::*;
 
 #[derive(Copy, Clone)]
 pub enum SystemService {

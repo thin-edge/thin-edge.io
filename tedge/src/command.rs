@@ -192,7 +192,7 @@ impl ExecutionContext {
     }
 
     pub fn system_service_manager(&self) -> impl crate::system_services::SystemServiceManager {
-        crate::system_services::SystemdServiceManager::new(self.user_manager.clone())
+        crate::system_services::SystemdManager::new(self.user_manager.clone())
     }
 }
 

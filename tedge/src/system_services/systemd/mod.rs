@@ -12,12 +12,12 @@ const SYSTEMCTL_ERROR_SERVICE_NOT_LOADED: ExitCode = 5;
 
 const SYSTEMCTL_BIN: &str = "systemctl";
 
-pub struct SystemdServiceManager {
+pub struct SystemdManager {
     systemctl_bin: String,
     user_manager: UserManager,
 }
 
-impl SystemdServiceManager {
+impl SystemdManager {
     pub fn new(user_manager: UserManager) -> Self {
         Self {
             systemctl_bin: SYSTEMCTL_BIN.into(),
@@ -26,9 +26,7 @@ impl SystemdServiceManager {
     }
 }
 
-// XXX: Very hard to distinguish "SystemdXXX" from "SystemXXX".
-// Rename to SystemServiceManagerFacility?
-impl SystemServiceManager for SystemdServiceManager {
+impl SystemServiceManager for SystemdManager {
     fn manager_name(&self) -> &str {
         "systemd"
     }
@@ -130,7 +128,7 @@ impl SystemServiceManager for SystemdServiceManager {
     }
 }
 
-impl SystemdServiceManager {
+impl SystemdManager {
     fn call_systemd_subcmd_sudo(
         &self,
         systemctl_subcmd: SystemCtlCmd,
