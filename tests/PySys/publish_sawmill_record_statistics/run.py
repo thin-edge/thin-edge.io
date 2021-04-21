@@ -1,7 +1,4 @@
 import os
-import pysys
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")

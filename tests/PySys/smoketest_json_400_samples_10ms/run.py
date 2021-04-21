@@ -1,13 +1,7 @@
-import os
-import pysys
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")
 from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-import time
 
 """
 Roundtrip test C8y 400 samples 10ms delay
@@ -22,7 +16,7 @@ Then we validate the data from C8y
 class SmoketestJson400Samples10ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = '400'
-        self.delay = '10'
-        self.timeslot = '15'
+        self.samples = "400"
+        self.delay = "10"
+        self.timeslot = "15"
         self.style = "JSON"

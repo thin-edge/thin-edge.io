@@ -1,7 +1,3 @@
-import pysys
-from pysys.constants import *
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")
@@ -21,7 +17,7 @@ see ../environment/environment_c8y
 """
 
 
-class PySysTest(EnvironmentC8y):
+class RestartBridge(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")

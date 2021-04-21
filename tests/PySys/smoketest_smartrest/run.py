@@ -1,14 +1,7 @@
-import pysys
-from pysys.constants import *
-from pysys.basetest import BaseTest
-
-import os
 import sys
 
 sys.path.append("environments")
 from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-import time
 
 """
 Roundtrip test C8y via SmartREST
@@ -25,7 +18,7 @@ Then we validate the data from C8y
 class SmoketestSmartRest(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = '20'
-        self.delay = '100'
-        self.timeslot = '10'
+        self.samples = "20"
+        self.delay = "100"
+        self.timeslot = "10"
         self.style = "REST"

@@ -1,7 +1,4 @@
 import os
-import pysys
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")
@@ -20,7 +17,7 @@ TODO : Add validation procedure
 """
 
 
-class PySysTest(EnvironmentC8y):
+class PublishFlux(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")

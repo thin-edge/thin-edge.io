@@ -1,13 +1,7 @@
-import os
-import pysys
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")
 from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-import time
 
 """
 Roundtrip test C8y 400 samples 1Xms delay
@@ -26,7 +20,7 @@ TODO : Further investigation necessary
 class SmoketestSmartRest400Samples1Xms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = '400'
-        self.delay = '15'
-        self.timeslot = '35'
+        self.samples = "400"
+        self.delay = "15"
+        self.timeslot = "35"
         self.style = "REST"
