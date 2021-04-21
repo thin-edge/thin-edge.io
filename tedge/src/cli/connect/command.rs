@@ -1,10 +1,7 @@
 use crate::cli::connect::*;
 use crate::command::{Command, ExecutionContext};
-use crate::services::{
-    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
-};
+use crate::system_services::*;
 use crate::utils::paths;
-use crate::utils::users::UserManager;
 use crate::ConfigError;
 use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::path::Path;
@@ -60,7 +57,7 @@ impl Command for ConnectCommand {
         new_bridge(
             &bridge_config,
             &self.common_mosquitto_config,
-            &context.user_manager,
+            &mut context.system_service_manager(),
         )?;
 
         println!(
@@ -235,10 +232,13 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
 fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
-    user_manager: &UserManager,
+    service_manager: &mut dyn SystemServiceManager,
 ) -> Result<(), ConnectError> {
-    println!("Checking if systemd is available.\n");
-    let () = services::systemd_available()?;
+    println!(
+        "Checking if {} is available.\n",
+        service_manager.manager_name()
+    );
+    let () = service_manager.check_manager_available()?;
 
     println!("Checking if configuration for requested bridge already exists.\n");
     let () = bridge_config_exists(bridge_config)?;
@@ -254,7 +254,7 @@ fn new_bridge(
     }
 
     println!("Restarting mosquitto service.\n");
-    if let Err(err) = MosquittoService.restart(user_manager) {
+    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(bridge_config)?;
         return Err(err.into());
     }
@@ -268,7 +268,7 @@ fn new_bridge(
     ));
 
     println!("Persisting mosquitto on reboot.\n");
-    if let Err(err) = MosquittoService.enable(user_manager) {
+    if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
         clean_up(bridge_config)?;
         return Err(err.into());
     }
@@ -281,7 +281,7 @@ fn new_bridge(
         if which("tedge_mapper").is_err() {
             println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
         } else {
-            start_and_enable_tedge_mapper(user_manager);
+            start_and_enable_tedge_mapper(service_manager);
         }
     }
 
@@ -335,17 +335,17 @@ fn get_bridge_config_file_path(bridge_config: &BridgeConfig) -> Result<String, C
     ])?)
 }
 
-fn start_and_enable_tedge_mapper(user_manager: &UserManager) {
+fn start_and_enable_tedge_mapper(service_manager: &mut dyn SystemServiceManager) {
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperService.restart(user_manager) {
+    if let Err(err) = service_manager.restart_service(SystemService::TEdgeMapper) {
         println!("Failed to stop tedge-mapper service: {:?}", err);
         failed = true;
     }
 
     println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperService.enable(user_manager) {
+    if let Err(err) = service_manager.enable_service(SystemService::TEdgeMapper) {
         println!("Failed to enable tedge-mapper service: {:?}", err);
         failed = true;
     }

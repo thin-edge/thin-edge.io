@@ -190,6 +190,10 @@ impl ExecutionContext {
             user_manager: UserManager::new(),
         }
     }
+
+    pub fn system_service_manager(&self) -> impl crate::system_services::SystemServiceManager {
+        crate::system_services::SystemdServiceManager::new(self.user_manager.clone())
+    }
 }
 
 /// Return the value provided on the command line,

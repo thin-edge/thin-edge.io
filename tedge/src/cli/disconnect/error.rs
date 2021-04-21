@@ -1,4 +1,3 @@
-use crate::services;
 use crate::utils::paths;
 
 #[derive(thiserror::Error, Debug)]
@@ -16,7 +15,7 @@ pub enum DisconnectBridgeError {
     PathsError(#[from] paths::PathsError),
 
     #[error(transparent)]
-    ServicesError(#[from] services::ServicesError),
+    ServicesError(#[from] crate::system_services::ServicesError),
 
     #[error("Bridge file does not exist.")]
     BridgeFileDoesNotExist,
