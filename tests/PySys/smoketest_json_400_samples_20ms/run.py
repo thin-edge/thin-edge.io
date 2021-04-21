@@ -22,42 +22,8 @@ Then we validate the data from C8y
 class PySysTest(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-
-        # bad hack to wait until the receive window is empty again
-        time.sleep(self.timeslot)
-
-    def execute(self):
-        super().execute()
-        self.log.info("Execute")
-
-        sub = self.startPython(
-            arguments=[
-                self.cmd,
-                "-m",
-                "JSON",
-                "-pub",
-                self.project.exampledir,
-                "-u",
-                self.project.username,
-                "-t",
-                self.project.tenant,
-                "-pass",
-                self.project.c8ypass,
-                "-id",
-                self.project.deviceid,
-                "-o",
-                "15",  # burst should take 8000ms
-                "-d",
-                "20",  # delay in ms
-                "-s",
-                "400",  # samples
-            ],
-            stdouterr="stdout",
-        )
-
-    def validate(self):
-        super().validate()
-
-    def mycleanup(self):
-        super().mycleanup()
+        self.samples = '400'
+        self.delay = '10'
+        self.timeslot = '20'
+        self.style = "JSON"
 

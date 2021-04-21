@@ -13,20 +13,47 @@ import time
 class Environment_roundtrip_c8y(EnvironmentC8y):
     def setup(self):
         super().setup()
-        self.log.info("Setup")
+        self.log.info("C8y Roundtrip Setup")
         self.addCleanupFunction(self.mycleanup)
-        self.timeslot = 10
 
     def execute(self):
         super().execute()
-        self.log.info("Execute")
+        self.log.info("C8y Roundtrip Execute")
 
         self.script = self.project.tebasedir + "ci/roundtrip_local_to_c8y.py"
         self.cmd = os.path.expanduser(self.script)
 
+        # bad hack to wait until the receive window is empty again
+        time.sleep(int(self.timeslot))
+
+        sub = self.startPython(
+            arguments=[
+                self.cmd,
+                "-m",
+                self.style,
+                "-pub",
+                self.project.exampledir,
+                "-u",
+                self.project.username,
+                "-t",
+                self.project.tenant,
+                "-pass",
+                self.project.c8ypass,
+                "-id",
+                self.project.deviceid,
+                "-o",
+                self.timeslot,
+                "-d",
+                self.delay,
+                "-s",
+                self.samples,
+            ],
+            stdouterr="stdout",
+        )
+
     def validate(self):
         super().validate()
-        self.log.info("Validate")
+        self.log.info("C8y Roundtrip Validate")
         self.assertGrep("stdout.out", expr="Data verification PASSED", contains=True)
         self.assertGrep(
             "stdout.out", expr="Timestamp verification PASSED", contains=True
@@ -34,5 +61,5 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
 
     def mycleanup(self):
         super().mycleanup()
-        self.log.info("MyCleanup")
+        self.log.info("C8y Roundtrip MyCleanup")
 
