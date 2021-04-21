@@ -133,6 +133,9 @@ jobs:
           name: tarpaulin-coverage
           path: tarpaulin-report.html
 
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
+
   cargo-audit:
 
     name: Run cargo audit
