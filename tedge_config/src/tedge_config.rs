@@ -1,4 +1,5 @@
 use crate::*;
+use certificate::{CertificateError, PemCertificate};
 use std::convert::{TryFrom, TryInto};
 
 /// Represents the complete configuration of a thin edge device.
@@ -14,57 +15,46 @@ pub struct TEdgeConfig {
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceIdSetting) -> ConfigSettingResult<String> {
-        self.data
-            .device
-            .id
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: DeviceIdSetting::KEY,
-            })
+        let cert_path = self.query(DeviceCertPathSetting)?;
+        let pem = PemCertificate::from_pem_file(cert_path)
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        let device_id = pem
+            .subject_common_name()
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        Ok(device_id)
     }
 
     fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting {
-            message: concat!(
-                "Setting the device id is only allowed with `tedge cert create`.\n",
-                "To set 'device.id', use `tedge cert create --device-id <id>`."
-            ),
-        })
+        Err(device_id_read_only_error())
     }
 
     fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting {
-            message: concat!(
-                "Setting the device id is only allowed with `tedge cert create`.\n",
-                "To set 'device.id', use `tedge cert create --device-id <id>`."
-            ),
-        })
+        Err(device_id_read_only_error())
     }
 }
 
-impl ConfigSettingAccessor<WritableDeviceIdSetting> for TEdgeConfig {
-    fn query(&self, _setting: WritableDeviceIdSetting) -> ConfigSettingResult<String> {
-        self.data
-            .device
-            .id
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: WritableDeviceIdSetting::KEY,
-            })
+fn device_id_read_only_error() -> ConfigSettingError {
+    ConfigSettingError::ReadonlySetting {
+        message: concat!(
+            "The device id is read from the device certificate and cannot be set directly.\n",
+            "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+        ),
     }
+}
 
-    fn update(
-        &mut self,
-        _setting: WritableDeviceIdSetting,
-        value: String,
-    ) -> ConfigSettingResult<()> {
-        self.data.device.id = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: WritableDeviceIdSetting) -> ConfigSettingResult<()> {
-        self.data.device.id = None;
-        Ok(())
+fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ConfigSettingError {
+    match &err {
+        CertificateError::IoError(io_err) => match io_err.kind() {
+            std::io::ErrorKind::NotFound => ConfigSettingError::ConfigNotSet { key },
+            _ => ConfigSettingError::DerivationFailed {
+                key,
+                cause: format!("{}", err),
+            },
+        },
+        _ => ConfigSettingError::DerivationFailed {
+            key,
+            cause: format!("{}", err),
+        },
     }
 }
 

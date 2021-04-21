@@ -21,19 +21,6 @@ impl ConfigSetting for DeviceIdSetting {
     type Value = String;
 }
 
-/// XXX: This is just here to ease migration of `tedge cert` to the new config API
-/// until the `device.id` is infered from the certificate itself.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct WritableDeviceIdSetting;
-
-impl ConfigSetting for WritableDeviceIdSetting {
-    const KEY: &'static str = "";
-
-    const DESCRIPTION: &'static str = "FOR INTERNAL USE ONLY";
-
-    type Value = String;
-}
-
 ///
 /// Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem
 ///
