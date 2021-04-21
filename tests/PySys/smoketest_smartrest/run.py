@@ -1,14 +1,7 @@
-import pysys
-from pysys.constants import *
-from pysys.basetest import BaseTest
-
-import os
 import sys
 
 sys.path.append("environments")
 from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-import time
 
 """
 Roundtrip test C8y via SmartREST

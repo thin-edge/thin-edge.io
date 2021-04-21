@@ -1,13 +1,7 @@
-import os
-import pysys
-from pysys.basetest import BaseTest
-
 import sys
 
 sys.path.append("environments")
 from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-import time
 
 """
 Roundtrip test C8y 400 samples 1Xms delay

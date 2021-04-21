@@ -1,4 +1,3 @@
-import pysys
 from pysys.basetest import BaseTest
 
 import time
