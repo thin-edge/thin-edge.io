@@ -2,11 +2,11 @@
 name: build-workflow-musl
 
 on:
-  workflow_run:
-    workflows: ["commit-workflow"]
-    branches: [main, continuous_integration]
-    types:
-      - completed
+#  workflow_run:
+#    workflows: ["commit-workflow"]
+#    branches: [main, continuous_integration]
+#    types:
+#      - completed
   workflow_dispatch:
     branches: [ main, continuous_integration ]
 
