@@ -23,7 +23,7 @@ TODO : Further investigation necessary
 """
 
 
-class PySysTest(Environment_roundtrip_c8y):
+class SmoketestSmartRest400Samples1Xms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
         self.samples = '400'

@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Roundtrip test C8y 400 samples 20ms delay</title>
+	<title>Smoketest SmartRest 400 Samples 20ms Delay</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PySysTest" module="run"/>
+	<class name="SmoketestSmartRest400Samples20ms" module="run"/>
   </data>
   <traceability>
 	<requirements>

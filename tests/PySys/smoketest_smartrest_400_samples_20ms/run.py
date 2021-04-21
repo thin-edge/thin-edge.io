@@ -19,7 +19,7 @@ Then we validate the data from C8y
 """
 
 
-class PySysTest(Environment_roundtrip_c8y):
+class SmoketestSmartRest400Samples20ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
         self.samples = '400'

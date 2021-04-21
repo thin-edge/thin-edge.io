@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Roundtrip test C8y with SmartREST</title>
+	<title>Smoketest SmartREST</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PySysTest" module="run"/>
+	<class name="SmoketestSmartRest" module="run"/>
   </data>
   <traceability>
 	<requirements>
