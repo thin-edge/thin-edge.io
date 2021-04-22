@@ -13,6 +13,15 @@ pub enum SystemService {
     TEdgeMapper,
 }
 
+impl SystemService {
+    pub fn as_service_name(&self) -> &'static str {
+        match self {
+            SystemService::Mosquitto => "mosquitto",
+            SystemService::TEdgeMapper => "tedge-mapper",
+        }
+    }
+}
+
 /// The system facility that manages starting, stopping as well as other service-related management
 /// functions of system services.
 pub trait SystemServiceManager {

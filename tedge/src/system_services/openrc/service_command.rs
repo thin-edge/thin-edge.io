@@ -17,16 +17,16 @@ impl ServiceCommand {
     pub fn to_string(self) -> String {
         match self {
             Self::CheckManager => format!("{} -l", RC_SERVICE_BIN),
-            Self::Stop(service) => format!("{} {} stop", RC_SERVICE_BIN, service_name_for(service)),
+            Self::Stop(service) => format!("{} {} stop", RC_SERVICE_BIN, service.as_service_name()),
             Self::Restart(service) => {
-                format!("{} {} restart", RC_SERVICE_BIN, service_name_for(service))
+                format!("{} {} restart", RC_SERVICE_BIN, service.as_service_name())
             }
-            Self::Enable(service) => format!("{} add {}", RC_UPDATE_BIN, service_name_for(service)),
+            Self::Enable(service) => format!("{} add {}", RC_UPDATE_BIN, service.as_service_name()),
             Self::Disable(service) => {
-                format!("{} delete {}", RC_UPDATE_BIN, service_name_for(service))
+                format!("{} delete {}", RC_UPDATE_BIN, service.as_service_name())
             }
             Self::IsActive(service) => {
-                format!("{} {} status", RC_SERVICE_BIN, service_name_for(service))
+                format!("{} {} status", RC_SERVICE_BIN, service.as_service_name())
             }
         }
     }
@@ -38,37 +38,30 @@ impl ServiceCommand {
                 .silent()
                 .build(),
             Self::Stop(service) => CommandBuilder::new(RC_SERVICE_BIN)
-                .arg(service_name_for(service))
+                .arg(service.as_service_name())
                 .arg("stop")
                 .silent()
                 .build(),
             Self::Restart(service) => CommandBuilder::new(RC_SERVICE_BIN)
-                .arg(service_name_for(service))
+                .arg(service.as_service_name())
                 .arg("restart")
                 .silent()
                 .build(),
             Self::Enable(service) => CommandBuilder::new(RC_UPDATE_BIN)
                 .arg("add")
-                .arg(service_name_for(service))
+                .arg(service.as_service_name())
                 .silent()
                 .build(),
             Self::Disable(service) => CommandBuilder::new(RC_SERVICE_BIN)
                 .arg("delete")
-                .arg(service_name_for(service))
+                .arg(service.as_service_name())
                 .silent()
                 .build(),
             Self::IsActive(service) => CommandBuilder::new(RC_SERVICE_BIN)
-                .arg(service_name_for(service))
+                .arg(service.as_service_name())
                 .arg("status")
                 .silent()
                 .build(),
         }
-    }
-}
-
-fn service_name_for(service: SystemService) -> &'static str {
-    match service {
-        SystemService::Mosquitto => "mosquitto",
-        SystemService::TEdgeMapper => "tedge-mapper",
     }
 }
