@@ -10,7 +10,7 @@ Each mapper is responsible for its dedicated cloud.
 > Note: The tedge-mapper contains the Cumulocity mapper only currently.
 
 A mapper subscribes the reserved MQTT topic `tedge/measurements` with the QoS level At Least Once.
-The messages arrived in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format. 
+The messages that arrived in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format. 
 The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
 on the topic `tedge/errors` with the QoS level At Least Once.
@@ -31,7 +31,7 @@ $ ./tedge mqtt sub tedge/errors
 ```
 
 Once the mapper receives a correctly formatted message, 
-the message will be translated into a cloud specific format.
+the message will be translated into a cloud-specific format.
 
 ## Cumulocity mapper
 The Cumulocity mapper translates [Thin Edge JSON](thin-edge-json.md) into Cumulocity's [JSON via MQTT](https://cumulocity.com/guides/device-sdk/mqtt/#json).
@@ -66,16 +66,16 @@ You can see the Cumulocity mapper added the three things which are not defined b
 
 Going through 1), the `type` is a mandatory field in the Cumulocity's JSON via MQTT manner,
 therefore, the Cumulocity mapper always adds `ThinEdgeMeasurement` as a type.
-This value is not configurable by user.
+This value is not configurable by users.
 
 Next, 2) `time` will be added by the mapper **only when it is not specified in a received Thin Edge JSON message**.
-In this case, the timezone is always UTC+0. If you want other timezone, specify the time filed in Thin Edge JSON.
+In this case, the timezone is always UTC+0. If you want another timezone, specify the time filed in Thin Edge JSON.
 
-The last 3), the mapper uses a measurement name ("temperature" in this example)
+In the last 3), the mapper uses a measurement name ("temperature" in this example)
 as both a fragment type and a fragment series in [Cumulocity's measurements](https://cumulocity.com/guides/reference/measurements/#examples).
 
 After the mapper publishes a message on the topic `c8y/measurement/measurements/create`,
-the message will be transferred to the topic `measurement/measurements/create` by [MQTT bridge](../references/bridged-topics.md).
+the message will be transferred to the topic `measurement/measurements/create` by [the MQTT bridge](../references/bridged-topics.md).
 
 ## Topics used by tedge-mapper
 - Incoming topics
