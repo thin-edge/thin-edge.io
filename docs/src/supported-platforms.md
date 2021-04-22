@@ -8,7 +8,7 @@ Common requirements for all systems are:
 * mosquitto minimum version 1.6 (for security reasons we recommend the latest 1.x version)
 * dpkg (if you want to use our prebuilt deb packages)
 
-## Level 1
+# Level 1
 Level 1 supported platforms are officially supported and are actively tested in the CI/CD.
 * ARMv7 Raspberry Pi OS 10
 * ARMv8 Raspberry Pi OS 10
