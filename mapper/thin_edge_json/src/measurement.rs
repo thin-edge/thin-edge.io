@@ -3,7 +3,7 @@ use chrono::DateTime;
 pub trait FlatMeasurementVisitor {
     type Error;
 
-    fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error>;
+    fn timestamp(&mut self, value: &DateTime<FixedOffset>) -> Result<(), Self::Error>;
     fn measurement(
         &mut self,
         group: Option<&str>,

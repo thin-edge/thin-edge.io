@@ -3,8 +3,10 @@ use chrono::DateTime;
 use std::collections::HashMap;
 
 use crate::measurement::{FlatMeasurementVisitor, GroupedMeasurementVisitor};
+use crate::serialize::ThinEdgeJsonSerializationError;
+
 #[derive(Debug)]
-pub struct MeasurementMap {
+pub struct MeasurementGrouper {
     pub timestamp: DateTime<FixedOffset>,
     pub values: HashMap<String, Measurement>,
 }
@@ -15,15 +17,18 @@ pub enum Measurement {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum MeasurementMapError {
+pub enum MeasurementGrouperError {
     #[error("Duplicated measurement: {0}")]
     DuplicatedMeasurement(String),
 
     #[error("Duplicated measurement: {0}.{1}")]
     DuplicatedSubMeasurement(String, String),
+
+    #[error("Visitor Error")]
+    ThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
 }
 
-impl MeasurementMap {
+impl MeasurementGrouper {
     pub fn new(timestamp: DateTime<FixedOffset>) -> Self {
         Self {
             timestamp,
@@ -35,7 +40,7 @@ impl MeasurementMap {
     where
         V: GroupedMeasurementVisitor<Error = E>,
     {
-        visitor.timestamp(self.timestamp.clone())?;
+        visitor.timestamp(self.timestamp)?;
         for (key, value) in self.values.iter() {
             match value {
                 Measurement::Single(sv) => {
@@ -54,11 +59,11 @@ impl MeasurementMap {
     }
 }
 
-impl FlatMeasurementVisitor for MeasurementMap {
-    type Error = MeasurementMapError;
+impl FlatMeasurementVisitor for MeasurementGrouper {
+    type Error = MeasurementGrouperError;
 
-    fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        self.timestamp = value;
+    fn timestamp(&mut self, timestamp: &DateTime<FixedOffset>) -> Result<(), Self::Error> {
+        self.timestamp = *timestamp;
         Ok(())
     }
 
@@ -76,22 +81,21 @@ impl FlatMeasurementVisitor for MeasurementMap {
                 return Ok(());
             }
             Some(group) => {
-                let key = group.to_owned();
+                let group_key = group.to_owned();
 
-                if !self.values.contains_key(&key) {
-                    self.values
-                        .insert(key.clone(), Measurement::Multi(HashMap::new()));
-                }
-
-                let group = match self.values.get_mut(&key) {
-                    Some(Measurement::Multi(group)) => group,
-                    _ => {
-                        return Err(MeasurementMapError::DuplicatedMeasurement(key));
+                match self
+                    .values
+                    .entry(group_key)
+                    .or_insert_with(|| Measurement::Multi(HashMap::new()))
+                {
+                    Measurement::Multi(group_map) => {
+                        group_map.insert(name.to_owned(), value);
                     }
-                };
 
-                let sub_key = name.to_owned();
-                group.insert(sub_key, value);
+                    Measurement::Single(_) => {
+                        return Err(MeasurementGrouperError::DuplicatedMeasurement(key));
+                    }
+                }
                 Ok(())
             }
         }

@@ -1838,6 +1838,7 @@ dependencies = [
 name = "thin_edge_json"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "json",
  "pretty_assertions",

@@ -34,17 +34,20 @@ pub enum MeasurementStreamError {
 
 impl ThinEdgeJsonSerializer {
     pub fn new() -> Self {
-        ThinEdgeJsonSerializer {
+        let mut serializer = ThinEdgeJsonSerializer {
             buffer: Vec::new(),
             is_within_group: false,
             needs_separator: false,
-        }
+        };
+        serializer.buffer.push(b'{');
+        serializer
     }
-    pub fn start(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
-        self.buffer.push(b'{');
-        self.needs_separator = false;
-        Ok(())
-    }
+
+    // pub fn start(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
+    //     self.buffer.push(b'{');
+    //     self.needs_separator = false;
+    //     Ok(())
+    // }
 
     pub fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
         if self.is_within_group {
@@ -55,15 +58,16 @@ impl ThinEdgeJsonSerializer {
         Ok(())
     }
 
-    pub fn get_searialized_tej(&mut self) -> Vec<u8> {
-        self.buffer.clone()
+    pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
+        self.end()?;
+        Ok(self.buffer)
     }
 }
 
 impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
 
-    fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
@@ -72,7 +76,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             self.buffer.push(b',');
         }
         self.buffer
-            .write_fmt(format_args!("\"time\":\"{}\"", value))?;
+            .write_fmt(format_args!("\"time\":\"{}\"", timestamp))?;
         self.needs_separator = true;
         Ok(())
     }
@@ -97,6 +101,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
         self.buffer.write_fmt(format_args!("\"{}\":{{", group))?;
         self.needs_separator = false;
+        self.is_within_group = true;
         Ok(())
     }
 
@@ -107,6 +112,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
 
         self.buffer.push(b'}');
         self.needs_separator = true;
+        self.is_within_group = false;
         Ok(())
     }
 }
