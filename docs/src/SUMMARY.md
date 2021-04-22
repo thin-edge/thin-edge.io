@@ -30,3 +30,4 @@
 - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [Architecture FAQ](architecture/faq.md)
+    - [Platform support](supported-platforms.md)
