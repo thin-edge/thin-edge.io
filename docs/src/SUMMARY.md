@@ -29,4 +29,5 @@
 ## Architecture
 - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
+    - [The Mapper](architecture/mapper.md)
     - [Architecture FAQ](architecture/faq.md)
