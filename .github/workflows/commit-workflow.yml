@@ -72,25 +72,6 @@ jobs:
           command: test
           args: --verbose
 
-      - name: Cargo test features (compile)
-        # If we do not compile in advance the timing in the test run
-        # will not work out as some parts are still compiling during the run
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --no-run --features integration-test
-
-        # To run the test for features here is kind of experimental
-        # they could fail if GitHub blocks external connections.
-        # It seems like they rarely do.
-      - name: Cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --features integration-test
-
   cargo-build:
 
     name: Run cargo build
