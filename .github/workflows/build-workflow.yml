@@ -79,14 +79,15 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-  build_armv7:
+  build_matrix:
 
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
-    env:
-      TARGET: armv7-unknown-linux-gnueabihf
+    strategy:
+      matrix:
+        target: [armv7-unknown-linux-gnueabihf, arm-unknown-linux-gnueabihf, armv7-unknown-linux-musleabihf]
 
     steps:
 
@@ -98,7 +99,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ env.TARGET}}
+          target: ${{ matrix.target }}
           override: true
 
       - name: Enable cache
@@ -125,7 +126,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=${{ env.TARGET }}
+          args: --release --target=${{ matrix.target }}
 
       - name: strip binaries (cargo deb fails to strip)
         # TODO This does not seem to work right
@@ -139,14 +140,14 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build tedge_mapper debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build examples
         uses: actions-rs/cargo@v1
@@ -154,19 +155,19 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --examples --target=${{ env.TARGET }}
+          args: --release --examples --target=${{ matrix.target }}
 
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: debian-packages-armhf
-          path: target/${{ env.TARGET }}/debian/*.deb
+          name: debian-packages-${{ matrix.target }}
+          path: target/${{ matrix.target }}/debian/*.deb
 
       - name: upload examples as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: examples_armhf
-          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+          name: examples_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
 
