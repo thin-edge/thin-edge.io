@@ -10,6 +10,9 @@ pub enum ServicesError {
     OpenRcServiceError(#[from] OpenRcServiceError),
 
     #[error(transparent)]
+    BsdServiceError(#[from] BsdServiceError),
+
+    #[error(transparent)]
     PathsError(#[from] crate::utils::paths::PathsError),
 
     #[error("Unexpected value for exit status.")]
@@ -44,6 +47,19 @@ pub enum SystemdError {
 #[derive(thiserror::Error, Debug)]
 pub enum OpenRcServiceError {
     #[error("OpenRC is not available on the system.")]
+    ServiceManagerNotAvailable,
+
+    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
+    ServiceCommandFailed {
+        service_command: String,
+        code: Option<i32>,
+    },
+}
+
+/// The error type used by the `BsdServiceManager`
+#[derive(thiserror::Error, Debug)]
+pub enum BsdServiceError {
+    #[error("service(8) is not available on the system.")]
     ServiceManagerNotAvailable,
 
     #[error("Service command <{service_command:?}> failed with code: {code:?}.")]

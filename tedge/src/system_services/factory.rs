@@ -1,4 +1,4 @@
-use crate::system_services::*;
+use crate::system_services::{bsd_service::*, openrc::*, systemd::*, *};
 use crate::utils::users::UserManager;
 
 pub trait SystemServiceManagerFactory {
@@ -18,12 +18,17 @@ impl DefaultSystemServiceManagerFactory {
 #[cfg(all(feature = "systemd", feature = "openrc"))]
 compile_error!("Both features \"systemd\" and \"openrc\" cannot be enabled at the same time.");
 
+#[cfg(not(any(feature = "systemd", feature = "openrc", target_os = "freebsd")))]
+compile_error!("Unsupported system.");
+
 impl SystemServiceManagerFactory for DefaultSystemServiceManagerFactory {
     fn create(&self) -> Box<dyn SystemServiceManager> {
         if cfg!(feature = "systemd") {
             Box::new(SystemdManager::new(self.user_manager.clone()))
         } else if cfg!(feature = "openrc") {
             Box::new(OpenRcServiceManager::new(self.user_manager.clone()))
+        } else if cfg!(target_os = "freebsd") {
+            Box::new(BsdServiceManager::new(self.user_manager.clone()))
         } else {
             panic!("Neither feature \"systemd\" nor \"openrc\" are enabled.");
         }
