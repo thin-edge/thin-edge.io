@@ -78,7 +78,7 @@ impl FlatMeasurementVisitor for MeasurementGrouper {
         match group {
             None => {
                 self.values.insert(key, Measurement::Single(value));
-                return Ok(());
+                Ok(())
             }
             Some(group) => {
                 let group_key = group.to_owned();
