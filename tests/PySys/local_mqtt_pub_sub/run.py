@@ -7,10 +7,10 @@ import time
 Validate local publishing and subscribing:
 
 Given a configured system
-When we start the bridge and the mapper
-When we start tedge sub in the background
-When we start tedge pub to publish a message
-When we start tedge pub to publish another message
+When we start tedge sub with sudo in the background
+When we start tedge pub with sudo to publish a message
+When we start tedge pub with sudo to publish another message
+Then we kill tedge sub with sudo as it is running with a different user account
 Then we find the messages in the output of tedge sub
 """
 
@@ -20,15 +20,24 @@ class PySysTest(BaseTest):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
 
-        sub = self.startProcess(
+        sub1 = self.startProcess(
             command=sudo,
             arguments=[tedge, "mqtt", "sub", "atopic"],
             stdouterr="tedge_sub",
             background=True,
         )
 
+        sub2 = self.startProcess(
+            command=sudo,
+            arguments=[tedge, "mqtt", "sub", "--no-topic", "atopic"],
+            stdouterr="tedge_sub_no_topic",
+            background=True,
+        )
+
         # Wait for a small amount of time to give tedge sub time
-        # to initialize
+        # to initialize. This is a heuristic measure.
+        # Without an additional wait we observe failures in 1% of the test
+        # runs.
         time.sleep(0.1)
 
         pub = self.startProcess(
@@ -47,10 +56,17 @@ class PySysTest(BaseTest):
         # not have the rights to do it
         kill = self.startProcess(
             command=sudo,
-            arguments=["kill", "-9", str(sub.pid)],
+            arguments=["kill", "-9", str(sub1.pid)],
+            stdouterr="kill_out",
+        )
+
+        kill = self.startProcess(
+            command=sudo,
+            arguments=["kill", "-9", str(sub2.pid)],
             stdouterr="kill_out",
         )
 
     def validate(self):
-        self.assertGrep("tedge_sub.out", "amessage", contains=True)
-        self.assertGrep("tedge_sub.out", "the message", contains=True)
+        self.assertGrep("tedge_sub.out", "\[atopic\] amessage", contains=True)
+        self.assertGrep("tedge_sub.out", "\[atopic\] the message", contains=True)
+        self.assertGrep("tedge_sub_no_topic.out", "atopic", contains=False)

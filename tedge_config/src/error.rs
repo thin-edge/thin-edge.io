@@ -9,12 +9,6 @@ pub enum TEdgeConfigError {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 
-    #[error("Home directory not found")]
-    HomeDirectoryNotFound,
-
-    #[error("Invalid characters found in home directory path")]
-    InvalidCharacterInHomeDirectoryPath,
-
     #[error(transparent)]
     ConfigSettingError(#[from] crate::ConfigSettingError),
 
