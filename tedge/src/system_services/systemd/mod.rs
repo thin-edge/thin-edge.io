@@ -32,21 +32,15 @@ impl SystemServiceManager for SystemdManager {
     }
 
     fn check_manager_available(&mut self) -> Result<(), ServicesError> {
-        std::process::Command::new(&self.systemctl_bin)
+        match std::process::Command::new(&self.systemctl_bin)
             .arg(SystemCtlParam::Version.as_str())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
-            .map_or_else(
-                |_error| Err(SystemdError::SystemdNotAvailable.into()),
-                |status| {
-                    if status.success() {
-                        Ok(())
-                    } else {
-                        Err(SystemdError::SystemdNotAvailable.into())
-                    }
-                },
-            )
+        {
+            Ok(status) if status.success() => Ok(()),
+            _ => Err(SystemdError::SystemdNotAvailable.into()),
+        }
     }
 
     fn stop_service(&mut self, service: SystemService) -> Result<(), ServicesError> {

@@ -7,6 +7,9 @@ pub enum ServicesError {
     SystemdError(#[from] SystemdError),
 
     #[error(transparent)]
+    OpenRcServiceError(#[from] OpenRcServiceError),
+
+    #[error(transparent)]
     PathsError(#[from] crate::utils::paths::PathsError),
 
     #[error("Unexpected value for exit status.")]
@@ -35,4 +38,17 @@ pub enum SystemdError {
 
     #[error("Returned exit code: '{code:?}' for: systemd' is unhandled.")]
     UnhandledReturnCode { code: i32 },
+}
+
+/// The error type used by the `OpenRcServiceManager`
+#[derive(thiserror::Error, Debug)]
+pub enum OpenRcServiceError {
+    #[error("OpenRC is not available on the system.")]
+    ServiceManagerNotAvailable,
+
+    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
+    ServiceCommandFailed {
+        service_command: String,
+        code: Option<i32>,
+    },
 }

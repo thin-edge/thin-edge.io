@@ -1,10 +1,11 @@
+pub mod command_builder;
 pub mod error;
+pub mod openrc;
 pub mod systemd;
 
-pub use self::error::*;
-pub use self::systemd::*;
+pub use self::{command_builder::*, error::*, openrc::*, systemd::*};
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum SystemService {
     Mosquitto,
     TEdgeMapper,
