@@ -62,8 +62,8 @@ impl MeasurementGrouper {
 impl FlatMeasurementVisitor for MeasurementGrouper {
     type Error = MeasurementGrouperError;
 
-    fn timestamp(&mut self, timestamp: &DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        self.timestamp = *timestamp;
+    fn timestamp(&mut self, time: &DateTime<FixedOffset>) -> Result<(), Self::Error> {
+        self.timestamp = *time;
         Ok(())
     }
 
