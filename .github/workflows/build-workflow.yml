@@ -81,7 +81,7 @@ jobs:
 
   build_matrix:
 
-    name: Build tedge and mapper Debian for armv7
+    name: Build packages for targets
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
