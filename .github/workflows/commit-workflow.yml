@@ -124,14 +124,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: tarpaulin
-          args: -v --out Html
-
-      - name: upload report
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: tarpaulin-coverage
-          path: tarpaulin-report.html
+          args: -v --out Xml
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
