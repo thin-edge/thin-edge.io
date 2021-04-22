@@ -19,7 +19,7 @@ impl Command for DisconnectBridgeCommand {
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        match self.stop_bridge(&mut context.system_service_manager()) {
+        match self.stop_bridge(context.system_service_manager().as_mut()) {
             Ok(()) | Err(DisconnectBridgeError::BridgeFileDoesNotExist) => Ok(()),
             Err(err) => Err(err.into()),
         }

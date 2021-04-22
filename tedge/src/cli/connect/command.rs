@@ -57,7 +57,7 @@ impl Command for ConnectCommand {
         new_bridge(
             &bridge_config,
             &self.common_mosquitto_config,
-            &mut context.system_service_manager(),
+            context.system_service_manager().as_mut(),
         )?;
 
         println!(

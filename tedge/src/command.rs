@@ -1,3 +1,4 @@
+use crate::system_services::{SystemServiceManager, SystemServiceManagerFactory};
 use crate::utils::users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
@@ -178,37 +179,11 @@ pub struct BuildContext {
 /// ```
 pub struct ExecutionContext {
     pub user_manager: UserManager,
+    pub system_service_manager_factory: Box<dyn SystemServiceManagerFactory>,
 }
 
 impl ExecutionContext {
-    /// Build a new execution context.
-    ///
-    /// Such a context MUST be created only once,
-    /// in practice in the `main()` function.
-    pub fn new() -> ExecutionContext {
-        ExecutionContext {
-            user_manager: UserManager::new(),
-        }
-    }
-
-    pub fn system_service_manager(&self) -> impl crate::system_services::SystemServiceManager {
-        crate::system_services::SystemdManager::new(self.user_manager.clone())
-    }
-}
-
-/// Return the value provided on the command line,
-/// or, if not set, return the value stored in the config
-/// or, if not found, return an error asking for the missing value.
-///
-/// ```
-/// let path = param_config_or_default!(cert_path, tedge.device.cert_path, "device.cert.path");
-/// ```
-#[macro_export]
-macro_rules! param_config_or_default {
-    ($( $param:ident ).*, $( $config:ident ).*, $key:expr) => {
-         $( $param ).* .as_ref()
-         .or( $( $config ).*.as_ref())
-         .map(|str| str.to_string())
-         .ok_or_else(|| ConfigError::ConfigNotSet{key:String::from($key)});
+    pub fn system_service_manager(&self) -> Box<dyn SystemServiceManager> {
+        self.system_service_manager_factory.create()
     }
 }

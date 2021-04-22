@@ -41,7 +41,10 @@ predicates = "1.0"
 which = "4.0"
 
 [features]
+default = ["systemd"]
 integration-test = []
 mosquitto-available = []      # Enable tests requesting mosquitto installed
 root-access = []              # Enable tests requesting root access
 tedge-user = []               # Enable tests requesting a tedge user
+systemd = []                  # Enable usage of systemd on Linux (default: on)
+openrc = []                   # Enable usage of OpenRC

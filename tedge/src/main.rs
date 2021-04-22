@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use crate::system_services::DefaultSystemServiceManagerFactory;
+use crate::utils::users::UserManager;
 use anyhow::Context;
 use structopt::StructOpt;
 
@@ -15,7 +17,14 @@ type ConfigError = crate::error::TEdgeError;
 use command::{BuildCommand, BuildContext, ExecutionContext};
 
 fn main() -> anyhow::Result<()> {
-    let context = ExecutionContext::new();
+    let user_manager = UserManager::new();
+
+    let context = ExecutionContext {
+        user_manager: user_manager.clone(),
+        system_service_manager_factory: Box::new(DefaultSystemServiceManagerFactory::new(
+            user_manager.clone(),
+        )),
+    };
 
     let _user_guard = context.user_manager.become_user(utils::users::TEDGE_USER)?;
 

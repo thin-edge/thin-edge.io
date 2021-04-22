@@ -1,9 +1,10 @@
 pub mod command_builder;
 pub mod error;
+pub mod factory;
 pub mod openrc;
 pub mod systemd;
 
-pub use self::{command_builder::*, error::*, openrc::*, systemd::*};
+pub use self::{command_builder::*, error::*, factory::*, openrc::*, systemd::*};
 
 #[derive(Debug, Copy, Clone)]
 pub enum SystemService {
