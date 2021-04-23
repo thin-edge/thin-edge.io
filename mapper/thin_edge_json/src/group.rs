@@ -92,9 +92,7 @@ impl FlatMeasurementVisitor for MeasurementGrouper {
                         group_map.insert(name.to_owned(), value);
                     }
 
-                    Measurement::Single(_) => {
-                        return Err(MeasurementGrouperError::DuplicatedMeasurement(key));
-                    }
+                    _ => {}
                 }
                 Ok(())
             }

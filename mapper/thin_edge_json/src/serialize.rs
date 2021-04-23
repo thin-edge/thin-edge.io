@@ -43,13 +43,7 @@ impl ThinEdgeJsonSerializer {
         serializer
     }
 
-    // pub fn start(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
-    //     self.buffer.push(b'{');
-    //     self.needs_separator = false;
-    //     Ok(())
-    // }
-
-    pub fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
+    fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
         }
