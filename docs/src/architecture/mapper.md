@@ -7,13 +7,15 @@ into cloud-specific messages.
 
 tedge-mapper is composed of multiple cloud-specific mappers, such as Cumulocity mapper and Azure mapper.
 Each mapper is responsible for its dedicated cloud.
-> Note: The tedge-mapper contains the Cumulocity mapper only currently.
+These specific mappers are launched by the respective `tedge connect` command.
+For instance, `tedge connect c8y` establishes a bridge to Cumulocity and launches a Cumulocity mapper
+that translates the messages in the background.
 
-A mapper subscribes the reserved MQTT topic `tedge/measurements` with the QoS level At Least Once.
-The messages that arrived in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format. 
+A mapper subscribes to the reserved MQTT topic `tedge/measurements` with the QoS level 1 (at least once).
+The messages that arrive in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format.
 The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
-on the topic `tedge/errors` with the QoS level At Least Once.
+on the topic `tedge/errors` with the QoS level 1 (at least once).
 
 Here is an example if you publish invalid Thin Edge JSON messages on `tedge/measurements`:
 
@@ -30,12 +32,12 @@ $ ./tedge mqtt sub tedge/errors
 [tedge/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
 ```
 
-Once the mapper receives a correctly formatted message, 
+When the mapper receives a correctly formatted message, 
 the message will be translated into a cloud-specific format.
 
 ## Cumulocity mapper
 The Cumulocity mapper translates [Thin Edge JSON](thin-edge-json.md) into Cumulocity's [JSON via MQTT](https://cumulocity.com/guides/device-sdk/mqtt/#json).
-Translated messages will be published in the topic `c8y/measurement/measurements/create`.
+The translated messages are published on the topic `c8y/measurement/measurements/create` from where they are forwarded to Cumulocity.
 
 Example in Thin Edge JSON:
 
@@ -62,14 +64,15 @@ Translated into JSON via MQTT by the Cumulocity mapper:
 You can see the Cumulocity mapper added the three things which are not defined before translation.
 1. `type` is added.
 2. `time` is added.
-3. Another `temperature` is added.
+3. Another hierarchy level is added, as required by the cumulocity data model.
+String `temperature` is used as fragment and series.
 
 Going through 1), the `type` is a mandatory field in the Cumulocity's JSON via MQTT manner,
 therefore, the Cumulocity mapper always adds `ThinEdgeMeasurement` as a type.
 This value is not configurable by users.
 
 Next, 2) `time` will be added by the mapper **only when it is not specified in a received Thin Edge JSON message**.
-In this case, the timezone is always UTC+0. If you want another timezone, specify the time filed in Thin Edge JSON.
+In this case, the mapper uses the device's local timezone. If you want another timezone, specify the time filed in Thin Edge JSON.
 
 In the last 3), the mapper uses a measurement name ("temperature" in this example)
 as both a fragment type and a fragment series in [Cumulocity's measurements](https://cumulocity.com/guides/reference/measurements/#examples).
