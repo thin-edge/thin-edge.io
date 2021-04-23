@@ -185,4 +185,46 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(expected_output, output);
     }
+
+    #[test]
+    fn serialize_timestamp_within_group() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        let timestamp = test_timestamp();
+        serializer.start_group("location").unwrap();
+        let result = serializer.timestamp(timestamp);
+        let expected_output = "Unexpected time stamp within a group";
+        assert_eq!(expected_output, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_group() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let result = serializer.end_group();
+        let expected_output = "Unexpected end of group";
+        assert_eq!(expected_output, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_start_of_group() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let result = serializer.start_group("location");
+        let expected_output = "Unexpected start of group";
+        assert_eq!(expected_output, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_message() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let expected_output = "Unexpected end of data";
+        let result = serializer.bytes();
+        assert_eq!(expected_output, result.unwrap_err().to_string());
+    }
 }
