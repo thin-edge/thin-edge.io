@@ -1,7 +1,5 @@
 # thin-edge.io platform support
 
-This doc`s target is to have an point to come to and find out if thin-edge.io will work on your device.
-
 Common requirements for all systems are:
 * minimum 16MB of RAM
 * systemd (for productive systems)
