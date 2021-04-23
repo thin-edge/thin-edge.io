@@ -1,10 +1,10 @@
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
 /// The FlatMeasurementVisitor trait is used to group the measurements from descrete measurements.
-/// The descrete measurements might belong to a group or individual
+/// The descrete measurement that contains key, value or group, key, value.
 /// All these are grouped as one ThinEdge Json message
-/// For example the MeasurementGrouper implementing FlatMeasurementVisitor to group
-/// the messages
+/// For example the below example shows how the MeasurementGrouper implements FlatMeasurementVisitor to group
+/// the messages.
 /// ```
 /// use thin_edge_json::measurement::{FlatMeasurementVisitor, GroupedMeasurementVisitor};
 /// use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
@@ -86,7 +86,7 @@ pub trait FlatMeasurementVisitor {
 
 /// The GroupedMeasurementVisitor trait manipulate the grouped messages.
 /// For example ThinEdgeJsonSerializer implements the GroupedMeasurementVisitor
-/// trait, to serialize the Thinedge Json message.
+/// trait, to serialize the grouped Thinedge Json message.
 /// ```
 /// use thin_edge_json::measurement::{FlatMeasurementVisitor, GroupedMeasurementVisitor};
 /// use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
