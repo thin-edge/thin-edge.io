@@ -3,7 +3,6 @@ use chrono::DateTime;
 use std::collections::HashMap;
 
 use crate::measurement::{FlatMeasurementVisitor, GroupedMeasurementVisitor};
-use crate::serialize::ThinEdgeJsonSerializationError;
 
 #[derive(Debug)]
 pub struct MeasurementGrouper {
@@ -23,9 +22,6 @@ pub enum MeasurementGrouperError {
 
     #[error("Duplicated measurement: {0}.{1}")]
     DuplicatedSubMeasurement(String, String),
-
-    #[error("Visitor Error")]
-    ThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
 }
 
 impl MeasurementGrouper {
