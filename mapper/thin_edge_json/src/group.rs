@@ -78,17 +78,12 @@ impl FlatMeasurementVisitor for MeasurementGrouper {
             }
             Some(group) => {
                 let group_key = group.to_owned();
-
-                match self
+                if let Measurement::Multi(group_map) = self
                     .values
                     .entry(group_key)
                     .or_insert_with(|| Measurement::Multi(HashMap::new()))
                 {
-                    Measurement::Multi(group_map) => {
-                        group_map.insert(name.to_owned(), value);
-                    }
-
-                    _ => {}
+                    group_map.insert(name.to_owned(), value);
                 }
                 Ok(())
             }
