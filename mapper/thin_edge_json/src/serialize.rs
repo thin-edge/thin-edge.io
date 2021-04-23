@@ -164,9 +164,9 @@ mod tests {
     #[test]
     fn serialize_empty_message() {
         let serializer = ThinEdgeJsonSerializer::new();
-        let expected_output: Vec<u8> = format!("{}", "{}").into();
+        let expected_output = b"{}";
         let output = serializer.bytes().unwrap();
-        assert_eq!(expected_output, output);
+        assert_eq!(expected_output.to_vec(), output);
     }
 
     #[test]
