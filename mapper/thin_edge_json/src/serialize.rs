@@ -128,9 +128,9 @@ mod tests {
         serializer.timestamp(timestamp).unwrap();
         serializer.measurement("temperature", 25.5).unwrap();
 
-        let body = r#"temperature":25.5}"#;
+        let body = r#""temperature":25.5"#;
         let expected_output: Vec<u8> =
-            format!("{{\"time\":\"{}\",{}", timestamp.to_rfc3339(), body).into();
+            format!(r#"{{"time":"{}",{}}}"#, timestamp.to_rfc3339(), body).into();
         let output = serializer.bytes().unwrap();
         assert_eq!(output, expected_output);
     }
@@ -156,7 +156,7 @@ mod tests {
         serializer.measurement("pressure", 255.0).unwrap();
         let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255}"#;
         let expected_output: Vec<u8> =
-            format!("{{\"time\":\"{}\",{}", timestamp.to_rfc3339(), body).into();
+            format!(r#"{{"time":"{}",{}"#, timestamp.to_rfc3339(), body).into();
         let output = serializer.bytes().unwrap();
         assert_eq!(expected_output, output);
     }
@@ -175,7 +175,7 @@ mod tests {
         let timestamp = test_timestamp();
         serializer.timestamp(timestamp).unwrap();
         let expected_output: Vec<u8> =
-            format!("{{\"time\":\"{}\"{}", timestamp.to_rfc3339(), "}").into();
+            format!(r#"{{"time":"{}"{}"#, timestamp.to_rfc3339(), "}").into();
         let output = serializer.bytes().unwrap();
         assert_eq!(expected_output, output);
     }
