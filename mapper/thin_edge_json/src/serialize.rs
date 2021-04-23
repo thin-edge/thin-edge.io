@@ -166,4 +166,23 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(expected_output, output);
     }
+
+    #[test]
+    fn serialize_empty_message() {
+        let serializer = ThinEdgeJsonSerializer::new();
+        let expected_output: Vec<u8> = format!("{}", "{}").into();
+        let output = serializer.bytes().unwrap();
+        assert_eq!(expected_output, output);
+    }
+
+    #[test]
+    fn serialize_timestamp_message() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        let timestamp = test_timestamp();
+        serializer.timestamp(timestamp).unwrap();
+        let expected_output: Vec<u8> =
+            format!("{}\"time\":\"{}\"{}", "{", timestamp.to_rfc3339(), "}").into();
+        let output = serializer.bytes().unwrap();
+        assert_eq!(expected_output, output);
+    }
 }
