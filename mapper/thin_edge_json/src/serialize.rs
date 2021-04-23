@@ -76,7 +76,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             self.buffer.push(b',');
         }
         self.buffer
-            .write_fmt(format_args!("\"time\":\"{}\"", timestamp))?;
+            .write_fmt(format_args!("\"time\":\"{}\"", timestamp.to_rfc3339()))?;
         self.needs_separator = true;
         Ok(())
     }
@@ -114,5 +114,56 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+    use chrono::{offset::FixedOffset, DateTime, Local};
+    fn test_timestamp() -> DateTime<FixedOffset> {
+        let local_time_now: DateTime<Local> = Local::now();
+        local_time_now.with_timezone(local_time_now.offset())
+    }
+    #[test]
+    fn serialize_single_value_message() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        let timestamp = test_timestamp();
+
+        serializer.timestamp(timestamp).unwrap();
+        serializer.measurement("temperature", 25.5).unwrap();
+
+        let body = "\"temperature\":25.5}";
+        let expected_output: Vec<u8> =
+            format!("{}\"time\":\"{}\",{}", "{", timestamp.to_rfc3339(), body).into();
+        let output = serializer.bytes().unwrap();
+        assert_eq!(output, expected_output);
+    }
+    #[test]
+    fn serialize_single_value_no_timestamp_message() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        serializer.measurement("temperature", 25.5).unwrap();
+        let expected_output = b"{\"temperature\":25.5}";
+        let output = serializer.bytes().unwrap();
+        assert_eq!(output, expected_output);
+    }
+    #[test]
+    fn serialize_multi_value_message() {
+        let mut serializer = ThinEdgeJsonSerializer::new();
+        let timestamp = test_timestamp();
+        serializer.timestamp(timestamp).unwrap();
+        serializer.measurement("temperature", 25.5).unwrap();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        serializer.measurement("lati", 2300.4).unwrap();
+        serializer.end_group().unwrap();
+        serializer.measurement("pressure", 255.0).unwrap();
+        let body = "\"temperature\":25.5,\"location\":{\"alti\":2100.4,\"longi\":2200.4,\"lati\":2300.4},\"pressure\":255}";
+        let expected_output: Vec<u8> =
+            format!("{}\"time\":\"{}\",{}", "{", timestamp.to_rfc3339(), body).into();
+        let output = serializer.bytes().unwrap();
+        assert_eq!(expected_output, output);
     }
 }
