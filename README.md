@@ -32,6 +32,7 @@
 * [Connect your device to Cumulocity](docs/src/tutorials/connect-c8y.md)
 * [Connect your device to Azure](docs/src/tutorials/connect-azure.md)
 * [How to build from source](./BUILDING.md)
+* [Have a look at some examples](https://github.com/thin-edge/thin-edge.io_examples)
 * [**Explore the Docs**](docs/src/SUMMARY.md)
 <br/>
 <br/>
