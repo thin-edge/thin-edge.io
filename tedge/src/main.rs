@@ -9,6 +9,7 @@ use structopt::StructOpt;
 mod cli;
 mod command;
 mod error;
+mod system_command;
 mod system_services;
 mod utils;
 
