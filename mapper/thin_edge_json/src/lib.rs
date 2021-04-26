@@ -5,6 +5,10 @@ use chrono::format::ParseError;
 use chrono::prelude::*;
 use json::JsonValue;
 
+pub mod group;
+pub mod measurement;
+pub mod serialize;
+
 /// ThinEdgeJson is represented in this struct
 /// Since json does not understand DateTime format, the time stamp is represented as a string
 /// Before populating the struct members the thinedge json values and names will be validated
