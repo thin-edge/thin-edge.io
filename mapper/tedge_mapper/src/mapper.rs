@@ -88,7 +88,7 @@ impl Mapper {
         Ok(())
     }
 
-    fn map(input: &[u8]) -> Result<Vec<u8>, thin_edge_json::ThinEdgeJsonError> {
+    fn map(input: &[u8]) -> Result<Vec<u8>, thin_edge_json::json::ThinEdgeJsonError> {
         CumulocityJson::from_thin_edge_json(input)
     }
 }
