@@ -10,7 +10,7 @@ fn timestamp() -> DateTime<FixedOffset> {
 
 fn tej_build_serialize() -> anyhow::Result<()> {
     //Produce the TEJ from raw data
-    let mut grp_msg = MeasurementGrouper::new(timestamp());
+    let mut grp_msg = MeasurementGrouper::new();
 
     grp_msg.timestamp(&timestamp())?;
     grp_msg.measurement(None, "temperature", 25.0)?;
