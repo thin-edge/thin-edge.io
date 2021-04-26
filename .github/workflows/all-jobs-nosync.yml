@@ -1,0 +1,489 @@
+name: all-in-one-workflow
+
+on:
+  #push:
+  #  branches: [ main, continuous_integration ]
+  workflow_dispatch:
+    branches: [ main, continuous_integration ]
+  #pull_request:
+  #  branches: [ main, continuous_integration ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  cargo-fmt:
+
+    name: Run cargo fmt
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: -- --check
+
+  cargo-clippy:
+
+    name: Run cargo clippy
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: clippy
+
+  cargo-test:
+
+    name: Run cargo test
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose
+
+  cargo-build:
+
+    name: Run cargo build
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args:  --release
+
+  cargo-tarpaulin:
+
+    name: Run cargo tarpaulin
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install libssl
+        run: sudo apt install libssl-dev
+
+      - name: Cargo install tarpaulin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-tarpaulin
+
+      - name: Cargo tarpaulin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: tarpaulin
+          args: -v --out Html
+
+      - name: upload report
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tarpaulin-coverage
+          path: tarpaulin-report.html
+
+  cargo-audit:
+
+    name: Run cargo audit
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo audit
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: audit
+
+  cargo-outdated:
+
+    name: Run cargo outdated
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
+
+
+
+  sync-commit:
+     runs-on: Ubuntu-20.04
+     needs: [cargo-fmt, cargo-clippy, cargo-test, cargo-tarpaulin, cargo-outdated, cargo-audit, cargo-build]
+     steps:
+      - name: Synchronize
+        run:  echo nop
+
+# build:
+
+  build_amd64:
+    needs: [sync-commit]
+    name: Build tedge and mapper Debian packages for amd64
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: Build tedge debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge
+
+      - name: Build tedge_mapper debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper
+
+      - name: Upload artifacts as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-packages-amd64
+          path: target/debian/*.deb
+
+  build_armv7:
+    needs: [sync-commit]
+    name: Build tedge and mapper Debian for armv7
+    runs-on: Ubuntu-20.04
+
+    env:
+      TARGET: armv7-unknown-linux-gnueabihf
+
+    steps:
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ env.TARGET}}
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: install cargo-strip
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-strip
+
+      - name: build cross release for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ env.TARGET }}
+
+      - name: strip binaries (cargo deb fails to strip)
+        # TODO This does not seem to work right
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: strip
+
+      - name: build tedge debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build tedge_mapper debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+
+      - name: build examples
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --examples --target=${{ env.TARGET }}
+
+      - name: build examples for amd64
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: --release --examples
+
+      - name: upload debian packages as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-packages-armhf
+          path: target/${{ env.TARGET }}/debian/*.deb
+
+      - name: upload examples as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+
+      - name: upload amd64 examples as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples_amd64
+          path: target/release/examples/sawtooth_publisher
+
+  sync-build:
+     runs-on: Ubuntu-20.04
+     needs: [build_amd64, build_armv7]
+     steps:
+      - name: Synchronize
+        run:  echo nop
+
+# ingegration
+
+
+  install-and-use-amd64:
+
+    runs-on: Ubuntu-20.04
+    needs: [sync-build]
+
+    steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: debian-packages-amd64
+            path: debian-package_unpack
+
+        - name: purge
+          run: sudo dpkg -P mosquitto tedge tedge_mapper
+          continue-on-error: true
+
+        - name: install mosquitto
+          run: sudo apt-get --assume-yes install mosquitto
+
+        - name: install packages
+          run: sudo dpkg -i ./debian-package_unpack/*.deb
+
+        - name: run tedge help
+          run: tedge --help
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: examples_amd64
+            path: examples
+
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test.sh
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_hosted
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_HOSTED }}
+
+  install-and-use-rpi:
+
+    runs-on: [self-hosted, Linux, ARM]
+    needs: [sync-build]
+
+    steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: debian-packages-armhf
+            path: debian-package_unpack
+
+        - name: purge
+          run: sudo dpkg -P mosquitto tedge tedge_mapper
+          continue-on-error: true
+
+        - name: install mosquitto
+          run: sudo apt-get --assume-yes install mosquitto
+
+        - name: install packages
+          run: sudo dpkg -i ./debian-package_unpack/*.deb
+
+        - name: run tedge help
+          run: tedge --help
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: examples
+            path: examples
+
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test.sh
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+
+  sync-integration:
+     runs-on: Ubuntu-20.04
+     needs: [install-and-use-amd64, install-and-use-rpi]
+     steps:
+      - name: Synchronize
+        run:  echo nop
+
+# system-test
+
+  system-test:
+    runs-on: [self-hosted, Linux, ARM]
+    needs: [sync-integration]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results
+        path: tests/
+
+
