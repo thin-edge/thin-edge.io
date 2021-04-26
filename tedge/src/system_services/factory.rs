@@ -35,7 +35,9 @@ impl SystemServiceManagerFactory for DefaultSystemServiceManagerFactory {
         if cfg!(feature = "systemd") {
             Box::new(SystemdManager::new(self.user_manager.clone()))
         } else if cfg!(feature = "openrc") {
-            Box::new(OpenRcServiceManager::new(self.user_manager.clone()))
+            Box::new(OpenRcServiceManager::new(
+                self.system_command_runner.clone(),
+            ))
         } else if cfg!(target_os = "freebsd") {
             Box::new(BsdServiceManager::new(self.system_command_runner.clone()))
         } else {
