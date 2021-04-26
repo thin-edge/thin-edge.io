@@ -6,6 +6,7 @@ use crate::ConfigError;
 use mqtt_client::{Client, Message, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;
+use tedge_config::TEdgeConfigLocation;
 use tedge_config::*;
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
@@ -23,6 +24,7 @@ pub struct ConnectCommand {
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
+    pub tedge_config_location: TEdgeConfigLocation,
 }
 
 pub enum Cloud {
@@ -46,6 +48,7 @@ impl Command for ConnectCommand {
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let mut config = self.config_repository.load()?;
+
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
@@ -54,8 +57,13 @@ impl Command for ConnectCommand {
         let bridge_config = self.bridge_config(&config)?;
         self.config_repository.store(config)?;
 
+        let bridge_config_root_path = self
+            .tedge_config_location
+            .tedge_config_root_path()
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH);
         new_bridge(
             &bridge_config,
+            &bridge_config_root_path,
             &self.common_mosquitto_config,
             context.system_service_manager().as_mut(),
         )?;
@@ -231,6 +239,7 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
 
 fn new_bridge(
     bridge_config: &BridgeConfig,
+    bridge_config_root_path: &Path,
     common_mosquitto_config: &CommonMosquittoConfig,
     service_manager: &mut dyn SystemServiceManager,
 ) -> Result<(), ConnectError> {
@@ -241,21 +250,33 @@ fn new_bridge(
     let () = service_manager.check_manager_available()?;
 
     println!("Checking if configuration for requested bridge already exists.\n");
-    let () = bridge_config_exists(bridge_config)?;
+
+    if bridge_config_root_path
+        .join(&bridge_config.config_file)
+        .exists()
+    {
+        return Err(ConnectError::ConfigurationExists {
+            cloud: bridge_config.cloud_name.to_string(),
+        });
+    }
 
     println!("Validating the bridge certificates.\n");
     let () = bridge_config.validate()?;
 
     println!("Saving configuration for requested bridge.\n");
-    if let Err(err) = write_bridge_config_to_file(bridge_config, common_mosquitto_config) {
+    if let Err(err) = write_bridge_config_to_file(
+        bridge_config,
+        common_mosquitto_config,
+        bridge_config_root_path,
+    ) {
         // We want to preserve previous errors and therefore discard result of this function.
-        let _ = clean_up(bridge_config);
+        let _ = clean_up(&bridge_config, bridge_config_root_path);
         return Err(err);
     }
 
     println!("Restarting mosquitto service.\n");
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
-        clean_up(bridge_config)?;
+        clean_up(&bridge_config, bridge_config_root_path)?;
         return Err(err.into());
     }
 
@@ -269,7 +290,7 @@ fn new_bridge(
 
     println!("Persisting mosquitto on reboot.\n");
     if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
-        clean_up(bridge_config)?;
+        clean_up(&bridge_config, bridge_config_root_path)?;
         return Err(err.into());
     }
 
@@ -290,49 +311,36 @@ fn new_bridge(
 
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
-fn clean_up(bridge_config: &BridgeConfig) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(bridge_config)?;
-    let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
-    Ok(())
-}
-
-fn bridge_config_exists(bridge_config: &BridgeConfig) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(bridge_config)?;
-    if Path::new(&path).exists() {
-        return Err(ConnectError::ConfigurationExists {
-            cloud: bridge_config.cloud_name.to_string(),
-        });
-    }
+fn clean_up(
+    bridge_config: &BridgeConfig,
+    bridge_config_root_path: impl AsRef<Path>,
+) -> Result<(), ConnectError> {
+    let bridge_config_path = bridge_config_root_path
+        .as_ref()
+        .join(&bridge_config.config_file);
+    let _ = std::fs::remove_file(bridge_config_path).or_else(paths::ok_if_not_found)?;
     Ok(())
 }
 
 fn write_bridge_config_to_file(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
+    bridge_config_root_path: &Path,
 ) -> Result<(), ConnectError> {
-    let dir_path = paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH])?;
-
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    let _ = paths::create_directories(&dir_path)?;
+    let _ = paths::create_directories(bridge_config_root_path)?;
 
     let mut common_temp_file = NamedTempFile::new()?;
     common_mosquitto_config.serialize(&mut common_temp_file)?;
-    let common_config_path = get_common_mosquitto_config_file_path(common_mosquitto_config)?;
+    let common_config_path = bridge_config_root_path.join(&common_mosquitto_config.config_file);
     let () = paths::persist_tempfile(common_temp_file, &common_config_path)?;
 
     let mut temp_file = NamedTempFile::new()?;
     bridge_config.serialize(&mut temp_file)?;
-    let config_path = get_bridge_config_file_path(bridge_config)?;
+    let config_path = bridge_config_root_path.join(&bridge_config.config_file);
     let () = paths::persist_tempfile(temp_file, &config_path)?;
 
     Ok(())
-}
-
-fn get_bridge_config_file_path(bridge_config: &BridgeConfig) -> Result<String, ConnectError> {
-    Ok(paths::build_path_for_sudo_or_user(&[
-        TEDGE_BRIDGE_CONF_DIR_PATH,
-        &bridge_config.config_file,
-    ])?)
 }
 
 fn start_and_enable_tedge_mapper(service_manager: &mut dyn SystemServiceManager) {
@@ -352,21 +360,5 @@ fn start_and_enable_tedge_mapper(service_manager: &mut dyn SystemServiceManager)
 
     if !failed {
         println!("tedge-mapper service successfully started and enabled!\n");
-    }
-}
-
-fn get_common_mosquitto_config_file_path(
-    common_mosquitto_config: &CommonMosquittoConfig,
-) -> Result<String, ConnectError> {
-    Ok(paths::build_path_for_sudo_or_user(&[
-        TEDGE_BRIDGE_CONF_DIR_PATH,
-        &common_mosquitto_config.config_file,
-    ])?)
-}
-
-fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
-    match err.kind() {
-        std::io::ErrorKind::NotFound => Ok(()),
-        _ => Err(err),
     }
 }

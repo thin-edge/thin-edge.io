@@ -1,5 +1,4 @@
 use crate::system_services::{SystemServiceManager, SystemServiceManagerFactory};
-use crate::utils::users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -162,6 +161,13 @@ pub trait BuildCommand {
 ///
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
+    pub tedge_config_location: tedge_config::TEdgeConfigLocation,
+}
+
+impl BuildContext {
+    pub fn tedge_config_location(&self) -> &tedge_config::TEdgeConfigLocation {
+        &self.tedge_config_location
+    }
 }
 
 /// The execution context of a command.
@@ -178,7 +184,6 @@ pub struct BuildContext {
 ///     }
 /// ```
 pub struct ExecutionContext {
-    pub user_manager: UserManager,
     pub system_service_manager_factory: Box<dyn SystemServiceManagerFactory>,
 }
 

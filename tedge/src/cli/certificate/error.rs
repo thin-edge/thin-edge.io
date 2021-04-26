@@ -1,7 +1,7 @@
 use reqwest::StatusCode;
 use tedge_config::FilePath;
 
-use crate::utils::{paths::PathsError, users::UserSwitchError};
+use crate::utils::paths::PathsError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertError {
@@ -69,9 +69,6 @@ pub enum CertError {
 
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
-
-    #[error(transparent)]
-    UserSwitchError(#[from] UserSwitchError),
 }
 
 impl CertError {

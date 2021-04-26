@@ -1,14 +1,9 @@
-use crate::command::{Command, ExecutionContext};
-use crate::utils::{paths, users};
-use certificate::{KeyCertPair, NewCertificateConfig};
-use std::{
-    fs::{File, OpenOptions},
-    io::prelude::*,
-    path::Path,
-};
-use tedge_config::*;
-
 use super::error::CertError;
+use super::file_installer::*;
+use crate::command::{Command, ExecutionContext};
+use crate::system_command::Role;
+use certificate::{KeyCertPair, NewCertificateConfig};
+use tedge_config::*;
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -27,9 +22,9 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let config = NewCertificateConfig::default();
-        let () = self.create_test_certificate(&config, &context.user_manager)?;
+        let () = self.create_test_certificate(&config, &Installer)?;
         Ok(())
     }
 }
@@ -38,55 +33,42 @@ impl CreateCertCmd {
     fn create_test_certificate(
         &self,
         config: &NewCertificateConfig,
-        user_manager: &users::UserManager,
+        installer: &dyn FileInstaller,
     ) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
-
-        paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
-        paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
-
-        // Creating files with permission 644
-        let mut cert_file = create_new_file(&self.cert_path)
-            .map_err(|err| err.cert_context(self.cert_path.clone()))?;
-        let mut key_file = create_new_file(&self.key_path)
-            .map_err(|err| err.key_context(self.key_path.clone()))?;
-
         let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
-
         let cert_pem = cert.certificate_pem_string()?;
-        cert_file.write_all(cert_pem.as_bytes())?;
-        cert_file.sync_all()?;
+        let cert_key = cert.private_key_pem_string()?;
 
-        // Prevent the certificate to be overwritten
-        paths::set_permission(&cert_file, 0o444)?;
+        // 0o444: Prevents the certificate to be overwritten
+        let () = installer
+            .install(
+                self.cert_path.as_ref(),
+                Role::Broker,
+                0o444,
+                cert_pem.as_bytes(),
+            )
+            .map_err(|err| err.cert_context(self.cert_path.clone()))?;
 
-        {
-            // Make sure the key is secret, before write
-            paths::set_permission(&key_file, 0o600)?;
-
-            // Zero the private key on drop
-            let cert_key = cert.private_key_pem_string()?;
-            key_file.write_all(cert_key.as_bytes())?;
-            key_file.sync_all()?;
-
-            // Prevent the key to be overwritten
-            paths::set_permission(&key_file, 0o400)?;
-        }
+        // 0o600: Make sure the key is secret and cannot be written
+        let () = installer
+            .install(
+                self.key_path.as_ref(),
+                Role::Broker,
+                0o400,
+                cert_key.as_bytes(),
+            )
+            .map_err(|err| err.cert_context(self.key_path.clone()))?;
 
         Ok(())
     }
 }
 
-fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
-    Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
     use std::fs;
+    use std::path::Path;
     use tempfile::*;
 
     #[test]
@@ -103,7 +85,7 @@ mod tests {
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default(), &UserManager::new()),
+            cmd.create_test_certificate(&NewCertificateConfig::default(), &Installer),
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -130,7 +112,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
             .ok()
             .is_none());
 
@@ -151,7 +133,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -169,7 +151,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }

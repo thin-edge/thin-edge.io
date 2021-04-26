@@ -1,5 +1,5 @@
+use super::file_installer::*;
 use crate::command::{Command, ExecutionContext};
-use crate::utils::{paths::*, users::*};
 
 use tedge_config::*;
 
@@ -19,18 +19,16 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        let () = self.remove_certificate(&context.user_manager)?;
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        let () = self.remove_certificate(&Installer)?;
         Ok(())
     }
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(crate::utils::users::BROKER_USER)?;
-        std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
-        std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
-
+    fn remove_certificate(&self, installer: &dyn FileInstaller) -> Result<(), CertError> {
+        let () = installer.remove_if_exists(self.cert_path.as_ref())?;
+        let () = installer.remove_if_exists(self.key_path.as_ref())?;
         Ok(())
     }
 }

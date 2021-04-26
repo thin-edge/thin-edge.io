@@ -14,17 +14,13 @@ const TEDGE_CONFIG_FILE_TMP: &str = "tedge.toml.tmp";
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TEdgeConfigLocation {
     /// Root directory where `tedge.toml` and other tedge related configuration files are located.
-    pub tedge_config_root_path: PathBuf,
-
-    /// Full path to the `tedge.toml` file.
-    pub tedge_config_file_path: PathBuf,
+    tedge_config_root_path: PathBuf,
 }
 
 impl TEdgeConfigLocation {
     pub fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
         Self {
             tedge_config_root_path: tedge_config_root_path.as_ref().to_path_buf(),
-            tedge_config_file_path: tedge_config_root_path.as_ref().join(TEDGE_CONFIG_FILE),
         }
     }
 
@@ -46,8 +42,9 @@ impl TEdgeConfigLocation {
     pub fn tedge_config_root_path(&self) -> &Path {
         &self.tedge_config_root_path
     }
-    pub fn tedge_config_file_path(&self) -> &Path {
-        &self.tedge_config_file_path
+
+    pub fn tedge_config_file_path(&self) -> PathBuf {
+        self.tedge_config_root_path.join(TEDGE_CONFIG_FILE)
     }
 
     pub fn temporary_tedge_config_file_path(&self) -> impl AsRef<Path> {
@@ -63,7 +60,7 @@ fn test_from_custom_root() {
         PathBuf::from("/opt/etc/tedge")
     );
     assert_eq!(
-        config_location.tedge_config_file_path,
+        config_location.tedge_config_file_path(),
         PathBuf::from("/opt/etc/tedge/tedge.toml")
     );
 }
@@ -76,7 +73,7 @@ fn test_from_default_system_location() {
         PathBuf::from("/etc/tedge")
     );
     assert_eq!(
-        config_location.tedge_config_file_path,
+        config_location.tedge_config_file_path(),
         PathBuf::from("/etc/tedge/tedge.toml")
     );
 }
@@ -85,11 +82,11 @@ fn test_from_default_system_location() {
 fn test_from_custom_etc_location() {
     let config_location = TEdgeConfigLocation::from_custom_etc_location("/usr/local/etc");
     assert_eq!(
-        config_location.tedge_config_root_path,
+        config_location.tedge_config_root_path(),
         PathBuf::from("/usr/local/etc/tedge")
     );
     assert_eq!(
-        config_location.tedge_config_file_path,
+        config_location.tedge_config_file_path(),
         PathBuf::from("/usr/local/etc/tedge/tedge.toml")
     );
 }
@@ -98,11 +95,11 @@ fn test_from_custom_etc_location() {
 fn test_from_users_home_location() {
     let config_location = TEdgeConfigLocation::from_users_home_location("/home/user");
     assert_eq!(
-        config_location.tedge_config_root_path,
+        config_location.tedge_config_root_path(),
         PathBuf::from("/home/user/.tedge")
     );
     assert_eq!(
-        config_location.tedge_config_file_path,
+        config_location.tedge_config_file_path(),
         PathBuf::from("/home/user/.tedge/tedge.toml")
     );
 }

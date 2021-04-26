@@ -17,16 +17,19 @@ pub enum TEdgeConnectOpt {
 
 impl BuildCommand for TEdgeConnectOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+        let tedge_config_location = context.tedge_config_location().clone();
         Ok(match self {
             TEdgeConnectOpt::C8y => ConnectCommand {
                 config_repository: context.config_repository,
                 cloud: Cloud::C8y,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
+                tedge_config_location,
             },
             TEdgeConnectOpt::Az => ConnectCommand {
                 config_repository: context.config_repository,
                 cloud: Cloud::Azure,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
+                tedge_config_location,
             },
         }
         .into_boxed())

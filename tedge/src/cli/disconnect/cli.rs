@@ -14,17 +14,19 @@ pub enum TEdgeDisconnectBridgeCli {
 }
 
 impl BuildCommand for TEdgeDisconnectBridgeCli {
-    fn build_command(self, _context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let cmd = match self {
             TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud_name: "Cumulocity".into(),
                 use_mapper: true,
+                tedge_config_location: context.tedge_config_location().clone(),
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud_name: "Azure".into(),
                 use_mapper: false,
+                tedge_config_location: context.tedge_config_location().clone(),
             },
         };
         Ok(cmd.into_boxed())
