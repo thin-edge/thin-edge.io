@@ -54,7 +54,6 @@ jobs:
 
     name: Run cargo test
     runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
 
     steps:
 
@@ -76,7 +75,6 @@ jobs:
 
     name: Run cargo build
     runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
 
     steps:
 
@@ -98,7 +96,6 @@ jobs:
 
     name: Run cargo tarpaulin
     runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
 
     steps:
 
@@ -137,8 +134,6 @@ jobs:
 
     name: Run cargo audit
     runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
 
     steps:
 
@@ -155,7 +150,6 @@ jobs:
 
     name: Run cargo outdated
     runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
 
     steps:
 
@@ -169,18 +163,9 @@ jobs:
           command: outdated
 
 
-
-  sync-commit:
-     runs-on: Ubuntu-20.04
-     needs: [cargo-fmt, cargo-clippy, cargo-test, cargo-tarpaulin, cargo-outdated, cargo-audit, cargo-build]
-     steps:
-      - name: Synchronize
-        run:  echo nop
-
 # build:
 
   build_amd64:
-    needs: [sync-commit]
     name: Build tedge and mapper Debian packages for amd64
     runs-on: Ubuntu-20.04
 
@@ -229,7 +214,6 @@ jobs:
           path: target/debian/*.deb
 
   build_armv7:
-    needs: [sync-commit]
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
 
@@ -332,20 +316,13 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-  sync-build:
-     runs-on: Ubuntu-20.04
-     needs: [build_amd64, build_armv7]
-     steps:
-      - name: Synchronize
-        run:  echo nop
-
 # ingegration
 
 
   install-and-use-amd64:
 
     runs-on: Ubuntu-20.04
-    needs: [sync-build]
+    needs: [build_amd64]
 
     steps:
         - name: checkout
@@ -398,7 +375,7 @@ jobs:
   install-and-use-rpi:
 
     runs-on: [self-hosted, Linux, ARM]
-    needs: [sync-build]
+    needs: [build_armv7]
 
     steps:
         - name: checkout
@@ -448,18 +425,11 @@ jobs:
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
 
-  sync-integration:
-     runs-on: Ubuntu-20.04
-     needs: [install-and-use-amd64, install-and-use-rpi]
-     steps:
-      - name: Synchronize
-        run:  echo nop
-
 # system-test
 
   system-test:
     runs-on: [self-hosted, Linux, ARM]
-    needs: [sync-integration]
+    needs: [install-and-use-rpi]
 
     steps:
 
