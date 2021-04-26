@@ -37,5 +37,4 @@ class RestartBridge(EnvironmentC8y):
         self.assertGrep("tedge_connect.out", fail, contains=False)
 
     def mycleanup(self):
-        super().mycleanup()
         self.log.info("MyCleanup")
