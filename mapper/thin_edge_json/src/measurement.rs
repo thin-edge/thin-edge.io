@@ -76,6 +76,7 @@ pub trait FlatMeasurementVisitor {
     type Error;
 
     fn timestamp(&mut self, value: &DateTime<FixedOffset>) -> Result<(), Self::Error>;
+
     fn measurement(
         &mut self,
         group: Option<&str>,
@@ -117,4 +118,10 @@ pub trait GroupedMeasurementVisitor {
     fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error>;
     fn start_group(&mut self, group: &str) -> Result<(), Self::Error>;
     fn end_group(&mut self) -> Result<(), Self::Error>;
+}
+
+/// Return the current timestamp using the local time zone
+pub fn current_timestamp() -> DateTime<FixedOffset> {
+    let local_time_now: DateTime<chrono::Local> = chrono::Local::now();
+    local_time_now.with_timezone(local_time_now.offset())
 }
