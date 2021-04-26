@@ -5,10 +5,13 @@ authors = ["Software AG <thin-edge-team@softwareag.com>"]
 edition = "2018"
 
 [dependencies]
+certificate = { path = "../common/certificate" }
 toml = "0.5"
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tempfile = "3.2"
+url = "2.2"
 
 [dev-dependencies]
 assert_matches = "1.4"
+tempfile = "3.2"

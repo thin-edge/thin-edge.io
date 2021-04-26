@@ -1,12 +1,13 @@
 use crate::*;
+use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
-use tempfile::NamedTempFile;
+use std::path::{Path, PathBuf};
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
+    config_defaults: TEdgeConfigDefaults,
 }
 
 pub trait ConfigRepository<T> {
@@ -19,25 +20,63 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     type Error = TEdgeConfigError;
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config = self.read_file_or_default(self.config_location.tedge_config_path.clone())?;
+        let config =
+            self.read_file_or_default(self.config_location.tedge_config_file_path().into())?;
         Ok(config)
     }
 
-    // XXX: Explicitly set the file permissions in this function and file ownership!
+    // TODO: Explicitly set the file permissions in this function and file ownership!
     fn store(&self, config: TEdgeConfig) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config.data)?;
-        let mut file = NamedTempFile::new()?;
-        file.write_all(toml.as_bytes())?;
-        match file.persist(self.config_location.tedge_config_path.clone()) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err.error.into()),
+
+        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
+        if !self.config_location.tedge_config_root_path.exists() {
+            let () = fs::create_dir(self.config_location.tedge_config_root_path())?;
         }
+
+        let () = atomically_write_file(
+            self.config_location.temporary_tedge_config_file_path(),
+            self.config_location.tedge_config_file_path(),
+            toml.as_bytes(),
+        )?;
+        Ok(())
     }
+}
+
+fn atomically_write_file(
+    tempfile: impl AsRef<Path>,
+    dest: impl AsRef<Path>,
+    content: &[u8],
+) -> std::io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tempfile.as_ref())?;
+    if let Err(err) = file.write_all(content) {
+        let _ = fs::remove_file(tempfile);
+        return Err(err);
+    }
+    if let Err(err) = fs::rename(tempfile.as_ref(), dest) {
+        let _ = fs::remove_file(tempfile);
+        return Err(err);
+    }
+    Ok(())
 }
 
 impl TEdgeConfigRepository {
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
-        Self { config_location }
+        let config_defaults = TEdgeConfigDefaults::from(&config_location);
+        Self::new_with_defaults(config_location, config_defaults)
+    }
+
+    pub fn new_with_defaults(
+        config_location: TEdgeConfigLocation,
+        config_defaults: TEdgeConfigDefaults,
+    ) -> Self {
+        Self {
+            config_location,
+            config_defaults,
+        }
     }
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
@@ -60,7 +99,7 @@ impl TEdgeConfigRepository {
     }
 
     fn read_file_or_default(&self, path: PathBuf) -> Result<TEdgeConfig, TEdgeConfigError> {
-        match self.read_file(path.clone()) {
+        match self.read_file(path) {
             Ok(file) => Ok(file),
             Err(TEdgeConfigError::ConfigFileNotFound(..)) => {
                 self.make_tedge_config(TEdgeConfigDto::default())
@@ -73,6 +112,7 @@ impl TEdgeConfigRepository {
         Ok(TEdgeConfig {
             data,
             config_location: self.config_location.clone(),
+            config_defaults: self.config_defaults.clone(),
         })
     }
 }

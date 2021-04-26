@@ -2,7 +2,6 @@
 
 use crate::*;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -23,16 +22,18 @@ pub(crate) struct TEdgeConfigDto {
 #[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct DeviceConfigDto {
-    /// The unique id of the device
-    pub(crate) id: Option<String>,
+    /// The unique id of the device (DEPRECATED)
+    /// This id is now derived from the device certificate
+    #[serde(rename(deserialize = "id"), skip_serializing)]
+    pub(crate) _id: Option<String>,
 
     /// Path where the device's private key is stored.
     /// Defaults to $HOME/.tedge/tedge-private.pem
-    pub(crate) key_path: Option<PathBuf>,
+    pub(crate) key_path: Option<FilePath>,
 
     /// Path where the device's certificate is stored.
     /// Defaults to $HOME/.tedge/tedge-certificate.crt
-    pub(crate) cert_path: Option<PathBuf>,
+    pub(crate) cert_path: Option<FilePath>,
 }
 
 /// Represents the Cumulocity specific configurations defined in the
@@ -48,7 +49,7 @@ pub(crate) struct CumulocityConfigDto {
 
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
-    pub(crate) root_cert_path: Option<PathBuf>,
+    pub(crate) root_cert_path: Option<FilePath>,
 }
 
 #[serde(deny_unknown_fields)]
@@ -56,5 +57,5 @@ pub(crate) struct CumulocityConfigDto {
 pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
-    pub(crate) root_cert_path: Option<PathBuf>,
+    pub(crate) root_cert_path: Option<FilePath>,
 }

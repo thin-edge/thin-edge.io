@@ -13,7 +13,7 @@ Before you try to connect your device to Azure IoT, you need:
 * Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
 * [Install `thin-edge.io` on your device](../howto-guides/002_installation.md).
 
-You can now use [`tegde` command](../references/tedge.md) to:
+You can now use [`tedge` command](../references/tedge.md) to:
 * [create a certificate for your device](connect-azure.md#create-the-certificate),
 * [register the device on Azure IoT Hub](connect-azure.md#register-the-device-on-Azure),
 * [configure the device](connect-azure.md#configure-the-device),
@@ -130,7 +130,7 @@ Any messages sent on the topic will be forwarded to Azure.
 Here, we use `tedge mqtt pub az/messages/events/` a message to be understood as a temperature of 20 Degree.
 
 ```
-$ tedge mqtt pub az/messages/events '{"temperature": 20}'
+$ tedge mqtt pub az/messages/events/ '{"temperature": 20}'
 ```
 To view the messages that were sent from the device to the cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
 
