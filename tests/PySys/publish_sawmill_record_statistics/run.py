@@ -20,7 +20,7 @@ TODO : Add validation procedure
 """
 
 
-class PySysTest(EnvironmentC8y):
+class PublishSawmillRecordStatistics(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
