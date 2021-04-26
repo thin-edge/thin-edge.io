@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Module",
+            "type": "python",
+            "request": "launch",
+            "module": "pysys",
+            "args": ["run", "-v", "DEBUG", "c8y_restart_bridge"],
+            "cwd" :"${workspaceFolder}/tests/PySys/",
+            "env" : {
+                "PYSYS_APP_HOME":"${workspaceFolder}/tests/PySys",
+                "TEBASEDIR":"~/thin-edge.io/",
+                "C8YUSERNAME":"octocat",
+                "C8YPASS":"9GKZCTa5oNkbZk65",
+                "C8YDEVICE":"eulatestisonoe",
+                "C8YTENANT":"t493319102",
+                "C8YDEVICEID":"798",
+                "EXAMPLEDIR":"${workspaceFolder}/target/debug/examples",
+            }
+        }
+    ]
+}
