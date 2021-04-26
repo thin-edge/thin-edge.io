@@ -32,6 +32,10 @@ impl MeasurementGrouper {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
     pub fn accept<V, E>(&self, visitor: &mut V) -> Result<(), E>
     where
         V: GroupedMeasurementVisitor<Error = E>,
@@ -113,6 +117,34 @@ mod tests {
             fn start_group(&mut self, group: &str) -> Result<(), ()>;
             fn end_group(&mut self) -> Result<(), ()>;
         }
+    }
+
+    #[test]
+    fn new_measurement_grouper_is_empty() {
+        let grouper = MeasurementGrouper::new();
+        assert!(grouper.is_empty());
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_measurement().never();
+        mock.expect_start_group().never();
+        mock.expect_end_group().never();
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn new_measurement_grouper_with_a_timestamp_is_empty() {
+        let mut grouper = MeasurementGrouper::new();
+        let _ = grouper.timestamp(&test_timestamp(4));
+        assert!(grouper.is_empty());
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_timestamp().return_const(Ok(()));
+        mock.expect_measurement().never();
+        mock.expect_start_group().never();
+        mock.expect_end_group().never();
+
+        let _ = grouper.accept(&mut mock);
     }
 
     #[test]
