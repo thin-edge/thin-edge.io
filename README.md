@@ -81,10 +81,7 @@ With thin-edge.io we want to provide re-usable and modular components, which are
 <!-- REFERENCESYSTEMS -->
 
 # Reference Systems
-These are the systems that we currently test on. This does not mean that thin-edge.io is not building and working on other systems, but these are the systems that we are testing on.
-
-* Raspberry Pi 3b with Raspberry Pi OS 10
-* Raspberry Pi 4 with Raspberry Pi OS 10
+For an overview of the supported platforms please have a look at the [platform support](docs/src/supported-platforms.md) doc.
 <br/>
 <br/>
 
