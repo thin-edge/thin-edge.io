@@ -1,5 +1,6 @@
 use crate::*;
-use std::path::PathBuf;
+use certificate::{CertificateError, PemCertificate};
+use std::convert::{TryFrom, TryInto};
 
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
@@ -9,25 +10,51 @@ use std::path::PathBuf;
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
     pub(crate) config_location: TEdgeConfigLocation,
+    pub(crate) config_defaults: TEdgeConfigDefaults,
 }
 
 impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceIdSetting) -> ConfigSettingResult<String> {
-        self.data
-            .device
-            .id
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: DeviceIdSetting::KEY,
-            })
+        let cert_path = self.query(DeviceCertPathSetting)?;
+        let pem = PemCertificate::from_pem_file(cert_path)
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        let device_id = pem
+            .subject_common_name()
+            .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
+        Ok(device_id)
     }
 
     fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting)
+        Err(device_id_read_only_error())
     }
 
     fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
-        Err(ConfigSettingError::ReadonlySetting)
+        Err(device_id_read_only_error())
+    }
+}
+
+fn device_id_read_only_error() -> ConfigSettingError {
+    ConfigSettingError::ReadonlySetting {
+        message: concat!(
+            "The device id is read from the device certificate and cannot be set directly.\n",
+            "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+        ),
+    }
+}
+
+fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ConfigSettingError {
+    match &err {
+        CertificateError::IoError(io_err) => match io_err.kind() {
+            std::io::ErrorKind::NotFound => ConfigSettingError::ConfigNotSet { key },
+            _ => ConfigSettingError::DerivationFailed {
+                key,
+                cause: format!("{}", err),
+            },
+        },
+        _ => ConfigSettingError::DerivationFailed {
+            key,
+            cause: format!("{}", err),
+        },
     }
 }
 
@@ -76,19 +103,19 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<PathBuf> {
+    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
             .device
             .cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_device_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_device_cert_path.clone()))
     }
 
     fn update(
         &mut self,
         _setting: DeviceCertPathSetting,
-        value: PathBuf,
+        value: FilePath,
     ) -> ConfigSettingResult<()> {
         self.data.device.cert_path = Some(value);
         Ok(())
@@ -101,19 +128,19 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<PathBuf> {
+    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
             .device
             .key_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_device_key_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_device_key_path.clone()))
     }
 
     fn update(
         &mut self,
         _setting: DeviceKeyPathSetting,
-        value: PathBuf,
+        value: FilePath,
     ) -> ConfigSettingResult<()> {
         self.data.device.key_path = Some(value);
         Ok(())
@@ -126,19 +153,19 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<PathBuf> {
+    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
             .azure
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_azure_root_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_azure_root_cert_path.clone()))
     }
 
     fn update(
         &mut self,
         _setting: AzureRootCertPathSetting,
-        value: PathBuf,
+        value: FilePath,
     ) -> ConfigSettingResult<()> {
         self.data.azure.root_cert_path = Some(value);
         Ok(())
@@ -151,19 +178,19 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<PathBuf> {
+    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
             .c8y
             .root_cert_path
             .clone()
-            .unwrap_or_else(|| self.config_location.default_c8y_root_cert_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_c8y_root_cert_path.clone()))
     }
 
     fn update(
         &mut self,
         _setting: C8yRootCertPathSetting,
-        value: PathBuf,
+        value: FilePath,
     ) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = Some(value);
         Ok(())
@@ -172,5 +199,27 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     fn unset(&mut self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = None;
         Ok(())
+    }
+}
+
+/// Generic extension trait implementation for all `ConfigSetting`s of `TEdgeConfig`
+/// that provide `TryFrom`/`TryInto` implementations for `String`.
+impl<T, E, F> ConfigSettingAccessorStringExt<T> for TEdgeConfig
+where
+    T: ConfigSetting,
+    TEdgeConfig: ConfigSettingAccessor<T>,
+    T::Value: TryFrom<String, Error = E>,
+    T::Value: TryInto<String, Error = F>,
+{
+    fn query_string(&self, setting: T) -> ConfigSettingResult<String> {
+        self.query(setting)?
+            .try_into()
+            .map_err(|_e| ConfigSettingError::ConversionIntoStringFailed)
+    }
+
+    fn update_string(&mut self, setting: T, string_value: String) -> ConfigSettingResult<()> {
+        T::Value::try_from(string_value)
+            .map_err(|_e| ConfigSettingError::ConversionFromStringFailed)
+            .and_then(|value| self.update(setting, value))
     }
 }

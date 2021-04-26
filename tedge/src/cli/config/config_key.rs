@@ -1,0 +1,67 @@
+use std::str::FromStr;
+use tedge_config::*;
+
+/// Wrapper type for configuration keys.
+///
+/// This is used to reject invalid config keys during CLI parsing.
+pub struct ConfigKey {
+    pub key: &'static str,
+    pub description: &'static str,
+    pub get: GetConfigStringValue<TEdgeConfig>,
+    pub set: SetConfigStringValue<TEdgeConfig>,
+    pub unset: UnsetConfigValue<TEdgeConfig>,
+}
+
+type GetConfigStringValue<C> = Box<dyn Fn(&C) -> ConfigSettingResult<String>>;
+type SetConfigStringValue<C> = Box<dyn Fn(&mut C, String) -> ConfigSettingResult<()>>;
+type UnsetConfigValue<C> = Box<dyn Fn(&mut C) -> ConfigSettingResult<()>>;
+
+impl std::fmt::Debug for ConfigKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ConfigKey({})", self.key)
+    }
+}
+
+macro_rules! config_key {
+    ($setting:tt) => {
+        ConfigKey {
+            key: $setting::KEY,
+            description: $setting::DESCRIPTION,
+            get: Box::new(move |config: &TEdgeConfig| config.query_string($setting)),
+            set: Box::new(move |config: &mut TEdgeConfig, value: String| {
+                config.update_string($setting, value)
+            }),
+            unset: Box::new(move |config: &mut TEdgeConfig| config.unset($setting)),
+        }
+    };
+}
+
+impl ConfigKey {
+    pub fn list_all() -> Vec<ConfigKey> {
+        vec![
+            config_key!(DeviceIdSetting),
+            config_key!(DeviceKeyPathSetting),
+            config_key!(DeviceCertPathSetting),
+            config_key!(C8yUrlSetting),
+            config_key!(C8yRootCertPathSetting),
+            config_key!(AzureUrlSetting),
+            config_key!(AzureRootCertPathSetting),
+        ]
+    }
+}
+
+impl FromStr for ConfigKey {
+    type Err = String;
+
+    fn from_str(key: &str) -> Result<Self, Self::Err> {
+        ConfigKey::list_all()
+            .into_iter()
+            .find(|config_key| config_key.key == key)
+            .ok_or_else(|| {
+                format!(
+                    "Invalid key `{}'. See `tedge config list --doc` for a list of valid keys.",
+                    key,
+                )
+            })
+    }
+}

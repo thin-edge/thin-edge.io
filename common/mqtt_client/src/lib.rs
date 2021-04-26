@@ -325,6 +325,7 @@ impl Client {
 }
 
 /// Configuration of the connection to the MQTT broker.
+#[derive(Debug, Clone)]
 pub struct Config {
     pub host: String,
     pub port: u16,

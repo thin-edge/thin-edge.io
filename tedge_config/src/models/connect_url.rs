@@ -1,24 +1,30 @@
 use std::convert::TryFrom;
+use url::Host;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(try_from = "String", into = "String")]
-pub struct ConnectUrl(String);
+pub struct ConnectUrl {
+    input: String,
+    host: Host,
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error(
-    "Provided URL: '{0}' contains scheme or port.
+    "Provided URL: '{input}' contains scheme or port.
          Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."
 )]
-pub struct InvalidConnectUrl(pub String);
+pub struct InvalidConnectUrl {
+    input: String,
+    error: url::ParseError,
+}
 
 impl TryFrom<String> for ConnectUrl {
     type Error = InvalidConnectUrl;
 
     fn try_from(input: String) -> Result<Self, Self::Error> {
-        if input.contains(':') {
-            Err(InvalidConnectUrl(input))
-        } else {
-            Ok(Self(input))
+        match Host::parse(&input) {
+            Ok(host) => Ok(Self { input, host }),
+            Err(error) => Err(InvalidConnectUrl { input, error }),
         }
     }
 }
@@ -33,13 +39,19 @@ impl TryFrom<&str> for ConnectUrl {
 
 impl ConnectUrl {
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        self.input.as_str()
     }
 }
 
 impl Into<String> for ConnectUrl {
     fn into(self) -> String {
-        self.0
+        self.input
+    }
+}
+
+impl Into<Host> for ConnectUrl {
+    fn into(self) -> Host {
+        self.host
     }
 }
 

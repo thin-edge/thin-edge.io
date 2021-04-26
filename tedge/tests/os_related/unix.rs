@@ -1,4 +1,4 @@
-use std::os::linux::fs::MetadataExt;
+use std::os::unix::fs::MetadataExt;
 
 fn command_as_root<I, S>(
     home_dir: &str,

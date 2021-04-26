@@ -85,6 +85,13 @@ pub fn build_path_for_sudo_or_user_as_path<T: AsRef<Path>>(
     Ok(final_path)
 }
 
+pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
+    match err.kind() {
+        std::io::ErrorKind::NotFound => Ok(()),
+        _ => Err(err),
+    }
+}
+
 // This isn't complete way to retrieve HOME dir from the user.
 // We could parse passwd file to get actual home path if we can get user name.
 // I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
@@ -113,7 +120,8 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn validate_parent_dir_exists(path: &Path) -> Result<(), PathsError> {
+pub fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
+    let path = path.as_ref();
     if path.is_relative() {
         Err(PathsError::RelativePathNotPermitted { path: path.into() })
     } else {

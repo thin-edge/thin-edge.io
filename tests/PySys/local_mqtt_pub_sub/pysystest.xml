@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title></title>
+	<title>Validate local publishing and subscribing</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
