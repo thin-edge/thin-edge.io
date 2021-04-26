@@ -1,4 +1,5 @@
 
+
 [![codecov](https://codecov.io/gh/abelikt/thin-edge.io/branch/continuous_integration/graph/badge.svg?token=HrR9JJl6Gh)](https://codecov.io/gh/abelikt/thin-edge.io)
 
 Inofficial Workflows:
@@ -8,8 +9,6 @@ Inofficial Workflows:
 ![integration-test-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)
 ![system-test-workflow](https://github.com/abelikt/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)
 ![system-test-workflow_2](https://github.com/abelikt/thin-edge.io/actions/workflows/system-test-workflow_2.yml/badge.svg)
-![cargo-test-features](https://github.com/abelikt/thin-edge.io/actions/workflows/cargo-test-features.yml/badge.svg)
-
 
 Official Workflows:
 
