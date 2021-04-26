@@ -27,7 +27,6 @@ fn main() -> anyhow::Result<()> {
     let context = ExecutionContext {
         user_manager: user_manager.clone(),
         system_service_manager_factory: Box::new(DefaultSystemServiceManagerFactory::new(
-            user_manager.clone(),
             system_command_runner,
         )),
     };

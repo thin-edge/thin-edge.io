@@ -1,6 +1,6 @@
+use crate::system_command::*;
 use crate::system_services::*;
-use crate::utils::users::{UserManager, ROOT_USER};
-use std::process::ExitStatus;
+use std::sync::Arc;
 
 type ExitCode = i32;
 
@@ -14,14 +14,14 @@ const SYSTEMCTL_BIN: &str = "systemctl";
 
 pub struct SystemdManager {
     systemctl_bin: String,
-    user_manager: UserManager,
+    system_command_runner: Arc<dyn SystemCommandRunner>,
 }
 
 impl SystemdManager {
-    pub fn new(user_manager: UserManager) -> Self {
+    pub fn new(system_command_runner: Arc<dyn SystemCommandRunner>) -> Self {
         Self {
             systemctl_bin: SYSTEMCTL_BIN.into(),
-            user_manager,
+            system_command_runner,
         }
     }
 }
@@ -32,12 +32,9 @@ impl SystemServiceManager for SystemdManager {
     }
 
     fn check_manager_available(&mut self) -> Result<(), ServicesError> {
-        match std::process::Command::new(&self.systemctl_bin)
-            .arg(SystemCtlParam::Version.as_str())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-        {
+        let system_command =
+            SystemCommand::new(&self.systemctl_bin).arg(SystemCtlParam::Version.as_str());
+        match self.system_command_runner.run(system_command) {
             Ok(status) if status.success() => Ok(()),
             _ => Err(SystemdError::SystemdNotAvailable.into()),
         }
@@ -45,7 +42,11 @@ impl SystemServiceManager for SystemdManager {
 
     fn stop_service(&mut self, service: SystemService) -> Result<(), ServicesError> {
         let service_name = service.as_service_name();
-        match self.call_systemd_subcmd_sudo(SystemCtlCmd::Stop, service_name)? {
+        let system_command = SystemCommand::new(&self.systemctl_bin)
+            .arg(SystemCtlCmd::Stop)
+            .arg(service_name)
+            .role(Role::Root);
+        match self.run_system_command(system_command)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
@@ -68,7 +69,12 @@ impl SystemServiceManager for SystemdManager {
     // systemctl stop command followed by systemctl start should be issued.
     fn restart_service(&mut self, service: SystemService) -> Result<(), ServicesError> {
         let service_name = service.as_service_name();
-        match self.call_systemd_subcmd_sudo(SystemCtlCmd::Restart, service_name)? {
+        let system_command = SystemCommand::new(&self.systemctl_bin)
+            .arg(SystemCtlCmd::Restart)
+            .arg(service_name)
+            .role(Role::Root);
+
+        match self.run_system_command(system_command)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
@@ -86,7 +92,12 @@ impl SystemServiceManager for SystemdManager {
 
     fn enable_service(&mut self, service: SystemService) -> Result<(), ServicesError> {
         let service_name = service.as_service_name();
-        match self.call_systemd_subcmd_sudo(SystemCtlCmd::Enable, service_name)? {
+        let system_command = SystemCommand::new(&self.systemctl_bin)
+            .arg(SystemCtlCmd::Enable)
+            .arg(service_name)
+            .role(Role::Root);
+
+        match self.run_system_command(system_command)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
@@ -100,7 +111,12 @@ impl SystemServiceManager for SystemdManager {
 
     fn disable_service(&mut self, service: SystemService) -> Result<(), ServicesError> {
         let service_name = service.as_service_name();
-        match self.call_systemd_subcmd_sudo(SystemCtlCmd::Disable, service_name)? {
+        let system_command = SystemCommand::new(&self.systemctl_bin)
+            .arg(SystemCtlCmd::Disable)
+            .arg(service_name)
+            .role(Role::Root);
+
+        match self.run_system_command(system_command)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
@@ -114,7 +130,12 @@ impl SystemServiceManager for SystemdManager {
 
     fn is_service_active(&mut self, service: SystemService) -> Result<bool, ServicesError> {
         let service_name = service.as_service_name();
-        match self.call_systemd_subcmd(SystemCtlCmd::IsActive, service_name)? {
+
+        let system_command = SystemCommand::new(&self.systemctl_bin)
+            .arg(SystemCtlCmd::IsActive)
+            .arg(service_name);
+
+        match self.run_system_command(system_command)? {
             SYSTEMCTL_OK => Ok(true),
             SYSTEMCTL_ERROR_UNIT_IS_NOT_ACTIVE => Ok(false),
             code => Err(SystemdError::UnhandledReturnCode { code }.into()),
@@ -123,35 +144,15 @@ impl SystemServiceManager for SystemdManager {
 }
 
 impl SystemdManager {
-    fn call_systemd_subcmd_sudo(
-        &self,
-        systemctl_subcmd: SystemCtlCmd,
-        arg: &str,
-    ) -> Result<i32, ServicesError> {
-        let _root_guard = self.user_manager.become_user(ROOT_USER);
-        self.call_systemd_subcmd(systemctl_subcmd, arg)
-    }
-
-    fn call_systemd_subcmd(
-        &self,
-        systemctl_subcmd: SystemCtlCmd,
-        arg: &str,
-    ) -> Result<i32, ServicesError> {
-        cmd_nullstdio_args_with_code(&self.systemctl_bin, &[systemctl_subcmd.as_str(), arg])?
+    fn run_system_command(&self, system_command: SystemCommand) -> Result<i32, ServicesError> {
+        self.system_command_runner
+            .run(system_command)?
             .code()
             .ok_or(ServicesError::UnexpectedExitStatus)
     }
 }
 
-fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, ServicesError> {
-    Ok(std::process::Command::new(command)
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()?)
-}
-
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum SystemCtlCmd {
     Enable,
     Disable,
@@ -172,13 +173,13 @@ impl SystemCtlCmd {
     }
 }
 
-impl From<SystemCtlCmd> for String {
-    fn from(val: SystemCtlCmd) -> Self {
-        val.as_str().into()
+impl Into<String> for SystemCtlCmd {
+    fn into(self) -> String {
+        self.as_str().into()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum SystemCtlParam {
     Version,
 }
@@ -191,27 +192,8 @@ impl SystemCtlParam {
     }
 }
 
-impl From<SystemCtlParam> for String {
-    fn from(val: SystemCtlParam) -> Self {
-        val.as_str().into()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cmd_nullstdio_args_expected_exit_code_zero() {
-        // There is a chance that this may fail on very embedded system which will not have 'ls' command on busybox.
-        assert_eq!(
-            cmd_nullstdio_args_with_code("ls", &[]).unwrap().code(),
-            Some(0)
-        );
-    }
-
-    #[test]
-    fn cmd_nullstdio_args_command_not_exists() {
-        assert!(cmd_nullstdio_args_with_code("test-command", &[]).is_err())
+impl Into<String> for SystemCtlParam {
+    fn into(self) -> String {
+        self.as_str().into()
     }
 }
