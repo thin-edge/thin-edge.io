@@ -1,4 +1,4 @@
-name: all-in-one-workflow
+name: all-in-one-workflow-wo-sync
 
 on:
   #push:
