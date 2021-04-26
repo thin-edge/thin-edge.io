@@ -33,7 +33,17 @@ impl SystemCommand {
         self
     }
 
-    pub fn role(self, role: Option<Role>) -> Self {
-        Self { role, ..self }
+    pub fn role(self, role: Role) -> Self {
+        Self {
+            role: Some(role),
+            ..self
+        }
+    }
+
+    pub fn command_line(&self) -> Vec<String> {
+        let mut command_line = Vec::new();
+        command_line.push(self.program.clone());
+        command_line.extend(self.args.iter().cloned());
+        command_line
     }
 }

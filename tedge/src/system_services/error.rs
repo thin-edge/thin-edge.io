@@ -17,6 +17,9 @@ pub enum ServicesError {
 
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
+
+    #[error("System command execution failed.")]
+    SystemCommandError(#[from] crate::system_command::SystemCommandError),
 }
 
 #[derive(thiserror::Error, Debug)]

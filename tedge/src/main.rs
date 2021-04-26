@@ -1,9 +1,11 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use crate::system_command::*;
 use crate::system_services::DefaultSystemServiceManagerFactory;
 use crate::utils::users::UserManager;
 use anyhow::Context;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 mod cli;
@@ -20,10 +22,13 @@ use command::{BuildCommand, BuildContext, ExecutionContext};
 fn main() -> anyhow::Result<()> {
     let user_manager = UserManager::new();
 
+    let system_command_runner = Arc::new(UnixSystemCommandRunner);
+
     let context = ExecutionContext {
         user_manager: user_manager.clone(),
         system_service_manager_factory: Box::new(DefaultSystemServiceManagerFactory::new(
             user_manager.clone(),
+            system_command_runner,
         )),
     };
 

@@ -1,5 +1,7 @@
+use crate::system_command::*;
 use crate::system_services::{bsd_service::*, openrc::*, systemd::*, *};
 use crate::utils::users::UserManager;
+use std::sync::Arc;
 
 pub trait SystemServiceManagerFactory {
     fn create(&self) -> Box<dyn SystemServiceManager>;
@@ -7,11 +9,18 @@ pub trait SystemServiceManagerFactory {
 
 pub struct DefaultSystemServiceManagerFactory {
     user_manager: UserManager,
+    system_command_runner: Arc<dyn SystemCommandRunner>,
 }
 
 impl DefaultSystemServiceManagerFactory {
-    pub fn new(user_manager: UserManager) -> Self {
-        Self { user_manager }
+    pub fn new(
+        user_manager: UserManager,
+        system_command_runner: Arc<dyn SystemCommandRunner>,
+    ) -> Self {
+        Self {
+            user_manager,
+            system_command_runner,
+        }
     }
 }
 
@@ -28,7 +37,7 @@ impl SystemServiceManagerFactory for DefaultSystemServiceManagerFactory {
         } else if cfg!(feature = "openrc") {
             Box::new(OpenRcServiceManager::new(self.user_manager.clone()))
         } else if cfg!(target_os = "freebsd") {
-            Box::new(BsdServiceManager::new(self.user_manager.clone()))
+            Box::new(BsdServiceManager::new(self.system_command_runner.clone()))
         } else {
             panic!("Neither feature \"systemd\" nor \"openrc\" are enabled.");
         }
