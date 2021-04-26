@@ -1,18 +1,14 @@
 use chrono::{offset::FixedOffset, DateTime, Local};
 
-use thin_edge_json::measurement::FlatMeasurementVisitor;
-use thin_edge_json::{group::MeasurementGrouper, serialize::ThinEdgeJsonSerializer};
-
-fn timestamp() -> DateTime<FixedOffset> {
-    let local_time_now: DateTime<Local> = Local::now();
-    local_time_now.with_timezone(local_time_now.offset())
-}
+use thin_edge_json::group::MeasurementGrouper;
+use thin_edge_json::measurement::*;
+use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 fn tej_build_serialize() -> anyhow::Result<()> {
     //Produce the TEJ from raw data
-    let mut grp_msg = MeasurementGrouper::new(timestamp());
+    let mut grp_msg = MeasurementGrouper::new();
 
-    grp_msg.timestamp(&timestamp())?;
+    grp_msg.timestamp(&current_timestamp())?;
     grp_msg.measurement(None, "temperature", 25.0)?;
     grp_msg.measurement(Some("location"), "alti", 2100.4)?;
     grp_msg.measurement(Some("location"), "longi", 2100.4)?;
