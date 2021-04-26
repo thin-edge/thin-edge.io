@@ -18,7 +18,7 @@ class EnvironmentC8y(BaseTest):
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
         self.log.info("EnvironmentC8y Setup")
-        self.addCleanupFunction(self.mycleanup)
+        self.addCleanupFunction(self.myenvcleanup)
 
         # Check if tedge-mapper is in disabled state
         serv_mapper = self.startProcess(
@@ -70,7 +70,7 @@ class EnvironmentC8y(BaseTest):
             expectedExitStatus="==0",
         )
 
-    def mycleanup(self):
+    def myenvcleanup(self):
         self.log.debug("EnvironmentC8y Cleanup")
 
         # Disconnect Bridge

@@ -14,7 +14,7 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.debug("C8y Roundtrip Setup")
-        self.addCleanupFunction(self.mycleanup)
+        self.addCleanupFunction(self.myenvroundtripcleanup)
 
     def execute(self):
         super().execute()
@@ -59,7 +59,6 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
             "stdout.out", expr="Timestamp verification PASSED", contains=True
         )
 
-    def mycleanup(self):
-        super().mycleanup()
+    def myenvroundtripcleanup(self):
         self.log.debug("C8y Roundtrip MyCleanup")
 

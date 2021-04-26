@@ -39,5 +39,4 @@ class PublishSawmill(EnvironmentC8y):
         self.log.info("Validate - Do it")
 
     def mycleanup(self):
-        super().mycleanup()
         self.log.info("MyCleanup")

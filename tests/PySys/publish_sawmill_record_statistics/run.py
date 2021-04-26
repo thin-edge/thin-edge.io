@@ -23,7 +23,7 @@ TODO : The stats output of mosquitto already contains one cat from the
 """
 
 
-class PySysTest(EnvironmentC8y):
+class PublishSawmillRecordStatistics(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
@@ -75,5 +75,4 @@ class PySysTest(EnvironmentC8y):
         self.log.info("Validate - Do it")
 
     def mycleanup(self):
-        super().mycleanup()
         self.log.info("My Cleanup")
