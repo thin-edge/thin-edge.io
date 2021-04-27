@@ -135,6 +135,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          use-cross: true
           command: strip
           args: --target=${{ matrix.target }}
 
