@@ -128,16 +128,26 @@ jobs:
           command: build
           args: --release --target=${{ matrix.target }}
 
-      - name: strip binaries (cargo deb fails to strip)
-        # IMHO cargo-strip does not work on debian for other targets
-        # -> https://github.com/guedou/cargo-strip
-        # TODO This does not seem to work right
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          use-cross: true
-          command: strip
-          args: --target=${{ matrix.target }}
+#      - name: strip binaries (cargo deb fails to strip)
+#        # IMHO cargo-strip does not work on debian for other targets
+#        # -> https://github.com/guedou/cargo-strip
+#        # TODO This does not seem to work right
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          use-cross: true
+#          command: strip
+#          args: --target=${{ matrix.target }}
+
+
+      - name: Install our own binutils
+          run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf
+
+      - name: Strip workaround tedge
+          run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge
+
+      - name: Strip workaround tedge_mapper
+          run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper
 
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
