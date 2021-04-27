@@ -135,7 +135,8 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          command: strip --target=${{ matrix.target }}
+          command: strip
+          args: --target=${{ matrix.target }}
 
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
