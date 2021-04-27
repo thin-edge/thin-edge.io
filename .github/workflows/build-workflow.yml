@@ -79,7 +79,7 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-  build_matrix:
+  build_matrix_arm:
 
     name: Build packages for targets
     runs-on: Ubuntu-20.04
@@ -87,6 +87,7 @@ jobs:
 
     strategy:
       matrix:
+        # Currently only arm targets, as we use a custom strip binary !
         target: [armv7-unknown-linux-gnueabihf, arm-unknown-linux-gnueabihf, armv7-unknown-linux-musleabihf]
 
     steps:
@@ -169,6 +170,9 @@ jobs:
           use-cross: true
           command: build
           args: --release --examples --target=${{ matrix.target }}
+
+      - name: Strip workaround sawtooth_publisher
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher
 
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
