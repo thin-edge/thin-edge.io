@@ -1,7 +1,6 @@
+use super::cert_store::*;
 use super::error::CertError;
-use super::file_installer::*;
 use crate::command::{Command, ExecutionContext};
-use crate::system_command::Role;
 use certificate::{KeyCertPair, NewCertificateConfig};
 use tedge_config::*;
 
@@ -15,6 +14,9 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: FilePath,
+
+    /// The certificate store of the mosquitto broker
+    pub broker_cert_store: Box<dyn CertificateStore>,
 }
 
 impl Command for CreateCertCmd {
@@ -24,39 +26,25 @@ impl Command for CreateCertCmd {
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         let config = NewCertificateConfig::default();
-        let () = self.create_test_certificate(&config, &Installer)?;
+        let () = self.create_test_certificate(&config)?;
         Ok(())
     }
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(
-        &self,
-        config: &NewCertificateConfig,
-        installer: &dyn FileInstaller,
-    ) -> Result<(), CertError> {
+    fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
         let cert_pem = cert.certificate_pem_string()?;
         let cert_key = cert.private_key_pem_string()?;
 
-        // 0o444: Prevents the certificate to be overwritten
-        let () = installer
-            .install(
-                self.cert_path.as_ref(),
-                Role::Broker,
-                0o444,
-                cert_pem.as_bytes(),
-            )
+        let () = self
+            .broker_cert_store
+            .store_certificate(self.cert_path.as_ref(), cert_pem.as_bytes())
             .map_err(|err| err.cert_context(self.cert_path.clone()))?;
 
-        // 0o600: Make sure the key is secret and cannot be written
-        let () = installer
-            .install(
-                self.key_path.as_ref(),
-                Role::Broker,
-                0o400,
-                cert_key.as_bytes(),
-            )
+        let () = self
+            .broker_cert_store
+            .store_private_key(self.key_path.as_ref(), cert_key.as_bytes())
             .map_err(|err| err.cert_context(self.key_path.clone()))?;
 
         Ok(())
@@ -82,10 +70,11 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            broker_cert_store: Box::new(BrokerCertStore),
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default(), &Installer),
+            cmd.create_test_certificate(&NewCertificateConfig::default()),
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -109,10 +98,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            broker_cert_store: Box::new(BrokerCertStore),
         };
 
         assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
+            .create_test_certificate(&NewCertificateConfig::default())
             .ok()
             .is_none());
 
@@ -130,10 +120,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            broker_cert_store: Box::new(BrokerCertStore),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
+            .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -148,10 +139,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            broker_cert_store: Box::new(BrokerCertStore),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &Installer)
+            .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }

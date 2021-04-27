@@ -1,4 +1,4 @@
-use super::file_installer::*;
+use super::cert_store::*;
 use crate::command::{Command, ExecutionContext};
 
 use tedge_config::*;
@@ -12,6 +12,9 @@ pub struct RemoveCertCmd {
 
     /// The path of the private key to be removed
     pub key_path: FilePath,
+
+    /// The certificate store of the mosquitto broker
+    pub broker_cert_store: Box<dyn CertificateStore>,
 }
 
 impl Command for RemoveCertCmd {
@@ -20,15 +23,19 @@ impl Command for RemoveCertCmd {
     }
 
     fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        let () = self.remove_certificate(&Installer)?;
+        let () = self.remove_certificate()?;
         Ok(())
     }
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self, installer: &dyn FileInstaller) -> Result<(), CertError> {
-        let () = installer.remove_if_exists(self.cert_path.as_ref())?;
-        let () = installer.remove_if_exists(self.key_path.as_ref())?;
+    fn remove_certificate(&self) -> Result<(), CertError> {
+        let () = self
+            .broker_cert_store
+            .remove_certificate(self.cert_path.as_ref())?;
+        let () = self
+            .broker_cert_store
+            .remove_private_key(self.key_path.as_ref())?;
         Ok(())
     }
 }

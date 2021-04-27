@@ -1,3 +1,4 @@
+use super::cert_store::*;
 use super::{create::CreateCertCmd, remove::RemoveCertCmd, show::ShowCertCmd, upload::*};
 
 use crate::command::{BuildCommand, BuildContext, Command};
@@ -35,6 +36,7 @@ impl BuildCommand for TEdgeCertCli {
                     id,
                     cert_path: config.query(DeviceCertPathSetting)?,
                     key_path: config.query(DeviceKeyPathSetting)?,
+                    broker_cert_store: Box::new(BrokerCertStore),
                 };
                 cmd.into_boxed()
             }
@@ -50,6 +52,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = RemoveCertCmd {
                     cert_path: config.query(DeviceCertPathSetting)?,
                     key_path: config.query(DeviceKeyPathSetting)?,
+                    broker_cert_store: Box::new(BrokerCertStore),
                 };
                 cmd.into_boxed()
             }
