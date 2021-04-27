@@ -129,11 +129,13 @@ jobs:
           args: --release --target=${{ matrix.target }}
 
       - name: strip binaries (cargo deb fails to strip)
+        # IMHO cargo-strip does not work on debian for other targets
+        # -> https://github.com/guedou/cargo-strip
         # TODO This does not seem to work right
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          command: strip
+          command: strip --target=${{ matrix.target }}
 
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
