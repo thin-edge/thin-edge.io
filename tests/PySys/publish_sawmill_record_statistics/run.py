@@ -17,9 +17,6 @@ When we record the /proc/pid/status of tedge-mapper
 When we upload the data to the github action for further analysis (not done here)
 
 TODO : Add validation procedure
-
-TODO : The stats output of mosquitto already contains one cat from the
-    following restart withh a different PID!!!
 """
 
 

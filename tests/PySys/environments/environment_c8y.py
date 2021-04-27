@@ -64,10 +64,9 @@ class EnvironmentC8y(BaseTest):
 
         # Check if tedge-mapper is active
         serv_mapper = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
-            stdouterr="serv_mapper1",
-            expectedExitStatus="==0",
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
+            stdouterr="serv_mapper4",
         )
 
     def myenvcleanup(self):
@@ -82,8 +81,8 @@ class EnvironmentC8y(BaseTest):
 
         # Check if tedge-mapper is disabled
         serv_mosq = self.startProcess(
-            command="/usr/sbin/service",
-            arguments=["tedge-mapper", "status"],
-            stdouterr="serv_mapper2",
+            command=self.systemctl,
+            arguments=["status", "tedge-mapper"],
+            stdouterr="serv_mapper5",
             expectedExitStatus="==3",
         )

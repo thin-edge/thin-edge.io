@@ -6,7 +6,7 @@ use crate::measurement::{FlatMeasurementVisitor, GroupedMeasurementVisitor};
 
 #[derive(Debug)]
 pub struct MeasurementGrouper {
-    pub timestamp: DateTime<FixedOffset>,
+    pub timestamp: Option<DateTime<FixedOffset>>,
     pub values: HashMap<String, Measurement>,
 }
 #[derive(Debug)]
@@ -25,18 +25,25 @@ pub enum MeasurementGrouperError {
 }
 
 impl MeasurementGrouper {
-    pub fn new(timestamp: DateTime<FixedOffset>) -> Self {
+    pub fn new() -> Self {
         Self {
-            timestamp,
+            timestamp: None,
             values: HashMap::new(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
     }
 
     pub fn accept<V, E>(&self, visitor: &mut V) -> Result<(), E>
     where
         V: GroupedMeasurementVisitor<Error = E>,
     {
-        visitor.timestamp(self.timestamp)?;
+        if let Some(timestamp) = self.timestamp {
+            visitor.timestamp(timestamp)?;
+        }
+
         for (key, value) in self.values.iter() {
             match value {
                 Measurement::Single(sv) => {
@@ -59,7 +66,7 @@ impl FlatMeasurementVisitor for MeasurementGrouper {
     type Error = MeasurementGrouperError;
 
     fn timestamp(&mut self, time: &DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        self.timestamp = *time;
+        self.timestamp = Some(*time);
         Ok(())
     }
 
@@ -88,5 +95,101 @@ impl FlatMeasurementVisitor for MeasurementGrouper {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::prelude::*;
+    use mockall::predicate::*;
+    use mockall::*;
+
+    mock! {
+        pub GroupedVisitor {
+        }
+
+        impl GroupedMeasurementVisitor for GroupedVisitor {
+            type Error = ();
+
+            fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), ()>;
+            fn measurement(&mut self, name: &str, value: f64) -> Result<(), ()>;
+            fn start_group(&mut self, group: &str) -> Result<(), ()>;
+            fn end_group(&mut self) -> Result<(), ()>;
+        }
+    }
+
+    #[test]
+    fn new_measurement_grouper_is_empty() {
+        let grouper = MeasurementGrouper::new();
+        assert!(grouper.is_empty());
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_measurement().never();
+        mock.expect_start_group().never();
+        mock.expect_end_group().never();
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn new_measurement_grouper_with_a_timestamp_is_empty() {
+        let mut grouper = MeasurementGrouper::new();
+        let _ = grouper.timestamp(&test_timestamp(4));
+        assert!(grouper.is_empty());
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_timestamp().return_const(Ok(()));
+        mock.expect_measurement().never();
+        mock.expect_start_group().never();
+        mock.expect_end_group().never();
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn new_measurement_grouper_has_no_timestamp() {
+        let grouper = MeasurementGrouper::new();
+        let mut mock = MockGroupedVisitor::new();
+
+        mock.expect_timestamp().never();
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn measurement_grouper_forward_timestamp() {
+        let mut grouper = MeasurementGrouper::new();
+        let _ = grouper.timestamp(&test_timestamp(4));
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_timestamp()
+            .times(1)
+            .with(eq(test_timestamp(4)))
+            .return_const(Ok(()));
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn measurement_grouper_forward_only_the_latest_received_timestamp() {
+        let mut grouper = MeasurementGrouper::new();
+        let _ = grouper.timestamp(&test_timestamp(4));
+        let _ = grouper.timestamp(&test_timestamp(6));
+        let _ = grouper.timestamp(&test_timestamp(5));
+
+        let mut mock = MockGroupedVisitor::new();
+        mock.expect_timestamp()
+            .times(1)
+            .with(eq(test_timestamp(5)))
+            .return_const(Ok(()));
+
+        let _ = grouper.accept(&mut mock);
+    }
+
+    fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
+        FixedOffset::east(5 * 3600)
+            .ymd(2021, 04, 08)
+            .and_hms(13, minute, 00)
     }
 }
