@@ -103,19 +103,28 @@ impl ThinEdgeJson {
         value: &JsonValue,
     ) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
         match value {
+            //When timestamp string is long, with more digits in the timestamp subseconds
+            JsonValue::String(str) => {
+                let result = ThinEdgeJson::check_complaint(str)?;
+                Ok(result)
+            }
+            //When timestamp string is having less digits in the subseconds
             JsonValue::Short(str) => {
-                let timestamp = str.as_str();
-                //Parse fails if timestamp is not is8601 complaint
-                let result = DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
-                    ThinEdgeJsonError::InvalidTimestamp {
-                        value: String::from(timestamp),
-                        from: err,
-                    }
-                })?;
+                let result = ThinEdgeJson::check_complaint(str)?;
                 Ok(result)
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
         }
+    }
+
+    fn check_complaint(timestamp: &str) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
+        let time = DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
+            ThinEdgeJsonError::InvalidTimestamp {
+                value: String::from(timestamp),
+                from: err,
+            }
+        })?;
+        Ok(time)
     }
 }
 
@@ -287,6 +296,28 @@ mod tests {
         FixedOffset::east(5 * 3600)
             .ymd(2021, 04, 08)
             .and_hms(0, 0, 0)
+    }
+
+    #[test]
+    fn valid_short_time_stamp() {
+        let time_stamp = "2013-06-22T17:03:14.000+02:00";
+        let result = ThinEdgeJson::check_complaint(time_stamp).unwrap();
+        assert_eq!(result, DateTime::parse_from_rfc3339(time_stamp).unwrap());
+    }
+
+    #[test]
+    fn valid_string_time_stamp() {
+        let time_stamp = "2013-06-22T17:03:14.000658767+02:00";
+        let result = ThinEdgeJson::check_complaint(time_stamp).unwrap();
+        assert_eq!(result, DateTime::parse_from_rfc3339(time_stamp).unwrap());
+    }
+
+    #[test]
+    fn invalid_time_stamp() {
+        let time_stamp = "2013-06-2217:03:14.000658767+02:00";
+        let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
+        let error = ThinEdgeJson::check_complaint(time_stamp).unwrap_err();
+        assert_eq!(error.to_string(), expected_error);
     }
 
     #[test]
