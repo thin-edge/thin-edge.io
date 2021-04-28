@@ -1,5 +1,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
+[![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)
+[![commit-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml)
+[![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
+[![integration-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml)
+[![system-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml)
 
 <!-- PROJECT LOGO -->
 <br />
