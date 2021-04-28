@@ -165,3 +165,26 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: outdated
+
+  dump-versions:
+
+    name: dump-version
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Cargo fmt version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: --version
+
+      - name: Cargo version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          args: --version
+
+      - name: Run all Tests
+          run:  rustc --version
