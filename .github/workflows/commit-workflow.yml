@@ -186,5 +186,8 @@ jobs:
         with:
           args: --version
 
-      - name: Run all Tests
+      - name: cargo version
+        run:  cargo --version
+
+      - name: rustc version
         run:  rustc --version
