@@ -12,6 +12,7 @@ members = [
 
 [profile.release]
 lto = true
-opt-level = "z"
-codegen-units = 1
-panic = 'abort'
+
+# opt-level = "z" # See https://doc.rust-lang.org/cargo/reference/profiles.html
+# codegen-units = 1
+# panic = 'abort'
