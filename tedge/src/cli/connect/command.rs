@@ -76,10 +76,10 @@ impl ConnectCommand {
         match self.cloud {
             Cloud::Azure => {
                 let params = BridgeConfigAzureParams {
-                    connect_url: config.query(C8yUrlSetting)?,
+                    connect_url: config.query(AzureUrlSetting)?,
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: AZURE_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(C8yRootCertPathSetting)?,
+                    bridge_root_cert_path: config.query(AzureRootCertPathSetting)?,
                     remote_clientid: config.query(DeviceIdSetting)?,
                     bridge_certfile: config.query(DeviceCertPathSetting)?,
                     bridge_keyfile: config.query(DeviceKeyPathSetting)?,
