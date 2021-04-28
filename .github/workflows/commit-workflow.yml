@@ -187,4 +187,4 @@ jobs:
           args: --version
 
       - name: Run all Tests
-          run:  rustc --version
+        run:  rustc --version
