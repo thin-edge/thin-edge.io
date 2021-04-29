@@ -140,6 +140,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-timer"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba5fa6ed76cb2aa820707b4eb9ec46f42da9ce70b0eafab5e5e34942b38a44d5"
+dependencies = [
+ "libc",
+ "wasm-bindgen",
+ "winapi",
+]
+
+[[package]]
+name = "async-trait"
+version = "0.1.50"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b98e84bbb4cbcdd97da190ba0c58a1bb0de2c1fdf67d159e192ed766aeca722"
+dependencies = [
+ "proc-macro2 1.0.26",
+ "quote 1.0.9",
+ "syn 1.0.68",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1832,12 +1854,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-timer",
+ "async-trait",
  "chrono",
  "futures",
+ "mockall",
  "mqtt_client",
  "thin_edge_json",
  "thiserror",
  "tokio",
+ "tokio-test",
  "tracing",
  "tracing-subscriber",
 ]

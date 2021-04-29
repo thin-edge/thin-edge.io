@@ -36,6 +36,10 @@ impl MeasurementGrouper {
         self.values.is_empty()
     }
 
+    pub fn clear(&mut self) {
+        self.values.clear();
+    }
+
     pub fn get_measurement_value(
         &self,
         group_key: Option<&str>,
