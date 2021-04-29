@@ -1,13 +1,17 @@
 #!/bin/sh
 set -e
 
-#VERSION="0.1.0"
-#ARCH="armhf"
 VERSION=$1
 ARCH=$(dpkg --print-architecture)
 
-BLUE='\033[1;34m'
-COLORRESET='\033[0m'
+BLUE=''
+COLORRESET=''
+if [ -t 1 ]; then
+    if [ "$(tput colors)" -ge 8 ]; then
+        BLUE='\033[1;34m'
+        COLORRESET='\033[0m'
+    fi
+fi
 
 echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
@@ -34,8 +38,8 @@ fi
 echo "${BLUE}Installing mosquitto as prerequirement for thin-edge.io${COLORRESET}"
 apt install mosquitto -y
 
-wget https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
-wget https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
+wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
+wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
 
 dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
 dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
