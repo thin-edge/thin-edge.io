@@ -51,7 +51,7 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             command="/bin/sh",
             arguments=[
                 "-c",
-                "while true; do cat date; /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done",
+                "while true; do date; cat /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done",
             ],
             stdouterr="stats_mapper_stdout",
             background=True,
