@@ -1,5 +1,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
+[![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)
+[![commit-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml)
+[![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
+[![integration-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml)
+[![system-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml)
 
 <!-- PROJECT LOGO -->
 <br />
@@ -51,10 +56,7 @@ With thin-edge.io we want to provide re-usable and modular components, which are
 <!-- REFERENCESYSTEMS -->
 
 # Reference Systems
-These are the systems that we currently test on. This does not mean that thin-edge.io is not building and working on other systems, but these are the systems that we are testing on.
-
-* Raspberry Pi 3b with Raspberry Pi OS 10
-* Raspberry Pi 4 with Raspberry Pi OS 10
+For an overview of the supported platforms please have a look at the [platform support](docs/src/supported-platforms.md) doc.
 <br/>
 <br/>
 

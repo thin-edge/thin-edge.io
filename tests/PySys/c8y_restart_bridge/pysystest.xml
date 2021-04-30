@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+
+  <description>
+	<title>Bridge restart</title>
+	<purpose><![CDATA[
+]]>
+	</purpose>
+  </description>
+  <classification>
+	<groups inherit="true">
+	  <group></group>
+	</groups>
+	<modes inherit="true">
+	</modes>
+  </classification>
+  <data>
+	<class name="RestartBridge" module="run"/>
+  </data>
+  <traceability>
+	<requirements>
+	  <requirement id=""/>
+	</requirements>
+  </traceability>
+</pysystest>

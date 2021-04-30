@@ -15,7 +15,7 @@
 use chrono::prelude::*;
 use json::JsonValue;
 use std::fmt;
-use thin_edge_json::{
+use thin_edge_json::json::{
     MultiValueMeasurement, SingleValueMeasurement, ThinEdgeJson, ThinEdgeJsonError, ThinEdgeValue,
 };
 
