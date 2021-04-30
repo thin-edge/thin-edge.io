@@ -57,6 +57,16 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             background=True,
         )
 
+        stats_mapper = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x tedge_mapper)/stat; sleep 1; done",
+            ],
+            stdouterr="stat_mapper_stdout",
+            background=True,
+        )
+
         publisher = self.project.exampledir + "/sawtooth_publisher"
         cmd = os.path.expanduser(publisher)
 
