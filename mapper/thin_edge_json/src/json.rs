@@ -301,50 +301,33 @@ mod tests {
     #[test]
     fn valid_short_time_stamp() {
         let input = r#"{
-            "time" : "2013-06-22T17:03:14.123+02:00"
+            "time" : "2021-04-30T17:03:14.123+02:00"
         }"#;
-
         let json = json::parse(&input).unwrap();
-        match &json {
-            JsonValue::Object(thin_edge_obj) => {
-                for (k, v) in thin_edge_obj.iter() {
-                    if k.eq("time") {
-                        let time_stamp =
-                            ThinEdgeJson::check_timestamp_for_iso8601_complaint(v).unwrap();
-                        assert_eq!(
-                            time_stamp,
-                            DateTime::parse_from_rfc3339("2013-06-22T17:03:14.123+02:00").unwrap()
-                        );
-                    }
-                }
-            }
-            _ => {}
-        }
+
+        let expected_output = FixedOffset::east(2 * 3600)
+            .ymd(2021, 04, 30)
+            .and_hms_milli(17, 03, 14, 123);
+
+        let time = json.entries().nth(0).unwrap();
+        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap();
+        assert_eq!(output, expected_output);
     }
 
     #[test]
     fn valid_string_time_stamp() {
         let input = r#"{
-            "time" : "2013-06-22T17:03:14.1234567890+02:00"
+            "time" : "2021-04-30T17:03:14.123456789+02:00"
         }"#;
 
         let json = json::parse(&input).unwrap();
-        match &json {
-            JsonValue::Object(thin_edge_obj) => {
-                for (k, v) in thin_edge_obj.iter() {
-                    if k.eq("time") {
-                        let time_stamp =
-                            ThinEdgeJson::check_timestamp_for_iso8601_complaint(v).unwrap();
-                        assert_eq!(
-                            time_stamp,
-                            DateTime::parse_from_rfc3339("2013-06-22T17:03:14.1234567890+02:00")
-                                .unwrap()
-                        );
-                    }
-                }
-            }
-            _ => {}
-        }
+        let expected_output = FixedOffset::east(2 * 3600)
+            .ymd(2021, 04, 30)
+            .and_hms_nano(17, 03, 14, 123456789);
+
+        let time = json.entries().nth(0).unwrap();
+        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap();
+        assert_eq!(output, expected_output);
     }
 
     #[test]
@@ -354,19 +337,62 @@ mod tests {
         }"#;
         let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
         let json = json::parse(&input).unwrap();
-        match &json {
-            JsonValue::Object(thin_edge_obj) => {
-                for (k, v) in thin_edge_obj.iter() {
-                    if k.eq("time") {
-                        let output_error =
-                            ThinEdgeJson::check_timestamp_for_iso8601_complaint(v).unwrap_err();
-                        assert_eq!(output_error.to_string(), expected_error);
-                    }
-                }
-            }
-            _ => {}
-        }
+        let time = json.entries().nth(0).unwrap();
+        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap_err();
+        assert_eq!(output.to_string(), expected_error);
     }
+
+    #[test]
+    fn check_from_json_str_short_timestamp() {
+        let input = r#"{
+            "temperature" : 25
+        }"#;
+        let timestamp = FixedOffset::east(2 * 3600)
+            .ymd(2021, 04, 30)
+            .and_hms_milli(17, 03, 14, 123);
+
+        //prepare expected output
+        let tvalues: ThinEdgeValue = ThinEdgeValue::Single(SingleValueMeasurement {
+            name: "temperature".into(),
+            value: 25.0,
+        });
+        let tjson: ThinEdgeJson = ThinEdgeJson {
+            timestamp,
+            values: vec![tvalues],
+        };
+        let expected_string = format!("{:#?}", tjson);
+
+        let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
+        let output_string = format!("{:#?}", output);
+
+        assert_eq!(output_string, expected_string);
+    }
+
+    #[test]
+    fn check_from_json_str_string_local_time_now() {
+        let input = r#"{
+            "temperature" : 25
+        }"#;
+        let local_time_now: DateTime<Local> = Local::now();
+        let timestamp = local_time_now.with_timezone(local_time_now.offset());
+
+        //prepare expected output
+        let tvalues: ThinEdgeValue = ThinEdgeValue::Single(SingleValueMeasurement {
+            name: "temperature".into(),
+            value: 25.0,
+        });
+        let tjson: ThinEdgeJson = ThinEdgeJson {
+            timestamp,
+            values: vec![tvalues],
+        };
+        let expected_string = format!("{:#?}", tjson);
+
+        let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
+        let output_string = format!("{:#?}", output);
+
+        assert_eq!(output_string, expected_string);
+    }
+
     #[test]
     fn thin_edge_json_reject_invalid_utf8() {
         let input = b"temperature\xc3\x28";
