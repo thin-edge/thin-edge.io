@@ -291,6 +291,7 @@ impl ThinEdgeJsonError {
 
 mod tests {
     use super::*;
+    use crate::measurement::*;
 
     fn test_timestamp() -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
@@ -341,7 +342,6 @@ mod tests {
         let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap_err();
         assert_eq!(output.to_string(), expected_error);
     }
-
     #[test]
     fn check_from_json_str_short_timestamp() {
         let input = r#"{
@@ -351,21 +351,13 @@ mod tests {
             .ymd(2021, 04, 30)
             .and_hms_milli(17, 03, 14, 123);
 
-        //prepare expected output
-        let tvalues: ThinEdgeValue = ThinEdgeValue::Single(SingleValueMeasurement {
-            name: "temperature".into(),
-            value: 25.0,
-        });
-        let tjson: ThinEdgeJson = ThinEdgeJson {
-            timestamp,
-            values: vec![tvalues],
-        };
-        let expected_string = format!("{:#?}", tjson);
-
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
-        let output_string = format!("{:#?}", output);
-
-        assert_eq!(output_string, expected_string);
+        assert_eq!(
+            output.timestamp,
+            FixedOffset::east(2 * 3600)
+                .ymd(2021, 04, 30)
+                .and_hms_milli(17, 03, 14, 123)
+        );
     }
 
     #[test]
@@ -373,24 +365,11 @@ mod tests {
         let input = r#"{
             "temperature" : 25
         }"#;
-        let local_time_now: DateTime<Local> = Local::now();
-        let timestamp = local_time_now.with_timezone(local_time_now.offset());
 
-        //prepare expected output
-        let tvalues: ThinEdgeValue = ThinEdgeValue::Single(SingleValueMeasurement {
-            name: "temperature".into(),
-            value: 25.0,
-        });
-        let tjson: ThinEdgeJson = ThinEdgeJson {
-            timestamp,
-            values: vec![tvalues],
-        };
-        let expected_string = format!("{:#?}", tjson);
+        let timestamp = current_timestamp();
 
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
-        let output_string = format!("{:#?}", output);
-
-        assert_eq!(output_string, expected_string);
+        assert_eq!(output.timestamp, timestamp);
     }
 
     #[test]
