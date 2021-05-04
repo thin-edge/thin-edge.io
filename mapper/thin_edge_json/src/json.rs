@@ -296,13 +296,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_from_rfc3339() {
+    fn test_parse_from_rfc3339_empty_timestamp() {
         //no time stamp
         assert_matches!(
             ThinEdgeJson::parse_from_rfc3339("...."),
             Err(ThinEdgeJsonError::InvalidTimestamp { .. })
         );
-
+    }
+        #[test]
+        fn test_parse_from_rfc3339_timestamp_with_seconds() {
         //no subseconds
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T00:00:00+05:00").unwrap(),
@@ -310,7 +312,9 @@ mod tests {
                 .ymd(2021, 04, 08)
                 .and_hms(0, 0, 0)
         );
-
+    }
+        #[test]
+        fn test_parse_from_rfc3339_timestamp_with_milliseconds() {
         //with milliseconds
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123+05:00").unwrap(),
@@ -318,7 +322,9 @@ mod tests {
                 .ymd(2021, 04, 08)
                 .and_hms_milli(12, 10, 10, 123)
         );
-
+    }
+        #[test]
+        fn test_parse_from_rfc3339_timestamp_with_nanoseconds() {
         //with nanoseconds
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123456789+05:00").unwrap(),
