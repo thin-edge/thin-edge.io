@@ -342,6 +342,20 @@ mod tests {
         let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap_err();
         assert_eq!(output.to_string(), expected_error);
     }
+
+    #[test]
+    fn check_json_str_with_second_timestamp() {
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14+02:00",
+            "temperature" : 25
+        }"#;
+        let timestamp = FixedOffset::east(2 * 3600)
+            .ymd(2021, 04, 30)
+            .and_hms(17, 03, 14);
+
+        let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
+        assert_eq!(output.timestamp, timestamp);
+    }
     #[test]
     fn check_json_str_with_millisecond_timestamp() {
         let input = r#"{
@@ -353,12 +367,7 @@ mod tests {
             .and_hms_milli(17, 03, 14, 123);
 
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
-        assert_eq!(
-            output.timestamp,
-            FixedOffset::east(2 * 3600)
-                .ymd(2021, 04, 30)
-                .and_hms_milli(17, 03, 14, 123)
-        );
+        assert_eq!(output.timestamp, timestamp);
     }
 
     #[test]
