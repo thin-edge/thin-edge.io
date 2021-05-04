@@ -1878,7 +1878,6 @@ name = "thin_edge_json"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "assert_matches",
  "chrono",
  "json",
  "mockall",

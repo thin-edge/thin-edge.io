@@ -277,49 +277,13 @@ impl ThinEdgeJsonError {
 mod tests {
     use super::*;
     use crate::measurement::*;
-    use assert_matches::*;
-
     fn test_timestamp() -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
             .ymd(2021, 04, 08)
             .and_hms(0, 0, 0)
     }
     #[test]
-    fn parse_from_rfc3339_with_empty_timestamp() {
-        assert_matches!(
-            ThinEdgeJson::parse_from_rfc3339("...."),
-            Err(ThinEdgeJsonError::InvalidTimestamp { .. })
-        );
-    }
-    #[test]
-    fn parse_from_rfc3339_timestamp_with_seconds() {
-        assert_eq!(
-            ThinEdgeJson::parse_from_rfc3339("2021-04-08T00:00:00+05:00").unwrap(),
-            FixedOffset::east(5 * 3600)
-                .ymd(2021, 04, 08)
-                .and_hms(0, 0, 0)
-        );
-    }
-    #[test]
-    fn parse_from_rfc3339_timestamp_with_milliseconds() {
-        assert_eq!(
-            ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123+05:00").unwrap(),
-            FixedOffset::east(5 * 3600)
-                .ymd(2021, 04, 08)
-                .and_hms_milli(12, 10, 10, 123)
-        );
-    }
-    #[test]
-    fn parse_from_rfc3339_timestamp_with_nanoseconds() {
-        assert_eq!(
-            ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123456789+05:00").unwrap(),
-            FixedOffset::east(5 * 3600)
-                .ymd(2021, 04, 08)
-                .and_hms_nano(12, 10, 10, 123456789)
-        );
-    }
-    #[test]
-    fn json_str_with_invalid_time_stamp() {
+    fn test_str_with_invalid_time_stamp() {
         let input = r#"{
             "time" : "2013-06-2217:03:14.000658767+02:00"
         }"#;
@@ -329,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn json_str_with_second_timestamp() {
+    fn test_str_with_valid_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14+02:00",
             "temperature" : 25
@@ -342,7 +306,7 @@ mod tests {
         assert_eq!(output.timestamp, timestamp);
     }
     #[test]
-    fn json_str_with_millisecond_timestamp() {
+    fn test_str_with_millisecond_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14.123+02:00",
             "temperature" : 25
@@ -356,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn json_str_with_nanosecond_timestamp() {
+    fn test_str_with_nanosecond_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14.123456789+02:00",
             "temperature" : 25
