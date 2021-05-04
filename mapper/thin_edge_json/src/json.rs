@@ -300,47 +300,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_short_time_stamp() {
-        let input = r#"{
-            "time" : "2021-04-30T17:03:14.123+02:00"
-        }"#;
-        let json = json::parse(&input).unwrap();
-
-        let expected_output = FixedOffset::east(2 * 3600)
-            .ymd(2021, 04, 30)
-            .and_hms_milli(17, 03, 14, 123);
-
-        let time = json.entries().nth(0).unwrap();
-        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap();
-        assert_eq!(output, expected_output);
-    }
-
-    #[test]
-    fn valid_string_time_stamp() {
-        let input = r#"{
-            "time" : "2021-04-30T17:03:14.123456789+02:00"
-        }"#;
-
-        let json = json::parse(&input).unwrap();
-        let expected_output = FixedOffset::east(2 * 3600)
-            .ymd(2021, 04, 30)
-            .and_hms_nano(17, 03, 14, 123456789);
-
-        let time = json.entries().nth(0).unwrap();
-        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap();
-        assert_eq!(output, expected_output);
-    }
-
-    #[test]
     fn invalid_time_stamp() {
         let input = r#"{
             "time" : "2013-06-2217:03:14.000658767+02:00"
         }"#;
         let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
-        let json = json::parse(&input).unwrap();
-        let time = json.entries().nth(0).unwrap();
-        let output = ThinEdgeJson::check_timestamp_for_iso8601_complaint(time.1).unwrap_err();
-        assert_eq!(output.to_string(), expected_error);
+        let output_err = ThinEdgeJson::from_str(input, test_timestamp()).unwrap_err();
+        assert_eq!(output_err.to_string(), expected_error);
     }
 
     #[test]
