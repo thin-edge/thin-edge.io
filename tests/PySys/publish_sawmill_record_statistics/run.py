@@ -37,13 +37,15 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             background=True,
         )
 
-        stats_mosquitto = self.startProcess(
+        # record /proc/pid/status
+
+        status_mosquitto = self.startProcess(
             command="/bin/sh",
             arguments=[
                 "-c",
                 "while true; do date; cat /proc/$(pgrep -x mosquitto)/status; sleep 1; done",
             ],
-            stdouterr="stats_mosquitto_stdout",
+            stdouterr="status_mosquitto_stdout",
             background=True,
         )
 
@@ -53,9 +55,11 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
                 "-c",
                 "while true; do date; cat /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done",
             ],
-            stdouterr="stats_mapper_stdout",
+            stdouterr="status_mapper_stdout",
             background=True,
         )
+
+        # record /proc/pid/stat
 
         stats_mapper = self.startProcess(
             command="/bin/sh",
@@ -66,6 +70,40 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             stdouterr="stat_mapper_stdout",
             background=True,
         )
+
+        stats_mosquitto = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x mosquitto)/stat; sleep 1; done",
+            ],
+            stdouterr="stat_mosquitto_stdout",
+            background=True,
+        )
+
+        # record /proc/pid/statm
+
+        statm_mapper = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x tedge_mapper)/statm; sleep 1; done",
+            ],
+            stdouterr="statm_mapper_stdout",
+            background=True,
+        )
+
+        statm_mosquitto = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do cat /proc/$(pgrep -x mosquitto)/statm; sleep 1; done",
+            ],
+            stdouterr="statm_mosquitto_stdout",
+            background=True,
+        )
+
+        # start the publisher
 
         publisher = self.project.exampledir + "/sawtooth_publisher"
         cmd = os.path.expanduser(publisher)
