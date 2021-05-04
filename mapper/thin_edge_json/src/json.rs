@@ -64,7 +64,10 @@ impl ThinEdgeJson {
                             name: String::from(k),
                         });
                     } else if k.eq("time") {
-                        time = ThinEdgeJson::check_timestamp_for_iso8601_complaint(v)?;
+                        time = ThinEdgeJson::parse_from_rfc3339(
+                            v.as_str()
+                                .ok_or(ThinEdgeJsonError::new_invalid_json_time(v))?,
+                        )?;
                     } else {
                         match v {
                             //Single Value object
@@ -96,24 +99,6 @@ impl ThinEdgeJson {
                 }
             }
             _ => Err(ThinEdgeJsonError::new_invalid_json_root(&input)),
-        }
-    }
-
-    fn check_timestamp_for_iso8601_complaint(
-        value: &JsonValue,
-    ) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
-        match value {
-            //When timestamp string is long, with more digits in the timestamp subseconds
-            JsonValue::String(str) => {
-                let result = ThinEdgeJson::parse_from_rfc3339(str)?;
-                Ok(result)
-            }
-            //When timestamp string is having less digits in the subseconds
-            JsonValue::Short(str) => {
-                let result = ThinEdgeJson::parse_from_rfc3339(str)?;
-                Ok(result)
-            }
-            _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
         }
     }
 
@@ -292,6 +277,7 @@ impl ThinEdgeJsonError {
 mod tests {
     use super::*;
     use crate::measurement::*;
+    use assert_matches::*;
 
     fn test_timestamp() -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
@@ -307,6 +293,39 @@ mod tests {
         let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
         let output_err = ThinEdgeJson::from_str(input, test_timestamp()).unwrap_err();
         assert_eq!(output_err.to_string(), expected_error);
+    }
+
+    #[test]
+    fn test_parse_from_rfc3339() {
+        //no time stamp
+        assert_matches!(
+            ThinEdgeJson::parse_from_rfc3339("...."),
+            Err(ThinEdgeJsonError::InvalidTimestamp { .. })
+        );
+
+        //no subseconds
+        assert_eq!(
+            ThinEdgeJson::parse_from_rfc3339("2021-04-08T00:00:00+05:00").unwrap(),
+            FixedOffset::east(5 * 3600)
+                .ymd(2021, 04, 08)
+                .and_hms(0, 0, 0)
+        );
+
+        //with milliseconds
+        assert_eq!(
+            ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123+05:00").unwrap(),
+            FixedOffset::east(5 * 3600)
+                .ymd(2021, 04, 08)
+                .and_hms_milli(12, 10, 10, 123)
+        );
+
+        //with nanoseconds
+        assert_eq!(
+            ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123456789+05:00").unwrap(),
+            FixedOffset::east(5 * 3600)
+                .ymd(2021, 04, 08)
+                .and_hms_nano(12, 10, 10, 123456789)
+        );
     }
 
     #[test]
