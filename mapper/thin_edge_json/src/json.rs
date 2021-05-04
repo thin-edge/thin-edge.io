@@ -284,28 +284,16 @@ mod tests {
             .ymd(2021, 04, 08)
             .and_hms(0, 0, 0)
     }
-
+      
     #[test]
-    fn invalid_time_stamp() {
-        let input = r#"{
-            "time" : "2013-06-2217:03:14.000658767+02:00"
-        }"#;
-        let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
-        let output_err = ThinEdgeJson::from_str(input, test_timestamp()).unwrap_err();
-        assert_eq!(output_err.to_string(), expected_error);
-    }
-
-    #[test]
-    fn test_parse_from_rfc3339_empty_timestamp() {
-        //no time stamp
+    fn parse_from_rfc3339_with_empty_timestamp() {
         assert_matches!(
             ThinEdgeJson::parse_from_rfc3339("...."),
             Err(ThinEdgeJsonError::InvalidTimestamp { .. })
         );
     }
     #[test]
-    fn test_parse_from_rfc3339_timestamp_with_seconds() {
-        //no subseconds
+    fn parse_from_rfc3339_timestamp_with_seconds() {
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T00:00:00+05:00").unwrap(),
             FixedOffset::east(5 * 3600)
@@ -314,8 +302,7 @@ mod tests {
         );
     }
     #[test]
-    fn test_parse_from_rfc3339_timestamp_with_milliseconds() {
-        //with milliseconds
+    fn parse_from_rfc3339_timestamp_with_milliseconds() {
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123+05:00").unwrap(),
             FixedOffset::east(5 * 3600)
@@ -324,8 +311,7 @@ mod tests {
         );
     }
     #[test]
-    fn test_parse_from_rfc3339_timestamp_with_nanoseconds() {
-        //with nanoseconds
+    fn parse_from_rfc3339_timestamp_with_nanoseconds() {
         assert_eq!(
             ThinEdgeJson::parse_from_rfc3339("2021-04-08T12:10:10.123456789+05:00").unwrap(),
             FixedOffset::east(5 * 3600)
@@ -335,7 +321,17 @@ mod tests {
     }
 
     #[test]
-    fn check_json_str_with_second_timestamp() {
+    fn json_str_with_invalid_time_stamp() {
+        let input = r#"{
+            "time" : "2013-06-2217:03:14.000658767+02:00"
+        }"#;
+        let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
+        let output_err = ThinEdgeJson::from_str(input, test_timestamp()).unwrap_err();
+        assert_eq!(output_err.to_string(), expected_error);
+    }
+
+    #[test]
+    fn json_str_with_second_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14+02:00",
             "temperature" : 25
@@ -348,7 +344,7 @@ mod tests {
         assert_eq!(output.timestamp, timestamp);
     }
     #[test]
-    fn check_json_str_with_millisecond_timestamp() {
+    fn json_str_with_millisecond_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14.123+02:00",
             "temperature" : 25
@@ -362,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn check_json_str_with_nanosecond_timestamp() {
+    fn json_str_with_nanosecond_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14.123456789+02:00",
             "temperature" : 25
