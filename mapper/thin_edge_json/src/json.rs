@@ -284,7 +284,6 @@ mod tests {
             .ymd(2021, 04, 08)
             .and_hms(0, 0, 0)
     }
-      
     #[test]
     fn parse_from_rfc3339_with_empty_timestamp() {
         assert_matches!(
@@ -319,7 +318,6 @@ mod tests {
                 .and_hms_nano(12, 10, 10, 123456789)
         );
     }
-
     #[test]
     fn json_str_with_invalid_time_stamp() {
         let input = r#"{
