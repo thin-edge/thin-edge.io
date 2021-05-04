@@ -343,8 +343,9 @@ mod tests {
         assert_eq!(output.to_string(), expected_error);
     }
     #[test]
-    fn check_from_json_str_short_timestamp() {
+    fn check_json_str_with_millisecond_timestamp() {
         let input = r#"{
+            "time" : "2021-04-30T17:03:14.123+02:00",
             "temperature" : 25
         }"#;
         let timestamp = FixedOffset::east(2 * 3600)
@@ -361,15 +362,21 @@ mod tests {
     }
 
     #[test]
-    fn check_from_json_str_string_local_time_now() {
+    fn check_json_str_with_nanosecond_timestamp() {
         let input = r#"{
+            "time" : "2021-04-30T17:03:14.123456789+02:00",
             "temperature" : 25
         }"#;
 
         let timestamp = current_timestamp();
 
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
-        assert_eq!(output.timestamp, timestamp);
+        assert_eq!(
+            output.timestamp,
+            FixedOffset::east(2 * 3600)
+                .ymd(2021, 04, 30)
+                .and_hms_nano(17, 03, 14, 123456789)
+        );
     }
 
     #[test]
