@@ -117,7 +117,22 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
     def validate(self):
         super().validate()
-        self.log.info("Validate - Do it")
+
+        # These are mostly placeholder validations to make sure
+        # that the file is there and is at least not empty
+        self.assertGrep('mosquitto_sub_stdout.out', 'mosquitto', contains=True)
+
+        self.assertGrep('status_mapper_stdout.out', 'tedge_mapper', contains=True)
+        self.assertGrep('status_mosquitto_stdout.out', 'mosquitto', contains=True)
+
+        self.assertGrep('stat_mapper_stdout.out', 'tedge_mapper', contains=True)
+        self.assertGrep('stat_mosquitto_stdout.out', 'mosquitto', contains=True)
+
+        self.assertGrep('statm_mapper_stdout.out', expr=r'\d', contains=True)
+        self.assertGrep('statm_mosquitto_stdout.out', expr=r'\d', contains=True)
+
+
+
 
     def mycleanup(self):
         self.log.info("My Cleanup")
