@@ -40,5 +40,5 @@ jobs:
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
-        name: results
+        name: results_$GITHUB_RUN_ID
         path: tests/
