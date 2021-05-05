@@ -2,14 +2,14 @@
 //! Takes thin_edge_json bytes and returns c8y json bytes
 //!
 //! ```
-//! use c8y_translator_lib::CumulocityJson;
+//! use c8y_translator_lib::json::CumulocityJson;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
 //! let output = CumulocityJson::from_thin_edge_json(
-//!             &String::from(single_value_thin_edge_json));
+//!             &String::from(single_value_thin_edge_json).into_bytes());
 //! ```
 
 use crate::serializer;
