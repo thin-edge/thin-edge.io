@@ -273,17 +273,16 @@ impl ThinEdgeJsonError {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
-    use crate::measurement::*;
+
     fn test_timestamp() -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
             .ymd(2021, 04, 08)
             .and_hms(0, 0, 0)
     }
     #[test]
-    fn test_str_with_invalid_time_stamp() {
+    fn test_str_with_invalid_timestamp() {
         let input = r#"{
             "time" : "2013-06-2217:03:14.000658767+02:00"
         }"#;
@@ -326,8 +325,9 @@ mod tests {
             "temperature" : 25
         }"#;
 
-        let timestamp = current_timestamp();
-
+        let timestamp = FixedOffset::east(2 * 3600)
+            .ymd(2021, 04, 30)
+            .and_hms_milli(17, 03, 14, 123);
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
         assert_eq!(
             output.timestamp,
