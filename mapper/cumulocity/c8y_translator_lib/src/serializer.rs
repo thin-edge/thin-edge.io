@@ -126,3 +126,152 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+
+mod tests {
+    use assert_json_diff::*;
+    use serde_json::json;
+
+    use super::*;
+    use chrono::{offset::FixedOffset, DateTime, Local};
+    fn test_timestamp() -> DateTime<FixedOffset> {
+        let local_time_now: DateTime<Local> = Local::now();
+        local_time_now.with_timezone(local_time_now.offset())
+    }
+    #[test]
+    fn serialize_single_value_message() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        let timestamp = test_timestamp();
+        serializer.timestamp(timestamp).unwrap();
+        serializer.measurement("temperature", 25.5).unwrap();
+        let output = serializer.bytes().unwrap();
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": timestamp.to_rfc3339(),
+            "temperature":{
+                "temperature":{
+                    "value": 25.5
+                }
+            }
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+            expected_output
+        );
+    }
+    #[test]
+    fn serialize_multi_value_message() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        let timestamp = test_timestamp();
+        serializer.timestamp(timestamp).unwrap();
+        serializer.measurement("temperature", 25.5).unwrap();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        serializer.measurement("lati", 2300.4).unwrap();
+        serializer.end_group().unwrap();
+        serializer.measurement("pressure", 255.2).unwrap();
+
+        let output = serializer.bytes().unwrap();
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": timestamp.to_rfc3339(),
+            "temperature":{
+                "temperature":{
+                    "value": 25.5
+                }
+            },
+             "location": {
+                 "alti": {
+                     "value": 2100.4
+                 },
+                 "longi":{
+                     "value": 2200.4
+                 },
+                 "lati":{
+                     "value": 2300.4
+                 },
+             },
+             "pressure":{
+                 "pressure":{
+                     "value":255.2
+                 }
+             }
+
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+            expected_output
+        );
+    }
+
+    #[test]
+    fn serialize_empty_message() {
+        let serializer = C8yJsonSerializer::new().unwrap();
+        let expected_output: Vec<u8> = format!(r#"{{"type": "ThinEdgeMeasurement"}}"#).into_bytes();
+        let output = serializer.bytes().unwrap();
+
+        assert_eq!(expected_output.to_vec(), output);
+    }
+
+    #[test]
+    fn serialize_timestamp_message() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        let timestamp = test_timestamp();
+        serializer.timestamp(timestamp).unwrap();
+        let expected_output: Vec<u8> = format!(
+            r#"{{"type": "ThinEdgeMeasurement","time":"{}"}}"#,
+            timestamp.to_rfc3339()
+        )
+        .into();
+        let output = serializer.bytes().unwrap();
+        assert_eq!(expected_output, output);
+    }
+
+    #[test]
+    fn serialize_timestamp_within_group() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        let timestamp = test_timestamp();
+        serializer.start_group("location").unwrap();
+        let result = serializer.timestamp(timestamp);
+        let expected_error = "Unexpected time stamp within a group";
+        assert_eq!(expected_error, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_group() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let result = serializer.end_group();
+        let expected_error = "Unexpected end of group";
+        assert_eq!(expected_error, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_start_of_group() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let result = serializer.start_group("location2");
+        let expected_error = "Unexpected start of group";
+        assert_eq!(expected_error, result.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_message() {
+        let mut serializer = C8yJsonSerializer::new().unwrap();
+        serializer.start_group("location").unwrap();
+        serializer.measurement("alti", 2100.4).unwrap();
+        serializer.measurement("longi", 2200.4).unwrap();
+        let expected_error = "Unexpected end of data";
+        let result = serializer.bytes();
+        assert_eq!(expected_error, result.unwrap_err().to_string());
+    }
+}

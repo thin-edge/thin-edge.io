@@ -8,13 +8,14 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4"
-json = "0.12"
 thiserror = "1.0"
 thin_edge_json = {path = "../../thin_edge_json"}
 
 [dev-dependencies]
 pretty_assertions = "0.6"
 proptest = "0.10"
+assert-json-diff = "2"
+serde_json = "1"
 
 [features]
 # use: #[cfg(feature="integration-test")]
