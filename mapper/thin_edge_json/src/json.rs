@@ -30,6 +30,14 @@ pub struct MultiValueMeasurement {
 }
 
 impl ThinEdgeJson {
+    pub fn has_timestamp(&self) -> bool {
+        true
+    }
+
+    pub fn set_timestamp(&mut self, timestamp: DateTime<FixedOffset>) {
+        self.timestamp = timestamp;
+    }
+
     pub fn from_utf8(
         input: &[u8],
         timestamp: DateTime<FixedOffset>,
