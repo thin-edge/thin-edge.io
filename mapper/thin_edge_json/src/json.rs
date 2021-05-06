@@ -128,111 +128,129 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
     }
 }
 
-struct ThinEdgeJsonParser;
+pub struct ThinEdgeJsonParser;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'static> {
+    #[error(transparent)]
+    ThinEdgeJsonError(#[from] ThinEdgeJsonError),
+
+    #[error(transparent)]
+    VisitorError(T),
+}
 
 impl ThinEdgeJsonParser {
-    /// Confirms that the json is in thin-edge json format or not
-    fn accept_json<T: GroupedMeasurementVisitor>(
-        input: json::JsonValue,
+    pub fn parse_utf8<T: GroupedMeasurementVisitor>(
+        &self,
+        input: &[u8],
         visitor: &mut T,
-    ) -> Result<(), ThinEdgeJsonError>
-    where
-        ThinEdgeJsonError: From<T::Error>,
-    {
-        match &input {
+    ) -> Result<(), ThinEdgeJsonParserError<T::Error>> {
+        let json_string = std::str::from_utf8(input)
+            .map_err(|err| ThinEdgeJsonError::new_invalid_utf8(input, err))?;
+
+        let thin_edge_obj = json::parse(&json_string)
+            .map_err(|err| ThinEdgeJsonError::new_invalid_json(json_string, err))?;
+
+        match &thin_edge_obj {
             JsonValue::Object(thin_edge_obj) => {
                 for (key, value) in thin_edge_obj.iter() {
                     if key.eq("type") {
                         return Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
                             name: String::from(key),
-                        });
+                        }
+                        .into());
                     } else if key.eq("time") {
-                        let () = visitor.timestamp(parse_timestamp_iso8601(value)?)?;
+                        let () =
+                            visitor
+                                .timestamp(parse_from_rfc3339(value.as_str().ok_or_else(
+                                    || ThinEdgeJsonError::new_invalid_json_time(value),
+                                )?)?)
+                                .map_err(ThinEdgeJsonParserError::VisitorError)?;
                     } else {
                         match value {
                             // Single Value object
                             JsonValue::Number(num) => {
-                                let () = visitor.measurement(key, (*num).into())?;
+                                let () = visitor
+                                    .measurement(key, (*num).into())
+                                    .map_err(ThinEdgeJsonParserError::VisitorError)?;
                             }
                             // Multi value object
                             JsonValue::Object(multi_value_thin_edge_object) => {
-                                let () = visitor.start_group(key)?;
+                                let () = visitor
+                                    .start_group(key)
+                                    .map_err(ThinEdgeJsonParserError::VisitorError)?;
 
                                 for (k, v) in multi_value_thin_edge_object.iter() {
                                     match v {
                                         JsonValue::Number(num) => {
                                             // Single Value object
-                                            let () = visitor.measurement(k, (*num).into())?;
+                                            let () = visitor
+                                                .measurement(k, (*num).into())
+                                                .map_err(ThinEdgeJsonParserError::VisitorError)?;
                                         }
                                         JsonValue::Object(_object) => {
                                             return Err(
                                                 ThinEdgeJsonError::InvalidThinEdgeHierarchy {
                                                     name: k.into(),
-                                                },
-                                            )
+                                                }
+                                                .into(),
+                                            );
                                         }
                                         value => {
                                             return Err(ThinEdgeJsonError::new_invalid_json_value(
-                                                k.into(),
-                                                value,
-                                            ));
+                                                k, value,
+                                            )
+                                            .into());
                                         }
                                     }
                                 }
 
-                                let () = visitor.end_group()?;
+                                let () = visitor
+                                    .end_group()
+                                    .map_err(ThinEdgeJsonParserError::VisitorError)?;
                             }
 
                             _ => {
-                                return Err(ThinEdgeJsonError::new_invalid_json_value(key, value));
+                                return Err(
+                                    ThinEdgeJsonError::new_invalid_json_value(key, value).into()
+                                );
                             }
                         }
                     }
                 }
             }
-            _ => return Err(ThinEdgeJsonError::new_invalid_json_root(&input)),
+            _ => return Err(ThinEdgeJsonError::new_invalid_json_root(&thin_edge_obj).into()),
         }
 
         Ok(())
     }
 }
 
-impl ThinEdgeJson {
-    pub fn from_utf8(input: &[u8]) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        let json_string = std::str::from_utf8(input)
-            .map_err(|err| ThinEdgeJsonError::new_invalid_utf8(input, err))?;
-        ThinEdgeJson::from_str(json_string)
-    }
-
-    pub fn from_str(json_string: &str) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        match json::parse(&json_string) {
-            Ok(thin_edge_obj) => ThinEdgeJson::from_json(thin_edge_obj),
-            Err(err) => Err(ThinEdgeJsonError::new_invalid_json(json_string, err)),
+fn parse_from_rfc3339(timestamp: &str) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
+    let time = DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
+        ThinEdgeJsonError::InvalidTimestamp {
+            value: String::from(timestamp),
+            from: err,
         }
-    }
-
-    /// Confirms that the json is in thin-edge json format or not
-    fn from_json(input: json::JsonValue) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        let mut builder = ThinEdgeJsonBuilder::new();
-        let () = ThinEdgeJsonParser::accept_json(input, &mut builder)?;
-        builder.finish()
-    }
+    })?;
+    Ok(time)
 }
 
-fn parse_timestamp_iso8601(value: &JsonValue) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
-    match value {
-        JsonValue::Short(str) => {
-            let timestamp = str.as_str();
-            //Parse fails if timestamp is not is8601 complaint
-            let result = DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
-                ThinEdgeJsonError::InvalidTimestamp {
-                    value: String::from(timestamp),
-                    from: err,
-                }
-            })?;
-            Ok(result)
-        }
-        _ => Err(ThinEdgeJsonError::new_invalid_json_time(value)),
+impl ThinEdgeJson {
+    pub fn from_utf8(
+        input: &[u8],
+    ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
+        let parser = ThinEdgeJsonParser;
+        let mut builder = ThinEdgeJsonBuilder::new();
+
+        let () = parser.parse_utf8(input, &mut builder)?;
+        Ok(builder.finish()?)
+    }
+
+    pub fn from_str(
+        json_string: &str,
+    ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
+        ThinEdgeJson::from_utf8(json_string.as_bytes())
     }
 }
 
@@ -360,6 +378,69 @@ impl ThinEdgeJsonError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_str_with_invalid_timestamp() {
+        let input = r#"{
+            "time" : "2013-06-2217:03:14.000658767+02:00"
+        }"#;
+        let expected_error = r#"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-2217:03:14.000658767+02:00": input contains invalid characters"#;
+        let output_err = ThinEdgeJson::from_str(input).unwrap_err();
+        assert_eq!(output_err.to_string(), expected_error);
+    }
+
+    #[test]
+    fn test_str_with_valid_timestamp() {
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14+02:00",
+            "temperature" : 25
+        }"#;
+        let output = ThinEdgeJson::from_str(input).unwrap();
+        assert_eq!(
+            output.timestamp,
+            Some(
+                FixedOffset::east(2 * 3600)
+                    .ymd(2021, 4, 30)
+                    .and_hms(17, 3, 14)
+            )
+        );
+    }
+
+    #[test]
+    fn test_str_with_millisecond_timestamp() {
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14.123+02:00",
+            "temperature" : 25
+        }"#;
+
+        let output = ThinEdgeJson::from_str(input).unwrap();
+        assert_eq!(
+            output.timestamp,
+            Some(
+                FixedOffset::east(2 * 3600)
+                    .ymd(2021, 4, 30)
+                    .and_hms_milli(17, 3, 14, 123)
+            )
+        );
+    }
+
+    #[test]
+    fn test_str_with_nanosecond_timestamp() {
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14.123456789+02:00",
+            "temperature" : 25
+        }"#;
+
+        let output = ThinEdgeJson::from_str(input).unwrap();
+        assert_eq!(
+            output.timestamp,
+            Some(
+                FixedOffset::east(2 * 3600)
+                    .ymd(2021, 4, 30)
+                    .and_hms_nano(17, 3, 14, 123456789)
+            )
+        );
+    }
 
     #[test]
     fn thin_edge_json_reject_invalid_utf8() {
