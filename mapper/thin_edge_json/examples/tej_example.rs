@@ -1,5 +1,3 @@
-use chrono::{offset::FixedOffset, DateTime, Local};
-
 use thin_edge_json::group::MeasurementGrouper;
 use thin_edge_json::measurement::*;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
