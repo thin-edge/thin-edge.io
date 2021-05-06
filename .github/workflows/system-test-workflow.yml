@@ -36,9 +36,21 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi
             RUN_NUMBER: ${{ github.run_number }}
+
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
+      env:
+            RUN_NUMBER: ${{ github.run_number }}
       with:
         name: results_$RUN_NUMBER
+        path: tests/
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      env:
+            RUN_NUMBER: ${{ github.run_number }}
+      with:
+        name: "results_$RUN_NUMBER"
         path: tests/
