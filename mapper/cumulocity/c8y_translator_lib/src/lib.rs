@@ -49,9 +49,11 @@ impl CumulocityJson {
         input: &[u8],
         timestamp: DateTime<FixedOffset>,
     ) -> Result<Vec<u8>, ThinEdgeJsonError> {
-        let measurements = ThinEdgeJson::from_utf8(input, timestamp)?;
-        let mut c8y_object =
-            CumulocityJson::new(&measurements.timestamp.to_rfc3339(), "ThinEdgeMeasurement");
+        let measurements = ThinEdgeJson::from_utf8(input)?;
+        let mut c8y_object = CumulocityJson::new(
+            &measurements.timestamp.unwrap_or(timestamp).to_rfc3339(),
+            "ThinEdgeMeasurement",
+        );
         for v in measurements.values.iter() {
             match v {
                 ThinEdgeValue::Single(thin_edge_single_value_measurement) => {
