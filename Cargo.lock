@@ -66,6 +66,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert-json-diff"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f1c3703dd33532d7f0ca049168930e9099ecac238e23cf932f3a69c42f06da"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "assert_cmd"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -251,10 +261,11 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 name = "c8y_translator_lib"
 version = "0.1.0"
 dependencies = [
+ "assert-json-diff 2.0.1",
  "chrono",
- "json",
  "pretty_assertions",
  "proptest",
+ "serde_json",
  "thin_edge_json",
  "thiserror",
 ]
@@ -953,7 +964,7 @@ version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "102f0986ade96028c3227fc14fcbbbee0358ca33b3fedc9a400a97a6f5ad4a6e"
 dependencies = [
- "assert-json-diff",
+ "assert-json-diff 1.1.0",
  "colored",
  "difference",
  "httparse",

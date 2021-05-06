@@ -105,17 +105,23 @@ mod tests {
     use mockall::predicate::*;
     use mockall::*;
 
+    #[derive(thiserror::Error, Debug, Clone)]
+    pub enum TestError {
+        #[error("test")]
+        _Test,
+    }
+
     mock! {
         pub GroupedVisitor {
         }
 
         impl GroupedMeasurementVisitor for GroupedVisitor {
-            type Error = ();
+            type Error = TestError;
 
-            fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), ()>;
-            fn measurement(&mut self, name: &str, value: f64) -> Result<(), ()>;
-            fn start_group(&mut self, group: &str) -> Result<(), ()>;
-            fn end_group(&mut self) -> Result<(), ()>;
+            fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), TestError>;
+            fn measurement(&mut self, name: &str, value: f64) -> Result<(), TestError>;
+            fn start_group(&mut self, group: &str) -> Result<(), TestError>;
+            fn end_group(&mut self) -> Result<(), TestError>;
         }
     }
 

@@ -15,18 +15,26 @@
 use crate::serializer;
 use chrono::prelude::*;
 use thin_edge_json::{
-    json::{ThinEdgeJson, ThinEdgeValue},
+    json::{
+        ThinEdgeJson, ThinEdgeJsonError, ThinEdgeJsonParser, ThinEdgeJsonParserError, ThinEdgeValue,
+    },
     measurement::GroupedMeasurementVisitor,
 };
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct CumulocityJson;
 
+#[derive(thiserror::Error, Debug)]
+pub enum CumulocityJsonError {
+    #[error(transparent)]
+    C8yJsonSerializationError(#[from] serializer::C8yJsonSerializationError),
+    #[error(transparent)]
+    ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError<serializer::C8yJsonSerializationError>),
+}
+
 impl CumulocityJson {
-    ///Convert from thinedgejson to c8y_json
-    pub fn from_thin_edge_json(
-        input: &[u8],
-    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
+    /// Convert from thinedgejson to c8y_json
+    pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, CumulocityJsonError> {
         let local_time_now: DateTime<Local> = Local::now();
         let timestamp = local_time_now.with_timezone(local_time_now.offset());
         let c8y_vec = Self::from_thin_edge_json_with_timestamp(input, timestamp)?;
@@ -36,26 +44,10 @@ impl CumulocityJson {
     fn from_thin_edge_json_with_timestamp(
         input: &[u8],
         timestamp: DateTime<FixedOffset>,
-    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
-        let measurements = ThinEdgeJson::from_utf8(input, timestamp)?;
-
-        let mut serializer = serializer::C8yJsonSerializer::new()?;
-        serializer.timestamp(measurements.timestamp)?;
-
-        for v in measurements.values.iter() {
-            match v {
-                ThinEdgeValue::Single(measurement) => {
-                    serializer.measurement(&measurement.name, measurement.value)?;
-                }
-                ThinEdgeValue::Multi(measurement) => {
-                    serializer.start_group(&measurement.name)?;
-                    for s in measurement.values.iter() {
-                        serializer.measurement(&s.name, s.value)?;
-                    }
-                    serializer.end_group()?;
-                }
-            }
-        }
+    ) -> Result<Vec<u8>, CumulocityJsonError> {
+        let parser = ThinEdgeJsonParser;
+        let mut serializer = serializer::C8yJsonSerializer::new(timestamp)?;
+        let () = parser.parse_utf8(input, &mut serializer)?;
         Ok(serializer.bytes()?)
     }
 }
@@ -63,51 +55,44 @@ impl CumulocityJson {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_json_diff::*;
+    use serde_json::json;
 
     fn test_timestamp() -> DateTime<FixedOffset> {
-        FixedOffset::east(5 * 3600)
-            .ymd(2021, 04, 08)
-            .and_hms(0, 0, 0)
+        FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
     }
     #[test]
     fn check_single_value_translation() {
-        let single_value_thin_edge_json = r#"{
+        let single_value_thin_edge_json = br#"{
                   "temperature": 23,
                   "pressure": 220
                }"#;
 
-        let type_string = "{\"type\": \"ThinEdgeMeasurement\",";
-
-        let body_of_message = "\"temperature\": {
-               \"temperature\": {
-                       \"value\": 23
-                       }
-              },
-              \"pressure\": {
-                  \"pressure\": {
-                      \"value\": 220
-                  }
-              }
-         }";
-
-        let expected_output = format!(
-            "{} \"time\":\"{}\",{}",
-            type_string,
-            test_timestamp().to_rfc3339(),
-            body_of_message
-        );
+        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
         let output = CumulocityJson::from_thin_edge_json_with_timestamp(
-            &String::from(single_value_thin_edge_json).into_bytes(),
-            test_timestamp(),
+            single_value_thin_edge_json,
+            timestamp,
         );
-        let vec = output.unwrap();
-        assert_eq!(
-            expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(vec)
-                .unwrap()
-                .split_whitespace()
-                .collect::<String>()
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": timestamp.to_rfc3339(),
+            "temperature": {
+                "temperature": {
+                    "value": 23
+                }
+            },
+            "pressure": {
+                "pressure": {
+                    "value": 220
+                }
+            }
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            expected_output
         );
     }
 
@@ -150,62 +135,52 @@ mod tests {
 
     #[test]
     fn check_multi_value_translation() {
-        let utc_time_now: DateTime<Utc> = Utc::now();
-        let type_string = "{\"type\": \"ThinEdgeMeasurement\",";
-
-        let input = r#"{
-                "temperature": 25 ,
-                "location": {
-                      "latitude": 32.54,
-                      "longitude": -117.67,
-                      "altitude": 98.6
-                  },
-                "pressure": 98
+        let multi_value_thin_edge_json = br#"{
+            "temperature": 25 ,
+            "location": {
+                  "latitude": 32.54,
+                  "longitude": -117.67,
+                  "altitude": 98.6
+              },
+            "pressure": 98
         }"#;
 
-        let body_of_message = "
-
-            \"temperature\": {
-                \"temperature\": {
-                    \"value\": 25
-                 }
-            },
-           \"location\": {
-                \"latitude\": {
-                   \"value\": 32.54
-                 },
-                \"longitude\": {
-                  \"value\": -117.67
-                },
-                \"altitude\": {
-                  \"value\": 98.6
-               }
-          },
-         \"pressure\": {
-            \"pressure\": {
-                 \"value\": 98
-            }
-          }
-        }";
-
-        let expected_output = format!(
-            "{} \"time\":\"{}\",{}",
-            type_string,
-            utc_time_now.to_rfc3339(),
-            body_of_message
-        );
+        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
         let output = CumulocityJson::from_thin_edge_json_with_timestamp(
-            &String::from(input).into_bytes(),
-            DateTime::parse_from_rfc3339(&utc_time_now.to_rfc3339()).unwrap(),
+            multi_value_thin_edge_json,
+            timestamp,
         );
-        let vec = output.unwrap();
-        assert_eq!(
-            expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(vec)
-                .unwrap()
-                .split_whitespace()
-                .collect::<String>()
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": timestamp.to_rfc3339(),
+            "temperature": {
+                "temperature": {
+                    "value": 25
+                 }
+            },
+           "location": {
+                "latitude": {
+                   "value": 32.54
+                 },
+                "longitude": {
+                  "value": -117.67
+                },
+                "altitude": {
+                  "value": 98.6
+               }
+          },
+         "pressure": {
+            "pressure": {
+                 "value": 98
+            }
+          }
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            expected_output
         );
     }
 

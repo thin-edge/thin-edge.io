@@ -7,6 +7,7 @@ pub struct C8yJsonSerializer {
     is_within_group: bool,
     needs_separator: bool,
     timestamp_present: bool,
+    default_timestamp: DateTime<FixedOffset>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -36,12 +37,15 @@ pub enum MeasurementStreamError {
 }
 
 impl C8yJsonSerializer {
-    pub fn new() -> Result<Self, C8yJsonSerializationError> {
+    pub fn new(
+        default_timestamp: DateTime<FixedOffset>,
+    ) -> Result<Self, C8yJsonSerializationError> {
         let mut serializer = C8yJsonSerializer {
             buffer: Vec::new(),
             is_within_group: false,
             needs_separator: true,
             timestamp_present: false,
+            default_timestamp,
         };
 
         let _ = serializer
@@ -54,6 +58,12 @@ impl C8yJsonSerializer {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
         }
+
+        if !self.timestamp_present {
+            self.timestamp(self.default_timestamp)?;
+        }
+
+        assert!(self.timestamp_present);
 
         self.buffer.push(b'}');
         Ok(())
