@@ -26,6 +26,7 @@ pub struct ConnectCommand {
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
+    pub is_test_connection: bool,
 }
 
 pub enum Cloud {
@@ -44,10 +45,21 @@ impl Cloud {
 
 impl Command for ConnectCommand {
     fn description(&self) -> String {
-        format!("create bridge to connect {} cloud.", self.cloud.as_str())
+        if self.is_test_connection {
+            format!("test connection to {} cloud.", self.cloud.as_str())
+        } else {
+            format!("create bridge to connect {} cloud.", self.cloud.as_str())
+        }
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        if self.is_test_connection {
+            match self.check_connection() {
+                Ok(()) => return Ok(()),
+                Err(e) => return Err(e.into()),
+            }
+        }
+
         let mut config = self.config_repository.load()?;
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
@@ -63,11 +75,16 @@ impl Command for ConnectCommand {
             &context.user_manager,
         )?;
 
-        println!(
-            "Sending packets to check connection. This may take up to {} seconds.\n",
-            WAIT_FOR_CHECK_SECONDS
-        );
-        Ok(self.check_connection()?)
+        match self.check_connection() {
+            Ok(()) => Ok(()),
+            _ => {
+                println!(
+                    "Warning: Bridge has been configured, but {} connection check failed.\n",
+                    self.cloud.as_str()
+                );
+                Ok(())
+            }
+        }
     }
 }
 
@@ -104,6 +121,10 @@ impl ConnectCommand {
     }
 
     fn check_connection(&self) -> Result<(), ConnectError> {
+        println!(
+            "Sending packets to check connection. This may take up to {} seconds.\n",
+            WAIT_FOR_CHECK_SECONDS
+        );
         match self.cloud {
             Cloud::Azure => check_connection_azure(),
             Cloud::C8y => check_connection_c8y(),
@@ -179,9 +200,9 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
             }
         }
     }
-
-    println!("Warning: Bridge has been configured, but Cumulocity connection check failed.\n",);
-    Ok(())
+    Err(ConnectError::NoPacketsReceived {
+        cloud: "Cumulocity".to_string(),
+    })
 }
 
 // Here We check the az device twin properties over mqtt to check if connection has been open.
@@ -225,10 +246,9 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
             println!("Received expected response message, connection check is successful.");
             Ok(())
         }
-        _err => {
-            println!("Warning: No response, bridge has been configured, but Azure connection check failed.\n",);
-            Ok(())
-        }
+        _err => Err(ConnectError::NoPacketsReceived {
+            cloud: "Azure".to_string(),
+        }),
     }
 }
 
