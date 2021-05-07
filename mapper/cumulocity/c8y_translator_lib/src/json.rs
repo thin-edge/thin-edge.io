@@ -34,7 +34,9 @@ pub enum CumulocityJsonError {
 
 impl CumulocityJson {
     /// Convert from thinedgejson to c8y_json
-    pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, CumulocityJsonError> {
+    pub fn from_thin_edge_json(
+        input: &[u8],
+    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
         let local_time_now: DateTime<Local> = Local::now();
         let timestamp = local_time_now.with_timezone(local_time_now.offset());
         let c8y_vec = Self::from_thin_edge_json_with_timestamp(input, timestamp)?;
@@ -44,10 +46,12 @@ impl CumulocityJson {
     fn from_thin_edge_json_with_timestamp(
         input: &[u8],
         timestamp: DateTime<FixedOffset>,
-    ) -> Result<Vec<u8>, CumulocityJsonError> {
+    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
         let parser = ThinEdgeJsonParser;
         let mut serializer = serializer::C8yJsonSerializer::new(timestamp)?;
-        let () = parser.parse_utf8(input, &mut serializer)?;
+        let _ = parser
+            .parse_utf8(input, &mut serializer)
+            .map_err(ThinEdgeJsonParserError::VisitorError);
         Ok(serializer.bytes()?)
     }
 }
@@ -58,9 +62,6 @@ mod tests {
     use assert_json_diff::*;
     use serde_json::json;
 
-    fn test_timestamp() -> DateTime<FixedOffset> {
-        FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
-    }
     #[test]
     fn check_single_value_translation() {
         let single_value_thin_edge_json = br#"{

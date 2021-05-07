@@ -1,12 +1,6 @@
-//! A library to create the [ThinEdgeJson][1] from bytes of json data by validating it.
-//! It also serialize the ThinEdgeJson data.
-//! Is the
-//! [1]: https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/architecture/thin-edge-json.md
-
+use crate::measurement::GroupedMeasurementVisitor;
 use chrono::{format::ParseError, prelude::*};
 use json::JsonValue;
-
-use crate::measurement::GroupedMeasurementVisitor;
 
 /// ThinEdgeJson is represented in this struct
 /// Since json does not understand DateTime format, the time stamp is represented as a string

@@ -2,6 +2,8 @@ use chrono::prelude::*;
 use std::io::Write;
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
+use crate::json::CumulocityJsonError;
+
 pub struct C8yJsonSerializer {
     buffer: Vec<u8>,
     is_within_group: bool,
@@ -21,7 +23,7 @@ pub enum C8yJsonSerializationError {
     #[error(transparent)]
     ThinEdgeJsonParseError(#[from] ThinEdgeJsonError),
 }
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
     UnexpectedTimestamp,
