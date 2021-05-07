@@ -128,7 +128,6 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
 }
 
 #[cfg(test)]
-
 mod tests {
     use assert_json_diff::*;
     use serde_json::json;
@@ -239,8 +238,13 @@ mod tests {
         let timestamp = test_timestamp();
         serializer.start_group("location").unwrap();
         let result = serializer.timestamp(timestamp);
-        let expected_error = "Unexpected time stamp within a group";
-        assert_eq!(expected_error, result.unwrap_err().to_string());
+
+        assert_matches!(
+            result.unwrap_err(),
+            C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedTimestamp
+            )
+        );
     }
 
     #[test]
@@ -249,8 +253,13 @@ mod tests {
         serializer.measurement("alti", 2100.4).unwrap();
         serializer.measurement("longi", 2200.4).unwrap();
         let result = serializer.end_group();
-        let expected_error = "Unexpected end of group";
-        assert_eq!(expected_error, result.unwrap_err().to_string());
+
+        assert_matches!(
+            result.unwrap_err(),
+            C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedEndOfGroup
+            )
+        );
     }
 
     #[test]
@@ -260,8 +269,13 @@ mod tests {
         serializer.measurement("alti", 2100.4).unwrap();
         serializer.measurement("longi", 2200.4).unwrap();
         let result = serializer.start_group("location2");
-        let expected_error = "Unexpected start of group";
-        assert_eq!(expected_error, result.unwrap_err().to_string());
+
+        assert_matches!(
+            result.unwrap_err(),
+            C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedStartOfGroup
+            )
+        );
     }
 
     #[test]
@@ -270,8 +284,13 @@ mod tests {
         serializer.start_group("location").unwrap();
         serializer.measurement("alti", 2100.4).unwrap();
         serializer.measurement("longi", 2200.4).unwrap();
-        let expected_error = "Unexpected end of data";
+
         let result = serializer.bytes();
-        assert_eq!(expected_error, result.unwrap_err().to_string());
+        assert_matches!(
+            result.unwrap_err(),
+            C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedEndOfData
+            )
+        );
     }
 }
