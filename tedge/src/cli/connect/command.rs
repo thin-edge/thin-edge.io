@@ -54,10 +54,10 @@ impl Command for ConnectCommand {
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
         if self.is_test_connection {
-            match self.check_connection() {
-                Ok(()) => return Ok(()),
-                Err(e) => return Err(e.into()),
-            }
+            return match self.check_connection() {
+                Ok(()) => Ok(()),
+                Err(err) => Err(err.into()),
+            };
         }
 
         let mut config = self.config_repository.load()?;
@@ -75,16 +75,13 @@ impl Command for ConnectCommand {
             &context.user_manager,
         )?;
 
-        match self.check_connection() {
-            Ok(()) => Ok(()),
-            _ => {
-                println!(
-                    "Warning: Bridge has been configured, but {} connection check failed.\n",
-                    self.cloud.as_str()
-                );
-                Ok(())
-            }
+        if self.check_connection().is_err() {
+            println!(
+                "Warning: Bridge has been configured, but {} connection check failed.\n",
+                self.cloud.as_str()
+            );
         }
+        Ok(())
     }
 }
 
@@ -201,7 +198,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
         }
     }
     Err(ConnectError::NoPacketsReceived {
-        cloud: "Cumulocity".to_string(),
+        cloud: "Cumulocity".into(),
     })
 }
 
@@ -247,7 +244,7 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
             Ok(())
         }
         _err => Err(ConnectError::NoPacketsReceived {
-            cloud: "Azure".to_string(),
+            cloud: "Azure".into(),
         }),
     }
 }
