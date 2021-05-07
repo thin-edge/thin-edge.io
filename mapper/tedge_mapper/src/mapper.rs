@@ -1,4 +1,4 @@
-use c8y_translator_lib::{json::CumulocityJson, serializer::C8yJsonSerializationError};
+use c8y_translator_lib::serializer::C8yJsonSerializationError;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
 
@@ -89,6 +89,6 @@ impl Mapper {
     }
 
     fn map(input: &[u8]) -> Result<Vec<u8>, C8yJsonSerializationError> {
-        CumulocityJson::from_thin_edge_json(input)
+        c8y_translator_lib::json::from_thin_edge_json(input)
     }
 }

@@ -2,8 +2,6 @@ use chrono::prelude::*;
 use std::io::Write;
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
-use crate::json::CumulocityJsonError;
-
 pub struct C8yJsonSerializer {
     buffer: Vec<u8>,
     is_within_group: bool,

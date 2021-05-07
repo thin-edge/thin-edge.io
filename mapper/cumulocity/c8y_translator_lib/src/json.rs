@@ -2,27 +2,19 @@
 //! Takes thin_edge_json bytes and returns c8y json bytes
 //!
 //! ```
-//! use c8y_translator_lib::json::CumulocityJson;
+//! use c8y_translator_lib::json::from_thin_edge_json;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = CumulocityJson::from_thin_edge_json(
+//! let output = from_thin_edge_json(
 //!             &String::from(single_value_thin_edge_json).into_bytes());
 //! ```
 
 use crate::serializer;
 use chrono::prelude::*;
-use thin_edge_json::{
-    json::{
-        ThinEdgeJson, ThinEdgeJsonError, ThinEdgeJsonParser, ThinEdgeJsonParserError, ThinEdgeValue,
-    },
-    measurement::GroupedMeasurementVisitor,
-};
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct CumulocityJson;
+use thin_edge_json::json::{ThinEdgeJsonParser, ThinEdgeJsonParserError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
@@ -32,28 +24,24 @@ pub enum CumulocityJsonError {
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError<serializer::C8yJsonSerializationError>),
 }
 
-impl CumulocityJson {
-    /// Convert from thinedgejson to c8y_json
-    pub fn from_thin_edge_json(
-        input: &[u8],
-    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
-        let local_time_now: DateTime<Local> = Local::now();
-        let timestamp = local_time_now.with_timezone(local_time_now.offset());
-        let c8y_vec = Self::from_thin_edge_json_with_timestamp(input, timestamp)?;
-        Ok(c8y_vec)
-    }
+/// Convert from thin-edge Json to c8y_json
+pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
+    let local_time_now: DateTime<Local> = Local::now();
+    let timestamp = local_time_now.with_timezone(local_time_now.offset());
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
+    Ok(c8y_vec)
+}
 
-    fn from_thin_edge_json_with_timestamp(
-        input: &[u8],
-        timestamp: DateTime<FixedOffset>,
-    ) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
-        let parser = ThinEdgeJsonParser;
-        let mut serializer = serializer::C8yJsonSerializer::new(timestamp)?;
-        let _ = parser
-            .parse_utf8(input, &mut serializer)
-            .map_err(ThinEdgeJsonParserError::VisitorError);
-        Ok(serializer.bytes()?)
-    }
+fn from_thin_edge_json_with_timestamp(
+    input: &[u8],
+    timestamp: DateTime<FixedOffset>,
+) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
+    let parser = ThinEdgeJsonParser;
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp)?;
+    let _ = parser
+        .parse_utf8(input, &mut serializer)
+        .map_err(ThinEdgeJsonParserError::VisitorError);
+    serializer.bytes()
 }
 
 #[cfg(test)]
@@ -71,10 +59,7 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = CumulocityJson::from_thin_edge_json_with_timestamp(
-            single_value_thin_edge_json,
-            timestamp,
-        );
+        let output = from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -120,9 +105,7 @@ mod tests {
                        }
                   }"#;
 
-        let output = CumulocityJson::from_thin_edge_json(
-            &String::from(single_value_thin_edge_json).into_bytes(),
-        );
+        let output = from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
 
         let vec = output.unwrap();
         assert_eq!(
@@ -148,10 +131,7 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = CumulocityJson::from_thin_edge_json_with_timestamp(
-            multi_value_thin_edge_json,
-            timestamp,
-        );
+        let output = from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -202,7 +182,7 @@ mod tests {
             }
         }"#;
 
-        let output = CumulocityJson::from_thin_edge_json(&String::from(input).into_bytes());
+        let output = from_thin_edge_json(&String::from(input).into_bytes());
 
         let actual_output = String::from_utf8(output.unwrap())
             .unwrap()
@@ -238,7 +218,7 @@ mod tests {
                    }}
                 }}"#, time, measurement, measurement);
 
-        let output = CumulocityJson::from_thin_edge_json(&input.into_bytes()).unwrap();
+        let output = from_thin_edge_json(&input.into_bytes()).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             String::from_utf8(output)

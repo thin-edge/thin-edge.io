@@ -1,4 +1,4 @@
-use c8y_translator_lib::json::CumulocityJson;
+use c8y_translator_lib::json::from_thin_edge_json;
 
 fn single_value_translation() {
     let single_value_thin_edge_json = r#"  {
@@ -8,9 +8,7 @@ fn single_value_translation() {
 
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
 
-    let output = CumulocityJson::from_thin_edge_json(
-        &String::from(single_value_thin_edge_json).into_bytes(),
-    );
+    let output = from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
     match output {
         Ok(vec) => {
             println!("{}", String::from_utf8(vec).unwrap());
@@ -33,8 +31,7 @@ fn multi_value_translation() {
    }"#;
 
     println!("\nThin_Edge_Json: \n{:#}", multi_value_thin_edge_json);
-    let output =
-        CumulocityJson::from_thin_edge_json(&String::from(multi_value_thin_edge_json).into_bytes());
+    let output = from_thin_edge_json(&String::from(multi_value_thin_edge_json).into_bytes());
     match output {
         Ok(vec) => {
             println!("{}", String::from_utf8(vec).unwrap());
@@ -56,7 +53,7 @@ fn thin_edge_translation_with_type_and_time_stamp() {
         "\nThin_Edge_Json: \n{:#}",
         single_value_thin_edge_json_with_type_and_time
     );
-    let output = CumulocityJson::from_thin_edge_json(
+    let output = from_thin_edge_json(
         &String::from(single_value_thin_edge_json_with_type_and_time).into_bytes(),
     );
     match output {
