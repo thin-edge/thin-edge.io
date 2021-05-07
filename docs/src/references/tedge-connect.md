@@ -25,11 +25,17 @@ Create connection to Azure
 The command will create config and start edge relay from the device to az instance
 
 USAGE:
-    tedge connect az
+    tedge connect az [FLAGS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help       
+            Prints help information
+
+        --test       
+            Do only test of connection to Azure
+
+    -V, --version    
+            Prints version information
 
 ```
 
@@ -42,10 +48,16 @@ Create connection to Cumulocity
 The command will create config and start edge relay from the device to c8y instance
 
 USAGE:
-    tedge connect c8y
+    tedge connect c8y [FLAGS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-```
+    -h, --help       
+            Prints help information
 
+        --test       
+            Do only test of connection to Cumulocity
+
+    -V, --version    
+            Prints version information
+
+```
