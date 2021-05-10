@@ -1,8 +1,8 @@
 name: commit-workflow
 
 on:
-  #push:
-  #  branches: [ main, continuous_integration ]
+  push:
+    branches: [ main, continuous_integration ]
   workflow_dispatch:
     branches: [ main, continuous_integration ]
   pull_request:

@@ -16,7 +16,7 @@ env:
 jobs:
   system-test:
     runs-on: [self-hosted, Linux, ARM]
-    # wtf if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
