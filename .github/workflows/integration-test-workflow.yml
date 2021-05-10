@@ -204,4 +204,4 @@ jobs:
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_X64 }}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_X64 }}
