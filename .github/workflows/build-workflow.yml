@@ -58,12 +58,26 @@ jobs:
           command: deb
           args: -p tedge_mapper
 
+      - name: build examples for amd64
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: --release --examples
+
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: debian-packages-amd64
           path: target/debian/*.deb
+
+      - name: upload amd64 examples as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: examples_amd64
+          path: target/release/examples/sawtooth_publisher
 
   build_armv7:
 
@@ -153,5 +167,6 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: examples
+          name: examples_armhf
           path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+
