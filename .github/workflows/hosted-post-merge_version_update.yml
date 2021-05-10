@@ -1,15 +1,14 @@
 name: hosted-post-merge_version_update
 on:
-  pull_request:
-    branches: [main]
-    types: [closed]
+  schedule:
+    - cron '0 23 * * 0'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   versioning:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-20.04
 
     steps:
@@ -25,7 +24,7 @@ jobs:
           toolchain: 1.51
           components: cargo
           override: true
-          
+
       - name: Enable cache
         uses: Swatinem/rust-cache@v1
 
