@@ -193,6 +193,21 @@ mod tests {
         let _ = grouper.accept(&mut mock);
     }
 
+    // #[test]
+    // fn new_measurement_grouper_with_group() {
+    //     let mut grouper = MeasurementGrouper::new();
+    //     let _ = grouper.start_group();
+    //     assert!(grouper.is_empty());
+
+    //     let mut mock = MockGroupedVisitor::new();
+    //     mock.expect_timestamp().return_const(Ok(()));
+    //     mock.expect_measurement().never();
+    //     mock.expect_start_group().never();
+    //     mock.expect_end_group().never();
+
+    //     let _ = grouper.accept(&mut mock);
+    // }
+
     fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
             .ymd(2021, 4, 8)

@@ -691,6 +691,40 @@ mod tests {
         assert_eq!(input_prefix(input, 4), input);
     }
 
+    // #[derive(thiserror::Error, Debug, Clone)]
+    // pub enum TestError {
+    //     #[error("test")]
+    //     _Test,
+    // }
+
+    // mock! {
+    //     pub GroupedVisitor {
+    //     }
+
+    //     impl GroupedMeasurementVisitor for GroupedVisitor {
+    //         type Error = TestError;
+
+    //         fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), TestError>;
+    //         fn measurement(&mut self, name: &str, value: f64) -> Result<(), TestError>;
+    //         fn start_group(&mut self, group: &str) -> Result<(), TestError>;
+    //         fn end_group(&mut self) -> Result<(), TestError>;
+    //     }
+    // }
+
+    #[test]
+    fn thinEdgeJsonParser_test() {
+        let parser = ThinEdgeJsonParser;
+        let mut visitor = ThinEdgeJsonBuilder::new();
+        let input = "{}";
+        let aaa = parser.parse_utf8(input.as_bytes(), &mut visitor);
+        let result = visitor.finish();
+
+        assert!(aaa.is_ok());
+        // assert!(aaa.is_err());
+        assert!(result.is_err());
+        assert!(result.is_ok());
+    }
+
     use proptest::prelude::*;
 
     proptest! {
