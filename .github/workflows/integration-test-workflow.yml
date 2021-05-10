@@ -155,7 +155,7 @@ jobs:
 
   install-and-use-x64:
 
-    runs-on: [self-hosted, Linux, 'X64']
+    runs-on: [self-hosted, Linux, X64]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
