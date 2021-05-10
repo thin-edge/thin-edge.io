@@ -32,7 +32,7 @@ FLAGS:
             Prints help information
 
         --test       
-            Do only test of connection to Azure
+            Test connection to Azure
 
     -V, --version    
             Prints version information
@@ -55,7 +55,7 @@ FLAGS:
             Prints help information
 
         --test       
-            Do only test of connection to Cumulocity
+            Test connection to Cumulocity
 
     -V, --version    
             Prints version information
