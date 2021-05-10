@@ -6,6 +6,7 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "tedge is the cli tool for thin-edge.io"
+extended-description = "tedge is the cli tool for thin-edge.io"
 
 [package.metadata.deb]
 depends = "mosquitto"
