@@ -263,7 +263,7 @@ mod tests {
 
         assert_matches!(
             expected_err,
-           Err(C8yJsonSerializationError::MeasurementCollectorError(
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedTimestamp
             ))
         );
