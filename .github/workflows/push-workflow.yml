@@ -18,6 +18,9 @@ jobs:
 
     steps:
 
+    - name: Checkout
+      uses: actions/checkout@v2
+
     - name: Push to Github
       uses: x-actions/gh-pages@release/v1
       # https://github.com/marketplace/actions/git-push-action
