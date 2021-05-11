@@ -259,13 +259,13 @@ mod tests {
             .and_hms_nano(17, 3, 14, 123456789);
 
         serializer.start_group("location")?;
-        let result = serializer.timestamp(timestamp);
+        let expected_err = serializer.timestamp(timestamp);
 
         assert_matches!(
-            result.unwrap_err(),
-            C8yJsonSerializationError::MeasurementCollectorError(
+            expected_err,
+           Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedTimestamp
-            )
+            ))
         );
         Ok(())
     }
@@ -275,13 +275,13 @@ mod tests {
         let mut serializer = C8yJsonSerializer::new()?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
-        let result = serializer.end_group();
+        let expected_err = serializer.end_group();
 
         assert_matches!(
-            result.unwrap_err(),
-            C8yJsonSerializationError::MeasurementCollectorError(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedEndOfGroup
-            )
+            ))
         );
 
         Ok(())
@@ -293,13 +293,13 @@ mod tests {
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
-        let result = serializer.start_group("location2");
+        let expected_err = serializer.start_group("location2");
 
         assert_matches!(
-            result.unwrap_err(),
-            C8yJsonSerializationError::MeasurementCollectorError(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedStartOfGroup
-            )
+            ))
         );
 
         Ok(())
@@ -312,12 +312,12 @@ mod tests {
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
-        let result = serializer.bytes();
+        let expected_err = serializer.bytes();
         assert_matches!(
-            result.unwrap_err(),
-            C8yJsonSerializationError::MeasurementCollectorError(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedEndOfData
-            )
+            ))
         );
 
         Ok(())
