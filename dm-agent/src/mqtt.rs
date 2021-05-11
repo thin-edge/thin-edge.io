@@ -55,6 +55,16 @@ pub struct MqttClientImpl {
     pub mqtt_client: Client,
 }
 
+impl MqttClientImpl {
+    pub async fn connect(
+        name: &str,
+        config: &mqtt_client::Config,
+    ) -> Result<Arc<Self>, mqtt_client::Error> {
+        let mqtt_client = Client::connect(name, &config).await?;
+        Ok(Arc::new(MqttClientImpl { mqtt_client }))
+    }
+}
+
 #[async_trait]
 impl MqttClient for MqttClientImpl {
     fn subscribe_errors(&self) -> Box<dyn MqttErrorStream> {

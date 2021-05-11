@@ -1,11 +1,9 @@
-use mqtt_client::Client;
-use std::sync::Arc;
 use thin_edge_json::group::MeasurementGrouper;
 use tracing::{instrument, log::error};
 
 use crate::{
     batcher::{DeviceMonitorError, MessageBatchPublisher, MessageBatcher},
-    mqtt::MqttClientImpl,
+    mqtt::{MqttClient, MqttClientImpl},
 };
 
 const DEFAULT_HOST: &str = "localhost";
@@ -19,8 +17,7 @@ impl DeviceMonitor {
     #[instrument(name = "monitor")]
     pub async fn run() -> Result<(), DeviceMonitorError> {
         let config = mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT);
-        let mqtt_client = Client::connect(CLIENT_ID, &config).await?;
-        let mqtt_client = Arc::new(MqttClientImpl { mqtt_client });
+        let mqtt_client = MqttClientImpl::connect(CLIENT_ID, &config).await?;
 
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
@@ -37,8 +34,16 @@ impl DeviceMonitor {
             message_batch_consumer.run().await;
         });
 
+        let mut errors = mqtt_client.subscribe_errors();
+        let join_handle3 = tokio::task::spawn(async move {
+            while let Some(error) = errors.next().await {
+                error!("MQTT error: {}", error);
+            }
+        });
+
         let _ = join_handle1.await;
         let _ = join_handle2.await;
+        let _ = join_handle3.await;
 
         Ok(())
     }

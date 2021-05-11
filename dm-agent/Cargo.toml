@@ -19,7 +19,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
-async-timer = "0.7"
 mockall = "0.9"
 async-trait = "0.1"
 
