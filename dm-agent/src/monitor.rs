@@ -16,7 +16,7 @@ pub struct DeviceMonitor;
 impl DeviceMonitor {
     #[instrument(name = "monitor")]
     pub async fn run() -> Result<(), DeviceMonitorError> {
-        let config = mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT);
+        let config = mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT).queue_capacity(1024);
         let mqtt_client = MqttClientImpl::connect(CLIENT_ID, &config).await?;
 
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();

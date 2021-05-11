@@ -104,37 +104,38 @@ impl MessageBatcher {
             .subscribe(self.topic_filter.clone())
             .await?;
 
+        let batching_window = Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW);
+
         loop {
-            match self.run_message_batcher(messages.as_mut()).await {
-                Ok(_) => {
-                    //If the message batching loop returns, it means the MQTT connection has closed
-                    error!("MQTT connection closed");
-                    break;
+            match messages.next().await {
+                Some(message) => {
+                    // Build a message batch until the batching window times out and return the batch
+                    let message_batch_result = self
+                        .build_message_batch_with_timeout(
+                            message,
+                            messages.as_mut(),
+                            interval(batching_window),
+                        )
+                        .await;
+
+                    match message_batch_result {
+                        Ok(message_batch) => {
+                            //Send the current batch to the batch processor
+                            let _ = self.sender.send(message_batch).map_err(|err| {
+                                error!("Error while publishing a message batch: {}", err)
+                            });
+                        }
+                        Err(err) => {
+                            error!("Error while building a message batch: {}", err);
+                        }
+                    }
                 }
-                Err(error) => {
-                    error!("Error while building a message batch: {}", error);
+                None => {
+                    //If the message batching loop returns, it means the MQTT connection has closed
+                    error!("MQTT connection closed. Retrying...");
                 }
             }
         }
-        Ok(())
-    }
-
-    async fn run_message_batcher(
-        &self,
-        messages: &mut dyn MqttMessageStream,
-    ) -> Result<(), DeviceMonitorError> {
-        let batching_window = Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW);
-        while let Some(message) = messages.next().await {
-            // Build a message batch until the batching window times out and return the batch
-            let message_batch = self
-                .build_message_batch_with_timeout(message, messages, interval(batching_window))
-                .await?;
-
-            //Send the current batch to the batch processor
-            self.sender.send(message_batch)?;
-        }
-
-        Ok(())
     }
 
     async fn build_message_batch_with_timeout(
