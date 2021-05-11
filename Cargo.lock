@@ -261,6 +261,7 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 name = "c8y_translator_lib"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "assert-json-diff 2.0.1",
  "assert_matches",
  "chrono",
