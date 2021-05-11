@@ -1,5 +1,6 @@
 mod batcher;
 mod collectd;
+mod error;
 mod monitor;
 
 use tracing::{debug_span, info, Instrument};

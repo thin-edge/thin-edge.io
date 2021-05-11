@@ -3,7 +3,10 @@ use std::sync::Arc;
 use thin_edge_json::group::MeasurementGrouper;
 use tracing::{instrument, log::error};
 
-use crate::batcher::{DeviceMonitorError, MessageBatchPublisher, MessageBatcher};
+use crate::{
+    batcher::{MessageBatchPublisher, MessageBatcher},
+    error::DeviceMonitorError,
+};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;

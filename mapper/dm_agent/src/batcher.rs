@@ -1,43 +1,18 @@
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::{sync::Arc, time::Duration};
 use thin_edge_json::{
-    group::MeasurementGrouper,
-    measurement::current_timestamp,
-    measurement::FlatMeasurementVisitor,
-    serialize::{ThinEdgeJsonSerializationError, ThinEdgeJsonSerializer},
+    group::MeasurementGrouper, measurement::current_timestamp, measurement::FlatMeasurementVisitor,
+    serialize::ThinEdgeJsonSerializer,
 };
 use tokio::{
     select,
-    sync::mpsc::{error::SendError, UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
     time::sleep,
 };
 use tracing::{error, log::warn};
 
-use crate::collectd::{self, CollectdMessage};
-
-#[derive(thiserror::Error, Debug)]
-pub enum DeviceMonitorError {
-    #[error(transparent)]
-    MqttClientError(#[from] Arc<mqtt_client::Error>),
-
-    #[error(transparent)]
-    InvalidCollectdMeasurementError(#[from] collectd::CollectdError),
-
-    #[error(transparent)]
-    InvalidThinEdgeJsonError(#[from] thin_edge_json::group::MeasurementGrouperError),
-
-    #[error(transparent)]
-    ThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
-
-    #[error(transparent)]
-    BatchingError(#[from] SendError<MeasurementGrouper>),
-}
-
-impl From<mqtt_client::Error> for DeviceMonitorError {
-    fn from(error: mqtt_client::Error) -> Self {
-        Self::MqttClientError(Arc::new(error))
-    }
-}
+use crate::collectd::CollectdMessage;
+use crate::error::*;
 
 #[derive(Debug)]
 pub struct MessageBatch {
