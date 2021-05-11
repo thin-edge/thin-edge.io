@@ -8,7 +8,7 @@ pub enum TEdgeConnectOpt {
     ///
     /// The command will create config and start edge relay from the device to c8y instance
     C8y {
-        /// Do only test of connection to Cumulocity
+        /// Test connection to Cumulocity
         #[structopt(long = "test")]
         is_test_connection: bool,
     },
@@ -17,7 +17,7 @@ pub enum TEdgeConnectOpt {
     ///
     /// The command will create config and start edge relay from the device to az instance
     Az {
-        /// Do only test of connection to Azure
+        /// Test connection to Azure
         #[structopt(long = "test")]
         is_test_connection: bool,
     },
