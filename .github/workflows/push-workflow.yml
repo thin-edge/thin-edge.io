@@ -30,4 +30,4 @@ jobs:
         PUBLISH_REPO: git@github.com:abelikt/thin-edge.io_private.git
         PUBLISH_BRANCH: continuous_integration
         PUBLISH_DIR: .
-        # DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+        DEPLOY_PRIVATE_KEY: ${{ secrets.PUSH_DEPLOY_PRIVATE_KEY }}
