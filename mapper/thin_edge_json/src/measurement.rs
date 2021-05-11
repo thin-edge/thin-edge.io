@@ -68,7 +68,7 @@ use chrono::DateTime;
 /// ```
 pub trait FlatMeasurementVisitor {
     /// Error type specific to this way of collecting measurements
-    type Error;
+    type Error: std::error::Error + std::fmt::Debug;
 
     /// Set the timestamp shared by all the measurements of this series
     fn timestamp(&mut self, value: &DateTime<FixedOffset>) -> Result<(), Self::Error>;
