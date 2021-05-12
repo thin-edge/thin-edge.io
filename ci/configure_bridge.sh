@@ -1,3 +1,6 @@
+
+set -e
+
 echo "Configuring Bridge"
 
 sudo tedge cert remove
