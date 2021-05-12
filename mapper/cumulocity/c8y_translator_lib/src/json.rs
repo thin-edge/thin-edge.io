@@ -1,6 +1,8 @@
 //! A library to translate the ThinEdgeJson into C8yJson
 //! Takes thin_edge_json bytes and returns c8y json bytes
 //!
+//! # Examples
+//!
 //! ```
 //! use c8y_translator_lib::json::from_thin_edge_json;
 //! let single_value_thin_edge_json = r#"{
@@ -8,8 +10,7 @@
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = from_thin_edge_json(
-//!             &String::from(single_value_thin_edge_json).into_bytes());
+//! let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
 //! ```
 
 use crate::serializer;
@@ -20,11 +21,12 @@ use thin_edge_json::json::{ThinEdgeJsonParserError, *};
 pub enum CumulocityJsonError {
     #[error(transparent)]
     C8yJsonSerializationError(#[from] serializer::C8yJsonSerializationError),
+
     #[error(transparent)]
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError<serializer::C8yJsonSerializationError>),
 }
 
-/// Convert from thin-edge Json to c8y_json
+/// Converts from thin-edge Json to c8y_json
 pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
     let timestamp = thin_edge_json::measurement::current_timestamp();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;

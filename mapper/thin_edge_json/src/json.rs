@@ -56,8 +56,10 @@ impl ThinEdgeJsonBuilder {
         }
     }
 
-    fn end(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        assert!(self.inside_group.is_none());
+    fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
+        if self.inside_group.is_some() {
+            return Err(ThinEdgeJsonError::UnexpectedOpenGroup);
+        }
 
         if self.measurements.is_empty() {
             return Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot);
@@ -229,7 +231,7 @@ impl ThinEdgeJson {
         let mut builder = ThinEdgeJsonBuilder::new();
 
         let () = parse_utf8(input, &mut builder)?;
-        Ok(builder.end()?)
+        Ok(builder.done()?)
     }
 
     pub fn from_str(
@@ -249,11 +251,14 @@ fn input_prefix(input: &str, len: usize) -> String {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ThinEdgeJsonError {
-    #[error("Invalid UTF8: {from}: {input_excerpt}...")]
-    InvalidUtf8 {
-        input_excerpt: String,
-        from: std::str::Utf8Error,
-    },
+    #[error("... time stamp within a group")]
+    DuplicatedTimestamp,
+
+    #[error("Empty Thin Edge measurement: {name:?} must contain at least one measurement")]
+    EmptyThinEdgeJson { name: String },
+
+    #[error("Empty Thin Edge measurement: it must contain at least one measurement")]
+    EmptyThinEdgeJsonRoot,
 
     #[error("Invalid JSON: {from}: {input_excerpt}")]
     InvalidJson {
@@ -261,51 +266,51 @@ pub enum ThinEdgeJsonError {
         from: json::Error,
     },
 
+    #[error(
+        "Number out-of-range: the {name:?} value is too large to be represented as a float64."
+    )]
+    InvalidThinEdgeJsonNumber { name: String },
+
     #[error("Invalid Thin Edge measurement: it cannot be {actual_type}: {json_excerpt}")]
     InvalidThinEdgeJsonRoot {
         json_excerpt: String,
         actual_type: String,
     },
 
-    #[error("Empty Thin Edge measurement: it must contain at least one measurement")]
-    EmptyThinEdgeJsonRoot,
-
-    #[error("Empty Thin Edge measurement: {name:?} must contain at least one measurement")]
-    EmptyThinEdgeJson { name: String },
+    #[error("Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not {actual_type}.")]
+    InvalidThinEdgeJsonTime { actual_type: String },
 
     #[error("Not a number: the {name:?} value must be a number, not {actual_type}.")]
     InvalidThinEdgeJsonValue { name: String, actual_type: String },
 
-    #[error("Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not {actual_type}.")]
-    InvalidThinEdgeJsonTime { actual_type: String },
-
-    #[error(
-        "Number out-of-range: the {name:?} value is too large to be represented as a float64."
-    )]
-    InvalidThinEdgeJsonNumber { name: String },
-
-    #[error("Invalid measurement name: {name:?} is a reserved word.")]
-    ThinEdgeReservedWordError { name: String },
+    #[error("More than 2 nested levels: the record for {name:?} must be flattened.")]
+    InvalidThinEdgeHierarchy { name: String },
 
     #[error(
         "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {value:?}: {from}"
     )]
     InvalidTimestamp { value: String, from: ParseError },
 
-    #[error("More than 2 nested levels: the record for {name:?} must be flattened.")]
-    InvalidThinEdgeHierarchy { name: String },
+    #[error("Invalid UTF8: {from}: {input_excerpt}...")]
+    InvalidUtf8 {
+        input_excerpt: String,
+        from: std::str::Utf8Error,
+    },
 
-    #[error("Unexpected time stamp within a group")]
-    UnexpectedTimestamp,
-
-    #[error("... time stamp within a group")]
-    DuplicatedTimestamp,
+    #[error("Invalid measurement name: {name:?} is a reserved word.")]
+    ThinEdgeReservedWordError { name: String },
 
     #[error("Unexpected end of group")]
     UnexpectedEndOfGroup,
 
+    #[error("Unexpected open group")]
+    UnexpectedOpenGroup,
+
     #[error("Unexpected start of group")]
     UnexpectedStartOfGroup,
+
+    #[error("Unexpected time stamp within a group")]
+    UnexpectedTimestamp,
 }
 
 impl ThinEdgeJsonError {
