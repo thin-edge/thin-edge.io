@@ -134,12 +134,14 @@ impl InnerUserManager {
 
     fn inner_restore_previous_user(&mut self) {
         if let Some(username) = self.users.last() {
-            let guard = InnerUserManager::inner_become_user(username).expect(&format!(
-                r#"Fail to switch back to the former user: {}.
+            let guard = InnerUserManager::inner_become_user(username).unwrap_or_else(|_| {
+                panic!(
+                    r#"Fail to switch back to the former user: {}.
                 Has this user been removed from the system?
                 Aborting to avoid any security issue."#,
-                username
-            ));
+                    username
+                )
+            });
             self.guard = Some(guard);
         }
     }
