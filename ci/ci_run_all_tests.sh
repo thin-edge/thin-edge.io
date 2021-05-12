@@ -36,7 +36,7 @@ dpkg -s mosquitto-clients
 # TODO: Not available on buster
 # sudo apt install -y junitparser
 
-./configure_bridge.sh
+./ci/configure_bridge.sh
 
 # Run all PySys tests
 
