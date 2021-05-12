@@ -14,7 +14,7 @@ fn thin_edge_translation_with_type_and_timestamp() {
     let output = from_thin_edge_json(single_value_thin_edge_json_with_type_and_time.as_bytes());
     match output {
         Ok(vec) => {
-            println!("{}", vec);
+            println!("{:?}", vec);
         }
         Err(e) => {
             eprintln!("Error: {}", e);

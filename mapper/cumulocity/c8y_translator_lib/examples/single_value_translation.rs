@@ -11,7 +11,7 @@ fn single_value_translation() {
     let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
     match output {
         Ok(vec) => {
-            println!("{}", String::from_utf8(vec).unwrap());
+            println!("{:?}", vec);
         }
         Err(e) => {
             eprintln!("Error: {}", e);
