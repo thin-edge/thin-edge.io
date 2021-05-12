@@ -96,20 +96,18 @@ impl CollectdPayload {
             .map_err(|_err| CollectdPayloadError::NonUTF8MeasurementPayload(payload.into()))?;
         let mut iter = payload.split(':');
 
-        let _timestamp =
-            iter.next()
-                .ok_or(CollectdPayloadError::InvalidMeasurementPayloadFormat(
-                    payload.to_string(),
-                ))?;
+        let _timestamp = iter.next().ok_or_else(|| {
+            CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
+        })?;
+
         let _timestamp = _timestamp.parse::<f64>().map_err(|_err| {
             CollectdPayloadError::InvalidMeasurementTimestamp(_timestamp.to_string())
         })?;
 
-        let metric_value =
-            iter.next()
-                .ok_or(CollectdPayloadError::InvalidMeasurementPayloadFormat(
-                    payload.to_string(),
-                ))?;
+        let metric_value = iter.next().ok_or_else(|| {
+            CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
+        })?;
+
         let metric_value = metric_value
             .trim_end_matches(char::from(0)) //Trim \u{0} character from the end of the MQTT payload
             .parse::<f64>()
