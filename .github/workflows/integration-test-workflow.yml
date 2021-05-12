@@ -63,8 +63,8 @@ jobs:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_hosted
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_HOSTED }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
 
   cargo-test-features:
 
