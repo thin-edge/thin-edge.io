@@ -138,7 +138,7 @@ mod tests {
     use chrono::offset::FixedOffset;
 
     #[test]
-    fn serialize_single_value_message() -> Result<(), anyhow::Error> {
+    fn serialize_single_value_message() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
@@ -164,7 +164,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn serialize_multi_value_message() -> Result<(), anyhow::Error> {
+    fn serialize_multi_value_message() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
@@ -217,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_empty_message() -> Result<(), anyhow::Error> {
+    fn serialize_empty_message() -> anyhow::Result<()> {
         let serializer = C8yJsonSerializer::new()?;
         let expected_output = json!({"type": "ThinEdgeMeasurement"});
         let output = serializer.bytes()?;
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_timestamp_message() -> Result<(), anyhow::Error> {
+    fn serialize_timestamp_message() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_timestamp_within_group() -> Result<(), anyhow::Error> {
+    fn serialize_timestamp_within_group() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_unexpected_end_of_group() -> Result<(), anyhow::Error> {
+    fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_unexpected_start_of_group() -> Result<(), anyhow::Error> {
+    fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_unexpected_end_of_message() -> Result<(), anyhow::Error> {
+    fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
         let mut serializer = C8yJsonSerializer::new()?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
