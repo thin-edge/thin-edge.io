@@ -58,6 +58,12 @@ impl ThinEdgeJsonSerializer {
     }
 }
 
+impl Default for ThinEdgeJsonSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
 

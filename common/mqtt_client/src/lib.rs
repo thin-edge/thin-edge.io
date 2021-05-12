@@ -485,10 +485,10 @@ impl Message {
     }
 }
 
-impl Into<Publish> for Message {
-    fn into(self) -> Publish {
-        let mut publish = Publish::new(&self.topic.name, self.qos, self.payload);
-        publish.retain = self.retain;
+impl From<Message> for Publish {
+    fn from(val: Message) -> Self {
+        let mut publish = Publish::new(&val.topic.name, val.qos, val.payload);
+        publish.retain = val.retain;
         publish
     }
 }
