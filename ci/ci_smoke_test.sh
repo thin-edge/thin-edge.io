@@ -78,7 +78,7 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
-./configure_bridge.sh
+./ci/configure_bridge.sh
 
 echo "Connect again"
 sudo tedge connect c8y

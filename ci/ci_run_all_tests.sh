@@ -31,7 +31,15 @@ cd $TEBASEDIR
 # sudo apt-get install mosquitto-clients
 dpkg -s mosquitto-clients
 
+<<<<<<< HEAD
 ./configure_bridge.sh
+=======
+# Install necessary packages
+# TODO: Not available on buster
+# sudo apt install -y junitparser
+
+./ci/configure_bridge.sh
+>>>>>>> 0d01573 (Fix script execution)
 
 # Run all PySys tests
 
