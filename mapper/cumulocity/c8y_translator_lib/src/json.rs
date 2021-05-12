@@ -56,7 +56,7 @@ impl CumulocityJson {
                 }
             }
         }
-        Ok(serializer.bytes()?)
+        serializer.bytes()
     }
 }
 
