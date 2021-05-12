@@ -62,23 +62,17 @@ impl UserManager {
     /// the process is running under the requested user. When the guard is dropped,
     /// then the process switches back to the former user. These calls can be stacked.
     ///
+    /// # Example
+    ///
     /// ```
-    /// fn main()  {
-    ///     // Running as root
-    ///
-    ///     let user_manager = UserManager::new();
-    ///     let _user_guard_1 = user_manager.become_user("user_1")?;
-    ///
-    ///     // Running as user1
-    ///
-    ///     {
-    ///          let _user_guard_2 = user_manager.become_user("user_2")?;
-    ///
-    ///          // Running as user2
-    ///     }
-    ///
-    ///     // Running as user1
+    /// let user_manager = UserManager::new();
+    /// let _user_guard_1 = user_manager.become_user("user_1")?;
+    /// // Running as user1
+    /// {
+    ///      let _user_guard_2 = user_manager.become_user("user_2")?;
+    ///     // Running as user2
     /// }
+    /// // Running as user1
     /// ```
     ///
     /// If the process is not running as root, the user is unchanged,
