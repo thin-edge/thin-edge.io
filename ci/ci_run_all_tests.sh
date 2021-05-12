@@ -13,6 +13,16 @@
 # TEBASEDIR : Base directory for the Thin-Edge repo
 # EXAMPLEDIR : The direcory of the sawtooth example
 
+# Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
+PATH=$PATH:/usr/sbin
+
+echo "Disconnect old bridge"
+
+# Disconnect - may fail if not there
+sudo tedge disconnect c8y
+
+# From now on exit if a command exits with a non-zero status.
+# Commands above are allowed to fail
 set -e
 
 cd $TEBASEDIR
@@ -25,6 +35,8 @@ dpkg -s mosquitto-clients
 # Install necessary packages
 # TODO: Not available on buster
 # sudo apt install -y junitparser
+
+./configure_bridge.sh
 
 # Run all PySys tests
 
