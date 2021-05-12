@@ -11,7 +11,7 @@ fn multi_value_translation() {
       "pressure": 98
    }"#;
 
-    println!("\nThin_Edge_Json: \n{:#}", multi_value_thin_edge_json);
+    println!("\nThin_Edge_Json: {:#}", multi_value_thin_edge_json);
     let output = from_thin_edge_json(multi_value_thin_edge_json.as_bytes());
     match output {
         Ok(vec) => {

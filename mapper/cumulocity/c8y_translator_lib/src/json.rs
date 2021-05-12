@@ -5,17 +5,17 @@
 //!
 //! ```
 //! use c8y_translator_lib::json::from_thin_edge_json;
-//! let single_value_thin_edge_json = r#"{
+//! let single_value_thin_edge_json = br#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
+//! let output = from_thin_edge_json(single_value_thin_edge_json);
 //! ```
 
 use crate::serializer;
 use chrono::prelude::*;
-use thin_edge_json::json::{ThinEdgeJsonParserError, *};
+use thin_edge_json::json::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
