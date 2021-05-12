@@ -136,3 +136,200 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use assert_json_diff::*;
+    use assert_matches::*;
+    use serde_json::json;
+
+    use super::*;
+    use chrono::offset::FixedOffset;
+
+    #[test]
+    fn serialize_single_value_message() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+        serializer.timestamp(timestamp)?;
+        serializer.measurement("temperature", 25.5)?;
+        let output = serializer.bytes()?;
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": "2021-06-22T17:03:14.123456789+05:00",
+            "temperature":{
+                "temperature":{
+                    "value": 25.5
+                }
+            }
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output)?,
+            expected_output
+        );
+        Ok(())
+    }
+    #[test]
+    fn serialize_multi_value_message() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        serializer.timestamp(timestamp)?;
+        serializer.measurement("temperature", 25.5)?;
+        serializer.start_group("location")?;
+        serializer.measurement("alti", 2100.4)?;
+        serializer.measurement("longi", 2200.4)?;
+        serializer.measurement("lati", 2300.4)?;
+        serializer.end_group()?;
+        serializer.measurement("pressure", 255.2)?;
+
+        let output = serializer.bytes()?;
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": "2021-06-22T17:03:14.123456789+05:00",
+            "temperature":{
+                "temperature":{
+                    "value": 25.5
+                }
+            },
+             "location": {
+                 "alti": {
+                     "value": 2100.4
+                 },
+                 "longi":{
+                     "value": 2200.4
+                 },
+                 "lati":{
+                     "value": 2300.4
+                 },
+             },
+             "pressure":{
+                 "pressure":{
+                     "value":255.2
+                 }
+             }
+
+        });
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output)?,
+            expected_output
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_empty_message() -> anyhow::Result<()> {
+        let serializer = C8yJsonSerializer::new()?;
+        let expected_output = json!({"type": "ThinEdgeMeasurement"});
+        let output = serializer.bytes()?;
+
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output)?,
+            expected_output
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_timestamp_message() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+        serializer.timestamp(timestamp)?;
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time":"2021-06-22T17:03:14.123456789+05:00"
+        });
+
+        let output = serializer.bytes()?;
+        assert_json_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output)?,
+            expected_output
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_timestamp_within_group() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        serializer.start_group("location")?;
+        let expected_err = serializer.timestamp(timestamp);
+
+        assert_matches!(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedTimestamp
+            ))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        serializer.measurement("alti", 2100.4)?;
+        serializer.measurement("longi", 2200.4)?;
+        let expected_err = serializer.end_group();
+
+        assert_matches!(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedEndOfGroup
+            ))
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        serializer.start_group("location")?;
+        serializer.measurement("alti", 2100.4)?;
+        serializer.measurement("longi", 2200.4)?;
+        let expected_err = serializer.start_group("location2");
+
+        assert_matches!(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedStartOfGroup
+            ))
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
+        let mut serializer = C8yJsonSerializer::new()?;
+        serializer.start_group("location")?;
+        serializer.measurement("alti", 2100.4)?;
+        serializer.measurement("longi", 2200.4)?;
+
+        let expected_err = serializer.bytes();
+        assert_matches!(
+            expected_err,
+            Err(C8yJsonSerializationError::MeasurementCollectorError(
+                MeasurementStreamError::UnexpectedEndOfData
+            ))
+        );
+
+        Ok(())
+    }
+}

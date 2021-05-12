@@ -36,6 +36,23 @@ impl MeasurementGrouper {
         self.values.is_empty()
     }
 
+    pub fn get_measurement_value(
+        &self,
+        group_key: Option<&str>,
+        measurement_key: &str,
+    ) -> Option<f64> {
+        match group_key {
+            Some(group_key) => match self.values.get(group_key) {
+                Some(Measurement::Multi(map)) => map.get(measurement_key).cloned(), //hippo can we avoid this clone?
+                _ => None,
+            },
+            None => match self.values.get(measurement_key) {
+                Some(Measurement::Single(val)) => Some(*val),
+                _ => None,
+            },
+        }
+    }
+
     pub fn accept<V, E>(&self, visitor: &mut V) -> Result<(), E>
     where
         V: GroupedMeasurementVisitor<Error = E>,
@@ -191,6 +208,45 @@ mod tests {
             .return_const(Ok(()));
 
         let _ = grouper.accept(&mut mock);
+    }
+
+    #[test]
+    fn get_measurement_value() -> anyhow::Result<()> {
+        let mut grouper = MeasurementGrouper::new();
+        grouper.measurement(None, "temperature", 32.5)?;
+        grouper.measurement(Some("coordinate"), "x", 50.0)?;
+        grouper.measurement(Some("coordinate"), "y", 70.0)?;
+        grouper.measurement(Some("coordinate"), "z", 90.0)?;
+        grouper.measurement(None, "pressure", 98.2)?;
+
+        assert_eq!(
+            grouper.get_measurement_value(None, "temperature").unwrap(),
+            32.5
+        );
+        assert_eq!(
+            grouper.get_measurement_value(None, "pressure").unwrap(),
+            98.2
+        );
+        assert_eq!(
+            grouper
+                .get_measurement_value(Some("coordinate"), "x")
+                .unwrap(),
+            50.0
+        );
+        assert_eq!(
+            grouper
+                .get_measurement_value(Some("coordinate"), "y")
+                .unwrap(),
+            70.0
+        );
+        assert_eq!(
+            grouper
+                .get_measurement_value(Some("coordinate"), "z")
+                .unwrap(),
+            90.0
+        );
+
+        Ok(())
     }
 
     fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
