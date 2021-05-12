@@ -193,10 +193,13 @@ def assert_values(
     for i in response["measurements"]:
         source = i["source"]["id"]
         assert source == device_id
+        mtype = i['type']
 
         if mode == "JSON":
 
-            assert i["type"] == "ThinEdgeMeasurement"
+            if mtype != "ThinEdgeMeasurement":
+                print(f"Error: Expected Type  ThinEdgeMeasurement got {mtype}" )
+                sys.exit(1)
 
             try:
                 value = i["Flux [F]"]["Flux [F]"]["value"]
@@ -205,7 +208,9 @@ def assert_values(
                 sys.exit(1)
         elif mode == "REST":
 
-            assert i["type"] == "c8y_TemperatureMeasurement"
+            if mtype != "c8y_TemperatureMeasurement":
+                print(f"Error: Expected Type  c8y_TemperatureMeasurement got {mtype}" )
+                sys.exit(1)
 
             try:
                 value = i["c8y_TemperatureMeasurement"]["T"]["value"]
