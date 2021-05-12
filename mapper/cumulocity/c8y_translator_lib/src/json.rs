@@ -103,7 +103,7 @@ mod tests {
                        }
                   }"#;
 
-        let output = from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
+        let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
 
         let vec = output.unwrap();
         assert_eq!(
@@ -216,7 +216,7 @@ mod tests {
                    }}
                 }}"#, time, measurement, measurement);
 
-        let output = from_thin_edge_json(&input.into_bytes()).unwrap();
+        let output = from_thin_edge_json(input.as_bytes()).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             String::from_utf8(output)
