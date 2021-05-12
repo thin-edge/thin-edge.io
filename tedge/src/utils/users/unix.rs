@@ -125,7 +125,7 @@ impl InnerUserManager {
     fn drop_guard(&mut self) {
         self.guard.take();
 
-        if let None = self.users.pop() {
+        if self.users.pop().is_none() {
             return;
         }
 
