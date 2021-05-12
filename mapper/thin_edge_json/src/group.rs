@@ -251,7 +251,7 @@ mod tests {
 
     fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
-            .ymd(2021, 04, 08)
+            .ymd(2021, 4, 8)
             .and_hms(13, minute, 00)
     }
 }

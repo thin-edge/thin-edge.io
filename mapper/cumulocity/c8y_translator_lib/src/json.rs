@@ -65,9 +65,7 @@ mod tests {
     use super::*;
 
     fn test_timestamp() -> DateTime<FixedOffset> {
-        FixedOffset::east(5 * 3600)
-            .ymd(2021, 04, 08)
-            .and_hms(0, 0, 0)
+        FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
     }
     #[test]
     fn check_single_value_translation() {

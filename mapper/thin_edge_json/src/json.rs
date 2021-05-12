@@ -277,9 +277,7 @@ mod tests {
     use super::*;
 
     fn test_timestamp() -> DateTime<FixedOffset> {
-        FixedOffset::east(5 * 3600)
-            .ymd(2021, 04, 08)
-            .and_hms(0, 0, 0)
+        FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
     }
     #[test]
     fn test_str_with_invalid_timestamp() {
@@ -298,8 +296,8 @@ mod tests {
             "temperature" : 25
         }"#;
         let timestamp = FixedOffset::east(2 * 3600)
-            .ymd(2021, 04, 30)
-            .and_hms(17, 03, 14);
+            .ymd(2021, 4, 30)
+            .and_hms(17, 3, 14);
 
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
         assert_eq!(output.timestamp, timestamp);
@@ -311,8 +309,8 @@ mod tests {
             "temperature" : 25
         }"#;
         let timestamp = FixedOffset::east(2 * 3600)
-            .ymd(2021, 04, 30)
-            .and_hms_milli(17, 03, 14, 123);
+            .ymd(2021, 4, 30)
+            .and_hms_milli(17, 3, 14, 123);
 
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
         assert_eq!(output.timestamp, timestamp);
@@ -326,14 +324,14 @@ mod tests {
         }"#;
 
         let timestamp = FixedOffset::east(2 * 3600)
-            .ymd(2021, 04, 30)
-            .and_hms_milli(17, 03, 14, 123);
+            .ymd(2021, 4, 30)
+            .and_hms_milli(17, 3, 14, 123);
         let output = ThinEdgeJson::from_str(input, timestamp).unwrap();
         assert_eq!(
             output.timestamp,
             FixedOffset::east(2 * 3600)
-                .ymd(2021, 04, 30)
-                .and_hms_nano(17, 03, 14, 123456789)
+                .ymd(2021, 4, 30)
+                .and_hms_nano(17, 3, 14, 123456789)
         );
     }
 
