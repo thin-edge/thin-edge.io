@@ -1,4 +1,4 @@
-use c8y_translator_lib::{json::CumulocityJsonError, serializer::C8yJsonSerializationError};
+use c8y_translator_lib::json::CumulocityJsonError;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
 

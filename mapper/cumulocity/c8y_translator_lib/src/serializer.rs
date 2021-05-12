@@ -139,7 +139,6 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
@@ -149,12 +148,14 @@ mod tests {
 
     #[test]
     fn serialize_single_value_message() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
+
         let output = serializer.bytes()?;
 
         let expected_output = json!({
@@ -175,11 +176,11 @@ mod tests {
     }
     #[test]
     fn serialize_multi_value_message() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
         serializer.start_group("location")?;
@@ -228,8 +229,15 @@ mod tests {
 
     #[test]
     fn serialize_empty_message() -> anyhow::Result<()> {
-        let serializer = C8yJsonSerializer::new()?;
-        let expected_output = json!({"type": "ThinEdgeMeasurement"});
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        let serializer = C8yJsonSerializer::new(timestamp)?;
+
+        let expected_output =
+            json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
+
         let output = serializer.bytes()?;
 
         assert_json_eq!(
@@ -242,17 +250,20 @@ mod tests {
 
     #[test]
     fn serialize_timestamp_message() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.timestamp(timestamp)?;
+
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
             "time":"2021-06-22T17:03:14.123456789+05:00"
         });
 
         let output = serializer.bytes()?;
+
         assert_json_eq!(
             serde_json::from_slice::<serde_json::Value>(&output)?,
             expected_output
@@ -263,12 +274,13 @@ mod tests {
 
     #[test]
     fn serialize_timestamp_within_group() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
         let timestamp = FixedOffset::east(5 * 3600)
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.start_group("location")?;
+
         let expected_err = serializer.timestamp(timestamp);
 
         assert_matches!(
@@ -282,9 +294,14 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
+
         let expected_err = serializer.end_group();
 
         assert_matches!(
@@ -299,10 +316,15 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
+
         let expected_err = serializer.start_group("location2");
 
         assert_matches!(
@@ -317,12 +339,17 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
-        let mut serializer = C8yJsonSerializer::new()?;
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new(timestamp)?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
         let expected_err = serializer.bytes();
+
         assert_matches!(
             expected_err,
             Err(C8yJsonSerializationError::MeasurementCollectorError(
