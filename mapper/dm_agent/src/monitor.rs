@@ -1,0 +1,50 @@
+use thin_edge_json::group::MeasurementGrouper;
+use tracing::{instrument, log::error};
+
+use crate::{
+    batcher::{DeviceMonitorError, MessageBatchPublisher, MessageBatcher},
+    mqtt::{MqttClient, MqttClientImpl},
+};
+
+const DEFAULT_HOST: &str = "localhost";
+const DEFAULT_PORT: u16 = 1883;
+const CLIENT_ID: &str = "tedge-dm-agent";
+
+#[derive(Debug)]
+pub struct DeviceMonitor;
+
+impl DeviceMonitor {
+    #[instrument(name = "monitor")]
+    pub async fn run() -> Result<(), DeviceMonitorError> {
+        let config = mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT).queue_capacity(1024);
+        let mqtt_client = MqttClientImpl::connect(CLIENT_ID, &config).await?;
+
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+
+        let message_batch_producer = MessageBatcher::new(sender, mqtt_client.clone())?;
+        let join_handle1 = tokio::task::spawn(async move {
+            match message_batch_producer.run().await {
+                Ok(_) => error!("Unexpected end of message batcher thread"),
+                Err(err) => error!("Error in message batcher thread: {}", err),
+            }
+        });
+
+        let mut message_batch_consumer = MessageBatchPublisher::new(receiver, mqtt_client.clone())?;
+        let join_handle2 = tokio::task::spawn(async move {
+            message_batch_consumer.run().await;
+        });
+
+        let mut errors = mqtt_client.subscribe_errors();
+        let join_handle3 = tokio::task::spawn(async move {
+            while let Some(error) = errors.next().await {
+                error!("MQTT error: {}", error);
+            }
+        });
+
+        let _ = join_handle1.await;
+        let _ = join_handle2.await;
+        let _ = join_handle3.await;
+
+        Ok(())
+    }
+}

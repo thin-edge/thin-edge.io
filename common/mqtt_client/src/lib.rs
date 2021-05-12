@@ -370,6 +370,14 @@ impl Config {
         }
     }
 
+    /// Update queue_capcity.
+    pub fn queue_capacity(self, queue_capacity: usize) -> Self {
+        Self {
+            queue_capacity,
+            ..self
+        }
+    }
+
     /// Enable `clean_session`.
     pub fn clean_session(self) -> Self {
         Self {
