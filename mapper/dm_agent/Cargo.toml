@@ -20,6 +20,7 @@ stop-on-upgrade = false
 
 [dependencies]
 thin_edge_json = {path = "../thin_edge_json" }
+time = {path = "../../common/time" }
 mqtt_client = {path = "../../common/mqtt_client" }
 chrono = "0.4"
 futures = "0.3"

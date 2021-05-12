@@ -10,6 +10,7 @@ edition = "2018"
 chrono = "0.4"
 json = "0.12"
 thiserror = "1.0"
+time = {path = "../../common/time" }
 
 [dev-dependencies]
 pretty_assertions = "0.6"

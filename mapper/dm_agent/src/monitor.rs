@@ -1,6 +1,7 @@
 use mqtt_client::{Client, MqttClient};
 use std::sync::Arc;
 use thin_edge_json::group::MeasurementGrouper;
+use time::WallClock;
 use tracing::{instrument, log::error};
 
 use crate::{
@@ -34,6 +35,7 @@ impl DeviceMonitor {
             mqtt_client.clone(),
             Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW),
             TopicFilter::new(SOURCE_TOPIC)?.qos(QoS::AtMostOnce),
+            Box::new(WallClock),
         );
         let join_handle1 = tokio::task::spawn(async move {
             match message_batch_producer.run().await {

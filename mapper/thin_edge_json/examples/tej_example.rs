@@ -1,12 +1,13 @@
 use thin_edge_json::group::MeasurementGrouper;
 use thin_edge_json::measurement::*;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
+use time::{Clock, WallClock};
 
 fn tej_build_serialize() -> anyhow::Result<()> {
     //Produce the TEJ from raw data
     let mut grp_msg = MeasurementGrouper::new();
 
-    grp_msg.timestamp(&current_timestamp())?;
+    grp_msg.timestamp(&WallClock.now())?;
     grp_msg.measurement(None, "temperature", 25.0)?;
     grp_msg.measurement(Some("location"), "alti", 2100.4)?;
     grp_msg.measurement(Some("location"), "longi", 2100.4)?;
