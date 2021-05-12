@@ -13,7 +13,7 @@ env:
 
 jobs:
 
-  install-and-use-amd64:
+  install-and-use-amd64-github-hosted:
 
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -100,7 +100,7 @@ jobs:
           command: test
           args: --verbose --features integration-test
 
-  install-and-use-rpi:
+  install-and-use-rpi-self-hosted:
 
     runs-on: [self-hosted, Linux, ARM]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -153,7 +153,7 @@ jobs:
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
 
-  install-and-use-x64:
+  install-and-use-x64-self-hosted:
 
     runs-on: [self-hosted, Linux, X64]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -205,3 +205,4 @@ jobs:
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_X64 }}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_X64 }}
+
