@@ -1,7 +1,6 @@
 mod batcher;
 mod collectd;
 mod monitor;
-mod mqtt;
 
 use tracing::{debug_span, info, Instrument};
 
