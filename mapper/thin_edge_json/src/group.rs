@@ -56,6 +56,7 @@ impl MeasurementGrouper {
     pub fn accept<V, E>(&self, visitor: &mut V) -> Result<(), E>
     where
         V: GroupedMeasurementVisitor<Error = E>,
+        E: std::error::Error + std::fmt::Debug,
     {
         if let Some(timestamp) = self.timestamp {
             visitor.timestamp(timestamp)?;
