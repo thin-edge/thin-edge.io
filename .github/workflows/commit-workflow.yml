@@ -92,7 +92,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args:  --release
+          args: --release
 
   cargo-tarpaulin:
 
@@ -165,3 +165,30 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: outdated
+
+  cargo-msrv:
+    name: Run cargo msrv
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo install msrv
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-msrv
+
+      - name: Cargo msrv
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: msrv
+          args: --minimum 1.46.0
