@@ -8,6 +8,7 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 use zeroize::Zeroizing;
 
+pub mod validate_device_id;
 pub struct PemCertificate {
     pem: x509_parser::pem::Pem,
 }
@@ -134,24 +135,13 @@ impl KeyCertPair {
     }
 
     fn check_identifier(id: &str, max_cn_size: usize) -> Result<(), CertificateError> {
-        if id.is_empty() {
-            return Err(CertificateError::EmptyName);
-        } else if id.len() > max_cn_size {
-            return Err(CertificateError::TooLongName {
-                name: id.into(),
-                max_cn_size,
-            });
-        } else if id.contains(char::is_control) {
-            return Err(CertificateError::InvalidCharacter { name: id.into() });
-        }
-
-        Ok(())
+        Ok(validate_device_id::is_valid_device_id(id, max_cn_size)?)
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
-    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name"#)]
+    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) + , - . : ?]"#)]
     InvalidCharacter { name: String },
 
     #[error(r#"The empty string cannot be used as a name"#)]
