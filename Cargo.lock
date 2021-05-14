@@ -499,6 +499,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "flockfile"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "log",
+ "nix",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1012,6 +1023,18 @@ version = "0.1.0"
 source = "git+https://github.com/mneumann/rumqtt?branch=support-publish-ack#d15c73fcf21102f781a7f1c965d6d607cef7ce48"
 dependencies = [
  "bytes",
+]
+
+[[package]]
+name = "nix"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa9b4819da1bc61c0ea48b63b7bc8604064dd43013e7cc325df098d49cd7c18a"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -1873,9 +1896,11 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "c8y_translator_lib",
  "chrono",
  "env_logger",
+ "flockfile",
  "log",
  "mqtt_client",
  "thin_edge_json",

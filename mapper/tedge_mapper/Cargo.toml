@@ -18,10 +18,12 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
+anyhow = "1.0"
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 thin_edge_json = {path = "../../mapper/thin_edge_json"}
 chrono = "0.4"
 env_logger = "0.8"
+flockfile = {path = "../../common/flockfile" }
 log = "0.4"
 mqtt_client = {path = "../../common/mqtt_client" }
 tokio = { version = "1.1", features = ["full"] }
