@@ -80,6 +80,12 @@ impl MeasurementGrouper {
     }
 }
 
+impl Default for MeasurementGrouper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FlatMeasurementVisitor for MeasurementGrouper {
     type Error = MeasurementGrouperError;
 
