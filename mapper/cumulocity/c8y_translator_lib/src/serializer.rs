@@ -129,7 +129,6 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;

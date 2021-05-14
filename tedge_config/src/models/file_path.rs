@@ -22,12 +22,6 @@ where
     }
 }
 
-impl Into<PathBuf> for FilePath {
-    fn into(self) -> PathBuf {
-        self.0
-    }
-}
-
 impl TryInto<String> for FilePath {
     type Error = FilePathToStringConversionFailure;
 

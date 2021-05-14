@@ -79,6 +79,12 @@ impl MeasurementGrouper {
     }
 }
 
+impl Default for MeasurementGrouper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FlatMeasurementVisitor for MeasurementGrouper {
     type Error = MeasurementGrouperError;
 
@@ -245,7 +251,7 @@ mod tests {
 
     fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
         FixedOffset::east(5 * 3600)
-            .ymd(2021, 04, 08)
+            .ymd(2021, 4, 8)
             .and_hms(13, minute, 00)
     }
 }

@@ -62,23 +62,17 @@ impl UserManager {
     /// the process is running under the requested user. When the guard is dropped,
     /// then the process switches back to the former user. These calls can be stacked.
     ///
+    /// # Example
+    ///
     /// ```
-    /// fn main()  {
-    ///     // Running as root
-    ///
-    ///     let user_manager = UserManager::new();
-    ///     let _user_guard_1 = user_manager.become_user("user_1")?;
-    ///
-    ///     // Running as user1
-    ///
-    ///     {
-    ///          let _user_guard_2 = user_manager.become_user("user_2")?;
-    ///
-    ///          // Running as user2
-    ///     }
-    ///
-    ///     // Running as user1
+    /// let user_manager = UserManager::new();
+    /// let _user_guard_1 = user_manager.become_user("user_1")?;
+    /// // Running as user1
+    /// {
+    ///      let _user_guard_2 = user_manager.become_user("user_2")?;
+    ///     // Running as user2
     /// }
+    /// // Running as user1
     /// ```
     ///
     /// If the process is not running as root, the user is unchanged,
@@ -131,7 +125,7 @@ impl InnerUserManager {
     fn drop_guard(&mut self) {
         self.guard.take();
 
-        if let None = self.users.pop() {
+        if self.users.pop().is_none() {
             return;
         }
 
@@ -140,12 +134,14 @@ impl InnerUserManager {
 
     fn inner_restore_previous_user(&mut self) {
         if let Some(username) = self.users.last() {
-            let guard = InnerUserManager::inner_become_user(username).expect(&format!(
-                r#"Fail to switch back to the former user: {}.
+            let guard = InnerUserManager::inner_become_user(username).unwrap_or_else(|_| {
+                panic!(
+                    r#"Fail to switch back to the former user: {}.
                 Has this user been removed from the system?
                 Aborting to avoid any security issue."#,
-                username
-            ));
+                    username
+                )
+            });
             self.guard = Some(guard);
         }
     }
