@@ -41,9 +41,7 @@ impl Flockfile {
             .write(true)
             .open(&path)?;
 
-        if let Err(err) = flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
-            return Err(err.into());
-        }
+        let () = flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
 
         Ok(Flockfile {
             handle: Some(file),
