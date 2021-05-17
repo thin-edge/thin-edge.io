@@ -16,7 +16,7 @@
 
 use futures::future::Future;
 pub use rumqttc::QoS;
-use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
+use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot};
@@ -303,12 +303,19 @@ impl Client {
                 }
 
                 Err(err) => {
-                    let delay = match err {
-                        rumqttc::ConnectionError::Io(ref io_err)
-                            if io_err.kind() == std::io::ErrorKind::ConnectionRefused =>
+                    let delay = match &err {
+                        rumqttc::ConnectionError::Io(io_err)
+                            if matches!(io_err.kind(), std::io::ErrorKind::ConnectionRefused) =>
                         {
                             true
                         }
+
+                        rumqttc::ConnectionError::MqttState(state_error)
+                            if matches!(state_error, StateError::Io(_)) =>
+                        {
+                            true
+                        }
+
                         _ => false,
                     };
 
@@ -367,6 +374,14 @@ impl Config {
             host: host.into(),
             port,
             ..Config::default()
+        }
+    }
+
+    /// Update queue_capcity.
+    pub fn queue_capacity(self, queue_capacity: usize) -> Self {
+        Self {
+            queue_capacity,
+            ..self
         }
     }
 
@@ -477,10 +492,10 @@ impl Message {
     }
 }
 
-impl Into<Publish> for Message {
-    fn into(self) -> Publish {
-        let mut publish = Publish::new(&self.topic.name, self.qos, self.payload);
-        publish.retain = self.retain;
+impl From<Message> for Publish {
+    fn from(val: Message) -> Self {
+        let mut publish = Publish::new(&val.topic.name, val.qos, val.payload);
+        publish.retain = val.retain;
         publish
     }
 }

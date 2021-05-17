@@ -92,7 +92,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args:  --release
+          args: --release
 
   cargo-tarpaulin:
 
@@ -108,6 +108,12 @@ jobs:
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Install rust v1.51.0
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: "1.51.0"
+          override: true
 
       - name: install libssl
         run: sudo apt install libssl-dev
