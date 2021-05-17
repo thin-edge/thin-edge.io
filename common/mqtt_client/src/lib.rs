@@ -16,7 +16,7 @@
 
 use futures::future::Future;
 pub use rumqttc::QoS;
-use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
+use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot};
@@ -303,12 +303,19 @@ impl Client {
                 }
 
                 Err(err) => {
-                    let delay = match err {
-                        rumqttc::ConnectionError::Io(ref io_err)
-                            if io_err.kind() == std::io::ErrorKind::ConnectionRefused =>
+                    let delay = match &err {
+                        rumqttc::ConnectionError::Io(io_err)
+                            if matches!(io_err.kind(), std::io::ErrorKind::ConnectionRefused) =>
                         {
                             true
                         }
+
+                        rumqttc::ConnectionError::MqttState(state_error)
+                            if matches!(state_error, StateError::Io(_)) =>
+                        {
+                            true
+                        }
+
                         _ => false,
                     };
 
