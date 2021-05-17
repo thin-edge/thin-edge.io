@@ -2,6 +2,10 @@
 # source ~/env-bigquery/bin/activate
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
+# WT
+# Error {'reason': 'quotaExceeded', 'location': 'max_dml_outstanding_per_table', 'message': 'Quota exceeded: Your table exceeded quota for total number of dml jobs writing to a table, pending + running. For more information, see https://cloud.google.com/bigquery/troubleshooting-errors'}
+
+
 import sys
 import time
 import logging
@@ -15,7 +19,7 @@ lake = os.path.expanduser( '~/DataLake' )
 
 logging.basicConfig(level=logging.INFO)
 
-style = 'none'  #'ms', 'google', 'none'
+style = 'google'  #'ms', 'google', 'none'
 
 if style == 'ms':
     server = 'mysupertestserver.database.windows.net'
@@ -68,6 +72,7 @@ class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""
     def __init__(self, size):
         self.array = np.zeros((size, 7), dtype=np.int32)
+        self.size = size
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
@@ -88,9 +93,19 @@ class CpuHistory:
 
         plt.show()
 
+    def update_table(self):
+        for i in range(self.size):
+            assert self.array[i,0] == i
+
+            q = f"insert into {dbo}.{cpu_table} values ( {self.array[i,0]}, {self.array[i,1]}, " \
+                f"{self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]} );"
+            #print(q)
+            myquery( client, q)
+
 class MemoryHistory:
     def __init__(self, size):
         self.array = np.zeros((size, 8), dtype=np.int32)
+        self.size = size
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
@@ -112,6 +127,25 @@ class MemoryHistory:
         plt.title('Memory History')
 
         plt.show()
+
+    def update_table(self):
+        for i in range(self.size):
+            assert self.array[i,0] == i
+            q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
+            f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]}," \
+            f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
+            #print(q)
+            myquery( client, q)
+
+    def update_table_bulk(self):
+        bulk = 100
+        for i in range(self.size):
+            assert self.array[i,0] == i
+            q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
+            f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]}," \
+            f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
+            #print(q)
+            myquery( client, q)
 
 create_mem=f"""
 CREATE TABLE {dbo}.{mem_table} (
@@ -154,17 +188,14 @@ def scrap_mem(thefile, mesaurement_index, client, dbo, memidx, arr):
             #lib = entries[5-1] #      (5) library (unused since Linux 2.6; always 0)
             data = entries[6-1] #      (6) data + stack
 
-            q= f"insert into {dbo}.{mem_table} values ( {memidx}, {mesaurement_index}, {sample}, {size},{resident},{shared},{text}, {data} );"
-            myquery( client, q)
             arr.insert_line(idx=memidx, mid=mesaurement_index, sample=sample, size=size, resident=resident, shared=shared, text=text, data=data)
             sample += 1
             memidx += 1
 
-    logging.info(f"Read {sample} cpu stats")
+    logging.debug(f"Read {sample} Memory stats")
     missing = 60 - sample
     for m in range(missing):
-        q = f"insert into {dbo}.{mem_table} values ( {memidx}, {mesaurement_index}, {sample}, {0},{0},{0},{0}, {0} );"
-        myquery(client, q)
+
         arr.insert_line(idx=memidx, mid=mesaurement_index, sample=sample, size=0, resident=0, shared=0,
                         text=0, data=0)
         sample += 1
@@ -189,18 +220,13 @@ def scrap_cpu(thefile, mesaurement_index, client,dbo, cpuidx, arr):
                 cs = int(entries[17-1])
                 #print(idx, ut,st,ct,cs)
 
-                # hack with idx as some data recording did not work out
-                q = f"insert into {dbo}.{cpu_table} values ( {cpuidx}, {mesaurement_index}, {sample}, {ut},{st},{ct},{cs} );"
-                myquery( client, q)
                 arr.insert_line( idx=cpuidx, mid=mesaurement_index, sample=sample, utime=ut, stime=st, cutime=ct, cstime=cs )
                 sample += 1
                 cpuidx += 1
 
-    logging.info(f"Read {sample} cpu stats")
+    logging.debug(f"Read {sample} cpu stats")
     missing = 60 - sample
     for m in range(missing):
-        q = f"insert into {dbo}.{cpu_table} values ( {cpuidx}, {mesaurement_index}, {sample}, {0},{0},{0},{0} );"
-        myquery(client, q)
         arr.insert_line(idx=cpuidx, mid=mesaurement_index, sample=sample, utime=0, stime=0, cutime=0, cstime=0)
         sample += 1
         cpuidx += 1
@@ -209,7 +235,7 @@ def scrap_cpu(thefile, mesaurement_index, client,dbo, cpuidx, arr):
 
 def myquery(client, query):
 
-    #logging.info(query)
+    logging.info(query)
 
     if style == 'ms':
         client.execute( query )
@@ -228,10 +254,7 @@ def myquery(client, query):
     else:
         sys.exit(1)
 
-def postprocess_vals(measurement_folders, cpuidx, memidx):
-
-    cpu_array = CpuHistory( len(measurement_folders)*60 )
-    mem_array = MemoryHistory( len(measurement_folders)*60 )
+def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx):
 
     for folder in measurement_folders:
         mesaurement_index = int(folder.split('_')[1].split('.')[0])
@@ -242,8 +265,6 @@ def postprocess_vals(measurement_folders, cpuidx, memidx):
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
         memidx = scrap_mem(statsfile, mesaurement_index, client, dbo, memidx, mem_array)
 
-    cpu_array.show()
-    mem_array.show()
 
 def unzip_results():
     p = Path(lake)
@@ -307,11 +328,22 @@ def generate():
         assert measurement_folders[-processing_range] == last_valid
 
 
-    logging.info('Procesing Range' + str( measurement_folders[-processing_range:]))
+    relevant_measurement_folders = measurement_folders[-processing_range:]
+
+    logging.info('Procesing Range' + str( relevant_measurement_folders[-processing_range:]))
 
     logging.info("Postrprocessing")
 
-    postprocess_vals(  measurement_folders[-processing_range:], cpuidx, memidx )
+    cpu_array = CpuHistory( len(relevant_measurement_folders)*60 )
+    mem_array = MemoryHistory( len(relevant_measurement_folders)*60 )
+
+    postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx )
+
+    cpu_array.show()
+    mem_array.show()
+
+    cpu_array.update_table()
+    mem_array.update_table()
 
     logging.info("Done")
 
