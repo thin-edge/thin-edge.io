@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate tedge connect c8y --test (successful case)</title>
+	<title>Validate tedge connect c8y --test (negative case)</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="RestartBridge" module="run"/>
+	<class name="TedgeConnectTestNegative" module="run"/>
   </data>
   <traceability>
 	<requirements>

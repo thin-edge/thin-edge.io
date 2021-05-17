@@ -1,7 +1,7 @@
 from pysys.basetest import BaseTest
 
 """
-Test `tedge connect c8y --test` (successful case):
+Run connection test without being connected (negative case):
 
 Given a configured system
 When we execute `sudo tedge connect c8y --test`
@@ -11,7 +11,7 @@ Then test has passed
 """
 
 
-class PySysTest(BaseTest):
+class TedgeConnectTestNegative(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
@@ -20,12 +20,12 @@ class PySysTest(BaseTest):
         self.startProcess(
             command=sudo,
             arguments=[tedge, "connect", "c8y", "--test"],
-            stdouterr="tedge_connect_c8y_--test_negative",
+            stdouterr="tedge_connect_c8y_test_negative",
             expectedExitStatus="==1",
         )
 
     def validate(self):
         self.log.info("Validate")
         fail = "Error: failed to test connection to Cumulocity cloud."
-        self.assertGrep("tedge_connect_c8y_--test_negative.err", fail, contains=True)
+        self.assertGrep("tedge_connect_c8y_test_negative.err", fail, contains=True)
 
