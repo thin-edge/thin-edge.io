@@ -1,47 +1,45 @@
 //! A library to translate the ThinEdgeJson into C8yJson
 //! Takes thin_edge_json bytes and returns c8y json bytes
 //!
+//! # Examples
+//!
 //! ```
 //! use c8y_translator_lib::json::from_thin_edge_json;
-//! let single_value_thin_edge_json = r#"{
+//! let single_value_thin_edge_json = br#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = from_thin_edge_json(
-//!             &String::from(single_value_thin_edge_json).into_bytes());
+//! let output = from_thin_edge_json(single_value_thin_edge_json);
 //! ```
 
 use crate::serializer;
 use chrono::prelude::*;
-use thin_edge_json::json::{ThinEdgeJsonParser, ThinEdgeJsonParserError};
+use thin_edge_json::json::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
     #[error(transparent)]
     C8yJsonSerializationError(#[from] serializer::C8yJsonSerializationError),
+
     #[error(transparent)]
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError<serializer::C8yJsonSerializationError>),
 }
 
-/// Convert from thin-edge Json to c8y_json
-pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
-    let local_time_now: DateTime<Local> = Local::now();
-    let timestamp = local_time_now.with_timezone(local_time_now.offset());
+/// Converts from thin-edge Json to c8y_json
+pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, CumulocityJsonError> {
+    let timestamp = thin_edge_json::measurement::current_timestamp();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
     input: &[u8],
-    timestamp: DateTime<FixedOffset>,
-) -> Result<Vec<u8>, serializer::C8yJsonSerializationError> {
-    let parser = ThinEdgeJsonParser;
-    let mut serializer = serializer::C8yJsonSerializer::new(timestamp)?;
-    let _ = parser
-        .parse_utf8(input, &mut serializer)
-        .map_err(ThinEdgeJsonParserError::VisitorError);
-    serializer.bytes()
+    default_timestamp: DateTime<FixedOffset>,
+) -> Result<Vec<u8>, CumulocityJsonError> {
+    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp)?;
+    let () = parse_utf8(input, &mut serializer)?;
+    Ok(serializer.bytes()?)
 }
 
 #[cfg(test)]
@@ -105,7 +103,7 @@ mod tests {
                        }
                   }"#;
 
-        let output = from_thin_edge_json(&String::from(single_value_thin_edge_json).into_bytes());
+        let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
 
         let vec = output.unwrap();
         assert_eq!(
@@ -218,7 +216,7 @@ mod tests {
                    }}
                 }}"#, time, measurement, measurement);
 
-        let output = from_thin_edge_json(&input.into_bytes()).unwrap();
+        let output = from_thin_edge_json(input.as_bytes()).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             String::from_utf8(output)

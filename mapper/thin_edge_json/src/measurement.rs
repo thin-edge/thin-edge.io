@@ -43,10 +43,23 @@ use chrono::DateTime;
 /// ```
 /// # use thin_edge_json::measurement::*;
 /// # use chrono::*;
+///
+/// #[derive(thiserror::Error, Debug)]
+/// pub enum MeasurementError {
+///     #[error("Unexpected time stamp within a group")]
+///     UnexpectedTimestamp,
+///
+///     #[error("Unexpected end of group")]
+///     UnexpectedEndOfGroup,
+///
+///     #[error("Unexpected start of group")]
+///     UnexpectedStartOfGroup,
+/// }
+///
 /// struct MeasurementPrinter {}
 ///
 /// impl FlatMeasurementVisitor for MeasurementPrinter {
-///    type Error = ();
+///    type Error = MeasurementError;
 ///
 ///     fn timestamp(&mut self, value: &DateTime<FixedOffset>) -> Result<(), Self::Error> {
 ///         Ok(println!("time = {}", value.to_rfc2822()))
@@ -68,7 +81,7 @@ use chrono::DateTime;
 /// ```
 pub trait FlatMeasurementVisitor {
     /// Error type specific to this way of collecting measurements
-    type Error;
+    type Error: std::error::Error + std::fmt::Debug;
 
     /// Set the timestamp shared by all the measurements of this series
     fn timestamp(&mut self, value: &DateTime<FixedOffset>) -> Result<(), Self::Error>;
