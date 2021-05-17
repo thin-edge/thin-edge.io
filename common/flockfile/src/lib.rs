@@ -104,6 +104,21 @@ mod tests {
     }
 
     #[test]
+    fn lock_out_of_scope() {
+        let path = NamedTempFile::new().unwrap().into_temp_path().to_owned();
+        {
+            let _lockfile = Flockfile::new_lock(&path).unwrap();
+            // assert!(path.exists());
+            assert!(fs::metadata(&path).is_ok());
+        }
+
+        assert_eq!(
+            fs::metadata(path).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+    }
+
+    #[test]
     fn lock_twice() {
         let path = NamedTempFile::new().unwrap().into_temp_path().to_owned();
         let _lockfile = Flockfile::new_lock(&path).unwrap();
