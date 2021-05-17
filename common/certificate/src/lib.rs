@@ -142,7 +142,6 @@ impl KeyCertPair {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
-    
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
