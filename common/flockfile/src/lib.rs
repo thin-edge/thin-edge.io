@@ -59,10 +59,14 @@ impl Flockfile {
 }
 
 impl Drop for Flockfile {
+    /// The Drop trait will be called always when the lock goes out of scope, however,
+    /// if the program exits unexpectedly and drop is not called the lock will be removed by the system.
     fn drop(&mut self) {
         if let Some(handle) = self.handle.take() {
             drop(handle);
 
+            // Even if the file is not removed this is not an issue, as OS will take care of the flock.
+            // Additionally if the file is created before an attempt to create the lock that won't be an issue as we rely on filesystem lock.
             match fs::remove_file(&self.path) {
                 Ok(()) => debug!(r#"Lockfile deleted "{:?}""#, self.path),
                 Err(err) => warn!(
