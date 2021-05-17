@@ -1,6 +1,5 @@
 use crate::error::*;
 use crate::mapper::*;
-use c8y_translator_lib::CumulocityJson;
 use mqtt_client::Topic;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
@@ -37,6 +36,6 @@ pub struct CumulocityConverter;
 impl Converter for CumulocityConverter {
     type Error = ConversionError;
     fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        CumulocityJson::from_thin_edge_json(input).map_err(Into::into)
+        c8y_translator_lib::json::from_thin_edge_json(input).map_err(Into::into)
     }
 }

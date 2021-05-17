@@ -14,4 +14,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     AzureMapperError(#[from] crate::az_mapper::AzureMapperError),
+
+    #[error(transparent)]
+    ThinEdgeJsonParserError(#[from] thin_edge_json::json::ThinEdgeJsonParserError<thin_edge_json::json::ThinEdgeJsonError>)
 }

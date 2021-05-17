@@ -1,7 +1,6 @@
 use crate::error::*;
 use crate::mapper::*;
 use async_trait::async_trait;
-use c8y_translator_lib::CumulocityJson;
 use chrono::{DateTime, Local};
 use mqtt_client::Topic;
 use thin_edge_json::json::ThinEdgeJson;
@@ -54,7 +53,7 @@ impl Converter for AzureConverter {
         // Validate if a correct Thin Edge JSON or not
         let local_time_now: DateTime<Local> = Local::now();
         let timestamp = local_time_now.with_timezone(local_time_now.offset());
-        let valid_thin_edge_json = ThinEdgeJson::from_utf8(input, timestamp)?;
+        let valid_thin_edge_json = ThinEdgeJson::from_utf8(input)?;
         println!("{:?}", valid_thin_edge_json);
 
         // Timestamp config
