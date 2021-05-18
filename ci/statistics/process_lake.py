@@ -439,14 +439,14 @@ def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx, 
 
     column = 1
     for m in range(mlen-1, mlen-10-1, -1 ):
-        print(m)
+        #print(m)
         for i in range(60):
-            print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
+            #print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
             cpu_hist_array.array[i, column] = cpu_array.array[ m*60+i ,3]
             cpu_hist_array.array[i, column+1] = cpu_array.array[ m*60+i ,4]
         column += 2
 
-    print( cpu_hist_array.array )
+    #print( cpu_hist_array.array )
 
 
 def unzip_results():
@@ -489,13 +489,13 @@ def generate():
         #myquery(client, create_cpu)
         #myquery(client, create_cpu_hist)
 
-        print(measurement_folders)
+        #print(measurement_folders)
 
         # last earliest valid is 'results_107_unpack'
         max_processing_range=23
         earliest_valid = 'results_107_unpack'
 
-        print(measurement_folders[-max_processing_range])
+        #print(measurement_folders[-max_processing_range])
 
         assert measurement_folders[-max_processing_range] == earliest_valid
         processing_range = max_processing_range
@@ -513,7 +513,8 @@ def generate():
 
     relevant_measurement_folders = measurement_folders[-processing_range:]
 
-    logging.info('Procesing Range' + str( relevant_measurement_folders[-processing_range:]))
+    #logging.info('Procesing Range' + str( relevant_measurement_folders[-processing_range:]))
+    logging.info('Procesing Range ' + str( len(relevant_measurement_folders[-processing_range:])))
 
     logging.info("Postrprocessing")
 
