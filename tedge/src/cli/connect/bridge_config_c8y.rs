@@ -55,7 +55,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"q/us out 2 c8y/ """#.into(),
                 r#"c/us out 2 c8y/ """#.into(),
                 r#"s/ds in 2 c8y/ """#.into(),
-                r#"s/os in 2 c8y/ """#.into(),
                 // Debug
                 r#"s/e in 0 c8y/ """#.into(),
                 // SmartRest2
@@ -64,7 +63,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"q/uc/# out 2 c8y/ """#.into(),
                 r#"c/uc/# out 2 c8y/ """#.into(),
                 r#"s/dc/# in 2 c8y/ """#.into(),
-                r#"s/oc/# in 2 c8y/ """#.into(),
                 // c8y JSON
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
@@ -113,7 +111,6 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             r#"q/us out 2 c8y/ """#.into(),
             r#"c/us out 2 c8y/ """#.into(),
             r#"s/ds in 2 c8y/ """#.into(),
-            r#"s/os in 2 c8y/ """#.into(),
             // Debug
             r#"s/e in 0 c8y/ """#.into(),
             // SmartRest2
@@ -122,7 +119,6 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             r#"q/uc/# out 2 c8y/ """#.into(),
             r#"c/uc/# out 2 c8y/ """#.into(),
             r#"s/dc/# in 2 c8y/ """#.into(),
-            r#"s/oc/# in 2 c8y/ """#.into(),
             // c8y JSON
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
