@@ -492,7 +492,7 @@ def generate():
         #print(measurement_folders)
 
         # last earliest valid is 'results_107_unpack'
-        max_processing_range=23
+        max_processing_range = 24 # newest one 145
         earliest_valid = 'results_107_unpack'
 
         #print(measurement_folders[-max_processing_range])
