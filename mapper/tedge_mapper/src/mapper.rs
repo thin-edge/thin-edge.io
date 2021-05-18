@@ -1,4 +1,4 @@
-use crate::error::ConversionError;
+use crate::error::{ConversionError, MapperError};
 use mqtt_client::Topic;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
@@ -78,5 +78,37 @@ impl Mapper {
             }
         }
         Ok(())
+    }
+}
+
+// This should be used for c8y as well as Azure
+pub(crate) fn is_smaller_than_size_threshold(
+    input: &[u8],
+    threshold: usize,
+) -> Result<(), MapperError> {
+    let size = std::mem::size_of_val(input);
+    if size > threshold {
+        Err(MapperError::MessageSizeError { threshold })
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mapper::is_smaller_than_size_threshold;
+
+    #[test]
+    fn test_is_smaller_than_size_threshold_positive() {
+        let input = "test"; // 4 bytes
+        let result = is_smaller_than_size_threshold(input.as_ref(), 4);
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn test_is_smaller_than_size_threshold_negative() {
+        let input = "test"; // 4 bytes
+        let result = is_smaller_than_size_threshold(input.as_ref(), 3);
+        assert!(result.is_err())
     }
 }

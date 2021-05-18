@@ -1,8 +1,6 @@
 use crate::error::*;
 use crate::mapper::*;
 use mqtt_client::Topic;
-use tokio::task::JoinHandle;
-use tracing::{debug, error, instrument};
 
 #[derive(Debug)]
 pub struct CumulocityMapperConfig {

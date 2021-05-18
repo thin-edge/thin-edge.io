@@ -1,5 +1,5 @@
 use chrono::offset::FixedOffset;
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use std::io::Write;
 
 use crate::measurement::GroupedMeasurementVisitor;
@@ -19,6 +19,7 @@ pub enum ThinEdgeJsonSerializationError {
     #[error(transparent)]
     MeasurementCollectorError(#[from] MeasurementStreamError),
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
@@ -35,7 +36,11 @@ pub enum MeasurementStreamError {
 }
 
 impl ThinEdgeJsonSerializer {
-    pub fn new(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_timestamp(None)
+    }
+
+    pub fn new_with_timestamp(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
         let mut serializer = ThinEdgeJsonSerializer {
             buffer: Vec::new(),
             is_within_group: false,
@@ -137,6 +142,7 @@ mod tests {
         let local_time_now: DateTime<Local> = Local::now();
         local_time_now.with_timezone(local_time_now.offset())
     }
+
     #[test]
     fn serialize_single_value_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();
@@ -151,6 +157,7 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(output, expected_output);
     }
+
     #[test]
     fn serialize_single_value_no_timestamp_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();
@@ -159,6 +166,7 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(output, expected_output);
     }
+
     #[test]
     fn serialize_multi_value_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();

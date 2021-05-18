@@ -1873,17 +1873,21 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.1.0"
 dependencies = [
+ "assert-json-diff 2.0.1",
  "async-trait",
  "c8y_translator_lib",
  "chrono",
  "env_logger",
  "log",
  "mqtt_client",
+ "serde_json",
+ "tedge_config",
  "thin_edge_json",
  "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "users",
 ]
 
 [[package]]
