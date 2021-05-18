@@ -13,8 +13,12 @@ pub(crate) struct TEdgeConfigDto {
     /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
     pub(crate) c8y: CumulocityConfigDto,
+
     #[serde(default)]
     pub(crate) azure: AzureConfigDto,
+
+    #[serde(default)]
+    pub(crate) mosquitto: MosquittoConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -58,4 +62,11 @@ pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<FilePath>,
+}
+
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MosquittoConfigDto {
+    pub(crate) port: Option<u16>,
 }

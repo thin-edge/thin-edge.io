@@ -125,3 +125,16 @@ impl ConfigSetting for AzureRootCertPathSetting {
 
     type Value = FilePath;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MosquittoPortSetting;
+
+impl ConfigSetting for MosquittoPortSetting {
+    const KEY: &'static str = "mosquitto.port";
+
+    const DESCRIPTION: &'static str = concat!(
+        "XXX"
+    );
+
+    type Value = Port;
+}
