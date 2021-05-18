@@ -1,5 +1,5 @@
 use mqtt_client::Client;
-use tracing::{debug_span, info, Instrument};
+use tracing::{debug_span, error, info, Instrument};
 
 mod mapper;
 
@@ -8,7 +8,7 @@ const DEFAULT_LOG_LEVEL: &str = "warn";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
 #[tokio::main]
-async fn main() -> Result<(), mqtt_client::Error> {
+async fn main() -> Result<(), anyhow::Error> {
     let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
@@ -19,6 +19,14 @@ async fn main() -> Result<(), mqtt_client::Error> {
         .init();
 
     info!("{} starting!", APP_NAME);
+
+    let _lockfile = match flockfile::Flockfile::new_lock(format!("{}.lock", APP_NAME)) {
+        Ok(file) => file,
+        Err(err) => {
+            error!("Another instance of {} is running.", APP_NAME);
+            return Err(err.into());
+        }
+    };
 
     let config = mqtt_client::Config::default();
     let mqtt = Client::connect(APP_NAME, &config).await?;
