@@ -22,6 +22,19 @@ $ ls /etc/tedge/device-certs/
 
 ### Errors
 
+#### Certificate creation fails due to invalid device id
+
+If non-supported characters are used for the device id then the cert create will fail with below error:
+
+```plain
+Error: failed to create a test certificate for the device +.
+
+Caused by:
+    0: DeviceID Error
+    1: The string '"+"' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) , - . : ? % * _ ! @]
+```
+
+
 #### Certificate already exists in the given location
 
 If the certificate already exists you may see following error:
