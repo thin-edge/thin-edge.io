@@ -15,6 +15,7 @@ thiserror = "1.0"
 anyhow = "1.0.40"
 assert-json-diff = "2"
 assert_matches = "1.5.0"
+criterion = "0.3"
 pretty_assertions = "0.6"
 proptest = "0.10"
 serde_json = "1"
@@ -22,3 +23,7 @@ serde_json = "1"
 [features]
 # use: #[cfg(feature="integration-test")]
 integration-test = []
+
+[[bench]]
+name = "thin_edge_json"
+harness = false
