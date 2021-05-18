@@ -47,7 +47,7 @@ async fn main() -> Result<(), MapperError> {
             mqtt,
             az_mapper::AzureMapperConfig::default(),
             Box::new(az_mapper::AzureConverter {
-                add_timestamp: false,
+                add_timestamp: true,
             }),
         ),
         _ => return Err(MapperError::IncorrectArgument),

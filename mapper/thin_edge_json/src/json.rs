@@ -239,6 +239,14 @@ impl ThinEdgeJson {
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
         ThinEdgeJson::from_utf8(json_string.as_bytes())
     }
+
+    pub fn has_timestamp(&self) -> bool {
+        self.timestamp.is_some()
+    }
+
+    pub fn set_timestamp(&mut self, timestamp: DateTime<FixedOffset>) {
+        self.timestamp = Option::from(timestamp)
+    }
 }
 
 fn input_prefix(input: &str, len: usize) -> String {
@@ -430,6 +438,36 @@ mod tests {
                     .and_hms_nano(17, 3, 14, 123456789)
             )
         );
+    }
+
+    #[test]
+    fn test_has_a_timestamp() {
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14+02:00",
+            "temperature" : 25
+        }"#;
+        let output = ThinEdgeJson::from_str(input).unwrap();
+        assert_eq!(output.has_timestamp(), true);
+    }
+
+    #[test]
+    fn test_has_no_timestamp() {
+        let input = r#"{
+            "temperature" : 25
+        }"#;
+        let output = ThinEdgeJson::from_str(input).unwrap();
+        assert_eq!(output.has_timestamp(), false);
+    }
+
+    #[test]
+    fn test_set_timestamp() {
+        let input = r#"{
+            "temperature" : 25
+        }"#;
+        let mut output = ThinEdgeJson::from_str(input).unwrap();
+        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        output.set_timestamp(timestamp);
+        assert_eq!(output.timestamp, Some(timestamp));
     }
 
     #[test]

@@ -14,9 +14,10 @@ class EnvironmentC8y(BaseTest):
     def setup(self):
         self.log.debug("EnvironmentC8y Setup")
 
-        self.tedge = "/usr/bin/tedge"
+        # self.tedge = "/usr/bin/tedge"
+        self.tedge = "/home/rina/thinedge/thin-edge/target/debug/tedge"
         self.sudo = "/usr/bin/sudo"
-        self.systemctl = "/usr/bin/systemctl"
+        self.systemctl = "/bin/systemctl"
         self.log.info("EnvironmentC8y Setup")
         self.addCleanupFunction(self.myenvcleanup)
 

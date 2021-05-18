@@ -1,5 +1,5 @@
 use chrono::offset::FixedOffset;
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 use std::io::Write;
 
 use crate::measurement::GroupedMeasurementVisitor;
@@ -7,6 +7,8 @@ pub struct ThinEdgeJsonSerializer {
     buffer: Vec<u8>,
     is_within_group: bool,
     needs_separator: bool,
+    default_timestamp: Option<DateTime<FixedOffset>>,
+    timestamp_present: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -33,11 +35,13 @@ pub enum MeasurementStreamError {
 }
 
 impl ThinEdgeJsonSerializer {
-    pub fn new() -> Self {
+    pub fn new(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
         let mut serializer = ThinEdgeJsonSerializer {
             buffer: Vec::new(),
             is_within_group: false,
             needs_separator: false,
+            default_timestamp,
+            timestamp_present: false,
         };
         serializer.buffer.push(b'{');
         serializer
@@ -46,6 +50,12 @@ impl ThinEdgeJsonSerializer {
     fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
+        }
+
+        if !self.timestamp_present {
+            if let Some(default_timestamp) = self.default_timestamp {
+                let () = self.timestamp(default_timestamp)?;
+            }
         }
 
         self.buffer.push(b'}');
@@ -78,6 +88,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         self.buffer
             .write_fmt(format_args!("\"time\":\"{}\"", timestamp.to_rfc3339()))?;
         self.needs_separator = true;
+        self.timestamp_present = true;
         Ok(())
     }
 
