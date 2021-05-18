@@ -15,7 +15,7 @@ Then we validate output appropriate error message
 """
 
 
-class PySysTest(BaseTest):
+class RuntimeMultiMappers(BaseTest):
     def execute(self):
         tedge_mapper = "/usr/bin/tedge_mapper"
 
@@ -37,4 +37,4 @@ class PySysTest(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("tedge_mapper2.err", "Error:", contains=True)
+        self.assertGrep("tedge_mapper2.err", "Error: Couldn't acquire file lock.", contains=True)

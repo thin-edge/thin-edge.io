@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PySysTest" module="run"/>
+	<class name="MapperReconnectAwait" module="run"/>
   </data>
   <traceability>
 	<requirements>

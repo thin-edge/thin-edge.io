@@ -17,7 +17,7 @@ Then we validate output contains no more than 5 error messages
 """
 
 
-class PySysTest(BaseTest):
+class MapperReconnectAwait(BaseTest):
     def execute(self):
         tedge_mapper = "/usr/bin/tedge_mapper"
 
