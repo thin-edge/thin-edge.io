@@ -7,7 +7,16 @@ license = "Apache-2.0"
 readme = "README.md"
 description = "The daemon providing monitoring and remote management capabilities to tedge"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.deb]
+depends = "tedge"
+maintainer-scripts = "configuration/debian/tedge_dm_agent"
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "../../configuration/init/systemd"
+unit-name = "tedge-dm-agent"
+enable = false
+start = false
+stop-on-upgrade = false
 
 [dependencies]
 thin_edge_json = {path = "../thin_edge_json" }
