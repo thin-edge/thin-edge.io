@@ -103,6 +103,8 @@ class CpuHistory:
     def __init__(self, size):
         self.array = np.zeros((size, 7), dtype=np.int32)
         self.size = size
+        self.name = 'ci_cpu_measurement_tedge_mapper'
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
@@ -125,12 +127,12 @@ class CpuHistory:
 
     def delete_table(self):
         try:
-            client.delete_table( "sturdy-mechanic-312713.ADataSet.ci_cpu_measurement_tedge_mapper")
+            client.delete_table( self.database)
         except:# google.api_core.exceptions.NotFound:
             pass
 
     def update_table(self):
-
+            print("Updating table:", self.name)
             job_config = bigquery.LoadJobConfig(
                 schema=[
                     bigquery.SchemaField("id", "INT64"),
@@ -154,7 +156,80 @@ class CpuHistory:
                     "cstime":int(self.array[i,6]) } )
 
             load_job = client.load_table_from_json( data,
-                "sturdy-mechanic-312713.ADataSet.ci_cpu_measurement_tedge_mapper",
+                self.database,
+                job_config=job_config)
+
+            while load_job.running():
+                time.sleep(0.5)
+                print('Waiting')
+
+            if load_job.errors:
+                print("Error", load_job.error_result)
+                print(load_job.errors)
+                sys.exit(1)
+
+class CpuHistoryStacked:
+    """Mostly the representation of a unpublished SQL table"""
+
+    def __init__(self, size):
+        self.size = size
+        self.name = 'ci_cpu_hist'
+        self.fields = [
+            ("t0", "INT64"),
+            ("t1", "INT64"),
+            ("t2", "INT64"),
+            ("t3", "INT64"),
+            ("t4", "INT64"),
+            ("t5", "INT64"),
+            ("t6", "INT64"),
+            ("t7", "INT64"),
+            ("t8", "INT64"),
+            ("t9", "INT64")]
+        self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
+
+
+    def insert_line(self,line):
+        assert len(line)==len(self.fields)
+        self.array[idx] = line
+
+    def show(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+
+        for i in range(len(self.fields)):
+            ax.plot(self.array[:, i], '.', label=self.fields[i][0])
+
+        plt.legend()
+        plt.title('CPU History Stacked')
+
+        plt.show()
+
+    def delete_table(self):
+        try:
+            client.delete_table( f"sturdy-mechanic-312713.ADataSet.{self.name}")
+        except:# google.api_core.exceptions.NotFound:
+            pass
+
+    def update_table(self):
+            print("Updating table:", self.name)
+            schema = []
+            for i in range(len(self.fields)):
+                schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
+
+            job_config = bigquery.LoadJobConfig(
+                schema=schema
+            )
+
+            data = []
+
+            for i in range(self.size):
+                line={}
+                for j in range(len(self.fields)):
+                    line[ self.fields[j][0] ] = int(self.array[i,j])
+                data.append( line )
+
+            load_job = client.load_table_from_json( data,
+                f"sturdy-mechanic-312713.ADataSet.{self.name}",
                 job_config=job_config)
 
             while load_job.running():
@@ -196,6 +271,8 @@ class MemoryHistory:
     def __init__(self, size):
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
+        self.name = 'ci_mem_measurement_tedge_mapper'
+        self.database=f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
@@ -220,7 +297,7 @@ class MemoryHistory:
 
     def delete_table(self):
         try:
-            client.delete_table( "sturdy-mechanic-312713.ADataSet.ci_mem_measurement_tedge_mapper")
+            client.delete_table( self.database )
         except:# google.api_core.exceptions.NotFound:
             pass
 
@@ -234,7 +311,7 @@ class MemoryHistory:
             myquery( client, q)
 
     def update_table(self):
-
+            print("Updating table:", self.name)
             job_config = bigquery.LoadJobConfig(
                 schema=[
                     bigquery.SchemaField("id", "INT64"),
@@ -259,7 +336,7 @@ class MemoryHistory:
                     "text":int(self.array[i,6]), "data":int(self.array[i,6]) } )
 
             load_job = client.load_table_from_json( data,
-                "sturdy-mechanic-312713.ADataSet.ci_mem_measurement_tedge_mapper",
+                self.database,
                 job_config=job_config)
 
             while load_job.running():
@@ -435,16 +512,22 @@ def generate():
 
     cpu_array = CpuHistory( len(relevant_measurement_folders)*60 )
     mem_array = MemoryHistory( len(relevant_measurement_folders)*60 )
+    cpu_hist_array = CpuHistoryStacked ( 10 * 60 )
 
     postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx )
 
-    #cpu_array.show()
-    #mem_array.show()
+    cpu_array.show()
+    mem_array.show()
+    cpu_hist_array.show()
+
+    logging.info("Uploading")
 
     cpu_array.delete_table()
     cpu_array.update_table()
     mem_array.delete_table()
     mem_array.update_table()
+    cpu_hist_array.delete_table()
+    cpu_hist_array.update_table()
 
     logging.info("Done")
 
