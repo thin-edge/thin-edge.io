@@ -10,7 +10,7 @@ use thin_edge_json::{
 use tokio::{
     select,
     sync::mpsc::{error::SendError, UnboundedReceiver, UnboundedSender},
-    time::{interval, Interval},
+    time::sleep,
 };
 use tracing::{error, log::warn};
 
@@ -105,8 +105,6 @@ impl MessageBatcher {
             .subscribe(self.topic_filter.clone())
             .await?;
 
-        let batching_window = Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW);
-
         loop {
             match messages.next().await {
                 Some(message) => {
@@ -115,7 +113,7 @@ impl MessageBatcher {
                         .build_message_batch_with_timeout(
                             message,
                             messages.as_mut(),
-                            interval(batching_window),
+                            Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW),
                         )
                         .await;
 
@@ -143,9 +141,8 @@ impl MessageBatcher {
         &self,
         first_message: Message,
         messages: &mut dyn MqttMessageStream,
-        mut timeout: Interval,
+        batching_window: Duration,
     ) -> Result<MeasurementGrouper, DeviceMonitorError> {
-        timeout.tick().await; // The first tick starts the timeout window
         let collectd_message = CollectdMessage::parse_from(&first_message)?;
         let mut message_batch = MessageBatch::start_batch(collectd_message)?;
 
@@ -167,7 +164,7 @@ impl MessageBatcher {
                     }
                 }
 
-                _result = timeout.tick() => {
+                _result = sleep(batching_window) => {
                     break;
                 }
             }
@@ -348,13 +345,14 @@ mod tests {
             .expect_next()
             .returning(|| Box::pin(pending())); //Block the stream with a pending future
 
-        let mut timeout = interval(Duration::from_millis(500));
-        timeout.tick().await; // The first tick starts the timeout window
-
         let first_message = message_stream.next().await.unwrap();
         let builder = MessageBatcher::new(sender, Arc::new(mqtt_client)).unwrap();
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, &mut message_stream, timeout)
+            .build_message_batch_with_timeout(
+                first_message,
+                &mut message_stream,
+                Duration::from_millis(500),
+            )
             .await
             .unwrap();
 
@@ -384,13 +382,14 @@ mod tests {
             ("collectd/localhost/speed/value", 350.0),
         ]);
 
-        let mut timeout = interval(Duration::from_millis(500));
-        timeout.tick().await; // The first tick starts the timeout window
-
         let first_message = message_stream.next().await.unwrap();
         let builder = MessageBatcher::new(sender, Arc::new(mqtt_client)).unwrap();
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, &mut message_stream, timeout)
+            .build_message_batch_with_timeout(
+                first_message,
+                &mut message_stream,
+                Duration::from_millis(500),
+            )
             .await
             .unwrap();
 
@@ -416,9 +415,6 @@ mod tests {
 
         let mut message_stream = build_message_stream_from_messages(vec![]);
 
-        let mut timeout = interval(Duration::from_millis(500));
-        timeout.tick().await; // The first tick starts the timeout window
-
         let topic = Topic::new("collectd/host/group/key").unwrap();
         let invalid_collectd_message = Message::new(&topic, "123456789"); // Invalid payload
 
@@ -427,7 +423,7 @@ mod tests {
             .build_message_batch_with_timeout(
                 invalid_collectd_message,
                 &mut message_stream,
-                timeout,
+                Duration::from_millis(500),
             )
             .await;
 
