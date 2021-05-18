@@ -15,6 +15,7 @@ import os
 import os.path
 from pathlib import Path
 import numpy as np
+from numpy.core.records import array
 
 lake = os.path.expanduser( '~/DataLake' )
 
@@ -175,16 +176,27 @@ class CpuHistoryStacked:
         self.size = size
         self.name = 'ci_cpu_hist'
         self.fields = [
-            ("t0", "INT64"),
-            ("t1", "INT64"),
-            ("t2", "INT64"),
-            ("t3", "INT64"),
-            ("t4", "INT64"),
-            ("t5", "INT64"),
-            ("t6", "INT64"),
-            ("t7", "INT64"),
-            ("t8", "INT64"),
-            ("t9", "INT64")]
+            ("id", "INT64"),
+            ("t0u", "INT64"),
+            ("t0s", "INT64"),
+            ("t1u", "INT64"),
+            ("t1s", "INT64"),
+            ("t2u", "INT64"),
+            ("t2s", "INT64"),
+            ("t3u", "INT64"),
+            ("t3s", "INT64"),
+            ("t4u", "INT64"),
+            ("t4s", "INT64"),
+            ("t5u", "INT64"),
+            ("t5s", "INT64"),
+            ("t6u", "INT64"),
+            ("t6s", "INT64"),
+            ("t7u", "INT64"),
+            ("t7s", "INT64"),
+            ("t8u", "INT64"),
+            ("t8s", "INT64"),
+            ("t9u", "INT64"),
+            ("t9s", "INT64")]
         self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
 
 
@@ -197,7 +209,11 @@ class CpuHistoryStacked:
         fig, ax = plt.subplots()
 
         for i in range(len(self.fields)):
-            ax.plot(self.array[:, i], '.', label=self.fields[i][0])
+            if i%2==0:
+                style ='-o'
+            else:
+                style = '-x'
+            ax.plot(self.array[:, i], style, label=self.fields[i][0])
 
         plt.legend()
         plt.title('CPU History Stacked')
@@ -240,32 +256,6 @@ class CpuHistoryStacked:
                 print("Error", load_job.error_result)
                 print(load_job.errors)
                 sys.exit(1)
-
-    def update_table_one_by_one(self):
-        for i in range(self.size):
-            """Google Big Query does not like this as it it not Big Insert"""
-            q = f"insert into {dbo}.{cpu_table} values ( {self.array[i,0]}, {self.array[i,1]}, " \
-                f"{self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]} );"
-            #print(q)
-            myquery( client, q)
-
-    def update_table_bulk(self):
-        query_size = 100
-        query = ""
-        for i in range(self.size):
-            assert self.array[i,0] == i
-
-            q = f"({self.array[i,0]},{self.array[i,1]}," \
-                f"{self.array[i,2]},{self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]}), "
-            query += q
-
-            if (i+1)%query_size==0:
-                print(f"{i}\n")
-                query=query[:-2]
-                print(f"insert into {dbo}.{cpu_table} values {query} ;")
-
-                myquery( client, q)
-                query=""
 
 class MemoryHistory:
     def __init__(self, size):
@@ -430,7 +420,7 @@ def myquery(client, query):
     else:
         sys.exit(1)
 
-def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx):
+def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array):
 
     for folder in measurement_folders:
         mesaurement_index = int(folder.split('_')[1].split('.')[0])
@@ -440,6 +430,23 @@ def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx):
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
         memidx = scrap_mem(statsfile, mesaurement_index, client, dbo, memidx, mem_array)
+
+#    for folder in measurement_folders[-10:]:
+    mlen = len(measurement_folders)
+
+    for i in range(60):
+        cpu_hist_array.array[i, 0] = i
+
+    column = 1
+    for m in range(mlen-1, mlen-10-1, -1 ):
+        print(m)
+        for i in range(60):
+            print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
+            cpu_hist_array.array[i, column] = cpu_array.array[ m*60+i ,3]
+            cpu_hist_array.array[i, column+1] = cpu_array.array[ m*60+i ,4]
+        column += 2
+
+    print( cpu_hist_array.array )
 
 
 def unzip_results():
@@ -512,13 +519,15 @@ def generate():
 
     cpu_array = CpuHistory( len(relevant_measurement_folders)*60 )
     mem_array = MemoryHistory( len(relevant_measurement_folders)*60 )
-    cpu_hist_array = CpuHistoryStacked ( 10 * 60 )
+    cpu_hist_array = CpuHistoryStacked ( 60 )
 
-    postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx )
+    postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx , cpu_hist_array)
 
     cpu_array.show()
     mem_array.show()
     cpu_hist_array.show()
+
+    #sys.exit(1)
 
     logging.info("Uploading")
 
