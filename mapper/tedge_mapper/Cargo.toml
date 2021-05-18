@@ -18,12 +18,17 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
-c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
-thin_edge_json = {path = "../../mapper/thin_edge_json"}
+anyhow = "1.0"
+c8y_mapper = { path = "../c8y_mapper" }
+c8y_translator_lib = { path = "../cumulocity/c8y_translator_lib" }
 chrono = "0.4"
+tedge_dm_agent = { path = "../dm_agent" }
 env_logger = "0.8"
+futures = "0.3"
 log = "0.4"
-mqtt_client = {path = "../../common/mqtt_client" }
-tokio = { version = "1.1", features = ["full"] }
+mqtt_client = { path = "../../common/mqtt_client" }
+structopt = "0.3"
+thin_edge_json = { path = "../../mapper/thin_edge_json" }
+tokio = { version = "1.5", features = ["full"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"

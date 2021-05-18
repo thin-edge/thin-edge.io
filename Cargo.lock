@@ -269,6 +269,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
+name = "c8y_mapper"
+version = "0.1.0"
+dependencies = [
+ "c8y_translator_lib",
+ "chrono",
+ "env_logger",
+ "log",
+ "mqtt_client",
+ "thin_edge_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "c8y_translator_lib"
 version = "0.1.0"
 dependencies = [
@@ -1873,11 +1888,15 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "c8y_mapper",
  "c8y_translator_lib",
  "chrono",
  "env_logger",
  "log",
  "mqtt_client",
+ "structopt",
+ "tedge_dm_agent",
  "thin_edge_json",
  "tokio",
  "tracing",

@@ -19,17 +19,17 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
-thin_edge_json = {path = "../thin_edge_json" }
-mqtt_client = {path = "../../common/mqtt_client" }
+anyhow = "1.0"
+async-trait = "0.1"
 chrono = "0.4"
 futures = "0.3"
-tokio = { version = "1.1", features = ["rt", "sync", "time"] }
-anyhow = "1.0"
+mockall = "0.9"
+mqtt_client = {path = "../../common/mqtt_client" }
+thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
+tokio = { version = "1.1", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
-mockall = "0.9"
-async-trait = "0.1"
 
 [dev-dependencies]
 assert_matches = "1.4"

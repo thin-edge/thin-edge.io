@@ -1,0 +1,18 @@
+[package]
+name = "az_mapper"
+version = "0.1.0"
+edition = "2018"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+license = "Apache-2.0"
+description = "tedge_mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
+
+[dependencies]
+c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
+thin_edge_json = {path = "../../mapper/thin_edge_json"}
+chrono = "0.4"
+env_logger = "0.8"
+log = "0.4"
+mqtt_client = {path = "../../common/mqtt_client" }
+tokio = { version = "1.1", features = ["full"] }
+tracing = { version = "0.1", features = ["attributes", "log"] }
+tracing-subscriber = "0.2"
