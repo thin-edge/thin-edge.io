@@ -72,6 +72,31 @@ cstime                   {integer}
 );
 """
 
+create_mem=f"""
+CREATE TABLE {dbo}.{mem_table} (
+id {integer},
+mid {integer},
+sample {integer},
+size {integer},
+resident {integer},
+shared {integer},
+text {integer},
+data {integer}
+);
+"""
+
+# insert into mytable values ( 0, 0, 1,2,3,4 );
+
+create_cpu_hist = f"""
+CREATE TABLE {dbo}.{cpu_hist_table} (
+id {integer},
+last                    {integer},
+old                     {integer},
+older                   {integer},
+evenolder                   {integer},
+evenmovreolder                   {integer}
+);
+"""
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""
@@ -105,10 +130,6 @@ class CpuHistory:
             pass
 
     def update_table(self):
-            #q = f"insert into {dbo}.{cpu_table} values ( {self.array[i,0]}, {self.array[i,1]}, " \
-            #    f"{self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]} );"
-            ##print(q)
-            #myquery( client, q)
 
             job_config = bigquery.LoadJobConfig(
                 schema=[
@@ -124,7 +145,7 @@ class CpuHistory:
 
             data = []
 
-            for i in range(100):#self.size):
+            for i in range(self.size):
                 data.append(
                     {
                     "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
@@ -137,8 +158,8 @@ class CpuHistory:
                 job_config=job_config)
 
             while load_job.running():
-                time.sleep(0.1)
-                print('Sleeping')
+                time.sleep(0.5)
+                print('Waiting')
 
             if load_job.errors:
                 print("Error", load_job.error_result)
@@ -197,7 +218,13 @@ class MemoryHistory:
 
         plt.show()
 
-    def update_table(self):
+    def delete_table(self):
+        try:
+            client.delete_table( "sturdy-mechanic-312713.ADataSet.ci_mem_measurement_tedge_mapper")
+        except:# google.api_core.exceptions.NotFound:
+            pass
+
+    def update_table_one_by_one(self):
         for i in range(self.size):
             assert self.array[i,0] == i
             q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
@@ -206,31 +233,44 @@ class MemoryHistory:
             #print(q)
             myquery( client, q)
 
-create_mem=f"""
-CREATE TABLE {dbo}.{mem_table} (
-id {integer},
-mid {integer},
-sample {integer},
-size {integer},
-resident {integer},
-shared {integer},
-text {integer},
-data {integer}
-);
-"""
+    def update_table(self):
 
-# insert into mytable values ( 0, 0, 1,2,3,4 );
+            job_config = bigquery.LoadJobConfig(
+                schema=[
+                    bigquery.SchemaField("id", "INT64"),
+                    bigquery.SchemaField("mid", "INT64"),
+                    bigquery.SchemaField("sample", "INT64"),
+                    bigquery.SchemaField("size", "INT64"),
+                    bigquery.SchemaField("resident", "INT64"),
+                    bigquery.SchemaField("shared", "INT64"),
+                    bigquery.SchemaField("text", "INT64"),
+                    bigquery.SchemaField("data", "INT64"),
+                ],
+            )
 
-create_cpu_hist = f"""
-CREATE TABLE {dbo}.{cpu_hist_table} (
-id {integer},
-last                    {integer},
-old                     {integer},
-older                   {integer},
-evenolder                   {integer},
-evenmovreolder                   {integer}
-);
-"""
+            data = []
+
+            for i in range(self.size):
+                data.append(
+                    {
+                    "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
+                    "sample":int(self.array[i,2]), "size":int(self.array[i,3]),
+                    "resident":int(self.array[i,4]), "shared":int(self.array[i,5]),
+                    "text":int(self.array[i,6]), "data":int(self.array[i,6]) } )
+
+            load_job = client.load_table_from_json( data,
+                "sturdy-mechanic-312713.ADataSet.ci_mem_measurement_tedge_mapper",
+                job_config=job_config)
+
+            while load_job.running():
+                time.sleep(0.5)
+                print('Waiting')
+
+            if load_job.errors:
+                print("Error", load_job.error_result)
+                print(load_job.errors)
+                sys.exit(1)
+
 
 def scrap_mem(thefile, mesaurement_index, client, dbo, memidx, arr):
     with open(thefile) as thestats:
@@ -403,7 +443,8 @@ def generate():
 
     cpu_array.delete_table()
     cpu_array.update_table()
-    #mem_array.update_table()
+    mem_array.delete_table()
+    mem_array.update_table()
 
     logging.info("Done")
 
