@@ -1989,6 +1989,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "software_management"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

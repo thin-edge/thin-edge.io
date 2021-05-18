@@ -5,6 +5,7 @@ members = [
     "common/mqtt_client",
     "tedge",
     "tedge_config",
+    "mapper/software_management",
     "mapper/tedge_mapper",
     "mapper/cumulocity/c8y_translator_lib",
     "mapper/thin_edge_json",
