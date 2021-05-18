@@ -513,10 +513,13 @@ def generate():
 
     relevant_measurement_folders = measurement_folders[-processing_range:]
 
-    #logging.info('Procesing Range' + str( relevant_measurement_folders[-processing_range:]))
     logging.info('Procesing Range ' + str( len(relevant_measurement_folders[-processing_range:])))
+    logging.info('Procesing Build Numbers: ')
+    for m in relevant_measurement_folders[-processing_range:]:
+        print(m.split('_')[1], end=" ")
+    print("")
 
-    logging.info("Postrprocessing")
+    logging.info("Postprocessing")
 
     cpu_array = CpuHistory( len(relevant_measurement_folders)*60 )
     mem_array = MemoryHistory( len(relevant_measurement_folders)*60 )
