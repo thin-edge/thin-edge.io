@@ -9,6 +9,7 @@ _Put an `x` in the boxes that apply_
 
 - [ ] Bugfix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
+- [ ] Improvement (general improvements like code refactorings that doesn't explicitly fix a bug or add any new functionality)
 - [ ] Documentation Update (if none of the other choices apply)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 
