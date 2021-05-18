@@ -13,7 +13,7 @@ import os
 import sys
 from requests.auth import HTTPBasicAuth
 
-lake = '~/DataLake'
+lake = os.path.expanduser('~/DataLake')
 
 def download_artifact(url, name, run_number, token):
     headers = {"Accept": "application/vnd.github.v3+json"}
