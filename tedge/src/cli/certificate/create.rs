@@ -45,13 +45,13 @@ impl CreateCertCmd {
         paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
+        let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
+
         // Creating files with permission 644
         let mut cert_file = create_new_file(&self.cert_path)
             .map_err(|err| err.cert_context(self.cert_path.clone()))?;
         let mut key_file = create_new_file(&self.key_path)
             .map_err(|err| err.key_context(self.key_path.clone()))?;
-
-        let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
 
         let cert_pem = cert.certificate_pem_string()?;
         cert_file.write_all(cert_pem.as_bytes())?;
