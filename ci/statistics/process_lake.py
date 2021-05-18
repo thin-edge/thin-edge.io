@@ -9,6 +9,7 @@
 import sys
 import time
 import logging
+import json
 import subprocess
 import os
 import os.path
@@ -20,6 +21,7 @@ lake = os.path.expanduser( '~/DataLake' )
 logging.basicConfig(level=logging.INFO)
 
 style = 'google'  #'ms', 'google', 'none'
+
 
 if style == 'ms':
     server = 'mysupertestserver.database.windows.net'
@@ -36,7 +38,10 @@ if style == 'ms':
 
 elif style == 'google':
     sleep = 0.2
+
     from google.cloud import bigquery
+    #from google.api_core.exceptions import NotFound
+
     client = bigquery.Client()
     dbo = 'ADataSet'
     integer = 'INT64'
@@ -93,14 +98,78 @@ class CpuHistory:
 
         plt.show()
 
-    def update_table(self):
-        for i in range(self.size):
-            assert self.array[i,0] == i
+    def delete_table(self):
+        try:
+            client.delete_table( "sturdy-mechanic-312713.ADataSet.ci_cpu_measurement_tedge_mapper")
+        except:# google.api_core.exceptions.NotFound:
+            pass
 
+    def update_table(self):
+            #q = f"insert into {dbo}.{cpu_table} values ( {self.array[i,0]}, {self.array[i,1]}, " \
+            #    f"{self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]} );"
+            ##print(q)
+            #myquery( client, q)
+
+            job_config = bigquery.LoadJobConfig(
+                schema=[
+                    bigquery.SchemaField("id", "INT64"),
+                    bigquery.SchemaField("mid", "INT64"),
+                    bigquery.SchemaField("sample", "INT64"),
+                    bigquery.SchemaField("utime", "INT64"),
+                    bigquery.SchemaField("stime", "INT64"),
+                    bigquery.SchemaField("cutime", "INT64"),
+                    bigquery.SchemaField("cstime", "INT64"),
+                ],
+            )
+
+            data = []
+
+            for i in range(100):#self.size):
+                data.append(
+                    {
+                    "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
+                    "sample":int(self.array[i,2]), "utime":int(self.array[i,3]),
+                    "stime":int(self.array[i,4]), "cutime":int(self.array[i,5]),
+                    "cstime":int(self.array[i,6]) } )
+
+            load_job = client.load_table_from_json( data,
+                "sturdy-mechanic-312713.ADataSet.ci_cpu_measurement_tedge_mapper",
+                job_config=job_config)
+
+            while load_job.running():
+                time.sleep(0.1)
+                print('Sleeping')
+
+            if load_job.errors:
+                print("Error", load_job.error_result)
+                print(load_job.errors)
+                sys.exit(1)
+
+    def update_table_one_by_one(self):
+        for i in range(self.size):
+            """Google Big Query does not like this as it it not Big Insert"""
             q = f"insert into {dbo}.{cpu_table} values ( {self.array[i,0]}, {self.array[i,1]}, " \
                 f"{self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]} );"
             #print(q)
             myquery( client, q)
+
+    def update_table_bulk(self):
+        query_size = 100
+        query = ""
+        for i in range(self.size):
+            assert self.array[i,0] == i
+
+            q = f"({self.array[i,0]},{self.array[i,1]}," \
+                f"{self.array[i,2]},{self.array[i,3]},{self.array[i,4]},{self.array[i,5]},{self.array[i,6]}), "
+            query += q
+
+            if (i+1)%query_size==0:
+                print(f"{i}\n")
+                query=query[:-2]
+                print(f"insert into {dbo}.{cpu_table} values {query} ;")
+
+                myquery( client, q)
+                query=""
 
 class MemoryHistory:
     def __init__(self, size):
@@ -129,16 +198,6 @@ class MemoryHistory:
         plt.show()
 
     def update_table(self):
-        for i in range(self.size):
-            assert self.array[i,0] == i
-            q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
-            f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]}," \
-            f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
-            #print(q)
-            myquery( client, q)
-
-    def update_table_bulk(self):
-        bulk = 100
         for i in range(self.size):
             assert self.array[i,0] == i
             q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
@@ -298,13 +357,13 @@ def generate():
         # overall row index for the memory table
         memidx = 0
 
-        myquery( client, f"drop table {dbo}.{cpu_table}" )
-        myquery( client, f"drop table {dbo}.{mem_table}" )
-        myquery( client, f"drop table {dbo}.{cpu_hist_table}" )
+        #myquery( client, f"drop table {dbo}.{cpu_table}" )
+        #myquery( client, f"drop table {dbo}.{mem_table}" )
+        #myquery( client, f"drop table {dbo}.{cpu_hist_table}" )
 
-        myquery(client, create_mem)
-        myquery(client, create_cpu)
-        myquery(client, create_cpu_hist)
+        #myquery(client, create_mem)
+        #myquery(client, create_cpu)
+        #myquery(client, create_cpu_hist)
 
         print(measurement_folders)
 
@@ -339,11 +398,12 @@ def generate():
 
     postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx )
 
-    cpu_array.show()
-    mem_array.show()
+    #cpu_array.show()
+    #mem_array.show()
 
+    cpu_array.delete_table()
     cpu_array.update_table()
-    mem_array.update_table()
+    #mem_array.update_table()
 
     logging.info("Done")
 
