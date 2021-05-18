@@ -6,14 +6,12 @@ fn is_valid_device_id_char(ch: char) -> bool {
     | '='
     | '('
     | ')'
-    | '+'
     | ','
     | '-'
     | '.'
     | ':'
     | '?'
     | '_'
-    | '#'
     | '*'
     | '@'
     | '!'
@@ -37,7 +35,7 @@ pub fn is_valid_device_id(id: &str, max_cn_size: usize) -> Result<(), DeviceIdEr
 
 #[derive(thiserror::Error, Debug)]
 pub enum DeviceIdError {
-    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) + , - . : ? # % * _ ! @]"#)]
+    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) , - . : ? % * _ ! @]"#)]
     InvalidCharacter { name: String },
 
     #[error(r#"The empty string cannot be used as a name"#)]
@@ -70,7 +68,7 @@ mod test {
     fn valid_device_id_with_special_chars() -> anyhow::Result<()> {
         assert_eq!(
             (),
-            is_valid_device_id("'?:=()+,-.:123ThinEdgeDevice-id", 64)?
+            is_valid_device_id("'?:=()*@!%,-.:123ThinEdgeDevice-id", 64)?
         );
         Ok(())
     }
@@ -86,6 +84,9 @@ mod test {
             "thinedge{",
             "thinedge^",
             "thinedge&",
+            "thinedge#",
+            "thinedge$",
+            "thinedge+",
             "thin/edge",
             "thin$edge",
             "thin edge",
