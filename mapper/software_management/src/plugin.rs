@@ -2,7 +2,7 @@ use crate::software::*;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
-trait Plugin {
+pub trait Plugin {
     type SoftwareList: SoftwareListProducer;
 
     fn list(&self) -> Result<Self::SoftwareList, SoftwareError>;

@@ -1,3 +1,5 @@
+
+## Open questions
 * How to return detailed errors from the plugin (as unknown version, missing dependency, conflicting version, ...)
 * How to find a plugin?
    * It can be a combination of pre-registered plugins, configuration, $PATH search and directory search.
