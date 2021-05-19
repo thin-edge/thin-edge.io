@@ -20,9 +20,11 @@ Then we validate output contains no more than 5 error messages
 class MapperReconnectAwait(BaseTest):
     def execute(self):
         tedge_mapper = "/usr/bin/tedge_mapper"
+        self.sudo = "/usr/bin/sudo"
+
 
         subber = self.startProcess(
-            command="mosquito_sub",
+            command="/usr/bin/mosquitto_sub",
             arguments=["-i", "tedge-mapper", "-t", "test"],
             stdouterr="mosquitto_sub",
             background=True
@@ -31,13 +33,22 @@ class MapperReconnectAwait(BaseTest):
         self.wait(0.1)
 
         mapper = self.startProcess(
-            command=tedge_mapper,
-            arguments=[],
+            command=self.sudo,
+            arguments=["-u", "tedge-mapper", tedge_mapper],
             stdouterr="tedge_mapper",
             background=True
         )
 
         self.wait(5)
+
+        # since the first mapper is running with different user rights the
+        # test runner can't kill it for us. So we need to kill it ourselves
+        kill = self.startProcess(
+            command=self.sudo,
+            arguments=["sh", "-c", "kill -9 $(pgrep -x tedge_mapper)"],
+            stdouterr="kill",
+            ignoreExitStatus=True
+            )
 
     def validate(self):
         self.assertGrep("tedge_mapper.out", "ERROR", contains=True)
