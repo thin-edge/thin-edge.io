@@ -17,11 +17,16 @@ from pathlib import Path
 import numpy as np
 from numpy.core.records import array
 
-lake = os.path.expanduser( '~/DataLake' )
+testmode = False
+if testmode:
+    lake = os.path.expanduser( '~/DataLakeTest' )
+else:
+    lake = os.path.expanduser( '~/DataLake' )
+
+style = 'google'  #'ms', 'google', 'none'
 
 logging.basicConfig(level=logging.INFO)
 
-style = 'google'  #'ms', 'google', 'none'
 
 
 if style == 'ms':
@@ -44,6 +49,7 @@ elif style == 'google':
     #from google.api_core.exceptions import NotFound
 
     client = bigquery.Client()
+    #client = None
     dbo = 'ADataSet'
     integer = 'INT64'
     simulate = False
@@ -104,7 +110,12 @@ class CpuHistory:
     def __init__(self, size):
         self.array = np.zeros((size, 7), dtype=np.int32)
         self.size = size
-        self.name = 'ci_cpu_measurement_tedge_mapper'
+
+        if testmode:
+            self.name = 'ci_cpu_measurement_tedge_mapper_test'
+        else:
+            self.name = 'ci_cpu_measurement_tedge_mapper'
+
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
@@ -174,7 +185,10 @@ class CpuHistoryStacked:
 
     def __init__(self, size):
         self.size = size
-        self.name = 'ci_cpu_hist'
+        if testmode:
+            self.name = 'ci_cpu_hist'
+        else:
+            self.name = 'ci_cpu_hist_test'
         self.fields = [
             ("id", "INT64"),
             ("t0u", "INT64"),
@@ -261,7 +275,12 @@ class MemoryHistory:
     def __init__(self, size):
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
-        self.name = 'ci_mem_measurement_tedge_mapper'
+
+        if testmode:
+            self.name = 'ci_mem_measurement_tedge_mapper'
+        else:
+            self.name = 'ci_mem_measurement_tedge_mapper_test'
+
         self.database=f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
@@ -437,8 +456,9 @@ def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx, 
     for i in range(60):
         cpu_hist_array.array[i, 0] = i
 
+    processing_range = min(len(measurement_folders), 10)
     column = 1
-    for m in range(mlen-1, mlen-10-1, -1 ):
+    for m in range(mlen-1, mlen-processing_range-1, -1 ):
         #print(m)
         for i in range(60):
             #print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
@@ -491,9 +511,13 @@ def generate():
 
         #print(measurement_folders)
 
-        # last earliest valid is 'results_107_unpack'
-        max_processing_range = 24 # newest one 145
-        earliest_valid = 'results_107_unpack'
+        if testmode:
+            earliest_valid = 'results_1_unpack'
+            max_processing_range = 3 # newest one 145
+        else:
+            # last earliest valid is 'results_107_unpack'
+            max_processing_range = 24 # newest one 145
+            earliest_valid = 'results_107_unpack'
 
         #print(measurement_folders[-max_processing_range])
 
