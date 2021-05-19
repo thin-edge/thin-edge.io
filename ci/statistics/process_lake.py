@@ -48,8 +48,8 @@ elif style == 'google':
     from google.cloud import bigquery
     #from google.api_core.exceptions import NotFound
 
-    client = bigquery.Client()
-    #client = None
+    #client = bigquery.Client()
+    client = None
     dbo = 'ADataSet'
     integer = 'INT64'
     simulate = False
@@ -358,7 +358,7 @@ class MemoryHistory:
                 sys.exit(1)
 
 
-def scrap_mem(thefile, mesaurement_index, client, dbo, memidx, arr):
+def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr):
     with open(thefile) as thestats:
         lines = thestats.readlines()
         sample  = 0
@@ -378,7 +378,7 @@ def scrap_mem(thefile, mesaurement_index, client, dbo, memidx, arr):
             memidx += 1
 
     logging.debug(f"Read {sample} Memory stats")
-    missing = 60 - sample
+    missing = data_length - sample
     for m in range(missing):
 
         arr.insert_line(idx=memidx, mid=mesaurement_index, sample=sample, size=0, resident=0, shared=0,
@@ -388,7 +388,7 @@ def scrap_mem(thefile, mesaurement_index, client, dbo, memidx, arr):
 
     return memidx
 
-def scrap_cpu(thefile, mesaurement_index, client,dbo, cpuidx, arr):
+def scrap_cpu(data_length, thefile, mesaurement_index, client,dbo, cpuidx, arr):
 
     with open(thefile) as thestats:
         lines = thestats.readlines()
@@ -410,7 +410,7 @@ def scrap_cpu(thefile, mesaurement_index, client,dbo, cpuidx, arr):
                 cpuidx += 1
 
     logging.debug(f"Read {sample} cpu stats")
-    missing = 60 - sample
+    missing = data_length - sample
     for m in range(missing):
         arr.insert_line(idx=cpuidx, mid=mesaurement_index, sample=sample, utime=0, stime=0, cutime=0, cstime=0)
         sample += 1
@@ -439,31 +439,31 @@ def myquery(client, query):
     else:
         sys.exit(1)
 
-def postprocess_vals(measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array):
+def postprocess_vals(data_length, measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array):
 
     for folder in measurement_folders:
         mesaurement_index = int(folder.split('_')[1].split('.')[0])
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
-        cpuidx = scrap_cpu(statsfile, mesaurement_index, client, dbo, cpuidx, cpu_array)
+        cpuidx = scrap_cpu(data_length, statsfile, mesaurement_index, client, dbo, cpuidx, cpu_array)
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
-        memidx = scrap_mem(statsfile, mesaurement_index, client, dbo, memidx, mem_array)
+        memidx = scrap_mem(data_length, statsfile, mesaurement_index, client, dbo, memidx, mem_array)
 
 #    for folder in measurement_folders[-10:]:
     mlen = len(measurement_folders)
 
-    for i in range(60):
+    for i in range(data_length):
         cpu_hist_array.array[i, 0] = i
 
     processing_range = min(len(measurement_folders), 10)
     column = 1
     for m in range(mlen-1, mlen-processing_range-1, -1 ):
         #print(m)
-        for i in range(60):
+        for i in range(data_length):
             #print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
-            cpu_hist_array.array[i, column] = cpu_array.array[ m*60+i ,3]
-            cpu_hist_array.array[i, column+1] = cpu_array.array[ m*60+i ,4]
+            cpu_hist_array.array[i, column] = cpu_array.array[ m*data_length+i ,3]
+            cpu_hist_array.array[i, column+1] = cpu_array.array[ m*data_length+i ,4]
         column += 2
 
     #print( cpu_hist_array.array )
@@ -493,7 +493,6 @@ def get_measurement_folders( path: str ) -> list[Path]:
     return pathnames
 
 def generate():
-
 
     logging.info("Unzip Results")
     unzip_results()
@@ -554,11 +553,12 @@ def generate():
 
     logging.info("Postprocessing")
 
+    data_length = 60
     cpu_array = CpuHistory( len(relevant_measurement_folders)*60 )
     mem_array = MemoryHistory( len(relevant_measurement_folders)*60 )
-    cpu_hist_array = CpuHistoryStacked ( 60 )
+    cpu_hist_array = CpuHistoryStacked ( data_length )
 
-    postprocess_vals(  relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx , cpu_hist_array)
+    postprocess_vals(data_length, relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
 
     cpu_array.show()
     mem_array.show()
