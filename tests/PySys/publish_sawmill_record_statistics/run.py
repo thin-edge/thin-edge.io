@@ -49,7 +49,7 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             background=True,
         )
 
-        stats_mapper = self.startProcess(
+        status_mapper = self.startProcess(
             command="/bin/sh",
             arguments=[
                 "-c",
