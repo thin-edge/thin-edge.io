@@ -1,5 +1,5 @@
 use crate::error::{ConversionError, MapperError};
-use mqtt_client::Topic;
+use mqtt_client::{MqttClient, Topic};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
 

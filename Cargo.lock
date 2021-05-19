@@ -1154,11 +1154,13 @@ name = "mqtt_client"
 version = "0.1.0"
 dependencies = [
  "async-log",
+ "async-trait",
  "env_logger",
  "futures",
  "futures-timer",
  "json",
  "log",
+ "mockall",
  "rand 0.8.3",
  "rumqttc",
  "thiserror",
