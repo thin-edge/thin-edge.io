@@ -53,4 +53,4 @@ class MapperReconnectAwait(BaseTest):
     def validate(self):
         self.assertGrep("tedge_mapper.out", "ERROR", contains=True)
         self.assertLineCount("tedge_mapper.out", condition='<=5', abortOnError=True, expr='tedge_mapper::mapper: MQTT connection error:')
-        self.assertLineCount("tedge_mapper.out", condition='>=4', abortOnError=True, expr='tedge_mapper::mapper: MQTT connection error:')
+        self.assertLineCount("tedge_mapper.out", condition='>=2', abortOnError=True, expr='tedge_mapper::mapper: MQTT connection error:')
