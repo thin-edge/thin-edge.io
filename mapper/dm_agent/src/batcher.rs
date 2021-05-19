@@ -10,7 +10,7 @@ use thin_edge_json::{
 use tokio::{
     select,
     sync::mpsc::{error::SendError, UnboundedReceiver, UnboundedSender},
-    time::{interval, Interval},
+    time::sleep,
 };
 use tracing::{error, log::warn};
 
@@ -51,20 +51,21 @@ pub struct MessageBatch {
 }
 
 impl MessageBatch {
-    pub fn start_batch(message: Message) -> Result<Self, DeviceMonitorError> {
+    pub fn start_batch(collectd_message: CollectdMessage) -> Result<Self, DeviceMonitorError> {
         let mut message_grouper = MeasurementGrouper::new();
         message_grouper.timestamp(&current_timestamp())?;
 
         let mut message_batch = Self { message_grouper };
 
-        message_batch.add_to_batch(message)?;
+        message_batch.add_to_batch(collectd_message)?;
 
         Ok(message_batch)
     }
 
-    pub fn add_to_batch(&mut self, message: Message) -> Result<(), DeviceMonitorError> {
-        let collectd_message = CollectdMessage::parse_from(&message)?;
-
+    fn add_to_batch(
+        &mut self,
+        collectd_message: CollectdMessage,
+    ) -> Result<(), DeviceMonitorError> {
         self.message_grouper.measurement(
             Some(collectd_message.metric_group_key),
             collectd_message.metric_key,
@@ -104,8 +105,6 @@ impl MessageBatcher {
             .subscribe(self.topic_filter.clone())
             .await?;
 
-        let batching_window = Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW);
-
         loop {
             match messages.next().await {
                 Some(message) => {
@@ -114,7 +113,7 @@ impl MessageBatcher {
                         .build_message_batch_with_timeout(
                             message,
                             messages.as_mut(),
-                            interval(batching_window),
+                            Duration::from_millis(DEFAULT_STATS_COLLECTION_WINDOW),
                         )
                         .await;
 
@@ -142,21 +141,30 @@ impl MessageBatcher {
         &self,
         first_message: Message,
         messages: &mut dyn MqttMessageStream,
-        mut timeout: Interval,
+        batching_window: Duration,
     ) -> Result<MeasurementGrouper, DeviceMonitorError> {
-        let mut message_batch = MessageBatch::start_batch(first_message)?;
-        timeout.tick().await; // The first tick starts the timeout window
+        let collectd_message = CollectdMessage::parse_from(&first_message)?;
+        let mut message_batch = MessageBatch::start_batch(collectd_message)?;
 
         loop {
             select! {
                 maybe_message = messages.next() => {
                     match maybe_message {
-                        Some(message) => message_batch.add_to_batch(message)?,
+                        Some(message) => {
+                            let collectd_message = match CollectdMessage::parse_from(&message) {
+                                Ok(message) => message,
+                                Err(err) => {
+                                    error!("Error parsing collectd message: {}", err);
+                                    continue;   // Even if one message is faulty, we skip that one and keep building the batch
+                                },
+                            };
+                            message_batch.add_to_batch(collectd_message)?;
+                        }
                         None => break
                     }
                 }
 
-                _result = timeout.tick() => {
+                _result = sleep(batching_window) => {
                     break;
                 }
             }
@@ -214,6 +222,7 @@ impl MessageBatchPublisher {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use crate::mqtt::MockMqttClient;
     use crate::mqtt::MockMqttErrorStream;
     use crate::mqtt::MockMqttMessageStream;
@@ -222,28 +231,21 @@ mod tests {
     use mockall::Sequence;
     use tokio::time::sleep;
 
-    use super::*;
-
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
-        let collectd_message = Message::new(&topic, "123456789:32.5");
+        let collectd_message = CollectdMessage::new("temperature", "value", 32.5);
         let mut message_batch = MessageBatch::start_batch(collectd_message)?;
 
-        let topic = Topic::new("collectd/localhost/coordinate/x").unwrap();
-        let collectd_message = Message::new(&topic, "123456789:50");
+        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let topic = Topic::new("collectd/localhost/coordinate/y").unwrap();
-        let collectd_message = Message::new(&topic, "123456789:70");
+        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let topic = Topic::new("collectd/localhost/pressure/value").unwrap();
-        let collectd_message = Message::new(&topic, "123456789:98.2");
+        let collectd_message = CollectdMessage::new("pressure", "value", 98.2);
         message_batch.add_to_batch(collectd_message)?;
 
-        let topic = Topic::new("collectd/localhost/coordinate/z").unwrap();
-        let collectd_message = Message::new(&topic, "123456789:90");
+        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0);
         message_batch.add_to_batch(collectd_message)?;
 
         let message_grouper = message_batch.end_batch();
@@ -274,18 +276,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn invalid_collectd_message_format() {
-        let topic = Topic::new("collectd/host/group/key").unwrap();
-        let invalid_collectd_message = Message::new(&topic, "123456789");
-        let result = MessageBatch::start_batch(invalid_collectd_message);
-
-        assert_matches!(
-            result,
-            Err(DeviceMonitorError::InvalidCollectdMeasurementError(_))
-        );
-    }
-
     #[tokio::test]
     async fn batch_publisher() {
         let mut message_grouper = MeasurementGrouper::new();
@@ -308,22 +298,11 @@ mod tests {
             .unwrap();
     }
 
-    //TODO Control the timeout better with mocked clocks
     #[tokio::test]
     async fn batching_with_window_timeout() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
-        let mut mqtt_client = MockMqttClient::new();
-
-        mqtt_client.expect_subscribe_errors().returning(|| {
-            let error_stream = MockMqttErrorStream::default();
-            Box::new(error_stream)
-        });
-
-        mqtt_client.expect_subscribe().returning(|_| {
-            let message_stream = MockMqttMessageStream::default();
-            Ok(Box::new(message_stream))
-        });
+        let mqtt_client = build_mock_mqtt_client();
 
         let mut seq = Sequence::new(); //To control the order of mock returns
         let mut message_stream = MockMqttMessageStream::default();
@@ -366,13 +345,14 @@ mod tests {
             .expect_next()
             .returning(|| Box::pin(pending())); //Block the stream with a pending future
 
-        let mut timeout = interval(Duration::from_millis(500));
-        timeout.tick().await; // The first tick starts the timeout window
-
         let first_message = message_stream.next().await.unwrap();
         let builder = MessageBatcher::new(sender, Arc::new(mqtt_client)).unwrap();
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, &mut message_stream, timeout)
+            .build_message_batch_with_timeout(
+                first_message,
+                &mut message_stream,
+                Duration::from_millis(500),
+            )
             .await
             .unwrap();
 
@@ -388,5 +368,110 @@ mod tests {
             message_grouper.get_measurement_value(Some("speed"), "value"),
             None //This measurement isn't included in the batch because it came after the batching window
         );
+    }
+
+    #[tokio::test]
+    async fn batching_with_invalid_messages_within_a_batch() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+
+        let mqtt_client = build_mock_mqtt_client();
+
+        let mut message_stream = build_message_stream_from_messages(vec![
+            ("collectd/localhost/temperature/value", 32.5),
+            ("collectd/pressure/value", 98.0), //Erraneous collectd message with invalid topic
+            ("collectd/localhost/speed/value", 350.0),
+        ]);
+
+        let first_message = message_stream.next().await.unwrap();
+        let builder = MessageBatcher::new(sender, Arc::new(mqtt_client)).unwrap();
+        let message_grouper = builder
+            .build_message_batch_with_timeout(
+                first_message,
+                &mut message_stream,
+                Duration::from_millis(500),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            message_grouper.get_measurement_value(Some("temperature"), "value"),
+            Some(32.5)
+        );
+        assert_eq!(
+            message_grouper.get_measurement_value(Some("pressure"), "value"),
+            None //This measurement isn't included in the batch because the value was erraneous
+        );
+        assert_eq!(
+            message_grouper.get_measurement_value(Some("speed"), "value"),
+            Some(350.0) //This measurement is included in the batch even though the last message was erraneous
+        );
+    }
+
+    #[tokio::test]
+    async fn batching_with_erraneous_first_message() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+
+        let mqtt_client = build_mock_mqtt_client();
+
+        let mut message_stream = build_message_stream_from_messages(vec![]);
+
+        let topic = Topic::new("collectd/host/group/key").unwrap();
+        let invalid_collectd_message = Message::new(&topic, "123456789"); // Invalid payload
+
+        let builder = MessageBatcher::new(sender, Arc::new(mqtt_client)).unwrap();
+        let result = builder
+            .build_message_batch_with_timeout(
+                invalid_collectd_message,
+                &mut message_stream,
+                Duration::from_millis(500),
+            )
+            .await;
+
+        assert_matches!(
+            result,
+            Err(DeviceMonitorError::InvalidCollectdMeasurementError(_))
+        );
+    }
+
+    fn build_mock_mqtt_client() -> MockMqttClient {
+        let mut mqtt_client = MockMqttClient::new();
+
+        mqtt_client.expect_subscribe_errors().returning(|| {
+            let error_stream = MockMqttErrorStream::default();
+            Box::new(error_stream)
+        });
+
+        mqtt_client.expect_subscribe().returning(|_| {
+            let message_stream = MockMqttMessageStream::default();
+            Ok(Box::new(message_stream))
+        });
+
+        return mqtt_client;
+    }
+
+    fn build_message_stream_from_messages(
+        message_map: Vec<(&'static str, f64)>,
+    ) -> MockMqttMessageStream {
+        let mut seq = Sequence::new(); //To control the order of mock returns
+        let mut message_stream = MockMqttMessageStream::default();
+
+        for message in message_map {
+            message_stream
+                .expect_next()
+                .times(1)
+                .in_sequence(&mut seq) //The third value to be returend by this mock stream
+                .returning(move || {
+                    let topic = Topic::new(message.0).unwrap();
+                    let message = Message::new(&topic, format!("123456789:{}", message.1));
+                    Box::pin(ready(Some(message)))
+                });
+        }
+
+        //Block the stream from the 4th invocation onwards
+        message_stream
+            .expect_next()
+            .returning(|| Box::pin(pending())); //Block the stream with a pending future
+
+        return message_stream;
     }
 }
