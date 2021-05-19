@@ -1,6 +1,6 @@
 use json::JsonValue;
 use log::{debug, error, info};
-use mqtt_client::{Client, Config, Message, Topic};
+use mqtt_client::{Client, Config, Message, MqttClient, Topic};
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {

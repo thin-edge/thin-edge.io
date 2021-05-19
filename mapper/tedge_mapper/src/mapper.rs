@@ -1,4 +1,5 @@
 use c8y_translator_lib::json::CumulocityJsonError;
+use mqtt_client::MqttClient;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument};
 

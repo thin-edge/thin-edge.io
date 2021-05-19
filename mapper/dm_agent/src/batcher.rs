@@ -1,5 +1,4 @@
-use crate::mqtt::{MqttClient, MqttMessageStream};
-use mqtt_client::{Message, QoS, Topic, TopicFilter};
+use mqtt_client::{Message, MqttClient, MqttMessageStream, QoS, Topic, TopicFilter};
 use std::{sync::Arc, time::Duration};
 use thin_edge_json::{
     group::MeasurementGrouper,
@@ -223,12 +222,12 @@ impl MessageBatchPublisher {
 mod tests {
 
     use super::*;
-    use crate::mqtt::MockMqttClient;
-    use crate::mqtt::MockMqttErrorStream;
-    use crate::mqtt::MockMqttMessageStream;
     use assert_matches::assert_matches;
     use futures::future::{pending, ready};
     use mockall::Sequence;
+    use mqtt_client::MockMqttClient;
+    use mqtt_client::MockMqttErrorStream;
+    use mqtt_client::MockMqttMessageStream;
     use tokio::time::sleep;
 
     #[test]

@@ -1,4 +1,4 @@
-use mqtt_client::{Config, Message, QoS, Topic};
+use mqtt_client::{Config, Message, MqttClient, QoS, Topic};
 
 async fn publish(
     config: &Config,
