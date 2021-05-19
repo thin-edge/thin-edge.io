@@ -23,26 +23,32 @@
             "type": "python",
             "module": "process_lake",
             "request": "launch",
-            "cwd" :"${workspaceFolder}/ci/statistics/",
-            "args": [""],
+            "cwd": "${workspaceFolder}/ci/statistics/",
+            "args": [
+                ""
+            ],
         },
-
         {
             "name": "Python: Module",
             "type": "python",
             "request": "launch",
             "module": "pysys",
-            "args": ["run", "-v", "DEBUG", "c8y_restart_bridge"],
-            "cwd" :"${workspaceFolder}/tests/PySys/",
-            "env" : {
-                "PYSYS_APP_HOME":"${workspaceFolder}/tests/PySys",
-                "TEBASEDIR":"~/thin-edge.io/",
-                "C8YUSERNAME":"octocat",
-                "C8YPASS":"9GKZCTa5oNkbZk65",
-                "C8YDEVICE":"eulatestisonoe",
-                "C8YTENANT":"t493319102",
-                "C8YDEVICEID":"798",
-                "EXAMPLEDIR":"${workspaceFolder}/target/debug/examples",
+            "args": [
+                "run",
+                "-v",
+                "DEBUG",
+                "c8y_restart_bridge"
+            ],
+            "cwd": "${workspaceFolder}/tests/PySys/",
+            "env": {
+                "PYSYS_APP_HOME": "${workspaceFolder}/tests/PySys",
+                "TEBASEDIR": "~/thin-edge.io/",
+                "C8YUSERNAME": "octocat",
+                "C8YPASS": "9GKZCTa5oNkbZk65",
+                "C8YDEVICE": "eulatestisonoe",
+                "C8YTENANT": "t493319102",
+                "C8YDEVICEID": "798",
+                "EXAMPLEDIR": "${workspaceFolder}/target/debug/examples",
             }
         }
     ]
