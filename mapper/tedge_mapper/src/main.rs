@@ -1,11 +1,12 @@
 use crate::error::MapperError;
 use crate::time_provider::SystemTimeProvider;
+use flockfile::{Flockfile, FlockfileError};
 use mqtt_client::Client;
 use std::path::PathBuf;
 use tedge_config::{
     AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
 };
-use tracing::{debug_span, info, Instrument};
+use tracing::{debug_span, error, info, Instrument};
 
 mod az_mapper;
 mod c8y_mapper;
@@ -15,7 +16,7 @@ mod time_provider;
 
 const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_AZ: &str = "tedge-mapper-az";
-const DEFAULT_LOG_LEVEL: &str = "warn";
+const DEFAULT_LOG_LEVEL: &str = "debug";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
 #[tokio::main]
@@ -40,7 +41,10 @@ async fn main() -> Result<(), MapperError> {
 
     match cloud_name {
         "c8y" => {
+            let _flockfile = check_another_instance_is_running(APP_NAME_C8Y)?;
+
             info!("{} starting!", APP_NAME_C8Y);
+
             let mqtt_config = mqtt_client::Config::default();
             let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config).await?;
 
@@ -54,7 +58,10 @@ async fn main() -> Result<(), MapperError> {
             .await?
         }
         "az" => {
+            let _flockfile = check_another_instance_is_running(APP_NAME_AZ)?;
+
             info!("{} starting!", APP_NAME_AZ);
+
             let mqtt_config = mqtt_client::Config::default();
             let mqtt = Client::connect(APP_NAME_AZ, &mqtt_config).await?;
 
@@ -76,6 +83,16 @@ async fn main() -> Result<(), MapperError> {
     };
 
     Ok(())
+}
+
+fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, FlockfileError> {
+    match flockfile::Flockfile::new_lock(format!("{}.lock", app_name)) {
+        Ok(file) => Ok(file),
+        Err(err) => {
+            error!("Another instance of {} is running.", app_name);
+            Err(err)
+        }
+    }
 }
 
 fn get_config_repository() -> Result<TEdgeConfigRepository, MapperError> {

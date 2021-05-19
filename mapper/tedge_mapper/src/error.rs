@@ -20,6 +20,9 @@ pub enum MapperError {
 
     #[error(transparent)]
     ConfigSettingError(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    FlockfileError(#[from] flockfile::FlockfileError),
 }
 
 #[derive(Debug, thiserror::Error)]
