@@ -6,7 +6,7 @@ use crate::services::{
 use crate::utils::paths;
 use crate::utils::users::UserManager;
 use crate::ConfigError;
-use mqtt_client::{Client, Message, Topic, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;
 use tedge_config::*;
