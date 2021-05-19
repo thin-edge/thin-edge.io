@@ -4,6 +4,19 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "Pytest process lake",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v",
+                "--capture",
+                "no",
+                "${workspaceFolder}/ci/statistics/"
+            ],
+
+        },
 
         {
             "name": "process_lake",
