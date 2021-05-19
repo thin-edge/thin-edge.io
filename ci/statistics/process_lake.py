@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 from numpy.core.records import array
 
-testmode = False
+testmode = True
 if testmode:
     lake = os.path.expanduser( '~/DataLakeTest' )
 else:
@@ -482,17 +482,25 @@ def unzip_results():
             if not os.path.exists( os.path.join(lake,new_folder)):
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
+def get_measurement_folders( path: str ) -> list[Path]:
+    pathlist = sorted(
+        Path(lake).glob('*_unpack'), key=lambda _:
+            int(_.name.split('_')[1].split('.')[0])
+        )
+    pathnames = []
+    for path in pathlist:
+        pathnames.append(path.name)
+    return pathnames
+
 def generate():
+
+
     logging.info("Unzip Results")
     unzip_results()
+
     logging.info("Sumarize List")
 
-    s = sorted(Path(lake).glob('*_unpack'), key=lambda _: int(_.name.split('_')[1].split('.')[0]))
-
-    measurement_folders = []
-    for y in s:
-        logging.debug(y.name)
-        measurement_folders.append(y.name)
+    measurement_folders = get_measurement_folders(Path(lake))
 
     task = 'generate'
     if task == 'generate':
@@ -538,6 +546,7 @@ def generate():
     relevant_measurement_folders = measurement_folders[-processing_range:]
 
     logging.info('Procesing Range ' + str( len(relevant_measurement_folders[-processing_range:])))
+
     logging.info('Procesing Build Numbers: ')
     for m in relevant_measurement_folders[-processing_range:]:
         print(m.split('_')[1], end=" ")
@@ -561,10 +570,13 @@ def generate():
 
     cpu_array.delete_table()
     cpu_array.update_table()
+
     mem_array.delete_table()
     mem_array.update_table()
+
     cpu_hist_array.delete_table()
     cpu_hist_array.update_table()
+
 
     logging.info("Done")
 
