@@ -525,11 +525,11 @@ def generate():
             max_processing_range = 3 # newest one 145
         else:
             # last earliest valid is 'results_107_unpack'
-            max_processing_range = 24 # newest one 145
+            max_processing_range = 25 # newest one 185
             earliest_valid = 'results_107_unpack'
 
         #print(measurement_folders[-max_processing_range])
-
+        print(measurement_folders[-max_processing_range])
         assert measurement_folders[-max_processing_range] == earliest_valid
         processing_range = max_processing_range
 
