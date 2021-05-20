@@ -1992,8 +1992,10 @@ dependencies = [
 name = "software_management"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
+ "structopt",
  "thiserror",
 ]
 
