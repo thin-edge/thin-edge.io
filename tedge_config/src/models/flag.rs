@@ -1,9 +1,9 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 /// Represents a boolean type.
 ///
 /// We need this newtype in order to implement `TryFrom<String>` and `TryInto<String>`.
-/// The config_key macro uses query_string() and update_string().
+/// The `config_key!` macro uses query_string() and update_string().
 /// Therefore, boolean needs to be converted from/to String.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(transparent)]
@@ -27,20 +27,18 @@ impl TryFrom<String> for Flag {
     }
 }
 
-impl TryInto<String> for Flag {
-    type Error = std::convert::Infallible;
-
-    fn try_into(self) -> Result<String, Self::Error> {
-        match self {
-            Flag(true) => Ok(String::from("true")),
-            Flag(false) => Ok(String::from("false")),
-        }
+impl From<Flag> for bool {
+    fn from(value: Flag) -> Self {
+        value.0
     }
 }
 
-impl Into<bool> for Flag {
-    fn into(self) -> bool {
-        self.0
+impl From<Flag> for String {
+    fn from(value: Flag) -> Self {
+        match value {
+            Flag(true) => "true".to_string(),
+            Flag(false) => "false".to_string(),
+        }
     }
 }
 
@@ -50,36 +48,42 @@ impl Flag {
     }
 }
 
-#[test]
-fn convert_string_true_to_bool_true() {
-    let input = "true".to_string();
-    let output: bool = Flag::try_from(input).unwrap().into();
-    assert_eq!(output, true);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryInto;
 
-#[test]
-fn convert_string_false_to_bool_false() {
-    let input = "false".to_string();
-    let output: bool = Flag::try_from(input).unwrap().into();
-    assert_eq!(output, false);
-}
+    #[test]
+    fn convert_string_true_to_bool_true() {
+        let input = "true".to_string();
+        let output: bool = Flag::try_from(input).unwrap().into();
+        assert_eq!(output, true);
+    }
 
-#[test]
-fn return_error_for_unexpected_string_input() {
-    let input = "unknown".to_string();
-    assert!(Flag::try_from(input).is_err());
-}
+    #[test]
+    fn convert_string_false_to_bool_false() {
+        let input = "false".to_string();
+        let output: bool = Flag::try_from(input).unwrap().into();
+        assert_eq!(output, false);
+    }
 
-#[test]
-fn convert_bool_true_to_string_true() {
-    let input = true;
-    let output: String = Flag::try_into(Flag(input)).unwrap();
-    assert_eq!(output, "true");
-}
+    #[test]
+    fn return_error_for_unexpected_string_input() {
+        let input = "unknown".to_string();
+        assert!(Flag::try_from(input).is_err());
+    }
 
-#[test]
-fn convert_bool_false_to_string_false() {
-    let input = false;
-    let output: String = Flag::try_into(Flag(input)).unwrap();
-    assert_eq!(output, "false");
+    #[test]
+    fn convert_bool_true_to_string_true() {
+        let input = true;
+        let output: String = Flag::try_into(Flag(input)).unwrap();
+        assert_eq!(output, "true");
+    }
+
+    #[test]
+    fn convert_bool_false_to_string_false() {
+        let input = false;
+        let output: String = Flag::try_into(Flag(input)).unwrap();
+        assert_eq!(output, "false");
+    }
 }

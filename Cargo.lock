@@ -2151,6 +2151,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert-json-diff 2.0.1",
+ "assert_matches",
  "async-trait",
  "c8y_translator_lib",
  "chrono",

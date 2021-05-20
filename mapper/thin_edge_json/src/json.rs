@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn test_has_a_timestamp() {
+    fn has_timestamp_returns_true_given_timestamp() {
         let input = r#"{
             "time" : "2021-04-30T17:03:14+02:00",
             "temperature" : 25
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn test_has_no_timestamp() {
+    fn has_timestamp_returns_false_given_no_timestamp() {
         let input = r#"{
             "temperature" : 25
         }"#;
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_timestamp() {
+    fn set_timestamp_adds_timestamp() {
         let input = r#"{
             "temperature" : 25
         }"#;

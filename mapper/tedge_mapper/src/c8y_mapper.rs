@@ -1,4 +1,3 @@
-use crate::error::*;
 use crate::mapper::*;
 use mqtt_client::Topic;
 
@@ -19,21 +18,12 @@ impl Default for CumulocityMapperConfig {
     }
 }
 
-impl Into<MapperConfig> for CumulocityMapperConfig {
-    fn into(self) -> MapperConfig {
+impl From<CumulocityMapperConfig> for MapperConfig {
+    fn from(value: CumulocityMapperConfig) -> Self {
         MapperConfig {
-            in_topic: self.in_topic,
-            out_topic: self.out_topic,
-            errors_topic: self.errors_topic,
+            in_topic: value.in_topic,
+            out_topic: value.out_topic,
+            errors_topic: value.errors_topic,
         }
-    }
-}
-
-pub struct CumulocityConverter;
-
-impl Converter for CumulocityConverter {
-    type Error = ConversionError;
-    fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        c8y_translator_lib::json::from_thin_edge_json(input).map_err(Into::into)
     }
 }
