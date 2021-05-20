@@ -1,10 +1,6 @@
 # source ~/env-bigquery/bin/activate
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
-# WT
-# Error {'reason': 'quotaExceeded', 'location': 'max_dml_outstanding_per_table', 'message': 'Quota exceeded: Your table exceeded quota for total number of dml jobs writing to a table, pending + running. For more information, see https://cloud.google.com/bigquery/troubleshooting-errors'}
-
-
 import sys
 import time
 import logging
@@ -37,9 +33,7 @@ def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr)
         lines = thestats.readlines()
         sample = 0
         for line in lines:
-            # print(line)
             entries = line.split()
-            # print(entries)
             size = entries[1 - 1]  #     (1) total program size
             resident = entries[2 - 1]  #   (2) resident set size
             shared = entries[3 - 1]  #     (3) number of resident shared pages
@@ -87,9 +81,7 @@ def scrap_cpu(data_length, thefile, mesaurement_index, client, dbo, cpuidx, arr)
         sample = 0
 
         for line in lines:
-            # print(line)
             entries = line.split()
-            # print(len(entries))
             if len(entries) == 52 and entries[1] == "(tedge_mapper)":
                 ut = int(entries[14 - 1])
                 st = int(entries[15 - 1])
@@ -153,7 +145,6 @@ def postprocess_vals(
             data_length, statsfile, mesaurement_index, client, dbo, memidx, mem_array
         )
 
-    #    for folder in measurement_folders[-10:]:
     mlen = len(measurement_folders)
 
     for i in range(data_length):
@@ -170,9 +161,6 @@ def postprocess_vals(
                 m * data_length + i, 4
             ]
         column += 2
-
-    # print( cpu_hist_array.array )
-
 
 def unzip_results():
     p = Path(lake)
@@ -215,7 +203,7 @@ def get_relevant_measurement_folders():
 
     assert relevant_folders[-processing_range] == earliest_valid
 
-    logging.info("Procesing Range " + str(len(relevant_folders[-processing_range:])))
+    logging.info(f"Procesing Range {processing_range}")
 
     logging.info("Procesing Build Numbers:")
     for m in relevant_folders[-processing_range:]:
@@ -252,8 +240,6 @@ def generate():
     cpu_array.show()
     mem_array.show()
     cpu_hist_array.show()
-
-    # sys.exit(1)
 
     logging.info("Uploading")
 
