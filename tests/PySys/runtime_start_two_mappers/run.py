@@ -28,7 +28,7 @@ class RuntimeMultiMappers(BaseTest):
             background=True
         )
 
-        self.wait(0.5)
+        self.wait(0.1)
 
         tedge_mapper2 = self.startProcess(
             command=self.sudo,
