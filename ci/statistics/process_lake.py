@@ -132,10 +132,13 @@ def postprocess_vals(
     measurement_folders,
     cpu_array,
     mem_array,
-    cpuidx,
-    memidx,
     cpu_hist_array,
 ):
+
+    # overall row index for the cpu table
+    cpuidx = 0
+    # overall row index for the memory table
+    memidx = 0
 
     for folder in measurement_folders:
         mesaurement_index = int(folder.split("_")[1].split(".")[0])
@@ -229,11 +232,6 @@ def generate():
 
     logging.info("Sumarize List")
 
-    # overall row index for the cpu table
-    cpuidx = 0
-    # overall row index for the memory table
-    memidx = 0
-
     relevant_folders, processing_range = get_relevant_measurement_folders()
 
     logging.info("Postprocessing")
@@ -248,8 +246,6 @@ def generate():
         relevant_folders,
         cpu_array,
         mem_array,
-        cpuidx,
-        memidx,
         cpu_hist_array,
     )
 

@@ -43,8 +43,6 @@ def test_postprocess_vals_cpu():
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
-    cpuidx = 0
-    memidx = 0
     relevant_measurement_folders = [
         "results_1_unpack",
         "results_2_unpack",
@@ -66,8 +64,6 @@ def test_postprocess_vals_cpu():
         relevant_measurement_folders,
         cpu_array,
         mem_array,
-        cpuidx,
-        memidx,
         cpu_hist_array,
     )
 
@@ -101,8 +97,6 @@ def test_postprocess_vals_mem():
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
-    cpuidx = 0
-    memidx = 0
     relevant_measurement_folders = [
         "results_1_unpack",
         "results_2_unpack",
@@ -124,8 +118,6 @@ def test_postprocess_vals_mem():
         relevant_measurement_folders,
         cpu_array,
         mem_array,
-        cpuidx,
-        memidx,
         cpu_hist_array,
     )
 
@@ -158,8 +150,7 @@ def test_postprocess_vals_cpu_hist():
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
-    cpuidx = 0
-    memidx = 0
+
     relevant_measurement_folders = [
         "results_1_unpack",
         "results_2_unpack",
@@ -181,8 +172,6 @@ def test_postprocess_vals_cpu_hist():
         relevant_measurement_folders,
         cpu_array,
         mem_array,
-        cpuidx,
-        memidx,
         cpu_hist_array,
     )
 
