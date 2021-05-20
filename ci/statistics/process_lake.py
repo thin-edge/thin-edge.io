@@ -20,7 +20,7 @@ from numpy.core.records import array
 from google.cloud import bigquery
     #from google.api_core.exceptions import NotFound
 
-testmode = False
+testmode = True
 if testmode:
     lake = os.path.expanduser( '~/DataLakeTest' )
 else:

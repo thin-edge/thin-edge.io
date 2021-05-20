@@ -113,3 +113,47 @@ def test_postprocess_vals_mem():
             print("Line", i, np.array_equal(exp[i], mem_array.array[i]) )
 
     assert np.array_equal(exp, mem_array.array)
+
+def test_postprocess_vals_cpu_hist():
+    """Tightnen current functionality for now
+    Probably too much for a simple test
+    """
+    lake = os.path.expanduser( '~/DataLakeTest')
+    cpuidx = 0
+    memidx = 0
+    relevant_measurement_folders = [
+        'results_1_unpack',
+        'results_2_unpack',
+        'results_4_unpack'
+        ]
+    data_length = 10
+    cpu_array = pl.CpuHistory( len(relevant_measurement_folders)*data_length )
+    mem_array = pl.MemoryHistory( len(relevant_measurement_folders)*data_length )
+    cpu_hist_array = pl.CpuHistoryStacked ( data_length )
+
+    pl.postprocess_vals(  data_length, relevant_measurement_folders,
+    cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
+
+    #programmatically reproduce the data set
+    data = []
+    for i in range( 10 ):
+        if i < 20:
+            k=(i+10)//10
+        else:
+            k=4
+        data.append( [ i, 21+i, 22+i, 11+i, 12+i, i+1, i+2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] )
+
+    exp=np.array( data, dtype=np.int32)
+
+    extensive_check = False
+    if extensive_check:
+        print("Expect")
+        print(exp)
+        print('There')
+        print(cpu_hist_array.array)
+
+        for i in range(len(data)):
+            print("Line", i, np.array_equal(exp[i], cpu_hist_array.array[i]) )
+
+    assert np.array_equal(exp, cpu_hist_array.array)
+
