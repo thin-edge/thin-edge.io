@@ -21,7 +21,7 @@ if testdata:
 else:
     lake = os.path.expanduser("~/DataLake")
 
-style = "none"  #'ms', 'google', 'none'
+style = "google"  #'ms', 'google', 'none'
 
 client, dbo, integer, conn = db.get_database(style)
 
@@ -227,6 +227,7 @@ def generate():
     cpu_array = db.CpuHistory(processing_range * data_length, client, testdata)
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
+    measurements = db.MeasurementMetadata(processing_range, client, testdata)
 
     postprocess_vals(
         data_length,
@@ -235,10 +236,12 @@ def generate():
         mem_array,
         cpu_hist_array,
     )
+    measurements.postprocess(relevant_folders)
 
     cpu_array.show()
     mem_array.show()
     cpu_hist_array.show()
+    measurements.show()
 
     logging.info("Uploading")
 
@@ -250,6 +253,9 @@ def generate():
 
     cpu_hist_array.delete_table()
     cpu_hist_array.update_table()
+
+    measurements.delete_table()
+    measurements.update_table()
 
     logging.info("Done")
 

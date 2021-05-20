@@ -144,7 +144,10 @@ class MeasurementMetadata:
         else:
             self.name = "ci_measurements"
 
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+
     def postprocess(self, folders):
+        i = 0
         for folder in folders:
             index = int(folder.split("_")[1].split(".")[0])
 
@@ -152,10 +155,15 @@ class MeasurementMetadata:
             name = f"system_test_{index}_metadata.json"
             path = os.path.join(lake,name)
 
-            vals = scrap_measurement_metadata(path)
-            self.array.append( vals )
+            run, date, url, name, branch = scrap_measurement_metadata(path)
+            self.array.append( (i, run, date, url, name, branch) )
+            i += 1
 
         return self.array
+
+    def show(self):
+        for row in self.array:
+            print(row)
 
     def update_table(self):
 
@@ -176,19 +184,18 @@ class MeasurementMetadata:
         print(self.array)
         j = 0
         for i in range(self.size):
+            print(self.size, i, j)
             data.append(
                 {
-                    "id": self.array[i][j],
-                    "mid": self.array[i][0],
-                    "date": self.array[i][1],
-                    "url": self.array[i][2],
-                    "name": self.array[i][3],
-                    "branch": self.array[i][4],
+                    "id": self.array[i][0],
+                    "mid": self.array[i][1],
+                    "date": self.array[i][2],
+                    "url": self.array[i][3],
+                    "name": self.array[i][4],
+                    "branch": self.array[i][5],
                 }
             )
             j+=1
-
-        #print(data)
 
         if self.client:
             load_job = self.client.load_table_from_json(
@@ -206,7 +213,11 @@ class MeasurementMetadata:
                 print(load_job.errors)
                 sys.exit(1)
 
-
+    def delete_table(self):
+        try:
+            self.client.delete_table(self.database)
+        except:  # google.api_core.exceptions.NotFound:
+            pass
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""

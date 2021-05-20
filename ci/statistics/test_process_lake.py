@@ -258,17 +258,17 @@ def test_postprocess_vals_metadata():
     metadata.postprocess(folders)
 
     exp= [
-        ( 1,
+        ( 0, 1,
         "2021-05-19T15:21:01Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
         "continuous_integration"),
-        ( 2,
+        ( 1, 2,
         "2021-05-19T15:21:02Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
         "continuous_integration"),
-        ( 4,
+        ( 2, 4,
         "2021-05-19T15:21:04Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
@@ -277,8 +277,23 @@ def test_postprocess_vals_metadata():
 
     assert metadata.array == exp
 
+def test_show_metadata(mocker):
+    lake = os.path.expanduser("~/DataLakeTest")
 
-def test_updload_metadata(mocker):
+    folders = [
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+    ]
+    client = 'google'
+    testmode = True
+    metadata = db.MeasurementMetadata(
+        len(folders), client, testmode)
+
+    metadata.postprocess(folders)
+    metadata.show()
+
+def test_upload_metadata(mocker):
     """"""
     lake = os.path.expanduser("~/DataLakeTest")
 
