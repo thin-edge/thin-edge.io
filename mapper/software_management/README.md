@@ -1,3 +1,7 @@
+## Component responsibility
+
+
+
 
 ## Open questions
 

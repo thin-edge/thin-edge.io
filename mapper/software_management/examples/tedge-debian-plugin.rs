@@ -32,7 +32,7 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
     let status = match operation {
         PluginOp::List {} => run_cmd(
             "dpkg-query",
-            " --show --showformat='${{Package}}\\t${{Version}}\\n'",
+            " --show --showformat=${Package}\\t${Version}\\n",
         )?,
 
         PluginOp::Install { module, version } => {
@@ -54,7 +54,7 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
         PluginOp::Version { module } => run_cmd(
             "dpkg-query",
             &format!(
-                " --show --showformat='${{Package}}\\t${{Version}}\\n' {}",
+                " --show --showformat=${{Package}}\\t${{Version}}\\n {}",
                 module
             ),
         )?,
