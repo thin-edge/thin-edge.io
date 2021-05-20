@@ -47,23 +47,29 @@ def test_postprocess_vals_cpu():
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
 
-    #for i in cpu_array.array:
-    #    print(i)
-
     #programmatically reproduce the data set
     data = []
     for i in range( len(relevant_measurement_folders) * data_length):
         if i < 20:
-            data.append( [i, i//10, i, i+1, i+2, 0, 0] )
+            k=  (i+10)//10
         else:
-            data.append( [i, 4, i, i+1, i+2, 0, 0] )
+            k = 4
 
+        data.append( [i, k, i%10, i+1, i+2, 0, 0] )
 
-    exp=np.array( [
-        data
-    ], dtype=np.int32)
+    exp=np.array( data , dtype=np.int32)
 
-    assert exp.all() == cpu_array.array.all()
+    extensive_check = False
+    if extensive_check:
+        print("Expect")
+        print(exp)
+        print('There')
+        print(cpu_array.array)
+
+        for i in range(len(data)):
+            print("Line", i, np.array_equal(exp[i], cpu_array.array[i]) )
+
+    assert np.array_equal(exp, cpu_array.array)
 
 def test_postprocess_vals_mem():
     """Tightnen current functionality for now
@@ -85,9 +91,6 @@ def test_postprocess_vals_mem():
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
 
-    #for i in mem_array.array:
-    #    print(i)
-
     #programmatically reproduce the data set
     data = []
     for i in range(len(relevant_measurement_folders) * data_length):
@@ -97,22 +100,16 @@ def test_postprocess_vals_mem():
             k=4
         data.append( [i, k, i%10, 100+i, 200+i, 300+i, 400+i, 500+i] )
 
-    #for i in data:
-    #    print(i)
-
     exp=np.array( data, dtype=np.int32)
 
+    extensive_check = False
+    if extensive_check:
+        print("Expect")
+        print(exp)
+        print('There')
+        print(mem_array.array)
 
-    print("Expect")
-    print(exp)
-    print('There')
-    print(mem_array.array)
-
-    for i in range(len(data)):
-        print("Line", i, np.array_equal(exp[i], mem_array.array[i]) )
+        for i in range(len(data)):
+            print("Line", i, np.array_equal(exp[i], mem_array.array[i]) )
 
     assert np.array_equal(exp, mem_array.array)
-
-
-
-
