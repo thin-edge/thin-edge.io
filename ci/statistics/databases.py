@@ -5,7 +5,7 @@ import time
 import numpy as np
 from google.cloud import bigquery
 
-
+logging.basicConfig(level=logging.INFO)
 
 cpu_table = 'ci_cpu_measurement_tedge_mapper'
 mem_table = 'ci_mem_measurement_tedge_mapper'
@@ -14,6 +14,7 @@ cpu_hist_table = 'ci_cpu_hist'
 def get_database( style: str):
     conn = None
     if style == 'ms':
+        logging.info('Using Microsoft Azure Backend')
         server = 'mysupertestserver.database.windows.net'
         database = 'mysupertestdatabase'
         username = 'mysupertestadmin'
@@ -26,11 +27,13 @@ def get_database( style: str):
         integer = 'INTEGER'
 
     elif style == 'google':
+        logging.info('Using Google Big Query Backend')
         client = bigquery.Client()
         dbo = 'ADataSet'
         integer = 'INT64'
 
     elif style == 'none':
+        logging.info('Using No Backend')
         dbo = 'Nopdb'
         integer = 'Nopint'
         client = None

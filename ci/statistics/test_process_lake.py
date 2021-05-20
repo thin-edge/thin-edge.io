@@ -21,11 +21,24 @@ def test_get_measurement_foders():
     lake = os.path.expanduser( '~/DataLakeTest' )
     ret = pl.get_measurement_folders(lake)
     exp = [
+        'results_0_unpack',
         'results_1_unpack',
         'results_2_unpack',
         'results_4_unpack'
         ]
     assert ret == exp
+
+def test_get_relevant_measurement_folders():
+
+    exp = [
+        'results_1_unpack',
+        'results_2_unpack',
+        'results_4_unpack'
+        ]
+
+    ret, valid = pl.get_relevant_measurement_folders()
+    assert ret == exp
+    assert valid == 3
 
 
 def test_postprocess_vals_cpu():

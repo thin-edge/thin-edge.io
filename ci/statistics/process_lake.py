@@ -146,6 +146,31 @@ def get_measurement_folders( path: str ) -> list[Path]:
         pathnames.append(path.name)
     return pathnames
 
+def get_relevant_measurement_folders():
+
+    if testdata:
+        earliest_valid = 'results_1_unpack'
+        processing_range = 3 # newest one 145
+    else:
+        # last earliest valid is 'results_107_unpack'
+        processing_range = 25 # newest one 185
+        earliest_valid = 'results_107_unpack'
+
+    relevant_folders = get_measurement_folders(Path(lake))[-processing_range:]
+
+    print(relevant_folders[-processing_range])
+
+    assert relevant_folders[-processing_range] == earliest_valid
+
+    logging.info('Procesing Range ' + str( len(relevant_folders[-processing_range:])))
+
+    logging.info('Procesing Build Numbers:')
+    for m in relevant_folders[-processing_range:]:
+        print(m.split('_')[1], end=" ")
+    print("")
+
+    return relevant_folders, processing_range
+
 def generate():
 
     logging.info("Unzip Results")
@@ -153,43 +178,21 @@ def generate():
 
     logging.info("Sumarize List")
 
-    measurement_folders = get_measurement_folders(Path(lake))
-
     # overall row index for the cpu table
     cpuidx = 0
     # overall row index for the memory table
     memidx = 0
 
-    if testdata:
-        earliest_valid = 'results_1_unpack'
-        max_processing_range = 3 # newest one 145
-    else:
-        # last earliest valid is 'results_107_unpack'
-        max_processing_range = 25 # newest one 185
-        earliest_valid = 'results_107_unpack'
-
-    #print(measurement_folders[-max_processing_range])
-    print(measurement_folders[-max_processing_range])
-    assert measurement_folders[-max_processing_range] == earliest_valid
-    processing_range = max_processing_range
-
-    relevant_measurement_folders = measurement_folders[-processing_range:]
-
-    logging.info('Procesing Range ' + str( len(relevant_measurement_folders[-processing_range:])))
-
-    logging.info('Procesing Build Numbers: ')
-    for m in relevant_measurement_folders[-processing_range:]:
-        print(m.split('_')[1], end=" ")
-    print("")
+    relevant_folders, processing_range = get_relevant_measurement_folders()
 
     logging.info("Postprocessing")
 
     data_length = 60
-    cpu_array = db.CpuHistory( len(relevant_measurement_folders)*data_length, client, testdata)
-    mem_array = db.MemoryHistory( len(relevant_measurement_folders)*data_length, client, testdata)
+    cpu_array = db.CpuHistory( processing_range*data_length, client, testdata)
+    mem_array = db.MemoryHistory( processing_range*data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked ( data_length, client, testdata)
 
-    postprocess_vals(data_length, relevant_measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
+    postprocess_vals(data_length, relevant_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
 
     cpu_array.show()
     mem_array.show()
