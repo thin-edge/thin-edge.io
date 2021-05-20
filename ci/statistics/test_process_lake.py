@@ -42,9 +42,13 @@ def test_scrap_measurement_metadata():
     name = "system_test_1_metadata.json"
     file = os.path.join(lake,name)
 
-    ret = pl.scrap_measurement_metadata(file)
+    ret, date, url, name, branch = pl.scrap_measurement_metadata(file)
 
     assert ret == 1
+    assert date == "2021-05-19T15:21:38Z"
+    assert url == "https://github.com/abelikt/thin-edge.io/actions/runs/857323798"
+    assert name == "system-test-workflow"
+    assert branch == "continuous_integration"
 
 def test_postprocess_vals_cpu():
     """Tightnen current functionality for now
