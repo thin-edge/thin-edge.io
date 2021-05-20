@@ -1,4 +1,3 @@
-
 import logging
 import sys
 import time
@@ -7,35 +6,37 @@ from google.cloud import bigquery
 
 logging.basicConfig(level=logging.INFO)
 
-cpu_table = 'ci_cpu_measurement_tedge_mapper'
-mem_table = 'ci_mem_measurement_tedge_mapper'
-cpu_hist_table = 'ci_cpu_hist'
+cpu_table = "ci_cpu_measurement_tedge_mapper"
+mem_table = "ci_mem_measurement_tedge_mapper"
+cpu_hist_table = "ci_cpu_hist"
 
-def get_database( style: str):
+
+def get_database(style: str):
     conn = None
-    if style == 'ms':
-        logging.info('Using Microsoft Azure Backend')
-        server = 'mysupertestserver.database.windows.net'
-        database = 'mysupertestdatabase'
-        username = 'mysupertestadmin'
-        password = 'not_here'
+    if style == "ms":
+        logging.info("Using Microsoft Azure Backend")
+        server = "mysupertestserver.database.windows.net"
+        database = "mysupertestdatabase"
+        username = "mysupertestadmin"
+        password = "not_here"
 
         import pymssql
+
         conn = pymssql.connect(server, username, password, database)
         client = conn.cursor(as_dict=True)
-        dbo = 'dbo'
-        integer = 'INTEGER'
+        dbo = "dbo"
+        integer = "INTEGER"
 
-    elif style == 'google':
-        logging.info('Using Google Big Query Backend')
+    elif style == "google":
+        logging.info("Using Google Big Query Backend")
         client = bigquery.Client()
-        dbo = 'ADataSet'
-        integer = 'INT64'
+        dbo = "ADataSet"
+        integer = "INT64"
 
-    elif style == 'none':
-        logging.info('Using No Backend')
-        dbo = 'Nopdb'
-        integer = 'Nopint'
+    elif style == "none":
+        logging.info("Using No Backend")
+        dbo = "Nopdb"
+        integer = "Nopint"
         client = None
 
     else:
@@ -43,25 +44,27 @@ def get_database( style: str):
 
     return client, dbo, integer, conn
 
+
 def myquery(client, query, conn, style):
 
     logging.info(query)
 
-    if style == 'ms':
-        client.execute( query )
+    if style == "ms":
+        client.execute(query)
         conn.commit()
 
-    elif style == 'google':
+    elif style == "google":
 
-        query_job = client.query( query )
+        query_job = client.query(query)
         if query_job.errors:
             print("Error", query_job.error_result)
             sys.exit(1)
         time.sleep(0.3)
-    elif style == 'none':
+    elif style == "none":
         pass
     else:
         sys.exit(1)
+
 
 def get_sql_create_cpu_table(dbo, name, integer):
     create_cpu = f"""
@@ -76,9 +79,10 @@ def get_sql_create_cpu_table(dbo, name, integer):
     );
     """
 
+
 def get_sql_create_mem_table(dbo, name, integer):
 
-    create_mem=f"""
+    create_mem = f"""
     CREATE TABLE {dbo}.{name} (
     id {integer},
     mid {integer},
@@ -90,6 +94,7 @@ def get_sql_create_mem_table(dbo, name, integer):
     data {integer}
     );
     """
+
 
 def get_sql_create_mem_table(dbo, name, integer):
     create_cpu_hist = f"""
@@ -103,27 +108,31 @@ def get_sql_create_mem_table(dbo, name, integer):
     );
     """
 
-def get_sql_create_mem_table(dbo, name, client ):
-    myquery( client, f"drop table {dbo}.{cpu_table}" )
 
 def get_sql_create_mem_table(dbo, name, client):
-    myquery( client, f"drop table {dbo}.{mem_table}" )
+    myquery(client, f"drop table {dbo}.{cpu_table}")
+
 
 def get_sql_create_mem_table(dbo, name, client):
-    myquery( client, f"drop table {dbo}.{cpu_hist_table}" )
+    myquery(client, f"drop table {dbo}.{mem_table}")
+
+
+def get_sql_create_mem_table(dbo, name, client):
+    myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""
+
     def __init__(self, size, client, testmode):
         self.array = np.zeros((size, 7), dtype=np.int32)
         self.size = size
         self.client = client
 
         if testmode:
-            self.name = 'ci_cpu_measurement_tedge_mapper_test'
+            self.name = "ci_cpu_measurement_tedge_mapper_test"
         else:
-            self.name = 'ci_cpu_measurement_tedge_mapper'
+            self.name = "ci_cpu_measurement_tedge_mapper"
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
@@ -132,24 +141,25 @@ class CpuHistory:
 
     def show(self):
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots()
 
-        #ax.plot(self.array[:,0], 'o-')
-        ax.plot(self.array[:, 1], '.', label='mid')
-        ax.plot(self.array[:, 2], '-', label='sample')
-        ax.plot(self.array[:, 3], '-', label='utime')
-        ax.plot(self.array[:, 4], '-', label='stime')
-        ax.plot(self.array[:, 5], '-', label='cutime')
-        ax.plot(self.array[:, 6], '-', label='cstime')
+        # ax.plot(self.array[:,0], 'o-')
+        ax.plot(self.array[:, 1], ".", label="mid")
+        ax.plot(self.array[:, 2], "-", label="sample")
+        ax.plot(self.array[:, 3], "-", label="utime")
+        ax.plot(self.array[:, 4], "-", label="stime")
+        ax.plot(self.array[:, 5], "-", label="cutime")
+        ax.plot(self.array[:, 6], "-", label="cstime")
         plt.legend()
-        plt.title('CPU History')
+        plt.title("CPU History")
 
         plt.show()
 
     def delete_table(self):
         try:
-            self.client.delete_table( self.database)
-        except:# google.api_core.exceptions.NotFound:
+            self.client.delete_table(self.database)
+        except:  # google.api_core.exceptions.NotFound:
             pass
 
     def update_table(self):
@@ -171,24 +181,30 @@ class CpuHistory:
         for i in range(self.size):
             data.append(
                 {
-                "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
-                "sample":int(self.array[i,2]), "utime":int(self.array[i,3]),
-                "stime":int(self.array[i,4]), "cutime":int(self.array[i,5]),
-                "cstime":int(self.array[i,6]) } )
+                    "id": int(self.array[i, 0]),
+                    "mid": int(self.array[i, 1]),
+                    "sample": int(self.array[i, 2]),
+                    "utime": int(self.array[i, 3]),
+                    "stime": int(self.array[i, 4]),
+                    "cutime": int(self.array[i, 5]),
+                    "cstime": int(self.array[i, 6]),
+                }
+            )
 
         if self.client:
-            load_job = self.client.load_table_from_json( data,
-                self.database,
-                job_config=job_config)
+            load_job = self.client.load_table_from_json(
+                data, self.database, job_config=job_config
+            )
 
             while load_job.running():
                 time.sleep(0.5)
-                print('Waiting')
+                print("Waiting")
 
             if load_job.errors:
                 print("Error", load_job.error_result)
                 print(load_job.errors)
                 sys.exit(1)
+
 
 class CpuHistoryStacked:
     """Mostly the representation of a unpublished SQL table"""
@@ -196,9 +212,9 @@ class CpuHistoryStacked:
     def __init__(self, size, client, testmode):
         self.size = size
         if testmode:
-            self.name = 'ci_cpu_hist_test'
+            self.name = "ci_cpu_hist_test"
         else:
-            self.name = 'ci_cpu_hist'
+            self.name = "ci_cpu_hist"
         self.fields = [
             ("id", "INT64"),
             ("t0u", "INT64"),
@@ -220,35 +236,36 @@ class CpuHistoryStacked:
             ("t8u", "INT64"),
             ("t8s", "INT64"),
             ("t9u", "INT64"),
-            ("t9s", "INT64")]
+            ("t9s", "INT64"),
+        ]
         self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
         self.client = client
 
-
-    def insert_line(self,line, idx):
-        assert len(line)==len(self.fields)
+    def insert_line(self, line, idx):
+        assert len(line) == len(self.fields)
         self.array[idx] = line
 
     def show(self):
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots()
 
         for i in range(len(self.fields)):
-            if i%2==0:
-                style ='-o'
+            if i % 2 == 0:
+                style = "-o"
             else:
-                style = '-x'
+                style = "-x"
             ax.plot(self.array[:, i], style, label=self.fields[i][0])
 
         plt.legend()
-        plt.title('CPU History Stacked')
+        plt.title("CPU History Stacked")
 
         plt.show()
 
     def delete_table(self):
         try:
-            self.client.delete_table( f"sturdy-mechanic-312713.ADataSet.{self.name}")
-        except:# google.api_core.exceptions.NotFound:
+            self.client.delete_table(f"sturdy-mechanic-312713.ADataSet.{self.name}")
+        except:  # google.api_core.exceptions.NotFound:
             pass
 
     def update_table(self):
@@ -257,31 +274,32 @@ class CpuHistoryStacked:
         for i in range(len(self.fields)):
             schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
 
-        job_config = bigquery.LoadJobConfig(
-            schema=schema
-        )
+        job_config = bigquery.LoadJobConfig(schema=schema)
 
         data = []
 
         for i in range(self.size):
-            line={}
+            line = {}
             for j in range(len(self.fields)):
-                line[ self.fields[j][0] ] = int(self.array[i,j])
-            data.append( line )
+                line[self.fields[j][0]] = int(self.array[i, j])
+            data.append(line)
 
         if self.client:
-            load_job = self.client.load_table_from_json( data,
+            load_job = self.client.load_table_from_json(
+                data,
                 f"sturdy-mechanic-312713.ADataSet.{self.name}",
-                job_config=job_config)
+                job_config=job_config,
+            )
 
             while load_job.running():
                 time.sleep(0.5)
-                print('Waiting')
+                print("Waiting")
 
             if load_job.errors:
                 print("Error", load_job.error_result)
                 print(load_job.errors)
                 sys.exit(1)
+
 
 class MemoryHistory:
     def __init__(self, size, client, testmode):
@@ -289,49 +307,51 @@ class MemoryHistory:
         self.size = size
         self.client = client
 
-
         if testmode:
-            self.name = 'ci_mem_measurement_tedge_mapper_test'
+            self.name = "ci_mem_measurement_tedge_mapper_test"
         else:
-            self.name = 'ci_mem_measurement_tedge_mapper'
+            self.name = "ci_mem_measurement_tedge_mapper"
 
-        self.database=f"sturdy-mechanic-312713.ADataSet.{self.name}"
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
 
     def show(self):
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots()
-        style = '.'
-        #ax.plot(self.array[:,0], 'o-')
-        ax.plot(self.array[:, 1], style, label='mid')
-        ax.plot(self.array[:, 2], style, label='sample')
-        ax.plot(self.array[:, 3], style, label='size')
-        ax.plot(self.array[:, 4], style, label='resident')
-        ax.plot(self.array[:, 5], style, label='shared')
-        ax.plot(self.array[:, 6], style, label='text')
-        ax.plot(self.array[:, 7], style, label='data')
+        style = "."
+        # ax.plot(self.array[:,0], 'o-')
+        ax.plot(self.array[:, 1], style, label="mid")
+        ax.plot(self.array[:, 2], style, label="sample")
+        ax.plot(self.array[:, 3], style, label="size")
+        ax.plot(self.array[:, 4], style, label="resident")
+        ax.plot(self.array[:, 5], style, label="shared")
+        ax.plot(self.array[:, 6], style, label="text")
+        ax.plot(self.array[:, 7], style, label="data")
 
         plt.legend()
-        plt.title('Memory History')
+        plt.title("Memory History")
 
         plt.show()
 
     def delete_table(self):
         try:
-            self.client.delete_table( self.database )
-        except:# google.api_core.exceptions.NotFound:
+            self.client.delete_table(self.database)
+        except:  # google.api_core.exceptions.NotFound:
             pass
 
     def update_table_one_by_one(self, dbo):
         for i in range(self.size):
-            assert self.array[i,0] == i
-            q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
-            f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]}," \
-            f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
-            #print(q)
-            myquery( self.client, q)
+            assert self.array[i, 0] == i
+            q = (
+                f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]},"
+                f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},"
+                f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
+            )
+            # print(q)
+            myquery(self.client, q)
 
     def update_table(self):
         print("Updating table:", self.name)
@@ -353,18 +373,24 @@ class MemoryHistory:
         for i in range(self.size):
             data.append(
                 {
-                "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
-                "sample":int(self.array[i,2]), "size":int(self.array[i,3]),
-                "resident":int(self.array[i,4]), "shared":int(self.array[i,5]),
-                "text":int(self.array[i,6]), "data":int(self.array[i,6]) } )
+                    "id": int(self.array[i, 0]),
+                    "mid": int(self.array[i, 1]),
+                    "sample": int(self.array[i, 2]),
+                    "size": int(self.array[i, 3]),
+                    "resident": int(self.array[i, 4]),
+                    "shared": int(self.array[i, 5]),
+                    "text": int(self.array[i, 6]),
+                    "data": int(self.array[i, 6]),
+                }
+            )
         if self.client:
-            load_job = self.client.load_table_from_json( data,
-                self.database,
-                job_config=job_config)
+            load_job = self.client.load_table_from_json(
+                data, self.database, job_config=job_config
+            )
 
             while load_job.running():
                 time.sleep(0.5)
-                print('Waiting')
+                print("Waiting")
 
             if load_job.errors:
                 print("Error", load_job.error_result)
