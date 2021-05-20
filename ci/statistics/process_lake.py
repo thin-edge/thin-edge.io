@@ -155,26 +155,23 @@ def generate():
 
     measurement_folders = get_measurement_folders(Path(lake))
 
-    task = 'generate'
-    if task == 'generate':
-        # overall row index for the cpu table
-        cpuidx = 0
-        # overall row index for the memory table
-        memidx = 0
+    # overall row index for the cpu table
+    cpuidx = 0
+    # overall row index for the memory table
+    memidx = 0
 
-        if testdata:
-            earliest_valid = 'results_1_unpack'
-            max_processing_range = 3 # newest one 145
-        else:
-            # last earliest valid is 'results_107_unpack'
-            max_processing_range = 25 # newest one 185
-            earliest_valid = 'results_107_unpack'
+    if testdata:
+        earliest_valid = 'results_1_unpack'
+        max_processing_range = 3 # newest one 145
+    else:
+        # last earliest valid is 'results_107_unpack'
+        max_processing_range = 25 # newest one 185
+        earliest_valid = 'results_107_unpack'
 
-        #print(measurement_folders[-max_processing_range])
-        print(measurement_folders[-max_processing_range])
-        assert measurement_folders[-max_processing_range] == earliest_valid
-        processing_range = max_processing_range
-
+    #print(measurement_folders[-max_processing_range])
+    print(measurement_folders[-max_processing_range])
+    assert measurement_folders[-max_processing_range] == earliest_valid
+    processing_range = max_processing_range
 
     relevant_measurement_folders = measurement_folders[-processing_range:]
 
