@@ -64,7 +64,6 @@ pub(crate) struct AzureConfigDto {
     pub(crate) root_cert_path: Option<FilePath>,
 }
 
-
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MosquittoConfigDto {

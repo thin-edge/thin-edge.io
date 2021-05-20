@@ -40,8 +40,7 @@ pub enum TEdgeMqttCli {
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         
-       //let result  =  context.config_repository.load()?.query(MosquittoPortSetting);
-        
+          
        let port = match context.config_repository.load()?.query(MosquittoPortSetting) {
           Ok(p) => p,
            _=> Port(DEFAULT_PORT)

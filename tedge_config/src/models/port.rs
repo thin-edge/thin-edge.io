@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct Port(pub u16);
 
@@ -10,16 +10,17 @@ pub struct InvalidPortNumber {
     input: String,
 }
 
-
 impl TryFrom<String> for Port {
     type Error = InvalidPortNumber;
 
     fn try_from(input: String) -> Result<Self, Self::Error> {
-        input.as_str().parse::<u16>().map_err(|_| InvalidPortNumber{input})
-        .map(Port)
+        input
+            .as_str()
+            .parse::<u16>()
+            .map_err(|_| InvalidPortNumber { input })
+            .map(Port)
     }
 }
-
 
 impl TryInto<String> for Port {
     type Error = std::convert::Infallible;

@@ -133,7 +133,8 @@ impl ConfigSetting for MosquittoPortSetting {
     const KEY: &'static str = "mosquitto.port";
 
     const DESCRIPTION: &'static str = concat!(
-        "XXX"
+        "Mqtt broker port, which is used by the mqtt clients to publish or subscribe. ",
+        "Example: listener 1883"
     );
 
     type Value = Port;

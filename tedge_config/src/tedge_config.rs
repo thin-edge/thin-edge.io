@@ -213,11 +213,7 @@ impl ConfigSettingAccessor<MosquittoPortSetting> for TEdgeConfig {
         .map(Port)
     }
 
-    fn update(
-        &mut self,
-        _setting: MosquittoPortSetting,
-        value: Port,
-    ) -> ConfigSettingResult<()> {
+    fn update(&mut self, _setting: MosquittoPortSetting, value: Port) -> ConfigSettingResult<()> {
         self.data.mosquitto.port = Some(value.into());
         Ok(())
     }
@@ -227,7 +223,6 @@ impl ConfigSettingAccessor<MosquittoPortSetting> for TEdgeConfig {
         Ok(())
     }
 }
-
 
 /// Generic extension trait implementation for all `ConfigSetting`s of `TEdgeConfig`
 /// that provide `TryFrom`/`TryInto` implementations for `String`.
