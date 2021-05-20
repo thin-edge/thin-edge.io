@@ -42,10 +42,10 @@ def test_scrap_measurement_metadata():
     name = "system_test_1_metadata.json"
     file = os.path.join(lake,name)
 
-    ret, date, url, name, branch = pl.scrap_measurement_metadata(file)
+    ret, date, url, name, branch = db.scrap_measurement_metadata(file)
 
     assert ret == 1
-    assert date == "2021-05-19T15:21:38Z"
+    assert date == "2021-05-19T15:21:01Z"
     assert url == "https://github.com/abelikt/thin-edge.io/actions/runs/857323798"
     assert name == "system-test-workflow"
     assert branch == "continuous_integration"
@@ -233,3 +233,42 @@ def test_postprocess_vals_cpu_hist():
             print("Line", i, np.array_equal(exp[i], cpu_hist_array.array[i]))
 
     assert np.array_equal(exp, cpu_hist_array.array)
+
+def test_postprocess_vals_metadata():
+    """Tightnen current functionality for now
+    Probably too much for a simple test
+    """
+    lake = os.path.expanduser("~/DataLakeTest")
+
+    folders = [
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+    ]
+    client = None
+    testmode = True
+    metadata = db.MeasurementMetadata(
+        len(folders), client, testmode)
+
+    metadata.postprocess(folders)
+
+    exp= [
+        ( 1, "2021-05-19T15:21:01Z",
+        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+        "system-test-workflow",
+        "continuous_integration"),
+        ( 2, "2021-05-19T15:21:02Z",
+        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+        "system-test-workflow",
+        "continuous_integration"),
+        ( 4, "2021-05-19T15:21:04Z",
+        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+        "system-test-workflow",
+        "continuous_integration")
+    ]
+
+    assert metadata.array == exp
+
+
+
+

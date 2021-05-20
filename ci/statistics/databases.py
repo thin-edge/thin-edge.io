@@ -1,4 +1,7 @@
+
+import json
 import logging
+import os
 import sys
 import time
 import numpy as np
@@ -120,6 +123,33 @@ def get_sql_create_mem_table(dbo, name, client):
 def get_sql_create_mem_table(dbo, name, client):
     myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
+def scrap_measurement_metadata(file):
+    with open(file) as content:
+        data = json.load(content)
+        run = data["run_number"]
+        date = data["updated_at"]
+        url = data["html_url"]
+        name = data["name"]
+        branch = data["head_branch"]
+
+    return run, date, url, name, branch
+
+class MeasurementMetadata:
+    def __init__(self, size, client, testmode):
+        self.array = []
+
+    def postprocess(self, folders):
+        for folder in folders:
+            index = int(folder.split("_")[1].split(".")[0])
+
+            lake = os.path.expanduser("~/DataLakeTest")
+            name = f"system_test_{index}_metadata.json"
+            path = os.path.join(lake,name)
+
+            vals = scrap_measurement_metadata(path)
+            self.array.append( vals )
+
+        return self.array
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""

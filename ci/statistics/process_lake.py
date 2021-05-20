@@ -27,17 +27,6 @@ client, dbo, integer, conn = db.get_database(style)
 
 logging.basicConfig(level=logging.INFO)
 
-def scrap_measurement_metadata(file):
-    with open(file) as content:
-        data = json.load(content)
-        run = data["run_number"]
-        date = data["updated_at"]
-        url = data["html_url"]
-        name = data["name"]
-        branch = data["head_branch"]
-
-    return run, date, url, name, branch
-
 def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr):
     with open(thefile) as thestats:
         lines = thestats.readlines()
