@@ -93,26 +93,6 @@ def scrap_cpu(data_length, thefile, mesaurement_index, client,dbo, cpuidx, arr):
 
     return cpuidx
 
-def myquery(client, query, conn):
-
-    logging.info(query)
-
-    if style == 'ms':
-        client.execute( query )
-        conn.commit()
-
-    elif style == 'google':
-
-        query_job = client.query( query )
-        if query_job.errors:
-            print("Error", query_job.error_result)
-            sys.exit(1)
-        time.sleep(0.3)
-    elif style == 'none':
-        pass
-    else:
-        sys.exit(1)
-
 def postprocess_vals(data_length, measurement_folders, cpu_array, mem_array, cpuidx, memidx, cpu_hist_array):
 
     for folder in measurement_folders:
@@ -182,16 +162,6 @@ def generate():
         # overall row index for the memory table
         memidx = 0
 
-        #myquery( client, f"drop table {dbo}.{cpu_table}" )
-        #myquery( client, f"drop table {dbo}.{mem_table}" )
-        #myquery( client, f"drop table {dbo}.{cpu_hist_table}" )
-
-        #myquery(client, create_mem)
-        #myquery(client, create_cpu)
-        #myquery(client, create_cpu_hist)
-
-        #print(measurement_folders)
-
         if testdata:
             earliest_valid = 'results_1_unpack'
             max_processing_range = 3 # newest one 145
@@ -204,16 +174,6 @@ def generate():
         print(measurement_folders[-max_processing_range])
         assert measurement_folders[-max_processing_range] == earliest_valid
         processing_range = max_processing_range
-
-    elif task == 'update':
-        # overall row index for the cpu table
-        cpuidx =1164+1 #0
-        # overall row index for the memory table
-        memidx =1164+1 #0
-
-        processing_range = 1
-        last_valid = 'results_138_unpack'
-        assert measurement_folders[-processing_range] == last_valid
 
 
     relevant_measurement_folders = measurement_folders[-processing_range:]

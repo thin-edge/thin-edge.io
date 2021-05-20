@@ -1,8 +1,10 @@
 
+import logging
 import sys
 import time
 import numpy as np
 from google.cloud import bigquery
+
 
 
 cpu_table = 'ci_cpu_measurement_tedge_mapper'
@@ -38,6 +40,25 @@ def get_database( style: str):
 
     return client, dbo, integer, conn
 
+def myquery(client, query, conn, style):
+
+    logging.info(query)
+
+    if style == 'ms':
+        client.execute( query )
+        conn.commit()
+
+    elif style == 'google':
+
+        query_job = client.query( query )
+        if query_job.errors:
+            print("Error", query_job.error_result)
+            sys.exit(1)
+        time.sleep(0.3)
+    elif style == 'none':
+        pass
+    else:
+        sys.exit(1)
 
 def get_sql_create_cpu_table(dbo, name, integer):
     create_cpu = f"""
@@ -78,6 +99,16 @@ def get_sql_create_mem_table(dbo, name, integer):
     evenmovreolder                   {integer}
     );
     """
+
+def get_sql_create_mem_table(dbo, name, client ):
+    myquery( client, f"drop table {dbo}.{cpu_table}" )
+
+def get_sql_create_mem_table(dbo, name, client):
+    myquery( client, f"drop table {dbo}.{mem_table}" )
+
+def get_sql_create_mem_table(dbo, name, client):
+    myquery( client, f"drop table {dbo}.{cpu_hist_table}" )
+
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""
@@ -191,7 +222,7 @@ class CpuHistoryStacked:
         self.client = client
 
 
-    def insert_line(self,line):
+    def insert_line(self,line, idx):
         assert len(line)==len(self.fields)
         self.array[idx] = line
 
@@ -290,7 +321,7 @@ class MemoryHistory:
         except:# google.api_core.exceptions.NotFound:
             pass
 
-    def update_table_one_by_one(self):
+    def update_table_one_by_one(self, dbo):
         for i in range(self.size):
             assert self.array[i,0] == i
             q= f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]}," \
