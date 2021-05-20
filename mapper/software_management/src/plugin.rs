@@ -12,12 +12,12 @@ pub trait Plugin {
 }
 
 pub struct ExternalPluginCommand {
-    pub name: String,
+    pub name: SoftwareType,
     pub path: PathBuf,
 }
 
 impl ExternalPluginCommand {
-    pub fn new(name: impl Into<String>, path: impl Into<PathBuf>) -> ExternalPluginCommand {
+    pub fn new(name: impl Into<SoftwareType>, path: impl Into<PathBuf>) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
             path: path.into(),

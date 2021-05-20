@@ -55,7 +55,7 @@ impl Plugins for ExternalPlugins {
 
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin> {
         if let Some(dot) = module_name.rfind('.') {
-            let (_,extension) = module_name.split_at(dot+1);
+            let (_, extension) = module_name.split_at(dot + 1);
             self.by_software_type(extension)
         } else {
             self.default()

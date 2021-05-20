@@ -5,18 +5,22 @@ pub struct SoftwareList {
     pub modules: Vec<SoftwareModule>,
 }
 
+pub type SoftwareType = String;
+pub type SoftwareName = String;
+pub type SoftwareVersion = String;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SoftwareModule {
-    pub software_type: String,
-    pub name: String,
-    pub version: Option<String>,
+    pub software_type: SoftwareType,
+    pub name: SoftwareName,
+    pub version: Option<SoftwareVersion>,
     pub url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SoftwareOperation {
     SoftwareUpdate { updates: Vec<SoftwareUpdate> },
-    SoftwareList { module_type: Option<String> },
+    SoftwareList { module_type: Option<SoftwareType> },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -28,27 +32,30 @@ pub enum SoftwareUpdate {
 #[derive(thiserror::Error, Debug, Deserialize, Serialize)]
 pub enum SoftwareError {
     #[error("Unknown software type: {software_type:?}")]
-    UnknownSoftwareType { software_type: String },
+    UnknownSoftwareType { software_type: SoftwareType },
 
     #[error("Unknown {software_type:?} module: {name:?}")]
-    UnknownModule { software_type: String, name: String },
+    UnknownModule {
+        software_type: SoftwareType,
+        name: SoftwareName,
+    },
 
     #[error("Unknown {software_type:?} version: {name:?} - {version:?}")]
     UnknownVersion {
-        software_type: String,
-        name: String,
-        version: String,
+        software_type: SoftwareType,
+        name: SoftwareName,
+        version: SoftwareVersion,
     },
 
     #[error("Unexpected module type: actual: {actual_type:?}, expected: {expected_type:?}")]
     WrongModuleType {
-        actual_type: String,
-        expected_type: String,
+        actual_type: SoftwareType,
+        expected_type: SoftwareType,
     },
 
     #[error("Plugin error for {software_type:?}, reason: {reason:?}")]
     PluginError {
-        software_type: String,
+        software_type: SoftwareType,
         reason: String,
     },
 
