@@ -21,7 +21,7 @@ class RuntimeMultiMappers(BaseTest):
 
         tedge_mapper1 = self.startProcess(
             command=tedge_mapper,
-            arguments=[],
+            arguments=["c8y"],
             stdouterr="tedge_mapper1",
             expectedExitStatus="==0",
             background=True
@@ -31,7 +31,7 @@ class RuntimeMultiMappers(BaseTest):
 
         tedge_mapper2 = self.startProcess(
             command=tedge_mapper,
-            arguments=[],
+            arguments=["c8y"],
             stdouterr="tedge_mapper2",
             expectedExitStatus="==1",
         )
