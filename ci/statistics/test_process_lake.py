@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 import process_lake as pl
+import databases as db
 
 def test_get_measurement_foders():
     """Still clumsy check"""
@@ -40,9 +41,11 @@ def test_postprocess_vals_cpu():
         'results_4_unpack'
         ]
     data_length = 10
-    cpu_array = pl.CpuHistory( len(relevant_measurement_folders)*data_length )
-    mem_array = pl.MemoryHistory( len(relevant_measurement_folders)*data_length )
-    cpu_hist_array = pl.CpuHistoryStacked ( data_length )
+    client = None
+    testmode = True
+    cpu_array = db.CpuHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    mem_array = db.MemoryHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    cpu_hist_array = db.CpuHistoryStacked ( data_length, client, testmode)
 
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
@@ -84,9 +87,11 @@ def test_postprocess_vals_mem():
         'results_4_unpack'
         ]
     data_length = 10
-    cpu_array = pl.CpuHistory( len(relevant_measurement_folders)*data_length )
-    mem_array = pl.MemoryHistory( len(relevant_measurement_folders)*data_length )
-    cpu_hist_array = pl.CpuHistoryStacked ( data_length )
+    client = None
+    testmode = True
+    cpu_array = db.CpuHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    mem_array = db.MemoryHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    cpu_hist_array = db.CpuHistoryStacked ( data_length, client, testmode)
 
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
@@ -127,9 +132,11 @@ def test_postprocess_vals_cpu_hist():
         'results_4_unpack'
         ]
     data_length = 10
-    cpu_array = pl.CpuHistory( len(relevant_measurement_folders)*data_length )
-    mem_array = pl.MemoryHistory( len(relevant_measurement_folders)*data_length )
-    cpu_hist_array = pl.CpuHistoryStacked ( data_length )
+    client = None
+    testmode = True
+    cpu_array = db.CpuHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    mem_array = db.MemoryHistory( len(relevant_measurement_folders)*data_length, client, testmode)
+    cpu_hist_array = db.CpuHistoryStacked ( data_length, client, testmode)
 
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
