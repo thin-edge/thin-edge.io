@@ -137,6 +137,7 @@ def scrap_measurement_metadata(file):
 class MeasurementMetadata:
     def __init__(self, size, client, testmode):
         self.array = []
+        self.client = client
 
     def postprocess(self, folders):
         for folder in folders:
@@ -150,6 +151,12 @@ class MeasurementMetadata:
             self.array.append( vals )
 
         return self.array
+
+    def update_table(self):
+            load_job = self.client.load_table_from_json(
+                1,2,3
+            )
+
 
 class CpuHistory:
     """Mostly the representation of a unpublished SQL table"""

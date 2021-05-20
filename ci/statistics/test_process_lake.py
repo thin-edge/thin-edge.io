@@ -5,6 +5,10 @@
 # Workaround:
 # python -m pytest test_process_lake.py
 
+# https://pypi.org/project/pytest-mock/
+# pip install pytest
+# pip install pytest-mock
+
 import numpy as np
 import os
 from os.path import expanduser
@@ -268,6 +272,32 @@ def test_postprocess_vals_metadata():
     ]
 
     assert metadata.array == exp
+
+
+def test_updload_metadata(mocker):
+    """"""
+    lake = os.path.expanduser("~/DataLakeTest")
+
+    folders = [
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+    ]
+    client = None
+    testmode = True
+    metadata = db.MeasurementMetadata(
+        len(folders), client, testmode)
+
+    metadata.postprocess(folders)
+
+    #mocker.patch.object(google.cloud.bigquery, "Client.load_table_from_json")
+    mocker.patch.object(metadata, "client")
+
+    metadata.update_table()
+    #metadata.client.load_table_from_json()
+
+    metadata.client.load_table_from_json.assert_called_once_with(1,2,3)
+
 
 
 
