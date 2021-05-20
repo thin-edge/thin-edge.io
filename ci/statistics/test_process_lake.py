@@ -37,6 +37,14 @@ def test_get_relevant_measurement_folders():
     assert ret == exp
     assert valid == 3
 
+def test_scrap_measurement_metadata():
+    lake = os.path.expanduser("~/DataLakeTest")
+    name = "system_test_1_metadata.json"
+    file = os.path.join(lake,name)
+
+    ret = pl.scrap_measurement_metadata(file)
+
+    assert ret == 1
 
 def test_postprocess_vals_cpu():
     """Tightnen current functionality for now

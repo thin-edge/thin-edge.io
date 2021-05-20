@@ -21,12 +21,17 @@ if testdata:
 else:
     lake = os.path.expanduser("~/DataLake")
 
-style = "google"  #'ms', 'google', 'none'
+style = "none"  #'ms', 'google', 'none'
 
 client, dbo, integer, conn = db.get_database(style)
 
 logging.basicConfig(level=logging.INFO)
 
+def scrap_measurement_metadata(file):
+    with open(file) as content:
+        data = json.load(content)
+        run = data["run_number"]
+    return run
 
 def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr):
     with open(thefile) as thestats:
