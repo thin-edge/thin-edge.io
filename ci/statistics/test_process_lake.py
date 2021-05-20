@@ -8,6 +8,7 @@
 # https://pypi.org/project/pytest-mock/
 # pip install pytest
 # pip install pytest-mock
+# pip install pytest-cov
 
 import numpy as np
 import os
@@ -257,15 +258,18 @@ def test_postprocess_vals_metadata():
     metadata.postprocess(folders)
 
     exp= [
-        ( 1, "2021-05-19T15:21:01Z",
+        ( 1,
+        "2021-05-19T15:21:01Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
         "continuous_integration"),
-        ( 2, "2021-05-19T15:21:02Z",
+        ( 2,
+        "2021-05-19T15:21:02Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
         "continuous_integration"),
-        ( 4, "2021-05-19T15:21:04Z",
+        ( 4,
+        "2021-05-19T15:21:04Z",
         "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
         "system-test-workflow",
         "continuous_integration")
@@ -283,20 +287,31 @@ def test_updload_metadata(mocker):
         "results_2_unpack",
         "results_4_unpack",
     ]
-    client = None
+    client = 'google'
     testmode = True
     metadata = db.MeasurementMetadata(
         len(folders), client, testmode)
 
     metadata.postprocess(folders)
 
-    #mocker.patch.object(google.cloud.bigquery, "Client.load_table_from_json")
+    import google
+
+    # With this we inject a mock chain
+    # load_table_from_json is called, it returns a load_job
+    # load_job.running() returns False
+    load_mock = mocker.MagicMock( name='load_job')
+    load_mock.running = mocker.MagicMock( name='running', return_value = False)
+    load_mock.errors = False
+    load_table_mock = mocker.MagicMock(name='load_table_from_json', return_value = load_mock)
+
     mocker.patch.object(metadata, "client")
+    metadata.client.load_table_from_json = load_table_mock
+
 
     metadata.update_table()
     #metadata.client.load_table_from_json()
 
-    metadata.client.load_table_from_json.assert_called_once_with(1,2,3)
+    metadata.client.load_table_from_json.assert_called_once()
 
 
 

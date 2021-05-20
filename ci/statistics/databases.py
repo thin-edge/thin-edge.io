@@ -138,6 +138,11 @@ class MeasurementMetadata:
     def __init__(self, size, client, testmode):
         self.array = []
         self.client = client
+        self.size = size
+        if testmode:
+            self.name = "ci_measurements_test"
+        else:
+            self.name = "ci_measurements"
 
     def postprocess(self, folders):
         for folder in folders:
@@ -153,9 +158,54 @@ class MeasurementMetadata:
         return self.array
 
     def update_table(self):
-            load_job = self.client.load_table_from_json(
-                1,2,3
+
+        print("Updating table:", self.name)
+        job_config = bigquery.LoadJobConfig(
+            schema=[
+                bigquery.SchemaField("id", "INT64"),
+                bigquery.SchemaField("mid", "INT64"),
+                bigquery.SchemaField("date", "STRING"),
+                bigquery.SchemaField("url", "STRING"),
+                bigquery.SchemaField("name", "STRING"),
+                bigquery.SchemaField("branch", "STRING"),
+            ],
+        )
+
+        data = []
+
+        print(self.array)
+        j = 0
+        for i in range(self.size):
+            data.append(
+                {
+                    "id": self.array[i][j],
+                    "mid": self.array[i][0],
+                    "date": self.array[i][1],
+                    "url": self.array[i][2],
+                    "name": self.array[i][3],
+                    "branch": self.array[i][4],
+                }
             )
+            j+=1
+
+        #print(data)
+
+        if self.client:
+            load_job = self.client.load_table_from_json(
+                data,
+                f"sturdy-mechanic-312713.ADataSet.{self.name}",
+                job_config=job_config,
+            )
+
+            while load_job.running():
+                time.sleep(0.5)
+                print("Waiting")
+
+            if load_job.errors:
+                print("Error", load_job.error_result)
+                print(load_job.errors)
+                sys.exit(1)
+
 
 
 class CpuHistory:
