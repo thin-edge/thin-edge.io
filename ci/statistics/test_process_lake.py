@@ -27,7 +27,7 @@ def test_get_measurement_foders():
     assert ret == exp
 
 
-def test_postprocess_vals():
+def test_postprocess_vals_cpu():
     """Tightnen current functionality for now
     Probably too much for a simple test
     """
@@ -47,8 +47,8 @@ def test_postprocess_vals():
     pl.postprocess_vals(  data_length, relevant_measurement_folders,
     cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
 
-    for i in cpu_array.array:
-        print(i)
+    #for i in cpu_array.array:
+    #    print(i)
 
     #programmatically reproduce the data set
     data = []
@@ -61,10 +61,57 @@ def test_postprocess_vals():
 
     exp=np.array( [
         data
- ], dtype=np.int32)
+    ], dtype=np.int32)
 
     assert exp.all() == cpu_array.array.all()
 
+def test_postprocess_vals_mem():
+    """Tightnen current functionality for now
+    Probably too much for a simple test
+    """
+    lake = os.path.expanduser( '~/DataLakeTest')
+    cpuidx = 0
+    memidx = 0
+    relevant_measurement_folders = [
+        'results_1_unpack',
+        'results_2_unpack',
+        'results_4_unpack'
+        ]
+    data_length = 10
+    cpu_array = pl.CpuHistory( len(relevant_measurement_folders)*data_length )
+    mem_array = pl.MemoryHistory( len(relevant_measurement_folders)*data_length )
+    cpu_hist_array = pl.CpuHistoryStacked ( data_length )
+
+    pl.postprocess_vals(  data_length, relevant_measurement_folders,
+    cpu_array, mem_array, cpuidx, memidx, cpu_hist_array)
+
+    #for i in mem_array.array:
+    #    print(i)
+
+    #programmatically reproduce the data set
+    data = []
+    for i in range(len(relevant_measurement_folders) * data_length):
+        if i < 20:
+            k=(i+10)//10
+        else:
+            k=4
+        data.append( [i, k, i%10, 100+i, 200+i, 300+i, 400+i, 500+i] )
+
+    #for i in data:
+    #    print(i)
+
+    exp=np.array( data, dtype=np.int32)
+
+
+    print("Expect")
+    print(exp)
+    print('There')
+    print(mem_array.array)
+
+    for i in range(len(data)):
+        print("Line", i, np.array_equal(exp[i], mem_array.array[i]) )
+
+    assert np.array_equal(exp, mem_array.array)
 
 
 
