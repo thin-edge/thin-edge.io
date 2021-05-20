@@ -253,7 +253,7 @@ def test_postprocess_vals_metadata():
     client = None
     testmode = True
     metadata = db.MeasurementMetadata(
-        len(folders), client, testmode)
+        len(folders), client, testmode, lake)
 
     metadata.postprocess(folders)
 
@@ -288,7 +288,7 @@ def test_show_metadata(mocker):
     client = 'google'
     testmode = True
     metadata = db.MeasurementMetadata(
-        len(folders), client, testmode)
+        len(folders), client, testmode, lake)
 
     metadata.postprocess(folders)
     metadata.show()
@@ -305,7 +305,7 @@ def test_upload_metadata(mocker):
     client = 'google'
     testmode = True
     metadata = db.MeasurementMetadata(
-        len(folders), client, testmode)
+        len(folders), client, testmode, lake)
 
     metadata.postprocess(folders)
 

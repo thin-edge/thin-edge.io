@@ -227,7 +227,7 @@ def generate():
     cpu_array = db.CpuHistory(processing_range * data_length, client, testdata)
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
-    measurements = db.MeasurementMetadata(processing_range, client, testdata)
+    measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
 
     postprocess_vals(
         data_length,

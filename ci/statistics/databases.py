@@ -135,7 +135,7 @@ def scrap_measurement_metadata(file):
     return run, date, url, name, branch
 
 class MeasurementMetadata:
-    def __init__(self, size, client, testmode):
+    def __init__(self, size, client, testmode, lake):
         self.array = []
         self.client = client
         self.size = size
@@ -143,6 +143,7 @@ class MeasurementMetadata:
             self.name = "ci_measurements_test"
         else:
             self.name = "ci_measurements"
+        self.lake = lake
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
@@ -151,9 +152,9 @@ class MeasurementMetadata:
         for folder in folders:
             index = int(folder.split("_")[1].split(".")[0])
 
-            lake = os.path.expanduser("~/DataLakeTest")
+            #lake = os.path.expanduser("~/DataLakeTest")
             name = f"system_test_{index}_metadata.json"
-            path = os.path.join(lake,name)
+            path = os.path.join(self.lake,name)
 
             run, date, url, name, branch = scrap_measurement_metadata(path)
             self.array.append( (i, run, date, url, name, branch) )
