@@ -20,13 +20,13 @@ from numpy.core.records import array
 from google.cloud import bigquery
     #from google.api_core.exceptions import NotFound
 
-testmode = True
+testmode = False
 if testmode:
     lake = os.path.expanduser( '~/DataLakeTest' )
 else:
     lake = os.path.expanduser( '~/DataLake' )
 
-style = 'none'  #'ms', 'google', 'none'
+style = 'google'  #'ms', 'google', 'none'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -187,9 +187,9 @@ class CpuHistoryStacked:
     def __init__(self, size):
         self.size = size
         if testmode:
-            self.name = 'ci_cpu_hist'
-        else:
             self.name = 'ci_cpu_hist_test'
+        else:
+            self.name = 'ci_cpu_hist'
         self.fields = [
             ("id", "INT64"),
             ("t0u", "INT64"),
@@ -279,9 +279,9 @@ class MemoryHistory:
         self.size = size
 
         if testmode:
-            self.name = 'ci_mem_measurement_tedge_mapper'
-        else:
             self.name = 'ci_mem_measurement_tedge_mapper_test'
+        else:
+            self.name = 'ci_mem_measurement_tedge_mapper'
 
         self.database=f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
