@@ -17,13 +17,16 @@ from pathlib import Path
 import numpy as np
 from numpy.core.records import array
 
+from google.cloud import bigquery
+    #from google.api_core.exceptions import NotFound
+
 testmode = True
 if testmode:
     lake = os.path.expanduser( '~/DataLakeTest' )
 else:
     lake = os.path.expanduser( '~/DataLake' )
 
-style = 'google'  #'ms', 'google', 'none'
+style = 'none'  #'ms', 'google', 'none'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,11 +48,8 @@ if style == 'ms':
 elif style == 'google':
     sleep = 0.2
 
-    from google.cloud import bigquery
-    #from google.api_core.exceptions import NotFound
-
-    #client = bigquery.Client()
-    client = None
+    client = bigquery.Client()
+    #client = None
     dbo = 'ADataSet'
     integer = 'INT64'
     simulate = False
@@ -144,29 +144,30 @@ class CpuHistory:
             pass
 
     def update_table(self):
-            print("Updating table:", self.name)
-            job_config = bigquery.LoadJobConfig(
-                schema=[
-                    bigquery.SchemaField("id", "INT64"),
-                    bigquery.SchemaField("mid", "INT64"),
-                    bigquery.SchemaField("sample", "INT64"),
-                    bigquery.SchemaField("utime", "INT64"),
-                    bigquery.SchemaField("stime", "INT64"),
-                    bigquery.SchemaField("cutime", "INT64"),
-                    bigquery.SchemaField("cstime", "INT64"),
-                ],
-            )
+        print("Updating table:", self.name)
+        job_config = bigquery.LoadJobConfig(
+            schema=[
+                bigquery.SchemaField("id", "INT64"),
+                bigquery.SchemaField("mid", "INT64"),
+                bigquery.SchemaField("sample", "INT64"),
+                bigquery.SchemaField("utime", "INT64"),
+                bigquery.SchemaField("stime", "INT64"),
+                bigquery.SchemaField("cutime", "INT64"),
+                bigquery.SchemaField("cstime", "INT64"),
+            ],
+        )
 
-            data = []
+        data = []
 
-            for i in range(self.size):
-                data.append(
-                    {
-                    "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
-                    "sample":int(self.array[i,2]), "utime":int(self.array[i,3]),
-                    "stime":int(self.array[i,4]), "cutime":int(self.array[i,5]),
-                    "cstime":int(self.array[i,6]) } )
+        for i in range(self.size):
+            data.append(
+                {
+                "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
+                "sample":int(self.array[i,2]), "utime":int(self.array[i,3]),
+                "stime":int(self.array[i,4]), "cutime":int(self.array[i,5]),
+                "cstime":int(self.array[i,6]) } )
 
+        if client:
             load_job = client.load_table_from_json( data,
                 self.database,
                 job_config=job_config)
@@ -241,23 +242,24 @@ class CpuHistoryStacked:
             pass
 
     def update_table(self):
-            print("Updating table:", self.name)
-            schema = []
-            for i in range(len(self.fields)):
-                schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
+        print("Updating table:", self.name)
+        schema = []
+        for i in range(len(self.fields)):
+            schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
 
-            job_config = bigquery.LoadJobConfig(
-                schema=schema
-            )
+        job_config = bigquery.LoadJobConfig(
+            schema=schema
+        )
 
-            data = []
+        data = []
 
-            for i in range(self.size):
-                line={}
-                for j in range(len(self.fields)):
-                    line[ self.fields[j][0] ] = int(self.array[i,j])
-                data.append( line )
+        for i in range(self.size):
+            line={}
+            for j in range(len(self.fields)):
+                line[ self.fields[j][0] ] = int(self.array[i,j])
+            data.append( line )
 
+        if client:
             load_job = client.load_table_from_json( data,
                 f"sturdy-mechanic-312713.ADataSet.{self.name}",
                 job_config=job_config)
@@ -320,30 +322,30 @@ class MemoryHistory:
             myquery( client, q)
 
     def update_table(self):
-            print("Updating table:", self.name)
-            job_config = bigquery.LoadJobConfig(
-                schema=[
-                    bigquery.SchemaField("id", "INT64"),
-                    bigquery.SchemaField("mid", "INT64"),
-                    bigquery.SchemaField("sample", "INT64"),
-                    bigquery.SchemaField("size", "INT64"),
-                    bigquery.SchemaField("resident", "INT64"),
-                    bigquery.SchemaField("shared", "INT64"),
-                    bigquery.SchemaField("text", "INT64"),
-                    bigquery.SchemaField("data", "INT64"),
-                ],
-            )
+        print("Updating table:", self.name)
+        job_config = bigquery.LoadJobConfig(
+            schema=[
+                bigquery.SchemaField("id", "INT64"),
+                bigquery.SchemaField("mid", "INT64"),
+                bigquery.SchemaField("sample", "INT64"),
+                bigquery.SchemaField("size", "INT64"),
+                bigquery.SchemaField("resident", "INT64"),
+                bigquery.SchemaField("shared", "INT64"),
+                bigquery.SchemaField("text", "INT64"),
+                bigquery.SchemaField("data", "INT64"),
+            ],
+        )
 
-            data = []
+        data = []
 
-            for i in range(self.size):
-                data.append(
-                    {
-                    "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
-                    "sample":int(self.array[i,2]), "size":int(self.array[i,3]),
-                    "resident":int(self.array[i,4]), "shared":int(self.array[i,5]),
-                    "text":int(self.array[i,6]), "data":int(self.array[i,6]) } )
-
+        for i in range(self.size):
+            data.append(
+                {
+                "id":int(self.array[i,0]), "mid":int(self.array[i,1]),
+                "sample":int(self.array[i,2]), "size":int(self.array[i,3]),
+                "resident":int(self.array[i,4]), "shared":int(self.array[i,5]),
+                "text":int(self.array[i,6]), "data":int(self.array[i,6]) } )
+        if client:
             load_job = client.load_table_from_json( data,
                 self.database,
                 job_config=job_config)
