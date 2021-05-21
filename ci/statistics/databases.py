@@ -202,7 +202,7 @@ class MeasurementMetadata(MeasurementBase):
 
         self.json_data = []
 
-        print(self.array)
+        #print(self.array)
         j = 0
         for i in range(self.size):
             print(self.size, i, j)
@@ -299,7 +299,7 @@ class CpuHistory(MeasurementBase):
         self.upload_table()
 
 
-class CpuHistoryStacked:
+class CpuHistoryStacked(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
 
     def __init__(self, size, client, testmode):
@@ -377,24 +377,10 @@ class CpuHistoryStacked:
                 line[self.fields[j][0]] = int(self.array[i, j])
             data.append(line)
 
-        if self.client:
-            load_job = self.client.load_table_from_json(
-                data,
-                f"sturdy-mechanic-312713.ADataSet.{self.name}",
-                job_config=job_config,
-            )
-
-            while load_job.running():
-                time.sleep(0.5)
-                print("Waiting")
-
-            if load_job.errors:
-                print("Error", load_job.error_result)
-                print(load_job.errors)
-                sys.exit(1)
+        self.upload_table()
 
 
-class MemoryHistory:
+class MemoryHistory(MeasurementBase):
     def __init__(self, size, client, testmode):
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
@@ -476,16 +462,5 @@ class MemoryHistory:
                     "data": int(self.array[i, 6]),
                 }
             )
-        if self.client:
-            load_job = self.client.load_table_from_json(
-                data, self.database, job_config=job_config
-            )
 
-            while load_job.running():
-                time.sleep(0.5)
-                print("Waiting")
-
-            if load_job.errors:
-                print("Error", load_job.error_result)
-                print(load_job.errors)
-                sys.exit(1)
+        self.upload_table()

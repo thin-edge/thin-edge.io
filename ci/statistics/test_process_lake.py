@@ -327,6 +327,31 @@ def test_cpu_history_update_table_calls_upload(mocker):
 
     metadata.upload_table.assert_called_once()
 
+def test_cpu_history_stacked_update_table_calls_upload(mocker):
+    metadata = db.CpuHistoryStacked( 3, None, None)
+    mocker.patch.object(metadata, "upload_table")
+
+    metadata.update_table()
+
+    metadata.upload_table.assert_called_once()
+
+def test_metadata_update_table_calls_upload(mocker):
+    metadata = db.MeasurementMetadata( 1, None, None, None)
+    mocker.patch.object(metadata, "upload_table")
+    metadata.array = [[1,2,3,4,5,6]]
+
+    metadata.update_table()
+
+    metadata.upload_table.assert_called_once()
+
+def test_mem_history_update_table_calls_upload(mocker):
+    metadata = db.MemoryHistory( 3, None, None)
+    mocker.patch.object(metadata, "upload_table")
+
+    metadata.update_table()
+
+    metadata.upload_table.assert_called_once()
+
 def test_upload_table_errors(mocker):
     """"""
     lake = None
