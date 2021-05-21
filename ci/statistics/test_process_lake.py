@@ -294,7 +294,7 @@ def test_show_metadata(mocker):
     metadata.postprocess(folders)
     metadata.show()
 
-def test_upload_table(mocker):
+def test_upload_table_metadata(mocker):
     """"""
     lake = None
     client = None
@@ -318,6 +318,14 @@ def test_upload_table(mocker):
     metadata.upload_table()
 
     metadata.client.load_table_from_json.assert_called_once()
+
+def test_cpu_history_update_table_calls_upload(mocker):
+    metadata = db.CpuHistory( 3, None, None)
+    mocker.patch.object(metadata, "upload_table")
+
+    metadata.update_table()
+
+    metadata.upload_table.assert_called_once()
 
 def test_upload_table_errors(mocker):
     """"""

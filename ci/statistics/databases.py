@@ -226,7 +226,7 @@ class MeasurementMetadata(MeasurementBase):
         except:  # google.api_core.exceptions.NotFound:
             pass
 
-class CpuHistory:
+class CpuHistory(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
 
     def __init__(self, size, client, testmode):
@@ -296,19 +296,7 @@ class CpuHistory:
                 }
             )
 
-        if self.client:
-            load_job = self.client.load_table_from_json(
-                data, self.database, job_config=job_config
-            )
-
-            while load_job.running():
-                time.sleep(0.5)
-                print("Waiting")
-
-            if load_job.errors:
-                print("Error", load_job.error_result)
-                print(load_job.errors)
-                sys.exit(1)
+        self.upload_table()
 
 
 class CpuHistoryStacked:
