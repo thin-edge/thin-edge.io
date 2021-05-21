@@ -333,6 +333,8 @@ class CpuHistoryStacked(MeasurementBase):
         ]
         self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
         self.client = client
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+
 
     def insert_line(self, line, idx):
         assert len(line) == len(self.fields)
@@ -367,15 +369,15 @@ class CpuHistoryStacked(MeasurementBase):
         for i in range(len(self.fields)):
             schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
 
-        job_config = bigquery.LoadJobConfig(schema=schema)
+        self.job_config = bigquery.LoadJobConfig(schema=schema)
 
-        data = []
+        self.json_data = []
 
         for i in range(self.size):
             line = {}
             for j in range(len(self.fields)):
                 line[self.fields[j][0]] = int(self.array[i, j])
-            data.append(line)
+            self.json_data.append(line)
 
         self.upload_table()
 

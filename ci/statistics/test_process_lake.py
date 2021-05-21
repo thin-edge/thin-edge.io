@@ -329,6 +329,17 @@ class TestMemoryHistory:
         assert base.job_config != None
         assert base.json_data != None
 
+class TestCpuHistoryStacked:
+    def test_update_table_creates_attributes(self, mocker):
+        base = db.CpuHistoryStacked( 3, None, None)
+        mocker.patch.object(base, "upload_table")
+
+        base.update_table()
+
+        assert base.job_config != None
+        assert base.json_data != None
+        assert base.database != None
+
 class TestCpuHistory:
     def test_update_table_creates_attributes(self, mocker):
         base = db.CpuHistory( 3, None, None)
