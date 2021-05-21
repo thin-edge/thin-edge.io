@@ -269,7 +269,7 @@ class CpuHistory(MeasurementBase):
 
     def update_table(self):
         print("Updating table:", self.name)
-        job_config = bigquery.LoadJobConfig(
+        self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
                 bigquery.SchemaField("mid", "INT64"),
@@ -281,10 +281,10 @@ class CpuHistory(MeasurementBase):
             ],
         )
 
-        data = []
+        self.json_data = []
 
         for i in range(self.size):
-            data.append(
+            self.json_data.append(
                 {
                     "id": int(self.array[i, 0]),
                     "mid": int(self.array[i, 1]),
@@ -434,7 +434,7 @@ class MemoryHistory(MeasurementBase):
 
     def update_table(self):
         print("Updating table:", self.name)
-        job_config = bigquery.LoadJobConfig(
+        self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
                 bigquery.SchemaField("mid", "INT64"),
@@ -447,10 +447,10 @@ class MemoryHistory(MeasurementBase):
             ],
         )
 
-        data = []
+        self.json_data = []
 
         for i in range(self.size):
-            data.append(
+            self.json_data.append(
                 {
                     "id": int(self.array[i, 0]),
                     "mid": int(self.array[i, 1]),

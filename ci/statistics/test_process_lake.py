@@ -319,30 +319,63 @@ def test_upload_table_metadata(mocker):
 
     metadata.client.load_table_from_json.assert_called_once()
 
-def test_cpu_history_update_table_calls_upload(mocker):
-    metadata = db.CpuHistory( 3, None, None)
-    mocker.patch.object(metadata, "upload_table")
+class TestMemoryHistory:
+    def test_update_table_creates_attributes(self, mocker):
+        base = db.MemoryHistory( 3, None, None)
+        mocker.patch.object(base, "upload_table")
 
-    metadata.update_table()
+        base.update_table()
 
-    metadata.upload_table.assert_called_once()
+        assert base.job_config != None
+        assert base.json_data != None
 
-def test_cpu_history_stacked_update_table_calls_upload(mocker):
-    metadata = db.CpuHistoryStacked( 3, None, None)
-    mocker.patch.object(metadata, "upload_table")
+class TestCpuHistory:
+    def test_update_table_creates_attributes(self, mocker):
+        base = db.CpuHistory( 3, None, None)
+        mocker.patch.object(base, "upload_table")
 
-    metadata.update_table()
+        base.update_table()
 
-    metadata.upload_table.assert_called_once()
+        assert base.job_config != None
+        assert base.json_data != None
 
-def test_metadata_update_table_calls_upload(mocker):
-    metadata = db.MeasurementMetadata( 1, None, None, None)
-    mocker.patch.object(metadata, "upload_table")
-    metadata.array = [[1,2,3,4,5,6]]
 
-    metadata.update_table()
+    def test_update_table_calls_upload(self, mocker):
+        base = db.CpuHistory( 3, None, None)
+        mocker.patch.object(base, "upload_table")
 
-    metadata.upload_table.assert_called_once()
+        base.update_table()
+
+        base.upload_table.assert_called_once()
+
+    def test_stacked_update_table_calls_upload(self, mocker):
+        base = db.CpuHistoryStacked( 3, None, None)
+        mocker.patch.object(base, "upload_table")
+
+        base.update_table()
+
+        base.upload_table.assert_called_once()
+
+class TestMetadata:
+    def test_update_table_calls_upload(self, mocker):
+        base = db.MeasurementMetadata( 1, None, None, None)
+        mocker.patch.object(base, "upload_table")
+        base.array = [[1,2,3,4,5,6]]
+
+        base.update_table()
+
+        base.upload_table.assert_called_once()
+
+    def test_update_table_creates_attributes(self, mocker):
+        base = db.MeasurementMetadata( 1, None, None, None)
+        mocker.patch.object(base, "upload_table")
+        base.array = [[1,2,3,4,5,6]]
+
+        base.update_table()
+
+        assert base.job_config != None
+        assert base.json_data != None
+
 
 def test_mem_history_update_table_calls_upload(mocker):
     metadata = db.MemoryHistory( 3, None, None)
