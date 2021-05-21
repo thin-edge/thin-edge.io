@@ -197,8 +197,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_no_seperator() {
-        let payload: Vec<u8> = "123456789".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -208,8 +208,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_more_seperators() {
-        let payload: Vec<u8> = "123456789:98.6:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:98.6:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -219,8 +219,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_value() {
-        let payload: Vec<u8> = "123456789:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -230,8 +230,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_timestamp() {
-        let payload: Vec<u8> = "abc:98.6".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"abc:98.6";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,

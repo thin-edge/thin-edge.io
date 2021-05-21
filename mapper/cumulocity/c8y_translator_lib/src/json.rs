@@ -15,6 +15,7 @@
 
 use crate::serializer;
 use chrono::prelude::*;
+use clock::{Clock, WallClock};
 use thin_edge_json::json::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -28,7 +29,7 @@ pub enum CumulocityJsonError {
 
 /// Converts from thin-edge Json to c8y_json
 pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, CumulocityJsonError> {
-    let timestamp = thin_edge_json::measurement::current_timestamp();
+    let timestamp = WallClock.now();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
     Ok(c8y_vec)
 }

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 chrono = "0.4"
 thin_edge_json = {path = "../../thin_edge_json"}
+clock = {path = "../../../common/clock" }
 thiserror = "1.0"
 
 [dev-dependencies]
