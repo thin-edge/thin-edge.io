@@ -48,80 +48,80 @@ def get_database(style: str):
     return client, dbo, integer, conn
 
 
-def myquery(client, query, conn, style):
-
-    logging.info(query)
-
-    if style == "ms":
-        client.execute(query)
-        conn.commit()
-
-    elif style == "google":
-
-        query_job = client.query(query)
-        if query_job.errors:
-            logging.error("Error", query_job.error_result)
-            sys.exit(1)
-        time.sleep(0.3)
-    elif style == "none":
-        pass
-    else:
-        sys.exit(1)
-
-
-def get_sql_create_cpu_table(dbo, name, integer):
-    create_cpu = f"""
-    CREATE TABLE {dbo}.{name} (
-    id {integer},
-    mid {integer},
-    sample {integer},
-    utime                    {integer},
-    stime                    {integer},
-    cutime                   {integer},
-    cstime                   {integer}
-    );
-    """
+#def myquery(client, query, conn, style):
+#
+#    logging.info(query)
+#
+#    if style == "ms":
+#        client.execute(query)
+#        conn.commit()
+#
+#    elif style == "google":
+#
+#        query_job = client.query(query)
+#        if query_job.errors:
+#            logging.error("Error", query_job.error_result)
+#            sys.exit(1)
+#        time.sleep(0.3)
+#    elif style == "none":
+#        pass
+#    else:
+#        sys.exit(1)
 
 
-def get_sql_create_mem_table(dbo, name, integer):
-
-    create_mem = f"""
-    CREATE TABLE {dbo}.{name} (
-    id {integer},
-    mid {integer},
-    sample {integer},
-    size {integer},
-    resident {integer},
-    shared {integer},
-    text {integer},
-    data {integer}
-    );
-    """
+# def get_sql_create_cpu_table(dbo, name, integer):
+#     create_cpu = f"""
+#     CREATE TABLE {dbo}.{name} (
+#     id {integer},
+#     mid {integer},
+#     sample {integer},
+#     utime                    {integer},
+#     stime                    {integer},
+#     cutime                   {integer},
+#     cstime                   {integer}
+#     );
+#     """
 
 
-def get_sql_create_mem_table(dbo, name, integer):
-    create_cpu_hist = f"""
-    CREATE TABLE {dbo}.{name} (
-    id {integer},
-    last                    {integer},
-    old                     {integer},
-    older                   {integer},
-    evenolder                   {integer},
-    evenmovreolder                   {integer}
-    );
-    """
+# def get_sql_create_mem_table(dbo, name, integer):
+
+#     create_mem = f"""
+#     CREATE TABLE {dbo}.{name} (
+#     id {integer},
+#     mid {integer},
+#     sample {integer},
+#     size {integer},
+#     resident {integer},
+#     shared {integer},
+#     text {integer},
+#     data {integer}
+#     );
+#     """
 
 
-def get_sql_create_mem_table(dbo, name, client):
-    myquery(client, f"drop table {dbo}.{cpu_table}")
+# def get_sql_create_mem_table(dbo, name, integer):
+#     create_cpu_hist = f"""
+#     CREATE TABLE {dbo}.{name} (
+#     id {integer},
+#     last                    {integer},
+#     old                     {integer},
+#     older                   {integer},
+#     evenolder                   {integer},
+#     evenmovreolder                   {integer}
+#     );
+#     """
 
 
-def get_sql_create_mem_table(dbo, name, client):
-    myquery(client, f"drop table {dbo}.{mem_table}")
+# def get_sql_create_mem_table(dbo, name, client):
+#     myquery(client, f"drop table {dbo}.{cpu_table}")
 
 
-def get_sql_create_mem_table(dbo, name, client):
-    myquery(client, f"drop table {dbo}.{cpu_hist_table}")
+# def get_sql_create_mem_table(dbo, name, client):
+#     myquery(client, f"drop table {dbo}.{mem_table}")
+
+
+# def get_sql_create_mem_table(dbo, name, client):
+#     myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
 def scrap_measurement_metadata(file):
     with open(file) as content:
