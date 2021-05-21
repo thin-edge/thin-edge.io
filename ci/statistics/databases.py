@@ -222,7 +222,7 @@ class MeasurementMetadata():
             if load_job.errors:
                 print("Error", load_job.error_result)
                 print(load_job.errors)
-                sys.exit(1)
+                raise SystemError
 
     def delete_table(self):
         try:

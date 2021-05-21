@@ -14,6 +14,7 @@ import numpy as np
 import os
 from os.path import expanduser
 from pathlib import Path
+import pytest
 
 
 import process_lake as pl
@@ -317,6 +318,60 @@ def test_upload_table(mocker):
     metadata.upload_table()
 
     metadata.client.load_table_from_json.assert_called_once()
+
+def test_upload_table_errors(mocker):
+    """"""
+    lake = None
+    client = None
+    testmode = None
+    metadata = db.MeasurementMetadata(
+        3, client, testmode, lake)
+
+    metadata.json_data = {'nope':'nope'}
+    metadata.job_config = None
+
+    # With this we inject a mock chain
+    # load_table_from_json is called, it returns a load_job
+    # load_job.running() returns False
+    load_mock = mocker.MagicMock( name='load_job')
+    load_mock.running = mocker.MagicMock( name='running', return_value = False)
+
+    load_mock.errors = True
+    load_mock.error_results = "Error results"
+
+    load_table_mock = mocker.MagicMock(name='load_table_from_json', return_value = load_mock)
+    mocker.patch.object(metadata, "client")
+    metadata.client.load_table_from_json = load_table_mock
+
+    with pytest.raises(SystemError):
+        metadata.upload_table()
+
+def test_upload_table_delayed(mocker):
+    """"""
+    lake = None
+    client = None
+    testmode = None
+    metadata = db.MeasurementMetadata(
+        3, client, testmode, lake)
+
+    metadata.json_data = {'nope':'nope'}
+    metadata.job_config = None
+
+    # With this we inject a mock chain
+    # load_table_from_json is called, it returns a load_job
+    # load_job.running() returns False
+    load_mock = mocker.MagicMock( name='load_job')
+    load_mock.running = mocker.MagicMock(
+        name='running', side_effect=[True, True, True, False])
+
+    load_mock.errors = False
+
+    load_table_mock = mocker.MagicMock(name='load_table_from_json', return_value = load_mock)
+    mocker.patch.object(metadata, "client")
+    metadata.client.load_table_from_json = load_table_mock
+
+    metadata.upload_table()
+    assert load_mock.running.call_count == 4
 
 def test_upload_metadata_b(mocker):
     """"""
