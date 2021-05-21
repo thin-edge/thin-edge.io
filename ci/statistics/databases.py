@@ -60,7 +60,7 @@ def myquery(client, query, conn, style):
 
         query_job = client.query(query)
         if query_job.errors:
-            print("Error", query_job.error_result)
+            logging.error("Error", query_job.error_result)
             sys.exit(1)
         time.sleep(0.3)
     elif style == "none":
@@ -147,11 +147,11 @@ class MeasurementBase:
 
             while load_job.running():
                 time.sleep(0.5)
-                print("Waiting")
+                logging.info("Waiting")
 
             if load_job.errors:
-                print("Error", load_job.error_result)
-                print(load_job.errors)
+                logging.error(f"Error {load_job.error_result}")
+                logging.error(load_job.errors)
                 raise SystemError
 
 class MeasurementMetadata(MeasurementBase):
@@ -183,12 +183,13 @@ class MeasurementMetadata(MeasurementBase):
         return self.array
 
     def show(self):
+        logging.info(f"Content of table {self.database}")
         for row in self.array:
-            print(row)
+            logging.info(row)
 
     def update_table(self):
 
-        print("Updating table:", self.name)
+        logging.info("Updating table:" + self.name)
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
@@ -205,7 +206,7 @@ class MeasurementMetadata(MeasurementBase):
         #print(self.array)
         j = 0
         for i in range(self.size):
-            print(self.size, i, j)
+            #print(self.size, i, j)
             self.json_data.append(
                 {
                     "id": self.array[i][0],
@@ -268,7 +269,7 @@ class CpuHistory(MeasurementBase):
             pass
 
     def update_table(self):
-        print("Updating table:", self.name)
+        logging.info("Updating table:" + self.name)
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
@@ -364,7 +365,7 @@ class CpuHistoryStacked(MeasurementBase):
             pass
 
     def update_table(self):
-        print("Updating table:", self.name)
+        logging.info("Updating table:" + self.name)
         schema = []
         for i in range(len(self.fields)):
             schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
@@ -435,7 +436,7 @@ class MemoryHistory(MeasurementBase):
             myquery(self.client, q)
 
     def update_table(self):
-        print("Updating table:", self.name)
+        logging.info("Updating table:" + self.name)
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),

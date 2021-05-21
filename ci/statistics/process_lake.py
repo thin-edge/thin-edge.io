@@ -197,7 +197,7 @@ def get_relevant_measurement_folders(lake, testdata):
     processing_range = len(relevant_folders)
     if processing_range ==0:
         raise SystemError("No reports found")
-    print(relevant_folders[-processing_range])
+    logging.info(relevant_folders[-processing_range])
 
     assert relevant_folders[-processing_range] == earliest_valid
 
@@ -205,8 +205,8 @@ def get_relevant_measurement_folders(lake, testdata):
 
     logging.info("Procesing Build Numbers:")
     for m in relevant_folders[-processing_range:]:
-        print(m.split("_")[1], end=" ")
-    print("")
+        logging.info(m.split("_")[1])
+    logging.info("")
 
     return relevant_folders, processing_range
 
