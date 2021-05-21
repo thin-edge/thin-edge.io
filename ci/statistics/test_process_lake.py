@@ -357,6 +357,8 @@ def test_upload_table_delayed(mocker):
     metadata.json_data = {'nope':'nope'}
     metadata.job_config = None
 
+    mocker.patch('time.sleep')
+
     # With this we inject a mock chain
     # load_table_from_json is called, it returns a load_job
     # load_job.running() returns False

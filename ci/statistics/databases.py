@@ -136,11 +136,25 @@ def scrap_measurement_metadata(file):
 
 class MeasurementBase:
 
-    @staticmethod
-    def upload_table():
-        pass
+    def upload_table(self):
 
-class MeasurementMetadata():
+        if self.client:
+            load_job = self.client.load_table_from_json(
+                self.json_data,
+                self.database,
+                job_config=self.job_config,
+            )
+
+            while load_job.running():
+                time.sleep(0.5)
+                print("Waiting")
+
+            if load_job.errors:
+                print("Error", load_job.error_result)
+                print(load_job.errors)
+                raise SystemError
+
+class MeasurementMetadata(MeasurementBase):
     def __init__(self, size, client, testmode, lake):
         self.array = []
         self.client = client
@@ -205,24 +219,6 @@ class MeasurementMetadata():
             j+=1
 
         self.upload_table()
-
-    def upload_table(self):
-
-        if self.client:
-            load_job = self.client.load_table_from_json(
-                self.json_data,
-                self.database,
-                job_config=self.job_config,
-            )
-
-            while load_job.running():
-                time.sleep(0.5)
-                print("Waiting")
-
-            if load_job.errors:
-                print("Error", load_job.error_result)
-                print(load_job.errors)
-                raise SystemError
 
     def delete_table(self):
         try:
