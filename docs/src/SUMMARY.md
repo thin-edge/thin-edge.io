@@ -16,6 +16,7 @@
     - [How to connect a cloud end-point](./howto-guides/004_connect.md)
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
     - [How to test connection to cloud](./howto-guides/007_test_connectiom.md)
+    - [How to configure mqtt port](./howto-guides/008_config_mqtt_port.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)
