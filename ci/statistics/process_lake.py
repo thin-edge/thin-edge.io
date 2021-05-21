@@ -266,6 +266,9 @@ def generate(style, lake, testdata):
     cpu_array.delete_table()
     cpu_array.update_table()
 
+    cpu_array_long.delete_table()
+    cpu_array_long.update_table()
+
     mem_array.delete_table()
     mem_array.update_table()
 

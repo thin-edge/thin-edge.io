@@ -258,7 +258,7 @@ class CpuHistory(MeasurementBase):
         ax.plot(self.array[:, 5], "-", label="cutime")
         ax.plot(self.array[:, 6], "-", label="cstime")
         plt.legend()
-        plt.title("CPU History")
+        plt.title("CPU History  " + self.name)
 
         plt.show()
 
@@ -354,7 +354,7 @@ class CpuHistoryStacked(MeasurementBase):
             ax.plot(self.array[:, i], style, label=self.fields[i][0])
 
         plt.legend()
-        plt.title("CPU History Stacked")
+        plt.title("CPU History Stacked  " + self.name)
 
         plt.show()
 
@@ -414,7 +414,7 @@ class MemoryHistory(MeasurementBase):
         ax.plot(self.array[:, 7], style, label="data")
 
         plt.legend()
-        plt.title("Memory History")
+        plt.title("Memory History  " + self.name)
 
         plt.show()
 
