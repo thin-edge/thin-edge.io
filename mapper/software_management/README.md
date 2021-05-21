@@ -43,6 +43,10 @@ Responsibilities:
 Out of scope:
 * Manage the dependencies
 
+Open questions:
+* How to translate a *desired software list* into a sequence of operations?
+ 
+
 ### DM-Agent database
 
 Responsibilities:

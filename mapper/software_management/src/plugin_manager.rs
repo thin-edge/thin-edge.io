@@ -1,5 +1,6 @@
 use crate::plugin::*;
 
+use crate::software::{SoftwareError, SoftwareModule};
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -18,6 +19,15 @@ pub trait Plugins {
 
     /// Return the plugin associated with the file extension of the module name, if any.
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin>;
+
+    fn plugin(&self, module: &SoftwareModule) -> Result<&Self::Plugin, SoftwareError> {
+        let software_type= &module.software_type;
+        let module_plugin = self
+            .by_software_type(software_type)
+            .ok_or_else(|| SoftwareError::UnknownSoftwareType { software_type: software_type.into() })?;
+
+        Ok(module_plugin)
+    }
 }
 
 /// A set of plugins materialized by executable files stored in a defined location.
@@ -92,5 +102,26 @@ impl ExternalPlugins {
         }
 
         Ok(())
+    }
+}
+
+/// The set of all installed plugins can be used as a plugin too.
+impl Plugin for ExternalPlugins {
+    type SoftwareList = ();
+
+    fn list(&self) -> Result<Self::SoftwareList, SoftwareError> {
+        unimplemented!()
+    }
+
+    fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError> {
+        self.plugin(module)?.version(module)
+    }
+
+    fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+        self.plugin(module)?.install(module)
+    }
+
+    fn uninstall(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+        self.plugin(module)?.uninstall(module)
     }
 }

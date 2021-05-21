@@ -9,6 +9,12 @@ pub trait Plugin {
     fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
     fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
     fn uninstall(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
+
+    fn run(operation: SoftwareOperation) {
+        match operation {
+            _ => unimplemented!()
+        }
+    }
 }
 
 pub struct ExternalPluginCommand {

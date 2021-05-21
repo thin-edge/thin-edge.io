@@ -1,10 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SoftwareList {
-    pub modules: Vec<SoftwareModule>,
-}
-
 pub type SoftwareType = String;
 pub type SoftwareName = String;
 pub type SoftwareVersion = String;
@@ -19,14 +14,41 @@ pub struct SoftwareModule {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SoftwareOperation {
-    SoftwareUpdate { updates: Vec<SoftwareUpdate> },
-    SoftwareList { module_type: Option<SoftwareType> },
+    // A request for the current software list
+    CurrentSoftwareList,
+
+    // A sequence of updates to be applied
+    SoftwareUpdates { updates: Vec<SoftwareUpdate> },
+
+    // The desired software list
+    DesiredSoftwareList { modules: Vec<SoftwareModule> },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SoftwareUpdate {
     Install { module: SoftwareModule },
     UnInstall { module: SoftwareModule },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum SoftwareOperationStatus {
+    SoftwareUpdates { updates: Vec<SoftwareUpdateStatus> },
+    DesiredSoftwareList { updates: Vec<SoftwareUpdateStatus> },
+    CurrentSoftwareList { modules: Vec<SoftwareModule> },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SoftwareUpdateStatus {
+    update: SoftwareUpdate,
+    status: UpdateStatus,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum UpdateStatus {
+    Scheduled,
+    Success,
+    Error { reason: SoftwareError },
+    Cancelled,
 }
 
 #[derive(thiserror::Error, Debug, Deserialize, Serialize)]

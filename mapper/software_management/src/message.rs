@@ -10,11 +10,5 @@ pub struct SoftwareRequest {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SoftwareResponse {
     pub id: String,
-    pub status: SoftwareStatus,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub enum SoftwareStatus {
-    SoftwareError { reason: String },
-    SoftwareList(SoftwareList),
+    pub status: SoftwareOperationStatus,
 }
