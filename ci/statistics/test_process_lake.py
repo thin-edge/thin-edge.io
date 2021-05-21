@@ -264,6 +264,8 @@ def test_postprocess_vals_cpu_hist():
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
+    cpu_array.postprocess(relevant_measurement_folders)
+
     pl.postprocess_vals(
         data_length,
         relevant_measurement_folders,
@@ -309,7 +311,7 @@ def test_postprocess_vals_cpu_hist():
 
     exp = np.array(data, dtype=np.int32)
 
-    extensive_check = True
+    extensive_check = False
     if extensive_check:
         print("Expect")
         print(exp)
