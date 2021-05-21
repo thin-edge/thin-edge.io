@@ -133,10 +133,10 @@ def test_postprocess_vals_cpu():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory("name",
+    cpu_array = db.CpuHistory("name", lake,
         len(relevant_measurement_folders) * data_length, client, testmode
     )
-    cpu_array_long = db.CpuHistory("name",
+    cpu_array_long = db.CpuHistory("name", lake,
         len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
@@ -153,6 +153,8 @@ def test_postprocess_vals_cpu():
         cpu_hist_array,
         lake
     )
+
+    cpu_array.postprocess(relevant_measurement_folders)
 
     # programmatically reproduce the data set
     data = []
@@ -192,10 +194,10 @@ def test_postprocess_vals_mem():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory("name",
+    cpu_array = db.CpuHistory("name", lake,
         len(relevant_measurement_folders) * data_length, client, testmode
     )
-    cpu_array_long = db.CpuHistory("name",
+    cpu_array_long = db.CpuHistory("name", lake,
         len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
@@ -251,10 +253,10 @@ def test_postprocess_vals_cpu_hist():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory( "name",
+    cpu_array = db.CpuHistory( "name", lake,
         len(relevant_measurement_folders) * data_length, client, testmode
     )
-    cpu_array_long = db.CpuHistory( "name",
+    cpu_array_long = db.CpuHistory( "name", lake,
         len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
@@ -307,7 +309,7 @@ def test_postprocess_vals_cpu_hist():
 
     exp = np.array(data, dtype=np.int32)
 
-    extensive_check = False
+    extensive_check = True
     if extensive_check:
         print("Expect")
         print(exp)
@@ -430,7 +432,8 @@ class TestCpuHistoryStacked:
 
 class TestCpuHistory:
     def test_update_table_creates_attributes(self, mocker):
-        base = db.CpuHistory("name", 3, None, None)
+        lake = os.path.expanduser("~/DataLakeTest")
+        base = db.CpuHistory("name", lake, 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -440,12 +443,28 @@ class TestCpuHistory:
 
 
     def test_update_table_calls_upload(self, mocker):
-        base = db.CpuHistory("name", 3, None, None)
+        lake = os.path.expanduser("~/DataLakeTest")
+        base = db.CpuHistory("name", lake, 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
 
         base.upload_table.assert_called_once()
+
+    def test_postprocess(self, mocker):
+        lake = os.path.expanduser("~/DataLakeTest")
+        base = db.CpuHistory("name", lake, 3, None, None)
+        mock = mocker.patch.object(base, "scrap_cpu_stats")
+        folders = [
+            "results_1_unpack",
+            "results_2_unpack",
+            "results_4_unpack",
+        ]
+        base.postprocess(folders)
+
+        #mock.assert_called_once()
+        assert mock.call_count == 3
+        #mock.assert_called_with
 
 
 class TestCpuHistoryStacked:
