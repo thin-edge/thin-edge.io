@@ -230,15 +230,15 @@ class MeasurementMetadata(MeasurementBase):
 class CpuHistory(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
 
-    def __init__(self, size, client, testmode):
+    def __init__(self, name, size, client, testmode):
         self.array = np.zeros((size, 7), dtype=np.int32)
         self.size = size
         self.client = client
 
         if testmode:
-            self.name = "ci_cpu_measurement_tedge_mapper_test"
+            self.name = name +"_test"
         else:
-            self.name = "ci_cpu_measurement_tedge_mapper"
+            self.name = name
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 

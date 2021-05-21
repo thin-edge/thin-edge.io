@@ -64,30 +64,34 @@ def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
 
 def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
 
-    with open(thefile) as thestats:
-        lines = thestats.readlines()
-        sample = 0
+    try:
+        with open(thefile) as thestats:
+            lines = thestats.readlines()
+            sample = 0
 
-        for line in lines:
-            entries = line.split()
-            if len(entries) == 52 and entries[1] == "(tedge_mapper)":
-                ut = int(entries[14 - 1])
-                st = int(entries[15 - 1])
-                ct = int(entries[16 - 1])
-                cs = int(entries[17 - 1])
-                # print(idx, ut,st,ct,cs)
+            for line in lines:
+                entries = line.split()
+                if len(entries) == 52 and entries[1] == "(tedge_mapper)":
+                    ut = int(entries[14 - 1])
+                    st = int(entries[15 - 1])
+                    ct = int(entries[16 - 1])
+                    cs = int(entries[17 - 1])
+                    # print(idx, ut,st,ct,cs)
 
-                arr.insert_line(
-                    idx=cpuidx,
-                    mid=mesaurement_index,
-                    sample=sample,
-                    utime=ut,
-                    stime=st,
-                    cutime=ct,
-                    cstime=cs,
-                )
-                sample += 1
-                cpuidx += 1
+                    arr.insert_line(
+                        idx=cpuidx,
+                        mid=mesaurement_index,
+                        sample=sample,
+                        utime=ut,
+                        stime=st,
+                        cutime=ct,
+                        cstime=cs,
+                    )
+                    sample += 1
+                    cpuidx += 1
+    except FileNotFoundError:
+        return cpuidx
+
 
     logging.debug(f"Read {sample} cpu stats")
     missing = data_length - sample
@@ -111,6 +115,7 @@ def postprocess_vals(
     data_length,
     measurement_folders,
     cpu_array,
+    cpu_array_long,
     mem_array,
     cpu_hist_array,
     lake
@@ -121,12 +126,19 @@ def postprocess_vals(
     # overall row index for the memory table
     memidx = 0
 
+    cpuidxl = 0
+
     for folder in measurement_folders:
         mesaurement_index = int(folder.split("_")[1].split(".")[0])
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
         cpuidx = scrap_cpu(
             data_length, statsfile, mesaurement_index, cpuidx, cpu_array
+        )
+
+        statsfile_long = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics_long/Output/linux/stat_mapper_stdout.out"
+        cpuidxl = scrap_cpu(
+            data_length *2 , statsfile_long, mesaurement_index, cpuidxl, cpu_array_long
         )
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
@@ -225,7 +237,8 @@ def generate(style, lake, testdata):
     logging.info("Postprocessing")
 
     data_length = 60
-    cpu_array = db.CpuHistory(processing_range * data_length, client, testdata)
+    cpu_array = db.CpuHistory( "ci_cpu_measurement_tedge_mapper", processing_range * data_length, client, testdata)
+    cpu_array_long = db.CpuHistory( "ci_cpu_measurement_tedge_mapper_long", processing_range * data_length *2 , client, testdata)
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
@@ -234,13 +247,16 @@ def generate(style, lake, testdata):
         data_length,
         relevant_folders,
         cpu_array,
+        cpu_array_long,
         mem_array,
         cpu_hist_array,
         lake
     )
+
     measurements.postprocess(relevant_folders)
 
     cpu_array.show()
+    cpu_array_long.show()
     mem_array.show()
     cpu_hist_array.show()
     measurements.show()

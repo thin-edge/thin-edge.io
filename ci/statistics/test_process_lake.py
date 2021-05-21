@@ -133,8 +133,11 @@ def test_postprocess_vals_cpu():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory(
+    cpu_array = db.CpuHistory("name",
         len(relevant_measurement_folders) * data_length, client, testmode
+    )
+    cpu_array_long = db.CpuHistory("name",
+        len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
@@ -145,6 +148,7 @@ def test_postprocess_vals_cpu():
         data_length,
         relevant_measurement_folders,
         cpu_array,
+        cpu_array_long,
         mem_array,
         cpu_hist_array,
         lake
@@ -188,8 +192,11 @@ def test_postprocess_vals_mem():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory(
+    cpu_array = db.CpuHistory("name",
         len(relevant_measurement_folders) * data_length, client, testmode
+    )
+    cpu_array_long = db.CpuHistory("name",
+        len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
@@ -200,6 +207,7 @@ def test_postprocess_vals_mem():
         data_length,
         relevant_measurement_folders,
         cpu_array,
+        cpu_array_long,
         mem_array,
         cpu_hist_array,
         lake
@@ -243,8 +251,11 @@ def test_postprocess_vals_cpu_hist():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory(
+    cpu_array = db.CpuHistory( "name",
         len(relevant_measurement_folders) * data_length, client, testmode
+    )
+    cpu_array_long = db.CpuHistory( "name",
+        len(relevant_measurement_folders) * data_length *2 , client, testmode
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
@@ -255,6 +266,7 @@ def test_postprocess_vals_cpu_hist():
         data_length,
         relevant_measurement_folders,
         cpu_array,
+        cpu_array_long,
         mem_array,
         cpu_hist_array,
         lake
@@ -396,6 +408,15 @@ class TestMemoryHistory:
         assert base.job_config != None
         assert base.json_data != None
 
+
+    def test_update_table_calls_upload(self, mocker):
+        metadata = db.MemoryHistory( 3, None, None)
+        mocker.patch.object(metadata, "upload_table")
+
+        metadata.update_table()
+
+        metadata.upload_table.assert_called_once()
+
 class TestCpuHistoryStacked:
     def test_update_table_creates_attributes(self, mocker):
         base = db.CpuHistoryStacked( 3, None, None)
@@ -409,7 +430,7 @@ class TestCpuHistoryStacked:
 
 class TestCpuHistory:
     def test_update_table_creates_attributes(self, mocker):
-        base = db.CpuHistory( 3, None, None)
+        base = db.CpuHistory("name", 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -419,13 +440,15 @@ class TestCpuHistory:
 
 
     def test_update_table_calls_upload(self, mocker):
-        base = db.CpuHistory( 3, None, None)
+        base = db.CpuHistory("name", 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
 
         base.upload_table.assert_called_once()
 
+
+class TestCpuHistoryStacked:
     def test_stacked_update_table_calls_upload(self, mocker):
         base = db.CpuHistoryStacked( 3, None, None)
         mocker.patch.object(base, "upload_table")
@@ -453,15 +476,6 @@ class TestMetadata:
 
         assert base.job_config != None
         assert base.json_data != None
-
-
-def test_mem_history_update_table_calls_upload(mocker):
-    metadata = db.MemoryHistory( 3, None, None)
-    mocker.patch.object(metadata, "upload_table")
-
-    metadata.update_table()
-
-    metadata.upload_table.assert_called_once()
 
 def test_upload_table_errors(mocker):
     """"""
