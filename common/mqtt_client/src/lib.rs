@@ -480,7 +480,7 @@ impl Message {
     {
         Message {
             topic: topic.clone(),
-            payload: payload.into(),
+            payload: Message::trim_if_null_terminated(&mut payload.into()).to_vec(),
             qos: QoS::AtLeastOnce,
             pkid: 0,
             retain: false,
@@ -489,6 +489,13 @@ impl Message {
 
     pub fn qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
+    }
+
+    fn trim_if_null_terminated(payload: &mut Vec<u8>) -> &mut Vec<u8> {
+        if !payload.is_empty() && payload[payload.len() - 1].eq(&0) {
+            payload.truncate(payload.len() - 1);
+        }
+        payload
     }
 }
 
@@ -685,5 +692,56 @@ mod tests {
         assert!(TopicFilter::new("").is_err());
         assert!(TopicFilter::new("/a/#/b").is_err());
         assert!(TopicFilter::new("/a/#/+").is_err());
+    }
+
+    #[test]
+    fn check_null_terminated_messages() {
+        let mut payload1 = vec![155, 156, 157, 158, 0];
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload1).to_vec(),
+            vec![155, 156, 157, 158]
+        );
+
+        let payload2 = "ab\u{0}";
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload2.as_bytes().to_vec()).to_vec(),
+            "ab".as_bytes().to_vec()
+        );
+
+        let payload3 = "\u{0}";
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload3.as_bytes().to_vec()).to_vec(),
+            "".as_bytes().to_vec()
+        );
+    }
+
+    #[test]
+    fn check_no_null_terminated_messages() {
+        let mut payload1 = vec![155, 156, 157, 158];
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload1).to_vec(),
+            vec![155, 156, 157, 158]
+        );
+
+        let payload2 = "ab";
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload2.as_bytes().to_vec()).to_vec(),
+            "ab".as_bytes().to_vec()
+        );
+
+        let payload3 = "";
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload3.as_bytes().to_vec()).to_vec(),
+            "".as_bytes().to_vec()
+        );
+    }
+
+    #[test]
+    fn check_empty_messages() {
+        let payload = "";
+        assert_eq!(
+            Message::trim_if_null_terminated(&mut payload.as_bytes().to_vec()).to_vec(),
+            "".as_bytes().to_vec()
+        );
     }
 }
