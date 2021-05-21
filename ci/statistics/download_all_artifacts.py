@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # Download Artifacts
 #
 # https://docs.github.com/en/rest/reference/actions#download-an-artifact

@@ -36,7 +36,7 @@ def test_get_measurement_foders():
     assert ret == exp
 
 
-def test_get_relevant_measurement_folders():
+def test_get_relevant_measurement_folders_real():
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
@@ -46,6 +46,66 @@ def test_get_relevant_measurement_folders():
 
     assert ret == exp
     assert valid == 3
+
+def test_get_relevant_measurement_folders_mocked(mocker):
+
+    exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
+
+    mock = mocker.patch("process_lake.get_measurement_folders")
+    mock.return_value = ["results_0_unpack", "results_1_unpack", "results_2_unpack", "results_4_unpack"]
+
+    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+
+    assert ret == exp
+    assert valid == 3
+
+def test_get_relevant_measurement_folders_mocked_5(mocker):
+
+    exp = ["results_1_unpack", "results_2_unpack",
+    "results_4_unpack", "results_5_unpack"]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
+
+    mock = mocker.patch("process_lake.get_measurement_folders")
+    mock.return_value = ["results_0_unpack",
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+        "results_5_unpack",
+        ]
+
+    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+
+    assert ret == exp
+    assert valid == 4
+
+def test_get_relevant_measurement_folders_mocked_1(mocker):
+
+    exp = ["results_1_unpack"]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
+
+    mock = mocker.patch("process_lake.get_measurement_folders")
+    mock.return_value = ["results_1_unpack"]
+
+    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+
+    assert ret == exp
+    assert valid == 1
+
+def test_get_relevant_measurement_folders_mocked_0(mocker):
+
+    exp = ["results_0_unpack"]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
+
+    mock = mocker.patch("process_lake.get_measurement_folders")
+    mock.return_value = ["results_0_unpack"]
+
+    with pytest.raises(SystemError):
+        pl.get_relevant_measurement_folders(lake, testdata)
 
 def test_scrap_measurement_metadata():
     lake = os.path.expanduser("~/DataLakeTest")

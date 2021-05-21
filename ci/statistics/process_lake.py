@@ -181,14 +181,22 @@ def get_relevant_measurement_folders(lake, testdata):
 
     if testdata:
         earliest_valid = "results_1_unpack"
-        processing_range = 3  # newest one 145
     else:
-        # last earliest valid is 'results_107_unpack'
-        processing_range = 25  # newest one 185
+        # last earliest valid test run is 'results_107_unpack'
         earliest_valid = "results_107_unpack"
 
-    relevant_folders = get_measurement_folders(lake)[-processing_range:]
+    folders = get_measurement_folders(lake)
+    relevant_folders = []
+    valid = False
+    for folder in folders:
+        if folder==earliest_valid:
+            valid = True
+        if valid:
+            relevant_folders.append(folder)
 
+    processing_range = len(relevant_folders)
+    if processing_range ==0:
+        raise SystemError("No reports found")
     print(relevant_folders[-processing_range])
 
     assert relevant_folders[-processing_range] == earliest_valid
