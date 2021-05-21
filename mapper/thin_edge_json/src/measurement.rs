@@ -8,7 +8,7 @@ use chrono::DateTime;
 /// ```
 /// use thin_edge_json::measurement::*;
 /// use thin_edge_json::group::MeasurementGrouper;
-/// use time::{Clock, WallClock};
+/// use clock::{Clock, WallClock};
 ///
 /// # fn main() -> Result<(), anyhow::Error> {
 ///

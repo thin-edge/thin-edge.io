@@ -5,7 +5,7 @@ mod monitor;
 
 use tracing::{debug_span, info, Instrument};
 
-use crate::monitor::DeviceMonitor;
+use crate::monitor::{DeviceMonitor, DeviceMonitorConfig};
 
 const APP_NAME: &str = "tedge-dm-agent";
 const DEFAULT_LOG_LEVEL: &str = "warn";
@@ -23,7 +23,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     info!("{} starting!", APP_NAME);
-    DeviceMonitor::run()
+
+    let device_monitor_config = DeviceMonitorConfig::default();
+    let device_monitor = DeviceMonitor::new(device_monitor_config);
+    device_monitor
+        .run()
         .instrument(debug_span!(APP_NAME))
         .await?;
 

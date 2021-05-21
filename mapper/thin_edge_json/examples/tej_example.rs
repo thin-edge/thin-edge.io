@@ -1,7 +1,7 @@
+use clock::{Clock, WallClock};
 use thin_edge_json::group::MeasurementGrouper;
 use thin_edge_json::measurement::*;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
-use time::{Clock, WallClock};
 
 fn tej_build_serialize() -> anyhow::Result<()> {
     //Produce the TEJ from raw data

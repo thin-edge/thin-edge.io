@@ -4,7 +4,7 @@ members = [
     "common/certificate",
     "common/flockfile",
     "common/mqtt_client",
-    "common/time",
+    "common/clock",
     "tedge",
     "tedge_config",
     "mapper/cumulocity/c8y_translator_lib",
