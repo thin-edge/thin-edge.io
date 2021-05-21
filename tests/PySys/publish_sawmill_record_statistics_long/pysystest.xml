@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Publish sawmill and record process statistics</title>
+	<title>Publish sawmill and record process statistics long version</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PublishSawmillRecordStatistics" module="run"/>
+	<class name="PublishSawmillRecordStatisticsLong" module="run"/>
   </data>
   <traceability>
 	<requirements>

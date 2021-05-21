@@ -5,7 +5,7 @@ sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
-Publish sawmill and record process statistics
+Publish sawmill and record process statistics long version
 
 Given a configured system with configured certificate
 When we derive from EnvironmentC8y
@@ -20,7 +20,7 @@ TODO : Add validation procedure
 """
 
 
-class PublishSawmillRecordStatistics(EnvironmentC8y):
+class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
@@ -111,7 +111,8 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
         pub = self.startProcess(
             command=cmd,
             # run for one minute
-            arguments=["100", "100", "6", "sawmill"],
+            # 20ms wait time, height 100, 60 repetitions -> 120s
+            arguments=["20", "100", "60", "sawmill"],
             stdouterr="stdout_sawmill",
         )
 
