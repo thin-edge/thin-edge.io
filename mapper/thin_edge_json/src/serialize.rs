@@ -7,6 +7,8 @@ pub struct ThinEdgeJsonSerializer {
     buffer: Vec<u8>,
     is_within_group: bool,
     needs_separator: bool,
+    default_timestamp: Option<DateTime<FixedOffset>>,
+    timestamp_present: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -17,6 +19,7 @@ pub enum ThinEdgeJsonSerializationError {
     #[error(transparent)]
     MeasurementCollectorError(#[from] MeasurementStreamError),
 }
+
 #[derive(thiserror::Error, Debug)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
@@ -34,10 +37,16 @@ pub enum MeasurementStreamError {
 
 impl ThinEdgeJsonSerializer {
     pub fn new() -> Self {
+        Self::new_with_timestamp(None)
+    }
+
+    pub fn new_with_timestamp(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
         let mut serializer = ThinEdgeJsonSerializer {
             buffer: Vec::new(),
             is_within_group: false,
             needs_separator: false,
+            default_timestamp,
+            timestamp_present: false,
         };
         serializer.buffer.push(b'{');
         serializer
@@ -46,6 +55,12 @@ impl ThinEdgeJsonSerializer {
     fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
+        }
+
+        if !self.timestamp_present {
+            if let Some(default_timestamp) = self.default_timestamp {
+                let () = self.timestamp(default_timestamp)?;
+            }
         }
 
         self.buffer.push(b'}');
@@ -78,6 +93,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         self.buffer
             .write_fmt(format_args!("\"time\":\"{}\"", timestamp.to_rfc3339()))?;
         self.needs_separator = true;
+        self.timestamp_present = true;
         Ok(())
     }
 
@@ -126,6 +142,7 @@ mod tests {
         let local_time_now: DateTime<Local> = Local::now();
         local_time_now.with_timezone(local_time_now.offset())
     }
+
     #[test]
     fn serialize_single_value_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();
@@ -140,6 +157,7 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(output, expected_output);
     }
+
     #[test]
     fn serialize_single_value_no_timestamp_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();
@@ -148,6 +166,7 @@ mod tests {
         let output = serializer.bytes().unwrap();
         assert_eq!(output, expected_output);
     }
+
     #[test]
     fn serialize_multi_value_message() {
         let mut serializer = ThinEdgeJsonSerializer::new();

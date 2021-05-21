@@ -8,6 +8,8 @@ use chrono::DateTime;
 /// ```
 /// use thin_edge_json::measurement::*;
 /// use thin_edge_json::group::MeasurementGrouper;
+/// use clock::{Clock, WallClock};
+///
 /// # fn main() -> Result<(), anyhow::Error> {
 ///
 /// // A producer first needs a consumer to forward the source measurements.
@@ -26,12 +28,12 @@ use chrono::DateTime;
 /// consumer.measurement(Some("g2"), "b", 4.0)?;
 ///
 /// // A timestamp can be assigned to the whole measurement series
-/// consumer.timestamp(&current_timestamp())?;
+/// consumer.timestamp(&WallClock.now())?;
 ///
 /// // Note that the timestamp or a measurement can be pushed several times.
 /// // __However__, the behavior depends on the actual consumer.
 /// // Here, the consumer is a `MeasurementGrouper` that simply always peeks the latest value.
-/// consumer.timestamp(&current_timestamp())?;         // update the timestamp
+/// consumer.timestamp(&WallClock.now())?;             // update the timestamp
 /// consumer.measurement(Some("g1"), "x", 2.0)?;       // update g1.x
 /// consumer.measurement(None, "k", 2.0)?;             // update k
 ///
@@ -177,10 +179,4 @@ pub trait GroupedMeasurementVisitor {
 
     /// Add a new measurement, attached to the current group if any
     fn end_group(&mut self) -> Result<(), Self::Error>;
-}
-
-/// Return the current timestamp using the local time zone
-pub fn current_timestamp() -> DateTime<FixedOffset> {
-    let local_time_now: DateTime<chrono::Local> = chrono::Local::now();
-    local_time_now.with_timezone(local_time_now.offset())
 }

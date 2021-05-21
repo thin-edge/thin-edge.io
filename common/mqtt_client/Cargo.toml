@@ -10,6 +10,8 @@ futures = "0.3"
 rumqttc = { git = "https://github.com/mneumann/rumqtt", branch = "support-publish-ack" }
 thiserror = "1.0"
 tokio = { version = "1.1", features = ["sync"] }
+mockall = "0.9"
+async-trait = "0.1"
 
 [dev-dependencies]
 async-log = "2.0"

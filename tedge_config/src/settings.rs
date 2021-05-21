@@ -126,6 +126,7 @@ impl ConfigSetting for AzureRootCertPathSetting {
     type Value = FilePath;
 }
 
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MosquittoPortSetting;
 
@@ -138,4 +139,24 @@ impl ConfigSetting for MosquittoPortSetting {
     );
 
     type Value = Port;
+}
+
+///
+/// Boolean whether Azure mapper should add timestamp if timestamp is not added in the incoming payload.
+///
+/// Example: true
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AzureMapperTimestamp;
+
+impl ConfigSetting for AzureMapperTimestamp {
+    const KEY: &'static str = "azure.mapper.timestamp";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Boolean whether Azure mapper should add timestamp or not. ",
+        "Example: true"
+    );
+
+    type Value = Flag;
+
 }

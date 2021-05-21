@@ -54,6 +54,9 @@ pub(crate) struct CumulocityConfigDto {
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
     pub(crate) root_cert_path: Option<FilePath>,
+
+    /// Boolean whether Azure mapper adds timestamp or not.
+    pub(crate) mapper_timestamp: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -62,6 +65,7 @@ pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<FilePath>,
+    pub(crate) mapper_timestamp: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
