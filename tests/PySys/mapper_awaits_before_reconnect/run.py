@@ -22,21 +22,20 @@ class MapperReconnectAwait(BaseTest):
         tedge_mapper = "/usr/bin/tedge_mapper"
         self.sudo = "/usr/bin/sudo"
 
-
         subber = self.startProcess(
             command="/usr/bin/mosquitto_sub",
-            arguments=["-i", "tedge-mapper", "-t", "test"],
+            arguments=["-i", "tedge-mapper-c8y", "-t", "test"],
             stdouterr="mosquitto_sub",
-            background=True
+            background=True,
         )
 
         self.wait(0.1)
 
         mapper = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper],
+            arguments=["-u", "tedge-mapper-c8y", tedge_mapper, "c8y"],
             stdouterr="tedge_mapper",
-            background=True
+            background=True,
         )
 
         self.wait(5)
@@ -47,10 +46,20 @@ class MapperReconnectAwait(BaseTest):
             command=self.sudo,
             arguments=["sh", "-c", "kill -9 $(pgrep -x tedge_mapper)"],
             stdouterr="kill",
-            ignoreExitStatus=True
-            )
+            ignoreExitStatus=True,
+        )
 
     def validate(self):
         self.assertGrep("tedge_mapper.out", "ERROR", contains=True)
-        self.assertLineCount("tedge_mapper.out", condition='<=5', abortOnError=True, expr='tedge_mapper::mapper: MQTT connection error:')
-        self.assertLineCount("tedge_mapper.out", condition='>=2', abortOnError=True, expr='tedge_mapper::mapper: MQTT connection error:')
+        self.assertLineCount(
+            "tedge_mapper.out",
+            condition="<=5",
+            abortOnError=True,
+            expr="tedge_mapper::mapper: MQTT connection error:",
+        )
+        self.assertLineCount(
+            "tedge_mapper.out",
+            condition=">=2",
+            abortOnError=True,
+            expr="tedge_mapper::mapper: MQTT connection error:",
+        )
