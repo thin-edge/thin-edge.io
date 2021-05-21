@@ -26,7 +26,7 @@ def test_get_measurement_foders():
 
     lake = os.path.expanduser("~/DataLakeTest")
 
-    ret = pl.get_measurement_folders(lake, Path(lake))
+    ret = pl.get_measurement_folders(lake)
     exp = [
         "results_0_unpack",
         "results_1_unpack",

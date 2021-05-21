@@ -165,7 +165,8 @@ def unzip_results(lake):
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-def get_measurement_folders(lake, path: str) -> list[Path]:
+def get_measurement_folders(lake: Path) -> list[Path]:
+    path = Path(lake)
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
         key=lambda _: int(_.name.split("_")[1].split(".")[0]),
@@ -186,7 +187,7 @@ def get_relevant_measurement_folders(lake, testdata):
         processing_range = 25  # newest one 185
         earliest_valid = "results_107_unpack"
 
-    relevant_folders = get_measurement_folders(lake, Path(lake))[-processing_range:]
+    relevant_folders = get_measurement_folders(lake)[-processing_range:]
 
     print(relevant_folders[-processing_range])
 
