@@ -424,16 +424,16 @@ class MemoryHistory(MeasurementBase):
         except:  # google.api_core.exceptions.NotFound:
             pass
 
-    def update_table_one_by_one(self, dbo):
-        for i in range(self.size):
-            assert self.array[i, 0] == i
-            q = (
-                f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]},"
-                f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},"
-                f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
-            )
-            # print(q)
-            myquery(self.client, q)
+#    def update_table_one_by_one(self, dbo):
+#        for i in range(self.size):
+#            assert self.array[i, 0] == i
+#            q = (
+#                f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]},"
+#                f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},"
+#                f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
+#            )
+#            # print(q)
+#            myquery(self.client, q)
 
     def update_table(self):
         logging.info("Updating table:" + self.name)
