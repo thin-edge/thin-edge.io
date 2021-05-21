@@ -1,3 +1,4 @@
+use crate::flag::Flag;
 use crate::{config_setting::*, models::*};
 
 ///
@@ -126,7 +127,6 @@ impl ConfigSetting for AzureRootCertPathSetting {
     type Value = FilePath;
 }
 
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MosquittoPortSetting;
 
@@ -158,5 +158,4 @@ impl ConfigSetting for AzureMapperTimestamp {
     );
 
     type Value = Flag;
-
 }
