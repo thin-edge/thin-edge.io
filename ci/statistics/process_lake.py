@@ -21,7 +21,7 @@ if testdata:
 else:
     lake = os.path.expanduser("~/DataLake")
 
-style = "google"  #'ms', 'google', 'none'
+style = "none"  #'ms', 'google', 'none'
 
 client, dbo, integer, conn = db.get_database(style)
 

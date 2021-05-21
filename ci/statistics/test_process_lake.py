@@ -293,7 +293,32 @@ def test_show_metadata(mocker):
     metadata.postprocess(folders)
     metadata.show()
 
-def test_upload_metadata(mocker):
+def test_upload_table(mocker):
+    """"""
+    lake = None
+    client = None
+    testmode = None
+    metadata = db.MeasurementMetadata(
+        3, client, testmode, lake)
+
+    metadata.json_data = {'nope':'nope'}
+    metadata.job_config = None
+
+    # With this we inject a mock chain
+    # load_table_from_json is called, it returns a load_job
+    # load_job.running() returns False
+    load_mock = mocker.MagicMock( name='load_job')
+    load_mock.running = mocker.MagicMock( name='running', return_value = False)
+    load_mock.errors = False
+    load_table_mock = mocker.MagicMock(name='load_table_from_json', return_value = load_mock)
+    mocker.patch.object(metadata, "client")
+    metadata.client.load_table_from_json = load_table_mock
+
+    metadata.upload_table()
+
+    metadata.client.load_table_from_json.assert_called_once()
+
+def test_upload_metadata_b(mocker):
     """"""
     lake = os.path.expanduser("~/DataLakeTest")
 
@@ -309,25 +334,11 @@ def test_upload_metadata(mocker):
 
     metadata.postprocess(folders)
 
-    import google
-
-    # With this we inject a mock chain
-    # load_table_from_json is called, it returns a load_job
-    # load_job.running() returns False
-    load_mock = mocker.MagicMock( name='load_job')
-    load_mock.running = mocker.MagicMock( name='running', return_value = False)
-    load_mock.errors = False
-    load_table_mock = mocker.MagicMock(name='load_table_from_json', return_value = load_mock)
-
-    mocker.patch.object(metadata, "client")
-    metadata.client.load_table_from_json = load_table_mock
-
+    mocker.patch.object(metadata, "upload_table")
 
     metadata.update_table()
-    #metadata.client.load_table_from_json()
 
-    metadata.client.load_table_from_json.assert_called_once()
-
+    metadata.upload_table.assert_called_once_with()
 
 
 

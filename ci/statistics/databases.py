@@ -134,7 +134,13 @@ def scrap_measurement_metadata(file):
 
     return run, date, url, name, branch
 
-class MeasurementMetadata:
+class MeasurementBase:
+
+    @staticmethod
+    def upload_table():
+        pass
+
+class MeasurementMetadata():
     def __init__(self, size, client, testmode, lake):
         self.array = []
         self.client = client
@@ -169,7 +175,7 @@ class MeasurementMetadata:
     def update_table(self):
 
         print("Updating table:", self.name)
-        job_config = bigquery.LoadJobConfig(
+        self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
                 bigquery.SchemaField("mid", "INT64"),
@@ -180,13 +186,13 @@ class MeasurementMetadata:
             ],
         )
 
-        data = []
+        self.json_data = []
 
         print(self.array)
         j = 0
         for i in range(self.size):
             print(self.size, i, j)
-            data.append(
+            self.json_data.append(
                 {
                     "id": self.array[i][0],
                     "mid": self.array[i][1],
@@ -198,11 +204,15 @@ class MeasurementMetadata:
             )
             j+=1
 
+        self.upload_table()
+
+    def upload_table(self):
+
         if self.client:
             load_job = self.client.load_table_from_json(
-                data,
-                f"sturdy-mechanic-312713.ADataSet.{self.name}",
-                job_config=job_config,
+                self.json_data,
+                self.database,
+                job_config=self.job_config,
             )
 
             while load_job.running():
