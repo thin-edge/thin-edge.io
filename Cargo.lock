@@ -362,6 +362,7 @@ name = "clock"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "mockall",
 ]
 
 [[package]]
@@ -2164,6 +2165,7 @@ dependencies = [
  "async-trait",
  "c8y_translator_lib",
  "chrono",
+ "clock",
  "env_logger",
  "flockfile",
  "log",

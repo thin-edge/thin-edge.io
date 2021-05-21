@@ -1,7 +1,9 @@
 use chrono::{DateTime, FixedOffset, Local};
+use mockall::automock;
 
 pub type Timestamp = DateTime<FixedOffset>;
 
+#[automock]
 pub trait Clock: Sync + Send + 'static {
     fn now(&self) -> Timestamp;
 }

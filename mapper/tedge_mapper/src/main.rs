@@ -1,6 +1,6 @@
 use crate::error::*;
 use crate::size_threshold::*;
-use crate::time_provider::*;
+use clock::WallClock;
 use flockfile::{Flockfile, FlockfileError};
 use mqtt_client::Client;
 use std::path::PathBuf;
@@ -18,7 +18,6 @@ mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
-mod time_provider;
 
 const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_AZ: &str = "tedge-mapper-az";
@@ -79,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
                 az_mapper::AzureMapperConfig::default(),
                 Box::new(az_converter::AzureConverter {
                     add_timestamp: tedge_config.query(AzureMapperTimestamp)?.is_set(),
-                    time_provider: Box::new(SystemTimeProvider),
+                    clock: Box::new(WallClock),
                     size_threshold: SizeThreshold(255 * 1024),
                 }),
             )
