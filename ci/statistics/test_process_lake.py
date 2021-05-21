@@ -25,7 +25,8 @@ def test_get_measurement_foders():
     """Still clumsy check"""
 
     lake = os.path.expanduser("~/DataLakeTest")
-    ret = pl.get_measurement_folders(lake)
+
+    ret = pl.get_measurement_folders(lake, Path(lake))
     exp = [
         "results_0_unpack",
         "results_1_unpack",
@@ -38,8 +39,11 @@ def test_get_measurement_foders():
 def test_get_relevant_measurement_folders():
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
 
-    ret, valid = pl.get_relevant_measurement_folders()
+    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+
     assert ret == exp
     assert valid == 3
 
@@ -83,6 +87,7 @@ def test_postprocess_vals_cpu():
         cpu_array,
         mem_array,
         cpu_hist_array,
+        lake
     )
 
     # programmatically reproduce the data set
@@ -137,6 +142,7 @@ def test_postprocess_vals_mem():
         cpu_array,
         mem_array,
         cpu_hist_array,
+        lake
     )
 
     # programmatically reproduce the data set
@@ -191,6 +197,7 @@ def test_postprocess_vals_cpu_hist():
         cpu_array,
         mem_array,
         cpu_hist_array,
+        lake
     )
 
     # programmatically reproduce the data set

@@ -1,6 +1,8 @@
+#!/usr/bin/python3
 # source ~/env-bigquery/bin/activate
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
+import argparse
 import sys
 import time
 import logging
@@ -12,22 +14,9 @@ from pathlib import Path
 import numpy as np
 from numpy.core.records import array
 
-
 import databases as db
 
-testdata = True
-if testdata:
-    lake = os.path.expanduser("~/DataLakeTest")
-else:
-    lake = os.path.expanduser("~/DataLake")
-
-style = "google"  #'ms', 'google', 'none'
-
-client, dbo, integer, conn = db.get_database(style)
-
-logging.basicConfig(level=logging.INFO)
-
-def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr):
+def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
     with open(thefile) as thestats:
         lines = thestats.readlines()
         sample = 0
@@ -73,7 +62,7 @@ def scrap_mem(data_length, thefile, mesaurement_index, client, dbo, memidx, arr)
     return memidx
 
 
-def scrap_cpu(data_length, thefile, mesaurement_index, client, dbo, cpuidx, arr):
+def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
 
     with open(thefile) as thestats:
         lines = thestats.readlines()
@@ -124,6 +113,7 @@ def postprocess_vals(
     cpu_array,
     mem_array,
     cpu_hist_array,
+    lake
 ):
 
     # overall row index for the cpu table
@@ -136,12 +126,12 @@ def postprocess_vals(
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
         cpuidx = scrap_cpu(
-            data_length, statsfile, mesaurement_index, client, dbo, cpuidx, cpu_array
+            data_length, statsfile, mesaurement_index, cpuidx, cpu_array
         )
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
         memidx = scrap_mem(
-            data_length, statsfile, mesaurement_index, client, dbo, memidx, mem_array
+            data_length, statsfile, mesaurement_index, memidx, mem_array
         )
 
     mlen = len(measurement_folders)
@@ -161,7 +151,7 @@ def postprocess_vals(
             ]
         column += 2
 
-def unzip_results():
+def unzip_results(lake):
     p = Path(lake)
     for child in p.iterdir():
         if child.is_dir():
@@ -175,7 +165,7 @@ def unzip_results():
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-def get_measurement_folders(path: str) -> list[Path]:
+def get_measurement_folders(lake, path: str) -> list[Path]:
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
         key=lambda _: int(_.name.split("_")[1].split(".")[0]),
@@ -186,7 +176,7 @@ def get_measurement_folders(path: str) -> list[Path]:
     return pathnames
 
 
-def get_relevant_measurement_folders():
+def get_relevant_measurement_folders(lake, testdata):
 
     if testdata:
         earliest_valid = "results_1_unpack"
@@ -196,7 +186,7 @@ def get_relevant_measurement_folders():
         processing_range = 25  # newest one 185
         earliest_valid = "results_107_unpack"
 
-    relevant_folders = get_measurement_folders(Path(lake))[-processing_range:]
+    relevant_folders = get_measurement_folders(lake, Path(lake))[-processing_range:]
 
     print(relevant_folders[-processing_range])
 
@@ -212,14 +202,16 @@ def get_relevant_measurement_folders():
     return relevant_folders, processing_range
 
 
-def generate():
+def generate(style, lake, testdata):
+
+    client, dbo, integer, conn = db.get_database(style)
 
     logging.info("Unzip Results")
-    unzip_results()
+    unzip_results(lake)
 
     logging.info("Sumarize List")
 
-    relevant_folders, processing_range = get_relevant_measurement_folders()
+    relevant_folders, processing_range = get_relevant_measurement_folders(lake, testdata)
 
     logging.info("Postprocessing")
 
@@ -235,6 +227,7 @@ def generate():
         cpu_array,
         mem_array,
         cpu_hist_array,
+        lake
     )
     measurements.postprocess(relevant_folders)
 
@@ -259,6 +252,27 @@ def generate():
 
     logging.info("Done")
 
+def main():
+    logging.basicConfig(level=logging.INFO)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("style", type=str, help="Database style: [none, google]")
+    parser.add_argument("-t", "--testdata", action='store_true', help="Use test data sets", required=False)
+    args = parser.parse_args()
+
+    testdata = args.testdata
+    style = args.style
+
+    assert style in ['google','none'] #'ms'
+
+    if testdata:
+        logging.info("Using test data lake")
+        lake = os.path.expanduser("~/DataLakeTest")
+    else:
+        logging.info("Using real data lake")
+        lake = os.path.expanduser("~/DataLake")
+
+    generate(style, lake, testdata)
 
 if __name__ == "__main__":
-    generate()
+    main()

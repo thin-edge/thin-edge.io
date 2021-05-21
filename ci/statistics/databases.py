@@ -17,7 +17,7 @@ cpu_hist_table = "ci_cpu_hist"
 def get_database(style: str):
     conn = None
     if style == "ms":
-        logging.info("Using Microsoft Azure Backend")
+        logging.info("Using Microsoft Azure backend")
         server = "mysupertestserver.database.windows.net"
         database = "mysupertestdatabase"
         username = "mysupertestadmin"
@@ -31,7 +31,7 @@ def get_database(style: str):
         integer = "INTEGER"
 
     elif style == "google":
-        logging.info("Using Google Big Query Backend")
+        logging.info("Using Google Big Query backend")
         client = bigquery.Client()
         dbo = "ADataSet"
         integer = "INT64"
