@@ -608,7 +608,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_device_key_path: FilePath::from("/dev/null"),
         default_c8y_root_cert_path: FilePath::from("/dev/null"),
         default_azure_root_cert_path: FilePath::from("/dev/null"),
-        default_mqtt_port: 1883,
+        default_mqtt_port: Port(1883),
     }
 }
 

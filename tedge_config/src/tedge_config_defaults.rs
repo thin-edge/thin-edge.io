@@ -73,7 +73,7 @@ fn test_from_tedge_config_location() {
             ),
             default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
-            default_mqtt_port: 1883,
+            default_mqtt_port: Port(DEFAULT_PORT),
         }
     );
 }
