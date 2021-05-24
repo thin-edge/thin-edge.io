@@ -1,26 +1,13 @@
 [package]
-name = "tedge_mapper"
+name = "mapper_converter"
 version = "0.1.0"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
-description = "tedge_mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
-
-[package.metadata.deb]
-depends = "tedge"
-maintainer-scripts = "configuration/debian/tedge_mapper"
-
-[package.metadata.deb.systemd-units]
-unit-scripts = "../../configuration/init/systemd"
-unit-name = "tedge-mapper"
-enable = false
-start = false
-stop-on-upgrade = false
+description = "mapper_converter"
 
 [dependencies]
 anyhow = "1.0"
-az_mapper = { path = "../az_mapper" }
-c8y_mapper = { path = "../c8y_mapper" }
 clock = {path = "../../common/clock" }
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 tedge_config = {path = "../../tedge_config" }
@@ -29,7 +16,6 @@ chrono = "0.4"
 env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 log = "0.4"
-mapper_converter = { path = "../mapper" }
 mqtt_client = {path = "../../common/mqtt_client" }
 tokio = { version = "1.1", features = ["full"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }

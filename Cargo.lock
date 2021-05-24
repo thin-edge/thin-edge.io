@@ -178,6 +178,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
+name = "az_mapper"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff 2.0.1",
+ "assert_matches",
+ "async-trait",
+ "c8y_translator_lib",
+ "chrono",
+ "clock",
+ "env_logger",
+ "flockfile",
+ "log",
+ "mapper_converter",
+ "mqtt_client",
+ "serde_json",
+ "tedge_config",
+ "thin_edge_json",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "users",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -268,6 +295,33 @@ name = "bytes"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
+
+[[package]]
+name = "c8y_mapper"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff 2.0.1",
+ "assert_matches",
+ "async-trait",
+ "c8y_translator_lib",
+ "chrono",
+ "clock",
+ "env_logger",
+ "flockfile",
+ "log",
+ "mapper_converter",
+ "mqtt_client",
+ "serde_json",
+ "tedge_config",
+ "thin_edge_json",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "users",
+]
 
 [[package]]
 name = "c8y_translator_lib"
@@ -1043,6 +1097,32 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
  "value-bag",
+]
+
+[[package]]
+name = "mapper_converter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff 2.0.1",
+ "assert_matches",
+ "async-trait",
+ "c8y_translator_lib",
+ "chrono",
+ "clock",
+ "env_logger",
+ "flockfile",
+ "log",
+ "mqtt_client",
+ "serde_json",
+ "tedge_config",
+ "thin_edge_json",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "users",
 ]
 
 [[package]]
@@ -2147,6 +2227,7 @@ dependencies = [
  "futures",
  "mockall",
  "mqtt_client",
+ "tedge_mapper",
  "thin_edge_json",
  "thiserror",
  "tokio",
@@ -2163,12 +2244,15 @@ dependencies = [
  "assert-json-diff 2.0.1",
  "assert_matches",
  "async-trait",
+ "az_mapper",
+ "c8y_mapper",
  "c8y_translator_lib",
  "chrono",
  "clock",
  "env_logger",
  "flockfile",
  "log",
+ "mapper_converter",
  "mqtt_client",
  "serde_json",
  "tedge_config",

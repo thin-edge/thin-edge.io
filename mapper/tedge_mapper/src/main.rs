@@ -1,7 +1,9 @@
-use crate::error::*;
-use crate::size_threshold::*;
+use az_mapper::{az_converter, az_mapper::AzureMapperConfig, size_threshold::SizeThreshold};
+use c8y_mapper::{c8y_converter, c8y_mapper::CumulocityMapperConfig};
 use clock::WallClock;
 use flockfile::{Flockfile, FlockfileError};
+use mapper::Mapper;
+use mapper_converter::{error::MapperError, mapper};
 use mqtt_client::Client;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -9,15 +11,6 @@ use tedge_config::{
     AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
 };
 use tracing::{debug_span, error, info, Instrument};
-
-mod az_converter;
-mod az_mapper;
-mod c8y_converter;
-mod c8y_mapper;
-mod converter;
-mod error;
-mod mapper;
-mod size_threshold;
 
 const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_AZ: &str = "tedge-mapper-az";
@@ -53,9 +46,9 @@ async fn main() -> anyhow::Result<()> {
             let mqtt_config = mqtt_client::Config::default();
             let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config).await?;
 
-            mapper::Mapper::new(
+            Mapper::new(
                 mqtt,
-                c8y_mapper::CumulocityMapperConfig::default(),
+                CumulocityMapperConfig::default(),
                 Box::new(c8y_converter::CumulocityConverter),
             )
             .run()
@@ -73,9 +66,9 @@ async fn main() -> anyhow::Result<()> {
             let config_repository = get_config_repository()?;
             let tedge_config = config_repository.load()?;
 
-            mapper::Mapper::new(
+            Mapper::new(
                 mqtt,
-                az_mapper::AzureMapperConfig::default(),
+                AzureMapperConfig::default(),
                 Box::new(az_converter::AzureConverter {
                     add_timestamp: tedge_config.query(AzureMapperTimestamp)?.is_set(),
                     clock: Box::new(WallClock),

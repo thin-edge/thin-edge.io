@@ -1,4 +1,4 @@
-use crate::mapper::*;
+use mapper_converter::mapper::MapperConfig;
 use mqtt_client::Topic;
 
 #[derive(Debug)]

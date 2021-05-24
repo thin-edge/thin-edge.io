@@ -1,4 +1,3 @@
-use crate::size_threshold::SizeThresholdExceeded;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
@@ -40,7 +39,6 @@ pub enum ConversionError {
     ThinEdgeJsonParserError(
         #[from] thin_edge_json::json::ThinEdgeJsonParserError<ThinEdgeJsonSerializationError>,
     ),
-
-    #[error(transparent)]
-    MessageSizeExceededError(#[from] SizeThresholdExceeded),
+    // #[error(transparent)]
+    // MessageSizeExceededError(#[from] SizeThresholdExceeded),
 }

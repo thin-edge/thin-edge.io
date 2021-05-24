@@ -1,5 +1,4 @@
-use crate::converter::*;
-use crate::error::*;
+use mapper_converter::{converter::Converter, error::ConversionError};
 
 pub struct CumulocityConverter;
 

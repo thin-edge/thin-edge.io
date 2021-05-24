@@ -1,19 +1,19 @@
-use crate::converter::*;
-use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use clock::Clock;
+use mapper_converter::{converter::Converter, error::ConversionError};
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
-    pub(crate) add_timestamp: bool,
-    pub(crate) clock: Box<dyn Clock>,
-    pub(crate) size_threshold: SizeThreshold,
+    pub add_timestamp: bool,
+    pub clock: Box<dyn Clock>,
+    pub size_threshold: SizeThreshold,
 }
 
 impl Converter for AzureConverter {
     type Error = ConversionError;
     fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        let () = self.size_threshold.validate(input)?;
+        // let () = self.size_threshold.validate(input)?;
+        let () = self.size_threshold.validate(input).unwrap();
 
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
