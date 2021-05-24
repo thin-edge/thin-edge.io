@@ -18,7 +18,7 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) azure: AzureConfigDto,
 
     #[serde(default)]
-    pub(crate) mosquitto: MosquittoConfigDto,
+    pub(crate) mqtt: MqttConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -70,6 +70,6 @@ pub(crate) struct AzureConfigDto {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct MosquittoConfigDto {
+pub(crate) struct MqttConfigDto {
     pub(crate) port: Option<u16>,
 }

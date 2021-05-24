@@ -21,7 +21,7 @@ url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 connect = "false"
 
-[mosquitto]
+[mqtt]
 port = 1234
 "#;
 
@@ -59,7 +59,7 @@ port = 1234
         FilePath::from("/path/to/azure/root/cert")
     );
 
-    assert_eq!(config.query(MosquittoPortSetting)?, Port(1234));
+    assert_eq!(config.query(MqttPortSetting)?, Port(1234));
 
     Ok(())
 }
@@ -79,7 +79,7 @@ root_cert_path = "/path/to/c8y/root/cert"
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 
-[mosquitto]
+[mqtt]
 port = 1883
 "#;
 
@@ -94,7 +94,7 @@ port = 1883
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
-    let updated_mosquitto_port = Port(2345);
+    let updated_mqtt_port = Port(2345);
 
     {
         let mut config = config_repo.load()?;
@@ -129,7 +129,7 @@ port = 1883
         config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
         config.unset(C8yRootCertPathSetting)?;
         config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
-        config.update(MosquittoPortSetting, updated_mosquitto_port)?;
+        config.update(MqttPortSetting, updated_mqtt_port)?;
         config.unset(AzureRootCertPathSetting)?;
         config_repo.store(config)?;
     }
@@ -159,7 +159,7 @@ port = 1883
             FilePath::from("default_azure_root_cert_path")
         );
 
-        assert_eq!(config.query(MosquittoPortSetting)?, updated_mosquitto_port);
+        assert_eq!(config.query(MqttPortSetting)?, updated_mqtt_port);
     }
 
     Ok(())
@@ -310,7 +310,7 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         FilePath::from("/etc/ssl/certs")
     );
 
-    assert_eq!(config.query(MosquittoPortSetting)?, Port(1883));
+    assert_eq!(config.query(MqttPortSetting)?, Port(1883));
     Ok(())
 }
 
@@ -344,9 +344,9 @@ hello="tedge"
 }
 
 #[test]
-fn test_invalid_mosquitto_port() -> Result<(), TEdgeConfigError> {
+fn test_invalid_mqtt_port() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
-[mosquitto]
+[mqtt]
 port = "1883"
 "#;
 
@@ -354,7 +354,7 @@ port = "1883"
     let result = TEdgeConfigRepository::new(config_location).load();
 
     let expected_err =
-        "invalid type: string \"1883\", expected u16 for key `mosquitto.port` at line 3 column 8";
+        "invalid type: string \"1883\", expected u16 for key `mqtt.port` at line 3 column 8";
 
     match result {
         Err(TEdgeConfigError::TOMLParseError(err)) => assert_eq!(err.to_string(), expected_err),
@@ -397,7 +397,7 @@ root_cert_path = "/path/to/c8y/root/cert"
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 
-[mosquitto]
+[mqtt]
 port = 1024
 "#;
 
@@ -436,8 +436,8 @@ port = 1024
 
     config.update(C8yUrlSetting, updated_c8y_url.clone())?;
 
-    let updated_mosquitto_port = Port(2048);
-    config.update(MosquittoPortSetting, updated_mosquitto_port.clone())?;
+    let updated_mqtt_port = Port(2048);
+    config.update(MqttPortSetting, updated_mqtt_port.clone())?;
 
     config.unset(C8yRootCertPathSetting)?;
 
@@ -456,7 +456,7 @@ port = 1024
         FilePath::from("/etc/ssl/certs")
     );
 
-    assert_eq!(config.query(MosquittoPortSetting)?, updated_mosquitto_port);
+    assert_eq!(config.query(MqttPortSetting)?, updated_mqtt_port);
     Ok(())
 }
 
@@ -608,7 +608,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_device_key_path: FilePath::from("/dev/null"),
         default_c8y_root_cert_path: FilePath::from("/dev/null"),
         default_azure_root_cert_path: FilePath::from("/dev/null"),
-        default_mosquitto_port: 1883,
+        default_mqtt_port: 1883,
     }
 }
 

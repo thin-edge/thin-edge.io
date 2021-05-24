@@ -1,4 +1,4 @@
-# How to configure a port in mosquitto?
+# How to configure a local port in mosquitto?
 
 Configuring a mosquitto port in thin edge is a two step process.
 
@@ -21,7 +21,7 @@ to all the mqtt clients that are using mosquitto to publish/subscribe.
 Follow below step to do that
    
 ```shell
-tedge config set mosquitto.port 1024
+tedge config set mqtt.port 1024
 ```
 This will make sure that all the mqtt clients use the newer port that has been set.
 
@@ -30,17 +30,17 @@ This will make sure that all the mqtt clients use the newer port that has been s
 Use below command to check the port has been set properly or not.
  
 ```shell
-tedge config get mosquitto.port
+tedge config get mqtt.port
 ```
 This prints out the port that has been set.
 
 ## Update to use default port
 
 To use the default port, one has to remove the `listener [port-number]` from the mosquitto.conf manually.
-Also has to unset the mosquitto.port using the tedge cli framework as below
+Also has to unset the mqtt.port using the tedge cli framework as below
 
 ```shell
-tedge config unset mosquitto.port
+tedge config unset mqtt.port
 ```
 
 ## Error case
@@ -48,9 +48,9 @@ tedge config unset mosquitto.port
 Below example shows that we can not set string value for the port number.
 
 ```shell
-tedge config set mosquitto.port '"1024"'
+tedge config set mqtt.port '"1024"'
 
-Error: failed to set the configuration key: mosquitto.port with value: "1234".
+Error: failed to set the configuration key: mqtt.port with value: "1234".
 
 Caused by:
     Conversion from String failed

@@ -224,24 +224,24 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     }
 }
 
-impl ConfigSettingAccessor<MosquittoPortSetting> for TEdgeConfig {
-    fn query(&self, _setting: MosquittoPortSetting) -> ConfigSettingResult<Port> {
+impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttPortSetting) -> ConfigSettingResult<Port> {
         Ok(self
             .data
-            .mosquitto
+            .mqtt
             .port
             .clone()
-            .unwrap_or_else(|| self.config_defaults.default_mosquitto_port))
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
         .map(Port)
     }
 
-    fn update(&mut self, _setting: MosquittoPortSetting, value: Port) -> ConfigSettingResult<()> {
-        self.data.mosquitto.port = Some(value.into());
+    fn update(&mut self, _setting: MqttPortSetting, value: Port) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = Some(value.into());
         Ok(())
     }
 
-    fn unset(&mut self, _setting: MosquittoPortSetting) -> ConfigSettingResult<()> {
-        self.data.mosquitto.port = None;
+    fn unset(&mut self, _setting: MqttPortSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = None;
         Ok(())
     }
 }

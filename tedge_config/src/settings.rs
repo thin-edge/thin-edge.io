@@ -128,10 +128,10 @@ impl ConfigSetting for AzureRootCertPathSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct MosquittoPortSetting;
+pub struct MqttPortSetting;
 
-impl ConfigSetting for MosquittoPortSetting {
-    const KEY: &'static str = "mosquitto.port";
+impl ConfigSetting for MqttPortSetting {
+    const KEY: &'static str = "mqtt.port";
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt broker port, which is used by the mqtt clients to publish or subscribe. ",

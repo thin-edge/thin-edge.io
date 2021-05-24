@@ -30,8 +30,8 @@ pub struct TEdgeConfigDefaults {
     /// Default path for c8y root certificates
     pub default_c8y_root_cert_path: FilePath,
 
-    /// Default port for mosquitto
-    pub default_mosquitto_port: u16,
+    /// Default port for mqtt
+    pub default_mqtt_port: u16,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -50,7 +50,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
                 .into(),
             default_azure_root_cert_path: system_cert_path.clone().into(),
             default_c8y_root_cert_path: system_cert_path.into(),
-            default_mosquitto_port: 1883,
+            default_mqtt_port: 1883,
         }
     }
 }
@@ -71,7 +71,7 @@ fn test_from_tedge_config_location() {
             ),
             default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
-            default_mosquitto_port: 1883,
+            default_mqtt_port: 1883,
         }
     );
 }
