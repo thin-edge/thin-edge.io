@@ -374,12 +374,12 @@ pub struct Config {
     /// frontend operations.
     ///
     /// Default: `10`.
-    queue_capacity: usize,
+    pub queue_capacity: usize,
 
     /// Clean the MQTT session upon connect if set to `true`.
     ///
     /// Default: `false`.
-    clean_session: bool,
+    pub clean_session: bool,
 }
 
 /// By default a client connects the local MQTT broker.

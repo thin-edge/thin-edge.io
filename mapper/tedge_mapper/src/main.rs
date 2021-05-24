@@ -2,9 +2,10 @@ use crate::error::*;
 use crate::size_threshold::*;
 use clock::WallClock;
 use flockfile::{Flockfile, FlockfileError};
-use mqtt_client::Client;
+use mqtt_client::{Client, Config};
 use std::path::PathBuf;
 use std::str::FromStr;
+use tedge_config::*;
 use tedge_config::{
     AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
 };
@@ -50,8 +51,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_C8Y);
 
-            let mqtt_config = mqtt_client::Config::default();
-            let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config).await?;
+            let mqtt = Client::connect(APP_NAME_C8Y, &get_mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
@@ -67,17 +67,13 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_AZ);
 
-            let mqtt_config = mqtt_client::Config::default();
-            let mqtt = Client::connect(APP_NAME_AZ, &mqtt_config).await?;
-
-            let config_repository = get_config_repository()?;
-            let tedge_config = config_repository.load()?;
+            let mqtt = Client::connect(APP_NAME_AZ, &get_mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
                 az_mapper::AzureMapperConfig::default(),
                 Box::new(az_converter::AzureConverter {
-                    add_timestamp: tedge_config.query(AzureMapperTimestamp)?.is_set(),
+                    add_timestamp: get_tedge_config()?.query(AzureMapperTimestamp)?.is_set(),
                     clock: Box::new(WallClock),
                     size_threshold: SizeThreshold(255 * 1024),
                 }),
@@ -89,6 +85,19 @@ async fn main() -> anyhow::Result<()> {
     };
 
     Ok(())
+}
+
+fn get_mqtt_config() -> Result<Config, anyhow::Error> {
+    let tedge_config = get_tedge_config()?;
+    Ok(Config {
+        port: tedge_config.query(MqttPortSetting)?.0,
+        ..mqtt_client::Config::default()
+    })
+}
+
+fn get_tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+    let config_repository = get_config_repository()?;
+    Ok(config_repository.load()?)
 }
 
 pub enum CloudName {
