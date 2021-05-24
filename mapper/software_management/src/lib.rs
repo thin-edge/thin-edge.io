@@ -1,4 +1,3 @@
-pub mod agent;
 pub mod message;
 pub mod plugin;
 pub mod plugin_manager;
