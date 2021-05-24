@@ -1,0 +1,27 @@
+[package]
+name = "dm_mapper"
+version = "0.1.0"
+edition = "2018"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+license = "Apache-2.0"
+readme = "README.md"
+description = "The daemon providing monitoring and remote management capabilities to tedge"
+
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = "0.4"
+clock = {path = "../../common/clock" }
+futures = "0.3"
+mockall = "0.9"
+mqtt_client = {path = "../../common/mqtt_client" }
+thin_edge_json = {path = "../thin_edge_json" }
+thiserror = "1.0"
+tokio = { version = "1.1", features = ["rt", "sync", "time"] }
+tracing = { version = "0.1", features = ["attributes", "log"] }
+tracing-subscriber = "0.2"
+
+[dev-dependencies]
+assert_matches = "1.4"
+tokio-test = "0.4"

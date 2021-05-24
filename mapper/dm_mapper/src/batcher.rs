@@ -212,10 +212,7 @@ mod tests {
     use clock::WallClock;
     use futures::future::{pending, ready};
     use mockall::Sequence;
-    use mqtt_client::MockMqttClient;
-    use mqtt_client::MockMqttErrorStream;
-    use mqtt_client::MockMqttMessageStream;
-    use mqtt_client::QoS;
+    use mqtt_client::{MockMqttClient, MockMqttErrorStream, MockMqttMessageStream, QoS};
     use tokio::time::{self, Instant};
 
     #[test]
@@ -471,7 +468,7 @@ mod tests {
             Ok(Box::new(message_stream))
         });
 
-        return mqtt_client;
+        mqtt_client
     }
 
     fn build_message_stream_from_messages(
@@ -497,6 +494,6 @@ mod tests {
             .expect_next()
             .returning(|| Box::pin(pending())); // Block the stream with a pending future
 
-        return message_stream;
+        message_stream
     }
 }

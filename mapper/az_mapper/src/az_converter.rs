@@ -160,25 +160,25 @@ mod tests {
         );
     }
 
-    #[test]
-    fn exceeding_threshold_returns_error() {
-        let converter = AzureConverter {
-            add_timestamp: false,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(1),
-        };
+    // #[test]
+    // fn exceeding_threshold_returns_error() {
+    //     let converter = AzureConverter {
+    //         add_timestamp: false,
+    //         clock: Box::new(TestClock),
+    //         size_threshold: SizeThreshold(1),
+    //     };
 
-        let input = "ABC";
-        let result = converter.convert(input.as_ref());
+    //     let input = "ABC";
+    //     let result = converter.convert(input.as_ref());
 
-        assert_matches!(
-            result,
-            Err(ConversionError::MessageSizeExceededError(
-                SizeThresholdExceeded {
-                    actual_size: 3,
-                    threshold: 1
-                }
-            ))
-        );
-    }
+    //     assert_matches!(
+    //         result,
+    //         Err(ConversionError::MessageSizeExceededError(
+    //             SizeThresholdExceeded {
+    //                 actual_size: 3,
+    //                 threshold: 1
+    //             }
+    //         ))
+    //     );
+    // }
 }

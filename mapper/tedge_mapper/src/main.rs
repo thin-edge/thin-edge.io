@@ -1,6 +1,7 @@
 use az_mapper::{az_converter, az_mapper::AzureMapperConfig, size_threshold::SizeThreshold};
 use c8y_mapper::{c8y_converter, c8y_mapper::CumulocityMapperConfig};
 use clock::WallClock;
+use dm_mapper::monitor::{DeviceMonitor, DeviceMonitorConfig};
 use flockfile::{Flockfile, FlockfileError};
 use mapper::Mapper;
 use mapper_converter::{error::MapperError, mapper};
@@ -12,8 +13,9 @@ use tedge_config::{
 };
 use tracing::{debug_span, error, info, Instrument};
 
-const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_AZ: &str = "tedge-mapper-az";
+const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
+const APP_NAME_DM: &str = "tedge-dm-agent";
 const DEFAULT_LOG_LEVEL: &str = "warn";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
@@ -55,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
             .instrument(debug_span!(APP_NAME_C8Y))
             .await?
         }
+
         CloudName::Azure => {
             let _flockfile = check_another_instance_is_running(APP_NAME_AZ)?;
 
@@ -79,6 +82,17 @@ async fn main() -> anyhow::Result<()> {
             .instrument(debug_span!(APP_NAME_AZ))
             .await?
         }
+
+        CloudName::DM => {
+            info!("{} starting!", APP_NAME_DM);
+
+            let device_monitor_config = DeviceMonitorConfig::default();
+            let device_monitor = DeviceMonitor::new(device_monitor_config);
+            device_monitor
+                .run()
+                .instrument(debug_span!(APP_NAME_DM))
+                .await?;
+        }
     };
 
     Ok(())
@@ -87,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
 pub enum CloudName {
     Azure,
     C8y,
+    DM,
 }
 
 impl FromStr for CloudName {
@@ -96,6 +111,7 @@ impl FromStr for CloudName {
         match value {
             "c8y" => Ok(CloudName::C8y),
             "az" => Ok(CloudName::Azure),
+            "dm" => Ok(CloudName::DM),
             _ => Err(MapperError::IncorrectArgument),
         }
     }

@@ -8,7 +8,6 @@ members = [
     "tedge",
     "tedge_config",
     "mapper/cumulocity/c8y_translator_lib",
-    "mapper/dm_agent",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
 ]
