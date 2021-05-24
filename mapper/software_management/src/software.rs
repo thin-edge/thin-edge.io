@@ -12,7 +12,9 @@ pub struct SoftwareModule {
     pub url: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+pub type SoftwareList = Vec<SoftwareModule>;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum SoftwareOperation {
     // A request for the current software list
     CurrentSoftwareList,
@@ -24,26 +26,26 @@ pub enum SoftwareOperation {
     DesiredSoftwareList { modules: Vec<SoftwareModule> },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum SoftwareUpdate {
     Install { module: SoftwareModule },
     UnInstall { module: SoftwareModule },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum SoftwareOperationStatus {
     SoftwareUpdates { updates: Vec<SoftwareUpdateStatus> },
     DesiredSoftwareList { updates: Vec<SoftwareUpdateStatus> },
     CurrentSoftwareList { modules: Vec<SoftwareModule> },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SoftwareUpdateStatus {
-    update: SoftwareUpdate,
-    status: UpdateStatus,
+    pub update: SoftwareUpdate,
+    pub status: UpdateStatus,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum UpdateStatus {
     Scheduled,
     Success,
@@ -51,7 +53,7 @@ pub enum UpdateStatus {
     Cancelled,
 }
 
-#[derive(thiserror::Error, Debug, Deserialize, Serialize)]
+#[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize)]
 pub enum SoftwareError {
     #[error("Unknown software type: {software_type:?}")]
     UnknownSoftwareType { software_type: SoftwareType },
@@ -94,29 +96,11 @@ pub enum SoftwareError {
     },
 }
 
-pub trait SoftwareListConsumer {
-    type Outcome;
-    type Error: std::error::Error;
-
-    fn start(&mut self) -> Result<(), Self::Error>;
-    fn add_module(&mut self, module: &SoftwareModule) -> Result<(), Self::Error>;
-    fn finalize(&mut self) -> Result<Self::Outcome, Self::Error>;
-}
-
-pub trait SoftwareListProducer {
-    fn produce<C, O, E>(&self, consumer: &mut C) -> Result<O, E>
-    where
-        C: SoftwareListConsumer<Outcome = O, Error = E>,
-        E: std::error::Error;
-}
-
-impl SoftwareListProducer for () {
-    fn produce<C, O, E>(&self, consumer: &mut C) -> Result<O, E>
-    where
-        C: SoftwareListConsumer<Outcome = O, Error = E>,
-        E: std::error::Error,
-    {
-        let () = consumer.start()?;
-        Ok(consumer.finalize()?)
+impl SoftwareUpdate {
+    pub fn module(&self) -> &SoftwareModule {
+        match self {
+            SoftwareUpdate::Install { module } |
+            SoftwareUpdate::UnInstall { module } => module
+        }
     }
 }

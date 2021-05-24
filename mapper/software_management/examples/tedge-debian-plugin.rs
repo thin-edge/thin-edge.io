@@ -53,10 +53,7 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
 
         PluginOp::Version { module } => run_cmd(
             "dpkg-query",
-            &format!(
-                " --show --showformat=${{Package}}\\t${{Version}}\\n {}",
-                module
-            ),
+            &format!(" --show --showformat=${{Version}}\\n {}", module),
         )?,
     };
 

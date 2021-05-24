@@ -1,6 +1,6 @@
 use crate::plugin::*;
 
-use crate::software::{SoftwareError, SoftwareModule};
+use crate::software::*;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -21,10 +21,12 @@ pub trait Plugins {
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin>;
 
     fn plugin(&self, module: &SoftwareModule) -> Result<&Self::Plugin, SoftwareError> {
-        let software_type= &module.software_type;
-        let module_plugin = self
-            .by_software_type(software_type)
-            .ok_or_else(|| SoftwareError::UnknownSoftwareType { software_type: software_type.into() })?;
+        let software_type = &module.software_type;
+        let module_plugin = self.by_software_type(software_type).ok_or_else(|| {
+            SoftwareError::UnknownSoftwareType {
+                software_type: software_type.into(),
+            }
+        })?;
 
         Ok(module_plugin)
     }
@@ -105,11 +107,9 @@ impl ExternalPlugins {
     }
 }
 
-/// The set of all installed plugins can be used as a plugin too.
-impl Plugin for ExternalPlugins {
-    type SoftwareList = ();
-
-    fn list(&self) -> Result<Self::SoftwareList, SoftwareError> {
+/// Any set of plugins can be used as a plugin too.
+impl<P: Plugin> Plugin for dyn Plugins<Plugin = P> {
+    fn list(&self) -> Result<SoftwareList, SoftwareError> {
         unimplemented!()
     }
 

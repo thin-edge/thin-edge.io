@@ -3,20 +3,29 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 pub trait Plugin {
-    type SoftwareList: SoftwareListProducer;
-
-    fn list(&self) -> Result<Self::SoftwareList, SoftwareError>;
+    fn list(&self) -> Result<SoftwareList, SoftwareError>;
     fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
     fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
     fn uninstall(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
 
-    fn run(operation: SoftwareOperation) {
-        match operation {
-            _ => unimplemented!()
+    fn apply(&self, update: &SoftwareUpdate) -> SoftwareUpdateStatus {
+        let result = match update {
+            SoftwareUpdate::Install { module } => self.install(&module),
+            SoftwareUpdate::UnInstall { module } => self.uninstall(&module),
+        };
+        let status = match result {
+            Ok(()) => { UpdateStatus::Success }
+            Err(reason) => { UpdateStatus::Error { reason }}
+        };
+
+        SoftwareUpdateStatus {
+            update: update.clone(),
+            status,
         }
     }
 }
 
+/// TODO: consider tokio::process
 pub struct ExternalPluginCommand {
     pub name: SoftwareType,
     pub path: PathBuf,
@@ -88,14 +97,12 @@ const INSTALL: &'static str = "install";
 const UN_INSTALL: &'static str = "uninstall";
 
 impl Plugin for ExternalPluginCommand {
-    type SoftwareList = ();
-
-    fn list(&self) -> Result<Self::SoftwareList, SoftwareError> {
+    fn list(&self) -> Result<SoftwareList, SoftwareError> {
         let command = self.command(LIST, None)?;
         let output = self.execute(command)?;
 
         if output.status.success() {
-            Ok(())
+            Ok(vec![])
         } else {
             Err(SoftwareError::PluginError {
                 software_type: self.name.clone(),
