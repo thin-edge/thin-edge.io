@@ -230,9 +230,8 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
             .data
             .mqtt
             .port
-            .clone()
+            .map(Port)
             .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
-        .map(Port)
     }
 
     fn update(&mut self, _setting: MqttPortSetting, value: Port) -> ConfigSettingResult<()> {

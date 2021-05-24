@@ -6,7 +6,6 @@ use structopt::StructOpt;
 use tedge_config::*;
 
 const DEFAULT_HOST: &str = "localhost";
-const DEFAULT_PORT: u16 = 1883;
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -39,10 +38,7 @@ pub enum TEdgeMqttCli {
 
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
-        let port = match context.config_repository.load()?.query(MqttPortSetting) {
-            Ok(p) => p,
-            _ => Port(DEFAULT_PORT),
-        };
+        let port = context.config_repository.load()?.query(MqttPortSetting)?;
 
         let mqtt_config = mqtt_client::Config::new(DEFAULT_HOST, port.into());
 
