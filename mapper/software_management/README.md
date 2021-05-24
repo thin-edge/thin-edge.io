@@ -21,7 +21,8 @@ Open questions:
 ### Specific mapper - e.g. C8y Mapper
 
 Responsibilities:
-* Register the device, so it will receive the software management requests
+* Register the device, so it will receive the software management requests.
+* Send the list of already installed software packages as all future update operations are derived from this initial list.
 * Listen and translate the operations received from the cloud.
 * Forward these operations to the DM-agent and listen for the responses.
 * Translate the DM-Agent responses and forward them to the cloud.
@@ -29,6 +30,13 @@ Responsibilities:
 Open questions:
 * Each software update message has an id, to be used for the response ...
    * Do we have to report the result in one go ... or can we have several partial responses using the same id?
+* Cumulocity doesn't let you send a response to a specific installation request based on an id.
+  There can only be one response for a single software update operation,
+  even if that request contains more than one software package.
+  Any responses sent are associated to the last received operation.
+  If there are multiple software installation requests received,
+  then the responses sent will have to be in the __reverse order__ in which they were received.
+  * This is really weird and need to be clarified.
 
 
 ### DM-Agent
@@ -77,6 +85,13 @@ Responsibilities:
 Open questions:
 * How to return detailed errors from the plugin (as unknown version, missing dependency, conflicting version, ...)
 * Do we need more operations to trigger say updates, upgrades, cleanings ...?
+* What is the best approach: to submit the entire list of updates to a plugin or to submit each update in turn?
+  * How to detect the  failure of individual packages,
+    IF we plan to submit the entire list of packages to be installed to the corresponding plugin at one go,
+    rather than calling the plugin separately for each and every component installation.
+    If we submit multiple packages at once and if there's a partial failure,
+    we need a mechanism to detect which ones succeeded and which others failed.
+  * If we submit the packages in turn, then how to prepare and finalize a series of updates?
 
 ### Plugin Store
 
@@ -100,6 +115,7 @@ Open questions:
   * An idea is to add two commands `start` and `finalize` to the plugins to give them an opportunity for any update or clean actions.
 * Do we support a way to call `apt-get upgrade` to update all the installed packages?
 * Do we support a way to call `apt-get dist-upgrade`?
+* How to add a new apt repository before an installation ?
 
 
 
