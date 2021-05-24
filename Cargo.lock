@@ -1993,10 +1993,14 @@ name = "software_management"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "env_logger",
+ "log",
+ "mqtt_client",
  "serde",
  "serde_json",
  "structopt",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

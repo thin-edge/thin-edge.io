@@ -4,17 +4,24 @@ pub type SoftwareType = String;
 pub type SoftwareName = String;
 pub type SoftwareVersion = String;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareModule {
+    #[serde(rename = "type")]
     pub software_type: SoftwareType,
+
     pub name: SoftwareName,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<SoftwareVersion>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 }
 
 pub type SoftwareList = Vec<SoftwareModule>;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(untagged)]
 pub enum SoftwareOperation {
     // A request for the current software list
     CurrentSoftwareList,
@@ -26,26 +33,36 @@ pub enum SoftwareOperation {
     DesiredSoftwareList { modules: Vec<SoftwareModule> },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(tag = "action")]
 pub enum SoftwareUpdate {
-    Install { module: SoftwareModule },
-    UnInstall { module: SoftwareModule },
+    #[serde(rename = "install")]
+    Install {
+        #[serde(flatten)]
+        module: SoftwareModule,
+    },
+
+    #[serde(rename = "uninstall")]
+    UnInstall {
+        #[serde(flatten)]
+        module: SoftwareModule,
+    },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareOperationStatus {
     SoftwareUpdates { updates: Vec<SoftwareUpdateStatus> },
     DesiredSoftwareList { updates: Vec<SoftwareUpdateStatus> },
     CurrentSoftwareList { modules: Vec<SoftwareModule> },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareUpdateStatus {
     pub update: SoftwareUpdate,
     pub status: UpdateStatus,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum UpdateStatus {
     Scheduled,
     Success,
@@ -53,8 +70,11 @@ pub enum UpdateStatus {
     Cancelled,
 }
 
-#[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize)]
+#[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareError {
+    #[error("JSON parse error: {reason:?}")]
+    ParseError { reason: String },
+
     #[error("Unknown software type: {software_type:?}")]
     UnknownSoftwareType { software_type: SoftwareType },
 
@@ -96,11 +116,18 @@ pub enum SoftwareError {
     },
 }
 
+impl From<serde_json::Error> for SoftwareError {
+    fn from(err: serde_json::Error) -> Self {
+        SoftwareError::ParseError {
+            reason: format!("{}", err),
+        }
+    }
+}
+
 impl SoftwareUpdate {
     pub fn module(&self) -> &SoftwareModule {
         match self {
-            SoftwareUpdate::Install { module } |
-            SoftwareUpdate::UnInstall { module } => module
+            SoftwareUpdate::Install { module } | SoftwareUpdate::UnInstall { module } => module,
         }
     }
 }

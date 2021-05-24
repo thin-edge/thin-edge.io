@@ -108,7 +108,7 @@ impl ExternalPlugins {
 }
 
 /// Any set of plugins can be used as a plugin too.
-impl<P: Plugin> Plugin for dyn Plugins<Plugin = P> {
+impl Plugin for ExternalPlugins {
     fn list(&self) -> Result<SoftwareList, SoftwareError> {
         unimplemented!()
     }

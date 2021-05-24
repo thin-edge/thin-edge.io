@@ -14,8 +14,8 @@ pub trait Plugin {
             SoftwareUpdate::UnInstall { module } => self.uninstall(&module),
         };
         let status = match result {
-            Ok(()) => { UpdateStatus::Success }
-            Err(reason) => { UpdateStatus::Error { reason }}
+            Ok(()) => UpdateStatus::Success,
+            Err(reason) => UpdateStatus::Error { reason },
         };
 
         SoftwareUpdateStatus {
