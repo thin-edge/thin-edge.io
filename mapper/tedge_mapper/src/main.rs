@@ -6,9 +6,6 @@ use mqtt_client::{Client, Config};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tedge_config::*;
-use tedge_config::{
-    AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
-};
 use tracing::{debug_span, error, info, Instrument};
 
 mod az_converter;
