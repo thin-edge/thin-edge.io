@@ -1,4 +1,4 @@
-# How to configure a local port in mosquitto?
+# How to configure the local port in mosquitto?
 
 Configuring a mosquitto port in thin edge is a two step process.
 

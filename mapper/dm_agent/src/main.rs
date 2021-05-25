@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 fn mqtt_port() -> anyhow::Result<u16> {
     let config_repository = config_repository()?;
     let tedge_config = config_repository.load()?;
-    Ok(tedge_config.query(MqttPortSetting)?.0)
+    Ok(tedge_config.query(MqttPortSetting)?.into())
 }
 
 fn config_repository() -> anyhow::Result<TEdgeConfigRepository> {

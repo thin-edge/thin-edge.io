@@ -38,7 +38,6 @@ impl Into<u16> for Port {
 #[cfg(test)]
 use assert_matches::*;
 #[test]
-
 fn conversion_from_valid_port_succeeds() {
     assert_matches!(Port::try_from("1234".to_string()), Ok(Port(1234)));
 }

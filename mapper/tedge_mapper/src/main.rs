@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_C8Y);
 
-            let mqtt = Client::connect(APP_NAME_C8Y, &get_mqtt_config()?).await?;
+            let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
@@ -64,13 +64,13 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_AZ);
 
-            let mqtt = Client::connect(APP_NAME_AZ, &get_mqtt_config()?).await?;
+            let mqtt = Client::connect(APP_NAME_AZ, &mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
                 az_mapper::AzureMapperConfig::default(),
                 Box::new(az_converter::AzureConverter {
-                    add_timestamp: get_tedge_config()?.query(AzureMapperTimestamp)?.is_set(),
+                    add_timestamp: tedge_config()?.query(AzureMapperTimestamp)?.is_set(),
                     clock: Box::new(WallClock),
                     size_threshold: SizeThreshold(255 * 1024),
                 }),
@@ -84,12 +84,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_mqtt_config() -> Result<Config, anyhow::Error> {
-    Ok(Config::default().with_port(get_tedge_config()?.query(MqttPortSetting)?.into()))
+fn mqtt_config() -> Result<Config, anyhow::Error> {
+    Ok(Config::default().with_port(tedge_config()?.query(MqttPortSetting)?.into()))
 }
 
-fn get_tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
-    let config_repository = get_config_repository()?;
+fn tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+    let config_repository = config_repository()?;
     Ok(config_repository.load()?)
 }
 
@@ -120,7 +120,7 @@ fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, Flockf
     }
 }
 
-fn get_config_repository() -> Result<TEdgeConfigRepository, MapperError> {
+fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     let tedge_config_location = if running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
