@@ -1,12 +1,12 @@
 use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
-use crate::time_provider::*;
+use clock::Clock;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
-    pub(crate) time_provider: Box<dyn TimeProvider>,
+    pub(crate) clock: Box<dyn Clock>,
     pub(crate) size_threshold: SizeThreshold,
 }
 
@@ -15,7 +15,7 @@ impl Converter for AzureConverter {
     fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
         let () = self.size_threshold.validate(input)?;
 
-        let default_timestamp = self.add_timestamp.then(|| self.time_provider.now());
+        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
 
@@ -33,15 +33,19 @@ mod tests {
     use chrono::{FixedOffset, TimeZone};
     use serde_json::json;
 
+    struct TestClock;
+
+    impl Clock for TestClock {
+        fn now(&self) -> clock::Timestamp {
+            FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
+        }
+    }
+
     #[test]
     fn converting_invalid_json_is_invalid() {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: false,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(255 * 1024),
         };
 
@@ -54,13 +58,9 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: false,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(255 * 1024),
         };
 
@@ -83,13 +83,9 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: false,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(255 * 1024),
         };
 
@@ -114,13 +110,9 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: true,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(255 * 1024),
         };
 
@@ -145,13 +137,9 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: true,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(255 * 1024),
         };
 
@@ -174,13 +162,9 @@ mod tests {
 
     #[test]
     fn exceeding_threshold_returns_error() {
-        let time_provider = TestTimeProvider {
-            now: FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0),
-        };
-
         let converter = AzureConverter {
             add_timestamp: false,
-            time_provider: Box::new(time_provider),
+            clock: Box::new(TestClock),
             size_threshold: SizeThreshold(1),
         };
 

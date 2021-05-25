@@ -20,6 +20,7 @@ stop-on-upgrade = false
 
 [dependencies]
 anyhow = "1.0"
+clock = {path = "../../common/clock" }
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 tedge_config = {path = "../../tedge_config" }
 thin_edge_json = {path = "../../mapper/thin_edge_json"}
@@ -31,11 +32,12 @@ mqtt_client = {path = "../../common/mqtt_client" }
 tokio = { version = "1.1", features = ["full"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
-async-trait = "0.1.50"
+async-trait = "0.1"
 thiserror = "1.0"
-users = "0.11.0"
+users = "0.11"
 
 [dev-dependencies]
-assert-json-diff = "2.0.1"
-serde_json = "1.0.64"
-assert_matches = "1.5.0"
+assert-json-diff = "2.0"
+serde_json = "1.0"
+assert_matches = "1.5"
+tokio-test = "0.4"
