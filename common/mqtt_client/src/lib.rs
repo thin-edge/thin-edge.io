@@ -480,7 +480,7 @@ impl Message {
     {
         Message {
             topic: topic.clone(),
-            payload: Message::trim_null_terminated(&mut payload.into()),
+            payload: trim_null_terminated(payload.into()),
             qos: QoS::AtLeastOnce,
             pkid: 0,
             retain: false,
@@ -696,48 +696,27 @@ mod tests {
 
     #[test]
     fn check_null_terminated_messages() {
+        assert_eq!(trim_null_terminated(vec![b'a', b'b', 0]), vec![b'a', b'b']);
+
         assert_eq!(
-            trim_null_terminated(vec![155, 156, 157, 158, 0]),
-            vec![155, 156, 157, 158]
+            trim_null_terminated(vec![b'a', 0, b'b', 0]),
+            vec![b'a', 0, b'b']
         );
 
-        let payload2 = "ab\u{0}";
-        assert_eq!(
-            trim_null_terminated("ab"),.to_vec()
-        );
+        assert_eq!(trim_null_terminated(vec![0]), vec![]);
 
-        let payload3 = "\u{0}";
-        assert_eq!(
-            Message::trim_if_null_terminated(&mut payload3.as_bytes().to_vec()).to_vec(),
-            "".as_bytes().to_vec()
-        );
+        assert_eq!(trim_null_terminated(vec![0, 0]), vec![0]);
     }
 
     #[test]
-    fn check_no_null_terminated_messages() {
-        let mut payload1 = vec![155, 156, 157, 158];
+    fn check_non_null_terminated_messages() {
+        assert_eq!(trim_null_terminated(vec![b'a', b'b']), vec![b'a', b'b']);
+
         assert_eq!(
-            Message::trim_if_null_terminated(&mut payload1).to_vec(),
-            vec![155, 156, 157, 158]
+            trim_null_terminated(vec![b'a', 0, b'b']),
+            vec![b'a', 0, b'b']
         );
 
-        let payload2 = "ab";
-        assert_eq!(
-            Message::trim_if_null_terminated("ab"), "ab".as_bytes().to_vec());
-
-        let payload3 = "";
-        assert_eq!(
-            Message::trim_if_null_terminated(&mut payload3.as_bytes().to_vec()).to_vec(),
-            "".as_bytes().to_vec()
-        );
-    }
-
-    #[test]
-    fn check_empty_messages() {
-        let payload = "";
-        assert_eq!(
-            Message::trim_if_null_terminated(&mut payload.as_bytes().to_vec()).to_vec(),
-            "".as_bytes().to_vec()
-        );
+        assert_eq!(trim_null_terminated(vec![]), vec![]);
     }
 }
