@@ -8,6 +8,7 @@ use mapper_converter::{error::MapperError, mapper};
 use mqtt_client::Client;
 use std::path::PathBuf;
 use std::str::FromStr;
+use structopt::*;
 use tedge_config::{
     AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
 };
@@ -16,31 +17,52 @@ use tracing::{debug_span, error, info, Instrument};
 const APP_NAME_AZ: &str = "tedge-mapper-az";
 const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_DM: &str = "tedge-dm-agent";
-const DEFAULT_LOG_LEVEL: &str = "warn";
+const DEFAULT_LOG_LEVEL: &str = "info";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
+
+#[derive(StructOpt, Debug)]
+#[structopt(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!()
+)]
+pub struct Cli {
+    pub mapper: MapperName,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MapperName {
+    Az,
+    C8y,
+    Dm,
+}
+
+impl FromStr for MapperName {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "az" => Ok(MapperName::Az),
+            "c8y" => Ok(MapperName::C8y),
+            "dm" => Ok(MapperName::Dm),
+            _ => Err("Unknown mapper name."),
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-
-    // Only one argument is allowed
-    if args.len() != 2 {
-        return Err(MapperError::IncorrectArgument.into());
-    }
-
-    let cloud_name = CloudName::from_str(args[1].as_str())?;
-
-    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
             TIME_FORMAT.into(),
         ))
-        .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .init();
 
-    match cloud_name {
-        CloudName::C8y => {
+    let cli = Cli::from_args();
+
+    match cli.mapper {
+        MapperName::C8y => {
             let _flockfile = check_another_instance_is_running(APP_NAME_C8Y)?;
 
             info!("{} starting!", APP_NAME_C8Y);
@@ -58,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
 
-        CloudName::Azure => {
+        MapperName::Az => {
             let _flockfile = check_another_instance_is_running(APP_NAME_AZ)?;
 
             info!("{} starting!", APP_NAME_AZ);
@@ -83,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
 
-        CloudName::DM => {
+        MapperName::Dm => {
             info!("{} starting!", APP_NAME_DM);
 
             let device_monitor_config = DeviceMonitorConfig::default();
@@ -96,25 +118,6 @@ async fn main() -> anyhow::Result<()> {
     };
 
     Ok(())
-}
-
-pub enum CloudName {
-    Azure,
-    C8y,
-    DM,
-}
-
-impl FromStr for CloudName {
-    type Err = MapperError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "c8y" => Ok(CloudName::C8y),
-            "az" => Ok(CloudName::Azure),
-            "dm" => Ok(CloudName::DM),
-            _ => Err(MapperError::IncorrectArgument),
-        }
-    }
 }
 
 fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, FlockfileError> {

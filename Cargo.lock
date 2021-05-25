@@ -2255,6 +2255,7 @@ dependencies = [
  "mapper_converter",
  "mqtt_client",
  "serde_json",
+ "structopt",
  "tedge_config",
  "thin_edge_json",
  "thiserror",
