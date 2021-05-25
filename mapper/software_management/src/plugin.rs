@@ -13,15 +13,8 @@ pub trait Plugin {
             SoftwareUpdate::Install { module } => self.install(&module),
             SoftwareUpdate::UnInstall { module } => self.uninstall(&module),
         };
-        let status = match result {
-            Ok(()) => UpdateStatus::Success,
-            Err(reason) => UpdateStatus::Error { reason },
-        };
 
-        SoftwareUpdateStatus {
-            update: update.clone(),
-            status,
-        }
+        SoftwareUpdateStatus::new(update, result)
     }
 }
 

@@ -70,6 +70,34 @@ pub enum UpdateStatus {
     Cancelled,
 }
 
+impl SoftwareUpdateStatus {
+    pub fn new(update: &SoftwareUpdate, result: Result<(), SoftwareError>) -> SoftwareUpdateStatus {
+        let status = match result {
+            Ok(()) => UpdateStatus::Success,
+            Err(reason) => UpdateStatus::Error { reason },
+        };
+
+        SoftwareUpdateStatus {
+            update: update.clone(),
+            status,
+        }
+    }
+
+    pub fn scheduled(update: &SoftwareUpdate) -> SoftwareUpdateStatus {
+        SoftwareUpdateStatus {
+            update: update.clone(),
+            status: UpdateStatus::Scheduled,
+        }
+    }
+
+    pub fn cancelled(update: &SoftwareUpdate) -> SoftwareUpdateStatus {
+        SoftwareUpdateStatus {
+            update: update.clone(),
+            status: UpdateStatus::Cancelled,
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareError {
     #[error("JSON parse error: {reason:?}")]

@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
+use log::{debug, error, info};
 use mqtt_client::{Client, Config, Message, Topic};
 use software_management::message::*;
 use software_management::plugin::*;
 use software_management::plugin_manager::*;
 use software_management::software::*;
-
-use log::{debug, error, info};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let operation_topic = Topic::new("tedge/sm-operations")?;
     let status_topic = Topic::new("tedge/sm-status")?;
     let error_topic = Topic::new("tedge/sm-errors")?;
-    let plugins = ExternalPlugins::open("/etc/tedge/sm-plugins")?;
+    let plugins = Arc::new(ExternalPlugins::open("/etc/tedge/sm-plugins")?);
 
     env_logger::init();
     info!("Starting SM-Agent");
@@ -57,13 +58,16 @@ async fn main() -> anyhow::Result<()> {
             }
 
             SoftwareOperation::SoftwareUpdates { updates } => {
+                for update in &updates {
+                    let status = SoftwareUpdateStatus::scheduled(update);
+                    let json = serde_json::to_string(&status)?;
+                    let _ = mqtt.publish(Message::new(&status_topic, json)).await?;
+                }
+
                 for update in updates {
-                    /*
-                    let blocking_task = tokio::task::spawn_blocking( || {
-                        plugins.apply(&update)
-                    });
-                    let status: SoftwareUpdateStatus = blocking_task.await?; */
-                    let status = plugins.apply(&update);
+                    let plugins = plugins.clone();
+                    let blocking_task = tokio::task::spawn_blocking(move || plugins.apply(&update));
+                    let status: SoftwareUpdateStatus = blocking_task.await?;
                     let json = serde_json::to_string(&status)?;
                     let _ = mqtt.publish(Message::new(&status_topic, json)).await?;
                 }
