@@ -2147,12 +2147,14 @@ dependencies = [
  "futures",
  "mockall",
  "mqtt_client",
+ "tedge_config",
  "thin_edge_json",
  "thiserror",
  "tokio",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "users",
 ]
 
 [[package]]
