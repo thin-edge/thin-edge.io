@@ -5,5 +5,4 @@
 3. [How to connect a cloud end-point?](./004_connect.md)
 4. [How to use `tedge mqtt` module?](./005_pub_sub.md)
 5. [How to test connection to cloud?](./007_test_connectiom.md)
-6. [How to configure local mqtt port?](./008_config_mqtt_port.md)
-
+6. [How to configure the local mqtt port?](./008_config_mqtt_port.md)
