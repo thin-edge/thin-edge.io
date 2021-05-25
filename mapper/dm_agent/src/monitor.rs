@@ -42,6 +42,12 @@ impl Default for DeviceMonitorConfig {
     }
 }
 
+impl DeviceMonitorConfig {
+    pub fn with_port(self, port: u16) -> Self {
+        Self { port, ..self }
+    }
+}
+
 #[derive(Debug)]
 pub struct DeviceMonitor {
     device_monitor_config: DeviceMonitorConfig,

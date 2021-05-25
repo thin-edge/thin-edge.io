@@ -22,4 +22,7 @@ pub enum DeviceMonitorError {
 
     #[error(transparent)]
     BatchingError(#[from] SendError<MeasurementGrouper>),
+
+    #[error("Home directory is not found.")]
+    HomeDirNotFound,
 }

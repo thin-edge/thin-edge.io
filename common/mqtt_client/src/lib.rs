@@ -404,6 +404,11 @@ impl Config {
         }
     }
 
+    /// Set a custom port
+    pub fn with_port(self, port: u16) -> Self {
+        Self { port, ..self }
+    }
+
     /// Update queue_capcity.
     pub fn queue_capacity(self, queue_capacity: usize) -> Self {
         Self {
