@@ -480,7 +480,7 @@ impl Message {
     {
         Message {
             topic: topic.clone(),
-            payload: Message::trim_if_null_terminated(&mut payload.into()).to_vec(),
+            payload: Message::trim_null_terminated(&mut payload.into()),
             qos: QoS::AtLeastOnce,
             pkid: 0,
             retain: false,
@@ -490,13 +490,13 @@ impl Message {
     pub fn qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
     }
+}
 
-    fn trim_if_null_terminated(payload: &mut Vec<u8>) -> &mut Vec<u8> {
-        if !payload.is_empty() && payload[payload.len() - 1].eq(&0) {
-            payload.truncate(payload.len() - 1);
-        }
-        payload
+fn trim_null_terminated(mut vec: Vec<u8>) -> Vec<u8> {
+    if let Some(0) = vec.as_slice().last() {
+        vec.pop();
     }
+    vec
 }
 
 impl From<Message> for Publish {
@@ -696,16 +696,14 @@ mod tests {
 
     #[test]
     fn check_null_terminated_messages() {
-        let mut payload1 = vec![155, 156, 157, 158, 0];
         assert_eq!(
-            Message::trim_if_null_terminated(&mut payload1).to_vec(),
+            trim_null_terminated(vec![155, 156, 157, 158, 0]),
             vec![155, 156, 157, 158]
         );
 
         let payload2 = "ab\u{0}";
         assert_eq!(
-            Message::trim_if_null_terminated(&mut payload2.as_bytes().to_vec()).to_vec(),
-            "ab".as_bytes().to_vec()
+            trim_null_terminated("ab"),.to_vec()
         );
 
         let payload3 = "\u{0}";
@@ -725,9 +723,7 @@ mod tests {
 
         let payload2 = "ab";
         assert_eq!(
-            Message::trim_if_null_terminated(&mut payload2.as_bytes().to_vec()).to_vec(),
-            "ab".as_bytes().to_vec()
-        );
+            Message::trim_if_null_terminated("ab"), "ab".as_bytes().to_vec());
 
         let payload3 = "";
         assert_eq!(
