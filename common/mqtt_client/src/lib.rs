@@ -374,12 +374,12 @@ pub struct Config {
     /// frontend operations.
     ///
     /// Default: `10`.
-    pub queue_capacity: usize,
+    queue_capacity: usize,
 
     /// Clean the MQTT session upon connect if set to `true`.
     ///
     /// Default: `false`.
-    pub clean_session: bool,
+    clean_session: bool,
 }
 
 /// By default a client connects the local MQTT broker.
@@ -402,6 +402,11 @@ impl Config {
             port,
             ..Config::default()
         }
+    }
+
+    /// Set a custom port
+    pub fn with_port(self, port: u16) -> Self {
+        Self { port, ..self }
     }
 
     /// Update queue_capcity.

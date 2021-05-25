@@ -21,12 +21,12 @@ use std::time::Duration;
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
-    pub host: &'static str,
-    pub port: u16,
-    pub mqtt_client_id: &'static str,
-    pub mqtt_source_topic: &'static str,
-    pub mqtt_target_topic: &'static str,
-    pub batching_window: u64,
+    host: &'static str,
+    port: u16,
+    mqtt_client_id: &'static str,
+    mqtt_source_topic: &'static str,
+    mqtt_target_topic: &'static str,
+    batching_window: u64,
 }
 
 impl Default for DeviceMonitorConfig {
@@ -39,6 +39,12 @@ impl Default for DeviceMonitorConfig {
             mqtt_target_topic: DEFAULT_MQTT_TARGET_TOPIC,
             batching_window: DEFAULT_BATCHING_WINDOW,
         }
+    }
+}
+
+impl DeviceMonitorConfig {
+    pub fn with_port(self, port: u16) -> Self {
+        Self { port, ..self }
     }
 }
 

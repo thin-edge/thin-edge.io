@@ -1,4 +1,3 @@
-use crate::flag::Flag;
 use crate::*;
 use certificate::{CertificateError, PemCertificate};
 use std::convert::{TryFrom, TryInto};

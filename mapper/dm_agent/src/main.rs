@@ -27,10 +27,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("{} starting!", APP_NAME);
 
-    let device_monitor_config = DeviceMonitorConfig {
-        port: get_mqtt_port()?,
-        ..DeviceMonitorConfig::default()
-    };
+    let device_monitor_config = DeviceMonitorConfig::default().with_port(mqtt_port()?);
+
     let device_monitor = DeviceMonitor::new(device_monitor_config);
     device_monitor
         .run()
@@ -40,13 +38,17 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_mqtt_port() -> Result<u16, anyhow::Error> {
-    let config_repository = get_config_repository()?;
+fn mqtt_port() -> anyhow::Result<u16> {
+    let config_repository = config_repository()?;
     let tedge_config = config_repository.load()?;
     Ok(tedge_config.query(MqttPortSetting)?.0)
 }
 
-fn get_config_repository() -> Result<TEdgeConfigRepository, anyhow::Error> {
+fn config_repository() -> anyhow::Result<TEdgeConfigRepository> {
+    Ok(TEdgeConfigRepository::new(config_location()?))
+}
+
+fn config_location() -> anyhow::Result<TEdgeConfigLocation> {
     let tedge_config_location = if running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
@@ -54,8 +56,7 @@ fn get_config_repository() -> Result<TEdgeConfigRepository, anyhow::Error> {
             home_dir().ok_or(DeviceMonitorError::HomeDirNotFound)?,
         )
     };
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
-    Ok(config_repository)
+    Ok(tedge_config_location)
 }
 
 // Copied from tedge/src/utils/users/unix.rs. In the future, it would be good to separate it from tedge crate.

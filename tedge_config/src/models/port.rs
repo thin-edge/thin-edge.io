@@ -1,7 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
-#[serde(transparent)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Port(pub u16);
 
 #[derive(thiserror::Error, Debug)]
@@ -34,4 +33,25 @@ impl Into<u16> for Port {
     fn into(self) -> u16 {
         self.0
     }
+}
+
+#[cfg(test)]
+use assert_matches::*;
+#[test]
+
+fn conversion_from_valid_port_succeeds() {
+    assert_matches!(Port::try_from("1234".to_string()), Ok(Port(1234)));
+}
+
+#[test]
+fn conversion_from_longer_integer_fails() {
+    assert_matches!(
+        Port::try_from("66000".to_string()),
+        Err(InvalidPortNumber { .. })
+    );
+}
+
+#[test]
+fn conversion_from_port_to_string() {
+    assert_matches!(TryInto::<String>::try_into(Port(1234)), Ok(port_str) if port_str == "1234");
 }
