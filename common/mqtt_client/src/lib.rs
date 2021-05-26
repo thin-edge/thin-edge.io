@@ -512,7 +512,7 @@ impl Message {
     {
         Message {
             topic: topic.clone(),
-            payload: payload.into(),
+            payload: trim_null_terminated(payload.into()),
             qos: QoS::AtLeastOnce,
             pkid: 0,
             retain: false,
@@ -522,6 +522,13 @@ impl Message {
     pub fn qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
     }
+}
+
+fn trim_null_terminated(mut vec: Vec<u8>) -> Vec<u8> {
+    if let Some(0) = vec.as_slice().last() {
+        vec.pop();
+    }
+    vec
 }
 
 impl From<Message> for Publish {
@@ -723,5 +730,31 @@ mod tests {
         assert!(TopicFilter::new("").is_err());
         assert!(TopicFilter::new("/a/#/b").is_err());
         assert!(TopicFilter::new("/a/#/+").is_err());
+    }
+
+    #[test]
+    fn check_null_terminated_messages() {
+        assert_eq!(trim_null_terminated(vec![b'a', b'b', 0]), vec![b'a', b'b']);
+
+        assert_eq!(
+            trim_null_terminated(vec![b'a', 0, b'b', 0]),
+            vec![b'a', 0, b'b']
+        );
+
+        assert_eq!(trim_null_terminated(vec![0]), vec![]);
+
+        assert_eq!(trim_null_terminated(vec![0, 0]), vec![0]);
+    }
+
+    #[test]
+    fn check_non_null_terminated_messages() {
+        assert_eq!(trim_null_terminated(vec![b'a', b'b']), vec![b'a', b'b']);
+
+        assert_eq!(
+            trim_null_terminated(vec![b'a', 0, b'b']),
+            vec![b'a', 0, b'b']
+        );
+
+        assert_eq!(trim_null_terminated(vec![]), vec![]);
     }
 }
