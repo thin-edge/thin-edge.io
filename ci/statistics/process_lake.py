@@ -187,16 +187,20 @@ def generate(style, show, lake, testdata):
     logging.info("Postprocessing")
 
     data_length = 60
-    cpu_array = db.CpuHistory( "ci_cpu_measurement_tedge_mapper", lake,
-        processing_range * data_length, client, testdata)
-    cpu_array_long = db.CpuHistory( "ci_cpu_measurement_tedge_mapper_long", lake,
-        processing_range * data_length *2 , client, testdata)
+    cpu_array = db.CpuHistory(
+        "ci_cpu_measurement_tedge_mapper", lake,
+        processing_range * data_length, data_length, client, testdata)
+    cpu_array_long = db.CpuHistory(
+        "ci_cpu_measurement_tedge_mapper_long", lake,
+        processing_range * data_length *2 , data_length, client, testdata)
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
 
-    cpu_array.postprocess(relevant_folders, "publish_sawmill_record_statistics")
-    cpu_array_long.postprocess(relevant_folders, "publish_sawmill_record_statistics_long")
+    cpu_array.postprocess(relevant_folders,
+        "publish_sawmill_record_statistics")
+    cpu_array_long.postprocess(relevant_folders,
+        "publish_sawmill_record_statistics_long")
 
     postprocess_vals(
         data_length,

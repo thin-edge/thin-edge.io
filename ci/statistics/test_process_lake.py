@@ -154,7 +154,7 @@ def test_postprocess_vals_cpu():
         lake
     )
 
-    cpu_array.postprocess(relevant_measurement_folders)
+    cpu_array.postprocess(relevant_measurement_folders, "publish_sawmill_record_statistics")
 
     # programmatically reproduce the data set
     data = []
@@ -264,7 +264,8 @@ def test_postprocess_vals_cpu_hist():
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
-    cpu_array.postprocess(relevant_measurement_folders)
+    cpu_array.postprocess(relevant_measurement_folders,
+        "publish_sawmill_record_statistics")
 
     pl.postprocess_vals(
         data_length,
@@ -462,7 +463,7 @@ class TestCpuHistory:
             "results_2_unpack",
             "results_4_unpack",
         ]
-        base.postprocess(folders)
+        base.postprocess(folders, "publish_sawmill_record_statistics")
 
         #mock.assert_called_once()
         assert mock.call_count == 3

@@ -280,9 +280,10 @@ def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
 class CpuHistory(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
 
-    def __init__(self, name, lake, size, client, testmode):
+    def __init__(self, name, lake, size, data_length, client, testmode):
         self.array = np.zeros((size, 7), dtype=np.int32)
         self.size = size
+        self.data_length = data_length
         self.client = client
         self.lake = lake
         if testmode:
@@ -293,8 +294,7 @@ class CpuHistory(MeasurementBase):
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def scrap_cpu_stats(self, thefile, measurement_index, cpuidx):
-        data_length = 10
-        return scrap_cpu(data_length, thefile, measurement_index, cpuidx, self)
+        return scrap_cpu(self.data_length, thefile, measurement_index, cpuidx, self)
 
     def postprocess(self, folders, testname):
         cpuidx =0
