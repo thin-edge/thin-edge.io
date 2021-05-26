@@ -33,7 +33,7 @@ class MapperReconnectAwait(BaseTest):
 
         mapper = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper, "c8y"],
+            arguments=["-u", "tedge-mapper-c8y", tedge_mapper, "c8y"],
             stdouterr="tedge_mapper",
             background=True,
         )
