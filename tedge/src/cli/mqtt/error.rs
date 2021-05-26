@@ -7,7 +7,7 @@ pub enum MqttError {
     IoError(#[from] std::io::Error),
 
     #[error("Received message is not UTF-8 format")]
-    FromUtf8Error(#[from] std::string::FromUtf8Error),
+    Utf8Error(#[from] std::str::Utf8Error),
 
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,

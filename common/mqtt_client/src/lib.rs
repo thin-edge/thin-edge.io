@@ -499,7 +499,7 @@ impl TopicFilter {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
-    pub payload: Vec<u8>,
+    payload: Vec<u8>,
     pub qos: QoS,
     pkid: u16,
     retain: bool,
@@ -512,7 +512,7 @@ impl Message {
     {
         Message {
             topic: topic.clone(),
-            payload: trim_null_terminated(payload.into()),
+            payload: payload.into(),
             qos: QoS::AtLeastOnce,
             pkid: 0,
             retain: false,
@@ -522,13 +522,13 @@ impl Message {
     pub fn qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
     }
-}
 
-fn trim_null_terminated(mut vec: Vec<u8>) -> Vec<u8> {
-    if let Some(0) = vec.as_slice().last() {
-        vec.pop();
+    /// trimming the trailing null char
+    pub fn payload_trimmed(&self) -> &[u8] {
+        self.payload
+            .strip_suffix(&[0])
+            .unwrap_or(self.payload.as_slice())
     }
-    vec
 }
 
 impl From<Message> for Publish {
@@ -703,6 +703,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -734,27 +735,33 @@ mod tests {
 
     #[test]
     fn check_null_terminated_messages() {
-        assert_eq!(trim_null_terminated(vec![b'a', b'b', 0]), vec![b'a', b'b']);
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"123\0"[..]);
 
-        assert_eq!(
-            trim_null_terminated(vec![b'a', 0, b'b', 0]),
-            vec![b'a', 0, b'b']
-        );
+        assert_eq!(message.payload_trimmed(), b"123");
+    }
 
-        assert_eq!(trim_null_terminated(vec![0]), vec![]);
+    #[test]
+    fn payload_trimmed_removes_only_last_null_char() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"123\0\0"[..]);
 
-        assert_eq!(trim_null_terminated(vec![0, 0]), vec![0]);
+        assert_eq!(message.payload_trimmed(), b"123\0");
+    }
+
+    #[test]
+    fn check_empty_messages() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b""[..]);
+
+        assert_eq!(message.payload_trimmed(), b"");
     }
 
     #[test]
     fn check_non_null_terminated_messages() {
-        assert_eq!(trim_null_terminated(vec![b'a', b'b']), vec![b'a', b'b']);
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"123"[..]);
 
-        assert_eq!(
-            trim_null_terminated(vec![b'a', 0, b'b']),
-            vec![b'a', 0, b'b']
-        );
-
-        assert_eq!(trim_null_terminated(vec![]), vec![]);
+        assert_eq!(message.payload_trimmed(), b"123");
     }
 }

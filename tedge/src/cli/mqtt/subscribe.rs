@@ -71,13 +71,13 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
 
 async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
     if hide_topic {
-        let s = String::from_utf8(message.payload)?.to_string();
+        let s = std::str::from_utf8(message.payload_trimmed())?;
         async_println(&s).await?;
     } else {
         let s = format!(
             "[{}] {}",
             message.topic.name,
-            String::from_utf8(message.payload)?
+            std::str::from_utf8(message.payload_trimmed())?
         );
         async_println(&s).await?;
     }
