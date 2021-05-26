@@ -18,12 +18,26 @@ class TestMemoryHistory:
         assert base.json_data != None
 
     def test_update_table_calls_upload(self, mocker):
-        metadata = db.MemoryHistory(3, None, None)
-        mocker.patch.object(metadata, "upload_table")
+        base = db.MemoryHistory(3, None, None)
+        mocker.patch.object(base, "upload_table")
 
-        metadata.update_table()
+        base.update_table()
 
-        metadata.upload_table.assert_called_once()
+        base.upload_table.assert_called_once()
+
+
+    def test_scrap_memory(self):
+        base = db.MemoryHistory(3, None, None)
+        base.scrap_mem()
+
+    def test_postrocess(self, mocker):
+
+        base = db.MemoryHistory(3, None, None)
+        mock = mocker.patch.object(base, "scrap_mem")
+
+        base.postprocess()
+
+        mock.assert_called_once_with()
 
 
 class TestCpuHistory:

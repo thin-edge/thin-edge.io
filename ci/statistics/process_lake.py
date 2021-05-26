@@ -16,53 +16,6 @@ from numpy.core.records import array
 
 import databases as db
 
-
-def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
-    with open(thefile) as thestats:
-        lines = thestats.readlines()
-        sample = 0
-        for line in lines:
-            entries = line.split()
-            size = entries[1 - 1]  #     (1) total program size
-            resident = entries[2 - 1]  #   (2) resident set size
-            shared = entries[3 - 1]  #     (3) number of resident shared pages
-            text = entries[4 - 1]  #       (4) text (code)
-            # lib = entries[5-1] #      (5) library (unused since Linux 2.6; always 0)
-            data = entries[6 - 1]  #      (6) data + stack
-
-            arr.insert_line(
-                idx=memidx,
-                mid=mesaurement_index,
-                sample=sample,
-                size=size,
-                resident=resident,
-                shared=shared,
-                text=text,
-                data=data,
-            )
-            sample += 1
-            memidx += 1
-
-    logging.debug(f"Read {sample} Memory stats")
-    missing = data_length - sample
-    for m in range(missing):
-
-        arr.insert_line(
-            idx=memidx,
-            mid=mesaurement_index,
-            sample=sample,
-            size=0,
-            resident=0,
-            shared=0,
-            text=0,
-            data=0,
-        )
-        sample += 1
-        memidx += 1
-
-    return memidx
-
-
 def postprocess_vals(
     data_length,
     measurement_folders,
@@ -94,7 +47,7 @@ def postprocess_vals(
         # )
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
-        memidx = scrap_mem(data_length, statsfile, mesaurement_index, memidx, mem_array)
+        memidx = db.scrap_mem(data_length, statsfile, mesaurement_index, memidx, mem_array)
 
     mlen = len(measurement_folders)
 
