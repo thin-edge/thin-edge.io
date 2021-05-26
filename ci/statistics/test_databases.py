@@ -6,10 +6,11 @@ import pytest
 
 import databases as db
 
+# TODO mocker.ANY does not seem to work
 
 class TestMemoryHistory:
     def test_update_table_creates_attributes(self, mocker):
-        base = db.MemoryHistory(3, None, None)
+        base = db.MemoryHistory(None, 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -18,7 +19,7 @@ class TestMemoryHistory:
         assert base.json_data != None
 
     def test_update_table_calls_upload(self, mocker):
-        base = db.MemoryHistory(3, None, None)
+        base = db.MemoryHistory(None, 3, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -27,13 +28,14 @@ class TestMemoryHistory:
 
 
     def test_scrap_memory(self):
-        base = db.MemoryHistory(3, None, None)
+        base = db.MemoryHistory(None, 3, None, None)
         base.scrap_mem()
 
     def test_postrocess(self, mocker):
+        lake = os.path.expanduser("~/DataLakeTest")
 
-        base = db.MemoryHistory(3, None, None)
-        mock = mocker.patch.object(base, "scrap_mem")
+        base = db.MemoryHistory(lake, 3, None, None)
+        mock = mocker.patch.object(base, "scrap_mem", side_effect = [10,20,30])
 
         folders = [
             "results_1_unpack",
@@ -41,12 +43,15 @@ class TestMemoryHistory:
             "results_4_unpack",
         ]
 
-        calls = [
-            mocker.call(),
-            mocker.call(),
-            mocker.call()]
+        exp = "{}/{}/PySys/name/Output/linux/filename.out"
 
-        base.postprocess(folders)
+        calls = [
+            mocker.call( exp.format(lake, folders[0]), 1 , 0, base),
+            mocker.call( exp.format(lake, folders[1]), 2 , 10, base),
+            mocker.call( exp.format(lake, folders[2]), 4 , 20, base)
+            ]
+
+        base.postprocess(folders, "name", "filename", "binary")
 
         #mock.assert_called_once_with()
 

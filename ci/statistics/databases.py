@@ -490,7 +490,8 @@ def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
 
 
 class MemoryHistory(MeasurementBase):
-    def __init__(self, size, client, testmode):
+    def __init__(self, lake, size, client, testmode):
+        self.lake = lake
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
         self.client = client
@@ -517,10 +518,12 @@ class MemoryHistory(MeasurementBase):
 
             cpuidx = self.scrap_cpu_stats(statsfile, measurement_index, cpuidx, binary)
 
-    def postprocess(self, folders):
+    def postprocess(self, folders, testname, filename, binary):
         index = 0
         for folder in folders:
-            self.scrap_mem()
+            measurement_index = int(folder.split("_")[1].split(".")[0])
+            statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
+            index = self.scrap_mem( statsfile, measurement_index, index, self)
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
