@@ -228,7 +228,7 @@ class MeasurementMetadata(MeasurementBase):
         except:  # google.api_core.exceptions.NotFound:
             pass
 
-def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
+def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr, binary):
 
     try:
         with open(thefile) as thestats:
@@ -237,7 +237,7 @@ def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
 
             for line in lines:
                 entries = line.split()
-                if len(entries) == 52 and entries[1] == "(tedge_mapper)":
+                if len(entries) == 52 and entries[1] == f"({binary})":
                     ut = int(entries[14 - 1])
                     st = int(entries[15 - 1])
                     ct = int(entries[16 - 1])
@@ -255,7 +255,8 @@ def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr):
                     )
                     sample += 1
                     cpuidx += 1
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        logging.error("File not found !!!" + str(e))
         return cpuidx
 
 
@@ -293,17 +294,17 @@ class CpuHistory(MeasurementBase):
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-    def scrap_cpu_stats(self, thefile, measurement_index, cpuidx):
-        return scrap_cpu(self.data_length, thefile, measurement_index, cpuidx, self)
+    def scrap_cpu_stats(self, thefile, measurement_index, cpuidx, binary):
+        return scrap_cpu(self.data_length, thefile, measurement_index, cpuidx, self, binary)
 
-    def postprocess(self, folders, testname, filename):
+    def postprocess(self, folders, testname, filename, binary):
         cpuidx =0
         for folder in folders:
             measurement_index = int(folder.split("_")[1].split(".")[0])
 
             statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
 
-            cpuidx = self.scrap_cpu_stats( statsfile, measurement_index, cpuidx)
+            cpuidx = self.scrap_cpu_stats( statsfile, measurement_index, cpuidx, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]

@@ -195,14 +195,22 @@ def generate(style, show, lake, testdata):
         "ci_cpu_measurement_tedge_mapper_long", lake,
         processing_range * data_length *2 , data_length, client, testdata)
 
+    cpu_array_long_mosquitto = db.CpuHistory(
+        "ci_cpu_measurement_mosquitto_long", lake,
+        processing_range * data_length *2 , data_length, client, testdata)
+
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
 
     cpu_array.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics", "stat_mapper_stdout")
+        "publish_sawmill_record_statistics", "stat_mapper_stdout", "tedge_mapper")
+
     cpu_array_long.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics_long", "stat_mapper_stdout")
+        "publish_sawmill_record_statistics_long", "stat_mapper_stdout", "tedge_mapper")
+
+    cpu_array_long_mosquitto.postprocess(relevant_folders,
+        "publish_sawmill_record_statistics_long", "stat_mosquitto_stdout", "mosquitto")
 
     postprocess_vals(
         data_length,
@@ -221,6 +229,7 @@ def generate(style, show, lake, testdata):
         cpu_array_long.show()
         mem_array.show()
         cpu_hist_array.show()
+        cpu_array_long_mosquitto.show()
         measurements.show()
 
     logging.info("Uploading")
@@ -236,6 +245,9 @@ def generate(style, show, lake, testdata):
 
     cpu_hist_array.delete_table()
     cpu_hist_array.update_table()
+
+    cpu_array_long_mosquitto.delete_table()
+    cpu_array_long_mosquitto.update_table()
 
     measurements.delete_table()
     measurements.update_table()
