@@ -296,12 +296,12 @@ class CpuHistory(MeasurementBase):
     def scrap_cpu_stats(self, thefile, measurement_index, cpuidx):
         return scrap_cpu(self.data_length, thefile, measurement_index, cpuidx, self)
 
-    def postprocess(self, folders, testname):
+    def postprocess(self, folders, testname, filename):
         cpuidx =0
         for folder in folders:
             measurement_index = int(folder.split("_")[1].split(".")[0])
 
-            statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/stat_mapper_stdout.out"
+            statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
 
             cpuidx = self.scrap_cpu_stats( statsfile, measurement_index, cpuidx)
 
