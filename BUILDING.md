@@ -44,7 +44,7 @@ rustc 1.51.0 (2fd73fabe 2021-03-23)
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
-Current MSRV is `1.46.0`.
+Current MSRV is `1.51.0`.
 
 ### Cross compilation toolchain (optional)
 

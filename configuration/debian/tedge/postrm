@@ -4,5 +4,5 @@ set -e
 ### Remove configs
 
 if [ "$1" = "purge" ]; then
-    rm -r /etc/tedge
+    rm -rf /etc/tedge
 fi

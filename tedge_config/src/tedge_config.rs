@@ -223,6 +223,27 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttPortSetting) -> ConfigSettingResult<Port> {
+        Ok(self
+            .data
+            .mqtt
+            .port
+            .map(Port)
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
+    }
+
+    fn update(&mut self, _setting: MqttPortSetting, value: Port) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttPortSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = None;
+        Ok(())
+    }
+}
+
 /// Generic extension trait implementation for all `ConfigSetting`s of `TEdgeConfig`
 /// that provide `TryFrom`/`TryInto` implementations for `String`.
 impl<T, E, F> ConfigSettingAccessorStringExt<T> for TEdgeConfig

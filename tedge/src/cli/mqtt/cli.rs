@@ -3,9 +3,9 @@ use crate::command::{BuildCommand, BuildContext, Command};
 use mqtt_client::{QoS, Topic};
 use std::time::Duration;
 use structopt::StructOpt;
+use tedge_config::*;
 
 const DEFAULT_HOST: &str = "localhost";
-const DEFAULT_PORT: u16 = 1883;
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -37,7 +37,11 @@ pub enum TEdgeMqttCli {
 }
 
 impl BuildCommand for TEdgeMqttCli {
-    fn build_command(self, _context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+        let port = context.config_repository.load()?.query(MqttPortSetting)?;
+
+        let mqtt_config = mqtt_client::Config::new(DEFAULT_HOST, port.into());
+
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {
@@ -48,7 +52,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic: Topic::new(topic.as_str())?,
                     message,
                     qos,
-                    mqtt_config: mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT),
+                    mqtt_config,
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
                     disconnect_timeout: DISCONNECT_TIMEOUT,
                 }
@@ -61,7 +65,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic,
                     qos,
                     hide_topic,
-                    mqtt_config: mqtt_client::Config::new(DEFAULT_HOST, DEFAULT_PORT),
+                    mqtt_config,
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                 }
                 .into_boxed(),

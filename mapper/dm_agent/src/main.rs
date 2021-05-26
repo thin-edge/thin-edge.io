@@ -5,7 +5,10 @@ mod monitor;
 
 use tracing::{debug_span, info, Instrument};
 
+use crate::error::*;
 use crate::monitor::{DeviceMonitor, DeviceMonitorConfig};
+use std::path::PathBuf;
+use tedge_config::*;
 
 const APP_NAME: &str = "tedge-dm-agent";
 const DEFAULT_LOG_LEVEL: &str = "warn";
@@ -24,7 +27,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("{} starting!", APP_NAME);
 
-    let device_monitor_config = DeviceMonitorConfig::default();
+    let device_monitor_config = DeviceMonitorConfig::default().with_port(mqtt_port()?);
+
     let device_monitor = DeviceMonitor::new(device_monitor_config);
     device_monitor
         .run()
@@ -32,4 +36,37 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+fn mqtt_port() -> anyhow::Result<u16> {
+    let config_repository = config_repository()?;
+    let tedge_config = config_repository.load()?;
+    Ok(tedge_config.query(MqttPortSetting)?.into())
+}
+
+fn config_repository() -> anyhow::Result<TEdgeConfigRepository> {
+    Ok(TEdgeConfigRepository::new(config_location()?))
+}
+
+fn config_location() -> anyhow::Result<TEdgeConfigLocation> {
+    let tedge_config_location = if running_as_root() {
+        tedge_config::TEdgeConfigLocation::from_default_system_location()
+    } else {
+        tedge_config::TEdgeConfigLocation::from_users_home_location(
+            home_dir().ok_or(DeviceMonitorError::HomeDirNotFound)?,
+        )
+    };
+    Ok(tedge_config_location)
+}
+
+// Copied from tedge/src/utils/users/unix.rs. In the future, it would be good to separate it from tedge crate.
+fn running_as_root() -> bool {
+    users::get_current_uid() == 0
+}
+
+// Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .and_then(|home| if home.is_empty() { None } else { Some(home) })
+        .map(PathBuf::from)
 }
