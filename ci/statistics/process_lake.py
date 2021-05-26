@@ -129,7 +129,7 @@ def generate(style, show, lake, testdata):
         testdata,
     )
 
-    mem_array = db.MemoryHistory(processing_range * data_length, data_length, client, testdata)
+    mem_array = db.MemoryHistory(lake, processing_range * data_length, data_length, client, testdata)
 
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
 
@@ -168,17 +168,9 @@ def generate(style, show, lake, testdata):
         "statm_mapper_stdout",
         "tedge_mapper")
 
-    postprocess_vals(
-        data_length,
-        relevant_folders,
-        cpu_array,
-        cpu_array_long,
-        mem_array,
-        cpu_hist_array,
-        lake,
-    )
-
     measurements.postprocess(relevant_folders)
+
+    cpu_hist_array.postprocess(relevant_folders, data_length, cpu_array)
 
     if show:
         cpu_array.show()
