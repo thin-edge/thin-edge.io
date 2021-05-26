@@ -173,7 +173,7 @@ def get_relevant_measurement_folders(lake, testdata):
     return relevant_folders, processing_range
 
 
-def generate(style, lake, testdata):
+def generate(style, show, lake, testdata):
 
     client, dbo, integer, conn = db.get_database(style)
 
@@ -187,11 +187,16 @@ def generate(style, lake, testdata):
     logging.info("Postprocessing")
 
     data_length = 60
-    cpu_array = db.CpuHistory( "ci_cpu_measurement_tedge_mapper", processing_range * data_length, client, testdata)
-    cpu_array_long = db.CpuHistory( "ci_cpu_measurement_tedge_mapper_long", processing_range * data_length *2 , client, testdata)
+    cpu_array = db.CpuHistory( "ci_cpu_measurement_tedge_mapper", lake,
+        processing_range * data_length, client, testdata)
+    cpu_array_long = db.CpuHistory( "ci_cpu_measurement_tedge_mapper_long", lake,
+        processing_range * data_length *2 , client, testdata)
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
+
+    cpu_array.postprocess(relevant_folders, "publish_sawmill_record_statistics")
+    cpu_array_long.postprocess(relevant_folders, "publish_sawmill_record_statistics_long")
 
     postprocess_vals(
         data_length,
@@ -205,11 +210,12 @@ def generate(style, lake, testdata):
 
     measurements.postprocess(relevant_folders)
 
-    cpu_array.show()
-    cpu_array_long.show()
-    mem_array.show()
-    cpu_hist_array.show()
-    measurements.show()
+    if show:
+        cpu_array.show()
+        cpu_array_long.show()
+        mem_array.show()
+        cpu_hist_array.show()
+        measurements.show()
 
     logging.info("Uploading")
 
@@ -236,10 +242,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("style", type=str, help="Database style: [none, google]")
     parser.add_argument("-t", "--testdata", action='store_true', help="Use test data sets", required=False)
+    parser.add_argument("-s", "--show", action='store_true', help="Show data with matplotlib", required=False)
+    parser.add_argument("-v", "--verbose", action='store_true', help="Verbose", required=False)
     args = parser.parse_args()
 
     testdata = args.testdata
     style = args.style
+    show = args.show
+    verbose = args.verbose
 
     assert style in ['google','none'] #'ms'
 
@@ -250,7 +260,12 @@ def main():
         logging.info("Using real data lake")
         lake = os.path.expanduser("~/DataLake")
 
-    generate(style, lake, testdata)
+    if verbose:
+        logging.info("Enabling verbose mode")
+        logging.basicConfig(level=logging.DEBUG)
+
+
+    generate(style, show, lake, testdata)
 
 if __name__ == "__main__":
     main()
