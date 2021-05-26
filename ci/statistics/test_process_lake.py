@@ -152,7 +152,7 @@ def test_postprocess_vals_cpu():
     )
     mem_array = db.MemoryHistory(
         lake,
-        len(relevant_measurement_folders) * data_length, client, testmode
+        len(relevant_measurement_folders) * data_length, data_length, client, testmode
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
@@ -229,7 +229,9 @@ def test_postprocess_vals_mem():
     )
     mem_array = db.MemoryHistory(
         lake,
-        len(relevant_measurement_folders) * data_length, client, testmode
+        len(relevant_measurement_folders) * data_length,
+        data_length,
+        client, testmode
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
@@ -242,6 +244,11 @@ def test_postprocess_vals_mem():
         cpu_hist_array,
         lake,
     )
+
+    mem_array.postprocess(relevant_measurement_folders,
+        "publish_sawmill_record_statistics",
+        "statm_mapper_stdout",
+        "tedge_mapper")
 
     # programmatically reproduce the data set
     data = []
@@ -299,7 +306,7 @@ def test_postprocess_vals_cpu_hist():
     )
     mem_array = db.MemoryHistory(
         lake,
-        len(relevant_measurement_folders) * data_length, client, testmode
+        len(relevant_measurement_folders) * data_length, data_length, client, testmode
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 

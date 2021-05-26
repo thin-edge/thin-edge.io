@@ -26,29 +26,6 @@ def postprocess_vals(
     lake,
 ):
 
-    # overall row index for the cpu table
-    cpuidx = 0
-    # overall row index for the memory table
-    memidx = 0
-
-    cpuidxl = 0
-
-    for folder in measurement_folders:
-        mesaurement_index = int(folder.split("_")[1].split(".")[0])
-
-        # statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
-        # cpuidx = scrap_cpu(
-        #    data_length, statsfile, mesaurement_index, cpuidx, cpu_array
-        # )
-
-        # statsfile_long = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics_long/Output/linux/stat_mapper_stdout.out"
-        # cpuidxl = scrap_cpu(
-        #    data_length *2 , statsfile_long, mesaurement_index, cpuidxl, cpu_array_long
-        # )
-
-        statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
-        memidx = db.scrap_mem(data_length, statsfile, mesaurement_index, memidx, mem_array)
-
     mlen = len(measurement_folders)
 
     for i in range(data_length):
@@ -180,8 +157,10 @@ def generate(style, show, lake, testdata):
         testdata,
     )
 
-    mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
+    mem_array = db.MemoryHistory(processing_range * data_length, data_length, client, testdata)
+
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
+
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
 
     cpu_array.postprocess(
@@ -211,6 +190,11 @@ def generate(style, show, lake, testdata):
         "stat_mosquitto_stdout",
         "mosquitto",
     )
+
+    mem_array.postprocess(relevant_folders,
+        "publish_sawmill_record_statistics",
+        "statm_mapper_stdout",
+        "tedge_mapper")
 
     postprocess_vals(
         data_length,

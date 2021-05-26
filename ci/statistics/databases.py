@@ -443,55 +443,10 @@ class CpuHistoryStacked(MeasurementBase):
 
         self.upload_table()
 
-def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
-    with open(thefile) as thestats:
-        lines = thestats.readlines()
-        sample = 0
-        for line in lines:
-            entries = line.split()
-            size = entries[1 - 1]  #     (1) total program size
-            resident = entries[2 - 1]  #   (2) resident set size
-            shared = entries[3 - 1]  #     (3) number of resident shared pages
-            text = entries[4 - 1]  #       (4) text (code)
-            # lib = entries[5-1] #      (5) library (unused since Linux 2.6; always 0)
-            data = entries[6 - 1]  #      (6) data + stack
-
-            arr.insert_line(
-                idx=memidx,
-                mid=mesaurement_index,
-                sample=sample,
-                size=size,
-                resident=resident,
-                shared=shared,
-                text=text,
-                data=data,
-            )
-            sample += 1
-            memidx += 1
-
-    logging.debug(f"Read {sample} Memory stats")
-    missing = data_length - sample
-    for m in range(missing):
-
-        arr.insert_line(
-            idx=memidx,
-            mid=mesaurement_index,
-            sample=sample,
-            size=0,
-            resident=0,
-            shared=0,
-            text=0,
-            data=0,
-        )
-        sample += 1
-        memidx += 1
-
-    return memidx
-
-
 class MemoryHistory(MeasurementBase):
-    def __init__(self, lake, size, client, testmode):
+    def __init__(self, lake, size, data_length, client, testmode):
         self.lake = lake
+        self.data_length = data_length
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
         self.client = client
@@ -504,19 +459,50 @@ class MemoryHistory(MeasurementBase):
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
 
-    def scrap_mem(self):
-        pass
+    def scrap_mem(self, thefile, mesaurement_index, memidx, arr):
+        with open(thefile) as thestats:
+            lines = thestats.readlines()
+            sample = 0
+            for line in lines:
+                entries = line.split()
+                size = entries[1 - 1]  #     (1) total program size
+                resident = entries[2 - 1]  #   (2) resident set size
+                shared = entries[3 - 1]  #     (3) number of resident shared pages
+                text = entries[4 - 1]  #       (4) text (code)
+                # lib = entries[5-1] #      (5) library (unused since Linux 2.6; always 0)
+                data = entries[6 - 1]  #      (6) data + stack
 
-    def postprocess_x(self, folders, testname, filename, binary):
-        cpuidx = 0
-        for folder in folders:
-            measurement_index = int(folder.split("_")[1].split(".")[0])
+                arr.insert_line(
+                    idx=memidx,
+                    mid=mesaurement_index,
+                    sample=sample,
+                    size=size,
+                    resident=resident,
+                    shared=shared,
+                    text=text,
+                    data=data,
+                )
+                sample += 1
+                memidx += 1
 
-            statsfile = (
-                f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
+        logging.debug(f"Read {sample} Memory stats")
+        missing = self.data_length - sample
+        for m in range(missing):
+
+            arr.insert_line(
+                idx=memidx,
+                mid=mesaurement_index,
+                sample=sample,
+                size=0,
+                resident=0,
+                shared=0,
+                text=0,
+                data=0,
             )
+            sample += 1
+            memidx += 1
 
-            cpuidx = self.scrap_cpu_stats(statsfile, measurement_index, cpuidx, binary)
+        return memidx
 
     def postprocess(self, folders, testname, filename, binary):
         index = 0
