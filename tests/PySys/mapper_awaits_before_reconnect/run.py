@@ -24,7 +24,7 @@ class MapperReconnectAwait(BaseTest):
 
         subber = self.startProcess(
             command="/usr/bin/mosquitto_sub",
-            arguments=["-i", "tedge-mapper", "-t", "test"],
+            arguments=["-i", "tedge-mapper-c8y", "-t", "test"],
             stdouterr="mosquitto_sub",
             background=True,
         )
