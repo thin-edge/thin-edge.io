@@ -35,9 +35,24 @@ class TestMemoryHistory:
         base = db.MemoryHistory(3, None, None)
         mock = mocker.patch.object(base, "scrap_mem")
 
-        base.postprocess()
+        folders = [
+            "results_1_unpack",
+            "results_2_unpack",
+            "results_4_unpack",
+        ]
 
-        mock.assert_called_once_with()
+        calls = [
+            mocker.call(),
+            mocker.call(),
+            mocker.call()]
+
+        base.postprocess(folders)
+
+        #mock.assert_called_once_with()
+
+        assert mock.call_count == 3
+
+        mock.assert_has_calls(calls)
 
 
 class TestCpuHistory:
