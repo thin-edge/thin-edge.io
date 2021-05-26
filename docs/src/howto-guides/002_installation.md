@@ -1,5 +1,17 @@
 # How to install `thin-edge.io`?
 
+## Installation with get-thin-edge_io.sh script
+
+There are two possibilities to install thin-edge.io, the easiest way is to use the installation script with this command:
+```
+curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s 0.1.0
+```
+You can execute that command on your device and it will do all required steps for an initial setup.
+
+If you prefer to have a little more control over the installation or the script did not work for you, please go on with the following steps.
+
+## Manual installation steps
+
 To install thin edge package it is required to use `curl` to download the package and `dpkg` to install it.
 
 ## Dependency installation

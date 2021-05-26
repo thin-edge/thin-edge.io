@@ -4,7 +4,7 @@
 // Proposed to use mock server instead of using live service on the Internet.
 // Run this test by calling 'cargo test --features integration-test' from the base path of the crate
 fn sending_and_receiving_a_message() {
-    use mqtt_client::{Config, Message, Topic};
+    use mqtt_client::{Config, Message, MqttClient, Topic};
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -23,7 +23,7 @@ fn sending_and_receiving_a_message() {
             msg = received.next() => Ok(msg),
             _ = sleep(Duration::from_millis(1000)) => Ok(None)
         }
-    };
+    }
 
     let payload = String::from("Hello there!");
     match tokio_test::block_on(scenario(payload.clone())) {

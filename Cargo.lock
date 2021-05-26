@@ -277,6 +277,7 @@ dependencies = [
  "assert-json-diff 2.0.1",
  "assert_matches",
  "chrono",
+ "clock",
  "criterion",
  "pretty_assertions",
  "proptest",
@@ -354,6 +355,14 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "clock"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mockall",
 ]
 
 [[package]]
@@ -1154,11 +1163,13 @@ name = "mqtt_client"
 version = "0.1.0"
 dependencies = [
  "async-log",
+ "async-trait",
  "env_logger",
  "futures",
  "futures-timer",
  "json",
  "log",
+ "mockall",
  "rand 0.8.3",
  "rumqttc",
  "thiserror",
@@ -2132,15 +2143,18 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "chrono",
+ "clock",
  "futures",
  "mockall",
  "mqtt_client",
+ "tedge_config",
  "thin_edge_json",
  "thiserror",
  "tokio",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "users",
 ]
 
 [[package]]
@@ -2148,16 +2162,25 @@ name = "tedge_mapper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert-json-diff 2.0.1",
+ "assert_matches",
+ "async-trait",
  "c8y_translator_lib",
  "chrono",
+ "clock",
  "env_logger",
  "flockfile",
  "log",
  "mqtt_client",
+ "serde_json",
+ "tedge_config",
  "thin_edge_json",
+ "thiserror",
  "tokio",
+ "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "users",
 ]
 
 [[package]]
@@ -2198,6 +2221,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "clock",
  "json",
  "mockall",
  "pretty_assertions",
@@ -2324,9 +2348,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-test"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f58403903e94d4bc56805e46597fced893410b2e753e229d3f7f22423ea03f67"
+checksum = "53474327ae5e166530d17f2d956afcb4f8a004de581b3cae10f12006bc8163e3"
 dependencies = [
  "async-stream",
  "bytes",

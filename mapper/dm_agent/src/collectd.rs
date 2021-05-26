@@ -22,6 +22,15 @@ pub enum CollectdError {
 }
 
 impl<'a> CollectdMessage<'a> {
+    #[cfg(test)]
+    pub fn new(metric_group_key: &'a str, metric_key: &'a str, metric_value: f64) -> Self {
+        Self {
+            metric_group_key,
+            metric_key,
+            metric_value,
+        }
+    }
+
     pub fn parse_from(mqtt_message: &'a Message) -> Result<Self, CollectdError> {
         let topic = mqtt_message.topic.name.as_str();
         let collectd_topic = match CollectdTopic::from_str(topic) {
@@ -206,8 +215,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_no_seperator() {
-        let payload: Vec<u8> = "123456789".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -217,8 +226,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_more_seperators() {
-        let payload: Vec<u8> = "123456789:98.6:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:98.6:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -228,8 +237,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_value() {
-        let payload: Vec<u8> = "123456789:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -239,8 +248,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_timestamp() {
-        let payload: Vec<u8> = "abc:98.6".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"abc:98.6";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,

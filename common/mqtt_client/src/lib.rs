@@ -1,7 +1,7 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
-//! use mqtt_client::{Config,Message,Topic};
+//! use mqtt_client::{MqttClient,Config,Message,Topic};
 //!
 //! #[tokio::main]
 //! async fn main (){
@@ -14,19 +14,43 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use async_trait::async_trait;
 use futures::future::Future;
+use mockall::automock;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot};
 
+#[automock]
+#[async_trait]
+pub trait MqttClient: Send + Sync {
+    fn subscribe_errors(&self) -> Box<dyn MqttErrorStream>;
+
+    async fn subscribe(&self, filter: TopicFilter) -> Result<Box<dyn MqttMessageStream>, Error>;
+
+    async fn publish(&self, message: Message) -> Result<MessageId, Error>;
+}
+
+#[async_trait]
+#[automock]
+pub trait MqttMessageStream: Send + Sync {
+    async fn next(&mut self) -> Option<Message>;
+}
+
+#[async_trait]
+#[automock]
+pub trait MqttErrorStream: Send + Sync {
+    async fn next(&mut self) -> Option<Arc<Error>>;
+}
+
 /// A connection to the local MQTT bus.
 ///
 /// The host and port are implied: a connection can only be open on the localhost, port 1883.
 ///
 /// ```no_run
-/// use mqtt_client::{Config,Message,Topic};
+/// use mqtt_client::{Config,Message,MqttClient,Topic};
 ///
 /// #[tokio::main]
 /// async fn main () {
@@ -83,7 +107,7 @@ impl Client {
     /// will be resent on its re-connection.
     ///
     /// ```no_run
-    /// use mqtt_client::{Config,Client,Topic};
+    /// use mqtt_client::{Config,Client,MqttClient,Topic};
     ///
     /// #[tokio::main]
     /// async fn main () {
@@ -141,33 +165,6 @@ impl Client {
 
     /// Publish a message on the local MQTT bus.
     ///
-    /// This does not wait for until the acknowledge is received.
-    ///
-    /// Upon success, this returns the `pkid` of the published message.
-    ///
-    pub async fn publish(&self, message: Message) -> Result<MessageId, Error> {
-        let (sender, receiver) = oneshot::channel();
-        let request = Request::PublishWithNotify {
-            publish: message.into(),
-            notify: sender,
-        };
-
-        let () = self
-            .requests_tx
-            .send(request)
-            .await
-            .map_err(|err| Error::ClientError(rumqttc::ClientError::Request(err)))?;
-
-        // Wait for the confirmation from the `rumqttc` backend that a `pkid` has been assigned
-        // to the message. We need the `pkid` in order to wait for the corresponding
-        // acknowledgement message.
-        let pkid: MessageId = receiver.await?;
-
-        Ok(pkid)
-    }
-
-    /// Publish a message on the local MQTT bus.
-    ///
     /// Supports awaiting the acknowledge.
     ///
     /// Upon success a `Future` is returned that resolves once the publish is acknowledged (only in
@@ -209,39 +206,6 @@ impl Client {
             }
             Ok(())
         })
-    }
-
-    /// Subscribe to the messages published on the given topics
-    pub async fn subscribe(&self, filter: TopicFilter) -> Result<MessageStream, Error> {
-        let () = self
-            .mqtt_client
-            .subscribe(&filter.pattern, filter.qos)
-            .await?;
-
-        Ok(MessageStream::new(
-            filter,
-            self.message_sender.subscribe(),
-            self.error_sender.clone(),
-        ))
-    }
-
-    /// Subscribe to the errors raised asynchronously.
-    ///
-    /// These errors include connection errors.
-    /// When the system fails to establish an MQTT connection with the local broker,
-    /// or when the current connection is lost, the system tries in the background to reconnect.
-    /// the client. Each connection error is forwarded to the `ErrorStream` returned by `subscribe_errors()`.
-    ///
-    /// These errors also include internal client errors.
-    /// Such errors are related to unread messages on the subscription channels.
-    /// If a client subscribes to a topic but fails to consume the received messages,
-    /// these messages will be dropped and an `Error::MessagesSkipped{lag}` will be published
-    /// in the `ErrorStream` returned by `subscribe_errors()`.
-    ///
-    /// If the `ErrorStream` itself is not read fast enough (i.e there are too many in-flight error messages)
-    /// these error messages will be dropped and replaced by an `Error::ErrorsSkipped{lag}`.
-    pub fn subscribe_errors(&self) -> ErrorStream {
-        ErrorStream::new(self.error_sender.subscribe())
     }
 
     /// Disconnect the client and drop it.
@@ -331,6 +295,69 @@ impl Client {
     }
 }
 
+#[async_trait]
+impl MqttClient for Client {
+    /// Publish a message on the local MQTT bus.
+    ///
+    /// This does not wait for until the acknowledge is received.
+    ///
+    /// Upon success, this returns the `pkid` of the published message.
+    ///
+    async fn publish(&self, message: Message) -> Result<MessageId, Error> {
+        let (sender, receiver) = oneshot::channel();
+        let request = Request::PublishWithNotify {
+            publish: message.into(),
+            notify: sender,
+        };
+
+        let () = self
+            .requests_tx
+            .send(request)
+            .await
+            .map_err(|err| Error::ClientError(rumqttc::ClientError::Request(err)))?;
+
+        // Wait for the confirmation from the `rumqttc` backend that a `pkid` has been assigned
+        // to the message. We need the `pkid` in order to wait for the corresponding
+        // acknowledgement message.
+        let pkid: MessageId = receiver.await?;
+
+        Ok(pkid)
+    }
+
+    /// Subscribe to the messages published on the given topics
+    async fn subscribe(&self, filter: TopicFilter) -> Result<Box<dyn MqttMessageStream>, Error> {
+        let () = self
+            .mqtt_client
+            .subscribe(&filter.pattern, filter.qos)
+            .await?;
+
+        Ok(Box::new(MessageStream::new(
+            filter,
+            self.message_sender.subscribe(),
+            self.error_sender.clone(),
+        )))
+    }
+
+    /// Subscribe to the errors raised asynchronously.
+    ///
+    /// These errors include connection errors.
+    /// When the system fails to establish an MQTT connection with the local broker,
+    /// or when the current connection is lost, the system tries in the background to reconnect.
+    /// the client. Each connection error is forwarded to the `ErrorStream` returned by `subscribe_errors()`.
+    ///
+    /// These errors also include internal client errors.
+    /// Such errors are related to unread messages on the subscription channels.
+    /// If a client subscribes to a topic but fails to consume the received messages,
+    /// these messages will be dropped and an `Error::MessagesSkipped{lag}` will be published
+    /// in the `ErrorStream` returned by `subscribe_errors()`.
+    ///
+    /// If the `ErrorStream` itself is not read fast enough (i.e there are too many in-flight error messages)
+    /// these error messages will be dropped and replaced by an `Error::ErrorsSkipped{lag}`.
+    fn subscribe_errors(&self) -> Box<dyn MqttErrorStream> {
+        Box::new(ErrorStream::new(self.error_sender.subscribe()))
+    }
+}
+
 /// Configuration of the connection to the MQTT broker.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -375,6 +402,11 @@ impl Config {
             port,
             ..Config::default()
         }
+    }
+
+    /// Set a custom port
+    pub fn with_port(self, port: u16) -> Self {
+        Self { port, ..self }
     }
 
     /// Update queue_capcity.
@@ -547,13 +579,16 @@ impl MessageStream {
             error_sender,
         }
     }
+}
 
+#[async_trait]
+impl MqttMessageStream for MessageStream {
     /// Return the next message received from MQTT for that subscription, if any.
     /// - Return None when the MQTT connection has been closed
     /// - If too many messages have been received since the previous call to `next()`
     ///   these messages are discarded, and an `Error::MessagesSkipped{lag}`
     ///   is broadcast to the error stream.
-    pub async fn next(&mut self) -> Option<Message> {
+    async fn next(&mut self) -> Option<Message> {
         loop {
             match self.receiver.recv().await {
                 Ok(message) if self.filter.accept(&message.topic) => return Some(message),
@@ -581,13 +616,16 @@ impl ErrorStream {
     fn new(receiver: broadcast::Receiver<Arc<Error>>) -> ErrorStream {
         ErrorStream { receiver }
     }
+}
 
+#[async_trait]
+impl MqttErrorStream for ErrorStream {
     /// Return the next MQTT error, if any
     /// - Return None when the MQTT connection has been closed
     /// - Return an `Error::ErrorsSkipped{lag}`
     ///   if too many errors have been received since the previous call to `next()`
     ///   and have been discarded.
-    pub async fn next(&mut self) -> Option<Arc<Error>> {
+    async fn next(&mut self) -> Option<Arc<Error>> {
         match self.receiver.recv().await {
             Ok(error) => Some(error),
             Err(broadcast::error::RecvError::Closed) => None,
