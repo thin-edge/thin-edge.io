@@ -229,56 +229,6 @@ class MeasurementMetadata(MeasurementBase):
         except:  # google.api_core.exceptions.NotFound:
             pass
 
-
-def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr, binary):
-
-    try:
-        with open(thefile) as thestats:
-            lines = thestats.readlines()
-            sample = 0
-
-            for line in lines:
-                entries = line.split()
-                if len(entries) == 52 and entries[1] == f"({binary})":
-                    ut = int(entries[14 - 1])
-                    st = int(entries[15 - 1])
-                    ct = int(entries[16 - 1])
-                    cs = int(entries[17 - 1])
-                    # print(idx, ut,st,ct,cs)
-
-                    arr.insert_line(
-                        idx=cpuidx,
-                        mid=mesaurement_index,
-                        sample=sample,
-                        utime=ut,
-                        stime=st,
-                        cutime=ct,
-                        cstime=cs,
-                    )
-                    sample += 1
-                    cpuidx += 1
-    except FileNotFoundError as e:
-        logging.error("File not found !!!" + str(e))
-        return cpuidx
-
-    logging.debug(f"Read {sample} cpu stats")
-    missing = data_length - sample
-    for m in range(missing):
-        arr.insert_line(
-            idx=cpuidx,
-            mid=mesaurement_index,
-            sample=sample,
-            utime=0,
-            stime=0,
-            cutime=0,
-            cstime=0,
-        )
-        sample += 1
-        cpuidx += 1
-
-    return cpuidx
-
-
 class CpuHistory(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
 
@@ -296,9 +246,52 @@ class CpuHistory(MeasurementBase):
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def scrap_cpu_stats(self, thefile, measurement_index, cpuidx, binary):
-        return scrap_cpu(
-            self.data_length, thefile, measurement_index, cpuidx, self, binary
-        )
+
+        try:
+            with open(thefile) as thestats:
+                lines = thestats.readlines()
+                sample = 0
+
+                for line in lines:
+                    entries = line.split()
+                    if len(entries) == 52 and entries[1] == f"({binary})":
+                        ut = int(entries[14 - 1])
+                        st = int(entries[15 - 1])
+                        ct = int(entries[16 - 1])
+                        cs = int(entries[17 - 1])
+                        # print(idx, ut,st,ct,cs)
+
+                        self.insert_line(
+                            idx=cpuidx,
+                            mid=measurement_index,
+                            sample=sample,
+                            utime=ut,
+                            stime=st,
+                            cutime=ct,
+                            cstime=cs,
+                        )
+                        sample += 1
+                        cpuidx += 1
+        except FileNotFoundError as e:
+            logging.error("File not found !!!" + str(e))
+            return cpuidx
+
+        logging.debug(f"Read {sample} cpu stats")
+        missing = self.data_length - sample
+        for m in range(missing):
+            self.insert_line(
+                idx=cpuidx,
+                mid=measurement_index,
+                sample=sample,
+                utime=0,
+                stime=0,
+                cutime=0,
+                cstime=0,
+            )
+            sample += 1
+            cpuidx += 1
+
+        return cpuidx
 
     def postprocess(self, folders, testname, filename, binary):
         cpuidx = 0
