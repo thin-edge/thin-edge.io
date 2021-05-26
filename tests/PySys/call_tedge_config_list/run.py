@@ -78,14 +78,20 @@ class PySysTest(BaseTest):
     def set_config_key(self, key, value):
 
         if value == None:
-            return
-
-        proc = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "config", "set", key, value],
-            stdouterr="tedge_set_config_key",
-            expectedExitStatus="==0",
-        )
+            self.log.info("Unsetting key " + key)
+            proc = self.startProcess(
+                command=self.sudo,
+                arguments=[self.tedge, "config", "unset", key],
+                stdouterr="tedge_unset_config_key_"+key,
+                expectedExitStatus="==0",
+            )
+        else:
+            proc = self.startProcess(
+                command=self.sudo,
+                arguments=[self.tedge, "config", "set", key, value],
+                stdouterr="tedge_set_config_key_"+key,
+                expectedExitStatus="==0",
+            )
 
     def execute(self):
         self.tedge = "/usr/bin/tedge"
@@ -140,7 +146,7 @@ class PySysTest(BaseTest):
             else:
                 self.assertThat("expect == valueread", expect=None, valueread=valueread)
 
-        # override all keys with a string
+        # override all keys with a string and check the content
         for key in configdict.keys():
             expect = "failfailfail"
             self.set_config_key(key, expect)
