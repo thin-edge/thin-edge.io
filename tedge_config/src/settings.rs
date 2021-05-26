@@ -126,6 +126,20 @@ impl ConfigSetting for AzureRootCertPathSetting {
     type Value = FilePath;
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttPortSetting;
+
+impl ConfigSetting for MqttPortSetting {
+    const KEY: &'static str = "mqtt.port";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Mqtt broker port, which is used by the mqtt clients to publish or subscribe. ",
+        "Example: listener 1883"
+    );
+
+    type Value = Port;
+}
+
 ///
 /// Boolean whether Azure mapper should add timestamp if timestamp is not added in the incoming payload.
 ///

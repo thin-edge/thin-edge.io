@@ -47,6 +47,7 @@ impl ConfigKey {
             config_key!(AzureUrlSetting),
             config_key!(AzureRootCertPathSetting),
             config_key!(AzureMapperTimestamp),
+            config_key!(MqttPortSetting),
         ]
     }
 }

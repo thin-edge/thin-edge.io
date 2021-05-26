@@ -118,7 +118,7 @@ impl CollectdPayload {
         })?;
 
         let metric_value = metric_value
-            .trim_end_matches(char::from(0)) //Trim \u{0} character from the end of the MQTT payload
+            //.trim_end_matches(char::from(0)) //Trim \u{0} character from the end of the MQTT payload
             .parse::<f64>()
             .map_err(|_err| {
                 CollectdPayloadError::InvalidMeasurementValue(metric_value.to_string())
@@ -147,6 +147,24 @@ mod tests {
     fn collectd_message_parsing() {
         let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
         let mqtt_message = Message::new(&topic, "123456789:32.5");
+
+        let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
+
+        let CollectdMessage {
+            metric_group_key,
+            metric_key,
+            metric_value,
+        } = collectd_message;
+
+        assert_eq!(metric_group_key, "temperature");
+        assert_eq!(metric_key, "value");
+        assert_eq!(metric_value, 32.5);
+    }
+
+    #[test]
+    fn collectd_null_terminated_message_parsing() {
+        let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
+        let mqtt_message = Message::new(&topic, "123456789:32.5\u{0}");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
@@ -197,8 +215,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_no_seperator() {
-        let payload: Vec<u8> = "123456789".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -208,8 +226,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_more_seperators() {
-        let payload: Vec<u8> = "123456789:98.6:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:98.6:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -219,8 +237,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_value() {
-        let payload: Vec<u8> = "123456789:abc".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"123456789:abc";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,
@@ -230,8 +248,8 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_timestamp() {
-        let payload: Vec<u8> = "abc:98.6".into();
-        let result = CollectdPayload::parse_from(&payload);
+        let payload = b"abc:98.6";
+        let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
             result,

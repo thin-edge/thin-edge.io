@@ -1,13 +1,11 @@
 use crate::error::*;
 use crate::size_threshold::*;
-use crate::time_provider::*;
+use clock::WallClock;
 use flockfile::{Flockfile, FlockfileError};
-use mqtt_client::Client;
+use mqtt_client::{Client, Config};
 use std::path::PathBuf;
 use std::str::FromStr;
-use tedge_config::{
-    AzureMapperTimestamp, ConfigRepository, ConfigSettingAccessor, TEdgeConfigRepository,
-};
+use tedge_config::*;
 use tracing::{debug_span, error, info, Instrument};
 
 mod az_converter;
@@ -18,7 +16,6 @@ mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
-mod time_provider;
 
 const APP_NAME_C8Y: &str = "tedge-mapper-c8y";
 const APP_NAME_AZ: &str = "tedge-mapper-az";
@@ -51,8 +48,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_C8Y);
 
-            let mqtt_config = mqtt_client::Config::default();
-            let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config).await?;
+            let mqtt = Client::connect(APP_NAME_C8Y, &mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
@@ -68,18 +64,14 @@ async fn main() -> anyhow::Result<()> {
 
             info!("{} starting!", APP_NAME_AZ);
 
-            let mqtt_config = mqtt_client::Config::default();
-            let mqtt = Client::connect(APP_NAME_AZ, &mqtt_config).await?;
-
-            let config_repository = get_config_repository()?;
-            let tedge_config = config_repository.load()?;
+            let mqtt = Client::connect(APP_NAME_AZ, &mqtt_config()?).await?;
 
             mapper::Mapper::new(
                 mqtt,
                 az_mapper::AzureMapperConfig::default(),
                 Box::new(az_converter::AzureConverter {
-                    add_timestamp: tedge_config.query(AzureMapperTimestamp)?.is_set(),
-                    time_provider: Box::new(SystemTimeProvider),
+                    add_timestamp: tedge_config()?.query(AzureMapperTimestamp)?.is_set(),
+                    clock: Box::new(WallClock),
                     size_threshold: SizeThreshold(255 * 1024),
                 }),
             )
@@ -90,6 +82,15 @@ async fn main() -> anyhow::Result<()> {
     };
 
     Ok(())
+}
+
+fn mqtt_config() -> Result<Config, anyhow::Error> {
+    Ok(Config::default().with_port(tedge_config()?.query(MqttPortSetting)?.into()))
+}
+
+fn tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+    let config_repository = config_repository()?;
+    Ok(config_repository.load()?)
 }
 
 pub enum CloudName {
@@ -119,7 +120,7 @@ fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, Flockf
     }
 }
 
-fn get_config_repository() -> Result<TEdgeConfigRepository, MapperError> {
+fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     let tedge_config_location = if running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
