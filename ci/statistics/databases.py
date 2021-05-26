@@ -124,18 +124,6 @@ def get_database(style: str):
 #     myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
 
-def scrap_measurement_metadata(file):
-    with open(file) as content:
-        data = json.load(content)
-        run = data["run_number"]
-        date = data["updated_at"]
-        url = data["html_url"]
-        name = data["name"]
-        branch = data["head_branch"]
-
-    return run, date, url, name, branch
-
-
 class MeasurementBase:
     def upload_table(self):
 
@@ -169,6 +157,18 @@ class MeasurementMetadata(MeasurementBase):
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
+    def scrap_measurement_metadata(self, file):
+        with open(file) as content:
+            data = json.load(content)
+            run = data["run_number"]
+            date = data["updated_at"]
+            url = data["html_url"]
+            name = data["name"]
+            branch = data["head_branch"]
+
+        return run, date, url, name, branch
+
+
     def postprocess(self, folders):
         i = 0
         for folder in folders:
@@ -178,7 +178,7 @@ class MeasurementMetadata(MeasurementBase):
             name = f"system_test_{index}_metadata.json"
             path = os.path.join(self.lake, name)
 
-            run, date, url, name, branch = scrap_measurement_metadata(path)
+            run, date, url, name, branch = self.scrap_measurement_metadata(path)
             self.array.append((i, run, date, url, name, branch))
             i += 1
 

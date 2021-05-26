@@ -227,3 +227,18 @@ class TestMetadata:
         metadata.update_table()
 
         metadata.upload_table.assert_called_once_with()
+
+    def test_scrap_measurement_metadata(self):
+        lake = os.path.expanduser("~/DataLakeTest")
+        name = "system_test_1_metadata.json"
+        file = os.path.join(lake, name)
+
+        metadata = db.MeasurementMetadata(0, None, None, None)
+
+        ret, date, url, name, branch = metadata.scrap_measurement_metadata(file)
+
+        assert ret == 1
+        assert date == "2021-05-19T15:21:01Z"
+        assert url == "https://github.com/abelikt/thin-edge.io/actions/runs/857323798"
+        assert name == "system-test-workflow"
+        assert branch == "continuous_integration"

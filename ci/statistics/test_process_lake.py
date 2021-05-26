@@ -121,21 +121,6 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
     with pytest.raises(SystemError):
         pl.get_relevant_measurement_folders(lake, testdata)
 
-
-def test_scrap_measurement_metadata():
-    lake = os.path.expanduser("~/DataLakeTest")
-    name = "system_test_1_metadata.json"
-    file = os.path.join(lake, name)
-
-    ret, date, url, name, branch = db.scrap_measurement_metadata(file)
-
-    assert ret == 1
-    assert date == "2021-05-19T15:21:01Z"
-    assert url == "https://github.com/abelikt/thin-edge.io/actions/runs/857323798"
-    assert name == "system-test-workflow"
-    assert branch == "continuous_integration"
-
-
 def test_postprocess_vals_cpu():
     """Tightnen current functionality for now
     Probably too much for a simple test
