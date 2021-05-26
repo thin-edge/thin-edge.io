@@ -187,8 +187,13 @@ def generate(style, show, lake, testdata):
     logging.info("Postprocessing")
 
     data_length = 60
+
     cpu_array = db.CpuHistory(
         "ci_cpu_measurement_tedge_mapper", lake,
+        processing_range * data_length, data_length, client, testdata)
+
+    cpu_array_mosquitto = db.CpuHistory(
+        "ci_cpu_measurement_mosquitto", lake,
         processing_range * data_length, data_length, client, testdata)
 
     cpu_array_long = db.CpuHistory(
@@ -205,6 +210,9 @@ def generate(style, show, lake, testdata):
 
     cpu_array.postprocess(relevant_folders,
         "publish_sawmill_record_statistics", "stat_mapper_stdout", "tedge_mapper")
+
+    cpu_array_mosquitto.postprocess(relevant_folders,
+        "publish_sawmill_record_statistics", "stat_mosquitto_stdout", "mosquitto")
 
     cpu_array_long.postprocess(relevant_folders,
         "publish_sawmill_record_statistics_long", "stat_mapper_stdout", "tedge_mapper")
@@ -226,6 +234,7 @@ def generate(style, show, lake, testdata):
 
     if show:
         cpu_array.show()
+        cpu_array_mosquitto.show()
         cpu_array_long.show()
         mem_array.show()
         cpu_hist_array.show()
@@ -236,6 +245,9 @@ def generate(style, show, lake, testdata):
 
     cpu_array.delete_table()
     cpu_array.update_table()
+
+    cpu_array_mosquitto.delete_table()
+    cpu_array_mosquitto.update_table()
 
     cpu_array_long.delete_table()
     cpu_array_long.update_table()

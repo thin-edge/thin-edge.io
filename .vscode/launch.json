@@ -9,7 +9,7 @@
             "name": "process lake",
             "type": "python",
             "request": "launch",
-            "module": "process_lake.py",
+            "program": "process_lake.py",
             "cwd": "${workspaceFolder}/ci/statistics/",
             "args": [
 
