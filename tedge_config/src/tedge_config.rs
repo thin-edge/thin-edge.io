@@ -177,6 +177,27 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
+    fn query(&self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<Flag> {
+        Ok(self
+            .data
+            .azure
+            .mapper_timestamp
+            .map(Flag)
+            .unwrap_or_else(|| Flag(true)))
+    }
+
+    fn update(&mut self, _setting: AzureMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
+        self.data.azure.mapper_timestamp = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<()> {
+        self.data.azure.mapper_timestamp = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
@@ -198,6 +219,27 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttPortSetting) -> ConfigSettingResult<Port> {
+        Ok(self
+            .data
+            .mqtt
+            .port
+            .map(Port)
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
+    }
+
+    fn update(&mut self, _setting: MqttPortSetting, value: Port) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttPortSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.port = None;
         Ok(())
     }
 }

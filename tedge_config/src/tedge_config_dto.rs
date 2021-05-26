@@ -3,8 +3,8 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
 
-#[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TEdgeConfigDto {
     /// Captures the device specific configurations
     #[serde(default)]
@@ -13,14 +13,18 @@ pub(crate) struct TEdgeConfigDto {
     /// Captures the configurations required to connect to Cumulocity
     #[serde(default)]
     pub(crate) c8y: CumulocityConfigDto,
+
     #[serde(default)]
     pub(crate) azure: AzureConfigDto,
+
+    #[serde(default)]
+    pub(crate) mqtt: MqttConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
-#[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DeviceConfigDto {
     /// The unique id of the device (DEPRECATED)
     /// This id is now derived from the device certificate
@@ -38,8 +42,8 @@ pub(crate) struct DeviceConfigDto {
 
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
-#[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct CumulocityConfigDto {
     /// Preserves the current status of the connection
     pub(crate) connect: Option<String>,
@@ -50,12 +54,22 @@ pub(crate) struct CumulocityConfigDto {
     /// The path where Cumulocity root certificate(s) are stored.
     /// The value can be a directory path as well as the path of the direct certificate file.
     pub(crate) root_cert_path: Option<FilePath>,
+
+    /// Boolean whether Azure mapper adds timestamp or not.
+    pub(crate) mapper_timestamp: Option<bool>,
 }
 
-#[serde(deny_unknown_fields)]
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<FilePath>,
+    pub(crate) mapper_timestamp: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MqttConfigDto {
+    pub(crate) port: Option<u16>,
 }

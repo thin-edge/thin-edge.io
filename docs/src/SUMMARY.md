@@ -15,6 +15,8 @@
     - [How to create a test certificate](./howto-guides/003_registration.md)
     - [How to connect a cloud end-point](./howto-guides/004_connect.md)
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
+    - [How to test connection to cloud](./howto-guides/007_test_connectiom.md)
+    - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)

@@ -1,5 +1,3 @@
-use std::os::unix::fs::MetadataExt;
-
 fn command_as_root<I, S>(
     home_dir: &str,
     args: I,
@@ -24,8 +22,8 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
     let device_id = "test";
     let tedge_dir = tempfile::tempdir()?;
     let mosquitto_dir = tempfile::tempdir()?;
-    let cert_path = temp_path(&mosquitto_dir, "test-cert.pem");
-    let key_path = temp_path(&mosquitto_dir, "test-key.pem");
+    let cert_path = _temp_path(&mosquitto_dir, "test-cert.pem");
+    let key_path = _temp_path(&mosquitto_dir, "test-key.pem");
     let tedge_home = tedge_dir.path().to_str().unwrap();
     let mosquitto_home = mosquitto_dir.path().to_str().unwrap();
 
@@ -82,7 +80,7 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
             .unwrap()
             .name()
     );
-    assert_eq!(0o444, extract_mode(cert_metadata.st_mode()));
+    assert_eq!(0o444, _extract_mode(cert_metadata.st_mode()));
 
     assert_eq!(
         "mosquitto",
@@ -96,7 +94,7 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
             .unwrap()
             .name()
     );
-    assert_eq!(0o400, extract_mode(key_metadata.st_mode()));
+    assert_eq!(0o400, _extract_mode(key_metadata.st_mode()));
 
     assert_eq!(
         "tedge",
@@ -110,15 +108,15 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
             .unwrap()
             .name()
     );
-    assert_eq!(0o600, extract_mode(config_metadata.st_mode()));
+    assert_eq!(0o600, _extract_mode(config_metadata.st_mode()));
 
     Ok(())
 }
 
-fn extract_mode(st_type_and_mode: u32) -> u32 {
+fn _extract_mode(st_type_and_mode: u32) -> u32 {
     st_type_and_mode % 0o1000
 }
 
-fn temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
+fn _temp_path(dir: &tempfile::TempDir, filename: &str) -> String {
     String::from(dir.path().join(filename).to_str().unwrap())
 }

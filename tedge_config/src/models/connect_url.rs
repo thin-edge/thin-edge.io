@@ -43,15 +43,15 @@ impl ConnectUrl {
     }
 }
 
-impl Into<String> for ConnectUrl {
-    fn into(self) -> String {
-        self.input
+impl From<ConnectUrl> for String {
+    fn from(val: ConnectUrl) -> Self {
+        val.input
     }
 }
 
-impl Into<Host> for ConnectUrl {
-    fn into(self) -> Host {
-        self.host
+impl From<ConnectUrl> for Host {
+    fn from(val: ConnectUrl) -> Self {
+        val.host
     }
 }
 

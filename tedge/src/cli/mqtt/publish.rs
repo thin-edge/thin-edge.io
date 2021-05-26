@@ -1,7 +1,7 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::{Command, ExecutionContext};
 use futures::future::FutureExt;
-use mqtt_client::{Client, Message, QoS, Topic};
+use mqtt_client::{Client, Message, MqttClient, QoS, Topic};
 use std::time::Duration;
 use tokio::select;
 
