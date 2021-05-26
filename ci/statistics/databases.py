@@ -398,6 +398,29 @@ class CpuHistoryStacked(MeasurementBase):
         self.client = client
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
+    def postprocess(self,
+        measurement_folders,
+        data_length,
+        cpu_array,
+    ):
+
+        mlen = len(measurement_folders)
+
+        for i in range(data_length):
+            self.array[i, 0] = i
+
+        processing_range = min(len(measurement_folders), 10)
+        column = 1
+        for m in range(mlen - 1, mlen - processing_range - 1, -1):
+            # print(m)
+            for i in range(data_length):
+                # print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
+                self.array[i, column] = cpu_array.array[m * data_length + i, 3]
+                self.array[i, column + 1] = cpu_array.array[
+                    m * data_length + i, 4
+                ]
+            column += 2
+
     def insert_line(self, line, idx):
         assert len(line) == len(self.fields)
         self.array[idx] = line

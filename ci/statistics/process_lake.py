@@ -16,31 +16,6 @@ from numpy.core.records import array
 
 import databases as db
 
-def postprocess_vals(
-    data_length,
-    measurement_folders,
-    cpu_array,
-    cpu_hist_array,
-):
-
-    mlen = len(measurement_folders)
-
-    for i in range(data_length):
-        cpu_hist_array.array[i, 0] = i
-
-    processing_range = min(len(measurement_folders), 10)
-    column = 1
-    for m in range(mlen - 1, mlen - processing_range - 1, -1):
-        # print(m)
-        for i in range(data_length):
-            # print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
-            cpu_hist_array.array[i, column] = cpu_array.array[m * data_length + i, 3]
-            cpu_hist_array.array[i, column + 1] = cpu_array.array[
-                m * data_length + i, 4
-            ]
-        column += 2
-
-
 def unzip_results(lake):
     p = Path(lake)
     for child in p.iterdir():

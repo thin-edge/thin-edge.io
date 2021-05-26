@@ -259,11 +259,10 @@ def test_postprocess_vals_cpu_hist():
         "tedge_mapper",
     )
 
-    pl.postprocess_vals(
-        data_length,
+    cpu_hist_array.postprocess(
         relevant_measurement_folders,
+        data_length,
         cpu_array,
-        cpu_hist_array,
     )
 
     # programmatically reproduce the data set

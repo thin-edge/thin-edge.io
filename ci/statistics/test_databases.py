@@ -123,6 +123,22 @@ class TestCpuHistoryStacked:
         assert base.json_data != None
         assert base.database != None
 
+    def test_postprocess(self):
+        """TODO: update me"""
+
+        base = db.CpuHistoryStacked(3, None, None)
+        folders = [
+            "results_1_unpack",
+            "results_2_unpack",
+            "results_4_unpack",
+        ]
+
+        base.postprocess(
+            folders, 0, None)
+        #cpu_array,
+        #cpu_hist_array)
+
+
 
 class TestMetadata:
     def test_update_table_calls_upload(self, mocker):
