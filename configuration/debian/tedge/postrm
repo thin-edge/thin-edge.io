@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+### Remove configs
+
+if [ "$1" = "purge" ]; then
+    rm -rf /etc/tedge
+fi
