@@ -131,9 +131,11 @@ def test_postprocess_vals_cpu():
         "results_2_unpack",
         "results_4_unpack",
     ]
+
     data_length = 10
     client = None
     testmode = True
+
     cpu_array = db.CpuHistory(
         "name",
         lake,
@@ -141,29 +143,6 @@ def test_postprocess_vals_cpu():
         data_length,
         client,
         testmode,
-    )
-    cpu_array_long = db.CpuHistory(
-        "name",
-        lake,
-        len(relevant_measurement_folders) * data_length * 2,
-        data_length,
-        client,
-        testmode,
-    )
-    mem_array = db.MemoryHistory(
-        lake,
-        len(relevant_measurement_folders) * data_length, data_length, client, testmode
-    )
-    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
-
-    pl.postprocess_vals(
-        data_length,
-        relevant_measurement_folders,
-        cpu_array,
-        cpu_array_long,
-        mem_array,
-        cpu_hist_array,
-        lake,
     )
 
     cpu_array.postprocess(
@@ -211,38 +190,12 @@ def test_postprocess_vals_mem():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory(
-        "name",
-        lake,
-        len(relevant_measurement_folders) * data_length,
-        data_length,
-        client,
-        testmode,
-    )
-    cpu_array_long = db.CpuHistory(
-        "name",
-        lake,
-        len(relevant_measurement_folders) * data_length * 2,
-        data_length,
-        client,
-        testmode,
-    )
+
     mem_array = db.MemoryHistory(
         lake,
         len(relevant_measurement_folders) * data_length,
         data_length,
         client, testmode
-    )
-    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
-
-    pl.postprocess_vals(
-        data_length,
-        relevant_measurement_folders,
-        cpu_array,
-        cpu_array_long,
-        mem_array,
-        cpu_hist_array,
-        lake,
     )
 
     mem_array.postprocess(relevant_measurement_folders,
@@ -296,18 +249,7 @@ def test_postprocess_vals_cpu_hist():
         client,
         testmode,
     )
-    cpu_array_long = db.CpuHistory(
-        "name",
-        lake,
-        len(relevant_measurement_folders) * data_length * 2,
-        data_length,
-        client,
-        testmode,
-    )
-    mem_array = db.MemoryHistory(
-        lake,
-        len(relevant_measurement_folders) * data_length, data_length, client, testmode
-    )
+
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
     cpu_array.postprocess(
@@ -321,10 +263,7 @@ def test_postprocess_vals_cpu_hist():
         data_length,
         relevant_measurement_folders,
         cpu_array,
-        cpu_array_long,
-        mem_array,
         cpu_hist_array,
-        lake,
     )
 
     # programmatically reproduce the data set

@@ -27,7 +27,9 @@ class TestMemoryHistory:
         base.upload_table.assert_called_once()
 
 
-    def dis_test_scrap_memory(self):
+    def disable_test_scrap_memory(self):
+        """Todo: Write nice tests here
+        """
         base = db.MemoryHistory(None, 3, None, None, None)
         ret = base.scrap_mem()
         assert ret == 88

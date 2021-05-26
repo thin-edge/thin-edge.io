@@ -20,10 +20,7 @@ def postprocess_vals(
     data_length,
     measurement_folders,
     cpu_array,
-    cpu_array_long,
-    mem_array,
     cpu_hist_array,
-    lake,
 ):
 
     mlen = len(measurement_folders)
