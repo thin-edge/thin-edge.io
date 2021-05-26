@@ -1,4 +1,3 @@
-
 import json
 import logging
 import os
@@ -49,7 +48,7 @@ def get_database(style: str):
     return client, dbo, integer, conn
 
 
-#def myquery(client, query, conn, style):
+# def myquery(client, query, conn, style):
 #
 #    logging.info(query)
 #
@@ -124,6 +123,7 @@ def get_database(style: str):
 # def get_sql_create_mem_table(dbo, name, client):
 #     myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
+
 def scrap_measurement_metadata(file):
     with open(file) as content:
         data = json.load(content)
@@ -135,8 +135,8 @@ def scrap_measurement_metadata(file):
 
     return run, date, url, name, branch
 
-class MeasurementBase:
 
+class MeasurementBase:
     def upload_table(self):
 
         if self.client:
@@ -154,6 +154,7 @@ class MeasurementBase:
                 logging.error(f"Error {load_job.error_result}")
                 logging.error(load_job.errors)
                 raise SystemError
+
 
 class MeasurementMetadata(MeasurementBase):
     def __init__(self, size, client, testmode, lake):
@@ -173,12 +174,12 @@ class MeasurementMetadata(MeasurementBase):
         for folder in folders:
             index = int(folder.split("_")[1].split(".")[0])
 
-            #lake = os.path.expanduser("~/DataLakeTest")
+            # lake = os.path.expanduser("~/DataLakeTest")
             name = f"system_test_{index}_metadata.json"
-            path = os.path.join(self.lake,name)
+            path = os.path.join(self.lake, name)
 
             run, date, url, name, branch = scrap_measurement_metadata(path)
-            self.array.append( (i, run, date, url, name, branch) )
+            self.array.append((i, run, date, url, name, branch))
             i += 1
 
         return self.array
@@ -204,10 +205,10 @@ class MeasurementMetadata(MeasurementBase):
 
         self.json_data = []
 
-        #print(self.array)
+        # print(self.array)
         j = 0
         for i in range(self.size):
-            #print(self.size, i, j)
+            # print(self.size, i, j)
             self.json_data.append(
                 {
                     "id": self.array[i][0],
@@ -218,7 +219,7 @@ class MeasurementMetadata(MeasurementBase):
                     "branch": self.array[i][5],
                 }
             )
-            j+=1
+            j += 1
 
         self.upload_table()
 
@@ -227,6 +228,7 @@ class MeasurementMetadata(MeasurementBase):
             self.client.delete_table(self.database)
         except:  # google.api_core.exceptions.NotFound:
             pass
+
 
 def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr, binary):
 
@@ -259,7 +261,6 @@ def scrap_cpu(data_length, thefile, mesaurement_index, cpuidx, arr, binary):
         logging.error("File not found !!!" + str(e))
         return cpuidx
 
-
     logging.debug(f"Read {sample} cpu stats")
     missing = data_length - sample
     for m in range(missing):
@@ -288,23 +289,27 @@ class CpuHistory(MeasurementBase):
         self.client = client
         self.lake = lake
         if testmode:
-            self.name = name +"_test"
+            self.name = name + "_test"
         else:
             self.name = name
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def scrap_cpu_stats(self, thefile, measurement_index, cpuidx, binary):
-        return scrap_cpu(self.data_length, thefile, measurement_index, cpuidx, self, binary)
+        return scrap_cpu(
+            self.data_length, thefile, measurement_index, cpuidx, self, binary
+        )
 
     def postprocess(self, folders, testname, filename, binary):
-        cpuidx =0
+        cpuidx = 0
         for folder in folders:
             measurement_index = int(folder.split("_")[1].split(".")[0])
 
-            statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
+            statsfile = (
+                f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
+            )
 
-            cpuidx = self.scrap_cpu_stats( statsfile, measurement_index, cpuidx, binary)
+            cpuidx = self.scrap_cpu_stats(statsfile, measurement_index, cpuidx, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
@@ -400,7 +405,6 @@ class CpuHistoryStacked(MeasurementBase):
         self.client = client
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-
     def insert_line(self, line, idx):
         assert len(line) == len(self.fields)
         self.array[idx] = line
@@ -488,16 +492,16 @@ class MemoryHistory(MeasurementBase):
         except:  # google.api_core.exceptions.NotFound:
             pass
 
-#    def update_table_one_by_one(self, dbo):
-#        for i in range(self.size):
-#            assert self.array[i, 0] == i
-#            q = (
-#                f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]},"
-#                f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},"
-#                f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
-#            )
-#            # print(q)
-#            myquery(self.client, q)
+    #    def update_table_one_by_one(self, dbo):
+    #        for i in range(self.size):
+    #            assert self.array[i, 0] == i
+    #            q = (
+    #                f"insert into {dbo}.{mem_table} values ( {i}, {self.array[i,1]},"
+    #                f" {self.array[i,2]}, {self.array[i,3]},{self.array[i,4]},"
+    #                f"{self.array[i,5]},{self.array[i,6]}, {self.array[i,7]} );"
+    #            )
+    #            # print(q)
+    #            myquery(self.client, q)
 
     def update_table(self):
         logging.info("Updating table:" + self.name)

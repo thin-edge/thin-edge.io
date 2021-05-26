@@ -16,6 +16,7 @@ from numpy.core.records import array
 
 import databases as db
 
+
 def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
     with open(thefile) as thestats:
         lines = thestats.readlines()
@@ -61,6 +62,7 @@ def scrap_mem(data_length, thefile, mesaurement_index, memidx, arr):
 
     return memidx
 
+
 def postprocess_vals(
     data_length,
     measurement_folders,
@@ -68,7 +70,7 @@ def postprocess_vals(
     cpu_array_long,
     mem_array,
     cpu_hist_array,
-    lake
+    lake,
 ):
 
     # overall row index for the cpu table
@@ -81,20 +83,18 @@ def postprocess_vals(
     for folder in measurement_folders:
         mesaurement_index = int(folder.split("_")[1].split(".")[0])
 
-        #statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
-        #cpuidx = scrap_cpu(
+        # statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/stat_mapper_stdout.out"
+        # cpuidx = scrap_cpu(
         #    data_length, statsfile, mesaurement_index, cpuidx, cpu_array
-        #)
+        # )
 
-        #statsfile_long = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics_long/Output/linux/stat_mapper_stdout.out"
-        #cpuidxl = scrap_cpu(
+        # statsfile_long = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics_long/Output/linux/stat_mapper_stdout.out"
+        # cpuidxl = scrap_cpu(
         #    data_length *2 , statsfile_long, mesaurement_index, cpuidxl, cpu_array_long
-        #)
+        # )
 
         statsfile = f"{lake}/{folder}/PySys/publish_sawmill_record_statistics/Output/linux/statm_mapper_stdout.out"
-        memidx = scrap_mem(
-            data_length, statsfile, mesaurement_index, memidx, mem_array
-        )
+        memidx = scrap_mem(data_length, statsfile, mesaurement_index, memidx, mem_array)
 
     mlen = len(measurement_folders)
 
@@ -112,6 +112,7 @@ def postprocess_vals(
                 m * data_length + i, 4
             ]
         column += 2
+
 
 def unzip_results(lake):
     p = Path(lake)
@@ -151,13 +152,13 @@ def get_relevant_measurement_folders(lake, testdata):
     relevant_folders = []
     valid = False
     for folder in folders:
-        if folder==earliest_valid:
+        if folder == earliest_valid:
             valid = True
         if valid:
             relevant_folders.append(folder)
 
     processing_range = len(relevant_folders)
-    if processing_range ==0:
+    if processing_range == 0:
         raise SystemError("No reports found")
     logging.info(relevant_folders[-processing_range])
 
@@ -182,43 +183,81 @@ def generate(style, show, lake, testdata):
 
     logging.info("Sumarize List")
 
-    relevant_folders, processing_range = get_relevant_measurement_folders(lake, testdata)
+    relevant_folders, processing_range = get_relevant_measurement_folders(
+        lake, testdata
+    )
 
     logging.info("Postprocessing")
 
     data_length = 60
 
     cpu_array = db.CpuHistory(
-        "ci_cpu_measurement_tedge_mapper", lake,
-        processing_range * data_length, data_length, client, testdata)
+        "ci_cpu_measurement_tedge_mapper",
+        lake,
+        processing_range * data_length,
+        data_length,
+        client,
+        testdata,
+    )
 
     cpu_array_mosquitto = db.CpuHistory(
-        "ci_cpu_measurement_mosquitto", lake,
-        processing_range * data_length, data_length, client, testdata)
+        "ci_cpu_measurement_mosquitto",
+        lake,
+        processing_range * data_length,
+        data_length,
+        client,
+        testdata,
+    )
 
     cpu_array_long = db.CpuHistory(
-        "ci_cpu_measurement_tedge_mapper_long", lake,
-        processing_range * data_length *2 , data_length, client, testdata)
+        "ci_cpu_measurement_tedge_mapper_long",
+        lake,
+        processing_range * data_length * 2,
+        data_length,
+        client,
+        testdata,
+    )
 
     cpu_array_long_mosquitto = db.CpuHistory(
-        "ci_cpu_measurement_mosquitto_long", lake,
-        processing_range * data_length *2 , data_length, client, testdata)
+        "ci_cpu_measurement_mosquitto_long",
+        lake,
+        processing_range * data_length * 2,
+        data_length,
+        client,
+        testdata,
+    )
 
     mem_array = db.MemoryHistory(processing_range * data_length, client, testdata)
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
     measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
 
-    cpu_array.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics", "stat_mapper_stdout", "tedge_mapper")
+    cpu_array.postprocess(
+        relevant_folders,
+        "publish_sawmill_record_statistics",
+        "stat_mapper_stdout",
+        "tedge_mapper",
+    )
 
-    cpu_array_mosquitto.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics", "stat_mosquitto_stdout", "mosquitto")
+    cpu_array_mosquitto.postprocess(
+        relevant_folders,
+        "publish_sawmill_record_statistics",
+        "stat_mosquitto_stdout",
+        "mosquitto",
+    )
 
-    cpu_array_long.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics_long", "stat_mapper_stdout", "tedge_mapper")
+    cpu_array_long.postprocess(
+        relevant_folders,
+        "publish_sawmill_record_statistics_long",
+        "stat_mapper_stdout",
+        "tedge_mapper",
+    )
 
-    cpu_array_long_mosquitto.postprocess(relevant_folders,
-        "publish_sawmill_record_statistics_long", "stat_mosquitto_stdout", "mosquitto")
+    cpu_array_long_mosquitto.postprocess(
+        relevant_folders,
+        "publish_sawmill_record_statistics_long",
+        "stat_mosquitto_stdout",
+        "mosquitto",
+    )
 
     postprocess_vals(
         data_length,
@@ -227,7 +266,7 @@ def generate(style, show, lake, testdata):
         cpu_array_long,
         mem_array,
         cpu_hist_array,
-        lake
+        lake,
     )
 
     measurements.postprocess(relevant_folders)
@@ -266,14 +305,29 @@ def generate(style, show, lake, testdata):
 
     logging.info("Done")
 
+
 def main():
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("style", type=str, help="Database style: [none, google]")
-    parser.add_argument("-t", "--testdata", action='store_true', help="Use test data sets", required=False)
-    parser.add_argument("-s", "--show", action='store_true', help="Show data with matplotlib", required=False)
-    parser.add_argument("-v", "--verbose", action='store_true', help="Verbose", required=False)
+    parser.add_argument(
+        "-t",
+        "--testdata",
+        action="store_true",
+        help="Use test data sets",
+        required=False,
+    )
+    parser.add_argument(
+        "-s",
+        "--show",
+        action="store_true",
+        help="Show data with matplotlib",
+        required=False,
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Verbose", required=False
+    )
     args = parser.parse_args()
 
     testdata = args.testdata
@@ -281,7 +335,7 @@ def main():
     show = args.show
     verbose = args.verbose
 
-    assert style in ['google','none'] #'ms'
+    assert style in ["google", "none"]  #'ms'
 
     if testdata:
         logging.info("Using test data lake")
@@ -294,8 +348,8 @@ def main():
         logging.info("Enabling verbose mode")
         logging.basicConfig(level=logging.DEBUG)
 
-
     generate(style, show, lake, testdata)
+
 
 if __name__ == "__main__":
     main()

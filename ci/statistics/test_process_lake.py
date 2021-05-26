@@ -47,6 +47,7 @@ def test_get_relevant_measurement_folders_real():
     assert ret == exp
     assert valid == 3
 
+
 def test_get_relevant_measurement_folders_mocked(mocker):
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
@@ -54,32 +55,44 @@ def test_get_relevant_measurement_folders_mocked(mocker):
     testdata = True
 
     mock = mocker.patch("process_lake.get_measurement_folders")
-    mock.return_value = ["results_0_unpack", "results_1_unpack", "results_2_unpack", "results_4_unpack"]
+    mock.return_value = [
+        "results_0_unpack",
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+    ]
 
     ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
 
     assert ret == exp
     assert valid == 3
 
+
 def test_get_relevant_measurement_folders_mocked_5(mocker):
 
-    exp = ["results_1_unpack", "results_2_unpack",
-    "results_4_unpack", "results_5_unpack"]
-    lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
-
-    mock = mocker.patch("process_lake.get_measurement_folders")
-    mock.return_value = ["results_0_unpack",
+    exp = [
         "results_1_unpack",
         "results_2_unpack",
         "results_4_unpack",
         "results_5_unpack",
-        ]
+    ]
+    lake = os.path.expanduser("~/DataLakeTest")
+    testdata = True
+
+    mock = mocker.patch("process_lake.get_measurement_folders")
+    mock.return_value = [
+        "results_0_unpack",
+        "results_1_unpack",
+        "results_2_unpack",
+        "results_4_unpack",
+        "results_5_unpack",
+    ]
 
     ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
 
     assert ret == exp
     assert valid == 4
+
 
 def test_get_relevant_measurement_folders_mocked_1(mocker):
 
@@ -95,6 +108,7 @@ def test_get_relevant_measurement_folders_mocked_1(mocker):
     assert ret == exp
     assert valid == 1
 
+
 def test_get_relevant_measurement_folders_mocked_0(mocker):
 
     exp = ["results_0_unpack"]
@@ -107,10 +121,11 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
     with pytest.raises(SystemError):
         pl.get_relevant_measurement_folders(lake, testdata)
 
+
 def test_scrap_measurement_metadata():
     lake = os.path.expanduser("~/DataLakeTest")
     name = "system_test_1_metadata.json"
-    file = os.path.join(lake,name)
+    file = os.path.join(lake, name)
 
     ret, date, url, name, branch = db.scrap_measurement_metadata(file)
 
@@ -119,6 +134,7 @@ def test_scrap_measurement_metadata():
     assert url == "https://github.com/abelikt/thin-edge.io/actions/runs/857323798"
     assert name == "system-test-workflow"
     assert branch == "continuous_integration"
+
 
 def test_postprocess_vals_cpu():
     """Tightnen current functionality for now
@@ -133,11 +149,21 @@ def test_postprocess_vals_cpu():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory("name", lake,
-        len(relevant_measurement_folders) * data_length, data_length, client, testmode
+    cpu_array = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length,
+        data_length,
+        client,
+        testmode,
     )
-    cpu_array_long = db.CpuHistory("name", lake,
-        len(relevant_measurement_folders) * data_length *2, data_length, client, testmode
+    cpu_array_long = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length * 2,
+        data_length,
+        client,
+        testmode,
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
@@ -151,11 +177,15 @@ def test_postprocess_vals_cpu():
         cpu_array_long,
         mem_array,
         cpu_hist_array,
-        lake
+        lake,
     )
 
-    cpu_array.postprocess(relevant_measurement_folders,
-    "publish_sawmill_record_statistics", "stat_mapper_stdout", "tedge_mapper")
+    cpu_array.postprocess(
+        relevant_measurement_folders,
+        "publish_sawmill_record_statistics",
+        "stat_mapper_stdout",
+        "tedge_mapper",
+    )
 
     # programmatically reproduce the data set
     data = []
@@ -195,11 +225,21 @@ def test_postprocess_vals_mem():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory("name", lake,
-        len(relevant_measurement_folders) * data_length, data_length, client, testmode
+    cpu_array = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length,
+        data_length,
+        client,
+        testmode,
     )
-    cpu_array_long = db.CpuHistory("name", lake,
-        len(relevant_measurement_folders) * data_length *2, data_length, client, testmode
+    cpu_array_long = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length * 2,
+        data_length,
+        client,
+        testmode,
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
@@ -213,7 +253,7 @@ def test_postprocess_vals_mem():
         cpu_array_long,
         mem_array,
         cpu_hist_array,
-        lake
+        lake,
     )
 
     # programmatically reproduce the data set
@@ -254,19 +294,33 @@ def test_postprocess_vals_cpu_hist():
     data_length = 10
     client = None
     testmode = True
-    cpu_array = db.CpuHistory( "name", lake,
-        len(relevant_measurement_folders) * data_length, data_length, client, testmode
+    cpu_array = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length,
+        data_length,
+        client,
+        testmode,
     )
-    cpu_array_long = db.CpuHistory( "name", lake,
-        len(relevant_measurement_folders) * data_length *2, data_length, client, testmode
+    cpu_array_long = db.CpuHistory(
+        "name",
+        lake,
+        len(relevant_measurement_folders) * data_length * 2,
+        data_length,
+        client,
+        testmode,
     )
     mem_array = db.MemoryHistory(
         len(relevant_measurement_folders) * data_length, client, testmode
     )
     cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
-    cpu_array.postprocess(relevant_measurement_folders,
-        "publish_sawmill_record_statistics", "stat_mapper_stdout", "tedge_mapper")
+    cpu_array.postprocess(
+        relevant_measurement_folders,
+        "publish_sawmill_record_statistics",
+        "stat_mapper_stdout",
+        "tedge_mapper",
+    )
 
     pl.postprocess_vals(
         data_length,
@@ -275,7 +329,7 @@ def test_postprocess_vals_cpu_hist():
         cpu_array_long,
         mem_array,
         cpu_hist_array,
-        lake
+        lake,
     )
 
     # programmatically reproduce the data set
@@ -325,6 +379,7 @@ def test_postprocess_vals_cpu_hist():
 
     assert np.array_equal(exp, cpu_hist_array.array)
 
+
 def test_postprocess_vals_metadata():
     """Tightnen current functionality for now
     Probably too much for a simple test
@@ -338,33 +393,35 @@ def test_postprocess_vals_metadata():
     ]
     client = None
     testmode = True
-    metadata = db.MeasurementMetadata(
-        len(folders), client, testmode, lake)
+    metadata = db.MeasurementMetadata(len(folders), client, testmode, lake)
 
     metadata.postprocess(folders)
 
-    exp= [
-        ( 0, 1,
-        "2021-05-19T15:21:01Z",
-        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
-        "system-test-workflow",
-        "continuous_integration"),
-        ( 1, 2,
-        "2021-05-19T15:21:02Z",
-        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
-        "system-test-workflow",
-        "continuous_integration"),
-        ( 2, 4,
-        "2021-05-19T15:21:04Z",
-        "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
-        "system-test-workflow",
-        "continuous_integration")
+    exp = [
+        (
+            0,
+            1,
+            "2021-05-19T15:21:01Z",
+            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "system-test-workflow",
+            "continuous_integration",
+        ),
+        (
+            1,
+            2,
+            "2021-05-19T15:21:02Z",
+            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "system-test-workflow",
+            "continuous_integration",
+        ),
+        (
+            2,
+            4,
+            "2021-05-19T15:21:04Z",
+            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "system-test-workflow",
+            "continuous_integration",
+        ),
     ]
 
     assert metadata.array == exp
-
-
-
-
-
-
