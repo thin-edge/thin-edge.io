@@ -32,7 +32,8 @@ def unzip_results(lake):
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-def get_measurement_folders(lake: Path) -> list[Path]:
+#def get_measurement_folders(lake: Path) -> list[Path]:
+def get_measurement_folders(lake):
     path = Path(lake)
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
