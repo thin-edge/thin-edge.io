@@ -656,6 +656,7 @@ class MemoryHistory(MeasurementBase):
     def update_table(self):
         """Create table and prepare loading via json and upload
         """
+        self.delete_table()
         logging.info("Updating table:" + self.name)
         self.job_config = bigquery.LoadJobConfig(
             schema=[

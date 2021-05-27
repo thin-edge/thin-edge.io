@@ -94,50 +94,60 @@ def generate(style, show, lake, testdata):
     data_length = 60
 
     cpu_array = db.CpuHistory(
-        "ci_cpu_measurement_tedge_mapper",
         lake,
-        processing_range * data_length,
+        "ci_cpu_measurement_tedge_mapper",
+        processing_range,
         data_length,
         client,
         testdata,
     )
 
     cpu_array_mosquitto = db.CpuHistory(
-        "ci_cpu_measurement_mosquitto",
         lake,
-        processing_range * data_length,
+        "ci_cpu_measurement_mosquitto",
+        processing_range,
         data_length,
         client,
         testdata,
     )
 
     cpu_array_long = db.CpuHistory(
-        "ci_cpu_measurement_tedge_mapper_long",
         lake,
-        processing_range * data_length * 2,
+        "ci_cpu_measurement_tedge_mapper_long",
+        processing_range * 2,
         data_length,
         client,
         testdata,
     )
 
     cpu_array_long_mosquitto = db.CpuHistory(
-        "ci_cpu_measurement_mosquitto_long",
         lake,
-        processing_range * data_length * 2,
+        "ci_cpu_measurement_mosquitto_long",
+        processing_range * 2,
         data_length,
         client,
         testdata,
     )
 
     mem_array = db.MemoryHistory(
-        lake, processing_range * data_length, data_length, client, testdata
+        lake,
+        "ci_mem_measurement_tedge_mapper",
+        processing_range,
+        data_length, client, testdata
         )
 
     cpu_hist_array = db.CpuHistoryStacked(
+        lake,
+        "ci_cpu_hist",
+        processing_range,
         data_length, client, testdata)
 
     measurements = db.MeasurementMetadata(
-        processing_range, client, testdata, lake)
+        lake,
+        "ci_measurents",
+        processing_range,
+        data_length,
+        client, testdata)
 
     cpu_array.postprocess(
         relevant_folders,

@@ -79,6 +79,18 @@ class TestMemoryHistory:
 
         mock.assert_has_calls(calls)
 
+    def test_upate_table(self, mocker):
+        lake = os.path.expanduser("~/DataLakeTest")
+
+        base = db.MemoryHistory(lake, "name", 3, 10, None, None)
+        umock = mocker.patch.object(base, "upload_table")
+        dmock = mocker.patch.object(base, "delete_table")
+
+        base.update_table()
+
+        umock.assert_called_once()
+        dmock.assert_called_once()
+
 
 class TestCpuHistory:
     def test_update_table_creates_attributes(self, mocker):
@@ -167,12 +179,13 @@ class TestMetadata:
             None,
             None
             )
-        mocker.patch.object(base, "upload_table")
+        umock = mocker.patch.object(base, "upload_table")
+        dmock = mocker.patch.object(base, "delete_table")
         base.array = [[1, 2, 3, 4, 5, 6]]
 
         base.update_table()
-
-        base.upload_table.assert_called_once()
+        umock.assert_called_once()
+        dmock.assert_called_once()
 
     def test_update_table_creates_attributes(self, mocker):
         base = db.MeasurementMetadata(
