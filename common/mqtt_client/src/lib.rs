@@ -523,11 +523,20 @@ impl Message {
         Self { qos, ..self }
     }
 
-    /// trimming the trailing null char
-    pub fn payload_trimmed(&self) -> &[u8] {
+    // trimming the trailing null char
+    fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())
+    }
+
+    /// Add a comment that this will trim the trailing null character....
+    pub fn payload_utf8(&self) -> Result<&str, Error> {
+        Ok(std::str::from_utf8(self.payload_trimmed())?)
+    }
+
+    pub fn payload_raw(&self) -> &[u8] {
+        &self.payload[..]
     }
 }
 
@@ -699,6 +708,9 @@ pub enum Error {
 
     #[error("Join Error")]
     JoinError,
+
+    #[error("Payload is invalid UTF8")]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ pub struct AzureConverter {
 
 impl Converter for AzureConverter {
     type Error = ConversionError;
-    fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    fn convert(&self, input: &str) -> Result<Vec<u8>, Self::Error> {
         let () = self.size_threshold.validate(input)?;
 
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());

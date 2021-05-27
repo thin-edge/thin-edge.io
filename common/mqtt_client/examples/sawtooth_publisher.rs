@@ -178,8 +178,8 @@ async fn publish_multi_topic(
 
 async fn listen_command(mut messages: Box<dyn MqttMessageStream>) {
     while let Some(message) = messages.next().await {
-        debug!("C8Y command: {:?}", message.payload_trimmed());
-        if let Some(cmd) = std::str::from_utf8(&message.payload_trimmed()).ok() {
+        debug!("C8Y command: {:?}", message.payload_utf8());
+        if let Some(cmd) = message.payload_utf8().ok() {
             if cmd.contains(C8Y_TEMPLATE_RESTART) {
                 info!("Stopping on remote request ... should be restarted by the daemon monitor.");
                 break;
@@ -191,7 +191,7 @@ async fn listen_command(mut messages: Box<dyn MqttMessageStream>) {
 async fn listen_c8y_error(mut messages: Box<dyn MqttMessageStream>) {
     let mut count: u32 = 0;
     while let Some(message) = messages.next().await {
-        error!("C8Y error: {:?}", message.payload_trimmed());
+        error!("C8Y error: {:?}", message.payload_utf8());
         if count >= 3 {
             panic!("Panic!");
         }

@@ -132,13 +132,10 @@ pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'stati
 }
 
 pub fn parse_utf8<T: GroupedMeasurementVisitor>(
-    input: &[u8],
+    json_string: &str,
     visitor: &mut T,
 ) -> Result<(), ThinEdgeJsonParserError<T::Error>> {
-    let json_string = std::str::from_utf8(input)
-        .map_err(|err| ThinEdgeJsonError::new_invalid_utf8(input, err))?;
-
-    let thin_edge_obj = json::parse(&json_string)
+    let thin_edge_obj = json::parse(json_string)
         .map_err(|err| ThinEdgeJsonError::new_invalid_json(json_string, err))?;
 
     match &thin_edge_obj {
@@ -225,19 +222,12 @@ fn parse_from_rfc3339(timestamp: &str) -> Result<DateTime<FixedOffset>, ThinEdge
 }
 
 impl ThinEdgeJson {
-    pub fn from_utf8(
-        input: &[u8],
-    ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
-        let mut builder = ThinEdgeJsonBuilder::new();
-
-        let () = parse_utf8(input, &mut builder)?;
-        Ok(builder.done()?)
-    }
-
     pub fn from_str(
         json_string: &str,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
-        ThinEdgeJson::from_utf8(json_string.as_bytes())
+        let mut builder = ThinEdgeJsonBuilder::new();
+        let () = parse_utf8(json_string, &mut builder)?;
+        Ok(builder.done()?)
     }
 
     pub fn has_timestamp(&self) -> bool {
@@ -323,16 +313,6 @@ pub enum ThinEdgeJsonError {
 
 impl ThinEdgeJsonError {
     const MAX_LEN: usize = 80;
-
-    fn new_invalid_utf8(bytes: &[u8], from: std::str::Utf8Error) -> ThinEdgeJsonError {
-        let index = from.valid_up_to();
-        let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
-
-        ThinEdgeJsonError::InvalidUtf8 {
-            input_excerpt: input_prefix(input, ThinEdgeJsonError::MAX_LEN),
-            from,
-        }
-    }
 
     fn new_invalid_json(input: &str, from: json::JsonError) -> ThinEdgeJsonError {
         ThinEdgeJsonError::InvalidJson {
@@ -471,33 +451,11 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_json_reject_invalid_utf8() {
-        let input = b"temperature\xc3\x28";
-
-        let expected_error =
-            r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 11: temperature..."#;
-        let output = ThinEdgeJson::from_utf8(input);
-
-        let error = output.unwrap_err();
-        assert_eq!(expected_error, error.to_string());
-    }
-
-    #[test]
-    fn thin_edge_json_reject_non_utf8_input() {
-        let input = b"\xc3\x28";
-
-        let expected_error = r#"Invalid UTF8: invalid utf-8 sequence of 1 bytes from index 0: ..."#;
-        let output = ThinEdgeJson::from_utf8(input);
-        let error = output.unwrap_err();
-        assert_eq!(expected_error, error.to_string());
-    }
-
-    #[test]
     fn thin_edge_json_reject_arrays() {
         let input = r"[50,23]";
 
         let expected_error = r#"Invalid Thin Edge measurement: it cannot be an array: [50,23]"#;
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -512,7 +470,7 @@ mod tests {
 
         let expected_error =
             r#"Not a number: the "temperature" value must be a number, not an array."#;
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -528,7 +486,7 @@ mod tests {
 
         let expected_error =
             r#"Not a number: the "pressure" value must be a number, not a string."#;
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -542,7 +500,7 @@ mod tests {
           }"#;
 
         let expected_error = r#"Number out-of-range: the "temperature" value is too large to be represented as a float64."#;
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -550,7 +508,7 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_boolean_value() {
-        let string_value_thin_edge_json = br#"{
+        let string_value_thin_edge_json = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
            "temperature": true,
            "pressure": 220
@@ -558,7 +516,7 @@ mod tests {
 
         let expected_output =
             r#"Not a number: the "temperature" value must be a number, not a boolean."#;
-        let output = ThinEdgeJson::from_utf8(string_value_thin_edge_json);
+        let output = ThinEdgeJson::from_str(string_value_thin_edge_json);
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -566,7 +524,7 @@ mod tests {
 
     #[test]
     fn thin_edge_reject_deep_hierarchy() {
-        let multi_level_hierarchy = br#"{
+        let multi_level_hierarchy = r#"{
                 "location": {
                       "latitude": 32.54,
                       "longitude": -117.67,
@@ -580,21 +538,21 @@ mod tests {
         }"#;
         let expected_output =
             r#"More than 2 nested levels: the record for "area" must be flattened."#;
-        let output = ThinEdgeJson::from_utf8(multi_level_hierarchy);
+        let output = ThinEdgeJson::from_str(multi_level_hierarchy);
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
     }
 
     #[test]
     fn thin_edge_reject_measurement_named_type() {
-        let string_value_thin_edge_json = br#"{
+        let string_value_thin_edge_json = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
            "type": 40,
            "pressure": 220
           }"#;
 
         let expected_output = r#"Invalid measurement name: "type" is a reserved word."#;
-        let output = ThinEdgeJson::from_utf8(string_value_thin_edge_json);
+        let output = ThinEdgeJson::from_str(string_value_thin_edge_json);
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -602,13 +560,13 @@ mod tests {
 
     #[test]
     fn thin_edge_reject_number_for_time() {
-        let string_value_thin_edge_json = br#"{
+        let string_value_thin_edge_json = r#"{
            "time": 40,
            "pressure": 220
           }"#;
 
         let expected_output = r#"Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number."#;
-        let output = ThinEdgeJson::from_utf8(string_value_thin_edge_json);
+        let output = ThinEdgeJson::from_str(string_value_thin_edge_json);
 
         let error = output.unwrap_err();
         assert_eq!(expected_output, error.to_string());
@@ -616,13 +574,13 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_invalid_json() {
-        let input = br#"{
+        let input = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
            "pressure": 220;
           }"#;
 
         let expected_error = r#"Invalid JSON: Unexpected character: ; at (3:27): {"time":"2013-06-22T17:03:14.000+02:00","pressure":220;}"#;
-        let output = ThinEdgeJson::from_utf8(input);
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -630,13 +588,13 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_partial_json() {
-        let input = br#"{
+        let input = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
         "#;
 
         let expected_error =
             r#"Invalid JSON: Unexpected end of JSON: {"time":"2013-06-22T17:03:14.000+02:00","#;
-        let output = ThinEdgeJson::from_utf8(input);
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -644,11 +602,11 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_empty_record() {
-        let input = b"{}";
+        let input = "{}";
 
         let expected_error =
             "Empty Thin Edge measurement: it must contain at least one measurement";
-        let output = ThinEdgeJson::from_utf8(input);
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -656,13 +614,13 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_just_time() {
-        let input = br#"{
+        let input = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00"
         }"#;
 
         let expected_error =
             "Empty Thin Edge measurement: it must contain at least one measurement";
-        let output = ThinEdgeJson::from_utf8(input);
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -670,13 +628,13 @@ mod tests {
 
     #[test]
     fn thin_edge_json_reject_empty_measurement() {
-        let input = br#"{
+        let input = r#"{
            "foo" : {}
         }"#;
 
         let expected_error =
             r#"Empty Thin Edge measurement: "foo" must contain at least one measurement"#;
-        let output = ThinEdgeJson::from_utf8(input);
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -690,7 +648,7 @@ mod tests {
           }"#;
 
         let expected_error = "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22\": premature end of input";
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
@@ -705,7 +663,7 @@ mod tests {
 
         let expected_error =
             "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): \"2013-06-22 3am\": input contains invalid characters";
-        let output = ThinEdgeJson::from_utf8(input.as_bytes());
+        let output = ThinEdgeJson::from_str(input);
 
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());

@@ -11,7 +11,7 @@ fn thin_edge_translation_with_type_and_timestamp() {
         "\nThin_Edge_Json: \n{:#}",
         single_value_thin_edge_json_with_type_and_time
     );
-    let output = from_thin_edge_json(single_value_thin_edge_json_with_type_and_time.as_bytes());
+    let output = from_thin_edge_json(single_value_thin_edge_json_with_type_and_time);
     match output {
         Ok(vec) => {
             println!("{:?}", vec);
