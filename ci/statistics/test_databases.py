@@ -1,3 +1,4 @@
+from ci.statistics.databases import MeasurementBase
 import numpy as np
 import os
 from os.path import expanduser
@@ -7,6 +8,22 @@ import pytest
 import databases as db
 
 # TODO mocker.ANY does not seem to work
+
+
+class TestMeasurementBase:
+
+    def test_foldername_to_index(self):
+        assert MeasurementBase.foldername_to_index("results_44_unpack") == 44
+        assert MeasurementBase.foldername_to_index("results_2_unpack") == 2
+        assert MeasurementBase.foldername_to_index("results_02_unpack") == 2
+
+        with pytest.raises(SystemError):
+            MeasurementBase.foldername_to_index("stuff_2_unpack")
+
+        with pytest.raises(SystemError):
+            MeasurementBase.foldername_to_index("results_2_unpac")
+
+
 
 class TestMemoryHistory:
     def test_update_table_creates_attributes(self, mocker):

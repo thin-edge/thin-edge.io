@@ -1,20 +1,22 @@
 import json
 import logging
 import os
+import re
 import sys
 import time
 import numpy as np
+from typing import Tuple
 
 from google.cloud import bigquery
 
 logging.basicConfig(level=logging.INFO)
 
-cpu_table = "ci_cpu_measurement_tedge_mapper"
-mem_table = "ci_mem_measurement_tedge_mapper"
-cpu_hist_table = "ci_cpu_hist"
-
-
 def get_database(style: str):
+    """Retrive database to the database to be used
+    Returns database client, database object, Integer type to be used
+    and a connection object (for Azure)
+    """
+
     conn = None
     if style == "ms":
         logging.info("Using Microsoft Azure backend")
@@ -43,9 +45,15 @@ def get_database(style: str):
         client = None
 
     else:
+        logging.error("Error in configuring database")
         sys.exit(1)
 
     return client, dbo, integer, conn
+
+
+# cpu_table = "ci_cpu_measurement_tedge_mapper"
+# mem_table = "ci_mem_measurement_tedge_mapper"
+# cpu_hist_table = "ci_cpu_hist"
 
 
 # def myquery(client, query, conn, style):
@@ -125,7 +133,12 @@ def get_database(style: str):
 
 
 class MeasurementBase:
+    """Base class for type Measurements
+    """
+
     def upload_table(self):
+        """Upload table to online database
+        """
 
         if self.client:
             load_job = self.client.load_table_from_json(
@@ -143,8 +156,23 @@ class MeasurementBase:
                 logging.error(load_job.errors)
                 raise SystemError
 
+    @staticmethod
+    def foldername_to_index(foldername: str) -> int:
+        """Convert results_N_unpack into N
+        """
+        reg = re.compile(r"^results_(\d+)_unpack$")
+        match = reg.match(foldername)
+
+        if match:
+            index = int( match.group(1) )
+        else:
+            raise SystemError("Cannot convert foldername")
+
+        return index
+
 
 class MeasurementMetadata(MeasurementBase):
+
     def __init__(self, size, client, testmode, lake):
         self.array = []
         self.client = client
@@ -155,9 +183,13 @@ class MeasurementMetadata(MeasurementBase):
             self.name = "ci_measurements"
         self.lake = lake
 
+        # TODO move to baseclass
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-    def scrap_measurement_metadata(self, file):
+    def scrap_measurement_metadata(self, file: str) -> Tuple[str, str, str, str, str]:
+        """Read measurement data from file
+        """
+
         with open(file) as content:
             data = json.load(content)
             run = data["run_number"]
@@ -170,9 +202,11 @@ class MeasurementMetadata(MeasurementBase):
 
 
     def postprocess(self, folders):
+        """Postprocess all relevant folders
+        """
         i = 0
         for folder in folders:
-            index = int(folder.split("_")[1].split(".")[0])
+            index = self.foldername_to_index(folder)
 
             # lake = os.path.expanduser("~/DataLakeTest")
             name = f"system_test_{index}_metadata.json"
@@ -296,13 +330,13 @@ class CpuHistory(MeasurementBase):
     def postprocess(self, folders, testname, filename, binary):
         cpuidx = 0
         for folder in folders:
-            measurement_index = int(folder.split("_")[1].split(".")[0])
+            index = self.foldername_to_index(folder)
 
             statsfile = (
                 f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
             )
 
-            cpuidx = self.scrap_cpu_stats(statsfile, measurement_index, cpuidx, binary)
+            cpuidx = self.scrap_cpu_stats(statsfile, index, cpuidx, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
@@ -363,7 +397,10 @@ class CpuHistory(MeasurementBase):
 
 
 class CpuHistoryStacked(MeasurementBase):
-    """Mostly the representation of a unpublished SQL table"""
+    """
+    Prepare a graph that contains a stacked graph of cpu power consumption.
+    The graph contains user and system cpu time for the last N test-runs.
+    """
 
     def __init__(self, size, client, testmode):
         self.size = size
@@ -371,6 +408,9 @@ class CpuHistoryStacked(MeasurementBase):
             self.name = "ci_cpu_hist_test"
         else:
             self.name = "ci_cpu_hist"
+        self.client = client
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+        self.history = 10 # process the last 10 test runs
         self.fields = [
             ("id", "INT64"),
             ("t0u", "INT64"),
@@ -395,30 +435,34 @@ class CpuHistoryStacked(MeasurementBase):
             ("t9s", "INT64"),
         ]
         self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
-        self.client = client
-        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def postprocess(self,
         measurement_folders,
         data_length,
         cpu_array,
     ):
-
         mlen = len(measurement_folders)
 
+        # Set the id in the first column
         for i in range(data_length):
             self.array[i, 0] = i
 
-        processing_range = min(len(measurement_folders), 10)
+        processing_range = min(len(measurement_folders), self.history)
         column = 1
+
+        # Iterate backwards through the measurement list
         for m in range(mlen - 1, mlen - processing_range - 1, -1):
-            # print(m)
+
             for i in range(data_length):
-                # print( cpu_array.array[ m*60+i ,3],  cpu_array.array[ m*60+i ,4] )
+
+                # Read user time from the cpu_table
                 self.array[i, column] = cpu_array.array[m * data_length + i, 3]
+
+                # Read system time from the cpu_table
                 self.array[i, column + 1] = cpu_array.array[
                     m * data_length + i, 4
                 ]
+
             column += 2
 
     def insert_line(self, line, idx):
@@ -528,11 +572,12 @@ class MemoryHistory(MeasurementBase):
         return memidx
 
     def postprocess(self, folders, testname, filename, binary):
-        index = 0
+        idx = 0
         for folder in folders:
-            measurement_index = int(folder.split("_")[1].split(".")[0])
+            index = self.foldername_to_index(folder)
+
             statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
-            index = self.scrap_mem( statsfile, measurement_index, index, self)
+            idx = self.scrap_mem( statsfile, index, idx, self)
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
