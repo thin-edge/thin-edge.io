@@ -18,6 +18,9 @@ pub enum ThinEdgeJsonSerializationError {
 
     #[error(transparent)]
     MeasurementCollectorError(#[from] MeasurementStreamError),
+
+    #[error("Serializer produced invalid Utf8 string")]
+    InvalidUtf8ConversionToString(std::string::FromUtf8Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -70,6 +73,11 @@ impl ThinEdgeJsonSerializer {
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
         self.end()?;
         Ok(self.buffer)
+    }
+
+    pub fn into_string(self) -> Result<String, ThinEdgeJsonSerializationError> {
+        String::from_utf8(self.bytes()?)
+            .map_err(ThinEdgeJsonSerializationError::InvalidUtf8ConversionToString)
     }
 }
 

@@ -28,7 +28,7 @@ pub enum CumulocityJsonError {
 }
 
 /// Converts from thin-edge Json to c8y_json
-pub fn from_thin_edge_json(input: &str) -> Result<Vec<u8>, CumulocityJsonError> {
+pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
     Ok(c8y_vec)
@@ -37,10 +37,10 @@ pub fn from_thin_edge_json(input: &str) -> Result<Vec<u8>, CumulocityJsonError> 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
     default_timestamp: DateTime<FixedOffset>,
-) -> Result<Vec<u8>, CumulocityJsonError> {
+) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp)?;
     let () = parse_utf8(input, &mut serializer)?;
-    Ok(serializer.bytes()?)
+    Ok(serializer.into_string()?)
 }
 
 #[cfg(test)]
@@ -76,7 +76,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -106,13 +106,9 @@ mod tests {
 
         let output = from_thin_edge_json(single_value_thin_edge_json);
 
-        let vec = output.unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(vec)
-                .unwrap()
-                .split_whitespace()
-                .collect::<String>()
+            output.unwrap().split_whitespace().collect::<String>()
         );
     }
 
@@ -159,7 +155,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -183,10 +179,7 @@ mod tests {
 
         let output = from_thin_edge_json(input);
 
-        let actual_output = String::from_utf8(output.unwrap())
-            .unwrap()
-            .split_whitespace()
-            .collect::<String>();
+        let actual_output = output.unwrap().split_whitespace().collect::<String>();
 
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -220,8 +213,7 @@ mod tests {
         let output = from_thin_edge_json(input.as_str()).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(output)
-                .unwrap()
+            output
                 .split_whitespace()
                 .collect::<String>()
         );

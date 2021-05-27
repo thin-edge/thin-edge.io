@@ -20,7 +20,11 @@ pub enum C8yJsonSerializationError {
 
     #[error(transparent)]
     ThinEdgeJsonParseError(#[from] ThinEdgeJsonError),
+
+    #[error("Serializer produced invalid Utf8 string")]
+    InvalidUtf8ConversionToString(std::string::FromUtf8Error),
 }
+
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
@@ -72,6 +76,11 @@ impl C8yJsonSerializer {
     pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
         self.end()?;
         Ok(self.buffer)
+    }
+
+    pub fn into_string(self) -> Result<String, C8yJsonSerializationError> {
+        String::from_utf8(self.bytes()?)
+            .map_err(C8yJsonSerializationError::InvalidUtf8ConversionToString)
     }
 }
 
