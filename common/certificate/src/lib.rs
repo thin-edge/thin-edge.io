@@ -1,6 +1,7 @@
 use chrono::offset::Utc;
 use chrono::DateTime;
 use chrono::Duration;
+use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
@@ -8,6 +9,7 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 use zeroize::Zeroizing;
 
+pub mod device_id;
 pub struct PemCertificate {
     pem: x509_parser::pem::Pem,
 }
@@ -134,34 +136,12 @@ impl KeyCertPair {
     }
 
     fn check_identifier(id: &str, max_cn_size: usize) -> Result<(), CertificateError> {
-        if id.is_empty() {
-            return Err(CertificateError::EmptyName);
-        } else if id.len() > max_cn_size {
-            return Err(CertificateError::TooLongName {
-                name: id.into(),
-                max_cn_size,
-            });
-        } else if id.contains(char::is_control) {
-            return Err(CertificateError::InvalidCharacter { name: id.into() });
-        }
-
-        Ok(())
+        Ok(device_id::is_valid_device_id(id, max_cn_size)?)
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
-    #[error(r#"The string '{name:?}' contains characters which cannot be used in a name"#)]
-    InvalidCharacter { name: String },
-
-    #[error(r#"The empty string cannot be used as a name"#)]
-    EmptyName,
-
-    #[error(
-    r#"The string '{name:?}' is more than {max_cn_size} characters long and cannot be used as a name"#
-    )]
-    TooLongName { name: String, max_cn_size: usize },
-
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
@@ -173,6 +153,9 @@ pub enum CertificateError {
 
     #[error("X509 file format error: {0}")]
     X509Error(String), // One cannot use x509_parser::error::X509Error unless one use `nom`.
+
+    #[error("DeviceID Error")]
+    InvalidDeviceID(#[from] DeviceIdError),
 }
 
 pub struct NewCertificateConfig {

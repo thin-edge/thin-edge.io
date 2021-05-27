@@ -20,6 +20,9 @@ connect = "true"
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 connect = "false"
+
+[mqtt]
+port = 1234
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -56,6 +59,8 @@ connect = "false"
         FilePath::from("/path/to/azure/root/cert")
     );
 
+    assert_eq!(config.query(MqttPortSetting)?, Port(1234));
+
     Ok(())
 }
 
@@ -73,6 +78,9 @@ root_cert_path = "/path/to/c8y/root/cert"
 [azure]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
+
+[mqtt]
+port = 1883
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -86,6 +94,7 @@ root_cert_path = "/path/to/azure/root/cert"
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
+    let updated_mqtt_port = Port(2345);
 
     {
         let mut config = config_repo.load()?;
@@ -120,6 +129,7 @@ root_cert_path = "/path/to/azure/root/cert"
         config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
         config.unset(C8yRootCertPathSetting)?;
         config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.update(MqttPortSetting, updated_mqtt_port)?;
         config.unset(AzureRootCertPathSetting)?;
         config_repo.store(config)?;
     }
@@ -148,6 +158,8 @@ root_cert_path = "/path/to/azure/root/cert"
             config.query(AzureRootCertPathSetting)?,
             FilePath::from("default_azure_root_cert_path")
         );
+
+        assert_eq!(config.query(MqttPortSetting)?, updated_mqtt_port);
     }
 
     Ok(())
@@ -297,6 +309,8 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         config.query(AzureRootCertPathSetting)?,
         FilePath::from("/etc/ssl/certs")
     );
+
+    assert_eq!(config.query(MqttPortSetting)?, Port(1883));
     Ok(())
 }
 
@@ -326,6 +340,28 @@ hello="tedge"
         Err(TEdgeConfigError::TOMLParseError(_)),
         "Expected the parsing to fail with TOMLParseError"
     );
+    Ok(())
+}
+
+#[test]
+fn test_invalid_mqtt_port() -> Result<(), TEdgeConfigError> {
+    let toml_conf = r#"
+[mqtt]
+port = "1883"
+"#;
+
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let result = TEdgeConfigRepository::new(config_location).load();
+
+    let expected_err =
+        "invalid type: string \"1883\", expected u16 for key `mqtt.port` at line 3 column 8";
+
+    match result {
+        Err(TEdgeConfigError::TOMLParseError(err)) => assert_eq!(err.to_string(), expected_err),
+
+        _ => assert!(false, "Expected the parsing to fail with TOMLParseError"),
+    }
+
     Ok(())
 }
 
@@ -360,6 +396,9 @@ root_cert_path = "/path/to/c8y/root/cert"
 [azure]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
+
+[mqtt]
+port = 1024
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -397,6 +436,9 @@ root_cert_path = "/path/to/azure/root/cert"
 
     config.update(C8yUrlSetting, updated_c8y_url.clone())?;
 
+    let updated_mqtt_port = Port(2048);
+    config.update(MqttPortSetting, updated_mqtt_port.clone())?;
+
     config.unset(C8yRootCertPathSetting)?;
 
     assert_eq!(
@@ -413,6 +455,8 @@ root_cert_path = "/path/to/azure/root/cert"
         config.query(C8yRootCertPathSetting)?,
         FilePath::from("/etc/ssl/certs")
     );
+
+    assert_eq!(config.query(MqttPortSetting)?, updated_mqtt_port);
     Ok(())
 }
 
@@ -529,7 +573,7 @@ cert_path = "/path/to/cert"
 }
 
 #[test]
-fn test_device_id_is_extraxted_from_device_certificate() -> Result<(), TEdgeConfigError> {
+fn test_device_id_is_extracted_from_device_certificate() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [device]
 cert_path = "/path/to/cert"
@@ -564,6 +608,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_device_key_path: FilePath::from("/dev/null"),
         default_c8y_root_cert_path: FilePath::from("/dev/null"),
         default_azure_root_cert_path: FilePath::from("/dev/null"),
+        default_mqtt_port: Port(1883),
     }
 }
 
