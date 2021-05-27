@@ -1,0 +1,12 @@
+[Unit]
+Description=tedge-mapper-az converts thin edge json measurements to thin-edge JSON for Azure format.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge-mapper
+ExecStart=/usr/bin/tedge_mapper az
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,5 @@
 [Unit]
-Description=tedge-mapper converts thin edge json measurements to connectivity provider format.
+Description=tedge-mapper-c8y converts thin edge json measurements to Cumulocity JSON format.
 After=syslog.target network.target mosquitto.service
 
 [Service]
