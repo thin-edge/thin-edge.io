@@ -55,7 +55,7 @@ class TestMemoryHistory:
         lake = os.path.expanduser("~/DataLakeTest")
 
         base = db.MemoryHistory(lake, 3, None, None, None)
-        mock = mocker.patch.object(base, "scrap_mem", side_effect = [10,20,30])
+        mock = mocker.patch.object(base, "scrap_data")
 
         folders = [
             "results_1_unpack",
@@ -66,9 +66,9 @@ class TestMemoryHistory:
         exp = "{}/{}/PySys/name/Output/linux/filename.out"
 
         calls = [
-            mocker.call( exp.format(lake, folders[0]), 1 , 0, base),
-            mocker.call( exp.format(lake, folders[1]), 2 , 10, base),
-            mocker.call( exp.format(lake, folders[2]), 4 , 20, base)
+            mocker.call( exp.format(lake, folders[0]), 1, base),
+            mocker.call( exp.format(lake, folders[1]), 2, base),
+            mocker.call( exp.format(lake, folders[2]), 4, base)
             ]
 
         base.postprocess(folders, "name", "filename", "binary")

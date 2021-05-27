@@ -337,7 +337,9 @@ class CpuHistory(MeasurementBase):
         except FileNotFoundError as e:
             logging.error("File not found, skipping for now!" + str(e))
 
-        logging.debug(f"Read {sample} cpu stats")
+        # In case that there are not enough lines in the file fixx with zeros
+        # Can happen, depending on when the data recorder process is killed.
+
         missing = self.data_length - sample
         for m in range(missing):
             self.insert_line(
@@ -365,6 +367,8 @@ class CpuHistory(MeasurementBase):
             self.scrap_data(statsfile, index, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
+        """Insert a line into the table
+        """
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
 
     def show(self):
@@ -374,7 +378,6 @@ class CpuHistory(MeasurementBase):
 
         fig, ax = plt.subplots()
 
-        # ax.plot(self.array[:,0], 'o-')
         ax.plot(self.array[:, 1], ".", label="mid")
         ax.plot(self.array[:, 2], "-", label="sample")
         ax.plot(self.array[:, 3], "-", label="utime")
@@ -474,7 +477,7 @@ class CpuHistoryStacked(MeasurementBase):
         for i in range(data_length):
             self.array[i, 0] = i
 
-        processing_range = min(len(measurement_folders), self.history)
+        processing_range = min(mlen, self.history)
         column = 1
 
         # Iterate backwards through the measurement list
@@ -493,6 +496,8 @@ class CpuHistoryStacked(MeasurementBase):
             column += 2
 
     def insert_line(self, line, idx):
+        """Insert a line into the table
+        """
         assert len(line) == len(self.fields)
         self.array[idx] = line
 
@@ -538,6 +543,8 @@ class CpuHistoryStacked(MeasurementBase):
         self.upload_table()
 
 class MemoryHistory(MeasurementBase):
+    """Class to represent a table of measured memory
+    """
 
     def __init__(self, lake, size, data_length, client, testmode):
         self.lake = lake
@@ -545,6 +552,7 @@ class MemoryHistory(MeasurementBase):
         self.array = np.zeros((size, 8), dtype=np.int32)
         self.size = size
         self.client = client
+        self.row_id = 0
 
         if testmode:
             self.name = "ci_mem_measurement_tedge_mapper_test"
@@ -554,7 +562,7 @@ class MemoryHistory(MeasurementBase):
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
 
-    def scrap_mem(self, thefile, mesaurement_index, memidx, arr):
+    def scrap_data(self, thefile, mesaurement_index, arr):
         """Read measurement data from file
         """
 
@@ -563,15 +571,15 @@ class MemoryHistory(MeasurementBase):
             sample = 0
             for line in lines:
                 entries = line.split()
-                size = entries[1 - 1]  #     (1) total program size
-                resident = entries[2 - 1]  #   (2) resident set size
-                shared = entries[3 - 1]  #     (3) number of resident shared pages
-                text = entries[4 - 1]  #       (4) text (code)
-                # lib = entries[5-1] #      (5) library (unused since Linux 2.6; always 0)
-                data = entries[6 - 1]  #      (6) data + stack
+                size = entries[0]  #     (1) total program size
+                resident = entries[1]  #   (2) resident set size
+                shared = entries[2]  #     (3) number of resident shared pages
+                text = entries[3]  #       (4) text (code)
+                # lib = entries[4] #      (5) library (unused since Linux 2.6; always 0)
+                data = entries[5]  #      (6) data + stack
 
                 arr.insert_line(
-                    idx=memidx,
+                    idx=self.row_id,
                     mid=mesaurement_index,
                     sample=sample,
                     size=size,
@@ -581,14 +589,14 @@ class MemoryHistory(MeasurementBase):
                     data=data,
                 )
                 sample += 1
-                memidx += 1
+                self.row_id += 1
 
         logging.debug(f"Read {sample} Memory stats")
         missing = self.data_length - sample
         for m in range(missing):
 
             arr.insert_line(
-                idx=memidx,
+                idx=self.row_id,
                 mid=mesaurement_index,
                 sample=sample,
                 size=0,
@@ -598,21 +606,20 @@ class MemoryHistory(MeasurementBase):
                 data=0,
             )
             sample += 1
-            memidx += 1
-
-        return memidx
+            self.row_id += 1
 
     def postprocess(self, folders, testname, filename, binary):
         """Postprocess all relevant folders
         """
-        idx = 0
         for folder in folders:
             index = self.foldername_to_index(folder)
 
             statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
-            idx = self.scrap_mem( statsfile, index, idx, self)
+            self.scrap_data( statsfile, index, self)
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
+        """Insert a line into the table
+        """
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
 
     def show(self):
