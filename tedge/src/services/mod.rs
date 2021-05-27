@@ -7,7 +7,8 @@ use crate::utils::users::ROOT_USER;
 use std::process::ExitStatus;
 
 pub mod mosquitto;
-pub mod tedge_mapper;
+pub mod tedge_mapper_az;
+pub mod tedge_mapper_c8y;
 
 type ExitCode = i32;
 
