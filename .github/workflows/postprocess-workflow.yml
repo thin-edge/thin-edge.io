@@ -4,11 +4,11 @@ on:
 
   workflow_dispatch:
     branches: [ main, continuous_integration]
-  workflow_run:
-    workflows: ["system-test-workflow"]
-    branches: [main, continuous_integration]
-    types:
-      - completed
+  #workflow_run:
+  #  workflows: ["system-test-workflow"]
+  #  branches: [main, continuous_integration]
+  #  types:
+  #    - completed
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +16,7 @@ env:
 jobs:
   postprocess:
     runs-on: [self-hosted, Linux, X64]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
