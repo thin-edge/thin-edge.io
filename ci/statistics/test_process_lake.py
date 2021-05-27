@@ -202,7 +202,8 @@ def test_postprocess_vals_mem():
 
     mem_array = db.MemoryHistory(
         lake,
-        len(relevant_measurement_folders) * data_length,
+        "ci_mem_measurement_tedge_mapper",
+        len(relevant_measurement_folders),
         data_length,
         client, testmode
     )
@@ -267,7 +268,13 @@ def test_postprocess_vals_cpu_hist():
         "tedge_mapper",
     )
 
-    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
+    cpu_hist_array = db.CpuHistoryStacked(
+        lake,
+        "ci_cpu_hist",
+        len(relevant_measurement_folders),
+        data_length,
+        client, testmode
+    )
 
     cpu_hist_array.postprocess(
         relevant_measurement_folders,

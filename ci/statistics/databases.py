@@ -53,6 +53,7 @@ def get_database(style: str):
 
     return client, dbo, integer, conn
 
+# Keep all this in case we want real SQL publshing again
 
 # cpu_table = "ci_cpu_measurement_tedge_mapper"
 # mem_table = "ci_mem_measurement_tedge_mapper"
@@ -151,6 +152,7 @@ class MeasurementBase(ABC):
             self.name = name + "_test"
         else:
             self.name = name
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
 
     def postprocess():
@@ -216,9 +218,7 @@ class MeasurementMetadata(MeasurementBase):
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
         super().__init__( lake, name, data_amount, data_length, client, testmode)
-
         self.array = np.zeros(( self.size , 7), dtype=np.int32)
-        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
         self.row_id = 0
 
         self.array = []
@@ -308,9 +308,7 @@ class CpuHistory(MeasurementBase):
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
         super().__init__( lake, name, data_amount, data_length, client, testmode)
-
         self.array = np.zeros(( self.size , 7), dtype=np.int32)
-        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
         self.row_id = 0
 
     def scrap_data(self, thefile, measurement_index, binary):
@@ -437,15 +435,12 @@ class CpuHistoryStacked(MeasurementBase):
     """Class to represent a table of measured CPU usage as stacked graph.
     The graph contains user and system cpu time for the last N test-runs.
     """
+    def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
-    def __init__(self, size, client, testmode):
-        self.size = size
-        if testmode:
-            self.name = "ci_cpu_hist_test"
-        else:
-            self.name = "ci_cpu_hist"
-        self.client = client
-        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+        super().__init__( lake, name, data_amount, data_length, client, testmode)
+
+        self.row_id = 0
+
         self.history = 10 # process the last 10 test runs
         self.fields = [
             ("id", "INT64"),
@@ -470,7 +465,7 @@ class CpuHistoryStacked(MeasurementBase):
             ("t9u", "INT64"),
             ("t9s", "INT64"),
         ]
-        self.array = np.zeros((size, len(self.fields)), dtype=np.int32)
+        self.array = np.zeros((self.data_length, len(self.fields)), dtype=np.int32)
 
     def postprocess(self,
         measurement_folders,
@@ -542,7 +537,7 @@ class CpuHistoryStacked(MeasurementBase):
 
         self.json_data = []
 
-        for i in range(self.size):
+        for i in range(self.data_length):
             line = {}
             for j in range(len(self.fields)):
                 line[self.fields[j][0]] = int(self.array[i, j])
@@ -554,21 +549,15 @@ class MemoryHistory(MeasurementBase):
     """Class to represent a table of measured memory
     """
 
-    def __init__(self, lake, size, data_length, client, testmode):
+    def __init__(self, lake, name, data_amount, data_length, client, testmode):
+        super().__init__( lake, name, data_amount, data_length, client, testmode)
+
         self.lake = lake
+        self.size = self.size
         self.data_length = data_length
-        self.array = np.zeros((size, 8), dtype=np.int32)
-        self.size = size
+        self.array = np.zeros((self.size, 8), dtype=np.int32)
         self.client = client
         self.row_id = 0
-
-        if testmode:
-            self.name = "ci_mem_measurement_tedge_mapper_test"
-        else:
-            self.name = "ci_mem_measurement_tedge_mapper"
-
-        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
-
 
     def scrap_data(self, thefile, mesaurement_index, arr):
         """Read measurement data from file
@@ -651,6 +640,8 @@ class MemoryHistory(MeasurementBase):
 
         plt.show()
 
+    # Keep this in case we want real SQL publshing again
+    #
     #    def update_table_one_by_one(self, dbo):
     #        for i in range(self.size):
     #            assert self.array[i, 0] == i

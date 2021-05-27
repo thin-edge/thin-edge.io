@@ -27,7 +27,7 @@ class TestMeasurementBase:
 
 class TestMemoryHistory:
     def test_update_table_creates_attributes(self, mocker):
-        base = db.MemoryHistory(None, 3, None, None, None)
+        base = db.MemoryHistory(None, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -36,7 +36,7 @@ class TestMemoryHistory:
         assert base.json_data != None
 
     def test_update_table_calls_upload(self, mocker):
-        base = db.MemoryHistory(None, 3, None, None, None)
+        base = db.MemoryHistory(None, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -54,7 +54,7 @@ class TestMemoryHistory:
     def test_postrocess(self, mocker):
         lake = os.path.expanduser("~/DataLakeTest")
 
-        base = db.MemoryHistory(lake, 3, None, None, None)
+        base = db.MemoryHistory(lake, "name", 3, 10, None, None)
         mock = mocker.patch.object(base, "scrap_data")
 
         folders = [
@@ -123,7 +123,7 @@ class TestCpuHistory:
 
 class TestCpuHistoryStacked:
     def test_stacked_update_table_calls_upload(self, mocker):
-        base = db.CpuHistoryStacked(3, None, None)
+        base = db.CpuHistoryStacked(None, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -131,7 +131,7 @@ class TestCpuHistoryStacked:
         base.upload_table.assert_called_once()
 
     def test_update_table_creates_attributes(self, mocker):
-        base = db.CpuHistoryStacked(3, None, None)
+        base = db.CpuHistoryStacked(None, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -143,7 +143,7 @@ class TestCpuHistoryStacked:
     def test_postprocess(self):
         """TODO: update me"""
 
-        base = db.CpuHistoryStacked(3, None, None)
+        base = db.CpuHistoryStacked(None, "name", 3, 10, None, None)
         folders = [
             "results_1_unpack",
             "results_2_unpack",
