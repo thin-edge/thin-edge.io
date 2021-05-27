@@ -302,8 +302,9 @@ class CpuHistory(MeasurementBase):
             self.name = name
 
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+        self.row_id = 0
 
-    def scrap_cpu_stats(self, thefile, measurement_index, cpuidx, binary):
+    def scrap_data(self, thefile, measurement_index, binary):
         """Read measurement data from file /proc/pid/stat
         See man proc
         """
@@ -322,7 +323,7 @@ class CpuHistory(MeasurementBase):
                         cs = int(entries[16])
 
                         self.insert_line(
-                            idx=cpuidx,
+                            idx=self.row_id,
                             mid=measurement_index,
                             sample=sample,
                             utime=ut,
@@ -331,17 +332,16 @@ class CpuHistory(MeasurementBase):
                             cstime=cs,
                         )
                         sample += 1
-                        cpuidx += 1
+                        self.row_id += 1
 
         except FileNotFoundError as e:
             logging.error("File not found, skipping for now!" + str(e))
-            return cpuidx
 
         logging.debug(f"Read {sample} cpu stats")
         missing = self.data_length - sample
         for m in range(missing):
             self.insert_line(
-                idx=cpuidx,
+                idx=self.row_id,
                 mid=measurement_index,
                 sample=sample,
                 utime=0,
@@ -350,14 +350,11 @@ class CpuHistory(MeasurementBase):
                 cstime=0,
             )
             sample += 1
-            cpuidx += 1
-
-        return cpuidx
+            self.row_id += 1
 
     def postprocess(self, folders, testname, filename, binary):
         """Postprocess all relevant folders
         """
-        cpuidx = 0
         for folder in folders:
             index = self.foldername_to_index(folder)
 
@@ -365,7 +362,7 @@ class CpuHistory(MeasurementBase):
                 f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
             )
 
-            cpuidx = self.scrap_cpu_stats(statsfile, index, cpuidx, binary)
+            self.scrap_data(statsfile, index, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]

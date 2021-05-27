@@ -1,4 +1,3 @@
-from ci.statistics.databases import MeasurementBase
 import numpy as np
 import os
 from os.path import expanduser
@@ -6,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import databases as db
+from databases import MeasurementBase
 
 # TODO mocker.ANY does not seem to work
 
@@ -103,7 +103,7 @@ class TestCpuHistory:
     def test_postprocess(self, mocker):
         lake = os.path.expanduser("~/DataLakeTest")
         base = db.CpuHistory("name", lake, 3, None, None, None)
-        mock = mocker.patch.object(base, "scrap_cpu_stats")
+        mock = mocker.patch.object(base, "scrap_data")
         folders = [
             "results_1_unpack",
             "results_2_unpack",

@@ -160,7 +160,14 @@ def test_postprocess_vals_cpu():
         else:
             k = 4
 
-        data.append([i, k, i % 10, i + 1, i + 2, 0, 0])
+        if i < 18 or i>=20:
+            ut = i + 1
+            st = i + 2
+        else:
+            ut = 0 # hint: missing data here
+            st = 0
+
+        data.append([i, k, i % 10, ut, st, 0, 0])
 
     exp = np.array(data, dtype=np.int32)
 
@@ -268,19 +275,22 @@ def test_postprocess_vals_cpu_hist():
     # programmatically reproduce the data set
     data = []
     for i in range(10):
-        if i < 20:
-            k = (i + 10) // 10
+        if i < 8:
+            ut2 = 11 + i
+            st2 = 12 + i
         else:
-            k = 4
+            ut2 = 0
+            st2 = 0
+
         data.append(
             [
-                i,
-                21 + i,
-                22 + i,
-                11 + i,
-                12 + i,
-                i + 1,
-                i + 2,
+                i, #id
+                21 + i, # user time 4
+                22 + i, # system time  4
+                ut2, # user time 2
+                st2, # system time 2
+                i + 1,  # user time 1
+                i + 2, # system time 1
                 0,
                 0,
                 0,
@@ -334,8 +344,7 @@ def test_postprocess_vals_metadata():
         (
             0,
             1,
-            "2021-05-19T15:21:01Z",
-            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "2021-05-19T15:21:01Z",            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
             "system-test-workflow",
             "continuous_integration",
         ),
