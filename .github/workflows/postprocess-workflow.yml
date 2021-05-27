@@ -23,7 +23,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
-    - name: Run all Tests
+    - name: Call postprocess
       run:  bash  ./ci/postprocess.sh
       env:
             THEGHTOKEN : ${{ secrets.SECRET_THEGHTOKEN  }}

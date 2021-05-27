@@ -134,10 +134,10 @@ def get_all_runs(token):
 
 token = None
 
-if "TOKEN" in os.environ:
-    token = os.environ["TOKEN"]
+if "THEGHTOKEN" in os.environ:
+    token = os.environ["THEGHTOKEN"]
 else:
-    print("Error environment variable TOKEN not set")
+    print("Error environment variable THEGHTOKEN not set")
     sys.exit(1)
 
 system_test_runs = []
