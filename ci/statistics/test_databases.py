@@ -83,7 +83,7 @@ class TestMemoryHistory:
 class TestCpuHistory:
     def test_update_table_creates_attributes(self, mocker):
         lake = os.path.expanduser("~/DataLakeTest")
-        base = db.CpuHistory("name", lake, 3, None, None, None)
+        base = db.CpuHistory(lake, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -93,7 +93,7 @@ class TestCpuHistory:
 
     def test_update_table_calls_upload(self, mocker):
         lake = os.path.expanduser("~/DataLakeTest")
-        base = db.CpuHistory("name", lake, 3, None, None, None)
+        base = db.CpuHistory(lake, "name", 3, 10, None, None)
         mocker.patch.object(base, "upload_table")
 
         base.update_table()
@@ -102,7 +102,7 @@ class TestCpuHistory:
 
     def test_postprocess(self, mocker):
         lake = os.path.expanduser("~/DataLakeTest")
-        base = db.CpuHistory("name", lake, 3, None, None, None)
+        base = db.CpuHistory(lake, "name", 3, 10, None, None)
         mock = mocker.patch.object(base, "scrap_data")
         folders = [
             "results_1_unpack",
@@ -159,7 +159,14 @@ class TestCpuHistoryStacked:
 
 class TestMetadata:
     def test_update_table_calls_upload(self, mocker):
-        base = db.MeasurementMetadata(1, None, None, None)
+        base = db.MeasurementMetadata(
+            None,
+            "ci_measurements",
+            1,
+            10,
+            None,
+            None
+            )
         mocker.patch.object(base, "upload_table")
         base.array = [[1, 2, 3, 4, 5, 6]]
 
@@ -168,7 +175,14 @@ class TestMetadata:
         base.upload_table.assert_called_once()
 
     def test_update_table_creates_attributes(self, mocker):
-        base = db.MeasurementMetadata(1, None, None, None)
+        base = db.MeasurementMetadata(
+            None,
+            "ci_measurements",
+            1,
+            10,
+            None,
+            None
+            )
         mocker.patch.object(base, "upload_table")
         base.array = [[1, 2, 3, 4, 5, 6]]
 
@@ -187,8 +201,14 @@ class TestMetadata:
         ]
         client = "google"
         testmode = True
-        metadata = db.MeasurementMetadata(len(folders), client, testmode, lake)
-
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            client,
+            testmode
+            )
         metadata.postprocess(folders)
         metadata.show()
 
@@ -197,8 +217,14 @@ class TestMetadata:
         lake = None
         client = None
         testmode = None
-        metadata = db.MeasurementMetadata(3, client, testmode, lake)
-
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            client,
+            testmode
+            )
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
 
@@ -223,8 +249,14 @@ class TestMetadata:
         lake = None
         client = None
         testmode = None
-        metadata = db.MeasurementMetadata(3, client, testmode, lake)
-
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            client,
+            testmode
+            )
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
 
@@ -251,7 +283,14 @@ class TestMetadata:
         lake = None
         client = None
         testmode = None
-        metadata = db.MeasurementMetadata(3, client, testmode, lake)
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            client,
+            testmode
+            )
 
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
@@ -288,11 +327,19 @@ class TestMetadata:
         ]
         client = "google"
         testmode = True
-        metadata = db.MeasurementMetadata(len(folders), client, testmode, lake)
 
-        metadata.postprocess(folders)
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            client,
+            testmode
+            )
 
         mocker.patch.object(metadata, "upload_table")
+
+        metadata.postprocess(folders)
 
         metadata.update_table()
 
@@ -303,7 +350,14 @@ class TestMetadata:
         name = "system_test_1_metadata.json"
         file = os.path.join(lake, name)
 
-        metadata = db.MeasurementMetadata(0, None, None, None)
+        metadata = db.MeasurementMetadata(
+            lake,
+            "ci_measurements",
+            3,
+            10,
+            None,
+            None
+            )
 
         ret, date, url, name, branch = metadata.scrap_measurement_metadata(file)
 

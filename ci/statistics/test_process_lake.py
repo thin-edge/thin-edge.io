@@ -137,9 +137,9 @@ def test_postprocess_vals_cpu():
     testmode = True
 
     cpu_array = db.CpuHistory(
-        "name",
         lake,
-        len(relevant_measurement_folders) * data_length,
+        "name",
+        len(relevant_measurement_folders),
         data_length,
         client,
         testmode,
@@ -173,9 +173,11 @@ def test_postprocess_vals_cpu():
 
     extensive_check = False
     if extensive_check:
-        print("Expect")
+        print("\nExpect")
+        print(len(exp))
         print(exp)
         print("There")
+        print(cpu_array.size)
         print(cpu_array.array)
 
         for i in range(len(data)):
@@ -248,16 +250,15 @@ def test_postprocess_vals_cpu_hist():
     data_length = 10
     client = None
     testmode = True
+
     cpu_array = db.CpuHistory(
-        "name",
         lake,
-        len(relevant_measurement_folders) * data_length,
+        "name",
+        len(relevant_measurement_folders),
         data_length,
         client,
         testmode,
     )
-
-    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
     cpu_array.postprocess(
         relevant_measurement_folders,
@@ -265,6 +266,8 @@ def test_postprocess_vals_cpu_hist():
         "stat_mapper_stdout",
         "tedge_mapper",
     )
+
+    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testmode)
 
     cpu_hist_array.postprocess(
         relevant_measurement_folders,
@@ -334,9 +337,19 @@ def test_postprocess_vals_metadata():
         "results_2_unpack",
         "results_4_unpack",
     ]
+    data_length = 10
     client = None
     testmode = True
-    metadata = db.MeasurementMetadata(len(folders), client, testmode, lake)
+
+
+    metadata = db.MeasurementMetadata(
+        lake,
+        "ci_measurements",
+        len(folders),
+        data_length,
+        client,
+        testmode
+        )
 
     metadata.postprocess(folders)
 

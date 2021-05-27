@@ -139,6 +139,20 @@ class MeasurementBase(ABC):
     """Abstract base class for type Measurements
     """
 
+    def __init__(self, lake, name, data_amount, data_length, client, testmode):
+
+        self.data_amount = data_amount
+        self.data_length = data_length
+        self.size = data_length * data_amount
+        self.client = client
+        self.lake = lake
+
+        if testmode:
+            self.name = name + "_test"
+        else:
+            self.name = name
+
+
     def postprocess():
         """Postprocess all relevant folders
         """
@@ -199,15 +213,16 @@ class MeasurementMetadata(MeasurementBase):
     """Class to represent a table of measurement metadata
     """
 
-    def __init__(self, size, client, testmode, lake):
+    def __init__(self, lake, name, data_amount, data_length, client, testmode):
+
+        super().__init__( lake, name, data_amount, data_length, client, testmode)
+
+        self.array = np.zeros(( self.size , 7), dtype=np.int32)
+        self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
+        self.row_id = 0
+
         self.array = []
         self.client = client
-        self.size = size
-        if testmode:
-            self.name = "ci_measurements_test"
-        else:
-            self.name = "ci_measurements"
-        self.lake = lake
 
         # TODO move to baseclass
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
@@ -272,7 +287,7 @@ class MeasurementMetadata(MeasurementBase):
 
         self.json_data = []
 
-        for index in range(self.size):
+        for index in range(self.data_amount):
             self.json_data.append(
                 {
                     "id": self.array[index][0],
@@ -290,17 +305,11 @@ class CpuHistory(MeasurementBase):
     """Class to represent a table of measured CPU usage
     """
 
-    def __init__(self, name, lake, size, data_length, client, testmode):
-        self.array = np.zeros((size, 7), dtype=np.int32)
-        self.size = size
-        self.data_length = data_length
-        self.client = client
-        self.lake = lake
-        if testmode:
-            self.name = name + "_test"
-        else:
-            self.name = name
+    def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
+        super().__init__( lake, name, data_amount, data_length, client, testmode)
+
+        self.array = np.zeros(( self.size , 7), dtype=np.int32)
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
         self.row_id = 0
 
@@ -309,11 +318,10 @@ class CpuHistory(MeasurementBase):
         See man proc
         """
 
+        sample = 0
         try:
             with open(thefile) as thestats:
                 lines = thestats.readlines()
-                sample = 0
-
                 for line in lines:
                     entries = line.split()
                     if len(entries) == 52 and entries[1] == f"({binary})":

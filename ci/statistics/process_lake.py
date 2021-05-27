@@ -129,11 +129,15 @@ def generate(style, show, lake, testdata):
         testdata,
     )
 
-    mem_array = db.MemoryHistory(lake, processing_range * data_length, data_length, client, testdata)
+    mem_array = db.MemoryHistory(
+        lake, processing_range * data_length, data_length, client, testdata
+        )
 
-    cpu_hist_array = db.CpuHistoryStacked(data_length, client, testdata)
+    cpu_hist_array = db.CpuHistoryStacked(
+        data_length, client, testdata)
 
-    measurements = db.MeasurementMetadata(processing_range, client, testdata, lake)
+    measurements = db.MeasurementMetadata(
+        processing_range, client, testdata, lake)
 
     cpu_array.postprocess(
         relevant_folders,
@@ -163,7 +167,8 @@ def generate(style, show, lake, testdata):
         "mosquitto",
     )
 
-    mem_array.postprocess(relevant_folders,
+    mem_array.postprocess(
+        relevant_folders,
         "publish_sawmill_record_statistics",
         "statm_mapper_stdout",
         "tedge_mapper")
