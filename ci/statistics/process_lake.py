@@ -183,25 +183,18 @@ def generate(style, show, lake, testdata):
 
     logging.info("Uploading")
 
-    cpu_array.delete_table()
     cpu_array.update_table()
 
-    cpu_array_mosquitto.delete_table()
     cpu_array_mosquitto.update_table()
 
-    cpu_array_long.delete_table()
     cpu_array_long.update_table()
 
-    mem_array.delete_table()
     mem_array.update_table()
 
-    cpu_hist_array.delete_table()
     cpu_hist_array.update_table()
 
-    cpu_array_long_mosquitto.delete_table()
     cpu_array_long_mosquitto.update_table()
 
-    measurements.delete_table()
     measurements.update_table()
 
     logging.info("Done")

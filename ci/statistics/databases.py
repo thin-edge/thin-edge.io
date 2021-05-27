@@ -1,3 +1,5 @@
+
+from abc import ABC
 import json
 import logging
 import os
@@ -132,9 +134,30 @@ def get_database(style: str):
 #     myquery(client, f"drop table {dbo}.{cpu_hist_table}")
 
 
-class MeasurementBase:
-    """Base class for type Measurements
+class MeasurementBase(ABC):
+    """Abstract base class for type Measurements
     """
+
+    def postprocess():
+        """Postprocess all relevant folders
+        """
+        pass
+
+    def show():
+        """Show content on console
+        """
+        pass
+
+    def update_table(self):
+        """Create table and prepare loading via json and upload
+        """
+        pass
+
+    def delete_table(self):
+        try:
+            self.client.delete_table(self.database)
+        except:  # TODO: Can' import this google.api_core.exceptions.NotFound:
+            pass
 
     def upload_table(self):
         """Upload table to online database
@@ -204,28 +227,35 @@ class MeasurementMetadata(MeasurementBase):
     def postprocess(self, folders):
         """Postprocess all relevant folders
         """
-        i = 0
+        idx = 0
         for folder in folders:
             index = self.foldername_to_index(folder)
 
-            # lake = os.path.expanduser("~/DataLakeTest")
             name = f"system_test_{index}_metadata.json"
             path = os.path.join(self.lake, name)
 
             run, date, url, name, branch = self.scrap_measurement_metadata(path)
-            self.array.append((i, run, date, url, name, branch))
-            i += 1
+
+            self.array.append((idx, run, date, url, name, branch))
+            idx += 1
 
         return self.array
 
     def show(self):
+        """Show content on console
+        """
         logging.info(f"Content of table {self.database}")
         for row in self.array:
             logging.info(row)
 
     def update_table(self):
+        """Create table and prepare loading via json and upload
+        """
 
         logging.info("Updating table:" + self.name)
+
+        self.delete_table()
+
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
@@ -239,10 +269,8 @@ class MeasurementMetadata(MeasurementBase):
 
         self.json_data = []
 
-        # print(self.array)
         j = 0
         for i in range(self.size):
-            # print(self.size, i, j)
             self.json_data.append(
                 {
                     "id": self.array[i][0],
@@ -256,12 +284,6 @@ class MeasurementMetadata(MeasurementBase):
             j += 1
 
         self.upload_table()
-
-    def delete_table(self):
-        try:
-            self.client.delete_table(self.database)
-        except:  # google.api_core.exceptions.NotFound:
-            pass
 
 class CpuHistory(MeasurementBase):
     """Mostly the representation of a unpublished SQL table"""
@@ -358,14 +380,10 @@ class CpuHistory(MeasurementBase):
 
         plt.show()
 
-    def delete_table(self):
-        try:
-            self.client.delete_table(self.database)
-        except:  # google.api_core.exceptions.NotFound:
-            pass
-
     def update_table(self):
         logging.info("Updating table:" + self.name)
+        self.delete_table()
+
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),
@@ -486,14 +504,10 @@ class CpuHistoryStacked(MeasurementBase):
 
         plt.show()
 
-    def delete_table(self):
-        try:
-            self.client.delete_table(f"sturdy-mechanic-312713.ADataSet.{self.name}")
-        except:  # google.api_core.exceptions.NotFound:
-            pass
-
     def update_table(self):
         logging.info("Updating table:" + self.name)
+        self.delete_table()
+
         schema = []
         for i in range(len(self.fields)):
             schema.append(bigquery.SchemaField(self.fields[i][0], self.fields[i][1]))
@@ -600,12 +614,6 @@ class MemoryHistory(MeasurementBase):
         plt.title("Memory History  " + self.name)
 
         plt.show()
-
-    def delete_table(self):
-        try:
-            self.client.delete_table(self.database)
-        except:  # google.api_core.exceptions.NotFound:
-            pass
 
     #    def update_table_one_by_one(self, dbo):
     #        for i in range(self.size):
