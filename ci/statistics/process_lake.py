@@ -97,7 +97,7 @@ def generate(style, show, lake, testdata):
     earliest_valid = "results_107_unpack"
 
     relevant_folders, processing_range = get_relevant_measurement_folders(
-        lake, testdata, earliest_valid
+        lake, earliest_valid
     )
 
     logging.info("Postprocessing")
