@@ -20,6 +20,7 @@ from numpy.core.records import array
 
 import databases as db
 
+
 def unzip_results(lake):
     p = Path(lake)
     for child in p.iterdir():
@@ -34,7 +35,7 @@ def unzip_results(lake):
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-#def get_measurement_folders(lake: Path) -> list[Path]:
+# def get_measurement_folders(lake: Path) -> list[Path]:
 def get_measurement_folders(lake):
     path = Path(lake)
     pathlist = sorted(
@@ -138,21 +139,18 @@ def generate(style, show, lake, testdata):
         lake,
         "ci_mem_measurement_tedge_mapper",
         processing_range,
-        data_length, client, testdata
-        )
+        data_length,
+        client,
+        testdata,
+    )
 
     cpu_hist_array = db.CpuHistoryStacked(
-        lake,
-        "ci_cpu_hist",
-        processing_range,
-        data_length, client, testdata)
+        lake, "ci_cpu_hist", processing_range, data_length, client, testdata
+    )
 
     measurements = db.MeasurementMetadata(
-        lake,
-        "ci_measurents",
-        processing_range,
-        data_length,
-        client, testdata)
+        lake, "ci_measurents", processing_range, data_length, client, testdata
+    )
 
     cpu_array.postprocess(
         relevant_folders,
@@ -186,7 +184,8 @@ def generate(style, show, lake, testdata):
         relevant_folders,
         "publish_sawmill_record_statistics",
         "statm_mapper_stdout",
-        "tedge_mapper")
+        "tedge_mapper",
+    )
 
     measurements.postprocess(relevant_folders)
 

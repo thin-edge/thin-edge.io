@@ -121,6 +121,7 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
     with pytest.raises(SystemError):
         pl.get_relevant_measurement_folders(lake, testdata)
 
+
 def test_postprocess_vals_cpu():
     """Tightnen current functionality for now
     Probably too much for a simple test
@@ -160,11 +161,11 @@ def test_postprocess_vals_cpu():
         else:
             k = 4
 
-        if i < 18 or i>=20:
+        if i < 18 or i >= 20:
             ut = i + 1
             st = i + 2
         else:
-            ut = 0 # hint: missing data here
+            ut = 0  # hint: missing data here
             st = 0
 
         data.append([i, k, i % 10, ut, st, 0, 0])
@@ -205,13 +206,16 @@ def test_postprocess_vals_mem():
         "ci_mem_measurement_tedge_mapper",
         len(relevant_measurement_folders),
         data_length,
-        client, testmode
+        client,
+        testmode,
     )
 
-    mem_array.postprocess(relevant_measurement_folders,
+    mem_array.postprocess(
+        relevant_measurement_folders,
         "publish_sawmill_record_statistics",
         "statm_mapper_stdout",
-        "tedge_mapper")
+        "tedge_mapper",
+    )
 
     # programmatically reproduce the data set
     data = []
@@ -273,7 +277,8 @@ def test_postprocess_vals_cpu_hist():
         "ci_cpu_hist",
         len(relevant_measurement_folders),
         data_length,
-        client, testmode
+        client,
+        testmode,
     )
 
     cpu_hist_array.postprocess(
@@ -294,13 +299,13 @@ def test_postprocess_vals_cpu_hist():
 
         data.append(
             [
-                i, #id
-                21 + i, # user time 4
-                22 + i, # system time  4
-                ut2, # user time 2
-                st2, # system time 2
+                i,  # id
+                21 + i,  # user time 4
+                22 + i,  # system time  4
+                ut2,  # user time 2
+                st2,  # system time 2
                 i + 1,  # user time 1
-                i + 2, # system time 1
+                i + 2,  # system time 1
                 0,
                 0,
                 0,
@@ -348,15 +353,9 @@ def test_postprocess_vals_metadata():
     client = None
     testmode = True
 
-
     metadata = db.MeasurementMetadata(
-        lake,
-        "ci_measurements",
-        len(folders),
-        data_length,
-        client,
-        testmode
-        )
+        lake, "ci_measurements", len(folders), data_length, client, testmode
+    )
 
     metadata.postprocess(folders)
 
@@ -364,7 +363,8 @@ def test_postprocess_vals_metadata():
         (
             0,
             1,
-            "2021-05-19T15:21:01Z",            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "2021-05-19T15:21:01Z",
+            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
             "system-test-workflow",
             "continuous_integration",
         ),

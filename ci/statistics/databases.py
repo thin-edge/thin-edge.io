@@ -14,6 +14,7 @@ from google.cloud import bigquery
 
 logging.basicConfig(level=logging.INFO)
 
+
 def get_database(style: str):
     """Retrive database to the database to be used
     Returns database client, database object, Integer type to be used
@@ -52,6 +53,7 @@ def get_database(style: str):
         sys.exit(1)
 
     return client, dbo, integer, conn
+
 
 # Keep all this in case we want real SQL publshing again
 
@@ -137,8 +139,7 @@ def get_database(style: str):
 
 
 class MeasurementBase(ABC):
-    """Abstract base class for type Measurements
-    """
+    """Abstract base class for type Measurements"""
 
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
@@ -154,20 +155,16 @@ class MeasurementBase(ABC):
             self.name = name
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-
     def postprocess():
-        """Postprocess all relevant folders
-        """
+        """Postprocess all relevant folders"""
         pass
 
     def show():
-        """Show content on console
-        """
+        """Show content on console"""
         pass
 
     def update_table(self):
-        """Create table and prepare loading via json and upload
-        """
+        """Create table and prepare loading via json and upload"""
         pass
 
     def delete_table(self):
@@ -177,8 +174,7 @@ class MeasurementBase(ABC):
             pass
 
     def upload_table(self):
-        """Upload table to online database
-        """
+        """Upload table to online database"""
 
         if self.client:
             load_job = self.client.load_table_from_json(
@@ -198,13 +194,12 @@ class MeasurementBase(ABC):
 
     @staticmethod
     def foldername_to_index(foldername: str) -> int:
-        """Convert results_N_unpack into N
-        """
+        """Convert results_N_unpack into N"""
         reg = re.compile(r"^results_(\d+)_unpack$")
         match = reg.match(foldername)
 
         if match:
-            index = int( match.group(1) )
+            index = int(match.group(1))
         else:
             raise SystemError("Cannot convert foldername")
 
@@ -212,13 +207,12 @@ class MeasurementBase(ABC):
 
 
 class MeasurementMetadata(MeasurementBase):
-    """Class to represent a table of measurement metadata
-    """
+    """Class to represent a table of measurement metadata"""
 
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
-        super().__init__( lake, name, data_amount, data_length, client, testmode)
-        self.array = np.zeros(( self.size , 7), dtype=np.int32)
+        super().__init__(lake, name, data_amount, data_length, client, testmode)
+        self.array = np.zeros((self.size, 7), dtype=np.int32)
         self.row_id = 0
 
         self.array = []
@@ -228,8 +222,7 @@ class MeasurementMetadata(MeasurementBase):
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
     def scrap_measurement_metadata(self, file: str) -> Tuple[str, str, str, str, str]:
-        """Read measurement data from file
-        """
+        """Read measurement data from file"""
 
         with open(file) as content:
             data = json.load(content)
@@ -241,10 +234,8 @@ class MeasurementMetadata(MeasurementBase):
 
         return run, date, url, name, branch
 
-
     def postprocess(self, folders):
-        """Postprocess all relevant folders
-        """
+        """Postprocess all relevant folders"""
         idx = 0
         for folder in folders:
             index = self.foldername_to_index(folder)
@@ -260,15 +251,13 @@ class MeasurementMetadata(MeasurementBase):
         return self.array
 
     def show(self):
-        """Show content on console
-        """
+        """Show content on console"""
         logging.info(f"Content of table {self.database}")
         for row in self.array:
             logging.info(row)
 
     def update_table(self):
-        """Create table and prepare loading via json and upload
-        """
+        """Create table and prepare loading via json and upload"""
 
         logging.info("Updating table:" + self.name)
 
@@ -301,14 +290,14 @@ class MeasurementMetadata(MeasurementBase):
 
         self.upload_table()
 
+
 class CpuHistory(MeasurementBase):
-    """Class to represent a table of measured CPU usage
-    """
+    """Class to represent a table of measured CPU usage"""
 
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
-        super().__init__( lake, name, data_amount, data_length, client, testmode)
-        self.array = np.zeros(( self.size , 7), dtype=np.int32)
+        super().__init__(lake, name, data_amount, data_length, client, testmode)
+        self.array = np.zeros((self.size, 7), dtype=np.int32)
         self.row_id = 0
 
     def scrap_data(self, thefile, measurement_index, binary):
@@ -361,8 +350,7 @@ class CpuHistory(MeasurementBase):
             self.row_id += 1
 
     def postprocess(self, folders, testname, filename, binary):
-        """Postprocess all relevant folders
-        """
+        """Postprocess all relevant folders"""
         for folder in folders:
             index = self.foldername_to_index(folder)
 
@@ -373,13 +361,11 @@ class CpuHistory(MeasurementBase):
             self.scrap_data(statsfile, index, binary)
 
     def insert_line(self, idx, mid, sample, utime, stime, cutime, cstime):
-        """Insert a line into the table
-        """
+        """Insert a line into the table"""
         self.array[idx] = [idx, mid, sample, utime, stime, cutime, cstime]
 
     def show(self):
-        """Show content with matplotlib
-        """
+        """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots()
@@ -396,8 +382,7 @@ class CpuHistory(MeasurementBase):
         plt.show()
 
     def update_table(self):
-        """Create table and prepare loading via json and upload
-        """
+        """Create table and prepare loading via json and upload"""
         logging.info("Updating table:" + self.name)
         self.delete_table()
 
@@ -435,13 +420,14 @@ class CpuHistoryStacked(MeasurementBase):
     """Class to represent a table of measured CPU usage as stacked graph.
     The graph contains user and system cpu time for the last N test-runs.
     """
+
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
 
-        super().__init__( lake, name, data_amount, data_length, client, testmode)
+        super().__init__(lake, name, data_amount, data_length, client, testmode)
 
         self.row_id = 0
 
-        self.history = 10 # process the last 10 test runs
+        self.history = 10  # process the last 10 test runs
         self.fields = [
             ("id", "INT64"),
             ("t0u", "INT64"),
@@ -467,13 +453,13 @@ class CpuHistoryStacked(MeasurementBase):
         ]
         self.array = np.zeros((self.data_length, len(self.fields)), dtype=np.int32)
 
-    def postprocess(self,
+    def postprocess(
+        self,
         measurement_folders,
         data_length,
         cpu_array,
     ):
-        """Postprocess all relevant folders
-        """
+        """Postprocess all relevant folders"""
         mlen = len(measurement_folders)
 
         # Set the id in the first column
@@ -492,21 +478,17 @@ class CpuHistoryStacked(MeasurementBase):
                 self.array[i, column] = cpu_array.array[m * data_length + i, 3]
 
                 # Read system time from the cpu_table
-                self.array[i, column + 1] = cpu_array.array[
-                    m * data_length + i, 4
-                ]
+                self.array[i, column + 1] = cpu_array.array[m * data_length + i, 4]
 
             column += 2
 
     def insert_line(self, line, idx):
-        """Insert a line into the table
-        """
+        """Insert a line into the table"""
         assert len(line) == len(self.fields)
         self.array[idx] = line
 
     def show(self):
-        """Show content with matplotlib
-        """
+        """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots()
@@ -524,8 +506,7 @@ class CpuHistoryStacked(MeasurementBase):
         plt.show()
 
     def update_table(self):
-        """Create table and prepare loading via json and upload
-        """
+        """Create table and prepare loading via json and upload"""
         logging.info("Updating table:" + self.name)
         self.delete_table()
 
@@ -545,12 +526,12 @@ class CpuHistoryStacked(MeasurementBase):
 
         self.upload_table()
 
+
 class MemoryHistory(MeasurementBase):
-    """Class to represent a table of measured memory
-    """
+    """Class to represent a table of measured memory"""
 
     def __init__(self, lake, name, data_amount, data_length, client, testmode):
-        super().__init__( lake, name, data_amount, data_length, client, testmode)
+        super().__init__(lake, name, data_amount, data_length, client, testmode)
 
         self.lake = lake
         self.size = self.size
@@ -560,8 +541,7 @@ class MemoryHistory(MeasurementBase):
         self.row_id = 0
 
     def scrap_data(self, thefile, mesaurement_index, arr):
-        """Read measurement data from file
-        """
+        """Read measurement data from file"""
 
         with open(thefile) as thestats:
             lines = thestats.readlines()
@@ -606,22 +586,21 @@ class MemoryHistory(MeasurementBase):
             self.row_id += 1
 
     def postprocess(self, folders, testname, filename, binary):
-        """Postprocess all relevant folders
-        """
+        """Postprocess all relevant folders"""
         for folder in folders:
             index = self.foldername_to_index(folder)
 
-            statsfile = f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
-            self.scrap_data( statsfile, index, self)
+            statsfile = (
+                f"{self.lake}/{folder}/PySys/{testname}/Output/linux/{filename}.out"
+            )
+            self.scrap_data(statsfile, index, self)
 
     def insert_line(self, idx, mid, sample, size, resident, shared, text, data):
-        """Insert a line into the table
-        """
+        """Insert a line into the table"""
         self.array[idx] = [idx, mid, sample, size, resident, shared, text, data]
 
     def show(self):
-        """Show content with matplotlib
-        """
+        """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots()
@@ -654,8 +633,7 @@ class MemoryHistory(MeasurementBase):
     #            myquery(self.client, q)
 
     def update_table(self):
-        """Create table and prepare loading via json and upload
-        """
+        """Create table and prepare loading via json and upload"""
         self.delete_table()
         logging.info("Updating table:" + self.name)
         self.job_config = bigquery.LoadJobConfig(
