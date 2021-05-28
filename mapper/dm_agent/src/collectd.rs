@@ -40,7 +40,7 @@ impl<'a> CollectdMessage<'a> {
             }
         };
 
-        let collectd_payload = CollectdPayload::parse_from(mqtt_message.payload.as_slice())
+        let collectd_payload = CollectdPayload::parse_from(mqtt_message.payload_trimmed())
             .map_err(|err| CollectdError::InvalidMeasurementPayload(topic.into(), err))?;
 
         Ok(CollectdMessage {
@@ -117,12 +117,9 @@ impl CollectdPayload {
             CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
         })?;
 
-        let metric_value = metric_value
-            //.trim_end_matches(char::from(0)) //Trim \u{0} character from the end of the MQTT payload
-            .parse::<f64>()
-            .map_err(|_err| {
-                CollectdPayloadError::InvalidMeasurementValue(metric_value.to_string())
-            })?;
+        let metric_value = metric_value.parse::<f64>().map_err(|_err| {
+            CollectdPayloadError::InvalidMeasurementValue(metric_value.to_string())
+        })?;
 
         match iter.next() {
             None => Ok(CollectdPayload {
