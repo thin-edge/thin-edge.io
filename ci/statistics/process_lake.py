@@ -64,7 +64,7 @@ def get_relevant_measurement_folders(lake, earliest_valid):
 
     processing_range = len(relevant_folders)
     if processing_range == 0:
-        raise SystemError("No reports found")
+        raise SystemError("No reports found in lake %s", lake)
     logging.info(relevant_folders[-processing_range])
 
     assert relevant_folders[-processing_range] == earliest_valid
@@ -79,7 +79,7 @@ def get_relevant_measurement_folders(lake, earliest_valid):
     return relevant_folders, processing_range
 
 
-def generate(style, show, lake, testdata):
+def generate(style, show, lake, testdata, earliest_valid):
     """Generate postprocessed databases and upload them
     Parameters:
     """
@@ -91,11 +91,8 @@ def generate(style, show, lake, testdata):
 
     logging.info("Sumarize List")
 
-    # last earliest valid test run is 'results_107_unpack'
-    earliest_valid = "results_107_unpack"
-
     relevant_folders, processing_range = get_relevant_measurement_folders(
-        lake, testdata, earliest_valid
+        lake, earliest_valid
     )
 
     logging.info("Postprocessing")
@@ -255,15 +252,18 @@ def main():
     if testdata:
         logging.info("Using test data lake")
         lake = os.path.expanduser("~/DataLakeTest")
+        earliest_valid = "results_1_unpack"
     else:
         logging.info("Using real data lake")
         lake = os.path.expanduser("~/DataLake")
+        # last earliest valid test run is 'results_107_unpack'
+        earliest_valid = "results_107_unpack"
 
     if verbose:
         logging.info("Enabling verbose mode")
         logging.basicConfig(level=logging.DEBUG)
 
-    generate(style, show, lake, testdata)
+    generate(style, show, lake, testdata, earliest_valid)
 
 
 if __name__ == "__main__":

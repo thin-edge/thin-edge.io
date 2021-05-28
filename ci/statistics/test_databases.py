@@ -9,6 +9,29 @@ from databases import MeasurementBase
 
 # TODO mocker.ANY does not seem to work
 
+class TestGetDatabase:
+
+    def test_big_query(self, mocker):
+        mocker.patch("google.cloud.bigquery.Client")
+        #assert db.get_database("google") ==  (mocker.ANY, 'ADataSet', 'INT64', None)
+        client, dbo, integer, conn = db.get_database("google")
+        assert  dbo == 'ADataSet'
+        assert integer == 'INT64'
+        assert conn == None
+
+    def test_none(self, mocker):
+        client, dbo, integer, conn = db.get_database("none")
+        assert  dbo == 'Nopedb'
+        assert integer == 'Nopeint'
+        assert conn == None
+
+    def disabled_test_ms(self, mocker):
+        """TODO: remove the import for that"""
+        #mocker.patch("pymssql")
+        client, dbo, integer, conn = db.get_database("ms")
+        assert  dbo == 'dbo'
+        assert integer == 'INTEGER'
+        assert conn != None
 
 class TestMeasurementBase:
     def test_foldername_to_index(self):

@@ -121,6 +121,53 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
         pl.get_relevant_measurement_folders(lake, valid)
 
 
+def test_generate(mocker):
+    """Integrtion test for generate"""
+
+    lake = os.path.expanduser("~/DataLakeTest")
+    show = False
+    style = 'none'
+    testdata = True
+    foldermock = mocker.patch(
+        "process_lake.get_relevant_measurement_folders",
+        return_value = (3,1))
+    earliest = "results_107_unpack"
+    cputables = 4
+    memtables = 1
+    stacktables = 1
+    metatables = 1
+
+    cpumock = mocker.MagicMock(name='cpuobject')
+    mocker.patch("databases.CpuHistory", return_value=cpumock)
+    memmock = mocker.MagicMock(name='memobject')
+    mocker.patch("databases.MemoryHistory", return_value=memmock)
+    stackmock = mocker.MagicMock(name='memobject')
+    mocker.patch("databases.CpuHistoryStacked", return_value=stackmock)
+    metamock = mocker.MagicMock(name='memobject')
+    mocker.patch("databases.MeasurementMetadata", return_value=metamock)
+
+    pl.generate(style, show, lake, testdata, earliest)
+
+    foldermock.assert_called_with(lake, earliest)
+    cpumock.update_table.assert_called_with()
+    assert cpumock.update_table.call_count == cputables
+    memmock.update_table.assert_called_with()
+    assert memmock.update_table.call_count == memtables
+    stackmock.update_table.assert_called_with()
+    assert stackmock.update_table.call_count == stacktables
+    metamock.update_table.assert_called_with()
+    assert metamock.update_table.call_count == metatables
+
+    # we seem to not be able to use ANY here, so assert at least the
+    # call count
+
+    assert cpumock.postprocess.call_count == cputables
+    assert memmock.postprocess.call_count == memtables
+    assert stackmock.postprocess.call_count == stacktables
+    assert metamock.postprocess.call_count == metatables
+
+
+
 
 def test_postprocess_vals_cpu():
     """This is an integration test!
@@ -390,3 +437,58 @@ def test_postprocess_vals_metadata():
     ]
 
     assert metadata.array == exp
+
+class TestMain:
+    lake = os.path.expanduser("~/DataLake")
+    testlake = os.path.expanduser("~/DataLakeTest")
+    earliest = 'results_107_unpack'
+    testearliest = 'results_1_unpack'
+
+
+    def test_main_with_testdata_nostyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-t", "none"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "none", False, self.testlake, True, self.testearliest)
+
+    def test_main_with_testdata_googlestyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-t", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", False, self.testlake, True, self.testearliest)
+
+    def test_main_with_testdata_nostyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "none"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "none", False, self.lake, False, self.earliest)
+
+    def test_main_with_testdata_googlestyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", False, self.lake, False, self.earliest)
+
+    def test_main_with_testdata_googlestyle_show(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.lake, False, self.earliest)
+
+    def test_main_with_testdata_googlestyle_show(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "-t", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.testlake, True, self.testearliest)
+
+    def test_main_with_testdata_googlestyle_show_verbose(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "-t", "-v", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.testlake, True, self.testearliest)
+
+    def test_main_with_invalid_arg(self, mocker):
+        mocker.patch("sys.argv", ["procname", "nope"])
+        genmock = mocker.patch("process_lake.generate")
+        with pytest.raises(AssertionError):
+            pl.main()
