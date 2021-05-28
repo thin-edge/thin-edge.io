@@ -94,6 +94,28 @@ jobs:
           command: build
           args: --release
 
+  cargo-build-integration-tests:
+
+    name: Run cargo build for integration tests
+    runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Compile cargo test features
+         uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose --no-run --features integration-test
+
   cargo-tarpaulin:
 
     name: Run cargo tarpaulin
