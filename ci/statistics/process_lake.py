@@ -1,7 +1,9 @@
 #!/usr/bin/python3
-# python3 -m venv env-bigquery
+# python3.9 -m venv env-bigquery
 # source ~/env-bigquery/bin/activate
+# pip install numpy
 # pip install --upgrade google-cloud-bigquery
+#
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
 import argparse
