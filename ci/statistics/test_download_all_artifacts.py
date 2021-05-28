@@ -51,3 +51,48 @@ class TestDownloadArtifacts:
 
         assert ret == [("456","123",)]
 
+
+    def test_get_artifacts_for_runid_no_artifacts(self, mocker):
+        inject = {"artifacts": []}
+        dmock = mocker.patch("download_all_artifacts.download_artifact")
+        mocker.patch("__main__.open")
+        mocker.patch("requests.get")
+        # instead of fiddling around with the return value of requests.get
+        # we just patch json.loads
+        mocker.patch("json.loads", return_value = inject)
+        runid = 42
+        run_number = 43
+        token = "token"
+        ret = da.get_artifacts_for_runid(runid, run_number, token)
+        dmock.assert_not_called()
+
+    def test_get_artifacts_for_runid_one_artifact(self, mocker):
+        inject = {"artifacts": [ {"name":"bob", "archive_download_url":"theurl"} ]}
+        dmock = mocker.patch("download_all_artifacts.download_artifact")
+        mocker.patch("__main__.open")
+        mocker.patch("requests.get")
+        # instead of fiddling around with the return value of requests.get
+        # we just patch json.loads
+        mocker.patch("json.loads", return_value = inject)
+        runid = 42
+        run_number = 43
+        token = "token"
+        ret = da.get_artifacts_for_runid(runid, run_number, token)
+        dmock.assert_called_once_with("theurl", "bob", 43, token)
+
+    def test_download_artifact(self, mocker):
+
+        url = "theurl"
+        run_number = 2
+        name = "results_"
+        token = "token"
+        rmock = mocker.patch("requests.get")
+        mocker.patch("os.path.exists", return_value = False)
+
+        da.download_artifact(url, name, run_number, token)
+
+        rmock.assert_called_once()
+
+
+
+

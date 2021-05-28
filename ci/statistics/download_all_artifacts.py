@@ -58,10 +58,13 @@ def download_artifact(url, name, run_number, token):
 
 
 def get_artifacts_for_runid(runid, run_number, token):
+    """Download artifacts for a given runid"""
     # Here we need the runid and we get the artifact id
 
+    # Manual
     # https://github.com/abelikt/thin-edge.io/actions/runs/828065682
-    # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/828065682/artifacts
+    # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
+    # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/828065682/artifacts
 
     url = f"https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/{runid}/artifacts"
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -144,6 +147,7 @@ def get_all_runs(token):
 
 
 def get_all_system_test_runs(token):
+    """Returns als system test runs as list of run_id and number"""
     system_test_runs = []
     for i in get_all_runs(token):
         print(i)
@@ -170,6 +174,7 @@ def get_all_system_test_runs(token):
 
 
 def main():
+    """main entry point"""
     token = None
 
     if "THEGHTOKEN" in os.environ:
