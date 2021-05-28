@@ -127,38 +127,42 @@ def get_all_runs(token):
 
         yield stuff["workflow_runs"]
 
+def get_all_system_test_runs(token):
+    system_test_runs = []
+    for i in get_all_runs(token):
+        # print(i)
+        for test_run in i:
+            if test_run["name"] == "system-test-workflow":
+                # print( j['id'], j['run_number'])
+                # print(json.dumps(j, indent=4))
+                run_number = test_run["run_number"]
+                with open(
+                    os.path.expanduser(f"{lake}/system_test_{run_number}_metadata.json"),
+                    "w",
+                ) as ofile:
+                    ofile.write(json.dumps(test_run, indent=4))
+                print(
+                    f"Found System Test Run with id {test_run['id']} run number {run_number} workflow id {test_run['workflow_id']}"
+                )
+                system_test_runs.append((test_run["id"], run_number))
 
-# get_artifacts()
-# get_artifacts_for_runid()
-# get_runs()
+    print(f"Found {len(system_test_runs)} test_runs ")
 
-token = None
+    return system_test_runs
 
-if "THEGHTOKEN" in os.environ:
-    token = os.environ["THEGHTOKEN"]
-else:
-    print("Error environment variable THEGHTOKEN not set")
-    sys.exit(1)
+def main():
+    token = None
 
-system_test_runs = []
-for i in get_all_runs(token):
-    # print(i)
-    for test_run in i:
-        if test_run["name"] == "system-test-workflow":
-            # print( j['id'], j['run_number'])
-            # print(json.dumps(j, indent=4))
-            run_number = test_run["run_number"]
-            with open(
-                os.path.expanduser(f"{lake}/system_test_{run_number}_metadata.json"),
-                "w",
-            ) as ofile:
-                ofile.write(json.dumps(test_run, indent=4))
-            print(
-                f"Found System Test Run with id {test_run['id']} run number {run_number} workflow id {test_run['workflow_id']}"
-            )
-            system_test_runs.append((test_run["id"], run_number))
+    if "THEGHTOKEN" in os.environ:
+        token = os.environ["THEGHTOKEN"]
+    else:
+        print("Error environment variable THEGHTOKEN not set")
+        sys.exit(1)
 
-print(f"Found {len(system_test_runs)} test_runs ")
+    system_test_runs= get_all_system_test_runs(token)
 
-for s in system_test_runs:
-    print(get_artifacts_for_runid(s[0], s[1], token))
+    for s in system_test_runs:
+        print(get_artifacts_for_runid(s[0], s[1], token))
+
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,20 @@
     "configurations": [
 
         {
+            "name": "Pytest download artifacts",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v",
+                "--capture",
+                "no",
+                "${workspaceFolder}/ci/statistics/",
+                "test_download_all_artifacts.py"
+            ],
+        },
+
+        {
             "name": "process lake",
             "type": "python",
             "request": "launch",
