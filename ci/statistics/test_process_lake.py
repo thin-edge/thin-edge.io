@@ -35,14 +35,13 @@ def test_get_measurement_foders():
     ]
     assert ret == exp
 
-
 def test_get_relevant_measurement_folders_real():
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 3
@@ -52,7 +51,7 @@ def test_get_relevant_measurement_folders_mocked(mocker):
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = [
@@ -62,7 +61,7 @@ def test_get_relevant_measurement_folders_mocked(mocker):
         "results_4_unpack",
     ]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 3
@@ -77,7 +76,7 @@ def test_get_relevant_measurement_folders_mocked_5(mocker):
         "results_5_unpack",
     ]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = [
@@ -88,7 +87,7 @@ def test_get_relevant_measurement_folders_mocked_5(mocker):
         "results_5_unpack",
     ]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 4
@@ -99,11 +98,11 @@ def test_get_relevant_measurement_folders_mocked_1(mocker):
     exp = ["results_1_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
     testdata = True
-
+    valid = "results_1_unpack"
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = ["results_1_unpack"]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 1
@@ -113,17 +112,19 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
 
     exp = ["results_0_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = ["results_0_unpack"]
 
     with pytest.raises(SystemError):
-        pl.get_relevant_measurement_folders(lake, testdata)
+        pl.get_relevant_measurement_folders(lake, valid)
+
 
 
 def test_postprocess_vals_cpu():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -188,7 +189,8 @@ def test_postprocess_vals_cpu():
 
 
 def test_postprocess_vals_mem():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -242,7 +244,8 @@ def test_postprocess_vals_mem():
 
 
 def test_postprocess_vals_cpu_hist():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -338,7 +341,8 @@ def test_postprocess_vals_cpu_hist():
 
 
 def test_postprocess_vals_metadata():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")

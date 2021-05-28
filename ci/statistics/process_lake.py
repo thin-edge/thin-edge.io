@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+"""Process data in the process lake
+"""
+
 # python3.9 -m venv env-bigquery
 # source ~/env-bigquery/bin/activate
 # pip install numpy
@@ -22,6 +25,7 @@ import databases as db
 
 
 def unzip_results(lake):
+    """Unzip all folders in the data lake"""
     p = Path(lake)
     for child in p.iterdir():
         if child.is_dir():
@@ -35,8 +39,9 @@ def unzip_results(lake):
                 proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-# def get_measurement_folders(lake: Path) -> list[Path]:
+# def get_measurement_folders(lake: Path) -> list[Path]: # invalid in python 3.8
 def get_measurement_folders(lake):
+    """Retrive all folders with measurements in canonical order"""
     path = Path(lake)
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
@@ -48,14 +53,8 @@ def get_measurement_folders(lake):
     return pathnames
 
 
-def get_relevant_measurement_folders(lake, testdata):
-
-    if testdata:
-        earliest_valid = "results_1_unpack"
-    else:
-        # last earliest valid test run is 'results_107_unpack'
-        earliest_valid = "results_107_unpack"
-
+def get_relevant_measurement_folders(lake, earliest_valid):
+    """Retrive a list of relevant test folders"""
     folders = get_measurement_folders(lake)
     relevant_folders = []
     valid = False
@@ -83,6 +82,9 @@ def get_relevant_measurement_folders(lake, testdata):
 
 
 def generate(style, show, lake, testdata):
+    """Generate postprocessed databases and upload them
+    Parameters:
+    """
 
     client, dbo, integer, conn = db.get_database(style)
 
@@ -91,13 +93,19 @@ def generate(style, show, lake, testdata):
 
     logging.info("Sumarize List")
 
+    # last earliest valid test run is 'results_107_unpack'
+    earliest_valid = "results_107_unpack"
+
     relevant_folders, processing_range = get_relevant_measurement_folders(
-        lake, testdata
+        lake, testdata, earliest_valid
     )
 
     logging.info("Postprocessing")
 
+    # Currently we are measuring for 60s and 120s
     data_length = 60
+    data_length_long = 120
+
 
     cpu_array = db.CpuHistory(
         lake,
@@ -120,8 +128,8 @@ def generate(style, show, lake, testdata):
     cpu_array_long = db.CpuHistory(
         lake,
         "ci_cpu_measurement_tedge_mapper_long",
-        processing_range * 2,
-        data_length,
+        processing_range,
+        data_length_long,
         client,
         testdata,
     )
@@ -129,8 +137,8 @@ def generate(style, show, lake, testdata):
     cpu_array_long_mosquitto = db.CpuHistory(
         lake,
         "ci_cpu_measurement_mosquitto_long",
-        processing_range * 2,
-        data_length,
+        processing_range,
+        data_length_long,
         client,
         testdata,
     )
@@ -203,23 +211,19 @@ def generate(style, show, lake, testdata):
     logging.info("Uploading")
 
     cpu_array.update_table()
-
     cpu_array_mosquitto.update_table()
-
     cpu_array_long.update_table()
-
     mem_array.update_table()
-
     cpu_hist_array.update_table()
-
     cpu_array_long_mosquitto.update_table()
-
     measurements.update_table()
 
     logging.info("Done")
 
 
 def main():
+    """Main entry point"""
+
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser()
