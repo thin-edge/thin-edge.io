@@ -44,8 +44,8 @@ def get_database(style: str):
 
     elif style == "none":
         logging.info("Using No Backend")
-        dbo = "Nopdb"
-        integer = "Nopint"
+        dbo = "Nopedb"
+        integer = "Nopeint"
         client = None
 
     else:

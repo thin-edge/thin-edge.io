@@ -478,6 +478,12 @@ class TestMain:
         pl.main()
         genmock.assert_called_with( "google", True, self.testlake, True)
 
+    def test_main_with_testdata_googlestyle_show_verbose(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "-t", "-v", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.testlake, True)
+
     def test_main_with_invalid_arg(self, mocker):
         mocker.patch("sys.argv", ["procname", "nope"])
         genmock = mocker.patch("process_lake.generate")
