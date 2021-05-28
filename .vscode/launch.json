@@ -15,7 +15,7 @@
 
                 "-s",
                 "-t",
-                "-v",
+                //"-v",
                 "none"
             ],
         },
@@ -24,6 +24,19 @@
             "name": "Pytest process lake",
             "type": "python",
             "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v",
+                "--capture",
+                "no",
+                "${workspaceFolder}/ci/statistics/"
+            ],
+        },
+
+        {
+            "name": "Explorer Pytest process lake",
+            "type": "python",
+            "request": "test",
             "module": "pytest",
             "args": [
                 "-v",

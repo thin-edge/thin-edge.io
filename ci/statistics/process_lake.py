@@ -189,7 +189,7 @@ def generate(style, show, lake, testdata):
 
     measurements.postprocess(relevant_folders)
 
-    cpu_hist_array.postprocess(relevant_folders, data_length, cpu_array)
+    cpu_hist_array.postprocess(relevant_folders, cpu_array)
 
     if show:
         cpu_array.show()

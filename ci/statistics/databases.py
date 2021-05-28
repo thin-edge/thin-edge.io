@@ -148,6 +148,8 @@ class MeasurementBase(ABC):
         self.size = data_length * data_amount
         self.client = client
         self.lake = lake
+        self.json_data = None
+        self.job_config = None
 
         if testmode:
             self.name = name + "_test"
@@ -155,19 +157,17 @@ class MeasurementBase(ABC):
             self.name = name
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-    def postprocess():
+    def postprocess(self, folders, testname, filename, binary):
         """Postprocess all relevant folders"""
-        pass
 
-    def show():
+    def show(self):
         """Show content on console"""
-        pass
 
     def update_table(self):
         """Create table and prepare loading via json and upload"""
-        pass
 
     def delete_table(self):
+        """Delete the table from the cloud"""
         try:
             self.client.delete_table(self.database)
         except:  # TODO: Can' import this google.api_core.exceptions.NotFound:
@@ -188,7 +188,7 @@ class MeasurementBase(ABC):
                 logging.info("Waiting")
 
             if load_job.errors:
-                logging.error(f"Error {load_job.error_result}")
+                logging.error("Error %s", load_job.error_result)
                 logging.error(load_job.errors)
                 raise SystemError
 
@@ -221,7 +221,7 @@ class MeasurementMetadata(MeasurementBase):
         # TODO move to baseclass
         self.database = f"sturdy-mechanic-312713.ADataSet.{self.name}"
 
-    def scrap_measurement_metadata(self, file: str) -> Tuple[str, str, str, str, str]:
+    def scrap_data(self, file: str) -> Tuple[str, str, str, str, str]:
         """Read measurement data from file"""
 
         with open(file) as content:
@@ -243,7 +243,7 @@ class MeasurementMetadata(MeasurementBase):
             name = f"system_test_{index}_metadata.json"
             path = os.path.join(self.lake, name)
 
-            run, date, url, name, branch = self.scrap_measurement_metadata(path)
+            run, date, url, name, branch = self.scrap_data(path)
 
             self.array.append((idx, run, date, url, name, branch))
             idx += 1
@@ -252,14 +252,14 @@ class MeasurementMetadata(MeasurementBase):
 
     def show(self):
         """Show content on console"""
-        logging.info(f"Content of table {self.database}")
+        logging.info("Content of table %s", self.database)
         for row in self.array:
             logging.info(row)
 
     def update_table(self):
         """Create table and prepare loading via json and upload"""
 
-        logging.info("Updating table:" + self.name)
+        logging.info("Updating table: %s", self.name)
 
         self.delete_table()
 
@@ -312,31 +312,31 @@ class CpuHistory(MeasurementBase):
                 for line in lines:
                     entries = line.split()
                     if len(entries) == 52 and entries[1] == f"({binary})":
-                        ut = int(entries[13])
-                        st = int(entries[14])
-                        ct = int(entries[15])
-                        cs = int(entries[16])
+                        utime = int(entries[13])
+                        stime = int(entries[14])
+                        cutime = int(entries[15])
+                        csime = int(entries[16])
 
                         self.insert_line(
                             idx=self.row_id,
                             mid=measurement_index,
                             sample=sample,
-                            utime=ut,
-                            stime=st,
-                            cutime=ct,
-                            cstime=cs,
+                            utime=utime,
+                            stime=stime,
+                            cutime=cutime,
+                            cstime=csime,
                         )
                         sample += 1
                         self.row_id += 1
 
-        except FileNotFoundError as e:
-            logging.error("File not found, skipping for now!" + str(e))
+        except FileNotFoundError as err:
+            logging.error("File not found, skipping for now! %s", str(err))
 
         # In case that there are not enough lines in the file fixx with zeros
         # Can happen, depending on when the data recorder process is killed.
 
         missing = self.data_length - sample
-        for m in range(missing):
+        for miss in range(missing):
             self.insert_line(
                 idx=self.row_id,
                 mid=measurement_index,
@@ -368,14 +368,14 @@ class CpuHistory(MeasurementBase):
         """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        fig, axis = plt.subplots()
 
-        ax.plot(self.array[:, 1], ".", label="mid")
-        ax.plot(self.array[:, 2], "-", label="sample")
-        ax.plot(self.array[:, 3], "-", label="utime")
-        ax.plot(self.array[:, 4], "-", label="stime")
-        ax.plot(self.array[:, 5], "-", label="cutime")
-        ax.plot(self.array[:, 6], "-", label="cstime")
+        axis.plot(self.array[:, 1], ".", label="mid")
+        axis.plot(self.array[:, 2], "-", label="sample")
+        axis.plot(self.array[:, 3], "-", label="utime")
+        axis.plot(self.array[:, 4], "-", label="stime")
+        axis.plot(self.array[:, 5], "-", label="cutime")
+        axis.plot(self.array[:, 6], "-", label="cstime")
         plt.legend()
         plt.title("CPU History  " + self.name)
 
@@ -383,7 +383,7 @@ class CpuHistory(MeasurementBase):
 
     def update_table(self):
         """Create table and prepare loading via json and upload"""
-        logging.info("Updating table:" + self.name)
+        logging.info("Updating table: %s", self.name)
         self.delete_table()
 
         self.job_config = bigquery.LoadJobConfig(
@@ -456,29 +456,32 @@ class CpuHistoryStacked(MeasurementBase):
     def postprocess(
         self,
         measurement_folders,
-        data_length,
         cpu_array,
     ):
         """Postprocess all relevant folders"""
         mlen = len(measurement_folders)
 
         # Set the id in the first column
-        for i in range(data_length):
-            self.array[i, 0] = i
+        for index in range(self.data_length):
+            self.array[index, 0] = index
 
         processing_range = min(mlen, self.history)
         column = 1
 
         # Iterate backwards through the measurement list
-        for m in range(mlen - 1, mlen - processing_range - 1, -1):
+        for measurement in range(mlen - 1, mlen - processing_range - 1, -1):
 
-            for i in range(data_length):
+            for index in range(self.data_length):
 
                 # Read user time from the cpu_table
-                self.array[i, column] = cpu_array.array[m * data_length + i, 3]
+                self.array[index, column] = cpu_array.array[
+                    measurement * self.data_length + index, 3
+                ]
 
                 # Read system time from the cpu_table
-                self.array[i, column + 1] = cpu_array.array[m * data_length + i, 4]
+                self.array[index, column + 1] = cpu_array.array[
+                    measurement * self.data_length + index, 4
+                ]
 
             column += 2
 
@@ -491,14 +494,14 @@ class CpuHistoryStacked(MeasurementBase):
         """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        fig, axis = plt.subplots()
 
         for i in range(len(self.fields)):
             if i % 2 == 0:
                 style = "-o"
             else:
                 style = "-x"
-            ax.plot(self.array[:, i], style, label=self.fields[i][0])
+            axis.plot(self.array[:, i], style, label=self.fields[i][0])
 
         plt.legend()
         plt.title("CPU History Stacked  " + self.name)
@@ -507,7 +510,7 @@ class CpuHistoryStacked(MeasurementBase):
 
     def update_table(self):
         """Create table and prepare loading via json and upload"""
-        logging.info("Updating table:" + self.name)
+        logging.info("Updating table: %s", self.name)
         self.delete_table()
 
         schema = []
@@ -568,9 +571,9 @@ class MemoryHistory(MeasurementBase):
                 sample += 1
                 self.row_id += 1
 
-        logging.debug(f"Read {sample} Memory stats")
+        logging.debug("Read %s Memory stats", sample)
         missing = self.data_length - sample
-        for m in range(missing):
+        for miss in range(missing):
 
             arr.insert_line(
                 idx=self.row_id,
@@ -603,16 +606,16 @@ class MemoryHistory(MeasurementBase):
         """Show content with matplotlib"""
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        fig, axis = plt.subplots()
         style = "."
         # ax.plot(self.array[:,0], 'o-')
-        ax.plot(self.array[:, 1], style, label="mid")
-        ax.plot(self.array[:, 2], style, label="sample")
-        ax.plot(self.array[:, 3], style, label="size")
-        ax.plot(self.array[:, 4], style, label="resident")
-        ax.plot(self.array[:, 5], style, label="shared")
-        ax.plot(self.array[:, 6], style, label="text")
-        ax.plot(self.array[:, 7], style, label="data")
+        axis.plot(self.array[:, 1], style, label="mid")
+        axis.plot(self.array[:, 2], style, label="sample")
+        axis.plot(self.array[:, 3], style, label="size")
+        axis.plot(self.array[:, 4], style, label="resident")
+        axis.plot(self.array[:, 5], style, label="shared")
+        axis.plot(self.array[:, 6], style, label="text")
+        axis.plot(self.array[:, 7], style, label="data")
 
         plt.legend()
         plt.title("Memory History  " + self.name)
@@ -635,7 +638,7 @@ class MemoryHistory(MeasurementBase):
     def update_table(self):
         """Create table and prepare loading via json and upload"""
         self.delete_table()
-        logging.info("Updating table:" + self.name)
+        logging.info("Updating table: %s", self.name)
         self.job_config = bigquery.LoadJobConfig(
             schema=[
                 bigquery.SchemaField("id", "INT64"),

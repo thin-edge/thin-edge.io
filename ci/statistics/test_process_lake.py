@@ -283,7 +283,6 @@ def test_postprocess_vals_cpu_hist():
 
     cpu_hist_array.postprocess(
         relevant_measurement_folders,
-        data_length,
         cpu_array,
     )
 

@@ -150,6 +150,7 @@ class TestCpuHistoryStacked:
 
     def test_postprocess(self):
         """TODO: update me"""
+        lake = os.path.expanduser("~/DataLakeTest")
 
         base = db.CpuHistoryStacked(None, "name", 3, 10, None, None)
         folders = [
@@ -158,7 +159,9 @@ class TestCpuHistoryStacked:
             "results_4_unpack",
         ]
 
-        base.postprocess(folders, 0, None)
+        cpu = db.CpuHistory(lake, "name", 3, 10, None, None)
+
+        base.postprocess(folders, cpu)
         # cpu_array,
         # cpu_hist_array)
 
@@ -320,7 +323,7 @@ class TestMetadata:
 
         metadata = db.MeasurementMetadata(lake, "ci_measurements", 3, 10, None, None)
 
-        ret, date, url, name, branch = metadata.scrap_measurement_metadata(file)
+        ret, date, url, name, branch = metadata.scrap_data(file)
 
         assert ret == 1
         assert date == "2021-05-19T15:21:01Z"
