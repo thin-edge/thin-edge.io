@@ -35,14 +35,13 @@ def test_get_measurement_foders():
     ]
     assert ret == exp
 
-
 def test_get_relevant_measurement_folders_real():
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 3
@@ -52,7 +51,7 @@ def test_get_relevant_measurement_folders_mocked(mocker):
 
     exp = ["results_1_unpack", "results_2_unpack", "results_4_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = [
@@ -62,7 +61,7 @@ def test_get_relevant_measurement_folders_mocked(mocker):
         "results_4_unpack",
     ]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 3
@@ -77,7 +76,7 @@ def test_get_relevant_measurement_folders_mocked_5(mocker):
         "results_5_unpack",
     ]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = [
@@ -88,7 +87,7 @@ def test_get_relevant_measurement_folders_mocked_5(mocker):
         "results_5_unpack",
     ]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 4
@@ -99,11 +98,11 @@ def test_get_relevant_measurement_folders_mocked_1(mocker):
     exp = ["results_1_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
     testdata = True
-
+    valid = "results_1_unpack"
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = ["results_1_unpack"]
 
-    ret, valid = pl.get_relevant_measurement_folders(lake, testdata)
+    ret, valid = pl.get_relevant_measurement_folders(lake, valid)
 
     assert ret == exp
     assert valid == 1
@@ -113,16 +112,19 @@ def test_get_relevant_measurement_folders_mocked_0(mocker):
 
     exp = ["results_0_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
+    valid = "results_1_unpack"
 
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = ["results_0_unpack"]
 
     with pytest.raises(SystemError):
-        pl.get_relevant_measurement_folders(lake, testdata)
+        pl.get_relevant_measurement_folders(lake, valid)
+
+
 
 def test_postprocess_vals_cpu():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -160,11 +162,11 @@ def test_postprocess_vals_cpu():
         else:
             k = 4
 
-        if i < 18 or i>=20:
+        if i < 18 or i >= 20:
             ut = i + 1
             st = i + 2
         else:
-            ut = 0 # hint: missing data here
+            ut = 0  # hint: missing data here
             st = 0
 
         data.append([i, k, i % 10, ut, st, 0, 0])
@@ -187,7 +189,8 @@ def test_postprocess_vals_cpu():
 
 
 def test_postprocess_vals_mem():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -205,13 +208,16 @@ def test_postprocess_vals_mem():
         "ci_mem_measurement_tedge_mapper",
         len(relevant_measurement_folders),
         data_length,
-        client, testmode
+        client,
+        testmode,
     )
 
-    mem_array.postprocess(relevant_measurement_folders,
+    mem_array.postprocess(
+        relevant_measurement_folders,
         "publish_sawmill_record_statistics",
         "statm_mapper_stdout",
-        "tedge_mapper")
+        "tedge_mapper",
+    )
 
     # programmatically reproduce the data set
     data = []
@@ -238,7 +244,8 @@ def test_postprocess_vals_mem():
 
 
 def test_postprocess_vals_cpu_hist():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -273,12 +280,12 @@ def test_postprocess_vals_cpu_hist():
         "ci_cpu_hist",
         len(relevant_measurement_folders),
         data_length,
-        client, testmode
+        client,
+        testmode,
     )
 
     cpu_hist_array.postprocess(
         relevant_measurement_folders,
-        data_length,
         cpu_array,
     )
 
@@ -294,13 +301,13 @@ def test_postprocess_vals_cpu_hist():
 
         data.append(
             [
-                i, #id
-                21 + i, # user time 4
-                22 + i, # system time  4
-                ut2, # user time 2
-                st2, # system time 2
+                i,  # id
+                21 + i,  # user time 4
+                22 + i,  # system time  4
+                ut2,  # user time 2
+                st2,  # system time 2
                 i + 1,  # user time 1
-                i + 2, # system time 1
+                i + 2,  # system time 1
                 0,
                 0,
                 0,
@@ -334,7 +341,8 @@ def test_postprocess_vals_cpu_hist():
 
 
 def test_postprocess_vals_metadata():
-    """Tightnen current functionality for now
+    """This is an integration test!
+    Tightnen current functionality for now
     Probably too much for a simple test
     """
     lake = os.path.expanduser("~/DataLakeTest")
@@ -348,15 +356,9 @@ def test_postprocess_vals_metadata():
     client = None
     testmode = True
 
-
     metadata = db.MeasurementMetadata(
-        lake,
-        "ci_measurements",
-        len(folders),
-        data_length,
-        client,
-        testmode
-        )
+        lake, "ci_measurements", len(folders), data_length, client, testmode
+    )
 
     metadata.postprocess(folders)
 
@@ -364,7 +366,8 @@ def test_postprocess_vals_metadata():
         (
             0,
             1,
-            "2021-05-19T15:21:01Z",            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
+            "2021-05-19T15:21:01Z",
+            "https://github.com/abelikt/thin-edge.io/actions/runs/857323798",
             "system-test-workflow",
             "continuous_integration",
         ),

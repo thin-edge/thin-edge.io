@@ -11,7 +11,6 @@ from databases import MeasurementBase
 
 
 class TestMeasurementBase:
-
     def test_foldername_to_index(self):
         assert MeasurementBase.foldername_to_index("results_44_unpack") == 44
         assert MeasurementBase.foldername_to_index("results_2_unpack") == 2
@@ -22,7 +21,6 @@ class TestMeasurementBase:
 
         with pytest.raises(SystemError):
             MeasurementBase.foldername_to_index("results_2_unpac")
-
 
 
 class TestMemoryHistory:
@@ -43,10 +41,8 @@ class TestMemoryHistory:
 
         base.upload_table.assert_called_once()
 
-
     def disable_test_scrap_memory(self):
-        """Todo: Write nice tests here
-        """
+        """Todo: Write nice tests here"""
         base = db.MemoryHistory(None, 3, None, None, None)
         ret = base.scrap_mem()
         assert ret == 88
@@ -66,14 +62,14 @@ class TestMemoryHistory:
         exp = "{}/{}/PySys/name/Output/linux/filename.out"
 
         calls = [
-            mocker.call( exp.format(lake, folders[0]), 1, base),
-            mocker.call( exp.format(lake, folders[1]), 2, base),
-            mocker.call( exp.format(lake, folders[2]), 4, base)
-            ]
+            mocker.call(exp.format(lake, folders[0]), 1, base),
+            mocker.call(exp.format(lake, folders[1]), 2, base),
+            mocker.call(exp.format(lake, folders[2]), 4, base),
+        ]
 
         base.postprocess(folders, "name", "filename", "binary")
 
-        #mock.assert_called_once_with()
+        # mock.assert_called_once_with()
 
         assert mock.call_count == 3
 
@@ -154,6 +150,7 @@ class TestCpuHistoryStacked:
 
     def test_postprocess(self):
         """TODO: update me"""
+        lake = os.path.expanduser("~/DataLakeTest")
 
         base = db.CpuHistoryStacked(None, "name", 3, 10, None, None)
         folders = [
@@ -162,23 +159,16 @@ class TestCpuHistoryStacked:
             "results_4_unpack",
         ]
 
-        base.postprocess(
-            folders, 0, None)
-        #cpu_array,
-        #cpu_hist_array)
+        cpu = db.CpuHistory(lake, "name", 3, 10, None, None)
 
+        base.postprocess(folders, cpu)
+        # cpu_array,
+        # cpu_hist_array)
 
 
 class TestMetadata:
     def test_update_table_calls_upload(self, mocker):
-        base = db.MeasurementMetadata(
-            None,
-            "ci_measurements",
-            1,
-            10,
-            None,
-            None
-            )
+        base = db.MeasurementMetadata(None, "ci_measurements", 1, 10, None, None)
         umock = mocker.patch.object(base, "upload_table")
         dmock = mocker.patch.object(base, "delete_table")
         base.array = [[1, 2, 3, 4, 5, 6]]
@@ -188,14 +178,7 @@ class TestMetadata:
         dmock.assert_called_once()
 
     def test_update_table_creates_attributes(self, mocker):
-        base = db.MeasurementMetadata(
-            None,
-            "ci_measurements",
-            1,
-            10,
-            None,
-            None
-            )
+        base = db.MeasurementMetadata(None, "ci_measurements", 1, 10, None, None)
         mocker.patch.object(base, "upload_table")
         base.array = [[1, 2, 3, 4, 5, 6]]
 
@@ -215,13 +198,8 @@ class TestMetadata:
         client = "google"
         testmode = True
         metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            client,
-            testmode
-            )
+            lake, "ci_measurements", 3, 10, client, testmode
+        )
         metadata.postprocess(folders)
         metadata.show()
 
@@ -231,13 +209,8 @@ class TestMetadata:
         client = None
         testmode = None
         metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            client,
-            testmode
-            )
+            lake, "ci_measurements", 3, 10, client, testmode
+        )
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
 
@@ -263,13 +236,8 @@ class TestMetadata:
         client = None
         testmode = None
         metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            client,
-            testmode
-            )
+            lake, "ci_measurements", 3, 10, client, testmode
+        )
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
 
@@ -297,13 +265,8 @@ class TestMetadata:
         client = None
         testmode = None
         metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            client,
-            testmode
-            )
+            lake, "ci_measurements", 3, 10, client, testmode
+        )
 
         metadata.json_data = {"nope": "nope"}
         metadata.job_config = None
@@ -342,13 +305,8 @@ class TestMetadata:
         testmode = True
 
         metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            client,
-            testmode
-            )
+            lake, "ci_measurements", 3, 10, client, testmode
+        )
 
         mocker.patch.object(metadata, "upload_table")
 
@@ -363,16 +321,9 @@ class TestMetadata:
         name = "system_test_1_metadata.json"
         file = os.path.join(lake, name)
 
-        metadata = db.MeasurementMetadata(
-            lake,
-            "ci_measurements",
-            3,
-            10,
-            None,
-            None
-            )
+        metadata = db.MeasurementMetadata(lake, "ci_measurements", 3, 10, None, None)
 
-        ret, date, url, name, branch = metadata.scrap_measurement_metadata(file)
+        ret, date, url, name, branch = metadata.scrap_data(file)
 
         assert ret == 1
         assert date == "2021-05-19T15:21:01Z"
