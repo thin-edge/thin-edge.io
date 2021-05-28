@@ -110,7 +110,7 @@ jobs:
         uses: Swatinem/rust-cache@v1
 
       - name: Compile cargo test features
-         uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
