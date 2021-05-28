@@ -437,3 +437,49 @@ def test_postprocess_vals_metadata():
     ]
 
     assert metadata.array == exp
+
+class TestMain:
+    lake = os.path.expanduser("~/DataLake")
+    testlake = os.path.expanduser("~/DataLakeTest")
+
+    def test_main_with_testdata_nostyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-t", "none"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "none", False, self.testlake, True)
+
+    def test_main_with_testdata_googlestyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-t", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", False, self.testlake, True)
+
+    def test_main_with_testdata_nostyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "none"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "none", False, self.lake, False)
+
+    def test_main_with_testdata_googlestyle(self, mocker):
+        mocker.patch("sys.argv", ["procname", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", False, self.lake, False)
+
+    def test_main_with_testdata_googlestyle_show(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.lake, False)
+
+    def test_main_with_testdata_googlestyle_show(self, mocker):
+        mocker.patch("sys.argv", ["procname", "-s", "-t", "google"])
+        genmock = mocker.patch("process_lake.generate")
+        pl.main()
+        genmock.assert_called_with( "google", True, self.testlake, True)
+
+    def test_main_with_invalid_arg(self, mocker):
+        mocker.patch("sys.argv", ["procname", "nope"])
+        genmock = mocker.patch("process_lake.generate")
+        with pytest.raises(AssertionError):
+            pl.main()

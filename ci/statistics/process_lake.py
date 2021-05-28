@@ -265,6 +265,7 @@ def main():
         logging.info("Enabling verbose mode")
         logging.basicConfig(level=logging.DEBUG)
 
+    # Do it
     generate(style, show, lake, testdata)
 
 
