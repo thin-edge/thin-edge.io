@@ -69,8 +69,8 @@ class TestDownloadArtifacts:
 
         mocker.patch("download_all_artifacts.get_all_runs",
             return_value=[[ {"name":"myname"} ]] )
-
-        ret = da.get_all_system_test_runs("token")
+        lake = "lake"
+        ret = da.get_all_system_test_runs("token", lake)
 
         assert ret == []
 
@@ -84,11 +84,12 @@ class TestDownloadArtifacts:
 
         mocker.patch("download_all_artifacts.get_all_runs",
             return_value=inject )
-
-        ret = da.get_all_system_test_runs("token")
+        lake = "lake"
+        mock = mocker.mock_open( read_data = "data")
+        mocker.patch('download_all_artifacts.open', mock)
+        ret = da.get_all_system_test_runs("token", lake)
 
         assert ret == [("456","123",)]
-
 
     def test_get_artifacts_for_runid_no_artifacts(self, mocker):
         inject = {"artifacts": []}
@@ -101,7 +102,10 @@ class TestDownloadArtifacts:
         runid = 42
         run_number = 43
         token = "token"
-        ret = da.get_artifacts_for_runid(runid, run_number, token)
+        lake = "lake"
+        mocker.patch('download_all_artifacts.open')
+
+        ret = da.get_artifacts_for_runid(runid, run_number, token, lake)
         dmock.assert_not_called()
 
     def test_get_artifacts_for_runid_one_artifact(self, mocker):
@@ -115,8 +119,11 @@ class TestDownloadArtifacts:
         runid = 42
         run_number = 43
         token = "token"
-        ret = da.get_artifacts_for_runid(runid, run_number, token)
-        dmock.assert_called_once_with("theurl", "bob", 43, token)
+        lake = "lake"
+        mocker.patch('download_all_artifacts.open')
+
+        ret = da.get_artifacts_for_runid(runid, run_number, token, lake)
+        dmock.assert_called_once_with("theurl", "bob", 43, token, lake)
 
     def test_download_artifact(self, mocker):
 
@@ -124,10 +131,12 @@ class TestDownloadArtifacts:
         run_number = 2
         name = "results_"
         token = "token"
+        lake = "lake"
         rmock = mocker.patch("requests.get")
         mocker.patch("os.path.exists", return_value = False)
+        mocker.patch('download_all_artifacts.open')
 
-        da.download_artifact(url, name, run_number, token)
+        da.download_artifact(url, name, run_number, token, lake)
 
         rmock.assert_called_once()
 

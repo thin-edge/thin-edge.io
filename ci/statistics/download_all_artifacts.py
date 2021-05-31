@@ -21,10 +21,7 @@ import os
 import sys
 from requests.auth import HTTPBasicAuth
 
-lake = os.path.expanduser("~/DataLake")
-
-
-def download_artifact(url, name, run_number, token):
+def download_artifact(url, name, run_number, token, lake):
     headers = {"Accept": "application/vnd.github.v3+json"}
 
     auth = HTTPBasicAuth("abelikt", token)
@@ -57,7 +54,7 @@ def download_artifact(url, name, run_number, token):
         print(f"Downloaded {lake}/{name}.zip")
 
 
-def get_artifacts_for_runid(runid, run_number, token):
+def get_artifacts_for_runid(runid, run_number, token, lake):
     """Download artifacts for a given runid"""
     # Here we need the runid and we get the artifact id
 
@@ -73,7 +70,7 @@ def get_artifacts_for_runid(runid, run_number, token):
 
     req = requests.get(url, auth=auth, headers=headers)
     text = json.loads(req.text)
-
+    lake = "lake"
     with open(
         os.path.expanduser(f"{lake}/results_{run_number}_metadata.json"), "w"
     ) as ofile:
@@ -85,7 +82,7 @@ def get_artifacts_for_runid(runid, run_number, token):
         artifact_name = artifacts[0]["name"]
         artifact_url = artifacts[0]["archive_download_url"]
         print(artifact_url)
-        download_artifact(artifact_url, artifact_name, run_number, token)
+        download_artifact(artifact_url, artifact_name, run_number, token, lake)
         return artifact_url
     else:
         print("No Artifact attached")
@@ -132,7 +129,7 @@ def get_all_runs(token):
         yield stuff["workflow_runs"]
 
 
-def get_all_system_test_runs(token):
+def get_all_system_test_runs(token, lake):
     """Returns als system test runs as list of run_id and number"""
 
     system_test_runs = []
@@ -161,7 +158,8 @@ def get_all_system_test_runs(token):
 def main():
     """main entry point"""
     token = None
-
+    #lake = os.path.expanduser("~/DataLake")
+    #username = "abelikt"
 
     if "THEGHTOKEN" in os.environ:
         token = os.environ["THEGHTOKEN"]
