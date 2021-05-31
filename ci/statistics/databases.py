@@ -330,7 +330,7 @@ class CpuHistory(MeasurementBase):
                         self.row_id += 1
 
         except FileNotFoundError as err:
-            logging.error("File not found, skipping for now! %s", str(err))
+            logging.warning("File not found, skipping for now! %s", str(err))
 
         # In case that there are not enough lines in the file fixx with zeros
         # Can happen, depending on when the data recorder process is killed.

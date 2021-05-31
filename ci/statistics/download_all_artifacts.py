@@ -31,7 +31,7 @@ def download_artifact(url, name, run_number, token):
 
     print(f"Will try {lake}/{name}.zip aka results_{run_number}'")
 
-    # Repair old names
+    # Repair names from old test runs
     if name == "results_":
         name = f"results_{run_number}"
     elif name == "results_$RUN_NUMBER":
@@ -61,7 +61,7 @@ def get_artifacts_for_runid(runid, run_number, token):
     """Download artifacts for a given runid"""
     # Here we need the runid and we get the artifact id
 
-    # Manual
+    # manual example
     # https://github.com/abelikt/thin-edge.io/actions/runs/828065682
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/828065682/artifacts
@@ -70,18 +70,16 @@ def get_artifacts_for_runid(runid, run_number, token):
     headers = {"Accept": "application/vnd.github.v3+json"}
 
     auth = HTTPBasicAuth("abelikt", token)
-    # per_page
 
     req = requests.get(url, auth=auth, headers=headers)
-    stuff = json.loads(req.text)
-    # print(json.dumps(stuff, indent=4))
+    text = json.loads(req.text)
 
     with open(
         os.path.expanduser(f"{lake}/results_{run_number}_metadata.json"), "w"
     ) as ofile:
-        ofile.write(json.dumps(stuff, indent=4))
+        ofile.write(json.dumps(text, indent=4))
 
-    artifacts = stuff["artifacts"]
+    artifacts = text["artifacts"]
 
     if len(artifacts) > 0:
         artifact_name = artifacts[0]["name"]
@@ -99,7 +97,7 @@ def get_all_runs(token):
     as list of dictionaries.
     """
 
-    # manual
+    # manual example
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs
 
@@ -108,8 +106,7 @@ def get_all_runs(token):
 
     auth = HTTPBasicAuth("abelikt", token)
 
-    index = 0  # 0 and 1 seem to have an identical meaning here
-    gathered = 0
+    index = 0  #Hint: 0 and 1 seem to have an identical meaning when we request
     empty = False
 
     while not empty:
@@ -117,19 +114,12 @@ def get_all_runs(token):
         params = {"per_page": "50", "page": index}
         req = requests.get(url, params=params, auth=auth, headers=headers)
         stuff = json.loads(req.text)
-        # print(req.text)
-        # print(json.dumps(stuff, indent=4))
 
-        # for s in stuff:
-        #    print(s)
-        # print(json.dumps(stuff['workflow_runs'][0], indent=4))
-
-        # print("Total Count", stuff['total_count'])
         try:
             read = len(stuff["workflow_runs"])
         except KeyError as ke:
             print("Error", ke, stuff)
-            print("Message from GitHub: ", stuff["message"])
+            print("Error: Message from GitHub: ", stuff["message"])
             sys.exit(1)
 
         if read == 0:
@@ -138,21 +128,17 @@ def get_all_runs(token):
         else:
             print(f"Read {read} entries")
 
-        # for s in stuff['workflow_runs']:
-        #    if s['name'] == 'system-test-workflow':
-        #        print(s['id'], s['run_number'])
         index += 1
         yield stuff["workflow_runs"]
 
 
 def get_all_system_test_runs(token):
     """Returns als system test runs as list of run_id and number"""
+
     system_test_runs = []
-    for i in get_all_runs(token):
-        for test_run in i:
+    for test_runs in get_all_runs(token):
+        for test_run in test_runs:
             if test_run["name"] == "system-test-workflow":
-                # print( j['id'], j['run_number'])
-                # print(json.dumps(j, indent=4))
                 run_number = test_run["run_number"]
                 with open(
                     os.path.expanduser(
@@ -162,11 +148,12 @@ def get_all_system_test_runs(token):
                 ) as ofile:
                     ofile.write(json.dumps(test_run, indent=4))
                 print(
-                    f"Found System Test Run with id {test_run['id']} run number {run_number} workflow id {test_run['workflow_id']}"
+                    f"Found System Test Run with id {test_run['id']}"
+                    f" run number {run_number} workflow id {test_run['workflow_id']}"
                 )
                 system_test_runs.append((test_run["id"], run_number))
 
-    print(f"Found {len(system_test_runs)} test_runs ")
+    print(f"Found {len(system_test_runs)} test_runs")
 
     return system_test_runs
 
@@ -174,6 +161,7 @@ def get_all_system_test_runs(token):
 def main():
     """main entry point"""
     token = None
+
 
     if "THEGHTOKEN" in os.environ:
         token = os.environ["THEGHTOKEN"]
@@ -183,10 +171,8 @@ def main():
 
     system_test_runs = get_all_system_test_runs(token)
 
-    for s in system_test_runs:
-        artifact = get_artifacts_for_runid(s[0], s[1], token)
-        #print(artifact)
-
+    for run in system_test_runs:
+        artifact = get_artifacts_for_runid(run[0], run[1], token)
 
 if __name__ == "__main__":
     main()

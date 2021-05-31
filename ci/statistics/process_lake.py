@@ -152,7 +152,7 @@ def generate(style, show, lake, testdata, earliest_valid):
     )
 
     measurements = db.MeasurementMetadata(
-        lake, "ci_measurents", processing_range, data_length, client, testdata
+        lake, "ci_measurements", processing_range, data_length, client, testdata
     )
 
     cpu_array.postprocess(

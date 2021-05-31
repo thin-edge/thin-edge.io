@@ -15,7 +15,6 @@
                 "--capture",
                 "no",
                 "${workspaceFolder}/ci/statistics/",
-                "test_download_all_artifacts.py"
             ],
         },
 
@@ -28,10 +27,13 @@
             "args": [
 
                 "-s",
-                "-t",
+                //"-t",
                 //"-v",
-                "none"
+                "google"
             ],
+            "env": {
+                "GOOGLE_APPLICATION_CREDENTIALS": "/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
+            }
         },
 
         {
