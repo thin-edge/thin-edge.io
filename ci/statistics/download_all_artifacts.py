@@ -61,7 +61,7 @@ def get_artifacts_for_runid(runid, run_number, token):
     """Download artifacts for a given runid"""
     # Here we need the runid and we get the artifact id
 
-    # Manual
+    # manual example
     # https://github.com/abelikt/thin-edge.io/actions/runs/828065682
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/828065682/artifacts
@@ -97,7 +97,7 @@ def get_all_runs(token):
     as list of dictionaries.
     """
 
-    # manual
+    # manual example
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs
 
@@ -149,7 +149,7 @@ def get_all_system_test_runs(token):
                     ofile.write(json.dumps(test_run, indent=4))
                 print(
                     f"Found System Test Run with id {test_run['id']}"
-                    f"run number {run_number} workflow id {test_run['workflow_id']}"
+                    f" run number {run_number} workflow id {test_run['workflow_id']}"
                 )
                 system_test_runs.append((test_run["id"], run_number))
 
@@ -161,6 +161,7 @@ def get_all_system_test_runs(token):
 def main():
     """main entry point"""
     token = None
+
 
     if "THEGHTOKEN" in os.environ:
         token = os.environ["THEGHTOKEN"]
