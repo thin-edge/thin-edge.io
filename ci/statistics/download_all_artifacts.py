@@ -142,7 +142,6 @@ def get_all_runs(token):
         #    if s['name'] == 'system-test-workflow':
         #        print(s['id'], s['run_number'])
         index += 1
-        print("stuff", stuff["workflow_runs"])
         yield stuff["workflow_runs"]
 
 
@@ -150,7 +149,6 @@ def get_all_system_test_runs(token):
     """Returns als system test runs as list of run_id and number"""
     system_test_runs = []
     for i in get_all_runs(token):
-        print(i)
         for test_run in i:
             if test_run["name"] == "system-test-workflow":
                 # print( j['id'], j['run_number'])
