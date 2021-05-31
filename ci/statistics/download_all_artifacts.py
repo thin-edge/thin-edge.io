@@ -21,10 +21,10 @@ import os
 import sys
 from requests.auth import HTTPBasicAuth
 
-def download_artifact(url, name, run_number, token, lake):
+def download_artifact(url, name, run_number, token, lake, user):
     headers = {"Accept": "application/vnd.github.v3+json"}
 
-    auth = HTTPBasicAuth("abelikt", token)
+    auth = HTTPBasicAuth(user, token)
 
     print(f"Will try {lake}/{name}.zip aka results_{run_number}'")
 
@@ -54,7 +54,7 @@ def download_artifact(url, name, run_number, token, lake):
         print(f"Downloaded {lake}/{name}.zip")
 
 
-def get_artifacts_for_runid(runid, run_number, token, lake):
+def get_artifacts_for_runid(runid, run_number, token, lake, user):
     """Download artifacts for a given runid"""
     # Here we need the runid and we get the artifact id
 
@@ -63,14 +63,14 @@ def get_artifacts_for_runid(runid, run_number, token, lake):
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/828065682/artifacts
 
-    url = f"https://api.github.com/repos/abelikt/thin-edge.io/actions/runs/{runid}/artifacts"
+    url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/runs/{runid}/artifacts"
     headers = {"Accept": "application/vnd.github.v3+json"}
 
-    auth = HTTPBasicAuth("abelikt", token)
+    auth = HTTPBasicAuth(user, token)
 
     req = requests.get(url, auth=auth, headers=headers)
     text = json.loads(req.text)
-    lake = "lake"
+
     with open(
         os.path.expanduser(f"{lake}/results_{run_number}_metadata.json"), "w"
     ) as ofile:
@@ -82,13 +82,13 @@ def get_artifacts_for_runid(runid, run_number, token, lake):
         artifact_name = artifacts[0]["name"]
         artifact_url = artifacts[0]["archive_download_url"]
         print(artifact_url)
-        download_artifact(artifact_url, artifact_name, run_number, token, lake)
+        download_artifact(artifact_url, artifact_name, run_number, token, lake, user)
         return artifact_url
     else:
         print("No Artifact attached")
 
 
-def get_all_runs(token):
+def get_all_runs(token, user):
     """Download all GitHub Actions workflow runs.
     Generator function that returns the next 50 runs from the web-ui
     as list of dictionaries.
@@ -98,7 +98,7 @@ def get_all_runs(token):
     # curl -H "Accept: application/vnd.github.v3+json" -u abelikt:$TOKEN
     # -L https://api.github.com/repos/abelikt/thin-edge.io/actions/runs
 
-    url = f"https://api.github.com/repos/abelikt/thin-edge.io/actions/runs"
+    url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/runs"
     headers = {"Accept": "application/vnd.github.v3+json"}
 
     auth = HTTPBasicAuth("abelikt", token)
@@ -129,11 +129,11 @@ def get_all_runs(token):
         yield stuff["workflow_runs"]
 
 
-def get_all_system_test_runs(token, lake):
+def get_all_system_test_runs(token, lake, user):
     """Returns als system test runs as list of run_id and number"""
 
     system_test_runs = []
-    for test_runs in get_all_runs(token):
+    for test_runs in get_all_runs(token, user):
         for test_run in test_runs:
             if test_run["name"] == "system-test-workflow":
                 run_number = test_run["run_number"]
@@ -155,11 +155,10 @@ def get_all_system_test_runs(token, lake):
     return system_test_runs
 
 
-def main():
+def main(lake, username):
     """main entry point"""
     token = None
-    #lake = os.path.expanduser("~/DataLake")
-    #username = "abelikt"
+    lake = os.path.expanduser(lake)
 
     if "THEGHTOKEN" in os.environ:
         token = os.environ["THEGHTOKEN"]
@@ -167,10 +166,10 @@ def main():
         print("Error environment variable THEGHTOKEN not set")
         sys.exit(1)
 
-    system_test_runs = get_all_system_test_runs(token)
+    system_test_runs = get_all_system_test_runs(token, lake, username)
 
     for run in system_test_runs:
-        artifact = get_artifacts_for_runid(run[0], run[1], token)
+        artifact = get_artifacts_for_runid(run[0], run[1], token, lake, username)
 
 if __name__ == "__main__":
-    main()
+    main("~/DataLake", "abelikt")
