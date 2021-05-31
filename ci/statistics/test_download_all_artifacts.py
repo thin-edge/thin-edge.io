@@ -33,8 +33,6 @@ class TestDownloadArtifacts:
     def test_get_all_runs_empty(self, mocker):
 
         url = "theurl"
-        run_number = 2
-        name = "results_"
         token = "token"
         user = "user"
         url = "https://api.github.com/repos/user/thin-edge.io/actions/runs"
@@ -54,8 +52,6 @@ class TestDownloadArtifacts:
     def test_get_all_runs(self, mocker):
 
         url = "theurl"
-        run_number = 2
-        name = "results_"
         token = "token"
         user = "user"
         url = "https://api.github.com/repos/user/thin-edge.io/actions/runs"
@@ -131,7 +127,7 @@ class TestDownloadArtifacts:
         user = "user"
         mocker.patch("download_all_artifacts.open")
 
-        ret = da.get_artifacts_for_runid(runid, run_number, token, lake, user)
+        da.get_artifacts_for_runid(runid, run_number, token, lake, user)
         dmock.assert_not_called()
 
     def test_get_artifacts_for_runid_one_artifact(self, mocker):
@@ -150,9 +146,9 @@ class TestDownloadArtifacts:
         mocker.patch("download_all_artifacts.open")
         url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/runs/{runid}/artifacts"
 
-        ret = da.get_artifacts_for_runid(runid, run_number, token, lake, user)
+        da.get_artifacts_for_runid(runid, run_number, token, lake, user)
 
-        dmock.assert_called_once_with("theurl", "bob", 43, token, lake)
+        dmock.assert_called_once_with("theurl", "bob", 43, token, lake, user)
         reqmock.assert_called_with(url, auth=mocker.ANY, headers=mocker.ANY)
 
     def test_download_artifact(self, mocker):

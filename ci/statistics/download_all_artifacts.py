@@ -170,7 +170,7 @@ def main(lake, username):
     system_test_runs = get_all_system_test_runs(token, lake, username)
 
     for run in system_test_runs:
-        artifact = get_artifacts_for_runid(run[0], run[1], token, lake, username)
+        get_artifacts_for_runid(run[0], run[1], token, lake, username)
 
 
 if __name__ == "__main__":
