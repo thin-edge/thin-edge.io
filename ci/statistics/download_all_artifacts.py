@@ -1,5 +1,9 @@
 #!/usr/bin/python3
-"""Download all artifacts from GitHub
+"""Download all thin-edge system-test artifacts from GitHub.
+
+First get a list of all workflow runs.
+Then filter out the system-test-workflows.
+Retrieve the URL of the system-test-workflow artifact and download it.
 
 See also here
 https://docs.github.com/en/rest/reference/actions#download-an-artifact
@@ -16,20 +20,23 @@ https://docs.github.com/en/rest/reference/actions#download-an-artifact
 # available and can skip downloading
 
 import json
-import requests
 import os
 import sys
+import requests
 from requests.auth import HTTPBasicAuth
 
 
 def download_artifact(url, name, run_number, token, lake, user):
+    """Download the artifact and store it as a zip file.
+    Also repair the filename if the name is outdated"""
+
     headers = {"Accept": "application/vnd.github.v3+json"}
 
     auth = HTTPBasicAuth(user, token)
 
     print(f"Will try {lake}/{name}.zip aka results_{run_number}'")
 
-    # Repair names from old test runs
+    # Repair names from old test runs (many tries to the the name right)
     if name == "results_":
         name = f"results_{run_number}"
     elif name == "results_$RUN_NUMBER":
@@ -49,9 +56,9 @@ def download_artifact(url, name, run_number, token, lake, user):
 
     req = requests.get(url, auth=auth, headers=headers, stream=True)
 
-    with open(os.path.expanduser(artifact_filename), "wb") as fd:
+    with open(os.path.expanduser(artifact_filename), "wb") as thefile:
         for chunk in req.iter_content(chunk_size=128):
-            fd.write(chunk)
+            thefile.write(chunk)
         print(f"Downloaded {lake}/{name}.zip")
 
 
@@ -88,6 +95,8 @@ def get_artifacts_for_runid(runid, run_number, token, lake, user):
     else:
         print("No Artifact attached")
 
+    return None
+
 
 def get_all_runs(token, user):
     """Download all GitHub Actions workflow runs.
@@ -115,8 +124,8 @@ def get_all_runs(token, user):
 
         try:
             read = len(stuff["workflow_runs"])
-        except KeyError as ke:
-            print("Error", ke, stuff)
+        except KeyError as kerror:
+            print("Error", kerror, stuff)
             print("Error: Message from GitHub: ", stuff["message"])
             sys.exit(1)
 

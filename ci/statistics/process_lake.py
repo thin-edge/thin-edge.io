@@ -1,7 +1,8 @@
 #!/usr/bin/python3
-"""Process data in the process lake
+"""Process data in the local process lake prepared by download_all_artifacts.py.
 """
 
+# Environment preparation:
 # python3.9 -m venv env-bigquery
 # source ~/env-bigquery/bin/activate
 # pip install numpy
@@ -34,9 +35,10 @@ def unzip_results(lake):
                 subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
-# def get_measurement_folders(lake: Path) -> list[Path]: # invalid in python 3.8
-def get_measurement_folders(lake):
-    """Retrive all folders with measurements in canonical order"""
+def get_measurement_folders(lake: Path) -> list[Path]:
+    """Get a sorted ist of measurement folders
+    Filename pattern: results_<id>_unpack.zip
+    """
     path = Path(lake)
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
