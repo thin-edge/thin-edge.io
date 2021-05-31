@@ -103,7 +103,6 @@ def generate(style, show, lake, testdata, earliest_valid):
     data_length = 60
     data_length_long = 120
 
-
     cpu_array = db.CpuHistory(
         lake,
         "ci_cpu_measurement_tedge_mapper",
