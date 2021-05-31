@@ -187,7 +187,7 @@ def main():
 
     for s in system_test_runs:
         artifact = get_artifacts_for_runid(s[0], s[1], token)
-        print(artifact)
+        #print(artifact)
 
 
 if __name__ == "__main__":
