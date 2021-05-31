@@ -12,10 +12,7 @@
 
 import numpy as np
 import os
-from os.path import expanduser
-from pathlib import Path
 import pytest
-
 
 import process_lake as pl
 import databases as db
@@ -98,7 +95,6 @@ def test_get_relevant_measurement_folders_mocked_1(mocker):
 
     exp = ["results_1_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
-    testdata = True
     valid = "results_1_unpack"
     mock = mocker.patch("process_lake.get_measurement_folders")
     mock.return_value = ["results_1_unpack"]
@@ -111,7 +107,6 @@ def test_get_relevant_measurement_folders_mocked_1(mocker):
 
 def test_get_relevant_measurement_folders_mocked_0(mocker):
 
-    exp = ["results_0_unpack"]
     lake = os.path.expanduser("~/DataLakeTest")
     valid = "results_1_unpack"
 
@@ -444,7 +439,7 @@ class TestMain:
     earliest = "results_107_unpack"
     testearliest = "results_1_unpack"
 
-    def test_main_with_testdata_nostyle(self, mocker):
+    def test_main_with_testdata_nostyle_testdata(self, mocker):
         mocker.patch("sys.argv", ["procname", "-t", "none"])
         genmock = mocker.patch("process_lake.generate")
         pl.main()
@@ -452,7 +447,7 @@ class TestMain:
             "none", False, self.testlake, True, self.testearliest
         )
 
-    def test_main_with_testdata_googlestyle(self, mocker):
+    def test_main_with_testdata_googlestyle_testdata(self, mocker):
         mocker.patch("sys.argv", ["procname", "-t", "google"])
         genmock = mocker.patch("process_lake.generate")
         pl.main()
@@ -478,7 +473,7 @@ class TestMain:
         pl.main()
         genmock.assert_called_with("google", True, self.lake, False, self.earliest)
 
-    def test_main_with_testdata_googlestyle_show(self, mocker):
+    def test_main_with_testdata_googlestyle_show_testdata(self, mocker):
         mocker.patch("sys.argv", ["procname", "-s", "-t", "google"])
         genmock = mocker.patch("process_lake.generate")
         pl.main()
@@ -496,6 +491,5 @@ class TestMain:
 
     def test_main_with_invalid_arg(self, mocker):
         mocker.patch("sys.argv", ["procname", "nope"])
-        genmock = mocker.patch("process_lake.generate")
         with pytest.raises(AssertionError):
             pl.main()

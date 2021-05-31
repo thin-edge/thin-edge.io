@@ -1,7 +1,4 @@
-import numpy as np
 import os
-from os.path import expanduser
-from pathlib import Path
 import pytest
 
 import databases as db

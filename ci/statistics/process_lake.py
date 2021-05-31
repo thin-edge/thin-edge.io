@@ -10,16 +10,11 @@
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
 import argparse
-import sys
-import time
 import logging
-import json
 import subprocess
 import os
 import os.path
 from pathlib import Path
-import numpy as np
-from numpy.core.records import array
 
 import databases as db
 
@@ -36,7 +31,7 @@ def unzip_results(lake):
             new_name = child.name.removesuffix(".zip")
             new_folder = f"{new_name}_unpack/"
             if not os.path.exists(os.path.join(lake, new_folder)):
-                proc = subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
+                subprocess.run(["unzip", child.name, "-d", new_folder], cwd=lake)
 
 
 def get_measurement_folders(lake: Path) -> list[Path]:
