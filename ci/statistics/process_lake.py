@@ -1,7 +1,8 @@
 #!/usr/bin/python3
-"""Process data in the process lake
+"""Process data in the local process lake prepared by download_all_artifacts.py.
 """
 
+# Environment preparation:
 # python3.9 -m venv env-bigquery
 # source ~/env-bigquery/bin/activate
 # pip install numpy
@@ -35,6 +36,9 @@ def unzip_results(lake):
 
 
 def get_measurement_folders(lake: Path) -> list[Path]:
+    """Get a sorted ist of measurement folders
+    Filename pattern: results_<id>_unpack.zip
+    """
     path = Path(lake)
     pathlist = sorted(
         Path(lake).glob("*_unpack"),
@@ -78,7 +82,6 @@ def generate(style, show, lake, testdata, earliest_valid):
     """Generate postprocessed databases and upload them
     Parameters:
     """
-
     client, dbo, integer, conn = db.get_database(style)
 
     logging.info("Unzip Results")
@@ -250,6 +253,7 @@ def main():
     else:
         logging.info("Using real data lake")
         lake = os.path.expanduser("~/DataLake")
+
         # last earliest valid test run is 'results_107_unpack'
         earliest_valid = "results_107_unpack"
 
