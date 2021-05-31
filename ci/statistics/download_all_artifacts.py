@@ -21,6 +21,7 @@ import os
 import sys
 from requests.auth import HTTPBasicAuth
 
+
 def download_artifact(url, name, run_number, token, lake, user):
     headers = {"Accept": "application/vnd.github.v3+json"}
 
@@ -103,7 +104,7 @@ def get_all_runs(token, user):
 
     auth = HTTPBasicAuth("abelikt", token)
 
-    index = 0  #Hint: 0 and 1 seem to have an identical meaning when we request
+    index = 0  # Hint: 0 and 1 seem to have an identical meaning when we request
     empty = False
 
     while not empty:
@@ -170,6 +171,7 @@ def main(lake, username):
 
     for run in system_test_runs:
         artifact = get_artifacts_for_runid(run[0], run[1], token, lake, username)
+
 
 if __name__ == "__main__":
     main("~/DataLake", "abelikt")
