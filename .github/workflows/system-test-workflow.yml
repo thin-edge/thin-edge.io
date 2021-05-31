@@ -15,7 +15,7 @@ env:
 
 jobs:
   system-test:
-    runs-on: [self-hosted, Linux, ARM, offsite]
+    runs-on: [self-hosted, Linux, ARM ] #, offsite]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
