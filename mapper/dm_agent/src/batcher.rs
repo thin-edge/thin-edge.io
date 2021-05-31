@@ -1,6 +1,6 @@
 use clock::{Clock, Timestamp};
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use thin_edge_json::{
     group::MeasurementGrouper, measurement::FlatMeasurementVisitor,
     serialize::ThinEdgeJsonSerializer,
@@ -8,7 +8,7 @@ use thin_edge_json::{
 use tokio::{
     select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::sleep,
+    time::{self, Duration},
 };
 use tracing::{error, log::warn};
 
@@ -121,9 +121,14 @@ impl MessageBatcher {
         let collectd_message = CollectdMessage::parse_from(&first_message)?;
         let mut message_batch =
             MessageBatch::start_batch(collectd_message, first_message_timestamp)?;
+        let sleep = time::sleep(self.batching_window);
+        tokio::pin!(sleep);
 
         loop {
             select! {
+                _ = &mut sleep => {
+                        break;
+                }
                 maybe_message = self.receive_message(messages) => {
                     match maybe_message {
                         Some((message, _timestamp)) => {
@@ -140,9 +145,6 @@ impl MessageBatcher {
                     }
                 }
 
-                _result = sleep(self.batching_window) => {
-                    break;
-                }
             }
         }
 
