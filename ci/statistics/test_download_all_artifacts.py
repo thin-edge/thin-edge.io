@@ -27,6 +27,44 @@ class TestDownloadArtifacts:
         assert runmock.call_count == len(runs)
         runmock.assert_has_calls(calls, any_order=True)
 
+
+    def test_get_all_runs_empty(self, mocker):
+
+        url = "theurl"
+        run_number = 2
+        name = "results_"
+        token = "token"
+
+        reqmock = mocker.MagicMock(name="reqmock")
+        reqmock.text = '{"workflow_runs":{}}'
+        rmock = mocker.patch("requests.get", return_value = reqmock)
+        ret = da.get_all_runs(token)
+
+        # Hint: this call finally runs the generator get_all runs
+        thelist = list(ret)
+
+        assert thelist == []
+
+    def test_get_all_runs(self, mocker):
+
+        url = "theurl"
+        run_number = 2
+        name = "results_"
+        token = "token"
+
+        reqmock = mocker.MagicMock(name="reqmock")
+        reqmock.text = '{"workflow_runs":{ "one":"one", "two":"two"}}'
+        reqmock2 = mocker.MagicMock(name="reqmock2")
+        reqmock2.text = '{"workflow_runs":{}}'
+
+        rmock = mocker.patch("requests.get", side_effect = [reqmock, reqmock2] )
+        ret = da.get_all_runs(token)
+
+        # Hint: this call finally runs the generator get_all runs
+        thelist = list(ret)
+
+        assert thelist == [ { "one":"one", "two":"two"} ]
+
     def test_get_all_system_test_runs_empty(self, mocker):
 
         mocker.patch("download_all_artifacts.get_all_runs",
