@@ -12,7 +12,7 @@ source ~/env-bigquery/bin/activate
 python3 -m pytest ci/statistics
 
 # Download all the artifacts
-./ci/statistics/download_all_artifacts.py
+./ci/statistics/download_all_artifacts.py abelikt
 
 # Trigger postprocessing and upload
 # For a yet unkown reason we need to call this via the python
