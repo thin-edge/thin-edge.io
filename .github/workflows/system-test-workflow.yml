@@ -1,7 +1,6 @@
 name: system-test-workflow
 
 on:
-
   workflow_dispatch:
     branches: [ main, continuous_integration]
   workflow_run:
