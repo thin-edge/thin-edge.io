@@ -23,6 +23,13 @@ class MonitoringWithSimulatedMessages(BaseTest):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
 
+        #stop collecd to avoid mixup of messages
+        collectd = self.startProcess(
+            command=sudo,
+            arguments=["systemctl", "stop", "collectd"],
+            stdouterr="collectd",
+        )
+
         collectd_mapper = self.startProcess(
             command=sudo,
             arguments=["systemctl", "start", "tedge-dm-agent"],

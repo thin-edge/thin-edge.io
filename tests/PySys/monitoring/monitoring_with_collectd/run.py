@@ -19,11 +19,13 @@ Then we validate the  messages in the output of tedge sub,
 
 
 class MonitoringWithCollectd(BaseTest):
-    js_msg = ""
-    cpu_cnt = 0
-    memory_cnt = 0
-    time_cnt = 0
-    disk_cnt = 0
+
+    def setup(self):
+        self.js_msg = ""
+        self.cpu_cnt = 0
+        self.memory_cnt = 0
+        self.time_cnt = 0
+        self.disk_cnt = 0
 
     def execute(self):
         tedge = "/usr/bin/tedge"
@@ -40,6 +42,8 @@ class MonitoringWithCollectd(BaseTest):
             arguments=["systemctl", "start", "tedge-dm-agent"],
             stdouterr="collectd_mapper",
         )
+
+        time.sleep(0.1)
 
         sub = self.startProcess(
             command=sudo,
