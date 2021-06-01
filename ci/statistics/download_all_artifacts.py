@@ -5,6 +5,10 @@ First get a list of all workflow runs.
 Then filter out the system-test-workflows.
 Retrieve the URL of the system-test-workflow artifact and download it.
 
+In order to run, you need a GitHub token set to $THEGHTOKEN.
+See https://github.com/settings/tokens to generate a token with repo, workflow scope.
+
+
 See also here
 https://docs.github.com/en/rest/reference/actions#download-an-artifact
 """
@@ -19,6 +23,7 @@ https://docs.github.com/en/rest/reference/actions#download-an-artifact
 # TODO: Add some heuristic to know if we have most of the data
 # available and can skip downloading
 
+import argparse
 import json
 import os
 import sys
@@ -183,4 +188,12 @@ def main(lake, username):
 
 
 if __name__ == "__main__":
-    main("~/DataLake", "abelikt")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("username", type=str, help="GitHub Username")
+    args = parser.parse_args()
+
+    user= args.username
+    lake = "~/DataLake"
+
+    main(lake, user)
