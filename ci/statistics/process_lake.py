@@ -7,6 +7,8 @@
 # source ~/env-bigquery/bin/activate
 # pip install numpy
 # pip install --upgrade google-cloud-bigquery
+# pip install pytest
+# pip install pytest-mock
 #
 # export GOOGLE_APPLICATION_CREDENTIALS="/home/micha/Project-SAG/Statistics/sturdy-mechanic-312713-14b2e55c4ad0.json"
 
