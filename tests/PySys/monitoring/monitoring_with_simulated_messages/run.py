@@ -23,7 +23,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
 
-        #stop collecd to avoid mixup of messages
+        # stop collecd to avoid mixup of messages
         collectd = self.startProcess(
             command=sudo,
             arguments=["systemctl", "stop", "collectd"],
@@ -89,14 +89,13 @@ class MonitoringWithSimulatedMessages(BaseTest):
                 return False
             if not self.validate_pressure():
                 return False
-        return True 
+        return True
 
     def validate_time(self):
         if self.js_msg["time"]:
             return True
         else:
             return False
-
 
     def validate_temperature(self):
         if self.js_msg["temperature"]:

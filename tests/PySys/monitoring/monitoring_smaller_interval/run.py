@@ -18,12 +18,13 @@ Then we validate the  messages in the output of tedge sub,
 
 """
 
+
 class MonitoringSmallInterval(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
 
-        #stop collectd to avoid mixup of  messages
+        # stop collectd to avoid mixup of  messages
         collectd = self.startProcess(
             command=sudo,
             arguments=["systemctl", "stop", "collectd"],
@@ -49,7 +50,7 @@ class MonitoringSmallInterval(BaseTest):
         # runs.
         time.sleep(0.1)
 
-        for i in range(10) :
+        for i in range(10):
 
             pub = self.startProcess(
                 command=sudo,
@@ -65,7 +66,7 @@ class MonitoringSmallInterval(BaseTest):
                 stdouterr="tedge_pres",
             )
 
-            #publish every 100ms
+            # publish every 100ms
             time.sleep(0.1)
 
         # wait for tedge-dm-agent to batch messages
@@ -94,7 +95,7 @@ class MonitoringSmallInterval(BaseTest):
                 return False
             if not self.validate_pressure():
                 return False
-        return True 
+        return True
 
     def validate_time(self):
         if self.js_msg["time"]:
