@@ -3,6 +3,7 @@
 	<requires-pysys>1.6.1</requires-pysys>
 	<requires-python>3.7.3</requires-python>
 	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true"/>
+	<!--
     <property name="tebasedir" value="${env.TEBASEDIR}" />
     <property name="exampledir" value="${env.EXAMPLEDIR}" />
     <property name="username" value="${env.C8YUSERNAME}" />
@@ -10,6 +11,7 @@
     <property name="tenant" value="${env.C8YTENANT}" />
     <property name="deviceid" value="${env.C8YDEVICEID}" />
     <property name="device" value="${env.C8YDEVICE}" />
+	-->
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
 			<property name="destDir" value="__pysys_output_archives/"/>

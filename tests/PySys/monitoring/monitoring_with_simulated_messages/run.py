@@ -25,7 +25,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
         collectd_mapper = self.startProcess(
             command=sudo,
             arguments=["systemctl", "start", "tedge-dm-agent"],
-            stdouterr="collectd_mapper",            
+            stdouterr="collectd_mapper",
         )
 
         sub = self.startProcess(
@@ -35,7 +35,6 @@ class MonitoringWithSimulatedMessages(BaseTest):
             background=True,
         )
 
-             
         # Wait for a small amount of time to give tedge sub time
         # to initialize. This is a heuristic measure.
         # Without an additional wait we observe failures in 1% of the test
@@ -44,13 +43,15 @@ class MonitoringWithSimulatedMessages(BaseTest):
 
         pub = self.startProcess(
             command=sudo,
-            arguments=[tedge, "mqtt", "pub", "collectd/host/temperature/temp", "123435445:25.5"],
+            arguments=[tedge, "mqtt", "pub",
+                       "collectd/host/temperature/temp", "123435445:25.5"],
             stdouterr="tedge_temp",
         )
 
         pub = self.startProcess(
             command=sudo,
-            arguments=[tedge, "mqtt", "pub", "collectd/host/pressure/pres", "12345678:500.5"],
+            arguments=[tedge, "mqtt", "pub",
+                       "collectd/host/pressure/pres", "12345678:500.5"],
             stdouterr="tedge_pres",
         )
 
@@ -72,4 +73,3 @@ class MonitoringWithSimulatedMessages(BaseTest):
         self.assertGrep("tedge_sub.out", "pressure")
         self.assertGrep("tedge_sub.out", "pres")
         self.assertGrep("tedge_sub.out", "500.5")
-        
