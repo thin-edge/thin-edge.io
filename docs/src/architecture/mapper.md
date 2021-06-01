@@ -67,6 +67,52 @@ as both a fragment type and a fragment series in [Cumulocity's measurements](htt
 After the mapper publishes a message on the topic `c8y/measurement/measurements/create`,
 the message will be transferred to the topic `measurement/measurements/create` by [the MQTT bridge](../references/bridged-topics.md).
 
+## Azure IoT Hub mapper
+
+The Azure IoT Hub mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
+It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
+The validated messages are published on the topic `az/messages/events/` from where they are forwarded to Azure IoT Hub.
+This mapper is launched by the `tedge connect az` command, and stopped by the `tedge disconnect az` command.
+
+The Azure IoT Hub Mapper works on this message in the following ways.
+
+1. Validates if it is a correct Thin Edge JSON message or not.
+2. Validates the incoming message size is below 255 KB.
+[The size of all device-to-cloud messages must be up to 256 KB](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-d2c-guidance).
+The mapper keeps 1 KB as a buffer for the strings added by Azure.
+3. (default) Adds a current timestamp if a timestamp is not included in an incoming message. To stop this behavior, please refer to the following instruction.
+
+So, if the input is below,
+
+```json
+{
+	"temperature": 23
+}
+```
+
+the output of the mapper is
+
+```json
+{
+	"temperature": 23,
+	"time": "2021-06-01T17:24:48.709803664+02:00"
+}
+```
+
+### Configure whether adding a timestamp or not
+
+However, if you don't want to add a timestamp in the output of Azure IoT Hub Mapper, you can change the behavior by running this:
+
+```shell
+sudo tedge config az.mapper.timestamp false 
+```
+
+After changing the configuration, you need to restart the mapper service by
+
+```shell
+sudo systemctl restart tedge-mapper-az.service
+```
+
 ## Error cases
 
 When some error occurs in a mapper process, the mapper publishes a corresponded error message
@@ -95,3 +141,4 @@ $ tedge mqtt sub tedge/errors
 - Outgoing topics
     - `tedge/errors` (for errors)
     - `c8y/measurement/measurements/create` (for Cumulocity)
+    - `az/messages/events/` (for Azure IoT Hub)
