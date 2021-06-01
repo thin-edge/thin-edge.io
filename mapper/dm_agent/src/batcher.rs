@@ -8,7 +8,8 @@ use thin_edge_json::{
 use tokio::{
     select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::{self, Duration},
+    time,
+    time::Duration,
 };
 use tracing::{error, log::warn};
 
@@ -121,6 +122,9 @@ impl MessageBatcher {
         let collectd_message = CollectdMessage::parse_from(&first_message)?;
         let mut message_batch =
             MessageBatch::start_batch(collectd_message, first_message_timestamp)?;
+
+        // Creates a sleep timer future handler and does not await here
+        // for sleep to finish, but inside the select loop
         let sleep = time::sleep(self.batching_window);
         tokio::pin!(sleep);
 
