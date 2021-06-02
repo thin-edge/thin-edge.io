@@ -1,6 +1,6 @@
 use json::JsonValue;
 use log::{debug, error, info};
-use mqtt_client::{Client, Config, Message, Topic};
+use mqtt_client::{Client, Config, Message, MqttClient, Topic};
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut messages = mqtt.subscribe(in_topic.filter()).await?;
     while let Some(message) = messages.next().await {
         debug!("Mapping {:?}", message);
-        match translate(&message.payload) {
+        match translate(message.payload_trimmed()) {
             Ok(translation) => {
                 let _ = mqtt.publish(Message::new(&out_topic, translation)).await?;
             }
@@ -42,8 +42,8 @@ const C8Y_TEMPLATE_TEMPERATURE: &str = "211";
 /// Naive mapper which extracts the temperature field from a ThinEdge Json value.
 ///
 /// `{ "temperature": 12.4 }` is translated into `"211,12.4"`
-fn translate(raw_input: &Vec<u8>) -> Result<Vec<u8>, String> {
-    let input = std::str::from_utf8(raw_input).map_err(|err| format!("ERROR: {}", err))?;
+fn translate(raw_input: &[u8]) -> Result<Vec<u8>, String> {
+    let input = std::str::from_utf8(&raw_input).map_err(|err| format!("ERROR: {}", err))?;
     let json = json::parse(input).map_err(|err| format!("ERROR: {}", err))?;
     match json {
         JsonValue::Object(obj) => {

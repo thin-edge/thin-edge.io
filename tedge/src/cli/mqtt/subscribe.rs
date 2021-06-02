@@ -2,7 +2,7 @@ use crate::cli::mqtt::MqttError;
 use crate::command::{Command, ExecutionContext};
 use crate::utils::signals;
 use futures::future::FutureExt;
-use mqtt_client::{Client, Message, MessageStream, QoS, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, QoS, TopicFilter};
 use tokio::{io::AsyncWriteExt, select};
 
 pub struct MqttSubscribeCommand {
@@ -33,7 +33,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     let filter = TopicFilter::new(cmd.topic.as_str())?.qos(cmd.qos);
 
     let mut errors = mqtt.subscribe_errors();
-    let mut messages: MessageStream = mqtt.subscribe(filter).await?;
+    let mut messages = mqtt.subscribe(filter).await?;
 
     loop {
         select! {
@@ -71,13 +71,13 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
 
 async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
     if hide_topic {
-        let s = String::from_utf8(message.payload)?.to_string();
+        let s = std::str::from_utf8(message.payload_trimmed())?;
         async_println(&s).await?;
     } else {
         let s = format!(
             "[{}] {}",
             message.topic.name,
-            String::from_utf8(message.payload)?
+            std::str::from_utf8(message.payload_trimmed())?
         );
         async_println(&s).await?;
     }

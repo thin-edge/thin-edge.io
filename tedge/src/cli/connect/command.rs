@@ -6,7 +6,7 @@ use crate::services::{
 use crate::utils::paths;
 use crate::utils::users::UserManager;
 use crate::ConfigError;
-use mqtt_client::{Client, Message, Topic, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;
 use tedge_config::*;
@@ -165,7 +165,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
 
     let _task_handle = tokio::spawn(async move {
         while let Some(message) = error_response.next().await {
-            if std::str::from_utf8(&message.payload)
+            if std::str::from_utf8(message.payload_trimmed())
                 .unwrap_or("")
                 .contains("41,100,Device already existing")
             {
