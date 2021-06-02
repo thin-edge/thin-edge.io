@@ -2,34 +2,36 @@
 <pysysproject>
 	<requires-pysys>1.6.1</requires-pysys>
 	<requires-python>3.7.3</requires-python>
-	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true" />
-	<property name="tebasedir" value="${env.TEBASEDIR}" />
-	<property name="exampledir" value="${env.EXAMPLEDIR}" />
-	<property name="username" value="${env.C8YUSERNAME}" />
-	<property name="c8ypass" value="${env.C8YPASS}" />
-	<property name="tenant" value="${env.C8YTENANT}" />
-	<property name="deviceid" value="${env.C8YDEVICEID}" />
-	<property name="device" value="${env.C8YDEVICE}" />
+	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true"/>
+    <property name="tebasedir" value="${env.TEBASEDIR}" />
+    <property name="exampledir" value="${env.EXAMPLEDIR}" />
+    <property name="username" value="${env.C8YUSERNAME}" />
+    <property name="c8ypass" value="${env.C8YPASS}" />
+    <property name="tenant" value="${env.C8YTENANT}" />
+    <property name="deviceid" value="${env.C8YDEVICEID}" />
+    <property name="device" value="${env.C8YDEVICE}" />
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
-			<property name="destDir" value="__pysys_output_archives/" />
-			<property name="maxTotalSizeMB" value="1024.0" />
+			<property name="destDir" value="__pysys_output_archives/"/>
+			<property name="maxTotalSizeMB" value="1024.0"/>
 		</writer>
+
 		<writer classname="pysys.writer.outcomes.JUnitXMLResultsWriter">
-			<property name="outputDir" value="__pysys_junit_xml" />
+			<property name="outputDir" value="__pysys_junit_xml"/>
 		</writer>
-		<writer classname="pysys.writer.ci.GitHubActionsCIWriter">
-		</writer>
-		<writer classname="pysys.writer.ci.TravisCIWriter">
-		</writer>
-		<writer classname="pysys.writer.console.ConsoleSummaryResultsWriter">
-		</writer>
+
+		<writer classname="pysys.writer.ci.GitHubActionsCIWriter"></writer>
+		<writer classname="pysys.writer.ci.TravisCIWriter"></writer>
+
+		<writer classname="pysys.writer.console.ConsoleSummaryResultsWriter"></writer>
 	</writers>
+
 	<default-file-encodings>
-		<default-file-encoding pattern="run.log" encoding="utf-8" />
-		<default-file-encoding pattern="*.xml" encoding="utf-8" />
-		<default-file-encoding pattern="*.json" encoding="utf-8" />
-		<default-file-encoding pattern="*.yaml" encoding="utf-8" />
+		<default-file-encoding pattern="run.log" encoding="utf-8"/>
+
+		<default-file-encoding pattern="*.xml"  encoding="utf-8"/>
+		<default-file-encoding pattern="*.json" encoding="utf-8"/>
+		<default-file-encoding pattern="*.yaml" encoding="utf-8"/>
 	</default-file-encodings>
 	<project-help>
 	</project-help>
