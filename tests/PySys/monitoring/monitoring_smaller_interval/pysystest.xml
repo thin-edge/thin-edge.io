@@ -2,7 +2,9 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate tedge dm agent messages
+			Validate the tedge dm agent messages that are produced
+			with smaller sampling interval than the batching window.
+			Here the simulated collectd messages are used.
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

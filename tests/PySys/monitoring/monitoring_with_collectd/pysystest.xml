@@ -2,7 +2,8 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate tedge dm agent messages
+			Validate tedge dm agent messages that are produced
+			by batching the collectd messages
 		</title>
 		<purpose>
 			<![CDATA[ ]]>
