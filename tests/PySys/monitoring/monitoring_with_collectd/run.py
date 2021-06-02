@@ -53,6 +53,15 @@ class MonitoringWithCollectd(BaseTest):
             background=True,
         )
 
+        sub = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "collectd/#"],
+            #arguments=[self.tedge, "mqtt", "sub", "--no-topic", "collectd/#"],
+            stdouterr="collectd_sub",
+            background=True,
+        )
+
+
         # Wait for a small amount of time to give tedge sub time
         # to initialize and capture couple of batches of messages
         # that are published by tedge-dm-agent.
