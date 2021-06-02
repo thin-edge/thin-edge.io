@@ -35,7 +35,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
             arguments=["systemctl", "start", "tedge-dm-agent"],
             stdouterr="collectd_mapper",
         )
-        self.addCleanupFunction(self.cleanup)
+        self.addCleanupFunction(self.monitoring_cleanup)
 
     def execute(self):
         sub = self.startProcess(
@@ -122,8 +122,8 @@ class MonitoringWithSimulatedMessages(BaseTest):
         else:
             return False
 
-    def cleanup(self):
-        self.log.info("cleanup")
+    def monitoring_cleanup(self):
+        self.log.info("monitoring_cleanup")
         collectd = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "stop", "tedge-dm-agent"],
