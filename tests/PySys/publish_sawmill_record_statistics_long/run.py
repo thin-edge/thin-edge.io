@@ -37,6 +37,29 @@ class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
             background=True,
         )
 
+        # record /proc/stat
+
+        status_mosquitto = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do date; cat /proc/stat; sleep 1; done",
+            ],
+            stdouterr="proc_stat_stdout",
+            background=True,
+        )
+        # record /proc/meminfo
+
+        status_mosquitto = self.startProcess(
+            command="/bin/sh",
+            arguments=[
+                "-c",
+                "while true; do date; cat /proc/meminfo; sleep 1; done",
+            ],
+            stdouterr="proc_meminfo_stdout",
+            background=True,
+        )
+
         # record /proc/pid/status
 
         status_mosquitto = self.startProcess(
