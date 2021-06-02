@@ -4,8 +4,10 @@ use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
     tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
 };
-use crate::utils::paths;
-use crate::utils::users::UserManager;
+use crate::utils::{
+    paths,
+    users::{UserManager, ROOT_USER},
+};
 use crate::ConfigError;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::Path;
@@ -363,6 +365,7 @@ fn get_bridge_config_file_path(bridge_config: &BridgeConfig) -> Result<String, C
 }
 
 fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
@@ -383,6 +386,7 @@ fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
 }
 
 fn start_and_enable_tedge_mapper_az(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");

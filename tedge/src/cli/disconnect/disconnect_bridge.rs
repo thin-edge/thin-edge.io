@@ -27,16 +27,13 @@ impl From<Cloud> for String {
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
     pub config_file: String,
-    pub cloud_name: Cloud,
+    pub cloud: Cloud,
     pub use_mapper: bool,
 }
 
 impl Command for DisconnectBridgeCommand {
     fn description(&self) -> String {
-        format!(
-            "remove the bridge to disconnect {:?} cloud",
-            self.cloud_name
-        )
+        format!("remove the bridge to disconnect {:?} cloud", self.cloud)
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
@@ -57,7 +54,7 @@ impl DisconnectBridgeCommand {
 
         // Only C8Y changes the status of tedge-mapper
         if self.use_mapper && which("tedge_mapper").is_ok() {
-            match self.cloud_name {
+            match self.cloud {
                 Cloud::Azure => {
                     self.stop_and_disable_tedge_mapper_az(user_manager);
                 }
@@ -75,7 +72,7 @@ impl DisconnectBridgeCommand {
         let bridge_conf_path =
             paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH, &self.config_file])?;
 
-        println!("Removing {:?} bridge.\n", self.cloud_name);
+        println!("Removing {:?} bridge.\n", self.cloud);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
@@ -104,7 +101,7 @@ impl DisconnectBridgeCommand {
         println!("Applying changes to mosquitto.\n");
         if MosquittoService.is_active()? {
             MosquittoService.restart(user_manager)?;
-            println!("{:?} Bridge successfully disconnected!\n", self.cloud_name);
+            println!("{:?} Bridge successfully disconnected!\n", self.cloud);
         }
         Ok(())
     }

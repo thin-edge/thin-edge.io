@@ -18,12 +18,12 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
         let cmd = match self {
             TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_file: C8Y_CONFIG_FILENAME.into(),
-                cloud_name: Cloud::C8y,
+                cloud: Cloud::C8y,
                 use_mapper: true,
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_file: AZURE_CONFIG_FILENAME.into(),
-                cloud_name: Cloud::Azure,
+                cloud: Cloud::Azure,
                 use_mapper: true,
             },
         };
