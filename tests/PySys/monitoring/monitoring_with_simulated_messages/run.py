@@ -4,11 +4,11 @@ import time
 import json
 
 """
-Validate tedge-dm-agent  messages that are published
+Validate collectd-mapper  messages that are published
 on tedge/measurements
 
 Given a configured system
-When we start the tedge-dm-agent with sudo in the background
+When we start the collectd-mapper with sudo in the background
 When we start tedge sub with sudo in the background
 When we start two publishers to publish the simulated collectd messages
 Wait for couple of seconds to publish couple of batch of messages
@@ -32,7 +32,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
 
         collectd_mapper = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "start", "tedge-dm-agent"],
+            arguments=["systemctl", "start", "collectd-mapper"],
             stdouterr="collectd_mapper",
         )
         self.addCleanupFunction(self.monitoring_cleanup)
@@ -65,7 +65,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
             stdouterr="tedge_pres",
         )
 
-        # wait for tedge-dm-agent to batch messages
+        # wait for collectd-mapper to batch messages
         time.sleep(1)
 
         # Kill the subscriber process explicitly with sudo as PySys does
@@ -126,6 +126,6 @@ class MonitoringWithSimulatedMessages(BaseTest):
         self.log.info("monitoring_cleanup")
         collectd = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "stop", "tedge-dm-agent"],
+            arguments=["systemctl", "stop", "collectd-mapper"],
             stdouterr="collectd_mapper",
         )

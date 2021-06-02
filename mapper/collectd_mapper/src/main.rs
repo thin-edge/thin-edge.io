@@ -10,7 +10,7 @@ use crate::monitor::{DeviceMonitor, DeviceMonitorConfig};
 use std::path::PathBuf;
 use tedge_config::*;
 
-const APP_NAME: &str = "tedge-dm-agent";
+const APP_NAME: &str = "collectd-mapper";
 const DEFAULT_LOG_LEVEL: &str = "warn";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
