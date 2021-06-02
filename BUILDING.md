@@ -2,7 +2,9 @@
 
 ## Requirements
 
-You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS and FreeBSD successfully), our recommended setup and required tools:
+You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully). 
+
+Our recommended setup and required tools are:
 
 * Ubuntu 20.04 or Debian 10.9 (Buster)
 * git
