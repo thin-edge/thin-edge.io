@@ -19,26 +19,28 @@ Then we validate the  messages in the output of tedge sub,
 
 
 class MonitoringWithSimulatedMessages(BaseTest):
-    def execute(self):
-        tedge = "/usr/bin/tedge"
-        sudo = "/usr/bin/sudo"
+    def setup(self):
+        self.tedge = "/usr/bin/tedge"
+        self.sudo = "/usr/bin/sudo"
 
-        # stop collecd to avoid mixup of messages
+        # stop collectd to avoid mixup of  messages
         collectd = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["systemctl", "stop", "collectd"],
             stdouterr="collectd",
         )
 
         collectd_mapper = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["systemctl", "start", "tedge-dm-agent"],
             stdouterr="collectd_mapper",
         )
+        self.addCleanupFunction(self.cleanup)
 
+    def execute(self):
         sub = self.startProcess(
-            command=sudo,
-            arguments=[tedge, "mqtt", "sub", "--no-topic", "tedge/#"],
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "tedge/#"],
             stdouterr="tedge_sub",
             background=True,
         )
@@ -50,15 +52,15 @@ class MonitoringWithSimulatedMessages(BaseTest):
         time.sleep(0.1)
 
         pub = self.startProcess(
-            command=sudo,
-            arguments=[tedge, "mqtt", "pub",
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "pub",
                        "collectd/host/temperature/temp", "123435445:25.5"],
             stdouterr="tedge_temp",
         )
 
         pub = self.startProcess(
-            command=sudo,
-            arguments=[tedge, "mqtt", "pub",
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "pub",
                        "collectd/host/pressure/pres", "12345678:500.5"],
             stdouterr="tedge_pres",
         )
@@ -69,7 +71,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
         # Kill the subscriber process explicitly with sudo as PySys does
         # not have the rights to do it
         kill = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["killall", "tedge"],
             stdouterr="kill_out",
         )
@@ -84,11 +86,16 @@ class MonitoringWithSimulatedMessages(BaseTest):
         for line in lines:
             self.js_msg = json.loads(line)
             if not self.validate_time():
-                return False
+                reason = "time validation failed in message: " + str(line)
+                self.abort(False, reason)
             if not self.validate_temperature():
-                return False
+                reason = "temperature stat validation failed in message: " + \
+                    str(line)
+                self.abort(False, reason)
             if not self.validate_pressure():
-                return False
+                reason = "pressure stat validation failed in message: " + \
+                    str(line)
+                self.abort(False, reason)
         return True
 
     def validate_time(self):
@@ -114,3 +121,11 @@ class MonitoringWithSimulatedMessages(BaseTest):
                 return False
         else:
             return False
+
+    def cleanup(self):
+        self.log.info("cleanup")
+        collectd = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "stop", "tedge-dm-agent"],
+            stdouterr="collectd_mapper",
+        )

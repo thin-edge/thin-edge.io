@@ -27,27 +27,28 @@ class MonitoringWithCollectd(BaseTest):
         self.time_cnt = 0
         self.disk_cnt = 0
 
-    def execute(self):
-        tedge = "/usr/bin/tedge"
-        sudo = "/usr/bin/sudo"
+        self.tedge = "/usr/bin/tedge"
+        self.sudo = "/usr/bin/sudo"
 
         collectd = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["systemctl", "start", "collectd"],
             stdouterr="collectd",
         )
 
         collectd_mapper = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["systemctl", "start", "tedge-dm-agent"],
             stdouterr="collectd_mapper",
         )
+        self.addCleanupFunction(self.cleanup)
+
+    def execute(self):
 
         time.sleep(0.1)
-
         sub = self.startProcess(
-            command=sudo,
-            arguments=[tedge, "mqtt", "sub", "--no-topic", "tedge/#"],
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "tedge/#"],
             stdouterr="tedge_sub",
             background=True,
         )
@@ -60,7 +61,7 @@ class MonitoringWithCollectd(BaseTest):
         # Kill the subscriber process explicitly with sudo as PySys does
         # not have the rights to do it
         kill = self.startProcess(
-            command=sudo,
+            command=self.sudo,
             arguments=["killall", "tedge"],
             stdouterr="kill_out",
         )
@@ -76,18 +77,23 @@ class MonitoringWithCollectd(BaseTest):
         for line in lines:
             self.js_msg = json.loads(line)
             if not self.validate_cpu():
-                return False
+                reason = "cpu stat validation failed in message: " + str(line)
+                self.abort(False, reason)
             if not self.validate_time():
-                return False
+                reason = "time validation failed in message: " + str(line)
+                self.abort(False, reason)
             if not self.validate_memory():
-                return False
+                reason = "memory stat validation failed in message: " + \
+                    str(line)
+                self.abort(False, reason)
             # validate disk stats if the entries are present, as the disk stats collection window is bigger
             if "df-root" in self.js_msg:
                 self.validate_disk()
         if self.time_cnt == self.cpu_cnt == self.memory_cnt and self.disk_cnt > 0 and self.disk_cnt <= 3:
             return True
         else:
-            return False
+            reason = "disk stat validation failed in message: " + str(line)
+            self.abort(False, reason)
 
     def validate_cpu(self):
         if self.js_msg["cpu"]:
@@ -122,3 +128,18 @@ class MonitoringWithCollectd(BaseTest):
             return True
         else:
             return False
+
+    def cleanup(self):
+        self.log.info("cleanup")
+
+        collectd = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "stop", "tedge-dm-agent"],
+            stdouterr="collectd_mapper",
+        )
+
+        collectd = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "stop", "collectd"],
+            stdouterr="collectd",
+        )
