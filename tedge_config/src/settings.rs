@@ -97,7 +97,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
 pub struct AzureUrlSetting;
 
 impl ConfigSetting for AzureUrlSetting {
-    const KEY: &'static str = "azure.url";
+    const KEY: &'static str = "az.url";
 
     const DESCRIPTION: &'static str = concat!(
         "Tenant endpoint URL of Azure IoT tenant. ",
@@ -116,7 +116,7 @@ impl ConfigSetting for AzureUrlSetting {
 pub struct AzureRootCertPathSetting;
 
 impl ConfigSetting for AzureRootCertPathSetting {
-    const KEY: &'static str = "azure.root.cert.path";
+    const KEY: &'static str = "az.root.cert.path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Azure IoT root certificate(s) are located. ",
@@ -124,6 +124,25 @@ impl ConfigSetting for AzureRootCertPathSetting {
     );
 
     type Value = FilePath;
+}
+
+///
+/// Boolean whether Azure mapper should add timestamp if timestamp is not added in the incoming payload.
+///
+/// Example: true
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AzureMapperTimestamp;
+
+impl ConfigSetting for AzureMapperTimestamp {
+    const KEY: &'static str = "az.mapper.timestamp";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Boolean whether Azure mapper should add timestamp or not. ",
+        "Example: true"
+    );
+
+    type Value = Flag;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -138,23 +157,4 @@ impl ConfigSetting for MqttPortSetting {
     );
 
     type Value = Port;
-}
-
-///
-/// Boolean whether Azure mapper should add timestamp if timestamp is not added in the incoming payload.
-///
-/// Example: true
-///
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct AzureMapperTimestamp;
-
-impl ConfigSetting for AzureMapperTimestamp {
-    const KEY: &'static str = "azure.mapper.timestamp";
-
-    const DESCRIPTION: &'static str = concat!(
-        "Boolean whether Azure mapper should add timestamp or not. ",
-        "Example: true"
-    );
-
-    type Value = Flag;
 }

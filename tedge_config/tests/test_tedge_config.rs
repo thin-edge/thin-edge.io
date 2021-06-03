@@ -16,7 +16,7 @@ url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
 connect = "true"
 
-[azure]
+[az]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 connect = "false"
@@ -75,9 +75,10 @@ cert_path = "/path/to/cert"
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
 
-[azure]
+[az]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
+mapper_timestamp = true
 
 [mqtt]
 port = 1883
@@ -393,7 +394,7 @@ cert_path = "/path/to/cert"
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
 
-[azure]
+[az]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 
@@ -471,7 +472,7 @@ cert_path = "/path/to/cert"
 url = "your-tenant.cumulocity.com"
 root_cert_path = "/path/to/c8y/root/cert"
 
-[azure]
+[az]
 url = "MyAzure.azure-devices.net"
 root_cert_path = "/path/to/azure/root/cert"
 "#;
