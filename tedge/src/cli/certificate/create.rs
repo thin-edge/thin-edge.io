@@ -85,9 +85,9 @@ fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_users::UserManager;
     use assert_matches::assert_matches;
     use std::fs;
+    use tedge_users::UserManager;
     use tempfile::*;
 
     #[test]

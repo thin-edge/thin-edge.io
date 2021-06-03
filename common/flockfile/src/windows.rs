@@ -1,4 +1,3 @@
-
 use std::{
     io,
     path::{Path, PathBuf},
@@ -18,9 +17,7 @@ pub struct Flockfile {
 impl Flockfile {
     pub fn new_lock(lock_name: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
         let path = Path::new("/no/lock/on/windows").join(lock_name);
-        Ok(Flockfile {
-            path: path,
-        })
+        Ok(Flockfile { path: path })
     }
 
     pub fn unlock(self) -> Result<(), io::Error> {
