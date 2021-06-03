@@ -7,6 +7,7 @@ pub struct CollectdMessage<'a> {
     pub metric_group_key: &'a str,
     pub metric_key: &'a str,
     pub metric_value: f64,
+    pub timestamp: f64,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -23,11 +24,17 @@ pub enum CollectdError {
 
 impl<'a> CollectdMessage<'a> {
     #[cfg(test)]
-    pub fn new(metric_group_key: &'a str, metric_key: &'a str, metric_value: f64) -> Self {
+    pub fn new(
+        metric_group_key: &'a str,
+        metric_key: &'a str,
+        metric_value: f64,
+        timestamp: f64,
+    ) -> Self {
         Self {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         }
     }
 
@@ -47,6 +54,7 @@ impl<'a> CollectdMessage<'a> {
             metric_group_key: collectd_topic.metric_group_key,
             metric_key: collectd_topic.metric_key,
             metric_value: collectd_payload.metric_value,
+            timestamp: collectd_payload.timestamp,
         })
     }
 }
@@ -80,7 +88,7 @@ impl<'a> CollectdTopic<'a> {
 
 #[derive(Debug)]
 struct CollectdPayload {
-    _timestamp: f64,
+    timestamp: f64,
     metric_value: f64,
 }
 
@@ -109,7 +117,7 @@ impl CollectdPayload {
             CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
         })?;
 
-        let _timestamp = _timestamp.parse::<f64>().map_err(|_err| {
+        let timestamp = _timestamp.parse::<f64>().map_err(|_err| {
             CollectdPayloadError::InvalidMeasurementTimestamp(_timestamp.to_string())
         })?;
 
@@ -123,7 +131,7 @@ impl CollectdPayload {
 
         match iter.next() {
             None => Ok(CollectdPayload {
-                _timestamp,
+                timestamp,
                 metric_value,
             }),
             Some(_) => Err(CollectdPayloadError::InvalidMeasurementPayloadFormat(
@@ -151,11 +159,13 @@ mod tests {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
         assert_eq!(metric_value, 32.5);
+        assert_eq!(timestamp, 123456789.0);
     }
 
     #[test]
@@ -169,11 +179,13 @@ mod tests {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
         assert_eq!(metric_value, 32.5);
+        assert_eq!(timestamp, 123456789.0);
     }
 
     #[test]
@@ -268,5 +280,21 @@ mod tests {
         let collectd_payload = CollectdPayload::parse_from(&payload).unwrap();
 
         assert_eq!(collectd_payload.metric_value, i128::MIN as f64);
+    }
+
+    #[test]
+    fn very_large_timestamp() {
+        let payload: Vec<u8> = format!("{}:0.1", u128::MAX).into();
+        let collectd_payload = CollectdPayload::parse_from(&payload).unwrap();
+
+        assert_eq!(collectd_payload.timestamp, u128::MAX as f64);
+    }
+
+    #[test]
+    fn very_small_timestamp() {
+        let payload: Vec<u8> = format!("{}:0.1", i128::MIN).into();
+        let collectd_payload = CollectdPayload::parse_from(&payload).unwrap();
+
+        assert_eq!(collectd_payload.timestamp, i128::MIN as f64);
     }
 }
