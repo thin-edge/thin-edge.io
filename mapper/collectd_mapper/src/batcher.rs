@@ -148,7 +148,6 @@ impl MessageBatcher {
                         None => break
                     }
                 }
-
             }
         }
 
@@ -163,6 +162,62 @@ impl MessageBatcher {
             .next()
             .await
             .map(|message| (message, self.clock.now()))
+    }
+}
+
+enum StreamState {
+    Closed,
+    NothingYet {
+        pending: Box<dyn MqttMessageStream>,
+    },
+    Message {
+        received: Message,
+        pending: Box<dyn MqttMessageStream>,
+    },
+}
+
+impl StreamState {
+    pub fn new(pending: Box<dyn MqttMessageStream>) -> StreamState {
+        StreamState::NothingYet { pending }
+    }
+
+    pub fn already_received(&self) -> Option<&Message> {
+        match self {
+            StreamState::Closed | StreamState::NothingYet { .. } => None,
+            StreamState::Message { received, .. } => Some(received),
+        }
+    }
+
+    pub async fn next(self) -> Self {
+        match self {
+            StreamState::Closed => StreamState::Closed,
+            StreamState::NothingYet { mut pending } | StreamState::Message { mut pending, .. } => {
+                match pending.next().await {
+                    None => StreamState::Closed,
+                    Some(received) => StreamState::Message { received, pending },
+                }
+            }
+        }
+    }
+
+    pub async fn next_unless_timeout(self, timeout: Duration) -> Self {
+        match self {
+            StreamState::Closed => StreamState::Closed,
+            StreamState::NothingYet { mut pending } | StreamState::Message { mut pending, .. } => {
+                select! {
+                    _ = time::sleep(timeout) => {
+                        StreamState::NothingYet { pending }
+                    }
+
+                    maybe_received = pending.next() => {
+                        match maybe_received {
+                            None => StreamState::Closed,
+                            Some(received) => StreamState::Message { received, pending },
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
