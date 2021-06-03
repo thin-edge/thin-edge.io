@@ -1,7 +1,8 @@
 use crate::command::{Command, ExecutionContext};
-use crate::utils::{paths::*, users::*};
+use crate::utils::paths::*;
 
 use tedge_config::*;
+use tedge_users::UserManager;
 
 use super::error::CertError;
 
@@ -27,7 +28,7 @@ impl Command for RemoveCertCmd {
 
 impl RemoveCertCmd {
     fn remove_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(crate::utils::users::BROKER_USER)?;
+        let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
         std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
         std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 

@@ -2135,12 +2135,12 @@ dependencies = [
  "serde",
  "structopt",
  "tedge_config",
+ "tedge_users",
  "tempfile",
  "thiserror",
  "tokio",
  "toml",
  "url",
- "users",
  "which",
 ]
 
@@ -2180,6 +2180,14 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "users",
+]
+
+[[package]]
+name = "tedge_users"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
  "users",
 ]
 
