@@ -7,7 +7,7 @@ use std::{
 
 use tempfile::{NamedTempFile, PersistError};
 
-use super::users::UserManager;
+use tedge_users::UserManager;
 
 const ETC_PATH: &str = "/etc";
 pub const TEDGE_ETC_DIR: &str = "tedge";

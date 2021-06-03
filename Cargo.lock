@@ -378,13 +378,13 @@ dependencies = [
  "mockall",
  "mqtt_client",
  "tedge_config",
+ "tedge_users",
  "thin_edge_json",
  "thiserror",
  "tokio",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "users",
 ]
 
 [[package]]
@@ -2135,12 +2135,12 @@ dependencies = [
  "serde",
  "structopt",
  "tedge_config",
+ "tedge_users",
  "tempfile",
  "thiserror",
  "tokio",
  "toml",
  "url",
- "users",
  "which",
 ]
 
@@ -2174,12 +2174,20 @@ dependencies = [
  "mqtt_client",
  "serde_json",
  "tedge_config",
+ "tedge_users",
  "thin_edge_json",
  "thiserror",
  "tokio",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tedge_users"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
  "users",
 ]
 

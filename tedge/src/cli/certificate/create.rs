@@ -1,5 +1,5 @@
 use crate::command::{Command, ExecutionContext};
-use crate::utils::{paths, users};
+use crate::utils::paths;
 use certificate::{KeyCertPair, NewCertificateConfig};
 use std::{
     fs::{File, OpenOptions},
@@ -7,6 +7,7 @@ use std::{
     path::Path,
 };
 use tedge_config::*;
+use tedge_users;
 
 use super::error::CertError;
 
@@ -38,9 +39,9 @@ impl CreateCertCmd {
     fn create_test_certificate(
         &self,
         config: &NewCertificateConfig,
-        user_manager: &users::UserManager,
+        user_manager: &tedge_users::UserManager,
     ) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(users::BROKER_USER)?;
+        let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
 
         paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
@@ -84,9 +85,9 @@ fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::users::UserManager;
     use assert_matches::assert_matches;
     use std::fs;
+    use tedge_users::UserManager;
     use tempfile::*;
 
     #[test]
