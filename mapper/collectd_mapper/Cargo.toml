@@ -1,5 +1,5 @@
 [package]
-name = "tedge_dm_agent"
+name = "collectd_mapper"
 version = "0.1.0"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
@@ -9,11 +9,11 @@ description = "The daemon providing monitoring and remote management capabilitie
 
 [package.metadata.deb]
 depends = "tedge"
-maintainer-scripts = "configuration/debian/tedge_dm_agent"
+maintainer-scripts = "configuration/debian/collectd_mapper"
 
 [package.metadata.deb.systemd-units]
 unit-scripts = "../../configuration/init/systemd"
-unit-name = "tedge-dm-agent"
+unit-name = "collectd-mapper"
 enable = false
 start = false
 stop-on-upgrade = false
