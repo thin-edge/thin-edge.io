@@ -33,7 +33,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
 async-trait = "0.1"
 thiserror = "1.0"
-users = "0.11"
+tedge_users = { path = "../../common/tedge_users" }
 
 [dev-dependencies]
 assert-json-diff = "2.0"

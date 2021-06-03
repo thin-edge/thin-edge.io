@@ -121,7 +121,7 @@ fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, Flockf
 }
 
 fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
-    let tedge_config_location = if running_as_root() {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(
@@ -130,11 +130,6 @@ fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     Ok(config_repository)
-}
-
-// Copied from tedge/src/utils/users/unix.rs. In the future, it would be good to separate it from tedge crate.
-fn running_as_root() -> bool {
-    users::get_current_uid() == 0
 }
 
 // Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.
