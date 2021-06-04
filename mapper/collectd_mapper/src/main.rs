@@ -10,7 +10,7 @@ use crate::monitor::{DeviceMonitor, DeviceMonitorConfig};
 use std::path::PathBuf;
 use tedge_config::*;
 
-const APP_NAME: &str = "tedge-dm-agent";
+const APP_NAME: &str = "collectd-mapper";
 const DEFAULT_LOG_LEVEL: &str = "warn";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
@@ -49,7 +49,7 @@ fn config_repository() -> anyhow::Result<TEdgeConfigRepository> {
 }
 
 fn config_location() -> anyhow::Result<TEdgeConfigLocation> {
-    let tedge_config_location = if running_as_root() {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(
@@ -57,11 +57,6 @@ fn config_location() -> anyhow::Result<TEdgeConfigLocation> {
         )
     };
     Ok(tedge_config_location)
-}
-
-// Copied from tedge/src/utils/users/unix.rs. In the future, it would be good to separate it from tedge crate.
-fn running_as_root() -> bool {
-    users::get_current_uid() == 0
 }
 
 // Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.

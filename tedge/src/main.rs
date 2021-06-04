@@ -17,11 +17,11 @@ use command::{BuildCommand, BuildContext, ExecutionContext};
 fn main() -> anyhow::Result<()> {
     let context = ExecutionContext::new();
 
-    let _user_guard = context.user_manager.become_user(utils::users::TEDGE_USER)?;
+    let _user_guard = context.user_manager.become_user(tedge_users::TEDGE_USER)?;
 
     let opt = cli::Opt::from_args();
 
-    let tedge_config_location = if crate::utils::users::UserManager::running_as_root() {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(
