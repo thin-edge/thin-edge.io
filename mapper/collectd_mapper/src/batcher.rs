@@ -1,4 +1,3 @@
-use clock::{Clock, Timestamp};
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
 use thin_edge_json::{
@@ -6,34 +5,40 @@ use thin_edge_json::{
     serialize::ThinEdgeJsonSerializer,
 };
 use tokio::{
-    select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time,
     time::Duration,
 };
 use tracing::{error, log::warn};
 
 use crate::collectd::CollectdMessage;
 use crate::error::*;
+use chrono::TimeZone;
 
 #[derive(Debug)]
 pub struct MessageBatch {
+    min_timestamp: f64,
+    max_timestamp: f64,
     message_grouper: MeasurementGrouper,
 }
 
 impl MessageBatch {
-    fn start_batch(
-        collectd_message: CollectdMessage,
-        timestamp: Timestamp,
-    ) -> Result<Self, DeviceMonitorError> {
-        let mut message_grouper = MeasurementGrouper::new();
-        message_grouper.timestamp(&timestamp)?;
-
-        let mut message_batch = Self { message_grouper };
+    fn start_batch(collectd_message: CollectdMessage) -> Result<Self, DeviceMonitorError> {
+        let message_grouper = MeasurementGrouper::new();
+        let timestamp = collectd_message.timestamp;
+        let mut message_batch = Self {
+            min_timestamp: timestamp,
+            max_timestamp: timestamp,
+            message_grouper,
+        };
 
         message_batch.add_to_batch(collectd_message)?;
 
         Ok(message_batch)
+    }
+
+    fn accept(&self, collectd_message: &CollectdMessage, batching_window: Duration) -> bool {
+        let delta = collectd_message.timestamp - self.min_timestamp;
+        delta < batching_window.as_secs_f64()
     }
 
     fn add_to_batch(
@@ -46,11 +51,25 @@ impl MessageBatch {
             collectd_message.metric_value,
         )?;
 
+        let timestamp = collectd_message.timestamp;
+        if timestamp > self.max_timestamp {
+            self.max_timestamp = timestamp;
+        }
+
         Ok(())
     }
 
-    fn end_batch(self) -> MeasurementGrouper {
-        self.message_grouper
+    fn end_batch(mut self) -> Result<MeasurementGrouper, DeviceMonitorError> {
+        let millis = (1000.0 * self.min_timestamp).floor() as i64;
+        let timestamp = chrono::Local
+            .timestamp_millis_opt(millis)
+            .single()
+            .ok_or_else(|| DeviceMonitorError::InvalidUnixTimestamp { timestamp: self.min_timestamp })?;
+        let timestamp_tz = timestamp.with_timezone(timestamp.offset());
+
+        self.message_grouper.timestamp(&timestamp_tz)?;
+
+        Ok(self.message_grouper)
     }
 }
 
@@ -59,7 +78,7 @@ pub struct MessageBatcher {
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
     batching_window: Duration,
-    clock: Arc<dyn Clock>,
+    batching_timeout: Duration,
 }
 
 impl MessageBatcher {
@@ -68,47 +87,44 @@ impl MessageBatcher {
         mqtt_client: Arc<dyn MqttClient>,
         batching_window: Duration,
         source_topic_filter: TopicFilter,
-        clock: Arc<dyn Clock>,
     ) -> Self {
+        let batching_timeout = batching_window / 5;
         Self {
             sender,
             mqtt_client,
             source_topic_filter,
             batching_window,
-            clock,
+            batching_timeout,
         }
     }
 
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let mut messages = self
-            .mqtt_client
-            .subscribe(self.source_topic_filter.clone())
-            .await?;
+        let mut messages = CollectdStream::new(
+            self.mqtt_client
+                .subscribe(self.source_topic_filter.clone())
+                .await?,
+        );
 
         loop {
-            match self.receive_message(messages.as_mut()).await {
-                Some((message, timestamp)) => {
-                    // Build a message batch until the batching window times out and return the batch
-                    let message_batch_result = self
-                        .build_message_batch_with_timeout(message, timestamp, messages.as_mut())
-                        .await;
+            if let Some(message) = messages.take_received_message() {
+                // Build a message batch until the batching window times out and return the batch
+                let message_batch_result = self
+                    .build_message_batch_with_timeout(message, &mut messages)
+                    .await;
 
-                    match message_batch_result {
-                        Ok(message_batch) => {
-                            // Send the current batch to the batch processor
-                            let _ = self.sender.send(message_batch).map_err(|err| {
-                                error!("Error while publishing a message batch: {}", err)
-                            });
-                        }
-                        Err(err) => {
-                            error!("Error while building a message batch: {}", err);
-                        }
+                match message_batch_result {
+                    Ok(message_batch) => {
+                        // Send the current batch to the batch processor
+                        let _ = self.sender.send(message_batch).map_err(|err| {
+                            error!("Error while publishing a message batch: {}", err)
+                        });
+                    }
+                    Err(err) => {
+                        error!("Error while building a message batch: {}", err);
                     }
                 }
-                None => {
-                    //If the message batching loop returns, it means the MQTT connection has closed
-                    error!("MQTT connection closed. Retrying...");
-                }
+            } else {
+                messages.expect_next().await;
             }
         }
     }
@@ -116,107 +132,67 @@ impl MessageBatcher {
     async fn build_message_batch_with_timeout(
         &self,
         first_message: Message,
-        first_message_timestamp: Timestamp,
-        messages: &mut dyn MqttMessageStream,
+        messages: &mut CollectdStream,
     ) -> Result<MeasurementGrouper, DeviceMonitorError> {
         let collectd_message = CollectdMessage::parse_from(&first_message)?;
         let mut message_batch =
-            MessageBatch::start_batch(collectd_message, first_message_timestamp)?;
-
-        // Creates a sleep timer future handler and does not await here
-        // for sleep to finish, but inside the select loop
-        let sleep = time::sleep(self.batching_window);
-        tokio::pin!(sleep);
+            MessageBatch::start_batch(collectd_message)?;
 
         loop {
-            select! {
-                _ = &mut sleep => {
-                        break;
-                }
-                maybe_message = self.receive_message(messages) => {
-                    match maybe_message {
-                        Some((message, _timestamp)) => {
-                            let collectd_message = match CollectdMessage::parse_from(&message) {
-                                Ok(message) => message,
-                                Err(err) => {
-                                    error!("Error parsing collectd message: {}", err);
-                                    continue;   // Even if one message is faulty, we skip that one and keep building the batch
-                                },
-                            };
-                            message_batch.add_to_batch(collectd_message)?;
-                        }
-                        None => break
-                    }
-                }
+            messages.expect_next_with_timeout(self.batching_timeout).await;
+
+            let message = match messages.received_message() {
+                Some(message) => message,
+                None => break, // No message received within batching_timeout seconds
+            };
+
+            let collectd_message = match CollectdMessage::parse_from(message) {
+                Ok(message) => message,
+                Err(err) => {
+                    error!("Error parsing collectd message: {}", err);
+                    continue;   // Even if one message is faulty, we skip that one and keep building the batch
+                },
+            };
+
+            if message_batch.accept(&collectd_message, self.batching_window) {
+                message_batch.add_to_batch(collectd_message)?;
+            } else {
+                break; // The received message is not batched but kept in the messages stream
             }
         }
 
-        Ok(message_batch.end_batch())
-    }
-
-    async fn receive_message(
-        &self,
-        messages: &mut dyn MqttMessageStream,
-    ) -> Option<(Message, Timestamp)> {
-        messages
-            .next()
-            .await
-            .map(|message| (message, self.clock.now()))
+        Ok(message_batch.end_batch()?)
     }
 }
 
-enum StreamState {
-    Closed,
-    NothingYet {
-        pending: Box<dyn MqttMessageStream>,
-    },
-    Message {
-        received: Message,
-        pending: Box<dyn MqttMessageStream>,
-    },
+struct CollectdStream {
+    messages: Box<dyn MqttMessageStream>,
+    already_received: Option<Message>,
 }
 
-impl StreamState {
-    pub fn new(pending: Box<dyn MqttMessageStream>) -> StreamState {
-        StreamState::NothingYet { pending }
-    }
-
-    pub fn already_received(&self) -> Option<&Message> {
-        match self {
-            StreamState::Closed | StreamState::NothingYet { .. } => None,
-            StreamState::Message { received, .. } => Some(received),
+impl CollectdStream {
+    pub fn new(messages: Box<dyn MqttMessageStream>) -> CollectdStream {
+        CollectdStream {
+            messages,
+            already_received: None,
         }
     }
 
-    pub async fn next(self) -> Self {
-        match self {
-            StreamState::Closed => StreamState::Closed,
-            StreamState::NothingYet { mut pending } | StreamState::Message { mut pending, .. } => {
-                match pending.next().await {
-                    None => StreamState::Closed,
-                    Some(received) => StreamState::Message { received, pending },
-                }
-            }
-        }
+    pub fn received_message(&self) -> Option<&Message> {
+        self.already_received.as_ref()
     }
 
-    pub async fn next_unless_timeout(self, timeout: Duration) -> Self {
-        match self {
-            StreamState::Closed => StreamState::Closed,
-            StreamState::NothingYet { mut pending } | StreamState::Message { mut pending, .. } => {
-                select! {
-                    _ = time::sleep(timeout) => {
-                        StreamState::NothingYet { pending }
-                    }
+    pub fn take_received_message(&mut self) -> Option<Message> {
+        self.already_received.take()
+    }
 
-                    maybe_received = pending.next() => {
-                        match maybe_received {
-                            None => StreamState::Closed,
-                            Some(received) => StreamState::Message { received, pending },
-                        }
-                    }
-                }
-            }
+    pub async fn expect_next(&mut self) {
+        self.already_received = self.messages.next().await;
+    }
+
+    pub async fn expect_next_with_timeout(&mut self, timeout: Duration) {
+        if let Err(_timeout) = tokio::time::timeout(timeout, self.expect_next()).await {
+            self.already_received = None
         }
     }
 }
@@ -270,7 +246,6 @@ mod tests {
 
     use super::*;
     use assert_matches::assert_matches;
-    use clock::WallClock;
     use futures::future::{pending, ready};
     use mockall::Sequence;
     use mqtt_client::MockMqttClient;
@@ -281,24 +256,29 @@ mod tests {
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let collectd_message = CollectdMessage::new("temperature", "value", 32.5, 1.0);
-        let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
+        let collectd_time = 1622820786.0;
+        let batch_time = chrono::FixedOffset::east(1 * 3600)
+            .ymd(2021, 6, 4)
+            .and_hms(16, 33, 6);
 
-        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, 1.0);
+        let collectd_message = CollectdMessage::new("temperature", "value", 32.5, collectd_time);
+        let mut message_batch = MessageBatch::start_batch(collectd_message)?;
+
+        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, collectd_time+0.01);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, 1.0);
+        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, collectd_time+0.02);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("pressure", "value", 98.2, 1.0);
+        let collectd_message = CollectdMessage::new("pressure", "value", 98.2, collectd_time+0.03);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0, 1.0);
+        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0, 1622820786.04);
         message_batch.add_to_batch(collectd_message)?;
 
-        let message_grouper = message_batch.end_batch();
+        let message_grouper = message_batch.end_batch()?;
 
-        assert_matches!(message_grouper.timestamp, Some(_));
+        assert_eq!(message_grouper.timestamp, Some(batch_time));
 
         assert_eq!(
             message_grouper.get_measurement_value(Some("temperature"), "value"),
@@ -412,19 +392,19 @@ mod tests {
             .expect_next()
             .returning(|| Box::pin(pending())); // Block the stream with a pending future
 
-        let clock = Arc::new(WallClock);
         let builder = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
             Duration::from_millis(500),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
-            clock.clone(),
         );
 
-        let first_message = message_stream.next().await.unwrap();
+        let mut collectd_stream = CollectdStream::new(Box::new(message_stream));
+        collectd_stream.expect_next().await;
+        let first_message = collectd_stream.take_received_message().unwrap();
 
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, clock.now(), &mut message_stream)
+            .build_message_batch_with_timeout(first_message,  &mut collectd_stream)
             .await?;
 
         assert_eq!(
@@ -449,23 +429,24 @@ mod tests {
 
         let mqtt_client = build_mock_mqtt_client();
 
-        let mut message_stream = build_message_stream_from_messages(vec![
+        let message_stream = build_message_stream_from_messages(vec![
             ("collectd/localhost/temperature/value", 32.5),
             ("collectd/pressure/value", 98.0), // Erraneous collectd message with invalid topic
             ("collectd/localhost/speed/value", 350.0),
         ]);
 
-        let first_message = message_stream.next().await.unwrap();
-        let clock = WallClock;
+        let mut collectd_stream = CollectdStream::new(Box::new(message_stream));
+        collectd_stream.expect_next().await;
+        let first_message = collectd_stream.take_received_message().unwrap();
+
         let builder = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
             Duration::from_millis(1000),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
-            Arc::new(clock.clone()),
         );
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, clock.now(), &mut message_stream)
+            .build_message_batch_with_timeout(first_message, &mut collectd_stream)
             .await?;
 
         assert_eq!(
@@ -490,24 +471,22 @@ mod tests {
 
         let mqtt_client = build_mock_mqtt_client();
 
-        let mut message_stream = build_message_stream_from_messages(vec![]);
+        let message_stream = build_message_stream_from_messages(vec![]);
+        let mut collectd_stream = CollectdStream::new(Box::new(message_stream));
 
         let topic = Topic::new("collectd/host/group/key")?;
         let invalid_collectd_message = Message::new(&topic, "123456789"); // Invalid payload
 
-        let clock = Arc::new(WallClock);
         let builder = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
             Duration::from_millis(1000),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
-            clock.clone(),
         );
         let result = builder
             .build_message_batch_with_timeout(
                 invalid_collectd_message,
-                clock.now(),
-                &mut message_stream,
+                &mut collectd_stream
             )
             .await;
 
