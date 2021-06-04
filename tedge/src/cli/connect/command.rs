@@ -178,9 +178,17 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     for i in 0..2 {
         print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        // 100: Device creation
-        mqtt.publish(Message::new(&c8y_msg_pub_topic, "100"))
-            .await?;
+        if timeout(
+            RESPONSE_TIMEOUT,
+            // 100: Device creation
+            mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
+        )
+        .await
+        .is_err()
+        {
+            println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+            return Err(ConnectError::TimeoutElapsedError);
+        }
 
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
         match fut.await {
@@ -234,8 +242,16 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
         }
     });
 
-    mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string()))
-        .await?;
+    if timeout(
+        RESPONSE_TIMEOUT,
+        mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string())),
+    )
+    .await
+    .is_err()
+    {
+        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+        return Err(ConnectError::TimeoutElapsedError);
+    }
 
     let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
     match fut.await {
