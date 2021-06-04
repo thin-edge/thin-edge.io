@@ -18,27 +18,51 @@ jobs:
         - name: checkout
           uses: actions/checkout@v2
 
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-amd64
-            path: debian-package_unpack
+# https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
+#- name: download workflow artifact
+#  uses: benday-inc/download-latest-artifact@main
+#  with:
+#     token: ${{ secrets.TOKEN_WITH_PERMISSIONS }}'
+#     repository_owner: 'benday'
+#     repository_name: 'actionsdemo'
+#     workflow_name: 'my-workflow'
+#     branch_name: 'master'
+#     download_path: '${{ github.workspace }}/temp'
+#     download_filename: 'actionsdemo-artifact.zip'
 
         - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
+          uses: benday-inc/download-latest-artifact@main
+          # https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
           with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_amd64
-            path: examples
+             repository_owner: 'abelikt'
+             repository_name: 'thin-edge.io'
+             workflow_name: 'build-workflow'
+             branch_name: 'continuos_integration'
+             download_path: 'debian-package_unpack'
+             download_filename: 'debian-packages-amd64.zip'
+
+
+#        - name: Download artifact
+#          uses: dawidd6/action-download-artifact@v2
+#          # https://github.com/marketplace/actions/download-workflow-artifact
+#          with:
+#            github_token: ${{secrets.GITHUB_TOKEN}}
+#            workflow: build-workflow.yml
+#            workflow_conclusion: success
+#            branch: continuous_integration
+#            name: debian-packages-amd64
+#            path: debian-package_unpack
+
+#        - name: Download artifact
+#          uses: dawidd6/action-download-artifact@v2
+#          # https://github.com/marketplace/actions/download-workflow-artifact
+#          with:
+#            github_token: ${{secrets.GITHUB_TOKEN}}
+#            workflow: build-workflow.yml
+#            workflow_conclusion: success
+#            branch: continuous_integration
+#            name: examples_amd64
+#            path: examples
 
         - name: Run Smoke Test
           run: ./ci/ci_smoke_test.sh
