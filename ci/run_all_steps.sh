@@ -78,8 +78,10 @@ cargo deb -p tedge
 
 cargo deb -p tedge_mapper
 
+cargo deb -p collectd_mapper
+
 cargo build --example sawtooth_publisher
-sudo dpkg -P mosquitto tedge tedge_mapper
+sudo dpkg -P mosquitto tedge tedge_mapper collectd_mapper
 
 echo "Installing"
 
