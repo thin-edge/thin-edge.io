@@ -97,12 +97,15 @@ class MonitoringWithCollectd(BaseTest):
                 self.abort(False, reason)
             # validate disk stats if the entries are present, as the disk stats collection window is bigger
             if "df-root" in self.js_msg:
-                self.validate_disk()
+                if not self.validate_disk():
+                    reason = "disk stat validation failed in message: " + str(line)
+                    self.abort(False, reason)
+
+
         if self.time_cnt == self.cpu_cnt == self.memory_cnt and self.disk_cnt > 0 and self.disk_cnt <= 3:
             return True
         else:
-            reason = "disk stat validation failed in message: " + str(line)
-            self.abort(False, reason)
+            return False
 
     def validate_cpu(self):
         if self.js_msg["cpu"]:
