@@ -1,4 +1,4 @@
-name: integration-test-workflow
+name: download_offsite
 
 on:
   workflow_dispatch:
