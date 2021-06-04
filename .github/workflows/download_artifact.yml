@@ -3,11 +3,7 @@ name: integration-test-workflow
 on:
   workflow_dispatch:
     branches: [ main, continuous_integration]
-  workflow_run:
-    workflows: ["build-workflow"]
-    branches: [main, continuous_integration]
-    types:
-      - completed
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -15,10 +11,8 @@ jobs:
 
   install-and-use-amd64-github-hosted:
 
-    runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    # This job can fail if GitHub restricts external network connections
-    # from their runners, so we just continue
+    runs-on: [self-hosted, Linux, ARM, offsite]
+
     continue-on-error: true
     steps:
         - name: checkout
@@ -34,27 +28,6 @@ jobs:
             branch: continuous_integration
             name: debian-packages-amd64
             path: debian-package_unpack
-
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
-          continue-on-error: true
-
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
-
-          #install collectd-core
-        - name: install collectd-core
-          run:  sudo apt-get --assume-yes install collectd-core
-
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
-
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
-
-        - name: run tedge help
-          run: tedge --help
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
@@ -75,152 +48,3 @@ jobs:
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
-
-  cargo-test-features:
-
-    name: Run cargo test features
-    runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo test features (compile)
-        # If we do not compile in advance the timing in the test run
-        # will not work out as some parts are still compiling during the run
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --no-run --features integration-test
-
-        # To run the test for features here is kind of experimental
-        # they could fail if GitHub blocks external connections.
-        # It seems like they rarely do.
-      - name: Cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --features integration-test
-
-  install-and-use-rpi-self-hosted:
-
-    runs-on: [self-hosted, Linux, ARM ] #, offsite]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    steps:
-        - name: checkout
-          uses: actions/checkout@v2
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-armv7-unknown-linux-gnueabihf
-            path: debian-package_unpack
-
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
-          continue-on-error: true
-
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
-
-          #install collectd-core
-        - name: install collectd-core
-          run:  sudo apt-get --assume-yes install collectd-core
-
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
-
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
-
-        - name: run tedge help
-          run: tedge --help
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_armv7-unknown-linux-gnueabihf
-            path: examples
-
-        - name: Run Smoke Test
-          run: ./ci/ci_smoke_test.sh
-          env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
-
-  install-and-use-x64-self-hosted:
-
-    runs-on: [self-hosted, Linux, X64]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    steps:
-        - name: checkout
-          uses: actions/checkout@v2
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-amd64
-            path: debian-package_unpack
-
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper
-          continue-on-error: true
-
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
-
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
-
-        - name: run tedge help
-          run: tedge --help
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_amd64
-            path: examples
-
-        - name: Run Smoke Test
-          run: ./ci/ci_smoke_test.sh
-          env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_X64 }}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_X64 }}
-
