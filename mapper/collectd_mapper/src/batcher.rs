@@ -64,7 +64,9 @@ impl MessageBatch {
         let timestamp = chrono::Local
             .timestamp_millis_opt(millis)
             .single()
-            .ok_or_else(|| DeviceMonitorError::InvalidUnixTimestamp { timestamp: self.min_timestamp })?;
+            .ok_or_else(|| DeviceMonitorError::InvalidUnixTimestamp {
+                timestamp: self.min_timestamp,
+            })?;
         let timestamp_tz = timestamp.with_timezone(timestamp.offset());
 
         self.message_grouper.timestamp(&timestamp_tz)?;
@@ -135,11 +137,12 @@ impl MessageBatcher {
         messages: &mut CollectdStream,
     ) -> Result<MeasurementGrouper, DeviceMonitorError> {
         let collectd_message = CollectdMessage::parse_from(&first_message)?;
-        let mut message_batch =
-            MessageBatch::start_batch(collectd_message)?;
+        let mut message_batch = MessageBatch::start_batch(collectd_message)?;
 
         loop {
-            messages.expect_next_with_timeout(self.batching_timeout).await;
+            messages
+                .expect_next_with_timeout(self.batching_timeout)
+                .await;
 
             let message = match messages.received_message() {
                 Some(message) => message,
@@ -150,8 +153,8 @@ impl MessageBatcher {
                 Ok(message) => message,
                 Err(err) => {
                     error!("Error parsing collectd message: {}", err);
-                    continue;   // Even if one message is faulty, we skip that one and keep building the batch
-                },
+                    continue; // Even if one message is faulty, we skip that one and keep building the batch
+                }
             };
 
             if message_batch.accept(&collectd_message, self.batching_window) {
@@ -264,13 +267,14 @@ mod tests {
         let collectd_message = CollectdMessage::new("temperature", "value", 32.5, collectd_time);
         let mut message_batch = MessageBatch::start_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, collectd_time+0.01);
+        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, collectd_time + 0.01);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, collectd_time+0.02);
+        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, collectd_time + 0.02);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("pressure", "value", 98.2, collectd_time+0.03);
+        let collectd_message =
+            CollectdMessage::new("pressure", "value", 98.2, collectd_time + 0.03);
         message_batch.add_to_batch(collectd_message)?;
 
         let collectd_message = CollectdMessage::new("coordinate", "z", 90.0, 1622820786.04);
@@ -404,7 +408,7 @@ mod tests {
         let first_message = collectd_stream.take_received_message().unwrap();
 
         let message_grouper = builder
-            .build_message_batch_with_timeout(first_message,  &mut collectd_stream)
+            .build_message_batch_with_timeout(first_message, &mut collectd_stream)
             .await?;
 
         assert_eq!(
@@ -474,7 +478,7 @@ mod tests {
         let message_stream = build_message_stream_from_messages(vec![
             ("collectd/localhost/temperature/value", 123456789.0, 32.5),
             ("collectd/localhost/pressure/value", 123456789.002, 98.0),
-            ("collectd/localhost/speed/value", 123456799.0, 350.0),     // no the same second
+            ("collectd/localhost/speed/value", 123456799.0, 350.0), // no the same second
         ]);
 
         let mut collectd_stream = CollectdStream::new(Box::new(message_stream));
@@ -493,11 +497,11 @@ mod tests {
 
         assert_eq!(
             message_grouper.get_measurement_value(Some("temperature"), "value"),
-            Some(32.5)  // included because this is the first message
+            Some(32.5) // included because this is the first message
         );
         assert_eq!(
             message_grouper.get_measurement_value(Some("pressure"), "value"),
-            Some(98.0)  // included because in the same time window as the first
+            Some(98.0) // included because in the same time window as the first
         );
         assert_eq!(
             message_grouper.get_measurement_value(Some("speed"), "value"),
@@ -526,10 +530,7 @@ mod tests {
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
         );
         let result = builder
-            .build_message_batch_with_timeout(
-                invalid_collectd_message,
-                &mut collectd_stream
-            )
+            .build_message_batch_with_timeout(invalid_collectd_message, &mut collectd_stream)
             .await;
 
         assert_matches!(

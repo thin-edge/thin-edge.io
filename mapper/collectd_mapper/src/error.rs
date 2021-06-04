@@ -27,5 +27,5 @@ pub enum DeviceMonitorError {
     HomeDirNotFound,
 
     #[error("Invalid unix timestamp: {timestamp} ")]
-    InvalidUnixTimestamp { timestamp: f64 }
+    InvalidUnixTimestamp { timestamp: f64 },
 }
