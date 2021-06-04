@@ -34,6 +34,7 @@ jobs:
           uses: benday-inc/download-latest-artifact@main
           # https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
           with:
+             token: ${{ secrets.GITHUB_TOKEN }}'
              repository_owner: 'abelikt'
              repository_name: 'thin-edge.io'
              workflow_name: 'build-workflow'
