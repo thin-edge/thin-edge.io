@@ -1665,14 +1665,15 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.8.9"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cb7a2dc0e5307189b6933a61290ff06b65b35bdcaae2b2c50a0c3e355cb118e"
+checksum = "48b4fc1b81d685fcd442a86da2e2c829d9e353142633a8159f42bf28e7e94428"
 dependencies = [
  "chrono",
  "pem",
  "ring",
  "yasna",
+ "zeroize",
 ]
 
 [[package]]
@@ -2750,9 +2751,9 @@ dependencies = [
 
 [[package]]
 name = "yasna"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de7bff972b4f2a06c85f6d8454b09df153af7e3a4ec2aac81db1b105b684ddb"
+checksum = "e262a29d0e61ccf2b6190d7050d4b237535fc76ce4c1210d9caa316f71dffa75"
 dependencies = [
  "chrono",
 ]
