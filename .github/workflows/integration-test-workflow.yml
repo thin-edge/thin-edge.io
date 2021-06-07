@@ -34,11 +34,19 @@ jobs:
             path: debian-package_unpack
 
         - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper
+          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
           continue-on-error: true
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto
+
+          #install collectd-core
+        - name: install collectd-core
+          run:  sudo apt-get --assume-yes install collectd-core
+
+          #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
 
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
@@ -101,11 +109,19 @@ jobs:
             path: debian-package_unpack
 
         - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper
+          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
           continue-on-error: true
 
         - name: install mosquitto
           run: sudo apt-get --assume-yes install mosquitto
+
+          #install collectd-core
+        - name: install collectd-core
+          run:  sudo apt-get --assume-yes install collectd-core
+
+          #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
 
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
