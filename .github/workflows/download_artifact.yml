@@ -9,7 +9,7 @@ env:
 
 jobs:
 
-  install-and-use-amd64-github-hosted:
+  hosted_offsite_dawidd6:
 
     runs-on: [self-hosted, Linux, ARM, offsite]
 
@@ -18,34 +18,7 @@ jobs:
         - name: checkout
           uses: actions/checkout@v2
 
-# From
-# https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
-#- name: download workflow artifact
-#  uses: benday-inc/download-latest-artifact@main
-#  with:
-#     token: ${{ secrets.TOKEN_WITH_PERMISSIONS }}'
-#     repository_owner: 'benday'
-#     repository_name: 'actionsdemo'
-#     workflow_name: 'my-workflow'
-#     branch_name: 'master'
-#     download_path: '${{ github.workspace }}/temp'
-#     download_filename: 'actionsdemo-artifact.zip'
-
-
-#        - name: Download artifact
-#          uses: benday-inc/download-latest-artifact@main
-#          # https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
-#          with:
-#             token: ${{ secrets.GITHUB_TOKEN }}'
-#             repository_owner: 'abelikt'
-#             repository_name: 'thin-edge.io'
-#             workflow_name: 'build-workflow'
-#             branch_name: 'continuos_integration'
-#             download_path: 'debian-package_unpack'
-#             download_filename: 'debian-packages-amd64.zip'
-
-
-        - name: Download artifact
+        - name: Action dawidd6
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
           with:
@@ -55,3 +28,44 @@ jobs:
             branch: continuous_integration
             name: debian-packages-amd64
             path: debian-package_unpack
+
+  hosted_onsite_dawidd6:
+
+    runs-on: [self-hosted, Linux, ARM] #onsite
+
+    continue-on-error: true
+    steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: Action dawidd6
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: debian-packages-amd64
+            path: debian-package_unpack
+
+  hosted-offsite-benday-inc:
+
+    runs-on: [self-hosted, Linux, ARM, offsite]
+
+    continue-on-error: true
+    steps:
+        - name: checkout
+          uses: actions/checkout@v2
+
+        - name: Action benday-inc
+          uses: benday-inc/download-latest-artifact@main
+          # https://github.com/marketplace/actions/download-latest-artifact-from-a-github-workflow
+          with:
+             token: ${{ secrets.GITHUB_TOKEN }}'
+             repository_owner: 'abelikt'
+             repository_name: 'thin-edge.io'
+             workflow_name: 'build-workflow'
+             branch_name: 'continuos_integration'
+             download_path: 'debian-package_unpack'
+             download_filename: 'debian-packages-amd64.zip'
