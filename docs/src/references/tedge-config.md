@@ -32,8 +32,7 @@ FLAGS:
     -V, --version    Prints version information
 
 ARGS:
-    <key>    [ device.id device.key.path device.cert.path c8y.url c8y.root.cert.path azure.url azure.root.cert.path
-             ]
+    <key>    Configuration key. Run `tedge config list --doc` for available keys
 ```
 
 ## set 
@@ -50,7 +49,7 @@ FLAGS:
     -V, --version    Prints version information
 
 ARGS:
-    <key>      [ device.key.path device.cert.path c8y.url c8y.root.cert.path azure.url azure.root.cert.path ]
+    <key>      Configuration key. Run `tedge config list --doc` for available keys
     <value>    Configuration value
 ```
 
@@ -84,6 +83,5 @@ FLAGS:
     -V, --version    Prints version information
 
 ARGS:
-    <key>    [ device.key.path device.cert.path c8y.url c8y.root.cert.path azure.url azure.root.cert.path ]
-
+    <key>    Configuration key. Run `tedge config list --doc` for available keys
 ```

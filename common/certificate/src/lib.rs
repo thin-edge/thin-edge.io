@@ -86,7 +86,7 @@ impl PemCertificate {
 }
 
 pub struct KeyCertPair {
-    certificate: rcgen::Certificate,
+    certificate: Zeroizing<rcgen::Certificate>,
 }
 
 impl KeyCertPair {
@@ -123,7 +123,7 @@ impl KeyCertPair {
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
 
         Ok(KeyCertPair {
-            certificate: Certificate::from_params(params)?,
+            certificate: Zeroizing::new(Certificate::from_params(params)?),
         })
     }
 

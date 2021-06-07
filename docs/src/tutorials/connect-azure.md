@@ -78,7 +78,7 @@ To connect the device to the Azure IoT Hub, one needs to set the URL/Hostname of
 Set the URL/Hostname of your Azure IoT Hub.   
 
 ```
-sudo tedge config set azure.url your-iot-hub-name.azure-devices.net
+sudo tedge config set az.url your-iot-hub-name.azure-devices.net
 ```
 
 The URL/Hostname can be found in the Azure web portal, clicking on the overview section of your IoT Hub.
@@ -86,7 +86,7 @@ The URL/Hostname can be found in the Azure web portal, clicking on the overview 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```
-sudo tedge config set azure.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
+sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 ```
 
 This will set the root certificate path of the Azure IoT Hub.
@@ -98,6 +98,9 @@ Now, you are ready to get your device connected to Azure IoT Hub with `tedge con
 This command configures the MQTT broker:
 * to establish a permanent and secure connection to the Azure cloud,
 * to forward local messages to the cloud and vice versa.
+
+Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-az systemd service.
+At last, it sends packets to Azure IoT Hub to check the connection.
 
 ```
 $ sudo tedge connect az
@@ -117,6 +120,14 @@ Awaiting mosquitto to start. This may take up to 5 seconds.
 Persisting mosquitto on reboot.
 
 Successfully created bridge connection!
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper service.
+
+Persisting tedge-mapper on reboot.
+
+tedge-mapper service successfully started and enabled!
 
 Sending packets to check connection. This may take up to 10 seconds.
 

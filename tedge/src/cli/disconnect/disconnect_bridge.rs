@@ -4,7 +4,8 @@ use crate::services::tedge_mapper_az::TedgeMapperAzService;
 use crate::services::{
     mosquitto::MosquittoService, tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
 };
-use crate::utils::{paths, users::*};
+use crate::utils::paths;
+use tedge_users::*;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";

@@ -1,0 +1,12 @@
+[Unit]
+Description=collectd-mapper collects device monitoring measurements and converts them to connectivity provider format.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=collectd-mapper
+ExecStart=/usr/bin/collectd_mapper
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target
