@@ -2,7 +2,7 @@
 
 Common requirements for all systems are:
 * minimum 16MB of RAM
-* systemd (for productive systems)
+* systemd (for production systems)
 * mosquitto minimum version 1.6 (for security reasons we recommend the latest 1.x version)
 * dpkg (if you want to use our prebuilt deb packages)
 
