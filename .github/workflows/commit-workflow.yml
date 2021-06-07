@@ -50,148 +50,149 @@ jobs:
         with:
           command: clippy
 
-  cargo-test:
-
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose
-
-  cargo-build:
-
-    name: Run cargo build
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release
-
-  cargo-build-integration-tests:
-
-    name: Run cargo build for integration tests
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Compile cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --no-run --features integration-test
-
-  cargo-tarpaulin:
-
-    name: Run cargo tarpaulin
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Install rust v1.51.0
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: "1.51.0"
-          override: true
-
-      - name: install libssl
-        run: sudo apt install libssl-dev
-
-      - name: Cargo install tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-tarpaulin
-
-      - name: Cargo tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: tarpaulin
-          args: -v --out Xml
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-
-  cargo-audit:
-
-    name: Run cargo audit
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo audit
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: audit --deny warnings
-        continue-on-error: true
-
-
-  cargo-outdated:
-
-    name: Run cargo outdated
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo outdated
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
+#  cargo-test:
+#
+#    name: Run cargo test
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo test
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: test
+#          args: --verbose
+#
+#  cargo-build:
+#
+#    name: Run cargo build
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo build
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: build
+#          args: --release
+#
+#  cargo-build-integration-tests:
+#
+#    name: Run cargo build for integration tests
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Compile cargo test features
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: test
+#          args: --verbose --no-run --features integration-test
+#
+#  cargo-tarpaulin:
+#
+#    name: Run cargo tarpaulin
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Install rust v1.51.0
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: "1.51.0"
+#          override: true
+#
+#      - name: install libssl
+#        run: sudo apt install libssl-dev
+#
+#      - name: Cargo install tarpaulin
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: install
+#          args: cargo-tarpaulin
+#
+#      - name: Cargo tarpaulin
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: tarpaulin
+#          args: -v --out Xml
+#
+#      - name: Upload to codecov.io
+#        uses: codecov/codecov-action@v1
+#        with:
+#          token: ${{secrets.CODECOV_TOKEN}}
+#
+#  cargo-audit:
+#
+#    name: Run cargo audit
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Cargo audit
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: audit --deny warnings
+#        continue-on-error: true
+#
+#
+#  cargo-outdated:
+#
+#    name: Run cargo outdated
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Cargo outdated
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: outdated
+#
