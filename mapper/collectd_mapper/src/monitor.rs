@@ -11,8 +11,8 @@ use crate::{
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_MQTT_CLIENT_ID: &str = "tedge-dm-agent";
-const DEFAULT_BATCHING_WINDOW: u64 = 1000;
+const DEFAULT_MQTT_CLIENT_ID: &str = "collectd-mapper";
+const DEFAULT_BATCHING_WINDOW: u64 = 200;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 
