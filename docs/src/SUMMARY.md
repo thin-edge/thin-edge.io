@@ -18,6 +18,7 @@
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
     - [How to test the cloud connection?](./howto-guides/007_test_connection.md)
     - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
+    - [How to trouble shoot device monitoring](./howto-guides/009_touble_shooting_monitoring.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)
