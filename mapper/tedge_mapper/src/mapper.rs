@@ -54,8 +54,8 @@ impl Mapper {
     async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
         let mut messages = self.client.subscribe(self.config.in_topic.filter()).await?;
         while let Some(message) = messages.next().await {
-            debug!("Mapping {:?}", message);
-            match self.converter.convert(&message.payload) {
+            debug!("Mapping {:?}", message.payload_trimmed());
+            match self.converter.convert(&message.payload_trimmed()) {
                 Ok(mapped) => {
                     self.client
                         .publish(mqtt_client::Message::new(&self.config.out_topic, mapped))

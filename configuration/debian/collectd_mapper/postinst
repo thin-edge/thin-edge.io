@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+# Create a group "collectd-mapper" if not created before
+if ! getent group collectd-mapper > /dev/null; then
+    addgroup --quiet --system collectd-mapper
+fi
+
+# Create a user "collectd-mapper" if not created before
+if ! getent passwd collectd-mapper > /dev/null; then
+    adduser --quiet --system --no-create-home --ingroup collectd-mapper --shell /usr/sbin/nologin collectd-mapper
+fi
+
+#DEBHELPER#
