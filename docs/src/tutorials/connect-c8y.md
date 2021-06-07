@@ -98,7 +98,7 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the cloud,
 * to forward local messages to the cloud and vice versa.
 
-Also, if you have installed `tedge_mapper`, this command starts and enables the tedge_mapper systemd service.
+Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-c8y systemd service.
 At last, it sends packets to Cumulocity to check the connection.
 If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
 

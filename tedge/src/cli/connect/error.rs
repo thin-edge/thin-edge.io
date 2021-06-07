@@ -27,6 +27,9 @@ pub enum ConnectError {
     #[error(transparent)]
     ServicesError(#[from] crate::services::ServicesError),
 
+    #[error("Operation timed out. Is mosquitto running?")]
+    TimeoutElapsedError,
+
     #[error("Couldn't receive packets from {cloud} within fixed time.")]
     NoPacketsReceived { cloud: String },
 }
