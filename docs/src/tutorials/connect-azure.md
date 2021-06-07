@@ -78,7 +78,7 @@ To connect the device to the Azure IoT Hub, one needs to set the URL/Hostname of
 Set the URL/Hostname of your Azure IoT Hub.   
 
 ```
-sudo tedge config set azure.url your-iot-hub-name.azure-devices.net
+sudo tedge config set az.url your-iot-hub-name.azure-devices.net
 ```
 
 The URL/Hostname can be found in the Azure web portal, clicking on the overview section of your IoT Hub.
@@ -86,7 +86,7 @@ The URL/Hostname can be found in the Azure web portal, clicking on the overview 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```
-sudo tedge config set azure.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
+sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 ```
 
 This will set the root certificate path of the Azure IoT Hub.

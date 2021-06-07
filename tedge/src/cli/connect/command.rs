@@ -4,12 +4,12 @@ use crate::services::{
     self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
 };
 use crate::utils::paths;
-use crate::utils::users::UserManager;
 use crate::ConfigError;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;
 use tedge_config::*;
+use tedge_users::UserManager;
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
