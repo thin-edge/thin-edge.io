@@ -1,13 +1,13 @@
 # The bridged topics
 
-This document lists the mqtt topics that are supported by the thin-edge.io.
+This document lists the MQTT topics that are supported by the thin-edge.io.
 
-## Thin Edge JSON Mqtt Topics
+## Thin Edge JSON MQTT Topics
 To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on
 **tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and
 send them to the cloud that the device has been connected to by the `tedge connect` command.
 
-## Cumulocity Mqtt Topics
+## Cumulocity MQTT Topics
 The topics follow the below format
 `<protocol>/<direction><type>[/<template>][/<child id>] `
 
@@ -52,7 +52,7 @@ The topics follow the below format
 
 You can find more information about Cumulocity topics [Here](https://tech.forums.softwareag.com/t/cumulocity-iot-tips-and-tricks-mqtt-cheat-sheet/237187)
 
-## Azure Mqtt Topics
+## Azure MQTT Topics
 MQTT clients on Thin Edge device must use the below topics to communicate with the Azure cloud.
 The Azure topics are prefixed by `az/`.
 
