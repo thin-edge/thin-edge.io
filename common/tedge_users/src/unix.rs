@@ -45,11 +45,14 @@ impl UserManager {
 
     /// Check if the process has been launched using `sudo` or not.
     ///
+    /// # Example
+    ///
     /// ```
+    ///     # use tedge_users::UserManager;
     ///     let path = if UserManager::running_as_root() {
-    ///         "/etc/mosquitto/mosquitto.conf"
+    ///          "/etc/mosquitto/mosquitto.conf"
     ///      } else {
-    ///          home_dir(".tedge/mosquitto.conf")
+    ///          ".tedge/mosquitto.conf"
     ///      };
     /// ```
     pub fn running_as_root() -> bool {
@@ -65,11 +68,12 @@ impl UserManager {
     /// # Example
     ///
     /// ```
+    /// # use tedge_users::UserManager;
     /// let user_manager = UserManager::new();
-    /// let _user_guard_1 = user_manager.become_user("user_1")?;
+    /// let _user_guard_1 = user_manager.become_user("user_1").expect("Fail to become user_1");
     /// // Running as user1
     /// {
-    ///      let _user_guard_2 = user_manager.become_user("user_2")?;
+    ///      let _user_guard_2 = user_manager.become_user("user_2").expect("Fail to become user_2");
     ///     // Running as user2
     /// }
     /// // Running as user1
@@ -173,7 +177,12 @@ impl InnerUserManager {
 ///
 /// Such a guard implements the RAII pattern and provides no methods beyond `drop`.
 ///
-/// fn create_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
+/// # Example
+///
+/// ```
+/// # use tedge_users::UserManager;
+/// # use tedge_users::UserSwitchError;
+/// fn create_certificate(user_manager: &UserManager) -> Result<(), UserSwitchError> {
 ///     let _user_guard = user_manager.become_user("mosquitto")?;
 ///     // As long as the _user_guard is owned, the process run as mosquitto.
 ///
@@ -181,6 +190,7 @@ impl InnerUserManager {
 ///
 ///     Ok(())
 /// } // Here, the _user_guard is dropped and the process switches back to the former user.
+/// ```
 pub struct UserGuard {
     user_manager: UserManager,
 }

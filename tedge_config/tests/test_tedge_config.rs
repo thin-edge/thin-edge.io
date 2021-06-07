@@ -272,6 +272,78 @@ url = "your-tenant.cumulocity.com"
 }
 
 #[test]
+fn read_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
+    let toml_conf = r#"
+[azure]
+url = "MyAzure.azure-devices.net"
+root_cert_path = "/path/to/azure/root/cert"
+mapper_timestamp = true
+"#;
+
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config_defaults = dummy_tedge_config_defaults();
+
+    let config =
+        TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
+
+    assert_eq!(
+        config.query(AzureUrlSetting)?.as_str(),
+        "MyAzure.azure-devices.net"
+    );
+    assert_eq!(
+        config.query(AzureRootCertPathSetting)?,
+        FilePath::from("/path/to/azure/root/cert")
+    );
+    assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
+
+    Ok(())
+}
+
+#[test]
+fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
+    let toml_conf = r#"
+[azure]
+"#;
+
+    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let config_defaults = TEdgeConfigDefaults {
+        default_azure_root_cert_path: FilePath::from("default_azure_root_cert_path"),
+        ..dummy_tedge_config_defaults()
+    };
+    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
+    let updated_azure_url = "OtherAzure.azure-devices.net";
+
+    {
+        let mut config = config_repo.load()?;
+
+        assert!(config.query_optional(AzureUrlSetting)?.is_none());
+        assert_eq!(
+            config.query(AzureRootCertPathSetting)?,
+            FilePath::from("default_azure_root_cert_path")
+        );
+        assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
+
+        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.unset(AzureRootCertPathSetting)?;
+        config.unset(AzureMapperTimestamp)?;
+        config_repo.store(config)?;
+    }
+
+    {
+        let config = config_repo.load()?;
+
+        assert_eq!(config.query(AzureUrlSetting)?.as_str(), updated_azure_url);
+        assert_eq!(
+            config.query(AzureRootCertPathSetting)?,
+            FilePath::from("default_azure_root_cert_path")
+        );
+        assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     let toml_conf = "";
 
