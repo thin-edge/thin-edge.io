@@ -1,5 +1,5 @@
 [Unit]
-Description=tedge-mapper-az converts Thin Edge JSON measurements to Thin Edge JSON for Azure format.
+Description=tedge-mapper-az checks Thin Edge JSON measurements and forwards to Azure IoT Hub.
 After=syslog.target network.target mosquitto.service
 
 [Service]
