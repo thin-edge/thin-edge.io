@@ -93,7 +93,7 @@ $ tedge mqtt sub 'collectd/#'
 ```
 
 The `tedge-collectd-mapper` translates into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
-grouping the measurements emitted by each plugin:
+[grouping the measurements](../references/bridged-topics.md#collectd-topics) emitted by each plugin:
 
 ```
 tedge mqtt sub 'tedge/measurements'
