@@ -99,6 +99,9 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the Azure cloud,
 * to forward local messages to the cloud and vice versa.
 
+Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-az systemd service.
+At last, it sends packets to Azure IoT Hub to check the connection.
+
 ```
 $ sudo tedge connect az
 
@@ -117,6 +120,14 @@ Awaiting mosquitto to start. This may take up to 5 seconds.
 Persisting mosquitto on reboot.
 
 Successfully created bridge connection!
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper service.
+
+Persisting tedge-mapper on reboot.
+
+tedge-mapper service successfully started and enabled!
 
 Sending packets to check connection. This may take up to 10 seconds.
 
