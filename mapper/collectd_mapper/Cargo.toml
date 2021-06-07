@@ -24,7 +24,7 @@ clock = {path = "../../common/clock" }
 mqtt_client = {path = "../../common/mqtt_client" }
 chrono = "0.4"
 futures = "0.3"
-tokio = { version = "1.1", features = ["rt", "sync", "time"] }
+tokio = { version = "1.6", features = ["rt", "sync", "time"] }
 anyhow = "1.0"
 thiserror = "1.0"
 tracing = { version = "0.1", features = ["attributes", "log"] }
@@ -32,7 +32,7 @@ tracing-subscriber = "0.2"
 mockall = "0.9"
 async-trait = "0.1"
 tedge_config = {path = "../../tedge_config" }
-users = "0.11"
+tedge_users = { path = "../../common/tedge_users" }
 
 [dev-dependencies]
 assert_matches = "1.4"

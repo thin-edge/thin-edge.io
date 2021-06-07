@@ -1,4 +1,4 @@
-use crate::utils::users::UserManager;
+use tedge_users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
