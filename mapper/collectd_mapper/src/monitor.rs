@@ -72,7 +72,7 @@ impl DeviceMonitor {
 
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
-        let message_batch_producer = MessageBatcher::new(
+        let mut message_batch_producer = MessageBatcher::new(
             sender,
             mqtt_client.clone(),
             Duration::from_millis(self.device_monitor_config.batching_window),

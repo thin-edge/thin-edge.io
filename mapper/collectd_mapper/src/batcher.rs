@@ -2,7 +2,7 @@ use crate::collectd::CollectdMessage;
 use crate::error::*;
 use crate::functional_batcher;
 use clock::Clock;
-use mqtt_client::{Message, MqttClient, Topic, TopicFilter};
+use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
 use thin_edge_json::{
     group::MeasurementGrouper, measurement::FlatMeasurementVisitor,
@@ -18,7 +18,7 @@ pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
-    batching_window: chrono::Duration,
+    batcher: functional_batcher::Batcher,
     clock: Arc<dyn Clock>,
 }
 
@@ -31,16 +31,40 @@ impl MessageBatcher {
         clock: Arc<dyn Clock>,
     ) -> Self {
         let batching_window = chrono::Duration::from_std(batching_window).unwrap();
+        let batcher = functional_batcher::Batcher::new(
+            1000,
+            batching_window,
+            batching_window.num_seconds() as f64,
+        );
+
         Self {
             sender,
             mqtt_client,
             source_topic_filter,
-            batching_window,
+            batcher,
             clock,
         }
     }
 
-    fn handle_outputs(&self, outputs: &mut Vec<functional_batcher::Output>) -> std::time::Duration {
+    pub async fn run(&mut self) -> Result<(), DeviceMonitorError> {
+        let mut messages = self
+            .mqtt_client
+            .subscribe(self.source_topic_filter.clone())
+            .await?;
+
+        let mut outputs: Vec<functional_batcher::Output> = Vec::new();
+
+        loop {
+            let next_tick_in = self.process_outputs(&mut outputs);
+            self.process_io(messages.as_mut(), next_tick_in, &mut outputs)
+                .await;
+        }
+    }
+
+    fn process_outputs(
+        &self,
+        outputs: &mut Vec<functional_batcher::Output>,
+    ) -> std::time::Duration {
         // sentinel value to avoid having to deal with optional timeouts.
         let mut next_tick_at = self.clock.now() + chrono::Duration::hours(24);
 
@@ -69,54 +93,40 @@ impl MessageBatcher {
         next_tick_in
     }
 
-    pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let mut messages = self
-            .mqtt_client
-            .subscribe(self.source_topic_filter.clone())
-            .await?;
-
-        let mut batcher = functional_batcher::Batcher::new(
-            1000,
-            self.batching_window,
-            self.batching_window.num_seconds() as f64,
-        );
-
-        let mut outputs: Vec<functional_batcher::Output> = Vec::new();
-
-        loop {
-            let next_tick_in = self.handle_outputs(&mut outputs);
-
-            match tokio::time::timeout_at(
-                tokio::time::Instant::now() + next_tick_in,
-                messages.next(),
-            )
+    async fn process_io(
+        &mut self,
+        messages: &mut dyn MqttMessageStream,
+        next_tick_in: std::time::Duration,
+        outputs: &mut Vec<functional_batcher::Output>,
+    ) {
+        match tokio::time::timeout_at(tokio::time::Instant::now() + next_tick_in, messages.next())
             .await
-            {
-                Err(_) => {
-                    // Timeout fired. Inform functional core
-                    let now = self.clock.now();
-                    batcher.handle(functional_batcher::Input::Tick { now }, &mut outputs);
-                }
-                Ok(Some(mqtt_message)) => {
-                    // got a message
-                    let received_at = self.clock.now();
-                    match CollectdMessage::parse_from(&mqtt_message) {
-                        Ok(collectd_message) => batcher.handle(
-                            functional_batcher::Input::Message {
-                                received_at,
-                                message: collectd_message.into(),
-                            },
-                            &mut outputs,
-                        ),
-                        Err(err) => {
-                            error!("Error parsing collectd message: {}", err);
-                        }
+        {
+            Err(_) => {
+                // Timeout fired. Inform functional core
+                let now = self.clock.now();
+                self.batcher
+                    .handle(functional_batcher::Input::Tick { now }, outputs);
+            }
+            Ok(Some(mqtt_message)) => {
+                // got a message
+                let received_at = self.clock.now();
+                match CollectdMessage::parse_from(&mqtt_message) {
+                    Ok(collectd_message) => self.batcher.handle(
+                        functional_batcher::Input::Message {
+                            received_at,
+                            message: collectd_message.into(),
+                        },
+                        outputs,
+                    ),
+                    Err(err) => {
+                        error!("Error parsing collectd message: {}", err);
                     }
                 }
-                Ok(None) => {
-                    // XXX: Not sure if this works!
-                    error!("MQTT connection closed. Retrying...");
-                }
+            }
+            Ok(None) => {
+                // XXX: Not sure if this works!
+                error!("MQTT connection closed. Retrying...");
             }
         }
     }
