@@ -12,16 +12,24 @@ pub struct Batcher {
     max_batch_size: usize,
 
     /// The maximum age of a batch.
+    ///
+    /// Age of a batch is the elapsed time since `current_batch.opened_at`.
     max_batch_age: chrono::Duration,
 
     /// We start a new batch upon receiving a message whose timestamp is farther away to the
     /// timestamp of first messsge in the batch than `collectd_timestamp_delta` seconds.
+    ///
     /// Delta is inclusive.
     collectd_timestamp_delta: f64,
 
     current_batch: CurrentBatch,
 }
 
+// Invariants:
+//
+//   opened_at.is_none() => messages.is_empty().
+//   opened_at.is_some() => messages.len() > 0.
+//
 struct CurrentBatch {
     opened_at: Option<Timestamp>,
     messages: Vec<OwnedCollectdMessage>,
@@ -67,10 +75,10 @@ pub enum Input {
 /// of the `Batcher`.
 #[derive(Debug, PartialEq)]
 pub enum Output {
-    /// Informs the imperative shell to send a `Input::Tick` at (or slightly after) the specified timestamp.
+    /// Informs the imperative shell to send an `Input::Tick` at (or slightly after) the specified timestamp.
     NextTickAt(Timestamp),
 
-    /// Informs the imperative shell to send a message batch out.
+    /// Informs the imperative shell to send the message batch out.
     MessageBatch(MessageBatch),
 }
 
@@ -113,6 +121,7 @@ impl Batcher {
         outputs: &mut Vec<Output>,
     ) {
         if self.message_exceeds_delta(&message) || self.timestamp_exceeds_max_age(received_at) {
+            // the current message starts a new batch.
             self.handle_flush(outputs);
         }
 
