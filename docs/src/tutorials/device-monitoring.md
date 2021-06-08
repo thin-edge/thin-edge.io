@@ -52,23 +52,54 @@ The behavior of collectd is defined by the
 
 __Important notes__ You can enable or disable the collectd plugins of your choice, but with some notable exceptions:
 1. __MQTT must be enabled__.
-   * `LoadPlugin mqtt`
    * Thin-edge.io expects the collectd metrics to be published on the local MQTT bus.
      Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.5.shtml#plugin_mqtt).
    * The MQTT plugin is available on most distribution of `collectd`, but this is the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
      See [https://github.com/collectd/collectd](https://github.com/collectd/collectd) for details.
+   * Here is a config snippet to configure the MQTT write plugin:
+     ```
+        LoadPlugin mqtt
+        
+        <Plugin mqtt>
+            <Publish "tedge">
+                Host "localhost"
+                Port 1883
+                ClientId "tedge-dm"
+            </Publish>
+        </Plugin>
+     ```
 2. __RRDTool and CSV might be disabled__
-   * `#LoadPlugin rrdtool`
-   * `#LoadPlugin csv`
    * The risk with these plugins is to run out of disk space on a small device.
    * With thin-edge.io the metrics collected by `collectd` are forwarded to the cloud,
      hence it makes sense to [disable Local storage](https://github.com/collectd/collectd/issues/2668).
+   * For that, simply comment out these two plugins:
+    ```
+       #LoadPlugin rrdtool
+       #LoadPlugin csv
+    ```
 3. __Cherry-pick the collected metrics__
    * `Collectd` can collect a lot of detailed metrics,
       and it doesn't always make sense to forward all these data to the cloud.
-   * See the [`tedge-collectd.conf` example](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/collectd/tedge-collectd.conf)
-     to see how to use the `match_regex` plugin to select the metrics of interest.
+   * Here is a config snippet that uses the `match_regex` plugin to select the metrics of interest:
+    ```
+        PreCacheChain "PreCache"
+        
+        LoadPlugin match_regex
+        
+        <Chain "PreCache">
+            <Rule "memory_free_only">
+                <Match "regex">
+                    Plugin "memory"
+                </Match>
+                <Match "regex">
+                    TypeInstance "used"
+                    Invert true
+                </Match>
+                Target "stop"
+            </Rule>
+        </Chain>
+    ```    
      
 ## Enable thin-edge monitoring
 
