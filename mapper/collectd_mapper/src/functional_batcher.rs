@@ -1,5 +1,6 @@
+//! Batching algorithm that is unaware of IO. Imperative shell, functional core.
+
 use crate::collectd::OwnedCollectdMessage;
-/// IO-less batching algorithm. Imperative shell, functional core.
 use clock::Timestamp;
 
 #[derive(Debug, PartialEq)]
