@@ -70,7 +70,7 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
 }
 
 async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
-    let payload = message.payload_utf8()?;
+    let payload = message.payload_str()?;
     if hide_topic {
         async_println(&payload).await?;
     } else {

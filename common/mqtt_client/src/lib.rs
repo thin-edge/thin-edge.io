@@ -531,7 +531,7 @@ impl Message {
     }
 
     // This function will trim the null character at the end of the payload
-    pub fn payload_utf8(&self) -> Result<&str, Error> {
+    pub fn payload_str(&self) -> Result<&str, Error> {
         Ok(std::str::from_utf8(self.payload_trimmed())?)
     }
 

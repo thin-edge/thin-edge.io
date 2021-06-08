@@ -168,7 +168,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     let _task_handle = tokio::spawn(async move {
         while let Some(message) = error_response.next().await {
             if message
-                .payload_utf8()
+                .payload_str()
                 .unwrap_or("")
                 .contains("41,100,Device already existing")
             {

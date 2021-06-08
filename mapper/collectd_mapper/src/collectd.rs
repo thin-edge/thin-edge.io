@@ -41,7 +41,7 @@ impl<'a> CollectdMessage<'a> {
             }
         };
 
-        let payload = mqtt_message.payload_utf8().map_err(|_err| {
+        let payload = mqtt_message.payload_str().map_err(|_err| {
             CollectdError::NonUTF8MeasurementPayload(mqtt_message.payload_raw().into())
         })?;
 
