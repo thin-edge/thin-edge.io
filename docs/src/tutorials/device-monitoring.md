@@ -38,7 +38,7 @@ that can be used to collect cpu, memory and disk metrics.
 Simply copy that file to the main collectd configuration file and restart the daemon.
 
 ``` shell
-sudo cp /etc/tedge/contrib/collectd/tedge-collectd.conf /etc/collectd/collectd.conf
+sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 ```
 
@@ -73,7 +73,7 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
 To enable monitoring on your device, you have now to launch the `collectd-mapper` daemon process.
 
 ``` shell
- sudo systemctl start tedge-collectd-mapper
+ sudo systemctl start collectd-mapper
 ```
 
 This process subscribes to the `collectd/#` topics and emits translated measurements to the `tedge/measurements` topic.
@@ -92,7 +92,7 @@ $ tedge mqtt sub 'collectd/#'
 
 ```
 
-The `tedge-collectd-mapper` translates into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
+The `collectd-mapper` translates into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
 [grouping the measurements](../references/bridged-topics.md#collectd-topics) emitted by each plugin:
 
 ```

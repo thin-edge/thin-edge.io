@@ -75,7 +75,7 @@ monitor metrics are emitted by `collectd` on a hierarchy of MQTT topics.
 * `collectd/$HOSTNAME/$PLUGIN/$METRIC` - The topic for a given metric, named `METRIC`.
    All the measurements are given as a pair of a Unix timestamp in milli-seconds and a numeric value.
 
-The `tedge-collectd-mapper` daemon process ingests these measurements and emit translated messages
+The `collectd-mapper` daemon process ingests these measurements and emit translated messages
 the `tedge/measurements` topic.
 * This process groups the atomic measurements that have been received during the same time-window (currently 200 ms)
 * and produces a single thin-edge-json for the whole group of measurements.

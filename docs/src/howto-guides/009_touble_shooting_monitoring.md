@@ -26,13 +26,13 @@ If no metrics are collected, please check the [MQTT configuration](../tutorials/
 ## Is the thin-edge `collectd-mapper` running?
 
 ```
-sudo systemctl status tedge-collectd-mapper
+sudo systemctl status collectd-mapper
 ```
 
 If not, launch collected
 
 ```
-sudo systemctl start tedge-collectd-mapper
+sudo systemctl start collectd-mapper
 ```
 
 ## Are the collectd metrics published in Thin Edge JSON format?
