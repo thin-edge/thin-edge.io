@@ -25,30 +25,7 @@ pub struct Batcher {
     /// Delta is inclusive.
     collectd_timestamp_delta: f64,
 
-    current_batch: CurrentBatch,
-}
-
-// Invariants:
-//
-//   opened_at.is_none() => messages.is_empty().
-//   opened_at.is_some() => messages.len() > 0.
-//
-struct CurrentBatch {
-    opened_at: Option<Timestamp>,
-    messages: Vec<OwnedCollectdMessage>,
-}
-
-impl CurrentBatch {
-    fn empty() -> Self {
-        Self {
-            opened_at: None,
-            messages: Vec::new(),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
+    current_batch: Option<MessageBatch>,
 }
 
 /// Inputs to the `Batcher`.
@@ -97,7 +74,7 @@ impl Batcher {
             max_batch_size,
             max_batch_age,
             collectd_timestamp_delta,
-            current_batch: CurrentBatch::empty(),
+            current_batch: None,
         }
     }
 
@@ -112,7 +89,7 @@ impl Batcher {
         }
 
         // Inform imperative shell about when to send a Tick message.
-        if let Some(batch_opened_at) = self.current_batch.opened_at {
+        if let Some(batch_opened_at) = self.current_batch.as_ref().map(|batch| batch.opened_at) {
             outputs.push(Output::NextTickAt(batch_opened_at + self.max_batch_age));
         }
     }
@@ -128,10 +105,20 @@ impl Batcher {
             self.handle_flush(outputs);
         }
 
-        self.current_batch.messages.push(message);
-        self.current_batch.opened_at = Some(self.current_batch.opened_at.unwrap_or(received_at));
+        match self.current_batch {
+            Some(ref mut current_batch) => {
+                debug_assert!(current_batch.messages.len() > 0);
+                current_batch.messages.push(message);
+            }
+            None => {
+                self.current_batch = Some(MessageBatch {
+                    opened_at: received_at,
+                    messages: vec![message],
+                });
+            }
+        }
 
-        if self.current_batch.messages.len() >= self.max_batch_size {
+        if self.current_batch_size() >= self.max_batch_size {
             self.handle_flush(outputs);
         }
     }
@@ -143,18 +130,17 @@ impl Batcher {
     }
 
     fn handle_flush(&mut self, outputs: &mut Vec<Output>) {
-        if let Some(opened_at) = self.current_batch.opened_at {
-            debug_assert!(!self.current_batch.is_empty());
-            let last_batch = std::mem::replace(&mut self.current_batch, CurrentBatch::empty());
-            outputs.push(Output::MessageBatch(MessageBatch {
-                opened_at,
-                messages: last_batch.messages,
-            }));
+        if let Some(last_batch) = self.current_batch.take() {
+            outputs.push(Output::MessageBatch(last_batch));
         }
     }
 
     fn message_exceeds_delta(&self, message: &OwnedCollectdMessage) -> bool {
-        match self.current_batch.messages.first() {
+        match self
+            .current_batch
+            .as_ref()
+            .and_then(|batch| batch.messages.first())
+        {
             None => false,
             Some(first) => {
                 let delta = (first.timestamp() - message.timestamp()).abs();
@@ -164,17 +150,20 @@ impl Batcher {
     }
 
     fn timestamp_exceeds_max_age(&self, timestamp: Timestamp) -> bool {
-        match self.current_batch.opened_at {
-            Some(batch_opened_at) => {
-                debug_assert!(!self.current_batch.messages.is_empty());
-                let age = timestamp - batch_opened_at;
+        match self.current_batch {
+            Some(MessageBatch { opened_at, .. }) => {
+                let age = timestamp - opened_at;
                 age >= self.max_batch_age
             }
-            None => {
-                debug_assert!(self.current_batch.messages.is_empty());
-                false
-            }
+            None => false,
         }
+    }
+
+    fn current_batch_size(&self) -> usize {
+        self.current_batch
+            .as_ref()
+            .map(|batch| batch.messages.len())
+            .unwrap_or(0)
     }
 }
 
