@@ -50,7 +50,6 @@ pub enum DeviceIdError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::Result;
     use assert_matches::*;
 
     #[test]

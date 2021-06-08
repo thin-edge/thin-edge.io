@@ -1,4 +1,4 @@
-fn command_as_root<I, S>(
+fn _command_as_root<I, S>(
     home_dir: &str,
     args: I,
 ) -> Result<std::process::Command, Box<dyn std::error::Error>>
@@ -36,21 +36,21 @@ fn create_certificate_as_root_should_switch_to_mosquitto() -> Result<(), Box<dyn
 
     let tedge = env!("CARGO_BIN_EXE_tedge");
 
-    let mut chown_mosquitto = command_as_root(
+    let mut chown_mosquitto = _command_as_root(
         &mosquitto_home,
         &["chown", "mosquitto:mosquitto", &mosquitto_home],
     )?;
-    let mut chown_tedge = command_as_root(&tedge_home, &["chown", "tedge:tedge", &tedge_home])?;
-    let mut set_cert_path_cmd = command_as_root(
+    let mut chown_tedge = _command_as_root(&tedge_home, &["chown", "tedge:tedge", &tedge_home])?;
+    let mut set_cert_path_cmd = _command_as_root(
         &tedge_home,
         &[tedge, "config", "set", "device.cert.path", &cert_path],
     )?;
-    let mut set_key_path_cmd = command_as_root(
+    let mut set_key_path_cmd = _command_as_root(
         &tedge_home,
         &[tedge, "config", "set", "device.key.path", &key_path],
     )?;
 
-    let mut create_cmd = command_as_root(
+    let mut create_cmd = _command_as_root(
         &tedge_home,
         &[tedge, "cert", "create", "--device-id", device_id],
     )?;
