@@ -35,9 +35,11 @@ sudo apt-get install collectd-core
 Thin-edge.io provides a [basic `collectd` configuration](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/collectd/tedge-collectd.conf)
 that can be used to collect cpu, memory and disk metrics.
 
-Simply copy that file to the main collectd configuration file and restart the daemon.
+Simply copy that file to the main collectd configuration file and restart the daemon
+(it might be good to keep a copy of the original configuration).
 
 ``` shell
+sudo cp /etc/tedge/contrib/collectd/collectd.conf sudo cp /etc/tedge/contrib/collectd/collectd.conf.backup
 sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 ```
@@ -56,7 +58,7 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
    * The MQTT plugin is available on most distribution of `collectd`, but this is the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
      See [https://github.com/collectd/collectd](https://github.com/collectd/collectd) for details.
-2. __RRDTool and CSV should be disabled__
+2. __RRDTool and CSV might be disabled__
    * `#LoadPlugin rrdtool`
    * `#LoadPlugin csv`
    * The risk with these plugins is to run out of disk space on a small device.
@@ -76,7 +78,8 @@ To enable monitoring on your device, you have now to launch the `collectd-mapper
  sudo systemctl start collectd-mapper
 ```
 
-This process subscribes to the `collectd/#` topics and emits translated measurements to the `tedge/measurements` topic.
+This process subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
+and emits the translated measurements in thin-edge.io JSON format to the `tedge/measurements` topic.
 You can inspect the collected and translated metrics, by subscribing to these topics:
 
 The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name:
@@ -102,7 +105,8 @@ tedge mqtt sub 'tedge/measurements'
 [tedge/measurements] {"time":"2021-06-07T15:39:00.154967388+01:00","cpu":{"percent-active":0},"df-root":{"percent_bytes-used":71.3110656738281},"memory":{"percent-used":1.12107875001658}}
 ```
 
-From there, if the device is actually connected, these monitoring metrics will be forwarded to the cloud.
+From there, if the device is actually connected to a cloud platform like Cumulocity,
+these monitoring metrics will be forwarded to the cloud.
 
 ```
 tedge mqtt sub 'c8y/#'
