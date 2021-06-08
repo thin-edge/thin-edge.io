@@ -30,7 +30,7 @@ impl<T> MessageBatch<T> {
     }
 }
 
-/// Decision whether to put a messsage into the current batch or start a new one.
+/// Decision whether to put a message into the current batch or start a new one.
 pub trait BatchingCriterion<T>: Send {
     /// Returns true, if the message belongs to the current batch.
     fn belongs_to_batch(&self, message: &T, message_batch: &MessageBatch<T>) -> bool;
@@ -240,7 +240,7 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     let one_hour = chrono::Duration::hours(1);
 
     /// We start a new batch upon receiving a message whose timestamp is farther away to the
-    /// timestamp of first messsge in the batch than `delta` seconds.
+    /// timestamp of first message in the batch than `delta` seconds.
     ///
     /// Delta is inclusive.
     struct CollectdTimestampDeltaCriterion {

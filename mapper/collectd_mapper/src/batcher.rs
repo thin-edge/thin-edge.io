@@ -12,7 +12,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{error, log::warn};
 
 /// We start a new batch upon receiving a message whose timestamp is farther away to the
-/// timestamp of first messsge in the batch than `delta` seconds.
+/// timestamp of first message in the batch than `delta` seconds.
 ///
 /// Delta is inclusive.
 struct CollectdTimestampDeltaCriterion {
