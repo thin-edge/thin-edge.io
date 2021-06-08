@@ -46,7 +46,7 @@ jobs:
 
           #replace the default config file with tedge custom config file
         - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
@@ -121,7 +121,7 @@ jobs:
 
           #replace the default config file with tedge custom config file
         - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
