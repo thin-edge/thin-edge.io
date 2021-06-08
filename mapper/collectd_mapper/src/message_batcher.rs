@@ -97,8 +97,12 @@ impl<T> MessageBatcher<T> {
         }
     }
 
-    pub fn add_batching_criterion(&mut self, batching_criterion: Box<dyn BatchingCriterion<T>>) {
-        self.batching_criteria.push(batching_criterion);
+    pub fn with_batching_criterion(
+        mut self,
+        batching_criterion: impl BatchingCriterion<T> + 'static,
+    ) -> Self {
+        self.batching_criteria.push(Box::new(batching_criterion));
+        self
     }
 
     pub fn handle(&mut self, input: Input<T>, outputs: &mut Vec<Output<T>>) {
@@ -254,8 +258,8 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
         }
     }
 
-    let mut batcher = MessageBatcher::new(1000, one_hour);
-    batcher.add_batching_criterion(Box::new(CollectdTimestampDeltaCriterion { delta: 1.5 }));
+    let mut batcher = MessageBatcher::new(1000, one_hour)
+        .with_batching_criterion(CollectdTimestampDeltaCriterion { delta: 1.5 });
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),

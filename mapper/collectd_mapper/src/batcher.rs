@@ -46,11 +46,10 @@ impl MessageBatcher {
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        let mut batcher = message_batcher::MessageBatcher::new(1000, batching_window);
-
-        batcher.add_batching_criterion(Box::new(CollectdTimestampDeltaCriterion {
-            delta: batching_window.num_seconds() as f64,
-        }));
+        let batcher = message_batcher::MessageBatcher::new(1000, batching_window)
+            .with_batching_criterion(CollectdTimestampDeltaCriterion {
+                delta: batching_window.num_seconds() as f64,
+            });
 
         Self {
             sender,
