@@ -1,6 +1,6 @@
 use crate::collectd::CollectdMessage;
 use crate::error::*;
-use crate::functional_batcher;
+use crate::message_batcher;
 use clock::Clock;
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
@@ -18,7 +18,7 @@ pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
-    batcher: functional_batcher::Batcher,
+    batcher: message_batcher::MessageBatcher,
     clock: Arc<dyn Clock>,
 }
 
@@ -31,7 +31,7 @@ impl MessageBatcher {
         clock: Arc<dyn Clock>,
     ) -> Self {
         let batching_window = chrono::Duration::from_std(batching_window).unwrap();
-        let batcher = functional_batcher::Batcher::new(
+        let batcher = message_batcher::MessageBatcher::new(
             1000,
             batching_window,
             batching_window.num_seconds() as f64,
@@ -52,7 +52,7 @@ impl MessageBatcher {
             .subscribe(self.source_topic_filter.clone())
             .await?;
 
-        let mut outputs: Vec<functional_batcher::Output> = Vec::new();
+        let mut outputs: Vec<message_batcher::Output> = Vec::new();
 
         loop {
             let next_tick_in = self.process_outputs(&mut outputs);
@@ -61,17 +61,14 @@ impl MessageBatcher {
         }
     }
 
-    fn process_outputs(
-        &self,
-        outputs: &mut Vec<functional_batcher::Output>,
-    ) -> std::time::Duration {
+    fn process_outputs(&self, outputs: &mut Vec<message_batcher::Output>) -> std::time::Duration {
         // sentinel value to avoid having to deal with optional timeouts.
         let mut next_tick_at = self.clock.now() + chrono::Duration::hours(24);
 
         // Handle outputs
         for output in outputs.drain(..) {
             match output {
-                functional_batcher::Output::MessageBatch(batch) => {
+                message_batcher::Output::MessageBatch(batch) => {
                     // Send the current batch to the batch processor
                     let _ = group_messages(batch)
                         .map_err(|err| error!("Error while grouping the message batch: {}", err))
@@ -81,7 +78,7 @@ impl MessageBatcher {
                             })
                         });
                 }
-                functional_batcher::Output::NextTickAt(at) => {
+                message_batcher::Output::NextTickAt(at) => {
                     next_tick_at = std::cmp::min(next_tick_at, at);
                 }
             }
@@ -97,7 +94,7 @@ impl MessageBatcher {
         &mut self,
         messages: &mut dyn MqttMessageStream,
         next_tick_in: std::time::Duration,
-        outputs: &mut Vec<functional_batcher::Output>,
+        outputs: &mut Vec<message_batcher::Output>,
     ) {
         match tokio::time::timeout_at(tokio::time::Instant::now() + next_tick_in, messages.next())
             .await
@@ -106,14 +103,14 @@ impl MessageBatcher {
                 // Timeout fired. Inform functional core
                 let now = self.clock.now();
                 self.batcher
-                    .handle(functional_batcher::Input::Tick { now }, outputs);
+                    .handle(message_batcher::Input::Tick { now }, outputs);
             }
             Ok(Some(mqtt_message)) => {
                 // got a message
                 let received_at = self.clock.now();
                 match CollectdMessage::parse_from(&mqtt_message) {
                     Ok(collectd_message) => self.batcher.handle(
-                        functional_batcher::Input::Message {
+                        message_batcher::Input::Message {
                             received_at,
                             message: collectd_message.into(),
                         },
@@ -133,7 +130,7 @@ impl MessageBatcher {
 }
 
 fn group_messages(
-    message_batch: functional_batcher::MessageBatch,
+    message_batch: message_batcher::MessageBatch,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
     message_grouper.timestamp(&message_batch.opened_at)?;

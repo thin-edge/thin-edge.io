@@ -9,8 +9,8 @@ pub struct MessageBatch {
     pub messages: Vec<OwnedCollectdMessage>,
 }
 
-/// The Batcher's internal state / configuration.
-pub struct Batcher {
+/// The MessageBatcher's internal state / configuration.
+pub struct MessageBatcher {
     /// Maximum number of messages per batch.
     max_batch_size: usize,
 
@@ -28,7 +28,7 @@ pub struct Batcher {
     current_batch: Option<MessageBatch>,
 }
 
-/// Inputs to the `Batcher`.
+/// Inputs to the `MessageBatcher`.
 pub enum Input {
     /// A message was received.
     Message {
@@ -41,7 +41,7 @@ pub enum Input {
 
     /// Time has progressed.
     ///
-    /// Allows the Batcher to close a batch when the current time window has expired.
+    /// Allows the `MessageBatcher` to close a batch when the current time window has expired.
     Tick {
         /// The current system time.
         now: Timestamp,
@@ -51,8 +51,8 @@ pub enum Input {
     Flush,
 }
 
-/// Outputs from the `Batcher`. These inform the imperative shell to perform some actions on behalf
-/// of the `Batcher`.
+/// Outputs from the `MessageBatcher`. These inform the imperative shell to perform some actions on behalf
+/// of the `MessageBatcher`.
 #[derive(Debug, PartialEq)]
 pub enum Output {
     /// Informs the imperative shell to send an `Input::Tick` at (or slightly after) the specified timestamp.
@@ -62,7 +62,7 @@ pub enum Output {
     MessageBatch(MessageBatch),
 }
 
-impl Batcher {
+impl MessageBatcher {
     pub fn new(
         max_batch_size: usize,
         max_batch_age: chrono::Duration,
@@ -178,7 +178,7 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
     let fixed_timestamp = clock::WallClock.now();
     let one_hour = chrono::Duration::hours(1);
 
-    let mut batcher = Batcher::new(3, one_hour, 10.0);
+    let mut batcher = MessageBatcher::new(3, one_hour, 10.0);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
@@ -222,7 +222,7 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     let fixed_timestamp = clock::WallClock.now();
     let one_hour = chrono::Duration::hours(1);
 
-    let mut batcher = Batcher::new(1000, one_hour, 1.5);
+    let mut batcher = MessageBatcher::new(1000, one_hour, 1.5);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
@@ -288,7 +288,7 @@ fn it_batches_messages_based_on_max_age() {
     let fixed_timestamp = clock::WallClock.now();
     let ten_seconds = Duration::seconds(10);
 
-    let mut batcher = Batcher::new(1000, ten_seconds, 100000.0);
+    let mut batcher = MessageBatcher::new(1000, ten_seconds, 100000.0);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
@@ -356,7 +356,7 @@ fn it_batches_messages_based_on_max_age() {
 }
 
 #[cfg(test)]
-fn test_batcher(batcher: &mut Batcher, inputs: Vec<Input>, expected_outputs: Vec<Output>) {
+fn test_batcher(batcher: &mut MessageBatcher, inputs: Vec<Input>, expected_outputs: Vec<Output>) {
     let mut outputs = Vec::new();
     inputs
         .into_iter()
