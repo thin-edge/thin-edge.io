@@ -1,4 +1,4 @@
-use crate::collectd::CollectdMessage;
+use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
 use crate::error::*;
 use crate::message_batcher;
 use clock::Clock;
@@ -11,11 +11,30 @@ use thin_edge_json::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{error, log::warn};
 
+/// We start a new batch upon receiving a message whose timestamp is farther away to the
+/// timestamp of first messsge in the batch than `delta` seconds.
+///
+/// Delta is inclusive.
+struct CollectdTimestampDeltaCriterion {
+    delta: f64,
+}
+
+impl message_batcher::BatchingCriterion<OwnedCollectdMessage> for CollectdTimestampDeltaCriterion {
+    fn belongs_to_batch(
+        &self,
+        message: &OwnedCollectdMessage,
+        message_batch: &message_batcher::MessageBatch<OwnedCollectdMessage>,
+    ) -> bool {
+        let delta = message_batch.first().timestamp() - message.timestamp();
+        delta.abs() <= self.delta
+    }
+}
+
 pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
-    batcher: message_batcher::MessageBatcher,
+    batcher: message_batcher::MessageBatcher<OwnedCollectdMessage>,
     clock: Arc<dyn Clock>,
 }
 
@@ -27,11 +46,11 @@ impl MessageBatcher {
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        let batcher = message_batcher::MessageBatcher::new(
-            1000,
-            batching_window,
-            batching_window.num_seconds() as f64,
-        );
+        let mut batcher = message_batcher::MessageBatcher::new(1000, batching_window);
+
+        batcher.add_batching_criterion(Box::new(CollectdTimestampDeltaCriterion {
+            delta: batching_window.num_seconds() as f64,
+        }));
 
         Self {
             sender,
@@ -48,7 +67,7 @@ impl MessageBatcher {
             .subscribe(self.source_topic_filter.clone())
             .await?;
 
-        let mut outputs: Vec<message_batcher::Output> = Vec::new();
+        let mut outputs = Vec::new();
 
         loop {
             let next_tick_in = self.process_outputs(&mut outputs);
@@ -57,7 +76,10 @@ impl MessageBatcher {
         }
     }
 
-    fn process_outputs(&self, outputs: &mut Vec<message_batcher::Output>) -> std::time::Duration {
+    fn process_outputs(
+        &self,
+        outputs: &mut Vec<message_batcher::Output<OwnedCollectdMessage>>,
+    ) -> std::time::Duration {
         // sentinel value to avoid having to deal with optional timeouts.
         let mut next_notification_at = self.clock.now() + chrono::Duration::hours(24);
 
@@ -90,7 +112,7 @@ impl MessageBatcher {
         &mut self,
         messages: &mut dyn MqttMessageStream,
         next_tick_in: std::time::Duration,
-        outputs: &mut Vec<message_batcher::Output>,
+        outputs: &mut Vec<message_batcher::Output<OwnedCollectdMessage>>,
     ) {
         match tokio::time::timeout_at(tokio::time::Instant::now() + next_tick_in, messages.next())
             .await
@@ -126,7 +148,7 @@ impl MessageBatcher {
 }
 
 fn group_messages(
-    message_batch: message_batcher::MessageBatch,
+    message_batch: message_batcher::MessageBatch<OwnedCollectdMessage>,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
     message_grouper.timestamp(&message_batch.opened_at())?;
