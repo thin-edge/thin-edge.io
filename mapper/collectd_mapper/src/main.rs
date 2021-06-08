@@ -1,7 +1,7 @@
 mod batcher;
-mod functional_batcher;
 mod collectd;
 mod error;
+mod functional_batcher;
 mod monitor;
 
 use tracing::{debug_span, info, Instrument};
