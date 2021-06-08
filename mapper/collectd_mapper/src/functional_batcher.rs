@@ -178,6 +178,9 @@ impl Batcher {
     }
 }
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 #[test]
 fn it_batches_messages_until_max_batch_size_is_reached() {
     use crate::collectd::CollectdMessage;
@@ -350,12 +353,12 @@ fn it_batches_messages_based_on_max_age() {
         Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
         Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
         Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
+            opened_at: fixed_timestamp + Duration::seconds(11),
             messages: vec![messages[3].clone(), messages[4].clone()],
         }),
         Output::NextTickAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
         Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
+            opened_at: fixed_timestamp + Duration::seconds(21),
             messages: vec![messages[5].clone()],
         }),
     ];

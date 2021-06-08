@@ -377,6 +377,7 @@ dependencies = [
  "futures",
  "mockall",
  "mqtt_client",
+ "pretty_assertions",
  "tedge_config",
  "tedge_users",
  "thin_edge_json",

@@ -41,3 +41,4 @@ tedge_users = { path = "../../common/tedge_users" }
 [dev-dependencies]
 assert_matches = "1.4"
 tokio-test = "0.4"
+pretty_assertions = "0.7.2"
