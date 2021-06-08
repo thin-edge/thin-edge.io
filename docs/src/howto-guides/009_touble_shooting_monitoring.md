@@ -3,7 +3,7 @@
 To install and configure monitoring on your device,
 see the tutorial [Monitor your device with collectd](../tutorials/device-monitoring.md).
 
-## Is collectd is running?
+## Is collectd running?
 
 ```
 sudo systemctl status collectd
@@ -15,7 +15,7 @@ If not, launch collected
 sudo systemctl start collectd
 ```
 
-## Is collect publishing MQTT messages?
+## Is collectd publishing MQTT messages?
 
 ```
 tedge mqtt sub 'collectd/#'
