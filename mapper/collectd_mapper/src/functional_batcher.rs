@@ -98,6 +98,11 @@ impl Batcher {
             Input::Tick { now } => self.handle_tick(now, outputs),
             Input::Flush => self.handle_flush(outputs),
         }
+
+        // Inform imperative shell about when to send a Tick message.
+        if let Some(batch_opened_at) = self.current_batch.opened_at {
+            outputs.push(Output::NextTickAt(batch_opened_at + self.max_batch_age));
+        }
     }
 
     fn handle_message(
@@ -161,8 +166,9 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
     use clock::Clock;
 
     let fixed_timestamp = clock::WallClock.now();
+    let one_hour = chrono::Duration::hours(1);
 
-    let mut batcher = Batcher::new(3, chrono::Duration::hours(1), 10.0);
+    let mut batcher = Batcher::new(3, one_hour, 10.0);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
@@ -186,7 +192,11 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
         Input::Flush,
     ];
 
-    let expected_outputs = vec![Output::MessageBatch(MessageBatch(messages))];
+    let expected_outputs = vec![
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::MessageBatch(MessageBatch(messages)),
+    ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
 }
@@ -197,8 +207,9 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     use clock::Clock;
 
     let fixed_timestamp = clock::WallClock.now();
+    let one_hour = chrono::Duration::hours(1);
 
-    let mut batcher = Batcher::new(1000, chrono::Duration::hours(1), 1.5);
+    let mut batcher = Batcher::new(1000, one_hour, 1.5);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
@@ -233,8 +244,13 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     ];
 
     let expected_outputs = vec![
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch(vec![messages[0].clone(), messages[1].clone()])),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch(vec![messages[2].clone(), messages[3].clone()])),
+        Output::NextTickAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch(vec![messages[4].clone()])),
     ];
 
@@ -244,11 +260,13 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
 #[test]
 fn it_batches_messages_based_on_max_age() {
     use crate::collectd::CollectdMessage;
+    use chrono::Duration;
     use clock::Clock;
 
     let fixed_timestamp = clock::WallClock.now();
+    let ten_seconds = Duration::seconds(10);
 
-    let mut batcher = Batcher::new(1000, chrono::Duration::seconds(10), 100000.0);
+    let mut batcher = Batcher::new(1000, ten_seconds, 100000.0);
 
     let messages: Vec<OwnedCollectdMessage> = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
@@ -288,12 +306,18 @@ fn it_batches_messages_based_on_max_age() {
     ];
 
     let expected_outputs = vec![
+        Output::NextTickAt(fixed_timestamp + ten_seconds),
+        Output::NextTickAt(fixed_timestamp + ten_seconds),
+        Output::NextTickAt(fixed_timestamp + ten_seconds),
         Output::MessageBatch(MessageBatch(vec![
             messages[0].clone(),
             messages[1].clone(),
             messages[2].clone(),
         ])),
+        Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
+        Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
         Output::MessageBatch(MessageBatch(vec![messages[3].clone(), messages[4].clone()])),
+        Output::NextTickAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
         Output::MessageBatch(MessageBatch(vec![messages[5].clone()])),
     ];
 
