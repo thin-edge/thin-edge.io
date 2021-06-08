@@ -4,7 +4,10 @@ use crate::collectd::OwnedCollectdMessage;
 use clock::Timestamp;
 
 #[derive(Debug, PartialEq)]
-pub struct MessageBatch(pub Vec<OwnedCollectdMessage>);
+pub struct MessageBatch {
+    pub opened_at: Timestamp,
+    pub messages: Vec<OwnedCollectdMessage>,
+}
 
 /// The Batcher's internal state.
 pub struct Batcher {
@@ -142,7 +145,10 @@ impl Batcher {
     fn handle_flush(&mut self, outputs: &mut Vec<Output>) {
         if !self.current_batch.is_empty() {
             let last_batch = std::mem::replace(&mut self.current_batch, CurrentBatch::empty());
-            outputs.push(Output::MessageBatch(MessageBatch(last_batch.messages)));
+            outputs.push(Output::MessageBatch(MessageBatch {
+                opened_at: self.current_batch.opened_at.unwrap(),
+                messages: last_batch.messages,
+            }));
         }
     }
 
@@ -205,7 +211,10 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
     let expected_outputs = vec![
         Output::NextTickAt(fixed_timestamp + one_hour),
         Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch(messages)),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages,
+        }),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
@@ -256,12 +265,21 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     let expected_outputs = vec![
         Output::NextTickAt(fixed_timestamp + one_hour),
         Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch(vec![messages[0].clone(), messages[1].clone()])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![messages[0].clone(), messages[1].clone()],
+        }),
         Output::NextTickAt(fixed_timestamp + one_hour),
         Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch(vec![messages[2].clone(), messages[3].clone()])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![messages[2].clone(), messages[3].clone()],
+        }),
         Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch(vec![messages[4].clone()])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![messages[4].clone()],
+        }),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
@@ -319,16 +337,25 @@ fn it_batches_messages_based_on_max_age() {
         Output::NextTickAt(fixed_timestamp + ten_seconds),
         Output::NextTickAt(fixed_timestamp + ten_seconds),
         Output::NextTickAt(fixed_timestamp + ten_seconds),
-        Output::MessageBatch(MessageBatch(vec![
-            messages[0].clone(),
-            messages[1].clone(),
-            messages[2].clone(),
-        ])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![
+                messages[0].clone(),
+                messages[1].clone(),
+                messages[2].clone(),
+            ],
+        }),
         Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
         Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
-        Output::MessageBatch(MessageBatch(vec![messages[3].clone(), messages[4].clone()])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![messages[3].clone(), messages[4].clone()],
+        }),
         Output::NextTickAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
-        Output::MessageBatch(MessageBatch(vec![messages[5].clone()])),
+        Output::MessageBatch(MessageBatch {
+            opened_at: fixed_timestamp,
+            messages: vec![messages[5].clone()],
+        }),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);

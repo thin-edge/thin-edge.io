@@ -1,64 +1,24 @@
-use clock::{Clock, Timestamp};
-use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
+use crate::collectd::CollectdMessage;
+use crate::error::*;
+use crate::functional_batcher;
+use clock::Clock;
+use mqtt_client::{Message, MqttClient, Topic, TopicFilter};
 use std::sync::Arc;
 use thin_edge_json::{
     group::MeasurementGrouper, measurement::FlatMeasurementVisitor,
     serialize::ThinEdgeJsonSerializer,
 };
 use tokio::{
-    select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time,
     time::Duration,
 };
 use tracing::{error, log::warn};
-
-use crate::collectd::CollectdMessage;
-use crate::error::*;
-
-#[derive(Debug)]
-pub struct MessageBatch {
-    message_grouper: MeasurementGrouper,
-}
-
-impl MessageBatch {
-    fn start_batch(
-        collectd_message: CollectdMessage,
-        timestamp: Timestamp,
-    ) -> Result<Self, DeviceMonitorError> {
-        let mut message_grouper = MeasurementGrouper::new();
-        message_grouper.timestamp(&timestamp)?;
-
-        let mut message_batch = Self { message_grouper };
-
-        message_batch.add_to_batch(collectd_message)?;
-
-        Ok(message_batch)
-    }
-
-    fn add_to_batch(
-        &mut self,
-        collectd_message: CollectdMessage,
-    ) -> Result<(), DeviceMonitorError> {
-        self.message_grouper.measurement(
-            Some(collectd_message.metric_group_key),
-            collectd_message.metric_key,
-            collectd_message.metric_value,
-        )?;
-
-        Ok(())
-    }
-
-    fn end_batch(self) -> MeasurementGrouper {
-        self.message_grouper
-    }
-}
 
 pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
-    batching_window: Duration,
+    batching_window: chrono::Duration,
     clock: Arc<dyn Clock>,
 }
 
@@ -70,6 +30,7 @@ impl MessageBatcher {
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        let batching_window = chrono::Duration::from_std(batching_window).unwrap();
         Self {
             sender,
             mqtt_client,
@@ -79,91 +40,102 @@ impl MessageBatcher {
         }
     }
 
+    fn handle_outputs(&self, outputs: &mut Vec<functional_batcher::Output>) -> std::time::Duration {
+        // sentinel value to avoid having to deal with optional timeouts.
+        let mut next_tick_at = self.clock.now() + chrono::Duration::hours(24);
+
+        // Handle outputs
+        for output in outputs.drain(..) {
+            match output {
+                functional_batcher::Output::MessageBatch(batch) => {
+                    // Send the current batch to the batch processor
+                    let _ = group_messages(batch)
+                        .map_err(|err| error!("Error while grouping the message batch: {}", err))
+                        .and_then(|group| {
+                            self.sender.send(group).map_err(|err| {
+                                error!("Error while publishing a message batch: {}", err)
+                            })
+                        });
+                }
+                functional_batcher::Output::NextTickAt(at) => {
+                    next_tick_at = std::cmp::min(next_tick_at, at);
+                }
+            }
+        }
+
+        // XXX: Ugly conversion due to std::time, chrono and tokio::time.
+        let next_tick_in = (next_tick_at - self.clock.now()).to_std().unwrap();
+
+        next_tick_in
+    }
+
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
         let mut messages = self
             .mqtt_client
             .subscribe(self.source_topic_filter.clone())
             .await?;
 
-        loop {
-            match self.receive_message(messages.as_mut()).await {
-                Some((message, timestamp)) => {
-                    // Build a message batch until the batching window times out and return the batch
-                    let message_batch_result = self
-                        .build_message_batch_with_timeout(message, timestamp, messages.as_mut())
-                        .await;
+        let mut batcher = functional_batcher::Batcher::new(
+            1000,
+            self.batching_window,
+            self.batching_window.num_seconds() as f64,
+        );
 
-                    match message_batch_result {
-                        Ok(message_batch) => {
-                            // Send the current batch to the batch processor
-                            let _ = self.sender.send(message_batch).map_err(|err| {
-                                error!("Error while publishing a message batch: {}", err)
-                            });
-                        }
+        let mut outputs: Vec<functional_batcher::Output> = Vec::new();
+
+        loop {
+            let next_tick_in = self.handle_outputs(&mut outputs);
+
+            match tokio::time::timeout_at(
+                tokio::time::Instant::now() + next_tick_in,
+                messages.next(),
+            )
+            .await
+            {
+                Err(_) => {
+                    // Timeout fired. Inform functional core
+                    let now = self.clock.now();
+                    batcher.handle(functional_batcher::Input::Tick { now }, &mut outputs);
+                }
+                Ok(Some(mqtt_message)) => {
+                    // got a message
+                    let received_at = self.clock.now();
+                    match CollectdMessage::parse_from(&mqtt_message) {
+                        Ok(collectd_message) => batcher.handle(
+                            functional_batcher::Input::Message {
+                                received_at,
+                                message: collectd_message.into(),
+                            },
+                            &mut outputs,
+                        ),
                         Err(err) => {
-                            error!("Error while building a message batch: {}", err);
+                            error!("Error parsing collectd message: {}", err);
                         }
                     }
                 }
-                None => {
-                    //If the message batching loop returns, it means the MQTT connection has closed
+                Ok(None) => {
+                    // XXX: Not sure if this works!
                     error!("MQTT connection closed. Retrying...");
                 }
             }
         }
     }
+}
 
-    async fn build_message_batch_with_timeout(
-        &self,
-        first_message: Message,
-        first_message_timestamp: Timestamp,
-        messages: &mut dyn MqttMessageStream,
-    ) -> Result<MeasurementGrouper, DeviceMonitorError> {
-        let collectd_message = CollectdMessage::parse_from(&first_message)?;
-        let mut message_batch =
-            MessageBatch::start_batch(collectd_message, first_message_timestamp)?;
+fn group_messages(
+    message_batch: functional_batcher::MessageBatch,
+) -> Result<MeasurementGrouper, DeviceMonitorError> {
+    let mut message_grouper = MeasurementGrouper::new();
+    message_grouper.timestamp(&message_batch.opened_at)?;
 
-        // Creates a sleep timer future handler and does not await here
-        // for sleep to finish, but inside the select loop
-        let sleep = time::sleep(self.batching_window);
-        tokio::pin!(sleep);
-
-        loop {
-            select! {
-                _ = &mut sleep => {
-                        break;
-                }
-                maybe_message = self.receive_message(messages) => {
-                    match maybe_message {
-                        Some((message, _timestamp)) => {
-                            let collectd_message = match CollectdMessage::parse_from(&message) {
-                                Ok(message) => message,
-                                Err(err) => {
-                                    error!("Error parsing collectd message: {}", err);
-                                    continue;   // Even if one message is faulty, we skip that one and keep building the batch
-                                },
-                            };
-                            message_batch.add_to_batch(collectd_message)?;
-                        }
-                        None => break
-                    }
-                }
-
-            }
-        }
-
-        Ok(message_batch.end_batch())
+    for collectd_message in message_batch.messages {
+        message_grouper.measurement(
+            Some(collectd_message.metric_group_key()),
+            collectd_message.metric_key(),
+            collectd_message.metric_value(),
+        )?;
     }
-
-    async fn receive_message(
-        &self,
-        messages: &mut dyn MqttMessageStream,
-    ) -> Option<(Message, Timestamp)> {
-        messages
-            .next()
-            .await
-            .map(|message| (message, self.clock.now()))
-    }
+    Ok(message_grouper)
 }
 
 pub struct MessageBatchPublisher {
@@ -224,6 +196,7 @@ mod tests {
     use mqtt_client::QoS;
     use tokio::time::{self, Instant};
 
+    /*
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
         let collectd_message = CollectdMessage::new("temperature", "value", 32.5, 1.0);
@@ -268,6 +241,7 @@ mod tests {
 
         Ok(())
     }
+    */
 
     #[tokio::test]
     async fn batch_publisher() -> anyhow::Result<()> {
