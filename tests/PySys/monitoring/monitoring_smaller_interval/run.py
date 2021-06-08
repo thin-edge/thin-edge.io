@@ -109,7 +109,7 @@ class MonitoringSmallInterval(BaseTest):
                         str(line)
                     self.abort(False, reason)
 
-        if self.time_cnt > 10 and self.temp_cnt == 10 and self.pres_cnt == 10:
+        if self.time_cnt >= 10 and self.temp_cnt == 10 and self.pres_cnt == 10:
             return True
         else:
             return False
