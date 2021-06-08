@@ -9,7 +9,7 @@ pub struct MessageBatch {
     pub messages: Vec<OwnedCollectdMessage>,
 }
 
-/// The Batcher's internal state.
+/// The Batcher's internal state / configuration.
 pub struct Batcher {
     /// Maximum number of messages per batch.
     max_batch_size: usize,
@@ -143,10 +143,11 @@ impl Batcher {
     }
 
     fn handle_flush(&mut self, outputs: &mut Vec<Output>) {
-        if !self.current_batch.is_empty() {
+        if let Some(opened_at) = self.current_batch.opened_at {
+            debug_assert!(!self.current_batch.is_empty());
             let last_batch = std::mem::replace(&mut self.current_batch, CurrentBatch::empty());
             outputs.push(Output::MessageBatch(MessageBatch {
-                opened_at: self.current_batch.opened_at.unwrap(),
+                opened_at,
                 messages: last_batch.messages,
             }));
         }
@@ -156,7 +157,8 @@ impl Batcher {
         match self.current_batch.messages.first() {
             None => false,
             Some(first) => {
-                (first.timestamp() - message.timestamp()).abs() > self.collectd_timestamp_delta
+                let delta = (first.timestamp() - message.timestamp()).abs();
+                delta > self.collectd_timestamp_delta
             }
         }
     }
