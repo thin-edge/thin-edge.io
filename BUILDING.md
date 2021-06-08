@@ -1,5 +1,23 @@
 # Building thin-edge.io
 
+## Requirements
+
+You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully). 
+
+Our recommended setup and required tools are:
+
+* Ubuntu 20.04 or Debian 10.9 (Buster)
+* git
+* Rust toolchain
+
+Following packages are required:
+
+* build-essentials
+* curl
+* gcc
+
+A list of our test platforms can be found [here](docs/src/supported-platforms.md).
+
 ## Get the code
 
 thin-edge.io code is in git repository on github to acquire the code use following command:

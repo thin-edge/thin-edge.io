@@ -1,15 +1,16 @@
 use crate::cli::connect::*;
 use crate::command::{Command, ExecutionContext};
 use crate::services::{
-    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+    self, mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
+    tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
 };
 use crate::utils::paths;
-use crate::utils::users::UserManager;
 use crate::ConfigError;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::Path;
 use std::time::Duration;
 use tedge_config::*;
+use tedge_users::{UserManager, ROOT_USER};
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
@@ -71,6 +72,7 @@ impl Command for ConnectCommand {
 
         new_bridge(
             &bridge_config,
+            &self.cloud,
             &self.common_mosquitto_config,
             &context.user_manager,
         )?;
@@ -179,9 +181,17 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     for i in 0..2 {
         print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        // 100: Device creation
-        mqtt.publish(Message::new(&c8y_msg_pub_topic, "100"))
-            .await?;
+        if timeout(
+            RESPONSE_TIMEOUT,
+            // 100: Device creation
+            mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
+        )
+        .await
+        .is_err()
+        {
+            println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+            return Err(ConnectError::TimeoutElapsedError);
+        }
 
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
         match fut.await {
@@ -235,8 +245,16 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
         }
     });
 
-    mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string()))
-        .await?;
+    if timeout(
+        RESPONSE_TIMEOUT,
+        mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string())),
+    )
+    .await
+    .is_err()
+    {
+        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+        return Err(ConnectError::TimeoutElapsedError);
+    }
 
     let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
     match fut.await {
@@ -252,6 +270,7 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
 
 fn new_bridge(
     bridge_config: &BridgeConfig,
+    cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
     user_manager: &UserManager,
 ) -> Result<(), ConnectError> {
@@ -299,7 +318,14 @@ fn new_bridge(
         if which("tedge_mapper").is_err() {
             println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
         } else {
-            start_and_enable_tedge_mapper(user_manager);
+            match cloud {
+                Cloud::Azure => {
+                    start_and_enable_tedge_mapper_az(user_manager);
+                }
+                Cloud::C8y => {
+                    start_and_enable_tedge_mapper_c8y(user_manager);
+                }
+            }
         }
     }
 
@@ -353,17 +379,39 @@ fn get_bridge_config_file_path(bridge_config: &BridgeConfig) -> Result<String, C
     ])?)
 }
 
-fn start_and_enable_tedge_mapper(user_manager: &UserManager) {
+fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperService.restart(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.restart(user_manager) {
         println!("Failed to stop tedge-mapper service: {:?}", err);
         failed = true;
     }
 
     println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperService.enable(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.enable(user_manager) {
+        println!("Failed to enable tedge-mapper service: {:?}", err);
+        failed = true;
+    }
+
+    if !failed {
+        println!("tedge-mapper service successfully started and enabled!\n");
+    }
+}
+
+fn start_and_enable_tedge_mapper_az(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
+    let mut failed = false;
+
+    println!("Starting tedge-mapper service.\n");
+    if let Err(err) = TedgeMapperAzService.restart(user_manager) {
+        println!("Failed to stop tedge-mapper service: {:?}", err);
+        failed = true;
+    }
+
+    println!("Persisting tedge-mapper on reboot.\n");
+    if let Err(err) = TedgeMapperAzService.enable(user_manager) {
         println!("Failed to enable tedge-mapper service: {:?}", err);
         failed = true;
     }

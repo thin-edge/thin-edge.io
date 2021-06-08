@@ -2,12 +2,12 @@ use crate::services::SystemdError::{
     ServiceNotFound, ServiceNotLoaded, SystemdNotAvailable, UnhandledReturnCode, UnspecificError,
 };
 use crate::utils::paths;
-use crate::utils::users::UserManager;
-use crate::utils::users::ROOT_USER;
 use std::process::ExitStatus;
+use tedge_users::*;
 
 pub mod mosquitto;
-pub mod tedge_mapper;
+pub mod tedge_mapper_az;
+pub mod tedge_mapper_c8y;
 
 type ExitCode = i32;
 

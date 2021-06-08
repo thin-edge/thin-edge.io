@@ -15,6 +15,7 @@ class EnvironmentC8y(BaseTest):
         self.log.debug("EnvironmentC8y Setup")
 
         self.tedge = "/usr/bin/tedge"
+        self.tedge_mapper_c8y = "tedge-mapper-c8y"
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
         self.log.info("EnvironmentC8y Setup")
@@ -23,7 +24,7 @@ class EnvironmentC8y(BaseTest):
         # Check if tedge-mapper is in disabled state
         serv_mapper = self.startProcess(
             command=self.systemctl,
-            arguments=["status", "tedge-mapper"],
+            arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper1",
             expectedExitStatus="==3", # 3: disabled
         )
@@ -45,7 +46,7 @@ class EnvironmentC8y(BaseTest):
         # Check if tedge-mapper is active again
         serv_mapper = self.startProcess(
             command=self.systemctl,
-            arguments=["status", "tedge-mapper"],
+            arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper3",
         )
 
@@ -65,7 +66,7 @@ class EnvironmentC8y(BaseTest):
         # Check if tedge-mapper is active
         serv_mapper = self.startProcess(
             command=self.systemctl,
-            arguments=["status", "tedge-mapper"],
+            arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper4",
         )
 
@@ -82,7 +83,7 @@ class EnvironmentC8y(BaseTest):
         # Check if tedge-mapper is disabled
         serv_mosq = self.startProcess(
             command=self.systemctl,
-            arguments=["status", "tedge-mapper"],
+            arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper5",
             expectedExitStatus="==3",
         )

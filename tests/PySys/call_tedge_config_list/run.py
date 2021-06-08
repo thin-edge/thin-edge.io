@@ -37,8 +37,8 @@ configdict = {
     "device.cert.path": "",
     "c8y.url": "",
     "c8y.root.cert.path": "",
-    "azure.url": "",
-    "azure.root.cert.path": "",
+    "az.url": "",
+    "az.root.cert.path": "",
 }
 
 DEFAULTKEYPATH = "/etc/tedge/device-certs/tedge-private-key.pem"
@@ -131,7 +131,7 @@ class PySysTest(BaseTest):
                     expect=DEFAULTROOTCERTPATH,
                     valueread=valueread,
                 )
-            elif key == "azure.root.cert.path":
+            elif key == "az.root.cert.path":
                 self.assertThat(
                     "expect == valueread",
                     expect=DEFAULTROOTCERTPATH,

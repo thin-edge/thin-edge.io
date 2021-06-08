@@ -14,8 +14,8 @@ pub(crate) struct TEdgeConfigDto {
     #[serde(default)]
     pub(crate) c8y: CumulocityConfigDto,
 
-    #[serde(default)]
-    pub(crate) azure: AzureConfigDto,
+    #[serde(default, alias = "azure")] // for version 0.1.0 compatibility
+    pub(crate) az: AzureConfigDto,
 
     #[serde(default)]
     pub(crate) mqtt: MqttConfigDto,

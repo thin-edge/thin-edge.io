@@ -530,7 +530,7 @@ impl Message {
             .unwrap_or(self.payload.as_slice())
     }
 
-    /// Add a comment that this will trim the trailing null character....
+    // This function will trim the null character at the end of the payload
     pub fn payload_utf8(&self) -> Result<&str, Error> {
         Ok(std::str::from_utf8(self.payload_trimmed())?)
     }

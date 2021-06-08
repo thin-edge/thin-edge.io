@@ -5,9 +5,11 @@ authors = ["Software AG <thin-edge-team@softwareag.com>"]
 edition = "2018"
 
 [dependencies]
+thiserror = "1.0"
+
+[target.'cfg(unix)'.dependencies]
 log = "0.4"
 nix = "0.20"
-thiserror = "1.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
