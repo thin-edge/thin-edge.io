@@ -3,10 +3,28 @@
 use crate::collectd::OwnedCollectdMessage;
 use clock::Timestamp;
 
+/// A batch of messages. Contains always at least one message.
 #[derive(Debug, PartialEq)]
 pub struct MessageBatch {
-    pub opened_at: Timestamp,
-    pub messages: Vec<OwnedCollectdMessage>,
+    opened_at: Timestamp,
+    messages: Vec<OwnedCollectdMessage>,
+}
+
+impl MessageBatch {
+    pub fn new(opened_at: Timestamp, first_message: OwnedCollectdMessage) -> Self {
+        Self {
+            opened_at,
+            messages: vec![first_message],
+        }
+    }
+
+    pub fn opened_at(&self) -> Timestamp {
+        self.opened_at
+    }
+
+    pub fn iter_messages(&self) -> impl Iterator<Item = &OwnedCollectdMessage> {
+        self.messages.iter()
+    }
 }
 
 /// The MessageBatcher's internal state / configuration.
@@ -111,10 +129,7 @@ impl MessageBatcher {
                 current_batch.messages.push(message);
             }
             None => {
-                self.current_batch = Some(MessageBatch {
-                    opened_at: received_at,
-                    messages: vec![message],
-                });
+                self.current_batch = Some(MessageBatch::new(received_at, message));
             }
         }
 

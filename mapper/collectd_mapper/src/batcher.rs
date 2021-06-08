@@ -133,9 +133,9 @@ fn group_messages(
     message_batch: message_batcher::MessageBatch,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
-    message_grouper.timestamp(&message_batch.opened_at)?;
+    message_grouper.timestamp(&message_batch.opened_at())?;
 
-    for collectd_message in message_batch.messages {
+    for collectd_message in message_batch.iter_messages() {
         message_grouper.measurement(
             Some(collectd_message.metric_group_key()),
             collectd_message.metric_key(),
