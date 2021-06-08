@@ -1,4 +1,5 @@
 mod batcher;
+mod functional_batcher;
 mod collectd;
 mod error;
 mod monitor;

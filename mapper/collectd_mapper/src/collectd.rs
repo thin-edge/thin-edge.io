@@ -7,6 +7,44 @@ pub struct CollectdMessage<'a> {
     pub metric_group_key: &'a str,
     pub metric_key: &'a str,
     pub metric_value: f64,
+    pub timestamp: f64,
+}
+
+/// It's easier to deal with owned, sendable data.
+/// XXX: Can be optimized to only store one `String`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OwnedCollectdMessage {
+    metric_group_key: String,
+    metric_key: String,
+    metric_value: f64,
+    timestamp: f64,
+}
+
+impl OwnedCollectdMessage {
+    pub fn metric_group_key(&self) -> &str {
+        &self.metric_group_key
+    }
+    pub fn metric_key(&self) -> &str {
+        &self.metric_key
+    }
+    pub fn metric_value(&self) -> f64 {
+        self.metric_value
+    }
+
+    pub fn timestamp(&self) -> f64 {
+        self.timestamp
+    }
+}
+
+impl<'a> Into<OwnedCollectdMessage> for CollectdMessage<'a> {
+    fn into(self) -> OwnedCollectdMessage {
+        OwnedCollectdMessage {
+            metric_group_key: self.metric_group_key.into(),
+            metric_key: self.metric_key.into(),
+            metric_value: self.metric_value,
+            timestamp: self.timestamp,
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -23,11 +61,17 @@ pub enum CollectdError {
 
 impl<'a> CollectdMessage<'a> {
     #[cfg(test)]
-    pub fn new(metric_group_key: &'a str, metric_key: &'a str, metric_value: f64) -> Self {
+    pub fn new(
+        metric_group_key: &'a str,
+        metric_key: &'a str,
+        metric_value: f64,
+        timestamp: f64,
+    ) -> Self {
         Self {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         }
     }
 
@@ -47,6 +91,7 @@ impl<'a> CollectdMessage<'a> {
             metric_group_key: collectd_topic.metric_group_key,
             metric_key: collectd_topic.metric_key,
             metric_value: collectd_payload.metric_value,
+            timestamp: collectd_payload.timestamp,
         })
     }
 }
@@ -80,7 +125,7 @@ impl<'a> CollectdTopic<'a> {
 
 #[derive(Debug)]
 struct CollectdPayload {
-    _timestamp: f64,
+    timestamp: f64,
     metric_value: f64,
 }
 
@@ -105,12 +150,12 @@ impl CollectdPayload {
             .map_err(|_err| CollectdPayloadError::NonUTF8MeasurementPayload(payload.into()))?;
         let mut iter = payload.split(':');
 
-        let _timestamp = iter.next().ok_or_else(|| {
+        let timestamp = iter.next().ok_or_else(|| {
             CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
         })?;
 
-        let _timestamp = _timestamp.parse::<f64>().map_err(|_err| {
-            CollectdPayloadError::InvalidMeasurementTimestamp(_timestamp.to_string())
+        let timestamp = timestamp.parse::<f64>().map_err(|_err| {
+            CollectdPayloadError::InvalidMeasurementTimestamp(timestamp.to_string())
         })?;
 
         let metric_value = iter.next().ok_or_else(|| {
@@ -123,7 +168,7 @@ impl CollectdPayload {
 
         match iter.next() {
             None => Ok(CollectdPayload {
-                _timestamp,
+                timestamp,
                 metric_value,
             }),
             Some(_) => Err(CollectdPayloadError::InvalidMeasurementPayloadFormat(
@@ -151,11 +196,13 @@ mod tests {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
         assert_eq!(metric_value, 32.5);
+        assert_eq!(timestamp, 123456789.0);
     }
 
     #[test]
@@ -169,11 +216,13 @@ mod tests {
             metric_group_key,
             metric_key,
             metric_value,
+            timestamp,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
         assert_eq!(metric_value, 32.5);
+        assert_eq!(timestamp, 123456789.0);
     }
 
     #[test]

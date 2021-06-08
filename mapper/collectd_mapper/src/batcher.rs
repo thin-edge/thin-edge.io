@@ -226,19 +226,19 @@ mod tests {
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let collectd_message = CollectdMessage::new("temperature", "value", 32.5);
+        let collectd_message = CollectdMessage::new("temperature", "value", 32.5, 1.0);
         let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0);
+        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, 1.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0);
+        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, 1.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("pressure", "value", 98.2);
+        let collectd_message = CollectdMessage::new("pressure", "value", 98.2, 1.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0);
+        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0, 1.0);
         message_batch.add_to_batch(collectd_message)?;
 
         let message_grouper = message_batch.end_batch();
