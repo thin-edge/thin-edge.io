@@ -17,7 +17,6 @@ const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 
 use mqtt_client::{QoS, Topic, TopicFilter};
-use std::time::Duration;
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
@@ -75,7 +74,7 @@ impl DeviceMonitor {
         let mut message_batch_producer = MessageBatcher::new(
             sender,
             mqtt_client.clone(),
-            Duration::from_millis(self.device_monitor_config.batching_window),
+            chrono::Duration::milliseconds(self.device_monitor_config.batching_window as i64),
             TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce),
             Arc::new(WallClock),
         );

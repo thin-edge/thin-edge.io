@@ -57,10 +57,10 @@ pub enum Input {
         message: OwnedCollectdMessage,
     },
 
-    /// Time has progressed.
+    /// Notify the `MessageBatcher` about an expired timer, requested through `Output::NotifyAt`.
     ///
     /// Allows the `MessageBatcher` to close a batch when the current time window has expired.
-    Tick {
+    Notify {
         /// The current system time.
         now: Timestamp,
     },
@@ -73,8 +73,8 @@ pub enum Input {
 /// of the `MessageBatcher`.
 #[derive(Debug, PartialEq)]
 pub enum Output {
-    /// Informs the imperative shell to send an `Input::Tick` at (or slightly after) the specified timestamp.
-    NextTickAt(Timestamp),
+    /// Informs the imperative shell to send an `Input::Notify` at (or slightly after) the specified timestamp.
+    NotifyAt(Timestamp),
 
     /// Informs the imperative shell to send the message batch out.
     MessageBatch(MessageBatch),
@@ -102,13 +102,13 @@ impl MessageBatcher {
                 message,
                 received_at,
             } => self.handle_message(message, received_at, outputs),
-            Input::Tick { now } => self.handle_tick(now, outputs),
+            Input::Notify { now } => self.handle_tick(now, outputs),
             Input::Flush => self.handle_flush(outputs),
         }
 
-        // Inform imperative shell about when to send a Tick message.
+        // Inform imperative shell about when to send a `Input::Notify` message.
         if let Some(batch_opened_at) = self.current_batch.as_ref().map(|batch| batch.opened_at) {
-            outputs.push(Output::NextTickAt(batch_opened_at + self.max_batch_age));
+            outputs.push(Output::NotifyAt(batch_opened_at + self.max_batch_age));
         }
     }
 
@@ -218,8 +218,8 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
     ];
 
     let expected_outputs = vec![
-        Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp,
             messages,
@@ -272,19 +272,19 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     ];
 
     let expected_outputs = vec![
-        Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp,
             messages: vec![messages[0].clone(), messages[1].clone()],
         }),
-        Output::NextTickAt(fixed_timestamp + one_hour),
-        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp,
             messages: vec![messages[2].clone(), messages[3].clone()],
         }),
-        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NotifyAt(fixed_timestamp + one_hour),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp,
             messages: vec![messages[4].clone()],
@@ -343,9 +343,9 @@ fn it_batches_messages_based_on_max_age() {
     ];
 
     let expected_outputs = vec![
-        Output::NextTickAt(fixed_timestamp + ten_seconds),
-        Output::NextTickAt(fixed_timestamp + ten_seconds),
-        Output::NextTickAt(fixed_timestamp + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + ten_seconds),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp,
             messages: vec![
@@ -354,13 +354,13 @@ fn it_batches_messages_based_on_max_age() {
                 messages[2].clone(),
             ],
         }),
-        Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
-        Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp + Duration::seconds(11),
             messages: vec![messages[3].clone(), messages[4].clone()],
         }),
-        Output::NextTickAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
+        Output::NotifyAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
         Output::MessageBatch(MessageBatch {
             opened_at: fixed_timestamp + Duration::seconds(21),
             messages: vec![messages[5].clone()],

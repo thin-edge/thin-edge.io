@@ -8,10 +8,7 @@ use thin_edge_json::{
     group::MeasurementGrouper, measurement::FlatMeasurementVisitor,
     serialize::ThinEdgeJsonSerializer,
 };
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::Duration,
-};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{error, log::warn};
 
 pub struct MessageBatcher {
@@ -26,11 +23,10 @@ impl MessageBatcher {
     pub fn new(
         sender: UnboundedSender<MeasurementGrouper>,
         mqtt_client: Arc<dyn MqttClient>,
-        batching_window: Duration,
+        batching_window: chrono::Duration,
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        let batching_window = chrono::Duration::from_std(batching_window).unwrap();
         let batcher = message_batcher::MessageBatcher::new(
             1000,
             batching_window,
@@ -63,7 +59,7 @@ impl MessageBatcher {
 
     fn process_outputs(&self, outputs: &mut Vec<message_batcher::Output>) -> std::time::Duration {
         // sentinel value to avoid having to deal with optional timeouts.
-        let mut next_tick_at = self.clock.now() + chrono::Duration::hours(24);
+        let mut next_notification_at = self.clock.now() + chrono::Duration::hours(24);
 
         // Handle outputs
         for output in outputs.drain(..) {
@@ -78,16 +74,16 @@ impl MessageBatcher {
                             })
                         });
                 }
-                message_batcher::Output::NextTickAt(at) => {
-                    next_tick_at = std::cmp::min(next_tick_at, at);
+                message_batcher::Output::NotifyAt(at) => {
+                    next_notification_at = std::cmp::min(next_notification_at, at);
                 }
             }
         }
 
         // XXX: Ugly conversion due to std::time, chrono and tokio::time.
-        let next_tick_in = (next_tick_at - self.clock.now()).to_std().unwrap();
+        let next_notification_in = (next_notification_at - self.clock.now()).to_std().unwrap();
 
-        next_tick_in
+        next_notification_in
     }
 
     async fn process_io(
@@ -103,7 +99,7 @@ impl MessageBatcher {
                 // Timeout fired. Inform functional core
                 let now = self.clock.now();
                 self.batcher
-                    .handle(message_batcher::Input::Tick { now }, outputs);
+                    .handle(message_batcher::Input::Notify { now }, outputs);
             }
             Ok(Some(mqtt_message)) => {
                 // got a message
