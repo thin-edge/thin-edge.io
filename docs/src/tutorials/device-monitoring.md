@@ -13,8 +13,8 @@ and then into the [cloud-vendor specific format](../architecture/mapper.md).
 
 Enabling monitoring on your device is a 3-steps process:
 1. [Install `collectd`](#install-collectd),
-1. [Configure `collectd`](#configure-collectd),
-1. [Enable thin-edge.io monitoring](#enable-thin-edge-monitoring).
+2. [Configure `collectd`](#configure-collectd),
+3. [Enable thin-edge.io monitoring](#enable-thin-edge-monitoring).
 
 ## Install `collectd`
 
@@ -32,21 +32,22 @@ sudo apt-get install collectd-core
 
 ### TLDR; Just want it running
 
-Thin-edge.io provides a [basic `collectd` configuration](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/collectd/tedge-collectd.conf)
+Thin-edge.io provides a [basic `collectd` configuration](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/collectd/collectd.conf)
 that can be used to collect cpu, memory and disk metrics.
 
 Simply copy that file to the main collectd configuration file and restart the daemon
 (it might be good to keep a copy of the original configuration).
 
 ``` shell
-sudo cp /etc/tedge/contrib/collectd/collectd.conf sudo cp /etc/tedge/contrib/collectd/collectd.conf.backup
+sudo cp /etc/collectd/collectd.conf sudo cp /etc/collectd/collectd.conf.backup
 sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 ```
 
 ### `Collectd.conf`
 
-The behavior of collectd is defined by the 
+Unless you opted for the [minimal test configuration provided with thin-edge](#tldr-just-want-it-running),
+you will have to update the
 [`collectd.conf` configuration file](https://collectd.org/documentation/manpages/collectd.conf.5.shtml)
 (usually located at `/etc/collectd/collectd.conf`)
 
@@ -54,7 +55,7 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
 1. __MQTT must be enabled__.
    * Thin-edge.io expects the collectd metrics to be published on the local MQTT bus.
      Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.5.shtml#plugin_mqtt).
-   * The MQTT plugin is available on most distribution of `collectd`, but this is the case on MacOS using homebrew.
+   * The MQTT plugin is available on most distribution of `collectd`, but this is not the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
      See [https://github.com/collectd/collectd](https://github.com/collectd/collectd) for details.
    * Here is a config snippet to configure the MQTT write plugin:
@@ -81,7 +82,8 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
 3. __Cherry-pick the collected metrics__
    * `Collectd` can collect a lot of detailed metrics,
       and it doesn't always make sense to forward all these data to the cloud.
-   * Here is a config snippet that uses the `match_regex` plugin to select the metrics of interest:
+   * Here is a config snippet that uses the `match_regex` plugin to select the metrics of interest,
+     filtering out every metric emitted by the memory plugin other than the used metric":
     ```
         PreCacheChain "PreCache"
         
@@ -103,10 +105,11 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
      
 ## Enable thin-edge monitoring
 
-To enable monitoring on your device, you have now to launch the `collectd-mapper` daemon process.
+To enable monitoring on your device, you have to launch the `collectd-mapper` daemon process.
 
 ``` shell
- sudo systemctl start collectd-mapper
+sudo systemctl enable collectd-mapper
+sudo systemctl start collectd-mapper
 ```
 
 This process subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
@@ -126,7 +129,7 @@ $ tedge mqtt sub 'collectd/#'
 
 ```
 
-The `collectd-mapper` translates into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
+The `collectd-mapper` translates these collectd measurements into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
 [grouping the measurements](../references/bridged-topics.md#collectd-topics) emitted by each plugin:
 
 ```
