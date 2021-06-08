@@ -6,7 +6,8 @@ use std::process::ExitStatus;
 use tedge_users::*;
 
 pub mod mosquitto;
-pub mod tedge_mapper;
+pub mod tedge_mapper_az;
+pub mod tedge_mapper_c8y;
 
 type ExitCode = i32;
 
