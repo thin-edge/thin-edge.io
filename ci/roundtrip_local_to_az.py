@@ -13,15 +13,15 @@ import requests
 import json
 
 import os
+import sys
 
 def publish_az():
     for i in range(20):
-        message = f'{{"temperature": {i} }}'
-        #message = '{"temperature": %i}'%i
+        message = f'{{"cafe": {i} }}'
         cmd = ["/usr/bin/tedge","mqtt", "pub", "az/messages/events/", message]
         subprocess.run(cmd)
         print (i)
-        time.sleep(0.1)
+        time.sleep(0.05)
 
 # Function taken from :
 # https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
@@ -46,7 +46,12 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
 
 def retrieve_az():
 
-    sas_policy_primary_key = os.environ["SASPOLICYKEY"]
+    if "SASPOLICYKEY" in os.environ:
+        sas_policy_primary_key = os.environ["SASPOLICYKEY"]
+    else:
+        print("Error environment variable SASPOLICYKEY not set")
+        sys.exit(1)
+
 
     sas_policy_name = "sas_policy"
     service_bus_name = "thinedgebus"
@@ -55,7 +60,7 @@ def retrieve_az():
     tokendict = get_auth_token( service_bus_name, queue_name, sas_policy_name, sas_policy_primary_key)
 
     token = tokendict["token"]
-    print("Token", token)
+    #print("Token", token)
 
     # See also
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
@@ -79,23 +84,23 @@ def retrieve_az():
         if req.status_code == 200:
             #print(req)
             text = req.text
-            print(text)
+            #print(text)
             #print(req.headers)
             props = json.loads( req.headers["BrokerProperties"] )
             #print("Properties", props)
             number = props["SequenceNumber"]
-            print("SequenceNumber", number)
+            #print("SequenceNumber", number)
             time = props["EnqueuedTimeUtc"]
-            print("Time", time)
+            #print("Time", time)
 
             try:
                 data = json.loads(text)
-                temp = data["temperature"]
+                value = data["cafe"]
             except:
                 print("Parsing Error", text)
-                temp = None
+                decoded = None
 
-            print(f"Got {number} from {time} message {text} temp {temp}")
+            print(f"Got message {number} from {time} message is {text} value: {value}")
 
         elif(req.status_code == 204):
             print("Queue Empty:  HTTP status: ", req.status_code)
