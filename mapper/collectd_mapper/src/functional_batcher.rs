@@ -95,10 +95,8 @@ impl Batcher {
                 message,
                 received_at,
             } => self.handle_message(message, received_at, outputs),
+            Input::Tick { now } => self.handle_tick(now, outputs),
             Input::Flush => self.handle_flush(outputs),
-            _ => {
-                unimplemented!()
-            }
         }
     }
 
@@ -108,7 +106,7 @@ impl Batcher {
         received_at: Timestamp,
         outputs: &mut Vec<Output>,
     ) {
-        if !self.message_in_delta(&message) {
+        if self.message_exceeds_delta(&message) || self.timestamp_exceeds_max_age(received_at) {
             self.handle_flush(outputs);
         }
 
@@ -120,6 +118,12 @@ impl Batcher {
         }
     }
 
+    fn handle_tick(&mut self, now: Timestamp, outputs: &mut Vec<Output>) {
+        if self.timestamp_exceeds_max_age(now) {
+            self.handle_flush(outputs);
+        }
+    }
+
     fn handle_flush(&mut self, outputs: &mut Vec<Output>) {
         if !self.current_batch.is_empty() {
             let last_batch = std::mem::replace(&mut self.current_batch, CurrentBatch::empty());
@@ -127,11 +131,25 @@ impl Batcher {
         }
     }
 
-    fn message_in_delta(&self, message: &OwnedCollectdMessage) -> bool {
+    fn message_exceeds_delta(&self, message: &OwnedCollectdMessage) -> bool {
         match self.current_batch.messages.first() {
-            None => true,
+            None => false,
             Some(first) => {
-                (first.timestamp() - message.timestamp()).abs() <= self.collectd_timestamp_delta
+                (first.timestamp() - message.timestamp()).abs() > self.collectd_timestamp_delta
+            }
+        }
+    }
+
+    fn timestamp_exceeds_max_age(&self, timestamp: Timestamp) -> bool {
+        match self.current_batch.opened_at {
+            Some(batch_opened_at) => {
+                debug_assert!(!self.current_batch.messages.is_empty());
+                let age = timestamp - batch_opened_at;
+                age >= self.max_batch_age
+            }
+            None => {
+                debug_assert!(self.current_batch.messages.is_empty());
+                false
             }
         }
     }
@@ -218,6 +236,65 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
         Output::MessageBatch(MessageBatch(vec![messages[0].clone(), messages[1].clone()])),
         Output::MessageBatch(MessageBatch(vec![messages[2].clone(), messages[3].clone()])),
         Output::MessageBatch(MessageBatch(vec![messages[4].clone()])),
+    ];
+
+    test_batcher(&mut batcher, inputs, expected_outputs);
+}
+
+#[test]
+fn it_batches_messages_based_on_max_age() {
+    use crate::collectd::CollectdMessage;
+    use clock::Clock;
+
+    let fixed_timestamp = clock::WallClock.now();
+
+    let mut batcher = Batcher::new(1000, chrono::Duration::seconds(10), 100000.0);
+
+    let messages: Vec<OwnedCollectdMessage> = vec![
+        CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
+        CollectdMessage::new("coordinate", "z", 90.0, 2.0).into(),
+        CollectdMessage::new("coordinate", "z", 90.0, 3.0).into(),
+        CollectdMessage::new("coordinate", "z", 90.0, 4.0).into(),
+        CollectdMessage::new("coordinate", "z", 90.0, 5.0).into(),
+    ];
+
+    let inputs = vec![
+        Input::Message {
+            received_at: fixed_timestamp,
+            message: messages[0].clone(),
+        },
+        Input::Message {
+            received_at: fixed_timestamp,
+            message: messages[1].clone(),
+        },
+        Input::Message {
+            received_at: fixed_timestamp + chrono::Duration::seconds(9),
+            message: messages[2].clone(),
+        },
+        Input::Message {
+            received_at: fixed_timestamp + chrono::Duration::seconds(11),
+            message: messages[3].clone(),
+        },
+        Input::Message {
+            received_at: fixed_timestamp + chrono::Duration::milliseconds(20999),
+            message: messages[4].clone(),
+        },
+        Input::Message {
+            received_at: fixed_timestamp + chrono::Duration::seconds(21),
+            message: messages[5].clone(),
+        },
+        Input::Flush,
+    ];
+
+    let expected_outputs = vec![
+        Output::MessageBatch(MessageBatch(vec![
+            messages[0].clone(),
+            messages[1].clone(),
+            messages[2].clone(),
+        ])),
+        Output::MessageBatch(MessageBatch(vec![messages[3].clone(), messages[4].clone()])),
+        Output::MessageBatch(MessageBatch(vec![messages[5].clone()])),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
