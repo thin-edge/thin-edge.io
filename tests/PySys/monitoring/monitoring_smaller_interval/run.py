@@ -54,14 +54,14 @@ class MonitoringSmallInterval(BaseTest):
 
         for i in range(10):
 
-            pub = self.startProcess(
+            temp_pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
                            "collectd/host/temperature/temp", "123435445:25.5"],
                 stdouterr="tedge_temp",
             )
 
-            pub = self.startProcess(
+            pres_pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
                            "collectd/host/pressure/pres", "12345678:500.5"],
@@ -94,14 +94,17 @@ class MonitoringSmallInterval(BaseTest):
             if not self.validate_time():
                 reason = "time validation failed in message: " + str(line)
                 self.abort(False, reason)
-            if not self.validate_temperature():
-                reason = "temperature stat validation failed in message: " + \
-                    str(line)
-                self.abort(False, reason)
-            if not self.validate_pressure():
-                reason = "pressure stat validation failed in message: " + \
-                    str(line)
-                self.abort(False, reason)
+            if "temperature" in self.js_msg:
+                if not self.validate_temperature():
+                    reason = "temperature stat validation failed in message: " + \
+                        str(line)
+                    self.abort(False, reason)
+            if "pressure" in self.js_msg:
+                if not self.validate_pressure():
+                    reason = "pressure stat validation failed in message: " + \
+                        str(line)
+                    self.abort(False, reason)
+        return True
         return True
 
     def validate_time(self):
