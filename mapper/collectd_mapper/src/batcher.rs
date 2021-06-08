@@ -69,8 +69,8 @@ impl MessageBatcher {
         let mut outputs = Vec::new();
 
         loop {
-            let next_tick_in = self.process_outputs(&mut outputs);
-            self.process_io(messages.as_mut(), next_tick_in, &mut outputs)
+            let next_notify_in = self.process_outputs(&mut outputs);
+            self.process_io(messages.as_mut(), next_notify_in, &mut outputs)
                 .await;
         }
     }
@@ -110,11 +110,14 @@ impl MessageBatcher {
     async fn process_io(
         &mut self,
         messages: &mut dyn MqttMessageStream,
-        next_tick_in: std::time::Duration,
+        next_notify_in: std::time::Duration,
         outputs: &mut Vec<message_batcher::Output<OwnedCollectdMessage>>,
     ) {
-        match tokio::time::timeout_at(tokio::time::Instant::now() + next_tick_in, messages.next())
-            .await
+        match tokio::time::timeout_at(
+            tokio::time::Instant::now() + next_notify_in,
+            messages.next(),
+        )
+        .await
         {
             Err(_) => {
                 // Timeout fired. Inform functional core
