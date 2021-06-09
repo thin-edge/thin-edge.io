@@ -59,20 +59,20 @@ impl UserManager {
         users::get_current_uid() == 0
     }
 
-    /// Check if the process has been launched using `tedge-mapper` or not.
+    /// Check if the process has been launched using a desired user or not.
     ///
     /// # Example
     ///
     /// ```
     ///     # use tedge_users::UserManager;
-    ///     let path = if UserManager::running_as_tedge_mapper() {
+    ///     let path = if UserManager::running_as("tedge-mapper") {
     ///          "/etc/tedge/tedge.toml"
     ///      } else {
     ///          ".tedge/tedge.toml"
     ///      };
     /// ```
-    pub fn running_as_tedge_mapper() -> bool {
-        users::get_current_username() == Some("tedge-mapper".into())
+    pub fn running_as(desired_user: &str) -> bool {
+        users::get_current_username() == Some(desired_user.into())
     }
 
     /// Switch the effective user of the running process.
