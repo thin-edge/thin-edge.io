@@ -21,6 +21,10 @@ Then we validate the  messages in the output of tedge sub,
 
 class MonitoringSmallInterval(BaseTest):
     def setup(self):
+        self.js_msg = ""
+        self.time_cnt = 0
+        self.temp_cnt = 0
+        self.pres_cnt = 0
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
@@ -94,18 +98,25 @@ class MonitoringSmallInterval(BaseTest):
             if not self.validate_time():
                 reason = "time validation failed in message: " + str(line)
                 self.abort(False, reason)
-            if not self.validate_temperature():
-                reason = "temperature stat validation failed in message: " + \
-                    str(line)
-                self.abort(False, reason)
-            if not self.validate_pressure():
-                reason = "pressure stat validation failed in message: " + \
-                    str(line)
-                self.abort(False, reason)
-        return True
+            if "temperature" in self.js_msg:
+                if not self.validate_temperature():
+                    reason = "temperature stat validation failed in message: " + \
+                        str(line)
+                    self.abort(False, reason)
+            if "pressure" in self.js_msg:
+                if not self.validate_pressure():
+                    reason = "pressure stat validation failed in message: " + \
+                        str(line)
+                    self.abort(False, reason)
+
+        if self.time_cnt >= 10 and self.temp_cnt == 10 and self.pres_cnt == 10:
+            return True
+        else:
+            return False
 
     def validate_time(self):
         if self.js_msg["time"]:
+            self.time_cnt += 1
             return True
         else:
             return False
@@ -113,6 +124,7 @@ class MonitoringSmallInterval(BaseTest):
     def validate_temperature(self):
         if self.js_msg["temperature"]:
             if "temp" in self.js_msg["temperature"]:
+                self.temp_cnt += 1
                 return True
             else:
                 return False
@@ -122,6 +134,7 @@ class MonitoringSmallInterval(BaseTest):
     def validate_pressure(self):
         if self.js_msg["pressure"]:
             if "pres" in self.js_msg["pressure"]:
+                self.pres_cnt += 1
                 return True
             else:
                 return False
