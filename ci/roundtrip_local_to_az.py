@@ -25,6 +25,7 @@ import urllib
 
 import requests
 
+
 def publish_az(amount):
     """Publish to Azure topic"""
 
@@ -59,6 +60,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
             uri, signature, expiry, sas_name
         ),
     }
+
 
 def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose):
     """Get the published messages back from a service bus queue"""
@@ -133,6 +135,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     else:
         print("Validation FAILED")
         return False
+
 
 if __name__ == "__main__":
 
