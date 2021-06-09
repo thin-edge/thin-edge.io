@@ -125,8 +125,7 @@ def upload_device_cert(devname, thprint, hub, sas_name):
     params = {"api-version": "2020-05-31-preview"}
 
     data = (
-        '{"deviceId":"%s", "authentication": {"type" : "selfSigned","x509Thumbprint": '
-        + '{ "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
+        '{"deviceId":"%s", "authentication": {"type" : "selfSigned","x509Thumbprint": { "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
         % (devname, thprint, thprint)
     )
 
