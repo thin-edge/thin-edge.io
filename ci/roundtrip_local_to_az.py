@@ -15,12 +15,14 @@ import json
 import os
 import sys
 
-def publish_az():
-    for i in range(20):
+def publish_az(amount):
+    """Publish to Azure topic"""
+
+    for i in range(amount):
         message = f'{{"cafe": {i} }}'
         cmd = ["/usr/bin/tedge","mqtt", "pub", "az/messages/events/", message]
         subprocess.run(cmd)
-        print (i)
+        print ("Published message: ", message)
         time.sleep(0.05)
 
 # Function taken from :
@@ -44,18 +46,14 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
                      .format(uri, signature, expiry, sas_name)
             }
 
-def retrieve_az():
+def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name):
+    """Get the published messages back from a service bus queue"""
 
     if "SASPOLICYKEY" in os.environ:
         sas_policy_primary_key = os.environ["SASPOLICYKEY"]
     else:
         print("Error environment variable SASPOLICYKEY not set")
         sys.exit(1)
-
-
-    sas_policy_name = "sas_policy"
-    service_bus_name = "thinedgebus"
-    queue_name = "testqueue"
 
     tokendict = get_auth_token( service_bus_name, queue_name, sas_policy_name, sas_policy_primary_key)
 
@@ -66,7 +64,7 @@ def retrieve_az():
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
 
 
-    # Curl
+    # Do it manuylly with curl:
     # curl --request DELETE     --url "http{s}://thinedgebus.servicebus.windows.net/testqueue/messages/head" \
     #     --header "Accept: application/json"     --header "Content-Type: application/json;charset=utf-8"   \
     #   --header "Authorization: $SASTOKEN"     --verbose
@@ -114,6 +112,14 @@ def retrieve_az():
             print("Error HTTP status: ", req.status_code)
             raise SystemError
 
-publish_az()
-retrieve_az()
+
+if __name__ == "__main__":
+
+    amount = 30
+    sas_policy_name = "sas_policy"
+    service_bus_name = "thinedgebus"
+    queue_name = "testqueue"
+
+    publish_az(amount)
+    retrieve_queue_az(sas_policy_name, service_bus_name, queue_name)
 
