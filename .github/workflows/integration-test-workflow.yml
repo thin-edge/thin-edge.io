@@ -2,10 +2,10 @@ name: integration-test-workflow
 
 on:
   workflow_dispatch:
-    branches: [ main ]
+    branches: [ main, continuous_integration]
   workflow_run:
     workflows: ["build-workflow"]
-    branches: [main]
+    branches: [main, continuous_integration]
     types:
       - completed
 env:
@@ -13,11 +13,13 @@ env:
 
 jobs:
 
-  install-and-use-amd64:
+  install-and-use-amd64-github-hosted:
 
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
+    # This job can fail if GitHub restricts external network connections
+    # from their runners, so we just continue
+    continue-on-error: true
     steps:
         - name: checkout
           uses: actions/checkout@v2
@@ -29,7 +31,7 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            branch: main
+            branch: continuous_integration
             name: debian-packages-amd64
             path: debian-package_unpack
 
@@ -50,12 +52,36 @@ jobs:
         - name: run tedge help
           run: tedge --help
 
-          #replace the default config file with tedge custom config file
+         #replace the default config file with tedge custom config file
         - name: configure collectd
           run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
+
+        - name: Download artifact
+          uses: dawidd6/action-download-artifact@v2
+          # https://github.com/marketplace/actions/download-workflow-artifact
+          with:
+            github_token: ${{secrets.GITHUB_TOKEN}}
+            workflow: build-workflow.yml
+            workflow_conclusion: success
+            branch: continuous_integration
+            name: examples_amd64
+            path: examples
+
         - name: Run Smoke Test
-          run: ./ci/ci_smoke_test_az.sh
+          run: ./ci/ci_smoke_test.sh
+          env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
+
+#        - name: Run Smoke Test
+#          run: ./ci/ci_smoke_test_az.sh
+#          env:
+#            SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#            SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
 
   cargo-test-features:
 
@@ -91,9 +117,9 @@ jobs:
           command: test
           args: --verbose --features integration-test
 
-  install-and-use-rpi:
+  install-and-use-rpi-self-hosted:
 
-    runs-on: [self-hosted, Linux, ARM]
+    runs-on: [self-hosted, Linux, ARM ] #, offsite]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -107,8 +133,8 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            branch: main
-            name: debian-packages-armhf
+            branch: continuous_integration
+            name: debian-packages-armv7-unknown-linux-gnueabihf
             path: debian-package_unpack
 
         - name: purge
@@ -139,8 +165,8 @@ jobs:
             github_token: ${{secrets.GITHUB_TOKEN}}
             workflow: build-workflow.yml
             workflow_conclusion: success
-            branch: main
-            name: examples_armhf
+            branch: continuous_integration
+            name: examples_armv7-unknown-linux-gnueabihf
             path: examples
 
         - name: Run Smoke Test
