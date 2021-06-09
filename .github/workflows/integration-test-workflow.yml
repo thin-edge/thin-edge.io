@@ -44,15 +44,15 @@ jobs:
         - name: install collectd-core
           run:  sudo apt-get --assume-yes install collectd-core
 
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
-
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
 
         - name: run tedge help
           run: tedge --help
+
+          #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
   cargo-test-features:
 
@@ -119,15 +119,15 @@ jobs:
         - name: install collectd-core
           run:  sudo apt-get --assume-yes install collectd-core
 
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
-
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
 
         - name: run tedge help
           run: tedge --help
+
+          #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
