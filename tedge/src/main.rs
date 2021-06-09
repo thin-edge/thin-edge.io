@@ -29,9 +29,12 @@ fn main() -> anyhow::Result<()> {
                 .ok_or(crate::utils::paths::PathsError::HomeDirNotFound)?,
         )
     };
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
 
-    let build_context = BuildContext { config_repository };
+    let build_context = BuildContext {
+        config_repository,
+        config_location: tedge_config_location,
+    };
 
     let cmd = opt
         .tedge
