@@ -279,6 +279,7 @@ dependencies = [
  "chrono",
  "clock",
  "criterion",
+ "json-writer",
  "pretty_assertions",
  "proptest",
  "serde_json",
@@ -1017,6 +1018,10 @@ name = "json"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
+
+[[package]]
+name = "json-writer"
+version = "0.1.0"
 
 [[package]]
 name = "lazy_static"
@@ -2192,6 +2197,7 @@ dependencies = [
  "chrono",
  "clock",
  "json",
+ "json-writer",
  "mockall",
  "pretty_assertions",
  "proptest",

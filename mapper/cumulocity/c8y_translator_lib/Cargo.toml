@@ -10,6 +10,7 @@ edition = "2018"
 chrono = "0.4"
 thin_edge_json = {path = "../../thin_edge_json"}
 clock = {path = "../../../common/clock" }
+json-writer = {path = "../../../common/json_writer" }
 thiserror = "1.0"
 
 [dev-dependencies]

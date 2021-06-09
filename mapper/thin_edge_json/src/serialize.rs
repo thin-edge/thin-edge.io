@@ -1,10 +1,10 @@
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
-use std::io::Write;
+use json_writer::JsonWriter;
 
 use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
-    buffer: String,
+    json: JsonWriter,
     is_within_group: bool,
     needs_separator: bool,
     default_timestamp: Option<DateTime<FixedOffset>>,
@@ -42,11 +42,11 @@ impl ThinEdgeJsonSerializer {
 
     pub fn new_with_timestamp(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut buffer = String::with_capacity(capa);
-        buffer.push('{');
+        let mut json = JsonWriter::with_capacity(capa);
+        json.write_open_obj();
 
         Self {
-            buffer,
+            json,
             is_within_group: false,
             needs_separator: false,
             default_timestamp,
@@ -65,30 +65,13 @@ impl ThinEdgeJsonSerializer {
             }
         }
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         Ok(())
     }
 
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
         self.end()?;
-        Ok(self.buffer.into())
-    }
-
-    // XXX: We need to abstract all this into a JsonSerializer.
-    fn write_key(&mut self, key: &str) {
-        self.write_str(key);
-        self.buffer.push(':');
-    }
-
-    fn write_str(&mut self, s: &str) {
-        self.buffer.push('"');
-        self.buffer.push_str(s);
-        self.buffer.push('"');
-    }
-
-    fn write_f64(&mut self, value: f64) -> std::fmt::Result {
-        use std::fmt::Write;
-        self.buffer.write_fmt(format_args!("{}", value))
+        Ok(self.json.into_string().into())
     }
 }
 
@@ -107,10 +90,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
-        self.write_key("time");
-        self.write_str(timestamp.to_rfc3339().as_str());
+        self.json.write_key_noescape("time");
+        self.json.write_str_noescape(timestamp.to_rfc3339().as_str());
         self.needs_separator = true;
         self.timestamp_present = true;
         Ok(())
@@ -118,10 +101,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
 
     fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
-        self.write_key(name);
-        self.write_f64(value)?;
+        self.json.write_key_noescape(name);
+        self.json.write_f64(value)?;
         self.needs_separator = true;
         Ok(())
     }
@@ -132,10 +115,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
-        self.write_key(group);
-        self.buffer.push('{');
+        self.json.write_key_noescape(group);
+        self.json.write_open_obj();
         self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
@@ -146,7 +129,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
