@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 """Perform a full roundtrip of messages from thin-edge to Azure IoT
 
@@ -7,8 +7,12 @@ Service Bus Queue; from there we retrieve the messages via a REST
 Interface and compare them with what we have sent in the beginning.
 
 When this script is called you need to be already connected to Azure.
+
+Call example:
+$ ./roundtrip_local_to_az.py  -a 10 -p sas_policy -b thinedgebus -q testqueue
 """
 
+import argparse
 import base64
 import json
 import hashlib
@@ -58,7 +62,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     }
 
 
-def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
+def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose):
     """Get the published messages back from a service bus queue"""
 
     if "SASPOLICYKEY" in os.environ:
@@ -72,7 +76,9 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
     )
 
     token = tokendict["token"]
-    # print("Token", token)
+
+    if verbose:
+        print("Token", token)
 
     # See also
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
@@ -133,13 +139,26 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
 
 if __name__ == "__main__":
 
-    amount = 10
-    sas_policy_name = "sas_policy"
-    service_bus_name = "thinedgebus"
-    queue_name = "testqueue"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-b", "--bus", help="Service Bus Name")
+    parser.add_argument("-p", "--policy", help="SAS Policy Name")
+    parser.add_argument("-q", "--queue", help="Queue Name")
+    parser.add_argument(
+        "-a", "--amount", help="Amount of messages to send", type=int, default=20
+    )
+    parser.add_argument("-v", "--verbose", help="Verbosity", action="count", default=0)
+    args = parser.parse_args()
+
+    amount = args.amount
+    sas_policy_name = args.policy
+    service_bus_name = args.bus
+    queue_name = args.queue
+    verbose = args.verbose
 
     publish_az(amount)
-    result = retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount)
+    result = retrieve_queue_az(
+        sas_policy_name, service_bus_name, queue_name, amount, verbose
+    )
 
     if not result:
         sys.exit(1)
