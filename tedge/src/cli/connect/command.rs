@@ -5,14 +5,15 @@ use crate::{
         self, mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
         tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
     },
+    system_commands::*,
     utils::paths,
     ConfigError,
 };
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_users::{UserManager, ROOT_USER};
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
@@ -26,6 +27,7 @@ const MQTT_TLS_PORT: u16 = 8883;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
+    pub system_command_runner: Arc<SystemCommandRunner>,
     pub config_location: TEdgeConfigLocation,
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
@@ -56,7 +58,7 @@ impl Command for ConnectCommand {
         }
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
         if self.is_test_connection {
             return match self.check_connection() {
                 Ok(()) => Ok(()),
@@ -77,7 +79,7 @@ impl Command for ConnectCommand {
             &bridge_config,
             &self.cloud,
             &self.common_mosquitto_config,
-            &context.user_manager,
+            self.system_command_runner.as_ref(),
             &self.config_location,
         )?;
 
@@ -275,11 +277,11 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
-    user_manager: &UserManager,
+    system_command_runner: &SystemCommandRunner,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if systemd is available.\n");
-    let () = services::systemd_available()?;
+    let () = services::systemd_available(system_command_runner)?;
 
     println!("Checking if configuration for requested bridge already exists.\n");
     let () = bridge_config_exists(config_location, bridge_config)?;
@@ -297,7 +299,7 @@ fn new_bridge(
     }
 
     println!("Restarting mosquitto service.\n");
-    if let Err(err) = MosquittoService.restart(user_manager) {
+    if let Err(err) = MosquittoService.restart(system_command_runner) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
@@ -311,7 +313,7 @@ fn new_bridge(
     ));
 
     println!("Persisting mosquitto on reboot.\n");
-    if let Err(err) = MosquittoService.enable(user_manager) {
+    if let Err(err) = MosquittoService.enable(system_command_runner) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
@@ -326,10 +328,10 @@ fn new_bridge(
         } else {
             match cloud {
                 Cloud::Azure => {
-                    start_and_enable_tedge_mapper_az(user_manager);
+                    start_and_enable_tedge_mapper_az(system_command_runner);
                 }
                 Cloud::C8y => {
-                    start_and_enable_tedge_mapper_c8y(user_manager);
+                    start_and_enable_tedge_mapper_c8y(system_command_runner);
                 }
             }
         }
@@ -388,18 +390,17 @@ fn write_bridge_config_to_file(
     Ok(())
 }
 
-fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
-    let _root_guard = user_manager.become_user(ROOT_USER);
+fn start_and_enable_tedge_mapper_c8y(system_command_runner: &SystemCommandRunner) {
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperC8yService.restart(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.restart(system_command_runner) {
         println!("Failed to stop tedge-mapper service: {:?}", err);
         failed = true;
     }
 
     println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperC8yService.enable(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.enable(system_command_runner) {
         println!("Failed to enable tedge-mapper service: {:?}", err);
         failed = true;
     }
@@ -409,18 +410,17 @@ fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
     }
 }
 
-fn start_and_enable_tedge_mapper_az(user_manager: &UserManager) {
-    let _root_guard = user_manager.become_user(ROOT_USER);
+fn start_and_enable_tedge_mapper_az(system_command_runner: &SystemCommandRunner) {
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperAzService.restart(user_manager) {
+    if let Err(err) = TedgeMapperAzService.restart(system_command_runner) {
         println!("Failed to stop tedge-mapper service: {:?}", err);
         failed = true;
     }
 
     println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperAzService.enable(user_manager) {
+    if let Err(err) = TedgeMapperAzService.enable(system_command_runner) {
         println!("Failed to enable tedge-mapper service: {:?}", err);
         failed = true;
     }

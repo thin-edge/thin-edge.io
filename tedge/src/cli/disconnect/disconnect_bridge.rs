@@ -4,8 +4,9 @@ use crate::services::{
     mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
     tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
 };
+use crate::system_commands::*;
+use std::sync::Arc;
 use tedge_config::TEdgeConfigLocation;
-use tedge_users::*;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
@@ -27,6 +28,7 @@ impl From<Cloud> for String {
 
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
+    pub system_command_runner: Arc<SystemCommandRunner>,
     pub config_location: TEdgeConfigLocation,
     pub config_file: String,
     pub cloud: Cloud,
@@ -38,8 +40,8 @@ impl Command for DisconnectBridgeCommand {
         format!("remove the bridge to disconnect {:?} cloud", self.cloud)
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        match self.stop_bridge(&context.user_manager) {
+    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        match self.stop_bridge() {
             Ok(()) | Err(DisconnectBridgeError::BridgeFileDoesNotExist) => Ok(()),
             Err(err) => Err(err.into()),
         }
@@ -47,21 +49,21 @@ impl Command for DisconnectBridgeCommand {
 }
 
 impl DisconnectBridgeCommand {
-    fn stop_bridge(&self, user_manager: &UserManager) -> Result<(), DisconnectBridgeError> {
+    fn stop_bridge(&self) -> Result<(), DisconnectBridgeError> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         self.remove_bridge_config_file()?;
 
         // Ignore failure
-        let _ = self.apply_changes_to_mosquitto(user_manager);
+        let _ = self.apply_changes_to_mosquitto();
 
         // Only C8Y changes the status of tedge-mapper
         if self.use_mapper && which("tedge_mapper").is_ok() {
             match self.cloud {
                 Cloud::Azure => {
-                    self.stop_and_disable_tedge_mapper_az(user_manager);
+                    self.stop_and_disable_tedge_mapper_az();
                 }
                 Cloud::C8y => {
-                    self.stop_and_disable_tedge_mapper_c8y(user_manager);
+                    self.stop_and_disable_tedge_mapper_c8y();
                 }
             }
         }
@@ -99,30 +101,26 @@ impl DisconnectBridgeCommand {
 
     // Deviation from specification:
     // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
-    fn apply_changes_to_mosquitto(
-        &self,
-        user_manager: &UserManager,
-    ) -> Result<(), DisconnectBridgeError> {
+    fn apply_changes_to_mosquitto(&self) -> Result<(), DisconnectBridgeError> {
         println!("Applying changes to mosquitto.\n");
-        if MosquittoService.is_active()? {
-            MosquittoService.restart(user_manager)?;
+        if MosquittoService.is_active(self.system_command_runner.as_ref())? {
+            MosquittoService.restart(self.system_command_runner.as_ref())?;
             println!("{:?} Bridge successfully disconnected!\n", self.cloud);
         }
         Ok(())
     }
 
-    fn stop_and_disable_tedge_mapper_c8y(&self, user_manager: &UserManager) {
-        let _root_guard = user_manager.become_user(ROOT_USER);
+    fn stop_and_disable_tedge_mapper_c8y(&self) {
         let mut failed = false;
 
         println!("Stopping tedge-mapper service.\n");
-        if let Err(err) = TedgeMapperC8yService.stop(user_manager) {
+        if let Err(err) = TedgeMapperC8yService.stop(self.system_command_runner.as_ref()) {
             println!("Failed to stop tedge-mapper service: {:?}", err);
             failed = true;
         }
 
         println!("Disabling tedge-mapper service.\n");
-        if let Err(err) = TedgeMapperC8yService.disable(user_manager) {
+        if let Err(err) = TedgeMapperC8yService.disable(self.system_command_runner.as_ref()) {
             println!("Failed to disable tedge-mapper service: {:?}", err);
             failed = true;
         }
@@ -132,18 +130,17 @@ impl DisconnectBridgeCommand {
         }
     }
 
-    fn stop_and_disable_tedge_mapper_az(&self, user_manager: &UserManager) {
-        let _root_guard = user_manager.become_user(ROOT_USER);
+    fn stop_and_disable_tedge_mapper_az(&self) {
         let mut failed = false;
 
         println!("Stopping tedge-mapper service.\n");
-        if let Err(err) = TedgeMapperAzService.stop(user_manager) {
+        if let Err(err) = TedgeMapperAzService.stop(self.system_command_runner.as_ref()) {
             println!("Failed to stop tedge-mapper service: {:?}", err);
             failed = true;
         }
 
         println!("Disabling tedge-mapper service.\n");
-        if let Err(err) = TedgeMapperAzService.disable(user_manager) {
+        if let Err(err) = TedgeMapperAzService.disable(self.system_command_runner.as_ref()) {
             println!("Failed to disable tedge-mapper service: {:?}", err);
             failed = true;
         }

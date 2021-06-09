@@ -1,13 +1,16 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use crate::system_commands::*;
 use anyhow::Context;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 mod cli;
 mod command;
 mod error;
 mod services;
+mod system_commands;
 mod utils;
 
 type ConfigError = crate::error::TEdgeError;
@@ -31,7 +34,12 @@ fn main() -> anyhow::Result<()> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
 
+    let system_command_runner = Arc::new(SystemCommandRunner {
+        user_manager: context.user_manager.clone(),
+    });
+
     let build_context = BuildContext {
+        system_command_runner,
         config_repository,
         config_location: tedge_config_location,
     };

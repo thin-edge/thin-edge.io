@@ -17,12 +17,14 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let cmd = match self {
             TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
+                system_command_runner: context.system_command_runner.clone(),
                 config_location: context.config_location,
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
+                system_command_runner: context.system_command_runner.clone(),
                 config_location: context.config_location,
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,

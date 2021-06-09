@@ -27,6 +27,7 @@ impl BuildCommand for TEdgeConnectOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(match self {
             TEdgeConnectOpt::C8y { is_test_connection } => ConnectCommand {
+                system_command_runner: context.system_command_runner.clone(),
                 config_location: context.config_location,
                 config_repository: context.config_repository,
                 cloud: Cloud::C8y,
@@ -34,6 +35,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
             },
             TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
+                system_command_runner: context.system_command_runner.clone(),
                 config_location: context.config_location,
                 config_repository: context.config_repository,
                 cloud: Cloud::Azure,

@@ -1,3 +1,5 @@
+use crate::system_commands::*;
+use std::sync::Arc;
 use tedge_users::UserManager;
 
 /// A trait to be implemented by all tedge sub-commands.
@@ -162,6 +164,7 @@ pub trait BuildCommand {
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
+    pub system_command_runner: Arc<SystemCommandRunner>,
 }
 
 /// The execution context of a command.
