@@ -169,7 +169,7 @@ jobs:
             name: examples_armv7-unknown-linux-gnueabihf
             path: examples
 
-        - name: Run Smoke Test
+        - name: Run Smoke Test Cumulocity
           run: ./ci/ci_smoke_test.sh
           env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
@@ -177,3 +177,9 @@ jobs:
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+
+        - name: Run Smoke Test Azure IoT
+          run: ./ci/ci_smoke_test_az.sh
+          env:
+            SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+            SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
