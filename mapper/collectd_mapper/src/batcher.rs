@@ -100,8 +100,12 @@ impl MessageBatcher {
             }
         }
 
-        // XXX: Ugly conversion due to std::time, chrono and tokio::time.
-        let next_notification_in = (next_notification_at - self.clock.now()).to_std().unwrap();
+        // To avoid negative durations (which is not supported by std::time::Duration), fall back
+        // to use a small timeout of 20 ms. Also use at least 20ms to avoid very small timeouts
+        // which might in the worst case end up in a busy loop.
+        let delta = next_notification_at - self.clock.now();
+        let t20ms = std::time::Duration::from_millis(20);
+        let next_notification_in = std::cmp::max(t20ms, delta.to_std().unwrap_or(t20ms));
 
         next_notification_in
     }
