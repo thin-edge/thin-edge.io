@@ -10,7 +10,7 @@ THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
 
 echo "DEVICE Thumbprint is " $THUMB
 
-./ci/az_upload_device_cert.py -d devpi3 -t $THUMB -u ThinEdgeHub -s iothubowner
+./ci/az_upload_device_cert.py -d octocatrpi3 -t $THUMB -u ThinEdgeHub -s iothubowner
 
 sudo tedge connect az
 
