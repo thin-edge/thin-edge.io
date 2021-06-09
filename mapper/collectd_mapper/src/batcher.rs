@@ -1,6 +1,5 @@
 use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
 use crate::error::*;
-use crate::message_batcher;
 use clock::Clock;
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;

@@ -1,6 +1,8 @@
-//! Batching algorithm that is unaware of IO. Imperative shell, functional core.
+//! Batching algorithm which is unaware of IO. It uses the "Imperative
+//! shell, functional core" approach with this code being the "function
+//! core".
 
-use clock::Timestamp;
+pub type Timestamp = chrono::DateTime<chrono::FixedOffset>;
 
 /// A batch of messages. Contains always at least one message.
 #[derive(Debug, PartialEq)]
@@ -187,21 +189,47 @@ impl<T> MessageBatcher<T> {
 use pretty_assertions::assert_eq;
 
 #[cfg(test)]
-use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
+#[derive(Clone, Debug, PartialEq)]
+struct CollectdMessage {
+    group_key: String,
+    key: String,
+    value: f64,
+    timestamp: f64,
+}
+
+#[cfg(test)]
+impl CollectdMessage {
+    fn new(
+        group_key: impl Into<String>,
+        key: impl Into<String>,
+        value: f64,
+        timestamp: f64,
+    ) -> Self {
+        Self {
+            group_key: group_key.into(),
+            key: key.into(),
+            value,
+            timestamp,
+        }
+    }
+}
 
 #[test]
 fn it_batches_messages_until_max_batch_size_is_reached() {
-    use clock::Clock;
+    use chrono::{prelude::*, Duration};
 
-    let fixed_timestamp = clock::WallClock.now();
-    let one_hour = chrono::Duration::hours(1);
+    let fixed_timestamp = FixedOffset::east(7 * 3600)
+        .ymd(2014, 7, 8)
+        .and_hms(9, 10, 11);
+
+    let one_hour = Duration::hours(1);
 
     let mut batcher = MessageBatcher::new(3, one_hour);
 
-    let messages: Vec<OwnedCollectdMessage> = vec![
-        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
+    let messages = vec![
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0),
     ];
 
     let inputs = vec![
@@ -234,9 +262,12 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
 
 #[test]
 fn it_batches_messages_within_collectd_timestamp_delta() {
-    use clock::Clock;
+    use chrono::prelude::*;
 
-    let fixed_timestamp = clock::WallClock.now();
+    let fixed_timestamp = FixedOffset::east(7 * 3600)
+        .ymd(2014, 7, 8)
+        .and_hms(9, 10, 11);
+
     let one_hour = chrono::Duration::hours(1);
 
     /// We start a new batch upon receiving a message whose timestamp is farther away to the
@@ -247,13 +278,13 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
         delta: f64,
     }
 
-    impl BatchingCriterion<OwnedCollectdMessage> for CollectdTimestampDeltaCriterion {
+    impl BatchingCriterion<CollectdMessage> for CollectdTimestampDeltaCriterion {
         fn belongs_to_batch(
             &self,
-            message: &OwnedCollectdMessage,
-            message_batch: &MessageBatch<OwnedCollectdMessage>,
+            message: &CollectdMessage,
+            message_batch: &MessageBatch<CollectdMessage>,
         ) -> bool {
-            let delta = message_batch.first().timestamp() - message.timestamp();
+            let delta = message_batch.first().timestamp - message.timestamp;
             delta.abs() <= self.delta
         }
     }
@@ -261,12 +292,12 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     let mut batcher = MessageBatcher::new(1000, one_hour)
         .with_batching_criterion(CollectdTimestampDeltaCriterion { delta: 1.5 });
 
-    let messages: Vec<OwnedCollectdMessage> = vec![
-        CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 2.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 3.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 4.0).into(),
+    let messages = vec![
+        CollectdMessage::new("coordinate", "z", 90.0, 0.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 2.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 3.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 4.0),
     ];
 
     let inputs = vec![
@@ -318,21 +349,23 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
 
 #[test]
 fn it_batches_messages_based_on_max_age() {
-    use chrono::Duration;
-    use clock::Clock;
+    use chrono::{prelude::*, Duration};
 
-    let fixed_timestamp = clock::WallClock.now();
+    let fixed_timestamp = FixedOffset::east(7 * 3600)
+        .ymd(2014, 7, 8)
+        .and_hms(9, 10, 11);
+
     let ten_seconds = Duration::seconds(10);
 
     let mut batcher = MessageBatcher::new(1000, ten_seconds);
 
-    let messages: Vec<OwnedCollectdMessage> = vec![
-        CollectdMessage::new("coordinate", "z", 90.0, 0.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 1.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 2.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 3.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 4.0).into(),
-        CollectdMessage::new("coordinate", "z", 90.0, 5.0).into(),
+    let messages = vec![
+        CollectdMessage::new("coordinate", "z", 90.0, 0.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 1.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 2.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 3.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 4.0),
+        CollectdMessage::new("coordinate", "z", 90.0, 5.0),
     ];
 
     let inputs = vec![
@@ -345,19 +378,19 @@ fn it_batches_messages_based_on_max_age() {
             message: messages[1].clone(),
         },
         Input::Message {
-            received_at: fixed_timestamp + chrono::Duration::seconds(9),
+            received_at: fixed_timestamp + Duration::seconds(9),
             message: messages[2].clone(),
         },
         Input::Message {
-            received_at: fixed_timestamp + chrono::Duration::seconds(11),
+            received_at: fixed_timestamp + Duration::seconds(11),
             message: messages[3].clone(),
         },
         Input::Message {
-            received_at: fixed_timestamp + chrono::Duration::milliseconds(20999),
+            received_at: fixed_timestamp + Duration::milliseconds(20999),
             message: messages[4].clone(),
         },
         Input::Message {
-            received_at: fixed_timestamp + chrono::Duration::seconds(21),
+            received_at: fixed_timestamp + Duration::seconds(21),
             message: messages[5].clone(),
         },
         Input::Flush,
@@ -393,9 +426,9 @@ fn it_batches_messages_based_on_max_age() {
 
 #[cfg(test)]
 fn test_batcher(
-    batcher: &mut MessageBatcher<OwnedCollectdMessage>,
-    inputs: Vec<Input<OwnedCollectdMessage>>,
-    expected_outputs: Vec<Output<OwnedCollectdMessage>>,
+    batcher: &mut MessageBatcher<CollectdMessage>,
+    inputs: Vec<Input<CollectdMessage>>,
+    expected_outputs: Vec<Output<CollectdMessage>>,
 ) {
     let mut outputs = Vec::new();
     inputs
