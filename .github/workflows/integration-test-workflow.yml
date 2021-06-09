@@ -17,9 +17,7 @@ jobs:
 
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    # This job can fail if GitHub restricts external network connections
-    # from their runners, so we just continue
-    continue-on-error: true
+
     steps:
         - name: checkout
           uses: actions/checkout@v2
@@ -55,6 +53,11 @@ jobs:
 
         - name: run tedge help
           run: tedge --help
+
+         #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
@@ -141,15 +144,15 @@ jobs:
         - name: install collectd-core
           run:  sudo apt-get --assume-yes install collectd-core
 
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "./configuration/contrib/collectd/tedge-collectd.conf"  "/etc/collectd/collectd.conf"
-
         - name: install packages
           run: sudo dpkg -i ./debian-package_unpack/*.deb
 
         - name: run tedge help
           run: tedge --help
+
+          #replace the default config file with tedge custom config file
+        - name: configure collectd
+          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
         - name: Download artifact
           uses: dawidd6/action-download-artifact@v2
@@ -170,57 +173,3 @@ jobs:
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
-
-  install-and-use-x64-self-hosted:
-
-    runs-on: [self-hosted, Linux, X64]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    steps:
-        - name: checkout
-          uses: actions/checkout@v2
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-amd64
-            path: debian-package_unpack
-
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper
-          continue-on-error: true
-
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
-
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
-
-        - name: run tedge help
-          run: tedge --help
-
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_amd64
-            path: examples
-
-        - name: Run Smoke Test
-          run: ./ci/ci_smoke_test.sh
-          env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_X64 }}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_X64 }}
-

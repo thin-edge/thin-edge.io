@@ -8,6 +8,7 @@
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
+    - [Monitor my device](./tutorials/device-monitoring.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
@@ -15,8 +16,9 @@
     - [How to create a test certificate](./howto-guides/003_registration.md)
     - [How to connect a cloud end-point](./howto-guides/004_connect.md)
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
-    - [How to test connection to cloud](./howto-guides/007_test_connection.md)
+    - [How to test the cloud connection?](./howto-guides/007_test_connection.md)
     - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
+    - [How to trouble shoot device monitoring](./howto-guides/009_touble_shooting_monitoring.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)
