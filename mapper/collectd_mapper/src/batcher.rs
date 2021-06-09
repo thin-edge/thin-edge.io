@@ -212,61 +212,14 @@ impl MessageBatchPublisher {
 mod tests {
 
     use super::*;
-    use assert_matches::assert_matches;
     use clock::WallClock;
     use futures::future::{pending, ready};
     use mockall::Sequence;
     use mqtt_client::MockMqttClient;
-    use mqtt_client::MockMqttErrorStream;
     use mqtt_client::MockMqttMessageStream;
     use mqtt_client::QoS;
+    use std::time::Duration;
     use tokio::time::{self, Instant};
-
-    #[test]
-    #[cfg(todo)]
-    fn test_message_batch_processor() -> anyhow::Result<()> {
-        let collectd_message = CollectdMessage::new("temperature", "value", 32.5, 1.0);
-        let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
-
-        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0, 1.0);
-        message_batch.add_to_batch(collectd_message)?;
-
-        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0, 1.0);
-        message_batch.add_to_batch(collectd_message)?;
-
-        let collectd_message = CollectdMessage::new("pressure", "value", 98.2, 1.0);
-        message_batch.add_to_batch(collectd_message)?;
-
-        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0, 1.0);
-        message_batch.add_to_batch(collectd_message)?;
-
-        let message_grouper = message_batch.end_batch();
-
-        assert_matches!(message_grouper.timestamp, Some(_));
-
-        assert_eq!(
-            message_grouper.get_measurement_value(Some("temperature"), "value"),
-            Some(32.5)
-        );
-        assert_eq!(
-            message_grouper.get_measurement_value(Some("pressure"), "value"),
-            Some(98.2)
-        );
-        assert_eq!(
-            message_grouper.get_measurement_value(Some("coordinate"), "x"),
-            Some(50.0)
-        );
-        assert_eq!(
-            message_grouper.get_measurement_value(Some("coordinate"), "y"),
-            Some(70.0)
-        );
-        assert_eq!(
-            message_grouper.get_measurement_value(Some("coordinate"), "z"),
-            Some(90.0)
-        );
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn batch_publisher() -> anyhow::Result<()> {
@@ -292,85 +245,88 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(todo)]
     async fn batching_with_window_timeout() -> anyhow::Result<()> {
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
-        let mqtt_client = build_mock_mqtt_client();
+        let mut mqtt_client = MockMqttClient::new();
+        mqtt_client.expect_subscribe().returning(|_| {
+            let mut seq = Sequence::new(); // To control the order of mock returns
+            let mut message_stream = MockMqttMessageStream::default();
+            message_stream
+                .expect_next()
+                .times(1)
+                .in_sequence(&mut seq) // The first value to be returned by this mock stream
+                .returning(|| {
+                    time::pause();
+                    let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
+                    let message = Message::new(&topic, "123456789:32.5");
+                    Box::pin(ready(Some(message)))
+                });
 
-        let mut seq = Sequence::new(); // To control the order of mock returns
-        let mut message_stream = MockMqttMessageStream::default();
-        message_stream
-            .expect_next()
-            .times(1)
-            .in_sequence(&mut seq) // The first value to be returned by this mock stream
-            .returning(|| {
-                time::pause();
-                let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
-                let message = Message::new(&topic, "123456789:32.5");
-                Box::pin(ready(Some(message)))
-            });
+            message_stream
+                .expect_next()
+                .times(1)
+                .in_sequence(&mut seq) // The second value to be returend by this mock stream
+                .returning(|| {
+                    Box::pin(async {
+                        time::advance(Duration::from_millis(100)).await; // Advance time, but stay within the batching window so that this message is part of the batch
+                        let topic = Topic::new("collectd/localhost/pressure/value").unwrap();
+                        let message = Message::new(&topic, "123456789:98.2");
+                        Some(message)
+                    })
+                });
 
-        message_stream
-            .expect_next()
-            .times(1)
-            .in_sequence(&mut seq) // The second value to be returend by this mock stream
-            .returning(|| {
-                Box::pin(async {
-                    time::advance(Duration::from_millis(100)).await; // Advance time, but stay within the batching window so that this message is part of the batch
-                    let topic = Topic::new("collectd/localhost/pressure/value").unwrap();
-                    let message = Message::new(&topic, "123456789:98.2");
-                    Some(message)
-                })
-            });
+            message_stream
+                .expect_next()
+                .times(1)
+                .in_sequence(&mut seq) // The second value to be returend by this mock stream
+                .returning(|| {
+                    Box::pin(async {
+                        time::advance(Duration::from_millis(1000)).await; // Advance time beyond the batching window so that upcoming messages arrive after the window is closed
+                        time::resume();
+                        let topic = Topic::new("collectd/localhost/dummy/value").unwrap();
+                        let message = Message::new(&topic, "123456789:98.2");
+                        Some(message)
+                    })
+                });
 
-        message_stream
-            .expect_next()
-            .times(1)
-            .in_sequence(&mut seq) // The second value to be returend by this mock stream
-            .returning(|| {
-                Box::pin(async {
-                    time::advance(Duration::from_millis(1000)).await; // Advance time beyond the batching window so that upcoming messages arrive after the window is closed
-                    time::resume();
-                    let topic = Topic::new("collectd/localhost/dummy/value").unwrap();
-                    let message = Message::new(&topic, "123456789:98.2");
-                    Some(message)
-                })
-            });
+            // This third message from this stream will not even be read as the batching window has closed with the previous message
+            message_stream
+                .expect_next()
+                .times(0)
+                .in_sequence(&mut seq) // The third value to be returend by this mock stream
+                .returning(|| {
+                    println!("Third message time: {:?}", Instant::now());
+                    Box::pin(async {
+                        let topic = Topic::new("collectd/localhost/speed/value").unwrap();
+                        let message = Message::new(&topic, "123456789:350");
+                        Some(message)
+                    })
+                });
 
-        // This third message from this stream will not even be read as the batching window has closed with the previous message
-        message_stream
-            .expect_next()
-            .times(0)
-            .in_sequence(&mut seq) // The third value to be returend by this mock stream
-            .returning(|| {
-                println!("Third message time: {:?}", Instant::now());
-                Box::pin(async {
-                    let topic = Topic::new("collectd/localhost/speed/value").unwrap();
-                    let message = Message::new(&topic, "123456789:350");
-                    Some(message)
-                })
-            });
+            // Block the stream from the 4th invocation onwards
+            message_stream
+                .expect_next()
+                .returning(|| Box::pin(pending())); // Block the stream with a pending future
 
-        // Block the stream from the 4th invocation onwards
-        message_stream
-            .expect_next()
-            .returning(|| Box::pin(pending())); // Block the stream with a pending future
+            Ok(Box::new(message_stream))
+        });
 
         let clock = Arc::new(WallClock);
-        let builder = MessageBatcher::new(
+        let batcher = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
-            Duration::from_millis(500),
+            chrono::Duration::milliseconds(500),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
             clock.clone(),
         );
 
-        let first_message = message_stream.next().await.unwrap();
+        let _batcher_tid = tokio::task::spawn(async move {
+            let mut batcher = batcher;
+            let _ = batcher.run().await;
+        });
 
-        let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, clock.now(), &mut message_stream)
-            .await?;
+        let message_grouper = receiver.recv().await.unwrap();
 
         assert_eq!(
             message_grouper.get_measurement_value(Some("temperature"), "value"),
@@ -389,30 +345,34 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(todo)]
     async fn batching_with_invalid_messages_within_a_batch() -> anyhow::Result<()> {
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
-        let mqtt_client = build_mock_mqtt_client();
+        let mut mqtt_client = MockMqttClient::new();
+        mqtt_client.expect_subscribe().returning(|_| {
+            let message_stream = build_message_stream_from_messages(vec![
+                ("collectd/localhost/temperature/value", "123456789:32.5"),
+                ("collectd/pressure/value", "123456789:98.0"), // Erraneous collectd message with invalid topic
+                ("collectd/localhost/speed/value", "123456789:350.0"),
+            ]);
+            Ok(Box::new(message_stream))
+        });
 
-        let mut message_stream = build_message_stream_from_messages(vec![
-            ("collectd/localhost/temperature/value", 32.5),
-            ("collectd/pressure/value", 98.0), // Erraneous collectd message with invalid topic
-            ("collectd/localhost/speed/value", 350.0),
-        ]);
-
-        let first_message = message_stream.next().await.unwrap();
         let clock = WallClock;
-        let builder = MessageBatcher::new(
+        let batcher = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
-            Duration::from_millis(1000),
+            chrono::Duration::milliseconds(1000),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
             Arc::new(clock.clone()),
         );
-        let message_grouper = builder
-            .build_message_batch_with_timeout(first_message, clock.now(), &mut message_stream)
-            .await?;
+
+        let _batcher_tid = tokio::task::spawn(async move {
+            let mut batcher = batcher;
+            let _ = batcher.run().await;
+        });
+
+        let message_grouper = receiver.recv().await.unwrap();
 
         assert_eq!(
             message_grouper.get_measurement_value(Some("temperature"), "value"),
@@ -431,59 +391,42 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(todo)]
-    async fn batching_with_erraneous_first_message() -> anyhow::Result<()> {
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+    async fn batching_with_erraneous_first_message_does_not_send_a_batch() -> anyhow::Result<()> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
-        let mqtt_client = build_mock_mqtt_client();
-
-        let mut message_stream = build_message_stream_from_messages(vec![]);
-
-        let topic = Topic::new("collectd/host/group/key")?;
-        let invalid_collectd_message = Message::new(&topic, "123456789"); // Invalid payload
+        let mut mqtt_client = MockMqttClient::new();
+        mqtt_client.expect_subscribe().returning(|_| {
+            let message_stream = build_message_stream_from_messages(vec![
+                ("collectd/host/group/key", "123456789"), // Invalid payload
+            ]);
+            Ok(Box::new(message_stream))
+        });
 
         let clock = Arc::new(WallClock);
-        let builder = MessageBatcher::new(
+        let batcher = MessageBatcher::new(
             sender,
             Arc::new(mqtt_client),
-            Duration::from_millis(1000),
+            chrono::Duration::milliseconds(1000),
             TopicFilter::new("collectd/#")?.qos(QoS::AtMostOnce),
             clock.clone(),
         );
-        let result = builder
-            .build_message_batch_with_timeout(
-                invalid_collectd_message,
-                clock.now(),
-                &mut message_stream,
-            )
-            .await;
 
-        assert_matches!(
-            result,
-            Err(DeviceMonitorError::InvalidCollectdMeasurementError(_))
-        );
+        let _batcher_tid = tokio::task::spawn(async move {
+            let mut batcher = batcher;
+            let _ = batcher.run().await;
+        });
+
+        // The batching window should close after 1000 ms.
+        let result: Result<_, tokio::time::error::Elapsed> =
+            tokio::time::timeout(Duration::from_millis(2000), receiver.recv()).await;
+
+        assert!(result.is_err());
 
         Ok(())
     }
 
-    fn build_mock_mqtt_client() -> MockMqttClient {
-        let mut mqtt_client = MockMqttClient::new();
-
-        mqtt_client.expect_subscribe_errors().returning(|| {
-            let error_stream = MockMqttErrorStream::default();
-            Box::new(error_stream)
-        });
-
-        mqtt_client.expect_subscribe().returning(|_| {
-            let message_stream = MockMqttMessageStream::default();
-            Ok(Box::new(message_stream))
-        });
-
-        return mqtt_client;
-    }
-
     fn build_message_stream_from_messages(
-        message_map: Vec<(&'static str, f64)>,
+        message_map: Vec<(&'static str, &'static str)>,
     ) -> MockMqttMessageStream {
         let mut seq = Sequence::new(); // To control the order of mock returns
         let mut message_stream = MockMqttMessageStream::default();
@@ -495,7 +438,7 @@ mod tests {
                 .in_sequence(&mut seq) // The third value to be returend by this mock stream
                 .returning(move || {
                     let topic = Topic::new(message.0).unwrap();
-                    let message = Message::new(&topic, format!("123456789:{}", message.1));
+                    let message = Message::new(&topic, format!("{}", message.1));
                     Box::pin(ready(Some(message)))
                 });
         }
