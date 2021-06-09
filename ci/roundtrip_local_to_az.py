@@ -65,10 +65,10 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
 def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose):
     """Get the published messages back from a service bus queue"""
 
-    if "SASPOLICYKEY" in os.environ:
-        sas_policy_primary_key = os.environ["SASPOLICYKEY"]
+    if "SASKEYQUEUE" in os.environ:
+        sas_policy_primary_key = os.environ["SASKEYQUEUE"]
     else:
-        print("Error environment variable SASPOLICYKEY not set")
+        print("Error environment variable SASKEYQUEUE not set")
         sys.exit(1)
 
     tokendict = get_auth_token(
