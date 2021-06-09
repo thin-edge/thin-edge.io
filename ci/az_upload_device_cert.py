@@ -1,5 +1,11 @@
 #!/usr/bin/python3
-"""Upload a device certificate for Azure"""
+"""Upload a device certificate for Azure
+
+See also:
+https://docs.microsoft.com/en-us/rest/api/iothub/
+https://docs.microsoft.com/en-us/rest/api/iothub/service/devices/create-or-update-identity
+
+"""
 
 import argparse
 import base64
@@ -34,6 +40,47 @@ def generate_sas_token(uri, key, policy_name, expiry=3600):
 
     return "SharedAccessSignature " + urllib.parse.urlencode(rawtoken)
 
+def delete_device(devname, hub, sas_name):
+    """Delete the device"""
+
+    if "SASKEYIOTHUB" in os.environ:
+        sas_policy_primary_key_iothub = os.environ["SASKEYIOTHUB"]
+    else:
+        print("Error environment variable SASPOLICYKEY not set")
+        sys.exit(1)
+
+    expiry = 3600
+
+    uri = f"{hub}.azure-devices.net"
+
+    # generate a sharec acces token
+    token = generate_sas_token(uri, sas_policy_primary_key_iothub, sas_name, expiry)
+
+    url = f"https://ThinEdgeHub.azure-devices.net/devices/{devname}"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Encoding": "utf-8",
+        "Authorization": token,
+        "If-Match":"*"
+    }
+
+    params = {"api-version": "2020-05-31-preview"}
+
+    req = requests.delete(url, params=params, headers=headers)
+
+    if req.status_code == 200:
+        print("Deleted the device")
+        print("Device Properties: ", req.text)
+    if req.status_code == 204:
+        print("Unconditinally deleted the device")
+        print("Deleted Device Properties: ", req.text)
+    elif req.status_code == 404:
+        print("Device is not there, not deleted")
+    else:
+        print(f"Error: {req.status_code}")
+        print("Response Properties", req.text)
+        sys.exit(1)
 
 def upload_device_cert(devname, thprint, hub, sas_name):
     """Upload device certificate
@@ -81,7 +128,7 @@ def upload_device_cert(devname, thprint, hub, sas_name):
 
     if req.status_code == 200:
         print("Uploaded device certificate")
-        print("Device Properties", req.text)
+        print("Uploaded Device Properties : ", req.text)
     else:
         print(f"Error: {req.status_code}")
         print("Response Properties", req.text)
@@ -89,23 +136,27 @@ def upload_device_cert(devname, thprint, hub, sas_name):
 
 if __name__ == "__main__":
 
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("-b", "--bus", help="Service Bus Name")
-    # parser.add_argument("-p", "--policy", help="SAS Policy Name")
-    # parser.add_argument("-q", "--queue", help="Queue Name")
-    # parser.add_argument(
-    #    "-a", "--amount", help="Amount of messages to send", type=int, default=20
-    # )
-    # parser.add_argument("-v", "--verbose", help="Verbosity", action="count", default=0)
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--device", help="Device name")
+    parser.add_argument("-t", "--thumbprint", help="Device thumbprint")
+    parser.add_argument("-u", "--hub", help="IoT Hub")
+    parser.add_argument("-s", "--name", help="Name of the IoT hub SAS policy")
 
-    # amount = args.amount
-    # sas_policy_name = args.policy
-    # service_bus_name = args.bus
+    parser.add_argument("-v", "--verbose", help="Verbosity", action="count", default=0)
+    args = parser.parse_args()
 
-    devname = "devpi3"
-    thprint = "01FDB2436885747A1174B1C95A1E884E8512E222"
-    hub = "ThinEdgeHub"
-    sas_name = "iothubowner"
+    devname = args.device
+    thprint = args.thumbprint
+    hub = args.hub
+    sas_name = args.name
+
+    #devname = "devpi3"
+    #thprint = "01FDB2436885747A1174B1C95A1E884E8512E222"
+    #hub = "ThinEdgeHub"
+    #sas_name = "iothubowner"
+
+    # ./az_upload_device_cert.py -d devpi3 -t 01FDB2436885747A1174B1C95A1E884E8512E222 -u ThinEdgeHub -s iothubowner
+
+    delete_device(devname, hub, sas_name)
 
     upload_device_cert(devname, thprint, hub, sas_name)
