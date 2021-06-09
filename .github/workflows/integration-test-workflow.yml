@@ -76,6 +76,9 @@ jobs:
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
 
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test_az.sh
+
   cargo-test-features:
 
     name: Run cargo test features

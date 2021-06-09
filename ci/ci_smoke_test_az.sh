@@ -6,9 +6,6 @@ set -e
 # lets avoid to create a new certifiate
 # ./ci/configure_bridge.sh
 
-
-
-
 THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
 
 echo "DEVICE Thumbprint is " $THUMB
