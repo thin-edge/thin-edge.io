@@ -51,7 +51,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     }
 
 
-def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name):
+def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
     """Get the published messages back from a service bus queue"""
 
     if "SASPOLICYKEY" in os.environ:
@@ -82,7 +82,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name):
         "Content-Type": "application/json;charset=utf-8",
         "Authorization": token,
     }
-
+    messages = []
     while True:
         req = requests.delete(url, headers=headers)
 
@@ -106,26 +106,37 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name):
                 decoded = None
 
             print(f"Got message {number} from {time} message is {text} value: {value}")
+            messages.append(value)
 
         elif req.status_code == 204:
             print("Queue Empty:  HTTP status: ", req.status_code)
             break
         elif req.status_code == 401:
             print("Token Expired:  HTTP status: ", req.status_code)
-            break
+            raise SystemError
         else:
             print(req)
             # print(req.headers)
             print("Error HTTP status: ", req.status_code)
             raise SystemError
 
+    if messages == list(range(amount)):
+        print("Validation PASSED")
+        return True
+    else:
+        print("Validation FAILED")
+        return False
+
 
 if __name__ == "__main__":
 
-    amount = 30
+    amount = 10
     sas_policy_name = "sas_policy"
     service_bus_name = "thinedgebus"
     queue_name = "testqueue"
 
     publish_az(amount)
-    retrieve_queue_az(sas_policy_name, service_bus_name, queue_name)
+    result = retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount)
+
+    if not result:
+        sys.exit(1)
