@@ -1,18 +1,25 @@
-import time
-import urllib
-import hmac
-import hashlib
+#!/usr/bin/python
+
+"""Perform a full roundtrip of messages from thin-edge to Azure IoT
+
+We publish with thin-edge to Azure IoT; then route the messages to a
+Service Bus Queue; from there we retrieve the messages via a REST
+Interface and compare them with what we have sent in the beginning.
+
+When this script is called you need to be already connected to Azure.
+"""
+
 import base64
-
-import subprocess
-import time
-
-
-import requests
 import json
-
+import hashlib
+import hmac
 import os
 import sys
+import subprocess
+import time
+import urllib
+
+import requests
 
 
 def publish_az(amount):
@@ -71,9 +78,11 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
 
     # Do it manuylly with curl:
-    # curl --request DELETE     --url "http{s}://thinedgebus.servicebus.windows.net/testqueue/messages/head" \
-    #     --header "Accept: application/json"     --header "Content-Type: application/json;charset=utf-8"   \
-    #   --header "Authorization: $SASTOKEN"     --verbose
+    # curl --request DELETE \
+    # --url "http{s}://thinedgebus.servicebus.windows.net/testqueue/messages/head" \
+    # --header "Accept: application/json" \
+    # --header "Content-Type: application/json;charset=utf-8" \
+    # --header "Authorization: $SASTOKEN"     --verbose
 
     url = "https://thinedgebus.servicebus.windows.net/testqueue/messages/head"
 
@@ -83,27 +92,22 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
         "Authorization": token,
     }
     messages = []
+
     while True:
         req = requests.delete(url, headers=headers)
 
         if req.status_code == 200:
-            # print(req)
             text = req.text
-            # print(text)
-            # print(req.headers)
             props = json.loads(req.headers["BrokerProperties"])
-            # print("Properties", props)
             number = props["SequenceNumber"]
-            # print("SequenceNumber", number)
             time = props["EnqueuedTimeUtc"]
-            # print("Time", time)
 
             try:
                 data = json.loads(text)
                 value = data["cafe"]
             except:
                 print("Parsing Error", text)
-                decoded = None
+                value = None
 
             print(f"Got message {number} from {time} message is {text} value: {value}")
             messages.append(value)
@@ -113,12 +117,11 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount):
             break
         elif req.status_code == 401:
             print("Token Expired:  HTTP status: ", req.status_code)
-            raise SystemError
+            raise SystemError("Token Expired")
         else:
             print(req)
-            # print(req.headers)
             print("Error HTTP status: ", req.status_code)
-            raise SystemError
+            raise SystemError("HTTP Error")
 
     if messages == list(range(amount)):
         print("Validation PASSED")
