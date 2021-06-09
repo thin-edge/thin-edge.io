@@ -1,10 +1,10 @@
 //! Batching algorithm which is unaware of IO. It uses the "Imperative
-//! shell, functional core" approach with this code being the "function
-//! core".
+//! shell, functional core" approach with this code being the
+//! "functional core".
 
 pub type Timestamp = chrono::DateTime<chrono::FixedOffset>;
 
-/// A batch of messages. Contains always at least one message.
+/// A batch of messages. Guaranteed to contain at least one message.
 #[derive(Debug, PartialEq)]
 pub struct MessageBatch<T> {
     opened_at: Timestamp,
@@ -82,7 +82,7 @@ pub struct MessageBatcher<T> {
     /// Age of a batch is the elapsed time since `current_batch.opened_at`.
     max_batch_age: chrono::Duration,
 
-    /// The decisions whether or not a message belongs to the current batch or not.
+    /// The decisions whether a message belongs to the current batch or not.
     batching_criteria: Vec<Box<dyn BatchingCriterion<T>>>,
 
     current_batch: Option<MessageBatch<T>>,
