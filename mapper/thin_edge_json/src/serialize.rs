@@ -4,7 +4,7 @@ use std::io::Write;
 
 use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
-    buffer: Vec<u8>,
+    buffer: String,
     is_within_group: bool,
     needs_separator: bool,
     default_timestamp: Option<DateTime<FixedOffset>>,
@@ -14,7 +14,7 @@ pub struct ThinEdgeJsonSerializer {
 #[derive(thiserror::Error, Debug)]
 pub enum ThinEdgeJsonSerializationError {
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    FormatError(#[from] std::fmt::Error),
 
     #[error(transparent)]
     MeasurementCollectorError(#[from] MeasurementStreamError),
@@ -41,15 +41,17 @@ impl ThinEdgeJsonSerializer {
     }
 
     pub fn new_with_timestamp(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
-        let mut serializer = ThinEdgeJsonSerializer {
-            buffer: Vec::new(),
+        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
+        let mut buffer = String::with_capacity(capa);
+        buffer.push('{');
+
+        Self {
+            buffer,
             is_within_group: false,
             needs_separator: false,
             default_timestamp,
             timestamp_present: false,
-        };
-        serializer.buffer.push(b'{');
-        serializer
+        }
     }
 
     fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
@@ -63,13 +65,30 @@ impl ThinEdgeJsonSerializer {
             }
         }
 
-        self.buffer.push(b'}');
+        self.buffer.push('}');
         Ok(())
     }
 
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
         self.end()?;
-        Ok(self.buffer)
+        Ok(self.buffer.into())
+    }
+
+    // XXX: We need to abstract all this into a JsonSerializer.
+    fn write_key(&mut self, key: &str) {
+        self.write_str(key);
+        self.buffer.push(':');
+    }
+
+    fn write_str(&mut self, s: &str) {
+        self.buffer.push('"');
+        self.buffer.push_str(s);
+        self.buffer.push('"');
+    }
+
+    fn write_f64(&mut self, value: f64) -> std::fmt::Result {
+        use std::fmt::Write;
+        self.buffer.write_fmt(format_args!("{}", value))
     }
 }
 
@@ -88,10 +107,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(b',');
+            self.buffer.push(',');
         }
-        self.buffer
-            .write_fmt(format_args!("\"time\":\"{}\"", timestamp.to_rfc3339()))?;
+        self.write_key("time");
+        self.write_str(timestamp.to_rfc3339().as_str());
         self.needs_separator = true;
         self.timestamp_present = true;
         Ok(())
@@ -99,10 +118,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
 
     fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
         if self.needs_separator {
-            self.buffer.push(b',');
+            self.buffer.push(',');
         }
-        self.buffer
-            .write_fmt(format_args!("\"{}\":{}", name, value))?;
+        self.write_key(name);
+        self.write_f64(value)?;
         self.needs_separator = true;
         Ok(())
     }
@@ -113,9 +132,10 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(b',');
+            self.buffer.push(',');
         }
-        self.buffer.write_fmt(format_args!("\"{}\":{{", group))?;
+        self.write_key(group);
+        self.buffer.push('{');
         self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
@@ -126,7 +146,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
-        self.buffer.push(b'}');
+        self.buffer.push('}');
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
