@@ -5,6 +5,9 @@ See also:
 https://docs.microsoft.com/en-us/rest/api/iothub/
 https://docs.microsoft.com/en-us/rest/api/iothub/service/devices/create-or-update-identity
 
+
+call example:
+$ ./az_upload_device_cert.py -d devpi3 -t 01FDB2436885747A1174B1C95A1E884E8512E222 -u ThinEdgeHub -s iothubowner
 """
 
 import argparse
@@ -40,6 +43,7 @@ def generate_sas_token(uri, key, policy_name, expiry=3600):
 
     return "SharedAccessSignature " + urllib.parse.urlencode(rawtoken)
 
+
 def delete_device(devname, hub, sas_name):
     """Delete the device"""
 
@@ -62,7 +66,7 @@ def delete_device(devname, hub, sas_name):
         "Content-Type": "application/json",
         "Content-Encoding": "utf-8",
         "Authorization": token,
-        "If-Match":"*"
+        "If-Match": "*",
     }
 
     params = {"api-version": "2020-05-31-preview"}
@@ -81,6 +85,7 @@ def delete_device(devname, hub, sas_name):
         print(f"Error: {req.status_code}")
         print("Response Properties", req.text)
         sys.exit(1)
+
 
 def upload_device_cert(devname, thprint, hub, sas_name):
     """Upload device certificate
@@ -120,7 +125,8 @@ def upload_device_cert(devname, thprint, hub, sas_name):
     params = {"api-version": "2020-05-31-preview"}
 
     data = (
-        '{"deviceId":"%s", "authentication": {"type" : "selfSigned","x509Thumbprint": { "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
+        '{"deviceId":"%s", "authentication": {"type" : "selfSigned","x509Thumbprint": '
+        + '{ "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
         % (devname, thprint, thprint)
     )
 
@@ -149,13 +155,6 @@ if __name__ == "__main__":
     thprint = args.thumbprint
     hub = args.hub
     sas_name = args.name
-
-    #devname = "devpi3"
-    #thprint = "01FDB2436885747A1174B1C95A1E884E8512E222"
-    #hub = "ThinEdgeHub"
-    #sas_name = "iothubowner"
-
-    # ./az_upload_device_cert.py -d devpi3 -t 01FDB2436885747A1174B1C95A1E884E8512E222 -u ThinEdgeHub -s iothubowner
 
     delete_device(devname, hub, sas_name)
 
