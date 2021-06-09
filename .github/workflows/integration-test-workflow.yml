@@ -54,6 +54,9 @@ jobs:
         - name: configure collectd
           run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
+        - name: Run Smoke Test
+          run: ./ci/ci_smoke_test_az.sh
+
   cargo-test-features:
 
     name: Run cargo test features
