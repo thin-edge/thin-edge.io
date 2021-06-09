@@ -28,7 +28,7 @@ impl From<Cloud> for String {
 
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
-    pub system_command_runner: Arc<SystemCommandRunner>,
+    pub system_command_runner: Arc<dyn AbstractSystemCommandRunner>,
     pub config_location: TEdgeConfigLocation,
     pub config_file: String,
     pub cloud: Cloud,

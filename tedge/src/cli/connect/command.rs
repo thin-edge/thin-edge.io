@@ -27,7 +27,7 @@ const MQTT_TLS_PORT: u16 = 8883;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
-    pub system_command_runner: Arc<SystemCommandRunner>,
+    pub system_command_runner: Arc<dyn AbstractSystemCommandRunner>,
     pub config_location: TEdgeConfigLocation,
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
@@ -277,7 +277,7 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
-    system_command_runner: &SystemCommandRunner,
+    system_command_runner: &dyn AbstractSystemCommandRunner,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if systemd is available.\n");
@@ -390,7 +390,7 @@ fn write_bridge_config_to_file(
     Ok(())
 }
 
-fn start_and_enable_tedge_mapper_c8y(system_command_runner: &SystemCommandRunner) {
+fn start_and_enable_tedge_mapper_c8y(system_command_runner: &dyn AbstractSystemCommandRunner) {
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
@@ -410,7 +410,7 @@ fn start_and_enable_tedge_mapper_c8y(system_command_runner: &SystemCommandRunner
     }
 }
 
-fn start_and_enable_tedge_mapper_az(system_command_runner: &SystemCommandRunner) {
+fn start_and_enable_tedge_mapper_az(system_command_runner: &dyn AbstractSystemCommandRunner) {
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");

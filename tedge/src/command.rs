@@ -164,7 +164,7 @@ pub trait BuildCommand {
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
-    pub system_command_runner: Arc<SystemCommandRunner>,
+    pub system_command_runner: Arc<dyn AbstractSystemCommandRunner>,
 }
 
 /// The execution context of a command.

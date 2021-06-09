@@ -19,7 +19,10 @@ const SYSTEMCTL_ERROR_SERVICE_NOT_LOADED: ExitCode = 5;
 pub trait SystemdService {
     const SERVICE_NAME: &'static str;
 
-    fn stop(&self, system_command_runner: &SystemCommandRunner) -> Result<(), ServicesError> {
+    fn stop(
+        &self,
+        system_command_runner: &dyn AbstractSystemCommandRunner,
+    ) -> Result<(), ServicesError> {
         let command = SystemdStopService {
             service_name: Self::SERVICE_NAME.into(),
         };
@@ -49,7 +52,10 @@ pub trait SystemdService {
     // as long as the unit has a job pending, and is only cleared when the unit is fully stopped and no jobs are pending anymore.
     // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
     // systemctl stop command followed by systemctl start should be issued.
-    fn restart(&self, system_command_runner: &SystemCommandRunner) -> Result<(), ServicesError> {
+    fn restart(
+        &self,
+        system_command_runner: &dyn AbstractSystemCommandRunner,
+    ) -> Result<(), ServicesError> {
         let command = SystemdRestartService {
             service_name: Self::SERVICE_NAME.into(),
         };
@@ -74,7 +80,10 @@ pub trait SystemdService {
         }
     }
 
-    fn enable(&self, system_command_runner: &SystemCommandRunner) -> Result<(), ServicesError> {
+    fn enable(
+        &self,
+        system_command_runner: &dyn AbstractSystemCommandRunner,
+    ) -> Result<(), ServicesError> {
         let command = SystemdEnableService {
             service_name: Self::SERVICE_NAME.into(),
         };
@@ -94,7 +103,10 @@ pub trait SystemdService {
         }
     }
 
-    fn disable(&self, system_command_runner: &SystemCommandRunner) -> Result<(), ServicesError> {
+    fn disable(
+        &self,
+        system_command_runner: &dyn AbstractSystemCommandRunner,
+    ) -> Result<(), ServicesError> {
         let command = SystemdDisableService {
             service_name: Self::SERVICE_NAME.into(),
         };
@@ -116,7 +128,7 @@ pub trait SystemdService {
 
     fn is_active(
         &self,
-        system_command_runner: &SystemCommandRunner,
+        system_command_runner: &dyn AbstractSystemCommandRunner,
     ) -> Result<bool, ServicesError> {
         let command = SystemdIsServiceActive {
             service_name: Self::SERVICE_NAME.into(),
@@ -177,7 +189,7 @@ pub enum ServicesError {
 }
 
 pub(crate) fn systemd_available(
-    system_command_runner: &SystemCommandRunner,
+    system_command_runner: &dyn AbstractSystemCommandRunner,
 ) -> Result<(), ServicesError> {
     match system_command_runner.run(SystemdVersion) {
         Ok(status) if status.success() => Ok(()),

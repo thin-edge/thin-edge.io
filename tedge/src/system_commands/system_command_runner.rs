@@ -6,6 +6,8 @@ pub struct SystemCommandRunner {
     pub user_manager: UserManager,
 }
 
+impl AbstractSystemCommandRunner for SystemCommandRunner {}
+
 // We need this as `UserManager` is not `Debug`
 impl std::fmt::Debug for SystemCommandRunner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
