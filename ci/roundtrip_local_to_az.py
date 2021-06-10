@@ -15,6 +15,7 @@ $ ./roundtrip_local_to_az.py  -a 10 -p sas_policy -b thinedgebus -q testqueue
 import argparse
 import base64
 import json
+import json.decoder
 import hashlib
 import hmac
 import os
@@ -32,7 +33,13 @@ def publish_az(amount):
     for i in range(amount):
         message = f'{{"cafe": {i} }}'
         cmd = ["/usr/bin/tedge", "mqtt", "pub", "az/messages/events/", message]
-        subprocess.run(cmd)
+
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError:
+            print("Failed to publish")
+            sys.exit(1)
+
         print("Published message: ", message)
         time.sleep(0.05)
 
@@ -106,16 +113,18 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
             text = req.text
             props = json.loads(req.headers["BrokerProperties"])
             number = props["SequenceNumber"]
-            time = props["EnqueuedTimeUtc"]
+            queuetime = props["EnqueuedTimeUtc"]
 
             try:
                 data = json.loads(text)
                 value = data["cafe"]
-            except:
+            except json.decoder.JSONDecodeError:
                 print("Parsing Error", text)
                 value = None
 
-            print(f"Got message {number} from {time} message is {text} value: {value}")
+            print(
+                f"Got message {number} from {queuetime} message is {text} value: {value}"
+            )
             messages.append(value)
 
         elif req.status_code == 204:
@@ -137,8 +146,8 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
         return False
 
 
-if __name__ == "__main__":
-
+def main():
+    """Main entry point"""
     parser = argparse.ArgumentParser()
     parser.add_argument("-b", "--bus", help="Service Bus Name")
     parser.add_argument("-p", "--policy", help="SAS Policy Name")
@@ -162,3 +171,7 @@ if __name__ == "__main__":
 
     if not result:
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
