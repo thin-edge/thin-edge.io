@@ -7,26 +7,26 @@ https://docs.microsoft.com/en-us/rest/api/iothub/service/devices/create-or-updat
 
 
 call example:
-$ ./az_upload_device_cert.py -d devpi3 -t 01FDB2436885747A1174B1C95A1E884E8512E222 -u ThinEdgeHub -s iothubowner
+$ ./az_upload_device_cert.py -d devpi3 -t 01F...222 -u ThinEdgeHub -s iothubowner
 """
 
 import argparse
 import base64
-import json
 import hashlib
 import hmac
 import os
 import sys
-import subprocess
 import time
 import urllib
 
 import requests
 
-# Function taken from here
-# https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-dev-guide-sas?tabs=python
-# TODO : Care about license for this part
+
 def generate_sas_token(uri, key, policy_name, expiry=3600):
+    """Function copied from Microsoft documentation
+    https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-dev-guide-sas?tabs=python
+    TODO : Care about license for this part
+    """
     ttl = time.time() + expiry
     sign_key = "%s\n%d" % ((urllib.parse.quote_plus(uri)), int(ttl))
     # print(sign_key)
@@ -107,7 +107,8 @@ def upload_device_cert(devname, thprint, hub, sas_name):
     # print(token)
 
     # Do it manually with curl:
-    # curl -L -i -X PUT https://ThinEdgeHub.azure-devices.net/devices/devpi3?api-version=2020-05-31-preview \
+    # curl -L -i -X PUT \
+    # https://ThinEdgeHub.azure-devices.net/devices/devpi3?api-version=2020-05-31-preview \
     # -H 'Content-Type:application/json' -H 'Content-Encoding:utf-8' -H "Authorization:$KEY" \
     # -d '{"deviceId":"devpi3", "authentication": {"type" : "selfSigned","x509Thumbprint": \
     # { "primaryThumbprint":"01FDB2436885747A1174B1C95A1E884E8512E222" }}}'
@@ -125,8 +126,9 @@ def upload_device_cert(devname, thprint, hub, sas_name):
     params = {"api-version": "2020-05-31-preview"}
 
     data = (
-        '{"deviceId":"%s", "authentication": {"type" : "selfSigned","x509Thumbprint": { "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
-        % (devname, thprint, thprint)
+        '{"deviceId":"%s", "authentication": {"type" : "selfSigned",' % devname
+        + '"x509Thumbprint": { "primaryThumbprint":"%s", "secondaryThumbprint":"%s" }}}'
+        % (thprint, thprint)
     )
 
     req = requests.put(url, data, params=params, headers=headers)
@@ -139,8 +141,8 @@ def upload_device_cert(devname, thprint, hub, sas_name):
         print("Response Properties", req.text)
 
 
-if __name__ == "__main__":
-
+def main():
+    """Main entry point"""
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--device", help="Device name")
     parser.add_argument("-t", "--thumbprint", help="Device thumbprint")
@@ -158,3 +160,7 @@ if __name__ == "__main__":
     delete_device(devname, hub, sas_name)
 
     upload_device_cert(devname, thprint, hub, sas_name)
+
+
+if __name__ == "__main__":
+    main()
