@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def get_database(style: str):
-    """Retrive database to the database to be used
+    """Retrieve database to the database to be used
     Returns database client, database object, Integer type to be used
     and a connection object (for Azure)
     """
@@ -302,7 +302,8 @@ class CpuHistory(MeasurementBase):
 
     def scrap_data(self, thefile, measurement_index, binary):
         """Read measurement data from file /proc/pid/stat
-        See man proc
+
+        See manpage proc ($ man proc) in section /proc/[pid]/stat for colum descriptions
         """
 
         sample = 0
@@ -312,10 +313,10 @@ class CpuHistory(MeasurementBase):
                 for line in lines:
                     entries = line.split()
                     if len(entries) == 52 and entries[1] == f"({binary})":
-                        utime = int(entries[13])
-                        stime = int(entries[14])
-                        cutime = int(entries[15])
-                        csime = int(entries[16])
+                        utime = int(entries[13])  # utime
+                        stime = int(entries[14])  # stime
+                        cutime = int(entries[15])  # cutime
+                        csime = int(entries[16])  # cstime
 
                         self.insert_line(
                             idx=self.row_id,
@@ -545,7 +546,6 @@ class MemoryHistory(MeasurementBase):
 
     def scrap_data(self, thefile, mesaurement_index, arr):
         """Read measurement data from file"""
-
         with open(thefile) as thestats:
             lines = thestats.readlines()
             sample = 0
