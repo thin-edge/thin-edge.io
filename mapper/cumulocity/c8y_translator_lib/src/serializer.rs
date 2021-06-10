@@ -1,6 +1,10 @@
 use chrono::prelude::*;
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
+// Default capacity for the json writer buffer
+// Buffer can grow beyond this capacity
+const DEFAULT_CAPACITY: usize = 128;
+
 pub struct C8yJsonSerializer {
     buffer: String,
     is_within_group: bool,

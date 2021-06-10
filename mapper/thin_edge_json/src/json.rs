@@ -141,6 +141,12 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
     match &thin_edge_obj {
         JsonValue::Object(thin_edge_obj) => {
             for (key, value) in thin_edge_obj.iter() {
+                if key.contains('\\') {
+                    return Err(ThinEdgeJsonError::InvalidThinEdgeJsonKey {
+                        key: String::from(key),
+                    }
+                    .into());
+                }
                 if key.eq("type") {
                     return Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
                         name: String::from(key),
@@ -274,6 +280,9 @@ pub enum ThinEdgeJsonError {
         json_excerpt: String,
         actual_type: String,
     },
+
+    #[error("Invalid Thin Edge key: {key:}")]
+    InvalidThinEdgeJsonKey { key: String },
 
     #[error("Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not {actual_type}.")]
     InvalidThinEdgeJsonTime { actual_type: String },
@@ -681,6 +690,20 @@ mod tests {
         let input = "FØØ";
         assert_eq!(input.len(), 5);
         assert_eq!(input_prefix(input, 4), input);
+    }
+
+    #[test]
+    fn thin_edge_json_reject_invalid_key() {
+        let input = r#"{
+            "key with backslash: \\": 220
+          }"#;
+
+        let expected_error = "Invalid Thin Edge key: key with backslash: \\";
+        let output = ThinEdgeJson::from_str(input);
+
+        let error = output.unwrap_err();
+
+        assert_eq!(expected_error, error.to_string());
     }
 
     use proptest::prelude::*;

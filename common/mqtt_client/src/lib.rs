@@ -533,7 +533,9 @@ impl Message {
     // This function trims the null character at the end of the payload before converting into UTF8
     // Some MQTT messages contain the payload with trailing null char, such payload is invalid payload.
     pub fn payload_str(&self) -> Result<&str, Error> {
-        Ok(std::str::from_utf8(self.payload_trimmed())?)
+        let payload_trimmed = self.payload_trimmed();
+        std::str::from_utf8(payload_trimmed)
+            .map_err(|err| new_invalid_utf8_payload(payload_trimmed, err))
     }
 
     pub fn payload_raw(&self) -> &[u8] {
@@ -710,8 +712,30 @@ pub enum Error {
     #[error("Join Error")]
     JoinError,
 
-    #[error("Payload is invalid UTF8")]
-    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("Invalid UTF8 payload: {from}: {input_excerpt}...")]
+    InvalidUtf8Payload {
+        input_excerpt: String,
+        from: std::str::Utf8Error,
+    },
+}
+
+fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> Error {
+    const EXCERPT_LEN: usize = 80;
+    let index = from.valid_up_to();
+    let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
+
+    Error::InvalidUtf8Payload {
+        input_excerpt: input_prefix(input, EXCERPT_LEN),
+        from,
+    }
+}
+
+fn input_prefix(input: &str, len: usize) -> String {
+    input
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(len)
+        .collect()
 }
 
 #[cfg(test)]
@@ -776,5 +800,15 @@ mod tests {
         let message = Message::new(&topic, &b"123"[..]);
 
         assert_eq!(message.payload_trimmed(), b"123");
+    }
+
+    #[test]
+    fn payload_str_fails_with_invalid_utf8() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"temperature\xc3\x28"[..]);
+        assert_eq!(
+            message.payload_str().unwrap_err().to_string(),
+            "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 11: temperature..."
+        );
     }
 }
