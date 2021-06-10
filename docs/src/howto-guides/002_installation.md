@@ -4,7 +4,7 @@
 
 There are two possibilities to install thin-edge.io, the easiest way is to use the installation script with this command:
 ```
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s 0.1.0
+curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s 0.2.0
 ```
 You can execute that command on your device and it will do all required steps for an initial setup.
 
