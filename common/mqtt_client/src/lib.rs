@@ -523,14 +523,15 @@ impl Message {
         Self { qos, ..self }
     }
 
-    // trimming the trailing null char
+    // trims the trailing null char if one exists
     fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())
     }
 
-    // This function will trim the null character at the end of the payload
+    // This function trims the null character at the end of the payload before converting into UTF8
+    // Some MQTT messages contain the payload with trailing null char, such payload is invalid payload.
     pub fn payload_str(&self) -> Result<&str, Error> {
         Ok(std::str::from_utf8(self.payload_trimmed())?)
     }

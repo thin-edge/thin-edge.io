@@ -19,7 +19,7 @@ impl Converter for AzureConverter {
 
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
 
-        let () = thin_edge_json::json::parse_utf8(input, &mut serializer)?;
+        let () = thin_edge_json::json::parse_str(input, &mut serializer)?;
         Ok(serializer.into_string()?)
     }
 }

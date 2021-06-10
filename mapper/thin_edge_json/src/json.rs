@@ -131,7 +131,7 @@ pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'stati
     VisitorError(T),
 }
 
-pub fn parse_utf8<T: GroupedMeasurementVisitor>(
+pub fn parse_str<T: GroupedMeasurementVisitor>(
     json_string: &str,
     visitor: &mut T,
 ) -> Result<(), ThinEdgeJsonParserError<T::Error>> {
@@ -226,7 +226,7 @@ impl ThinEdgeJson {
         json_string: &str,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
         let mut builder = ThinEdgeJsonBuilder::new();
-        let () = parse_utf8(json_string, &mut builder)?;
+        let () = parse_str(json_string, &mut builder)?;
         Ok(builder.done()?)
     }
 
