@@ -1,14 +1,13 @@
 #!/usr/bin/sh
 
-# This script is intended to be executed by a GitHub self-hosted runner
-# on a Raspberry Pi.
-# TODO: Introduce certificate management
-
-# Smoke test
+# Smoke test for Cumulocity
 # - Rebuild bridge
 # - Publish some values with tedge cli
 # - Run a smoke test for c8y smartREST
 # - Run a smoke test for c8y Thin Edge JSON
+
+# This script is intended to be executed by a GitHub self-hosted runner
+# on a Raspberry Pi.
 
 # Command line parameters:
 # ci_smoke_test.sh  <timezone>
