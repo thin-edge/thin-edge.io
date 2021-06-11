@@ -5,8 +5,9 @@ language = "en"
 multilingual = false
 src = "src"
 
-[output.linkcheck]
-follow-web-links = false
-traverse-parent-directories = false
-warning-policy = "warn"
-exclude = [ 'README.md' ]
+# FIX: the link check prevents some pages to be generated
+#[output.linkcheck]
+#follow-web-links = false
+#traverse-parent-directories = false
+#warning-policy = "warn"
+#exclude = [ 'README.md' ]

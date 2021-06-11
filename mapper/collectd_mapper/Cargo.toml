@@ -1,6 +1,6 @@
 [package]
 name = "collectd_mapper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -10,6 +10,10 @@ description = "The daemon providing monitoring and remote management capabilitie
 [package.metadata.deb]
 depends = "tedge"
 maintainer-scripts = "configuration/debian/collectd_mapper"
+assets = [
+    ["../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],
+    ["target/release/collectd_mapper", "/usr/bin/collectd_mapper", "755"],
+]
 
 [package.metadata.deb.systemd-units]
 unit-scripts = "../../configuration/init/systemd"

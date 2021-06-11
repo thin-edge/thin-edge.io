@@ -121,7 +121,9 @@ fn check_another_instance_is_running(app_name: &str) -> Result<Flockfile, Flockf
 }
 
 fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
-    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root()
+        || tedge_users::UserManager::running_as("tedge-mapper")
+    {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(

@@ -49,7 +49,9 @@ fn config_repository() -> anyhow::Result<TEdgeConfigRepository> {
 }
 
 fn config_location() -> anyhow::Result<TEdgeConfigLocation> {
-    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root()
+        || tedge_users::UserManager::running_as("collectd-mapper")
+    {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(
