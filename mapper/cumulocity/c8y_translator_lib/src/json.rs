@@ -38,7 +38,7 @@ fn from_thin_edge_json_with_timestamp(
     input: &str,
     default_timestamp: DateTime<FixedOffset>,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp)?;
+    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
