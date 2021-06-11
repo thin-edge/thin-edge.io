@@ -8,7 +8,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     translate_17x3_multi_measurements(c);
 }
 
-const REFERENCE_THIN_EDGE_JSON: &[u8] = br#"{
+const REFERENCE_THIN_EDGE_JSON: &str = r#"{
             "time": "2021-06-22T17:03:14.123456789+05:00",
             "temperature": 25.01,
             "location": {
@@ -31,11 +31,11 @@ fn translate_ref_measurement(c: &mut Criterion) {
 
 fn translate_2_measurements(c: &mut Criterion) {
     let id = "Translate 2 measurements";
-    let message = br#"{
+    let message = r#"{
             "temperature": 12.34,
             "pressure": 56.78
         }"#;
-    sanity_check(message);
+    sanity_check(&message);
 
     c.bench_function(id, |b| b.iter(|| json::from_thin_edge_json(message)));
 }
@@ -43,21 +43,17 @@ fn translate_2_measurements(c: &mut Criterion) {
 fn translate_50_measurements(c: &mut Criterion) {
     let id = "Translate 50 measurements";
     let message = flat_message(50);
-    sanity_check(message.as_bytes());
+    sanity_check(&message);
 
-    c.bench_function(id, |b| {
-        b.iter(|| json::from_thin_edge_json(message.as_bytes()))
-    });
+    c.bench_function(id, |b| b.iter(|| json::from_thin_edge_json(&message)));
 }
 
 fn translate_17x3_multi_measurements(c: &mut Criterion) {
     let id = "Translate 17x3 multi-measurements";
     let message = group_message(17, 3);
-    sanity_check(message.as_bytes());
+    sanity_check(&message);
 
-    c.bench_function(id, |b| {
-        b.iter(|| json::from_thin_edge_json(message.as_bytes()))
-    });
+    c.bench_function(id, |b| b.iter(|| json::from_thin_edge_json(&message)));
 }
 
 fn flat_message(n: u64) -> String {
@@ -94,7 +90,7 @@ fn group_message(n_grp: u64, n_per_grp: u64) -> String {
     message
 }
 
-fn sanity_check(message: &[u8]) {
+fn sanity_check(message: &str) {
     json::from_thin_edge_json(message).expect("Expect a valid thin-edge-json message");
 }
 
@@ -128,7 +124,7 @@ fn sanity_check_translate_reference_thin_edge_json() -> Result<(), anyhow::Error
     });
 
     assert_json_diff::assert_json_eq!(
-        serde_json::from_slice::<serde_json::Value>(&output)?,
+        serde_json::from_slice::<serde_json::Value>(output.as_bytes())?,
         simple_c8y_json
     );
 
