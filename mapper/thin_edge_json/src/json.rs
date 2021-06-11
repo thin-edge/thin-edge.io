@@ -469,7 +469,6 @@ mod tests {
         let error = output.unwrap_err();
         assert_eq!(expected_error, error.to_string());
     }
-
     #[test]
     fn thin_edge_json_reject_nested_arrays() {
         let input = r#"{

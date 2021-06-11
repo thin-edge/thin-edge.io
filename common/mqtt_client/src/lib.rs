@@ -793,7 +793,6 @@ mod tests {
 
         assert_eq!(message.payload_trimmed(), b"");
     }
-
     #[test]
     fn check_non_null_terminated_messages() {
         let topic = Topic::new("trimmed").unwrap();
@@ -801,14 +800,22 @@ mod tests {
 
         assert_eq!(message.payload_trimmed(), b"123");
     }
-
     #[test]
-    fn payload_str_fails_with_invalid_utf8() {
+    fn payload_str_with_invalid_utf8_char_in_the_middle() {
         let topic = Topic::new("trimmed").unwrap();
         let message = Message::new(&topic, &b"temperature\xc3\x28"[..]);
         assert_eq!(
             message.payload_str().unwrap_err().to_string(),
             "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 11: temperature..."
+        );
+    }
+    #[test]
+    fn payload_str_with_invalid_utf8_char_in_the_beginning() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"\xc3\x28"[..]);
+        assert_eq!(
+            message.payload_str().unwrap_err().to_string(),
+            "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 0: ..."
         );
     }
 }
