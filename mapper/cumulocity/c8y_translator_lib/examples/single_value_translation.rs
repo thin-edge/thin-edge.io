@@ -8,7 +8,7 @@ fn single_value_translation() {
 
     println!("Thin_Edge_Json: \n{:#}", single_value_thin_edge_json);
 
-    let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
+    let output = from_thin_edge_json(single_value_thin_edge_json);
     match output {
         Ok(vec) => {
             println!("{:?}", vec);
