@@ -45,5 +45,5 @@ jobs:
           commit-message: Patch version bump
           delete-branch: true
           title: Patch version bump
-          body: Pathc version bump
+          body: Patch version bump
           reviewers: itsyitsy
