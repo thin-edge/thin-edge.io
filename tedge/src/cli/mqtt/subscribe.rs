@@ -70,15 +70,11 @@ async fn async_println(s: &str) -> Result<(), MqttError> {
 }
 
 async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
+    let payload = message.payload_str()?;
     if hide_topic {
-        let s = std::str::from_utf8(message.payload_trimmed())?;
-        async_println(&s).await?;
+        async_println(&payload).await?;
     } else {
-        let s = format!(
-            "[{}] {}",
-            message.topic.name,
-            std::str::from_utf8(message.payload_trimmed())?
-        );
+        let s = format!("[{}] {}", message.topic.name, payload);
         async_println(&s).await?;
     }
 
