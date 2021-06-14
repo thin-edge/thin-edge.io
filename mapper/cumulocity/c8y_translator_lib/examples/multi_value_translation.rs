@@ -12,7 +12,7 @@ fn multi_value_translation() {
    }"#;
 
     println!("\nThin_Edge_Json: {:#}", multi_value_thin_edge_json);
-    let output = from_thin_edge_json(multi_value_thin_edge_json.as_bytes());
+    let output = from_thin_edge_json(multi_value_thin_edge_json);
     match output {
         Ok(vec) => {
             println!("{:?}", vec);

@@ -5,7 +5,7 @@
 //!
 //! ```
 //! use c8y_translator_lib::json::from_thin_edge_json;
-//! let single_value_thin_edge_json = br#"{
+//! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
@@ -28,19 +28,19 @@ pub enum CumulocityJsonError {
 }
 
 /// Converts from thin-edge Json to c8y_json
-pub fn from_thin_edge_json(input: &[u8]) -> Result<Vec<u8>, CumulocityJsonError> {
+pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
-    input: &[u8],
+    input: &str,
     default_timestamp: DateTime<FixedOffset>,
-) -> Result<Vec<u8>, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp)?;
-    let () = parse_utf8(input, &mut serializer)?;
-    Ok(serializer.bytes()?)
+) -> Result<String, CumulocityJsonError> {
+    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp);
+    let () = parse_str(input, &mut serializer)?;
+    Ok(serializer.into_string()?)
 }
 
 #[cfg(test)]
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn check_single_value_translation() {
-        let single_value_thin_edge_json = br#"{
+        let single_value_thin_edge_json = r#"{
                   "temperature": 23,
                   "pressure": 220
                }"#;
@@ -76,7 +76,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -104,21 +104,17 @@ mod tests {
                        }
                   }"#;
 
-        let output = from_thin_edge_json(single_value_thin_edge_json.as_bytes());
+        let output = from_thin_edge_json(single_value_thin_edge_json);
 
-        let vec = output.unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(vec)
-                .unwrap()
-                .split_whitespace()
-                .collect::<String>()
+            output.unwrap().split_whitespace().collect::<String>()
         );
     }
 
     #[test]
     fn check_multi_value_translation() {
-        let multi_value_thin_edge_json = br#"{
+        let multi_value_thin_edge_json = r#"{
             "temperature": 25 ,
             "location": {
                   "latitude": 32.54,
@@ -159,7 +155,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -181,12 +177,9 @@ mod tests {
             }
         }"#;
 
-        let output = from_thin_edge_json(&String::from(input).into_bytes());
+        let output = from_thin_edge_json(input);
 
-        let actual_output = String::from_utf8(output.unwrap())
-            .unwrap()
-            .split_whitespace()
-            .collect::<String>();
+        let actual_output = output.unwrap().split_whitespace().collect::<String>();
 
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -217,11 +210,10 @@ mod tests {
                    }}
                 }}"#, time, measurement, measurement);
 
-        let output = from_thin_edge_json(input.as_bytes()).unwrap();
+        let output = from_thin_edge_json(input.as_str()).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
-            String::from_utf8(output)
-                .unwrap()
+            output
                 .split_whitespace()
                 .collect::<String>()
         );
