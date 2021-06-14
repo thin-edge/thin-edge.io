@@ -1,8 +1,9 @@
 use chrono::prelude::*;
+use json_writer::JsonWriter;
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
 pub struct C8yJsonSerializer {
-    buffer: String,
+    json: JsonWriter,
     is_within_group: bool,
     needs_separator: bool,
     timestamp_present: bool,
@@ -42,12 +43,14 @@ pub enum MeasurementStreamError {
 impl C8yJsonSerializer {
     pub fn new(default_timestamp: DateTime<FixedOffset>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut buffer = String::with_capacity(capa);
+        let mut json = JsonWriter::with_capacity(capa);
 
-        buffer.push_str(r#"{"type": "ThinEdgeMeasurement""#);
+        json.write_open_obj();
+        json.write_key_noescape("type");
+        json.write_str_noescape("ThinEdgeMeasurement");
 
         Self {
-            buffer,
+            json,
             is_within_group: false,
             needs_separator: true,
             timestamp_present: false,
@@ -66,42 +69,21 @@ impl C8yJsonSerializer {
 
         assert!(self.timestamp_present);
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         Ok(())
     }
 
     pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
         self.end()?;
-        Ok(self.buffer.into())
-    }
-
-    fn write_key(&mut self, key: &str) {
-        self.write_str(key);
-        self.buffer.push(':');
-    }
-
-    fn write_str(&mut self, s: &str) {
-        self.buffer.push('"');
-        self.buffer.push_str(s);
-        self.buffer.push('"');
-    }
-
-    fn write_f64(&mut self, value: f64) -> std::fmt::Result {
-        use std::fmt::Write;
-        self.buffer.write_fmt(format_args!("{}", value))
+        Ok(self.json.into_string().into())
     }
 
     fn write_value_obj(&mut self, value: f64) -> std::fmt::Result {
-        self.buffer.push('{');
-        self.write_key("value");
-        self.write_f64(value)?;
-        self.buffer.push('}');
+        self.json.write_open_obj();
+        self.json.write_key_noescape("value");
+        self.json.write_f64(value)?;
+        self.json.write_close_obj();
         Ok(())
-    }
-
-    pub fn into_string(self) -> Result<String, C8yJsonSerializationError> {
-        String::from_utf8(self.bytes()?)
-            .map_err(C8yJsonSerializationError::InvalidUtf8ConversionToString)
     }
 }
 
@@ -114,11 +96,12 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
 
-        self.write_key("time");
-        self.write_str(timestamp.to_rfc3339().as_str());
+        self.json.write_key_noescape("time");
+        self.json
+            .write_str_noescape(timestamp.to_rfc3339().as_str());
 
         self.needs_separator = true;
         self.timestamp_present = true;
@@ -127,20 +110,20 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
 
     fn measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         } else {
             self.needs_separator = true;
         }
 
-        self.write_key(key);
+        self.json.write_key_noescape(key);
 
         if self.is_within_group {
             self.write_value_obj(value)?;
         } else {
-            self.buffer.push('{');
-            self.write_key(key);
+            self.json.write_open_obj();
+            self.json.write_key_noescape(key);
             self.write_value_obj(value)?;
-            self.buffer.push('}');
+            self.json.write_close_obj();
         }
         Ok(())
     }
@@ -151,10 +134,10 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
-        self.write_key(group);
-        self.buffer.push('{');
+        self.json.write_key_noescape(group);
+        self.json.write_open_obj();
         self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
@@ -165,10 +148,17 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
+    }
+}
+
+impl C8yJsonSerializer {
+    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
+        self.end()?;
+        Ok(self.json.clone().into_string())
     }
 }
 
