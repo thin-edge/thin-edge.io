@@ -2,60 +2,28 @@
 //! shell, functional core" approach with this code being the
 //! "functional core".
 
+pub mod dedup;
+pub mod filter;
+pub mod group;
+
 pub type Timestamp = chrono::DateTime<chrono::FixedOffset>;
+pub type Duration = chrono::Duration;
 
-/// A batch of messages. Guaranteed to contain at least one message.
-#[derive(Debug, PartialEq)]
-pub struct MessageBatch<T> {
-    opened_at: Timestamp,
-    messages: Vec<T>,
-}
-
-impl<T> MessageBatch<T> {
-    pub fn new(opened_at: Timestamp, first_message: T) -> Self {
-        Self {
-            opened_at,
-            messages: vec![first_message],
-        }
-    }
-
-    pub fn opened_at(&self) -> Timestamp {
-        self.opened_at
-    }
-
-    pub fn iter_messages(&self) -> impl Iterator<Item = &T> {
-        self.messages.iter()
-    }
-
-    pub fn first(&self) -> &T {
-        &self.messages[0]
-    }
-}
-
-/// Decision whether to put a message into the current batch or start a new one.
-pub trait BatchingCriterion<T>: Send {
-    /// Returns true, if the message belongs to the current batch.
-    fn belongs_to_batch(&self, message: &T, message_batch: &MessageBatch<T>) -> bool;
-}
+pub use filter::MessageFilter;
+pub use group::{MessageGroup, MessageGrouper};
 
 /// Inputs to the `MessageBatcher`.
 pub enum Input<T> {
     /// A message was received.
-    Message {
-        /// Time the message has been received.
-        received_at: Timestamp,
+    Message(T),
 
-        /// The message itself.
-        message: T,
-    },
-
-    /// Notify the `MessageBatcher` about an expired timer, requested through `Output::NotifyAt`.
+    /// Notify the `MessageBatcher` about the current system time.
+    ///
+    /// This is the result of either an expired timer, requested through `Output::NextTickAt`
+    /// or a change in the current system time (e.g. when a message was received).
     ///
     /// Allows the `MessageBatcher` to close a batch when the current time window has expired.
-    Notify {
-        /// The current system time.
-        now: Timestamp,
-    },
+    Tick(Timestamp),
 
     /// Will flush the current batch. This is used upon termination.
     Flush,
@@ -64,124 +32,95 @@ pub enum Input<T> {
 /// Outputs from the `MessageBatcher`. These inform the imperative shell to perform some actions on behalf
 /// of the `MessageBatcher`.
 #[derive(Debug, PartialEq)]
-pub enum Output<T> {
+pub enum Output<T: Send> {
     /// Informs the imperative shell to send an `Input::Notify` at (or slightly after) the specified timestamp.
-    NotifyAt(Timestamp),
+    NextTickAt(Timestamp),
 
     /// Informs the imperative shell to send the message batch out.
-    MessageBatch(MessageBatch<T>),
+    MessageBatch(MessageGroup<T>),
 }
 
 /// The MessageBatcher's internal state / configuration.
-pub struct MessageBatcher<T> {
-    /// Maximum number of messages per batch.
-    max_batch_size: usize,
+pub struct MessageBatcher<T: Send + Clone> {
+    /// Message filter to reject messages before grouping them.
+    message_filter: Box<dyn MessageFilter<T>>,
 
-    /// The maximum age of a batch.
+    /// The message grouper
+    message_grouper: MessageGrouper<T>,
+
     ///
-    /// Age of a batch is the elapsed time since `current_batch.opened_at`.
-    max_batch_age: chrono::Duration,
+    max_batch_age: Duration,
 
-    /// The decisions whether a message belongs to the current batch or not.
-    batching_criteria: Vec<Box<dyn BatchingCriterion<T>>>,
-
-    current_batch: Option<MessageBatch<T>>,
+    /// Current system time
+    current_timestamp: Timestamp,
 }
 
-impl<T> MessageBatcher<T> {
-    pub fn new(max_batch_size: usize, max_batch_age: chrono::Duration) -> Self {
-        assert!(max_batch_size > 0);
+impl<T: Clone + Send> MessageBatcher<T> {
+    pub fn new(
+        message_filter: Box<dyn MessageFilter<T>>,
+        message_grouper: MessageGrouper<T>,
+        max_batch_age: Duration,
+        startup_time: Timestamp,
+    ) -> Self {
         Self {
-            max_batch_size,
+            message_filter,
+            message_grouper,
             max_batch_age,
-            batching_criteria: Vec::new(),
-            current_batch: None,
+            current_timestamp: startup_time,
         }
     }
 
-    pub fn with_batching_criterion(
-        mut self,
-        batching_criterion: impl BatchingCriterion<T> + 'static,
-    ) -> Self {
-        self.batching_criteria.push(Box::new(batching_criterion));
-        self
+    pub fn handle_vec(&mut self, input: Input<T>) -> Vec<Output<T>> {
+        let mut outputs = Vec::new();
+        self.handle(input, &mut outputs);
+        outputs
     }
 
     pub fn handle(&mut self, input: Input<T>, outputs: &mut Vec<Output<T>>) {
         match input {
-            Input::Message {
-                message,
-                received_at,
-            } => self.handle_message(message, received_at, outputs),
-            Input::Notify { now } => self.handle_notify(now, outputs),
+            Input::Tick(timestamp) => self.handle_tick(timestamp, outputs),
+            Input::Message(message) => self.handle_message(message, outputs),
             Input::Flush => self.handle_flush(outputs),
         }
 
-        // Inform imperative shell about when to send a `Input::Notify` message.
-        if let Some(batch_opened_at) = self.current_batch.as_ref().map(|batch| batch.opened_at) {
-            outputs.push(Output::NotifyAt(batch_opened_at + self.max_batch_age));
+        // Inform imperative shell about when to send the next `Input::Tick` message.
+        if let Some(min_created_at) = self.message_grouper.min_created_at() {
+            outputs.push(Output::NextTickAt(min_created_at + self.max_batch_age));
         }
     }
 
-    fn handle_message(&mut self, message: T, received_at: Timestamp, outputs: &mut Vec<Output<T>>) {
-        if self.timestamp_exceeds_max_age(received_at)
-            || !self.message_belongs_to_current_batch(&message)
-        {
-            // the current message starts a new batch.
-            self.handle_flush(outputs);
-        }
-
-        match self.current_batch {
-            Some(ref mut current_batch) => {
-                current_batch.messages.push(message);
-            }
-            None => {
-                self.current_batch = Some(MessageBatch::new(received_at, message));
-            }
-        }
-
-        if self.current_batch_size() >= self.max_batch_size {
-            self.handle_flush(outputs);
-        }
+    fn handle_tick(&mut self, timestamp: Timestamp, outputs: &mut Vec<Output<T>>) {
+        self.current_timestamp = timestamp;
+        self.retire_messages(outputs);
     }
 
-    fn handle_notify(&mut self, now: Timestamp, outputs: &mut Vec<Output<T>>) {
-        if self.timestamp_exceeds_max_age(now) {
-            self.handle_flush(outputs);
+    fn handle_message(&mut self, message: T, outputs: &mut Vec<Output<T>>) {
+        match self.message_filter.filter(&message) {
+            filter::FilterDecision::Accept => {
+                self.message_grouper
+                    .group_message(message, self.current_timestamp);
+                self.retire_messages(outputs);
+            }
+            filter::FilterDecision::Reject => {
+                // ignore message
+            }
         }
     }
 
     fn handle_flush(&mut self, outputs: &mut Vec<Output<T>>) {
-        if let Some(last_batch) = self.current_batch.take() {
-            outputs.push(Output::MessageBatch(last_batch));
+        for message_group in self.message_grouper.flush_groups().into_iter() {
+            outputs.push(Output::MessageBatch(message_group));
         }
     }
 
-    fn message_belongs_to_current_batch(&self, message: &T) -> bool {
-        match self.current_batch.as_ref() {
-            Some(current_batch) => self
-                .batching_criteria
-                .iter()
-                .all(|crit| crit.belongs_to_batch(message, current_batch)),
-            None => true,
+    fn retire_messages(&mut self, outputs: &mut Vec<Output<T>>) {
+        for message_group in self
+            .message_grouper
+            .retire_groups(self.current_timestamp)
+            .into_iter()
+        {
+            outputs.push(Output::MessageBatch(message_group));
         }
-    }
-
-    fn timestamp_exceeds_max_age(&self, timestamp: Timestamp) -> bool {
-        match self.current_batch {
-            Some(MessageBatch { opened_at, .. }) => {
-                let age = timestamp - opened_at;
-                age >= self.max_batch_age
-            }
-            None => false,
-        }
-    }
-
-    fn current_batch_size(&self) -> usize {
-        self.current_batch
-            .as_ref()
-            .map(|batch| batch.messages.len())
-            .unwrap_or(0)
     }
 }
 
@@ -214,6 +153,41 @@ impl CollectdMessage {
     }
 }
 
+/// We start a new batch upon receiving a message whose timestamp is farther away to the
+/// timestamp of first message in the batch than `delta` seconds.
+///
+/// Delta is inclusive.
+#[cfg(test)]
+struct CollectdTimestampDeltaCriterion {
+    delta: f64,
+}
+
+#[cfg(test)]
+impl group::IsGroupMember<CollectdMessage> for CollectdTimestampDeltaCriterion {
+    fn is_group_member(
+        &self,
+        message: &CollectdMessage,
+        group: &MessageGroup<CollectdMessage>,
+    ) -> bool {
+        let delta = group.first().timestamp - message.timestamp;
+        delta.abs() <= self.delta
+    }
+}
+
+#[cfg(test)]
+struct RetirementPolicy {
+    max_group_age: Duration,
+}
+
+// XXX: Rename CanRetire -> RetirementPolicy
+#[cfg(test)]
+impl group::CanRetire<CollectdMessage> for RetirementPolicy {
+    fn can_retire(&self, group: &MessageGroup<CollectdMessage>, now: Timestamp) -> bool {
+        let age = now - group.created_at();
+        age >= self.max_group_age
+    }
+}
+
 #[test]
 fn it_batches_messages_until_max_batch_size_is_reached() {
     use chrono::{prelude::*, Duration};
@@ -224,7 +198,17 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
 
     let one_hour = Duration::hours(1);
 
-    let mut batcher = MessageBatcher::new(3, one_hour);
+    let mut batcher = MessageBatcher::new(
+        Box::new(filter::NoMessageFilter::new()),
+        group::MessageGrouper::new(
+            Box::new(CollectdTimestampDeltaCriterion { delta: 3.0 }),
+            Box::new(RetirementPolicy {
+                max_group_age: one_hour,
+            }),
+        ),
+        one_hour,
+        fixed_timestamp,
+    );
 
     let messages = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 1.0),
@@ -233,28 +217,18 @@ fn it_batches_messages_until_max_batch_size_is_reached() {
     ];
 
     let inputs = vec![
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[0].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[1].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[2].clone(),
-        },
+        Input::Tick(fixed_timestamp),
+        Input::Message(messages[0].clone()),
+        Input::Message(messages[1].clone()),
+        Input::Message(messages[2].clone()),
         Input::Flush,
     ];
 
     let expected_outputs = vec![
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
-            messages,
-        }),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::MessageBatch(MessageGroup::from_messages(messages, fixed_timestamp)),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
@@ -270,27 +244,17 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
 
     let one_hour = chrono::Duration::hours(1);
 
-    /// We start a new batch upon receiving a message whose timestamp is farther away to the
-    /// timestamp of first message in the batch than `delta` seconds.
-    ///
-    /// Delta is inclusive.
-    struct CollectdTimestampDeltaCriterion {
-        delta: f64,
-    }
-
-    impl BatchingCriterion<CollectdMessage> for CollectdTimestampDeltaCriterion {
-        fn belongs_to_batch(
-            &self,
-            message: &CollectdMessage,
-            message_batch: &MessageBatch<CollectdMessage>,
-        ) -> bool {
-            let delta = message_batch.first().timestamp - message.timestamp;
-            delta.abs() <= self.delta
-        }
-    }
-
-    let mut batcher = MessageBatcher::new(1000, one_hour)
-        .with_batching_criterion(CollectdTimestampDeltaCriterion { delta: 1.5 });
+    let mut batcher = MessageBatcher::new(
+        Box::new(filter::NoMessageFilter::new()),
+        group::MessageGrouper::new(
+            Box::new(CollectdTimestampDeltaCriterion { delta: 1.5 }),
+            Box::new(RetirementPolicy {
+                max_group_age: one_hour,
+            }),
+        ),
+        one_hour,
+        fixed_timestamp,
+    );
 
     let messages = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0),
@@ -301,47 +265,33 @@ fn it_batches_messages_within_collectd_timestamp_delta() {
     ];
 
     let inputs = vec![
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[0].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[1].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[2].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[3].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[4].clone(),
-        },
+        Input::Tick(fixed_timestamp),
+        Input::Message(messages[0].clone()),
+        Input::Message(messages[1].clone()),
+        Input::Message(messages[2].clone()),
+        Input::Message(messages[3].clone()),
+        Input::Message(messages[4].clone()),
         Input::Flush,
     ];
 
     let expected_outputs = vec![
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
-            messages: vec![messages[0].clone(), messages[1].clone()],
-        }),
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
-            messages: vec![messages[2].clone(), messages[3].clone()],
-        }),
-        Output::NotifyAt(fixed_timestamp + one_hour),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
-            messages: vec![messages[4].clone()],
-        }),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::NextTickAt(fixed_timestamp + one_hour),
+        Output::MessageBatch(MessageGroup::from_messages(
+            vec![messages[0].clone(), messages[1].clone()],
+            fixed_timestamp,
+        )),
+        Output::MessageBatch(MessageGroup::from_messages(
+            vec![messages[2].clone(), messages[3].clone()],
+            fixed_timestamp,
+        )),
+        Output::MessageBatch(MessageGroup::from_messages(
+            vec![messages[4].clone()],
+            fixed_timestamp,
+        )),
     ];
 
     test_batcher(&mut batcher, inputs, expected_outputs);
@@ -353,11 +303,21 @@ fn it_batches_messages_based_on_max_age() {
 
     let fixed_timestamp = FixedOffset::east(7 * 3600)
         .ymd(2014, 7, 8)
-        .and_hms(9, 10, 11);
+        .and_hms(9, 10, 0);
 
     let ten_seconds = Duration::seconds(10);
 
-    let mut batcher = MessageBatcher::new(1000, ten_seconds);
+    let mut batcher = MessageBatcher::new(
+        Box::new(filter::NoMessageFilter::new()),
+        group::MessageGrouper::new(
+            Box::new(CollectdTimestampDeltaCriterion { delta: 10000000.0 }),
+            Box::new(RetirementPolicy {
+                max_group_age: ten_seconds,
+            }),
+        ),
+        ten_seconds,
+        fixed_timestamp,
+    );
 
     let messages = vec![
         CollectdMessage::new("coordinate", "z", 90.0, 0.0),
@@ -368,60 +328,95 @@ fn it_batches_messages_based_on_max_age() {
         CollectdMessage::new("coordinate", "z", 90.0, 5.0),
     ];
 
-    let inputs = vec![
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[0].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp,
-            message: messages[1].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp + Duration::seconds(9),
-            message: messages[2].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp + Duration::seconds(11),
-            message: messages[3].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp + Duration::milliseconds(20999),
-            message: messages[4].clone(),
-        },
-        Input::Message {
-            received_at: fixed_timestamp + Duration::seconds(21),
-            message: messages[5].clone(),
-        },
-        Input::Flush,
-    ];
+    macro_rules! assert_handle {
+        ($input:expr => [ $($output:expr),* ]) => {
+            assert_eq!(batcher.handle_vec($input), vec![$($output),*]);
+        };
+    }
 
-    let expected_outputs = vec![
-        Output::NotifyAt(fixed_timestamp + ten_seconds),
-        Output::NotifyAt(fixed_timestamp + ten_seconds),
-        Output::NotifyAt(fixed_timestamp + ten_seconds),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp,
-            messages: vec![
-                messages[0].clone(),
-                messages[1].clone(),
-                messages[2].clone(),
-            ],
-        }),
-        Output::NotifyAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
-        Output::NotifyAt(fixed_timestamp + Duration::seconds(11) + ten_seconds),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp + Duration::seconds(11),
-            messages: vec![messages[3].clone(), messages[4].clone()],
-        }),
-        Output::NotifyAt(fixed_timestamp + Duration::seconds(21) + ten_seconds),
-        Output::MessageBatch(MessageBatch {
-            opened_at: fixed_timestamp + Duration::seconds(21),
-            messages: vec![messages[5].clone()],
-        }),
-    ];
+    assert_handle! {
+        Input::Tick(fixed_timestamp) => []
+    };
+    assert_handle! {
+        Input::Message(messages[0].clone()) => [
+            Output::NextTickAt(fixed_timestamp + ten_seconds)
+        ]
+    };
+    assert_handle! {
+        Input::Message(messages[1].clone()) => [
+            Output::NextTickAt(fixed_timestamp + ten_seconds)
+        ]
+    };
+    assert_handle! {
+        Input::Tick(fixed_timestamp + Duration::seconds(9)) => [
+            Output::NextTickAt(fixed_timestamp + ten_seconds)
+        ]
+    };
+    assert_handle! {
+        Input::Message(messages[2].clone()) => [
+            Output::NextTickAt(fixed_timestamp + ten_seconds)
+        ]
+    };
+    assert_handle! {
+        Input::Tick(fixed_timestamp + Duration::seconds(11)) => [
+            Output::MessageBatch(MessageGroup::from_messages(
+                vec![
+                    messages[0].clone(),
+                    messages[1].clone(),
+                    messages[2].clone(),
+                ],
+                fixed_timestamp,
+            ))
+        ]
+    };
+    assert_handle! {
+        Input::Message(messages[3].clone()) => [
+            Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds)
+        ]
+    };
 
-    test_batcher(&mut batcher, inputs, expected_outputs);
+    assert_handle! {
+        Input::Tick(fixed_timestamp + Duration::milliseconds(20999)) => [
+            Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds)
+        ]
+    };
+
+    assert_handle! {
+        Input::Message(messages[4].clone()) => [
+            Output::NextTickAt(fixed_timestamp + Duration::seconds(11) + ten_seconds)
+        ]
+    };
+
+    assert_handle! {
+         Input::Tick(fixed_timestamp + Duration::seconds(21)) => [
+            Output::MessageBatch(MessageGroup::from_messages(
+                vec![
+                    messages[3].clone(),
+                    messages[4].clone(),
+                ],
+                fixed_timestamp + Duration::seconds(11),
+            ))
+
+        ]
+    };
+
+    assert_handle! {
+        Input::Message(messages[5].clone()) => [
+            Output::NextTickAt(fixed_timestamp + Duration::seconds(21) + ten_seconds)
+        ]
+    };
+
+    assert_handle! {
+         Input::Flush => [
+            Output::MessageBatch(MessageGroup::from_messages(
+                vec![
+                    messages[5].clone(),
+                ],
+                fixed_timestamp + Duration::seconds(21),
+            ))
+
+        ]
+    };
 }
 
 #[cfg(test)]

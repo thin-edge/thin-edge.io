@@ -18,13 +18,15 @@ struct CollectdTimestampDeltaCriterion {
     delta: f64,
 }
 
-impl message_batcher::BatchingCriterion<OwnedCollectdMessage> for CollectdTimestampDeltaCriterion {
-    fn belongs_to_batch(
+impl message_batcher::group::IsGroupMember<OwnedCollectdMessage>
+    for CollectdTimestampDeltaCriterion
+{
+    fn is_group_member(
         &self,
         message: &OwnedCollectdMessage,
-        message_batch: &message_batcher::MessageBatch<OwnedCollectdMessage>,
+        group: &message_batcher::MessageGroup<OwnedCollectdMessage>,
     ) -> bool {
-        let delta = message_batch.first().timestamp() - message.timestamp();
+        let delta = group.first().timestamp() - message.timestamp();
         delta.abs() <= self.delta
     }
 }
@@ -37,6 +39,21 @@ pub struct MessageBatcher {
     clock: Arc<dyn Clock>,
 }
 
+struct RetirementPolicy {
+    max_group_age: chrono::Duration,
+}
+
+impl message_batcher::group::CanRetire<OwnedCollectdMessage> for RetirementPolicy {
+    fn can_retire(
+        &self,
+        group: &message_batcher::MessageGroup<OwnedCollectdMessage>,
+        now: message_batcher::Timestamp,
+    ) -> bool {
+        let age = now - group.created_at();
+        age >= self.max_group_age
+    }
+}
+
 impl MessageBatcher {
     pub fn new(
         sender: UnboundedSender<MeasurementGrouper>,
@@ -45,10 +62,19 @@ impl MessageBatcher {
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        let batcher = message_batcher::MessageBatcher::new(1000, batching_window)
-            .with_batching_criterion(CollectdTimestampDeltaCriterion {
-                delta: batching_window.num_seconds() as f64,
-            });
+        let batcher = message_batcher::MessageBatcher::new(
+            Box::new(message_batcher::filter::NoMessageFilter::new()),
+            message_batcher::group::MessageGrouper::new(
+                Box::new(CollectdTimestampDeltaCriterion {
+                    delta: batching_window.num_seconds() as f64,
+                }),
+                Box::new(RetirementPolicy {
+                    max_group_age: batching_window,
+                }),
+            ),
+            batching_window,
+            clock.now(),
+        );
 
         Self {
             sender,
@@ -94,7 +120,7 @@ impl MessageBatcher {
                             })
                         });
                 }
-                message_batcher::Output::NotifyAt(at) => {
+                message_batcher::Output::NextTickAt(at) => {
                     next_notification_at = std::cmp::min(next_notification_at, at);
                 }
             }
@@ -126,19 +152,20 @@ impl MessageBatcher {
                 // Timeout fired. Inform functional core
                 let now = self.clock.now();
                 self.batcher
-                    .handle(message_batcher::Input::Notify { now }, outputs);
+                    .handle(message_batcher::Input::Tick(now), outputs);
             }
             Ok(Some(mqtt_message)) => {
                 // got a message
                 let received_at = self.clock.now();
                 match CollectdMessage::parse_from(&mqtt_message) {
-                    Ok(collectd_message) => self.batcher.handle(
-                        message_batcher::Input::Message {
-                            received_at,
-                            message: collectd_message.into(),
-                        },
-                        outputs,
-                    ),
+                    Ok(collectd_message) => {
+                        self.batcher
+                            .handle(message_batcher::Input::Tick(received_at), outputs);
+                        self.batcher.handle(
+                            message_batcher::Input::Message(collectd_message.into()),
+                            outputs,
+                        );
+                    }
                     Err(err) => {
                         error!("Error parsing collectd message: {}", err);
                     }
@@ -153,10 +180,10 @@ impl MessageBatcher {
 }
 
 fn group_messages(
-    message_batch: message_batcher::MessageBatch<OwnedCollectdMessage>,
+    message_batch: message_batcher::MessageGroup<OwnedCollectdMessage>,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
-    message_grouper.timestamp(&message_batch.opened_at())?;
+    message_grouper.timestamp(&message_batch.created_at())?;
 
     for collectd_message in message_batch.iter_messages() {
         message_grouper.measurement(
