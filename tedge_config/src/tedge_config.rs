@@ -184,7 +184,7 @@ impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
             .az
             .mapper_timestamp
             .map(Flag)
-            .unwrap_or_else(|| Flag(true)))
+            .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
     }
 
     fn update(&mut self, _setting: AzureMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {

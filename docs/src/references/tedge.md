@@ -1,6 +1,7 @@
 # The `tedge` command
+
 ```
-tedge 0.1.0
+tedge 0.2.0
 tedge is the cli tool for thin-edge.io
 
 USAGE:
@@ -18,4 +19,3 @@ SUBCOMMANDS:
     help          Prints this message or the help of the given subcommand(s)
     mqtt          Publish a message on a topic and subscribe a topic
 ```
-
