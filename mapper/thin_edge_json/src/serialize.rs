@@ -1,6 +1,6 @@
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
-use json_writer::{JsonWriter, JsonWriterError};
+use json_writer::JsonWriter;
 
 use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
@@ -21,9 +21,6 @@ pub enum ThinEdgeJsonSerializationError {
 
     #[error("Serializer produced invalid Utf8 string")]
     InvalidUtf8ConversionToString(std::string::FromUtf8Error),
-
-    #[error("transparent")]
-    JsonWriterError(#[from] JsonWriterError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -76,8 +73,12 @@ impl ThinEdgeJsonSerializer {
     }
 
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
+        Ok(self.into_string()?.into_bytes())
+    }
+
+    pub fn into_string(&mut self) -> Result<String, ThinEdgeJsonSerializationError> {
         self.end()?;
-        Ok(self.json.into_string().into())
+        Ok(self.json.clone().into_string())
     }
 }
 
@@ -143,12 +144,6 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
     }
 }
 
-impl ThinEdgeJsonSerializer {
-    pub fn into_string(&mut self) -> Result<String, ThinEdgeJsonSerializationError> {
-        self.end()?;
-        Ok(self.json.clone().into_string())
-    }
-}
 #[cfg(test)]
 
 mod tests {

@@ -1,5 +1,5 @@
 use chrono::prelude::*;
-use json_writer::{JsonWriter, JsonWriterError};
+use json_writer::JsonWriter;
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
 pub struct C8yJsonSerializer {
@@ -23,9 +23,6 @@ pub enum C8yJsonSerializationError {
 
     #[error("Serializer produced invalid Utf8 string")]
     InvalidUtf8ConversionToString(std::string::FromUtf8Error),
-
-    #[error("transparent")]
-    JsonWriterError(#[from] JsonWriterError),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -76,17 +73,21 @@ impl C8yJsonSerializer {
         Ok(())
     }
 
-    pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
-        self.end()?;
-        Ok(self.json.into_string().into())
-    }
-
     fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
         self.json.write_open_obj();
         self.json.write_key_noescape("value");
         self.json.write_f64(value)?;
         self.json.write_close_obj();
         Ok(())
+    }
+
+    pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
+        Ok(self.into_string()?.into_bytes())
+    }
+
+    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
+        self.end()?;
+        Ok(self.json.clone().into_string())
     }
 }
 
@@ -155,13 +156,6 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
-    }
-}
-
-impl C8yJsonSerializer {
-    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
-        self.end()?;
-        Ok(self.json.clone().into_string())
     }
 }
 

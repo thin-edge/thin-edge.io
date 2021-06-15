@@ -5,12 +5,6 @@ pub struct JsonWriter {
     buffer: String,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum JsonWriterError {
-    #[error("Failed to write the f64 value")]
-    Writef64ValueError(#[from] std::fmt::Error),
-}
-
 impl JsonWriter {
     pub fn new() -> Self {
         Self {
@@ -34,7 +28,7 @@ impl JsonWriter {
         self.buffer.push('"');
     }
 
-    pub fn write_f64(&mut self, value: f64) -> Result<(), JsonWriterError> {
+    pub fn write_f64(&mut self, value: f64) -> Result<(), std::fmt::Error> {
         Ok(self.buffer.write_fmt(format_args!("{}", value))?)
     }
 
