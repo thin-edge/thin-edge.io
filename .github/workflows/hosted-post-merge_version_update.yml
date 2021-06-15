@@ -1,7 +1,11 @@
 name: hosted-post-merge_version_update
 on:
   workflow_dispatch:
-    branches: [ main ]
+    branches: [main]
+    inputs:
+      version:
+        description: Version value for tag
+        required: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,3 +51,8 @@ jobs:
           title: Patch version bump
           body: Patch version bump
           reviewers: itsyitsy
+
+      - name: Tag inplace
+        run: |
+          git tag ${{ github.event.inputs.name }}
+          git push --tags
