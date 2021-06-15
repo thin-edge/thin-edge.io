@@ -15,7 +15,7 @@ env:
 jobs:
   self-hosted:
     runs-on: [self-hosted, Linux, ARM ]
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
@@ -25,10 +25,18 @@ jobs:
 
   hosted:
     runs-on: Ubuntu-20.04
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
     - name: hi
       run:  echo hello
 
+  hostedjustdoit:
+    runs-on: Ubuntu-20.04
+    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+
+    - name: hi
+      run:  echo hello
