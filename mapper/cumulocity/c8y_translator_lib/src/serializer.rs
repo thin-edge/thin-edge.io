@@ -76,13 +76,9 @@ impl C8yJsonSerializer {
     fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
         self.json.write_open_obj();
         self.json.write_key_noescape("value");
-        self.json.write_f64(value)?;
+        self.json.write_f64(value);
         self.json.write_close_obj();
         Ok(())
-    }
-
-    pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
-        Ok(self.into_string()?.into_bytes())
     }
 
     pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
@@ -178,7 +174,7 @@ mod tests {
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -191,7 +187,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
         Ok(())
@@ -212,7 +208,7 @@ mod tests {
         serializer.end_group()?;
         serializer.measurement("pressure", 255.2)?;
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -242,7 +238,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -255,15 +251,15 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp);
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -284,10 +280,10 @@ mod tests {
             "time":"2021-06-22T17:03:14.123456789+05:00"
         });
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -370,7 +366,7 @@ mod tests {
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
-        let expected_err = serializer.bytes();
+        let expected_err = serializer.into_string();
 
         assert_matches!(
             expected_err,

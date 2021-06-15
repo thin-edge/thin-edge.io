@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::num::FpCategory;
 
 #[derive(Debug, Clone)]
 pub struct JsonWriter {
@@ -28,8 +29,17 @@ impl JsonWriter {
         self.buffer.push('"');
     }
 
-    pub fn write_f64(&mut self, value: f64) -> Result<(), std::fmt::Error> {
-        Ok(self.buffer.write_fmt(format_args!("{}", value))?)
+    pub fn write_f64(&mut self, value: f64) {
+        match value.classify() {
+            FpCategory::Normal | FpCategory::Zero | FpCategory::Subnormal => {
+                self.buffer
+                    .write_fmt(format_args!("{}", value))
+                    .expect("Infalliable");
+            }
+            FpCategory::Infinite | FpCategory::Nan => {
+                self.buffer.push_str("null");
+            }
+        }
     }
 
     pub fn write_separator(&mut self) {
@@ -62,6 +72,13 @@ mod tests {
     }
 
     #[test]
+    fn write_f64_message() {
+        let mut jw = JsonWriter::new();
+        jw.write_f64(1.0 / 0.0);
+        assert_eq!(jw.into_string(), "null");
+    }
+
+    #[test]
     fn write_timestamp_message() {
         let mut jw = JsonWriter::with_capacity(128);
         jw.write_open_obj();
@@ -82,7 +99,7 @@ mod tests {
         jw.write_str_noescape("2013-06-22T17:03:14.123+02:00");
         jw.write_separator();
         jw.write_key_noescape("temperature");
-        jw.write_f64(128.0)?;
+        jw.write_f64(128.0);
         jw.write_close_obj();
         assert_eq!(
             jw.into_string(),
@@ -99,18 +116,18 @@ mod tests {
         jw.write_str_noescape("2013-06-22T17:03:14.123+02:00");
         jw.write_separator();
         jw.write_key_noescape("temperature");
-        jw.write_f64(128.0)?;
+        jw.write_f64(128.0);
         jw.write_separator();
         jw.write_key_noescape("location");
         jw.write_open_obj();
         jw.write_key_noescape("altitude");
-        jw.write_f64(1028.0)?;
+        jw.write_f64(1028.0);
         jw.write_separator();
         jw.write_key_noescape("longitude");
-        jw.write_f64(1288.0)?;
+        jw.write_f64(1288.0);
         jw.write_separator();
         jw.write_key_noescape("longitude");
-        jw.write_f64(1280.0)?;
+        jw.write_f64(1280.0);
         jw.write_close_obj();
         jw.write_close_obj();
 
