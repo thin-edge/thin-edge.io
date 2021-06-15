@@ -1,0 +1,34 @@
+name: post-test-workflow
+
+on:
+  workflow_dispatch:
+    branches: [ main, continuous_integration]
+  workflow_run:
+    workflows: ["system-test-workflow"]
+    branches: [main, continuous_integration]
+    types:
+      - completed
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  self-hosted:
+    runs-on: [self-hosted, Linux, ARM ]
+    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+
+    - name: hi
+      run:  echo hello
+
+
+  hosted:
+    runs-on: Ubuntu-20.04
+    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+
+    - name: hi
+      run:  echo hello
+
