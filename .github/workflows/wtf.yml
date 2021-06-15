@@ -12,11 +12,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  system-test:
+  workflow-to-fine:
     runs-on: Ubuntu-20.04
 
     steps:
 
     - name: Run all Tests
-      run:  bash echo "Echo WTF, just pass"
+      run:  echo "Echo WTF, just pass"
 
