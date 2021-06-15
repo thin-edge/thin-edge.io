@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+	<description>
+		<title>
+			C8Y Mapper
+		</title>
+		<purpose>
+			<![CDATA[ ]]>
+		</purpose>
+	</description>
+	<classification>
+		<groups inherit="true">
+			<group>
+			</group>
+		</groups>
+		<modes inherit="true">
+		</modes>
+	</classification>
+	<data>
+		<class name="TedgeMapperC8y" module="run" />
+	</data>
+	<traceability>
+		<requirements>
+			<requirement id="" />
+		</requirements>
+	</traceability>
+</pysystest>
