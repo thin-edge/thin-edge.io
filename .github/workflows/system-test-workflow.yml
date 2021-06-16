@@ -42,3 +42,5 @@ jobs:
         name: results_${{ github.run_number }}
         path: tests/
 
+    - name: Say hello
+      run:  echo Hello
