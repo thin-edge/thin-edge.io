@@ -42,10 +42,10 @@ jobs:
         name: results_${{ github.run_number }}
         path: tests/
 
-      # Trigger repo dispatch here.
-      # This is here a limitation of the amount of workflows
-      # that trigger each other (GitHub Bug).
-      # It would be nicer to use the postprocess trigger instead
+    # Trigger repo dispatch here.
+    # This is here a limitation of the amount of workflows
+    # that trigger each other (GitHub Bug).
+    # It would be nicer to use the postprocess trigger instead
     - name: Repository Dispatch
         uses: peter-evans/repository-dispatch@v1
         with:
