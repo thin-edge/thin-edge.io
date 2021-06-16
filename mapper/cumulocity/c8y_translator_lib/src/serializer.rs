@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use json_writer::{JsonWriter, JsonWriterError};
-use std::convert::TryInto;
+
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
 pub struct C8yJsonSerializer {
@@ -50,8 +50,8 @@ impl C8yJsonSerializer {
         let mut json = JsonWriter::with_capacity(capa);
 
         json.write_open_obj();
-        json.write_static_key("type");
-        json.write_static_str_noescape("ThinEdgeMeasurement");
+        let _ = json.write_key("type");
+        let _ = json.write_str("ThinEdgeMeasurement");
 
         Self {
             json,
@@ -79,7 +79,7 @@ impl C8yJsonSerializer {
 
     fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
         self.json.write_open_obj();
-        self.json.write_key_noescape("value".try_into()?);
+        self.json.write_key("value")?;
         self.json.write_f64(value)?;
         self.json.write_close_obj();
         Ok(())
@@ -87,7 +87,7 @@ impl C8yJsonSerializer {
 
     pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
         self.end()?;
-        Ok(self.json.clone().into_string())
+        Ok(self.json.clone().into_string()?)
     }
 }
 
@@ -103,9 +103,8 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             self.json.write_separator();
         }
 
-        self.json.write_key_noescape("time".try_into()?);
-        self.json
-            .write_str_noescape(timestamp.to_rfc3339().as_str().try_into()?);
+        self.json.write_key("time")?;
+        self.json.write_str(timestamp.to_rfc3339().as_str())?;
 
         self.needs_separator = true;
         self.timestamp_present = true;
@@ -119,13 +118,13 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             self.needs_separator = true;
         }
 
-        self.json.write_key_noescape(key.try_into()?);
+        self.json.write_key(key)?;
 
         if self.is_within_group {
             self.write_value_obj(value)?;
         } else {
             self.json.write_open_obj();
-            self.json.write_key_noescape(key.try_into()?);
+            self.json.write_key(key)?;
             self.write_value_obj(value)?;
             self.json.write_close_obj();
         }
@@ -140,7 +139,7 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         if self.needs_separator {
             self.json.write_separator();
         }
-        self.json.write_key_noescape(group.try_into()?);
+        self.json.write_key(group)?;
         self.json.write_open_obj();
         self.needs_separator = false;
         self.is_within_group = true;

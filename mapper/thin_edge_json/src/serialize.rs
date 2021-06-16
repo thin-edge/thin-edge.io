@@ -1,7 +1,6 @@
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
 use json_writer::{JsonWriter, JsonWriterError};
-use std::convert::TryInto;
 
 use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
@@ -82,7 +81,7 @@ impl ThinEdgeJsonSerializer {
 
     pub fn into_string(&mut self) -> Result<String, ThinEdgeJsonSerializationError> {
         self.end()?;
-        Ok(self.json.clone().into_string())
+        Ok(self.json.clone().into_string()?)
     }
 }
 
@@ -104,9 +103,8 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             self.json.write_separator();
         }
 
-        self.json.write_key_noescape("time".try_into()?);
-        self.json
-            .write_str_noescape(timestamp.to_rfc3339().as_str().try_into()?);
+        self.json.write_key("time")?;
+        self.json.write_str(timestamp.to_rfc3339().as_str())?;
         self.needs_separator = true;
         self.timestamp_present = true;
         Ok(())
@@ -116,7 +114,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         if self.needs_separator {
             self.json.write_separator();
         }
-        self.json.write_key_noescape(name.try_into()?);
+        self.json.write_key(name)?;
         self.json.write_f64(value)?;
         self.needs_separator = true;
         Ok(())
@@ -130,7 +128,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         if self.needs_separator {
             self.json.write_separator();
         }
-        self.json.write_key_noescape(group.try_into()?);
+        self.json.write_key(group)?;
         self.json.write_open_obj();
         self.needs_separator = false;
         self.is_within_group = true;
