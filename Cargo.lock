@@ -1095,6 +1095,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "message-algos"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pretty_assertions",
+]
+
+[[package]]
 name = "message-batcher"
 version = "0.1.0"
 dependencies = [

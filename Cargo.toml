@@ -7,6 +7,7 @@ members = [
     "common/clock",
     "common/tedge_users",
     "common/message_batcher",
+    "common/message_algos",
     "tedge",
     "tedge_config",
     "mapper/cumulocity/c8y_translator_lib",
