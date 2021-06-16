@@ -1,13 +1,13 @@
-use crate::{grouping::*, Envelope, Timestamp};
+use crate::{grouping::*, Envelope, Message, Timestamp};
 
 /// A concrete implementation of a `MessageGrouper`.
-pub struct MessageBatcher<T: Send + Clone> {
+pub struct MessageBatcher<T: Message> {
     grouping_policy: Box<dyn GroupingPolicy<Message = T>>,
     retirement_policy: Box<dyn RetirementPolicy<Message = T>>,
     groups: Vec<MessageGroup<T>>,
 }
 
-impl<T: Clone + Send> MessageGrouper for MessageBatcher<T> {
+impl<T: Message> MessageGrouper for MessageBatcher<T> {
     type Message = T;
 
     /// Enqueue a message into one of the groups, or create a new message group.
@@ -62,7 +62,7 @@ impl<T: Clone + Send> MessageGrouper for MessageBatcher<T> {
     }
 }
 
-impl<T: Clone + Send> MessageBatcher<T> {
+impl<T: Message> MessageBatcher<T> {
     pub fn new(
         grouping_policy: Box<dyn GroupingPolicy<Message = T>>,
         retirement_policy: Box<dyn RetirementPolicy<Message = T>>,

@@ -1,8 +1,8 @@
-use crate::{grouping::MessageGroup, Timestamp};
+use crate::{grouping::MessageGroup, Message, Timestamp};
 
 /// Decision on retiring message groups ("batches").
 pub trait RetirementPolicy: Send {
-    type Message: Send + Clone;
+    type Message: Message;
 
     /// Decision whether to retire a group based on the current system time.
     fn check_retirement(

@@ -58,6 +58,8 @@ impl Hash for OwnedCollectdMessage {
     }
 }
 
+impl message_algos::Message for OwnedCollectdMessage {}
+
 impl OwnedCollectdMessage {
     pub fn metric_group_key(&self) -> &str {
         &self.metric_group_key

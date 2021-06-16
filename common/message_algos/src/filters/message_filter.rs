@@ -1,8 +1,8 @@
-pub use crate::Envelope;
+pub use crate::{Envelope, Message};
 
 /// Stateful message filter that accepts or rejects messages based on some criteria.
 pub trait MessageFilter: Send {
-    type Message: Send + Clone;
+    type Message: Message;
 
     fn filter(&mut self, _message: &Envelope<Self::Message>) -> FilterDecision;
 }

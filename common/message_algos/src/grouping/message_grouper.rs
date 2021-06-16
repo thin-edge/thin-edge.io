@@ -1,8 +1,8 @@
-use crate::{grouping::*, Envelope, Timestamp};
+use crate::{grouping::*, Envelope, Message, Timestamp};
 
 /// Describes the behavior of a message grouper.
 pub trait MessageGrouper {
-    type Message: Send + Clone;
+    type Message: Message;
 
     /// Add a message into one of the groups, or create a new message group.
     fn add_message(&mut self, message: Envelope<Self::Message>);
@@ -16,7 +16,7 @@ pub trait MessageGrouper {
 }
 
 /// Describes the action to retire groups and when to call `retire_groups` again.
-pub struct RetireGroupsAction<T: Send + Clone> {
+pub struct RetireGroupsAction<T: Message> {
     /// The groups to retire.
     pub retired_groups: Vec<MessageGroup<T>>,
     /// When to check next for retirement.

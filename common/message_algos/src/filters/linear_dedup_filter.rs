@@ -1,24 +1,24 @@
 //! Message deduplication
 
-use crate::{filters::*, Envelope};
+use crate::{filters::*, *};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::VecDeque;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 
 /// A linear message deduper.
 ///
 /// Complexity: O(n)
-pub struct LinearDedupFilter<T: Send + Clone + PartialEq + Hash> {
+pub struct LinearDedupFilter<T: Message> {
     max_history_capacity: usize,
     history: VecDeque<Entry<T>>,
 }
 
-struct Entry<T: Send + Clone + PartialEq + Hash> {
+struct Entry<T: Message> {
     hash: u64,
     envelope: Envelope<T>,
 }
 
-impl<T: Send + Clone + PartialEq + Hash> LinearDedupFilter<T> {
+impl<T: Message> LinearDedupFilter<T> {
     pub fn new(max_history_capacity: usize) -> Self {
         assert!(max_history_capacity > 0);
         Self {
@@ -28,7 +28,7 @@ impl<T: Send + Clone + PartialEq + Hash> LinearDedupFilter<T> {
     }
 }
 
-impl<T: Clone + Send + PartialEq + Hash> MessageFilter for LinearDedupFilter<T> {
+impl<T: Message> MessageFilter for LinearDedupFilter<T> {
     type Message = T;
 
     fn filter(&mut self, envelope: &Envelope<Self::Message>) -> FilterDecision {

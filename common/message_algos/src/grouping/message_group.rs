@@ -1,12 +1,12 @@
-use crate::Envelope;
+use crate::{Envelope, Message};
 
 /// A group of messages (or message envelopes). Guaranteed to contain at least one message.
 #[derive(Debug)]
-pub struct MessageGroup<T: Send + Clone> {
+pub struct MessageGroup<T: Message> {
     messages: Vec<Envelope<T>>,
 }
 
-impl<T: Send + Clone> MessageGroup<T> {
+impl<T: Message> MessageGroup<T> {
     pub fn new(first_message: Envelope<T>) -> Self {
         Self {
             messages: vec![first_message],
