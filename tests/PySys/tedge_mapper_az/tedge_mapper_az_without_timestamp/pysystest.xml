@@ -2,7 +2,10 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Az Mapper without Timestamp
+			Validate the Azure Mapper publishes a Thin Edge JSON message
+			without timestamp on az/messages/events/
+			when it receives a valid JSON message on tedge/measurements and
+			az.mapper.timestamp is configured false.
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

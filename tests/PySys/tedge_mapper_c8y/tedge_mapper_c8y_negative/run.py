@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate an invalid Thin Edge JSON message that is published
+Validate an invalid JSON message that is published
 on tedge/errors by tedge-mapper c8y
 
 Given a configured system
@@ -47,7 +47,7 @@ class TedgeMapperC8y(BaseTest):
         pub = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", '{"temperature": 12,}'],
+                       "tedge/measurements", "{"],
             stdouterr="tedge_temp",
         )
 

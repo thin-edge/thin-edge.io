@@ -2,7 +2,9 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Az Mapper with Timestamp
+			Validate the Azure Mapper publishes a Thin Edge JSON message
+			with timestamp on az/messages/events/
+			when it receives a valid JSON message on tedge/measurements.
 		</title>
 		<purpose>
 			<![CDATA[ ]]>
