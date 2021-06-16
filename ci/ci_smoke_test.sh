@@ -1,14 +1,13 @@
 #!/usr/bin/sh
 
-# This script is intended to be executed by a GitHub self-hosted runner
-# on a Raspberry Pi.
-# TODO: Introduce certificate management
-
-# Smoke test
+# Smoke test for Cumulocity
 # - Rebuild bridge
 # - Publish some values with tedge cli
 # - Run a smoke test for c8y smartREST
 # - Run a smoke test for c8y Thin Edge JSON
+
+# This script is intended to be executed by a GitHub self-hosted runner
+# on a Raspberry Pi.
 
 # Command line parameters:
 # ci_smoke_test.sh  <timezone>
@@ -78,25 +77,7 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
-echo "Configuring Bridge"
-
-sudo tedge cert remove
-
-sudo tedge cert create --device-id=$C8YDEVICE
-
-sudo tedge cert show
-
-sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
-
-sudo tedge config set c8y.root.cert.path /etc/ssl/certs
-
-sudo tedge config list
-
-# Note: This will always upload a new certificate. From time to time
-# we should delete the old ones in c8y
-sudo -E tedge cert upload c8y --user $C8YUSERNAME
-
-cat /etc/mosquitto/mosquitto.conf
+./ci/configure_bridge.sh
 
 echo "Connect again"
 sudo tedge connect c8y
