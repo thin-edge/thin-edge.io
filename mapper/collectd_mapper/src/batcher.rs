@@ -47,11 +47,11 @@ impl RetirementPolicy for MaxGroupAgeRetirementPolicy {
         group: &MessageGroup<Self::Message>,
         now: Timestamp,
     ) -> RetirementDecision {
-        let age = now - group.first().timestamp;
+        let age = now - group.first().received_at;
         if age >= self.max_group_age {
             RetirementDecision::Retire
         } else {
-            RetirementDecision::NextCheckAt(group.first().timestamp + self.max_group_age)
+            RetirementDecision::NextCheckAt(group.first().received_at + self.max_group_age)
         }
     }
 }
@@ -146,7 +146,7 @@ impl MessageBatcher {
                 match CollectdMessage::parse_from(&mqtt_message) {
                     Ok(collectd_message) => {
                         self.batcher.add_message(Envelope {
-                            timestamp: received_at,
+                            received_at,
                             message: collectd_message.into(),
                         });
                     }
@@ -167,7 +167,7 @@ fn group_messages(
     message_batch: &MessageGroup<OwnedCollectdMessage>,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
-    message_grouper.timestamp(&message_batch.first().timestamp)?;
+    message_grouper.timestamp(&message_batch.first().received_at)?;
 
     for collectd_message in message_batch.iter_messages() {
         message_grouper.measurement(

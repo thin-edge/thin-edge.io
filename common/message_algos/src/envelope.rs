@@ -4,5 +4,5 @@ use crate::Timestamp;
 #[derive(Debug, Clone)]
 pub struct Envelope<T: Send + Clone> {
     pub message: T,
-    pub timestamp: Timestamp,
+    pub received_at: Timestamp,
 }
