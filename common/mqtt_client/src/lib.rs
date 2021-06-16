@@ -133,6 +133,10 @@ impl Client {
             mqtt_options.set_inflight(inflight);
         }
 
+        if let Some(packet_size) = config.packet_size {
+            mqtt_options.set_max_packet_size(packet_size, packet_size);
+        }
+
         let (mqtt_client, eventloop) =
             rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
         let requests_tx = eventloop.requests_tx.clone();
@@ -368,6 +372,10 @@ pub struct Config {
     /// If `None` is provided, the default setting of `rumqttc` is used.
     pub inflight: Option<u16>,
 
+    /// Max packet size limit for outgoing an incoming packets
+    /// If `None` is provided, 10KB size limit is imposed
+    pub packet_size: Option<usize>,
+
     /// Capacity of various internal message queues.
     ///
     /// This is used to decouple both `rumqttc` and our background event loop from
@@ -389,6 +397,7 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
+            packet_size: None,
             queue_capacity: 10,
             clean_session: false,
         }
@@ -428,6 +437,14 @@ impl Config {
     /// Use this config to connect a MQTT client
     pub async fn connect(&self, name: &str) -> Result<Client, Error> {
         Client::connect(name, self).await
+    }
+
+    /// Set a max packet size
+    pub fn with_packet_size(self, packet_size: usize) -> Self {
+        Self {
+            packet_size: Some(packet_size),
+            ..self
+        }
     }
 }
 
