@@ -119,7 +119,10 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
                 data = json.loads(text)
                 value = data["cafe"]
             except json.decoder.JSONDecodeError:
-                print("Parsing Error", text)
+                print("Json Parsing Error: ", text)
+                value = None
+            except KeyError:
+                print("Parsing Error: ", text)
                 value = None
 
             print(
