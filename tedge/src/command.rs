@@ -161,6 +161,7 @@ pub trait BuildCommand {
 ///
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
+    pub config_location: tedge_config::TEdgeConfigLocation,
 }
 
 /// The execution context of a command.
@@ -189,22 +190,5 @@ impl ExecutionContext {
         ExecutionContext {
             user_manager: UserManager::new(),
         }
-    }
-}
-
-/// Return the value provided on the command line,
-/// or, if not set, return the value stored in the config
-/// or, if not found, return an error asking for the missing value.
-///
-/// ```
-/// let path = param_config_or_default!(cert_path, tedge.device.cert_path, "device.cert.path");
-/// ```
-#[macro_export]
-macro_rules! param_config_or_default {
-    ($( $param:ident ).*, $( $config:ident ).*, $key:expr) => {
-         $( $param ).* .as_ref()
-         .or( $( $config ).*.as_ref())
-         .map(|str| str.to_string())
-         .ok_or_else(|| ConfigError::ConfigNotSet{key:String::from($key)});
     }
 }

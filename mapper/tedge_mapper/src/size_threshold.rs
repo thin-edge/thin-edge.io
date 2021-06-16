@@ -1,7 +1,7 @@
 pub struct SizeThreshold(pub usize);
 
 impl SizeThreshold {
-    pub fn validate(&self, input: &[u8]) -> Result<(), SizeThresholdExceeded> {
+    pub fn validate(&self, input: &str) -> Result<(), SizeThresholdExceeded> {
         let actual_size = input.len();
         let threshold = self.0;
         if actual_size > threshold {

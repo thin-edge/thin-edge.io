@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 use mqtt_client::Message;
 
 #[derive(Debug)]
@@ -19,6 +17,9 @@ pub enum CollectdError {
 
     #[error("Invalid payload received on topic: {0}. Error: {1}")]
     InvalidMeasurementPayload(String, CollectdPayloadError),
+
+    #[error("Non UTF-8 payload: {0:?}")]
+    NonUTF8MeasurementPayload(Vec<u8>),
 }
 
 impl<'a> CollectdMessage<'a> {
@@ -40,7 +41,11 @@ impl<'a> CollectdMessage<'a> {
             }
         };
 
-        let collectd_payload = CollectdPayload::parse_from(mqtt_message.payload_trimmed())
+        let payload = mqtt_message.payload_str().map_err(|_err| {
+            CollectdError::NonUTF8MeasurementPayload(mqtt_message.payload_raw().into())
+        })?;
+
+        let collectd_payload = CollectdPayload::parse_from(payload)
             .map_err(|err| CollectdError::InvalidMeasurementPayload(topic.into(), err))?;
 
         Ok(CollectdMessage {
@@ -86,9 +91,6 @@ struct CollectdPayload {
 
 #[derive(thiserror::Error, Debug)]
 pub enum CollectdPayloadError {
-    #[error("Non UTF-8 payload: {0:?}")]
-    NonUTF8MeasurementPayload(Vec<u8>),
-
     #[error("Invalid payload: {0}. Expected payload format: <timestamp>:<value>")]
     InvalidMeasurementPayloadFormat(String),
 
@@ -100,9 +102,7 @@ pub enum CollectdPayloadError {
 }
 
 impl CollectdPayload {
-    fn parse_from(payload: &[u8]) -> Result<Self, CollectdPayloadError> {
-        let payload = from_utf8(payload)
-            .map_err(|_err| CollectdPayloadError::NonUTF8MeasurementPayload(payload.into()))?;
+    fn parse_from(payload: &str) -> Result<Self, CollectdPayloadError> {
         let mut iter = payload.split(':');
 
         let _timestamp = iter.next().ok_or_else(|| {
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_no_seperator() {
-        let payload = b"123456789";
+        let payload = "123456789";
         let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn invalid_collectd_payload_more_seperators() {
-        let payload = b"123456789:98.6:abc";
+        let payload = "123456789:98.6:abc";
         let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_value() {
-        let payload = b"123456789:abc";
+        let payload = "123456789:abc";
         let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn invalid_collectd_metric_timestamp() {
-        let payload = b"abc:98.6";
+        let payload = "abc:98.6";
         let result = CollectdPayload::parse_from(payload);
 
         assert_matches!(
@@ -256,16 +256,16 @@ mod tests {
 
     #[test]
     fn very_large_metric_value() {
-        let payload: Vec<u8> = format!("123456789:{}", u128::MAX).into();
-        let collectd_payload = CollectdPayload::parse_from(&payload).unwrap();
+        let payload: String = format!("123456789:{}", u128::MAX);
+        let collectd_payload = CollectdPayload::parse_from(payload.as_str()).unwrap();
 
         assert_eq!(collectd_payload.metric_value, u128::MAX as f64);
     }
 
     #[test]
     fn very_small_metric_value() {
-        let payload: Vec<u8> = format!("123456789:{}", i128::MIN).into();
-        let collectd_payload = CollectdPayload::parse_from(&payload).unwrap();
+        let payload: String = format!("123456789:{}", i128::MIN);
+        let collectd_payload = CollectdPayload::parse_from(payload.as_str()).unwrap();
 
         assert_eq!(collectd_payload.metric_value, i128::MIN as f64);
     }
