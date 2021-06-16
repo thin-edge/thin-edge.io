@@ -1,8 +1,7 @@
 # The `tedge cert` command
-The `tedge cert` command is used to create and manage device certificates.
 
 ```
-tedge-cert 0.1.0
+tedge-cert 0.2.0
 Create and manage device certificate
 
 USAGE:
@@ -18,12 +17,12 @@ SUBCOMMANDS:
     remove    Remove the device certificate
     show      Show the device certificate, if any
     upload    Upload root certificate
-
 ```
+
 ## Create
 
 ```
-tedge-cert-create 0.1.0
+tedge-cert-create 0.2.0
 Create a self-signed device certificate
 
 USAGE:
@@ -35,13 +34,12 @@ FLAGS:
 
 OPTIONS:
         --device-id <id>    The device identifier to be used as the common name for the certificate
-
 ```
 
 ## Show
 
 ```
-tedge-cert-show 0.1.0
+tedge-cert-show 0.2.0
 Show the device certificate, if any
 
 USAGE:
@@ -50,36 +48,38 @@ USAGE:
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
-
 ```
 
 ## Remove
 
 ```
-tedge-cert-remove 0.1.0
+tedge-cert-remove 0.2.0
 Remove the device certificate
 
 USAGE:
-    tedge cert remove [OPTIONS]
+    tedge cert remove
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
-
 ```
 
 ## Upload
 
 ```
-tedge-cert-upload 0.1.0
+tedge-cert-upload 0.2.0
 Upload root certificate
 
 USAGE:
     tedge cert upload <SUBCOMMAND>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help       
+            Prints help information
+
+    -V, --version    
+            Prints version information
+
 
 SUBCOMMANDS:
     c8y     Upload root certificate to Cumulocity

@@ -1,6 +1,7 @@
 # The `tedge disconnect` command
+
 ```
-tedge-disconnect 0.1.0
+tedge-disconnect 0.2.0
 Remove bridge connection for a provider
 
 USAGE:
@@ -15,9 +16,11 @@ SUBCOMMANDS:
     c8y     Remove bridge connection to Cumulocity
     help    Prints this message or the help of the given subcommand(s)
 ```
-## az 
+
+## Azure
+
 ```
-tedge-disconnect-az 0.1.0
+tedge-disconnect-az 0.2.0
 Remove bridge connection to Azure
 
 USAGE:
@@ -27,10 +30,11 @@ FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 ```
-## c8y
+
+## Cumulocity
 
 ```
-edge-disconnect-c8y 0.1.0
+tedge-disconnect-c8y 0.2.0
 Remove bridge connection to Cumulocity
 
 USAGE:
@@ -40,5 +44,3 @@ FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 ```
-
-
