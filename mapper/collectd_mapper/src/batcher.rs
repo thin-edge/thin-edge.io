@@ -135,12 +135,32 @@ impl MessageBatcher {
             let t20ms = std::time::Duration::from_millis(20);
             let next_notify_in = std::cmp::max(t20ms, delta.to_std().unwrap_or(t20ms));
 
-            self.process_messages(messages.as_mut(), next_notify_in)
+            self.process_next_message(messages.as_mut(), next_notify_in)
                 .await;
         }
     }
 
-    async fn process_messages(
+    fn handle_message(&mut self, mqtt_message: Message) -> Result<(), DeviceMonitorError> {
+        let received_at = self.clock.now();
+        let collectd_message = CollectdMessage::parse_from(&mqtt_message)?;
+        let envelope = Envelope {
+            received_at,
+            message: collectd_message.into(),
+        };
+
+        match self.deduper.filter(&envelope) {
+            FilterDecision::Accept => {
+                self.batcher.add_message(envelope);
+            }
+            FilterDecision::Reject => {
+                info!("Reject duplicate message");
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_next_message(
         &mut self,
         messages: &mut dyn MqttMessageStream,
         next_notify_in: std::time::Duration,
@@ -156,26 +176,8 @@ impl MessageBatcher {
             }
             Ok(Some(mqtt_message)) => {
                 // got a message
-                let received_at = self.clock.now();
-                match CollectdMessage::parse_from(&mqtt_message) {
-                    Ok(collectd_message) => {
-                        let envelope = Envelope {
-                            received_at,
-                            message: collectd_message.into(),
-                        };
-
-                        match self.deduper.filter(&envelope) {
-                            FilterDecision::Accept => {
-                                self.batcher.add_message(envelope);
-                            }
-                            FilterDecision::Reject => {
-                                info!("Got duplicate message");
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("Error parsing collectd message: {}", err);
-                    }
+                if let Err(err) = self.handle_message(mqtt_message) {
+                    error!("Error handling collectd message: {}", err);
                 }
             }
             Ok(None) => {
