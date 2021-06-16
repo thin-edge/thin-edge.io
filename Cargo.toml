@@ -6,7 +6,6 @@ members = [
     "common/mqtt_client",
     "common/clock",
     "common/tedge_users",
-    "common/message_batcher",
     "common/message_algos",
     "tedge",
     "tedge_config",

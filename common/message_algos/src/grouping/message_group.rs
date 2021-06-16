@@ -18,8 +18,12 @@ impl<T: Send + Clone> MessageGroup<T> {
         Self { messages }
     }
 
-    pub fn iter_messages(&self) -> impl Iterator<Item = &Envelope<T>> {
+    pub fn iter_envelopes(&self) -> impl Iterator<Item = &Envelope<T>> {
         self.messages.iter()
+    }
+
+    pub fn iter_messages(&self) -> impl Iterator<Item = &T> {
+        self.messages.iter().map(|envelope| &envelope.message)
     }
 
     pub fn first(&self) -> &Envelope<T> {

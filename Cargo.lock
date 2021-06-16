@@ -375,7 +375,7 @@ dependencies = [
  "chrono",
  "clock",
  "futures",
- "message-batcher",
+ "message-algos",
  "mockall",
  "mqtt_client",
  "pretty_assertions",
@@ -1096,14 +1096,6 @@ dependencies = [
 
 [[package]]
 name = "message-algos"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pretty_assertions",
-]
-
-[[package]]
-name = "message-batcher"
 version = "0.1.0"
 dependencies = [
  "chrono",

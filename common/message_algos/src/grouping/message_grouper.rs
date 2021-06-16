@@ -9,14 +9,14 @@ pub trait MessageGrouper {
 
     /// Retire groups. The decision is based on the current system time `now` and the retirement
     /// policy.
-    fn retire_groups(&mut self, now: Timestamp) -> RetireGroups<Self::Message>;
+    fn retire_groups(&mut self, now: Timestamp) -> RetireGroupsAction<Self::Message>;
 
-    /// Flushes all groups.
-    fn flush_groups(&mut self) -> Vec<MessageGroup<Self::Message>>;
+    /// Retire all groups unconditionally.
+    fn retire_groups_unconditionally(&mut self) -> RetireGroupsAction<Self::Message>;
 }
 
 /// Describes the action to retire groups and when to call `retire_groups` again.
-pub struct RetireGroups<T: Send + Clone> {
+pub struct RetireGroupsAction<T: Send + Clone> {
     /// The groups to retire.
     pub retired_groups: Vec<MessageGroup<T>>,
     /// When to check next for retirement.

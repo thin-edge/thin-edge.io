@@ -26,7 +26,7 @@ impl<T: Clone + Send> MessageGrouper for MessageBatcher<T> {
 
     /// Retire groups. The decision is based on the current system time `now` and the retirement
     /// policy.
-    fn retire_groups(&mut self, now: Timestamp) -> RetireGroups<Self::Message> {
+    fn retire_groups(&mut self, now: Timestamp) -> RetireGroupsAction<Self::Message> {
         let mut retired_groups = Vec::new();
         let mut next_check_at: Option<Timestamp> = None;
 
@@ -48,15 +48,17 @@ impl<T: Clone + Send> MessageGrouper for MessageBatcher<T> {
             }
         }
 
-        RetireGroups {
+        RetireGroupsAction {
             retired_groups,
             next_check_at,
         }
     }
 
-    /// Flushes all groups.
-    fn flush_groups(&mut self) -> Vec<MessageGroup<Self::Message>> {
-        std::mem::replace(&mut self.groups, Vec::new())
+    fn retire_groups_unconditionally(&mut self) -> RetireGroupsAction<Self::Message> {
+        RetireGroupsAction {
+            retired_groups: std::mem::replace(&mut self.groups, Vec::new()),
+            next_check_at: None,
+        }
     }
 }
 

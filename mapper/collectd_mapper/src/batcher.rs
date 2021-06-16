@@ -1,6 +1,10 @@
 use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
 use crate::error::*;
 use clock::Clock;
+use message_algos::{
+    Envelope, GroupingPolicy, MessageBatcher as Batcher, MessageGroup, MessageGrouper,
+    RetirementDecision, RetirementPolicy, Timestamp,
+};
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
 use thin_edge_json::{
@@ -14,20 +18,41 @@ use tracing::{error, log::warn};
 /// timestamp of first message in the batch than `delta` seconds.
 ///
 /// Delta is inclusive.
-struct CollectdTimestampDeltaCriterion {
+struct CollectdTimestampDeltaGroupingPolicy {
     delta: f64,
 }
 
-impl message_batcher::group::IsGroupMember<OwnedCollectdMessage>
-    for CollectdTimestampDeltaCriterion
-{
-    fn is_group_member(
+impl GroupingPolicy for CollectdTimestampDeltaGroupingPolicy {
+    type Message = OwnedCollectdMessage;
+
+    fn belongs_to_group(
         &self,
-        message: &OwnedCollectdMessage,
-        group: &message_batcher::MessageGroup<OwnedCollectdMessage>,
+        message: &Envelope<Self::Message>,
+        group: &MessageGroup<Self::Message>,
     ) -> bool {
-        let delta = group.first().timestamp() - message.timestamp();
+        let delta = group.first().message.timestamp() - message.message.timestamp();
         delta.abs() <= self.delta
+    }
+}
+
+struct MaxGroupAgeRetirementPolicy {
+    max_group_age: chrono::Duration,
+}
+
+impl RetirementPolicy for MaxGroupAgeRetirementPolicy {
+    type Message = OwnedCollectdMessage;
+
+    fn check_retirement(
+        &self,
+        group: &MessageGroup<Self::Message>,
+        now: Timestamp,
+    ) -> RetirementDecision {
+        let age = now - group.first().timestamp;
+        if age >= self.max_group_age {
+            RetirementDecision::Retire
+        } else {
+            RetirementDecision::NextCheckAt(group.first().timestamp + self.max_group_age)
+        }
     }
 }
 
@@ -35,23 +60,8 @@ pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
-    batcher: message_batcher::MessageBatcher<OwnedCollectdMessage>,
+    batcher: Batcher<OwnedCollectdMessage>,
     clock: Arc<dyn Clock>,
-}
-
-struct RetirementPolicy {
-    max_group_age: chrono::Duration,
-}
-
-impl message_batcher::group::CanRetire<OwnedCollectdMessage> for RetirementPolicy {
-    fn can_retire(
-        &self,
-        group: &message_batcher::MessageGroup<OwnedCollectdMessage>,
-        now: message_batcher::Timestamp,
-    ) -> bool {
-        let age = now - group.created_at();
-        age >= self.max_group_age
-    }
 }
 
 impl MessageBatcher {
@@ -62,18 +72,13 @@ impl MessageBatcher {
         source_topic_filter: TopicFilter,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        let batcher = message_batcher::MessageBatcher::new(
-            Box::new(message_batcher::filter::NoMessageFilter::new()),
-            message_batcher::group::MessageGrouper::new(
-                Box::new(CollectdTimestampDeltaCriterion {
-                    delta: batching_window.num_seconds() as f64,
-                }),
-                Box::new(RetirementPolicy {
-                    max_group_age: batching_window,
-                }),
-            ),
-            batching_window,
-            clock.now(),
+        let batcher = Batcher::new(
+            Box::new(CollectdTimestampDeltaGroupingPolicy {
+                delta: batching_window.num_seconds() as f64,
+            }),
+            Box::new(MaxGroupAgeRetirementPolicy {
+                max_group_age: batching_window,
+            }),
         );
 
         Self {
@@ -91,56 +96,40 @@ impl MessageBatcher {
             .subscribe(self.source_topic_filter.clone())
             .await?;
 
-        let mut outputs = Vec::new();
-
         loop {
-            let next_notify_in = self.process_outputs(&mut outputs);
-            self.process_io(messages.as_mut(), next_notify_in, &mut outputs)
-                .await;
-        }
-    }
+            let now = self.clock.now();
+            let retire_groups_action = self.batcher.retire_groups(now);
 
-    fn process_outputs(
-        &self,
-        outputs: &mut Vec<message_batcher::Output<OwnedCollectdMessage>>,
-    ) -> std::time::Duration {
-        // sentinel value to avoid having to deal with optional timeouts.
-        let mut next_notification_at = self.clock.now() + chrono::Duration::hours(24);
-
-        // Handle outputs
-        for output in outputs.drain(..) {
-            match output {
-                message_batcher::Output::MessageBatch(batch) => {
-                    // Send the current batch to the batch processor
-                    let _ = group_messages(batch)
-                        .map_err(|err| error!("Error while grouping the message batch: {}", err))
-                        .and_then(|group| {
-                            self.sender.send(group).map_err(|err| {
-                                error!("Error while publishing a message batch: {}", err)
-                            })
-                        });
-                }
-                message_batcher::Output::NextTickAt(at) => {
-                    next_notification_at = std::cmp::min(next_notification_at, at);
-                }
+            for retired_group in retire_groups_action.retired_groups.iter() {
+                // Send the current batch to the batch processor
+                let _ = group_messages(retired_group)
+                    .map_err(|err| error!("Error while grouping the message batch: {}", err))
+                    .and_then(|group| {
+                        self.sender.send(group).map_err(|err| {
+                            error!("Error while publishing a message batch: {}", err)
+                        })
+                    });
             }
+
+            let next_notification_at = retire_groups_action
+                .next_check_at
+                .unwrap_or(now + chrono::Duration::hours(24));
+
+            // To avoid negative durations (which is not supported by std::time::Duration), fall back
+            // to use a small timeout of 20 ms. Also use at least 20ms to avoid very small timeouts
+            // which might in the worst case end up in a busy loop.
+            let delta = next_notification_at - now;
+            let t20ms = std::time::Duration::from_millis(20);
+            let next_notify_in = std::cmp::max(t20ms, delta.to_std().unwrap_or(t20ms));
+
+            self.process_io(messages.as_mut(), next_notify_in).await;
         }
-
-        // To avoid negative durations (which is not supported by std::time::Duration), fall back
-        // to use a small timeout of 20 ms. Also use at least 20ms to avoid very small timeouts
-        // which might in the worst case end up in a busy loop.
-        let delta = next_notification_at - self.clock.now();
-        let t20ms = std::time::Duration::from_millis(20);
-        let next_notification_in = std::cmp::max(t20ms, delta.to_std().unwrap_or(t20ms));
-
-        next_notification_in
     }
 
     async fn process_io(
         &mut self,
         messages: &mut dyn MqttMessageStream,
         next_notify_in: std::time::Duration,
-        outputs: &mut Vec<message_batcher::Output<OwnedCollectdMessage>>,
     ) {
         match tokio::time::timeout_at(
             tokio::time::Instant::now() + next_notify_in,
@@ -149,22 +138,17 @@ impl MessageBatcher {
         .await
         {
             Err(_) => {
-                // Timeout fired. Inform functional core
-                let now = self.clock.now();
-                self.batcher
-                    .handle(message_batcher::Input::Tick(now), outputs);
+                // Timeout fired.
             }
             Ok(Some(mqtt_message)) => {
                 // got a message
                 let received_at = self.clock.now();
                 match CollectdMessage::parse_from(&mqtt_message) {
                     Ok(collectd_message) => {
-                        self.batcher
-                            .handle(message_batcher::Input::Tick(received_at), outputs);
-                        self.batcher.handle(
-                            message_batcher::Input::Message(collectd_message.into()),
-                            outputs,
-                        );
+                        self.batcher.add_message(Envelope {
+                            timestamp: received_at,
+                            message: collectd_message.into(),
+                        });
                     }
                     Err(err) => {
                         error!("Error parsing collectd message: {}", err);
@@ -180,10 +164,10 @@ impl MessageBatcher {
 }
 
 fn group_messages(
-    message_batch: message_batcher::MessageGroup<OwnedCollectdMessage>,
+    message_batch: &MessageGroup<OwnedCollectdMessage>,
 ) -> Result<MeasurementGrouper, DeviceMonitorError> {
     let mut message_grouper = MeasurementGrouper::new();
-    message_grouper.timestamp(&message_batch.created_at())?;
+    message_grouper.timestamp(&message_batch.first().timestamp)?;
 
     for collectd_message in message_batch.iter_messages() {
         message_grouper.measurement(
