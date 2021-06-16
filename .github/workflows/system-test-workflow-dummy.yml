@@ -1,0 +1,19 @@
+name: system-test-workflow-dummy
+
+on:
+  workflow_dispatch:
+    branches: [ main, continuous_integration]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  system-test:
+    runs-on: [self-hosted, Linux, ARM ]
+
+    steps:
+
+    - name: Say hello
+      run:  echo Hello
+
+
