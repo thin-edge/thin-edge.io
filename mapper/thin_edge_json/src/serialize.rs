@@ -194,7 +194,7 @@ mod tests {
         serializer.measurement("lati", 2300.4)?;
         serializer.end_group()?;
         serializer.measurement("pressure", 255.0)?;
-        let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255}"#;
+        let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255.0}"#;
         let expected_output = format!(r#"{{"time":"{}",{}"#, timestamp.to_rfc3339(), body);
         let output = serializer.into_string()?;
         assert_eq!(expected_output, output);
