@@ -4,19 +4,24 @@ use crate::{filters::*, Envelope};
 use std::collections::VecDeque;
 
 /// Test whether two messages are a duplicates.
-pub trait DedupPolicy<T: Send + Clone>: Send {
-    fn is_duplicate(&self, msg1: &Envelope<T>, msg2: &Envelope<T>) -> bool;
+pub trait DedupPolicy: Send {
+    type Message: Send + Clone;
+
+    fn is_duplicate(&self, msg1: &Envelope<Self::Message>, msg2: &Envelope<Self::Message>) -> bool;
 }
 
 /// A message deduper
-pub struct MessageDeduper<T: Send + Clone> {
-    dedup_policy: Box<dyn DedupPolicy<T>>,
+pub struct DedupFilter<T: Send + Clone> {
+    dedup_policy: Box<dyn DedupPolicy<Message = T>>,
     max_history_capacity: usize,
     history: VecDeque<Envelope<T>>,
 }
 
-impl<T: Send + Clone> MessageDeduper<T> {
-    pub fn new(dedup_policy: Box<dyn DedupPolicy<T>>, max_history_capacity: usize) -> Self {
+impl<T: Send + Clone> DedupFilter<T> {
+    pub fn new(
+        dedup_policy: Box<dyn DedupPolicy<Message = T>>,
+        max_history_capacity: usize,
+    ) -> Self {
         assert!(max_history_capacity > 0);
         Self {
             dedup_policy,
@@ -26,7 +31,7 @@ impl<T: Send + Clone> MessageDeduper<T> {
     }
 }
 
-impl<T: Clone + Send> MessageFilter for MessageDeduper<T> {
+impl<T: Clone + Send> MessageFilter for DedupFilter<T> {
     type Message = T;
 
     fn filter(&mut self, message: &Envelope<Self::Message>) -> FilterDecision {

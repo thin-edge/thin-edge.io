@@ -2,8 +2,8 @@ use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
 use crate::error::*;
 use clock::Clock;
 use message_algos::{
-    Envelope, GroupingPolicy, MessageBatcher as Batcher, MessageGroup, MessageGrouper,
-    RetirementDecision, RetirementPolicy, Timestamp,
+    DedupFilter, DedupPolicy, Envelope, FilterDecision, GroupingPolicy, MessageBatcher as Batcher,
+    MessageFilter, MessageGroup, MessageGrouper, RetirementDecision, RetirementPolicy, Timestamp,
 };
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
@@ -12,7 +12,7 @@ use thin_edge_json::{
     serialize::ThinEdgeJsonSerializer,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::{error, log::warn};
+use tracing::{error, log::info, log::warn};
 
 /// We start a new batch upon receiving a message whose timestamp is farther away to the
 /// timestamp of first message in the batch than `delta` seconds.
@@ -56,11 +56,22 @@ impl RetirementPolicy for MaxGroupAgeRetirementPolicy {
     }
 }
 
+struct CollectdDedupPolicy;
+
+impl DedupPolicy for CollectdDedupPolicy {
+    type Message = OwnedCollectdMessage;
+
+    fn is_duplicate(&self, msg1: &Envelope<Self::Message>, msg2: &Envelope<Self::Message>) -> bool {
+        msg1.message.eq(&msg2.message)
+    }
+}
+
 pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
     batcher: Batcher<OwnedCollectdMessage>,
+    deduper: DedupFilter<OwnedCollectdMessage>,
     clock: Arc<dyn Clock>,
 }
 
@@ -80,12 +91,14 @@ impl MessageBatcher {
                 max_group_age: batching_window,
             }),
         );
+        let deduper = DedupFilter::new(Box::new(CollectdDedupPolicy), 1000);
 
         Self {
             sender,
             mqtt_client,
             source_topic_filter,
             batcher,
+            deduper,
             clock,
         }
     }
@@ -122,11 +135,12 @@ impl MessageBatcher {
             let t20ms = std::time::Duration::from_millis(20);
             let next_notify_in = std::cmp::max(t20ms, delta.to_std().unwrap_or(t20ms));
 
-            self.process_io(messages.as_mut(), next_notify_in).await;
+            self.process_messages(messages.as_mut(), next_notify_in)
+                .await;
         }
     }
 
-    async fn process_io(
+    async fn process_messages(
         &mut self,
         messages: &mut dyn MqttMessageStream,
         next_notify_in: std::time::Duration,
@@ -145,10 +159,19 @@ impl MessageBatcher {
                 let received_at = self.clock.now();
                 match CollectdMessage::parse_from(&mqtt_message) {
                     Ok(collectd_message) => {
-                        self.batcher.add_message(Envelope {
+                        let envelope = Envelope {
                             received_at,
                             message: collectd_message.into(),
-                        });
+                        };
+
+                        match self.deduper.filter(&envelope) {
+                            FilterDecision::Accept => {
+                                self.batcher.add_message(envelope);
+                            }
+                            FilterDecision::Reject => {
+                                info!("Got duplicate message");
+                            }
+                        }
                     }
                     Err(err) => {
                         error!("Error parsing collectd message: {}", err);
