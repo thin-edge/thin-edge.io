@@ -50,7 +50,7 @@ def delete_device(devname, hub, sas_name):
     if "SASKEYIOTHUB" in os.environ:
         sas_policy_primary_key_iothub = os.environ["SASKEYIOTHUB"]
     else:
-        print("Error environment variable SASPOLICYKEY not set")
+        print("Error environment variable SASKEYIOTHUB not set")
         sys.exit(1)
 
     expiry = 3600
@@ -94,7 +94,7 @@ def upload_device_cert(devname, thprint, hub, sas_name):
     if "SASKEYIOTHUB" in os.environ:
         sas_policy_primary_key_iothub = os.environ["SASKEYIOTHUB"]
     else:
-        print("Error environment variable SASPOLICYKEY not set")
+        print("Error environment variable SASKEYIOTHUB not set")
         sys.exit(1)
 
     expiry = 3600
