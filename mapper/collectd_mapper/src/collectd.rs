@@ -2,6 +2,26 @@ use std::str::from_utf8;
 
 use mqtt_client::Message;
 
+use std::hash::{Hash, Hasher};
+
+/*
+// `f64` is difficult to deal with. There is no `Eq`, `Ord` or `Hash` defined for it.
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Copy, Clone)]
+pub struct CollectdTimestamp {
+    pub seconds: u64,
+    pub nanos: u64
+}
+
+impl From<f64> for CollectdTimestamp {
+    fn from(ts: f64) -> Self {
+        Self {
+            seconds: ts.trunc() as u64,
+            nanos: (ts.fract() * 1_000_000_000f64) as u64,
+        }
+    }
+}
+*/
+
 #[derive(Debug)]
 pub struct CollectdMessage<'a> {
     pub metric_group_key: &'a str,
@@ -12,12 +32,30 @@ pub struct CollectdMessage<'a> {
 
 /// It's easier to deal with owned, sendable data.
 /// XXX: Can be optimized to only store one `String`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct OwnedCollectdMessage {
     metric_group_key: String,
     metric_key: String,
     metric_value: f64,
     timestamp: f64,
+}
+
+struct HashF64(f64);
+
+impl Hash for HashF64 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // XXX
+        self.0.to_be_bytes().hash(state)
+    }
+}
+
+impl Hash for OwnedCollectdMessage {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.metric_group_key.hash(state);
+        self.metric_key.hash(state);
+        HashF64(self.metric_value).hash(state);
+        HashF64(self.timestamp).hash(state);
+    }
 }
 
 impl OwnedCollectdMessage {

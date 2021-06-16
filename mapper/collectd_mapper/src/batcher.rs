@@ -2,7 +2,7 @@ use crate::collectd::{CollectdMessage, OwnedCollectdMessage};
 use crate::error::*;
 use clock::Clock;
 use message_algos::{
-    DedupFilter, DedupPolicy, Envelope, FilterDecision, GroupingPolicy, MessageBatcher as Batcher,
+    Envelope, FilterDecision, GroupingPolicy, LinearDedupFilter, MessageBatcher as Batcher,
     MessageFilter, MessageGroup, MessageGrouper, RetirementDecision, RetirementPolicy, Timestamp,
 };
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
@@ -56,22 +56,12 @@ impl RetirementPolicy for MaxGroupAgeRetirementPolicy {
     }
 }
 
-struct CollectdDedupPolicy;
-
-impl DedupPolicy for CollectdDedupPolicy {
-    type Message = OwnedCollectdMessage;
-
-    fn is_duplicate(&self, msg1: &Envelope<Self::Message>, msg2: &Envelope<Self::Message>) -> bool {
-        msg1.message.eq(&msg2.message)
-    }
-}
-
 pub struct MessageBatcher {
     sender: UnboundedSender<MeasurementGrouper>,
     mqtt_client: Arc<dyn MqttClient>,
     source_topic_filter: TopicFilter,
     batcher: Batcher<OwnedCollectdMessage>,
-    deduper: DedupFilter<OwnedCollectdMessage>,
+    deduper: LinearDedupFilter<OwnedCollectdMessage>,
     clock: Arc<dyn Clock>,
 }
 
@@ -91,7 +81,7 @@ impl MessageBatcher {
                 max_group_age: batching_window,
             }),
         );
-        let deduper = DedupFilter::new(Box::new(CollectdDedupPolicy), 1000);
+        let deduper = LinearDedupFilter::new(1000);
 
         Self {
             sender,
