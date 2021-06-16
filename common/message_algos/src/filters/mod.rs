@@ -1,6 +1,6 @@
 //! Message filtering
 
-pub mod pass_filter;
+pub use crate::Envelope;
 
 pub enum FilterDecision {
     Accept,
@@ -8,6 +8,10 @@ pub enum FilterDecision {
 }
 
 /// Stateful message filter that accepts or rejects messages based on some criteria.
-pub trait MessageFilter<T: Send>: Send {
-    fn filter(&mut self, _message: &T) -> FilterDecision;
+pub trait MessageFilter: Send {
+    type Message: Send + Clone;
+
+    fn filter(&mut self, _message: &Envelope<Self::Message>) -> FilterDecision;
 }
+
+pub mod passthrough;
