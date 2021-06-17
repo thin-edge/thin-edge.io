@@ -65,18 +65,23 @@ impl Command for ConnectCommand {
         }
 
         let mut config = self.config_repository.load()?;
+
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
             Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
         }
         let bridge_config = self.bridge_config(&config)?;
+        let updated_mosquitto_config = self
+            .common_mosquitto_config
+            .clone()
+            .with_port(config.query(MqttPortSetting)?.into());
         self.config_repository.store(config)?;
 
         new_bridge(
             &bridge_config,
             &self.cloud,
-            &self.common_mosquitto_config,
+            &updated_mosquitto_config,
             &context.user_manager,
             &self.config_location,
         )?;

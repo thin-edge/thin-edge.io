@@ -1,6 +1,6 @@
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CommonMosquittoConfig {
     pub config_file: String,
     pub listener: String,
@@ -39,6 +39,11 @@ impl CommonMosquittoConfig {
         }
 
         Ok(())
+    }
+
+    pub fn with_port(self, listener: u16) -> Self {
+        let listener = listener.to_string() + " localhost";
+        Self { listener, ..self }
     }
 }
 
