@@ -92,6 +92,14 @@ mod tests {
     }
 
     #[test]
+    fn write_key_with_quote() -> anyhow::Result<()> {
+        let mut jw = JsonWriter::with_capacity(128);
+        jw.write_key("va\"lue")?;
+        assert_eq!(jw.into_string()?, "\"va\\\"lue\":");
+        Ok(())
+    }
+
+    #[test]
     fn write_timestamp_message() -> anyhow::Result<()> {
         let mut jw = JsonWriter::with_capacity(128);
         jw.write_open_obj();
