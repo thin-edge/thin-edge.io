@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+	<description>
+		<title>
+			Validate the Cumulocity Mapper publishes a Thin Edge JSON message
+			on c8y/measurement/measurements/create
+			when it receives a valid JSON message on tedge/measurements.
+		</title>
+		<purpose>
+			<![CDATA[ ]]>
+		</purpose>
+	</description>
+	<classification>
+		<groups inherit="true">
+			<group>
+			</group>
+		</groups>
+		<modes inherit="true">
+		</modes>
+	</classification>
+	<data>
+		<class name="TedgeMapperC8y" module="run" />
+	</data>
+	<traceability>
+		<requirements>
+			<requirement id="" />
+		</requirements>
+	</traceability>
+</pysystest>
