@@ -20,8 +20,9 @@ use mockall::automock;
 pub use rumqttc::QoS;
 use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::broadcast;
 
 #[automock]
 #[async_trait]
@@ -69,6 +70,8 @@ pub struct Client {
     ack_event_sender: broadcast::Sender<AckEvent>,
     join_handle: tokio::task::JoinHandle<()>,
     requests_tx: rumqttc::Sender<Request>,
+    next_correlation_id: AtomicUsize,
+    outgoing_publish_accepted_sender: broadcast::Sender<OutgoingPublishAccepted>,
 }
 
 // Send a message on a broadcast channel discarding any error.
@@ -81,6 +84,18 @@ macro_rules! send_discarding_error {
 
 /// MQTT message id
 pub type MessageId = u16;
+type CorrelationId = usize;
+
+/// Event that is raised when the low level mqtt client has accepted
+/// a `Request::Publish` or `Request::PublishCorrelated` from us.
+///
+#[derive(Debug, Copy, Clone)]
+struct OutgoingPublishAccepted {
+    /// The selected pkid.
+    pkid: u16,
+    /// In case of `Request::PublishCorrelated`, the associated `correlation_id`. Otherwise `None`.
+    correlation_id: Option<CorrelationId>,
+}
 
 /// `AckEvent` contains all events related to communicating acknowledgement of messages between our
 /// background event loop (see `Client::bg_process`) and frontend operations like
@@ -144,12 +159,16 @@ impl Client {
         let (error_sender, _) = broadcast::channel(config.queue_capacity);
         let (ack_event_sender, _) = broadcast::channel(config.queue_capacity);
 
+        let (outgoing_publish_accepted_sender, _) = broadcast::channel(config.queue_capacity);
+
         let join_handle = tokio::spawn(Client::bg_process(
             eventloop,
             message_sender.clone(),
             error_sender.clone(),
             ack_event_sender.clone(),
+            outgoing_publish_accepted_sender.clone(),
         ));
+        let next_correlation_id = AtomicUsize::new(0);
 
         Ok(Client {
             name,
@@ -159,6 +178,8 @@ impl Client {
             ack_event_sender,
             join_handle,
             requests_tx,
+            next_correlation_id,
+            outgoing_publish_accepted_sender,
         })
     }
 
@@ -226,11 +247,32 @@ impl Client {
         message_sender: broadcast::Sender<Message>,
         error_sender: broadcast::Sender<Arc<Error>>,
         ack_event_sender: broadcast::Sender<AckEvent>,
+        outgoing_publish_accepted_sender: broadcast::Sender<OutgoingPublishAccepted>,
     ) {
         let mut pending: HashMap<MessageId, Message> = HashMap::new();
 
         loop {
             match event_loop.poll().await {
+                Ok(Event::Outgoing(Outgoing::Publish(pkid))) => {
+                    send_discarding_error!(
+                        outgoing_publish_accepted_sender,
+                        OutgoingPublishAccepted {
+                            pkid,
+                            correlation_id: None,
+                        }
+                    );
+                }
+
+                Ok(Event::Outgoing(Outgoing::PublishCorrelated(pkid, correlation_id))) => {
+                    send_discarding_error!(
+                        outgoing_publish_accepted_sender,
+                        OutgoingPublishAccepted {
+                            pkid,
+                            correlation_id: Some(correlation_id)
+                        }
+                    );
+                }
+
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     match msg.qos {
                         QoS::AtLeastOnce | QoS::AtMostOnce => {
@@ -308,11 +350,10 @@ impl MqttClient for Client {
     /// Upon success, this returns the `pkid` of the published message.
     ///
     async fn publish(&self, message: Message) -> Result<MessageId, Error> {
-        let (sender, receiver) = oneshot::channel();
-        let request = Request::PublishWithNotify {
-            publish: message.into(),
-            notify: sender,
-        };
+        let correlation_id = self.next_correlation_id.fetch_add(1, Ordering::Relaxed);
+        let request = Request::PublishCorrelated(message.into(), correlation_id);
+
+        let mut publish_listener = self.outgoing_publish_accepted_sender.subscribe();
 
         let () = self
             .requests_tx
@@ -323,9 +364,19 @@ impl MqttClient for Client {
         // Wait for the confirmation from the `rumqttc` backend that a `pkid` has been assigned
         // to the message. We need the `pkid` in order to wait for the corresponding
         // acknowledgement message.
-        let pkid: MessageId = receiver.await?;
-
-        Ok(pkid)
+        loop {
+            match publish_listener.recv().await? {
+                OutgoingPublishAccepted {
+                    pkid,
+                    correlation_id: Some(cid),
+                } if cid == correlation_id => {
+                    return Ok(pkid);
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
     }
 
     /// Subscribe to the messages published on the given topics
@@ -722,9 +773,6 @@ pub enum Error {
 
     #[error("Broadcast receive error: {0}")]
     BroadcastRecvError(#[from] broadcast::error::RecvError),
-
-    #[error("Oneshot channel receive error: {0}")]
-    OneshotRecvError(#[from] tokio::sync::oneshot::error::RecvError),
 
     #[error("Join Error")]
     JoinError,
