@@ -50,10 +50,10 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"s/dt in 2 c8y/ """#.into(),
                 r#"s/ut/# out 2 c8y/ """#.into(),
                 // Static templates
-                r#"s/us out 2 c8y/ """#.into(),
-                r#"t/us out 2 c8y/ """#.into(),
-                r#"q/us out 2 c8y/ """#.into(),
-                r#"c/us out 2 c8y/ """#.into(),
+                r#"s/us/# out 2 c8y/ """#.into(),
+                r#"t/us/# out 2 c8y/ """#.into(),
+                r#"q/us/# out 2 c8y/ """#.into(),
+                r#"c/us/# out 2 c8y/ """#.into(),
                 r#"s/ds in 2 c8y/ """#.into(),
                 // Debug
                 r#"s/e in 0 c8y/ """#.into(),
