@@ -129,13 +129,15 @@ impl ConnectCommand {
     }
 
     fn check_connection(&self) -> Result<(), ConnectError> {
+        let config = self.config_repository.load()?;
+        let port = config.query(MqttPortSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
-            Cloud::Azure => check_connection_azure(),
-            Cloud::C8y => check_connection_c8y(),
+            Cloud::Azure => check_connection_azure(port),
+            Cloud::C8y => check_connection_c8y(port),
         }
     }
 }
@@ -161,7 +163,7 @@ where
 // the check can finish in the second try as there is no error response in the first try.
 
 #[tokio::main]
-async fn check_connection_c8y() -> Result<(), ConnectError> {
+async fn check_connection_c8y(port: u16) -> Result<(), ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
     const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -169,7 +171,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
     let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
     let mut error_response = mqtt.subscribe(c8y_error_sub_topic.filter()).await?;
 
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
@@ -230,7 +232,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
 // Here if the status is 200 then it's success.
 
 #[tokio::main]
-async fn check_connection_azure() -> Result<(), ConnectError> {
+async fn check_connection_azure(port: u16) -> Result<(), ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
@@ -238,7 +240,7 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
     let device_twin_pub_topic = Topic::new(AZURE_TOPIC_DEVICE_TWIN_UPSTREAM)?;
     let device_twin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM)?;
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
     let mut device_twin_response = mqtt.subscribe(device_twin_sub_filter).await?;
 
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
