@@ -18,7 +18,7 @@
 		</modes>
 	</classification>
 	<data>
-		<class name="MonitoringWithSimulatedMessages" module="run" />
+		<class name="MqttPortChangeConnectionFails" module="run" />
 	</data>
 	<traceability>
 		<requirements>

@@ -1,3 +1,8 @@
+import sys
+
+sys.path.append("environments")
+from environment_roundtrip_c8y import Environment_roundtrip_c8y
+
 from pysys.basetest import BaseTest
 
 import time
@@ -17,33 +22,24 @@ Now validate the services that use the mqtt port
 
 """
 
-
-class MonitoringWithSimulatedMessages(BaseTest):
+class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
         # disconnect from c8y cloud
-        collectd = self.startProcess(
+        disconnect_c8y = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="disconnect_c8y",
         )
-
-        # disconnect from az cloud
-        collectd = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "az"],
-            stdouterr="disconnect_az",
-        )
-
-        self.addCleanupFunction(self.monitoring_cleanup)
+        self.addCleanupFunction(self.mqtt_cleanup)
 
     def execute(self):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "8889"],
+            arguments=[self.tedge, "config", "set", "mqtt.port", "8889"],
             stdouterr="mqtt_port",
         )
 
@@ -57,13 +53,6 @@ class MonitoringWithSimulatedMessages(BaseTest):
             stdouterr="connect_c8y",
         )
 
-        # connect to az cloud
-        connect_az = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "az"],
-            stdouterr="connect_az",
-        )
-
     def validate(self):
         # validate the mqtt port set
         self.validate_mqtt_port_set()
@@ -72,13 +61,8 @@ class MonitoringWithSimulatedMessages(BaseTest):
         # validate c8y connection
         self.assertGrep("connect_c8y.out",
                         "connection check is successful", contains=True)
-        # validate az connection
-        self.assertGrep("connect_az.out",
-                        "connection check is successful", contains=True)
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
-        # validate az mapper
-        self.validate_tedge_mapper_az()
 
     def validate_mqtt_port_set(self):
         # subscribe for messages
@@ -97,6 +81,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
             stdouterr="mqtt_sub",
+            background=True,
         )
 
         # publish a message
@@ -129,13 +114,19 @@ class MonitoringWithSimulatedMessages(BaseTest):
         self.assertGrep("c8y_mapper_status.out",
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
-    def validate_tedge_mapper_az(self):
-        # check the status of the az mapper
-        az_mapper_status = self.startProcess(
+    def mqtt_cleanup(self):
+        # unset a new mqtt port, falls back to default port (1883)
+        mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "status", "tedge-mapper-az.service"],
-            stdouterr="az_mapper_status",
+            arguments=[self.tedge, "config", "unset", "mqtt.port"],
+            stdouterr="mqtt_port_unset",
         )
 
-        self.assertGrep("az_mapper_status.out",
-                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+        # disconnect from c8y cloud
+        disconnect_c8y = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="disconnect_c8y",
+        )
+
+
