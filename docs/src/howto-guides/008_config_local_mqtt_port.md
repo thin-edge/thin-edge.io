@@ -32,13 +32,13 @@ This prints out the port that has been set.
 
 Using `tedge` command connect to the desired cloud as below.
 
-This will force all the services use newer port.
+This will force all the services (mosquitto, tedge_mappers) to use newer port.
 
 ```shell
 tedge connect c8y/az
 ```
 
-Note: The step 1 and 2 can be followed any order.
+Note: The step 1 and 2 can be followed in any order.
 
 ## Update to use default port
 
@@ -47,7 +47,7 @@ To use the default port (1883), the mqtt.port has to be unset using the `tedge` 
 ```shell
 tedge config unset mqtt.port
 ```
-Also should follow step 1 and 3.
+Once the port is reverted to default, the step 1 and 3 has to be followed to use the default port.
 
 ## Error case
 

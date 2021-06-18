@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+	<description>
+		<title>
+			Validate the mqtt port change.
+			Validate all the dependent services work successfully after change of port.
+		</title>
+		<purpose>
+			<![CDATA[ ]]>
+		</purpose>
+	</description>
+	<classification>
+		<groups inherit="true">
+			<group>
+			</group>
+		</groups>
+		<modes inherit="true">
+		</modes>
+	</classification>
+	<data>
+		<class name="MonitoringWithSimulatedMessages" module="run" />
+	</data>
+	<traceability>
+		<requirements>
+			<requirement id="" />
+		</requirements>
+	</traceability>
+</pysystest>
