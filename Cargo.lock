@@ -279,6 +279,7 @@ dependencies = [
  "chrono",
  "clock",
  "criterion",
+ "json-writer",
  "pretty_assertions",
  "proptest",
  "serde_json",
@@ -1017,6 +1018,15 @@ name = "json"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
+
+[[package]]
+name = "json-writer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "lazy_static"
@@ -2050,6 +2060,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "strum"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
+
+[[package]]
+name = "strum_macros"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d06aaeeee809dbc59eb4556183dd927df67db1540de5be8d3ec0b6636358a5ec"
+dependencies = [
+ "heck",
+ "proc-macro2 1.0.26",
+ "quote 1.0.9",
+ "syn 1.0.68",
+]
+
+[[package]]
 name = "syn"
 version = "0.15.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2134,6 +2162,8 @@ dependencies = [
  "log",
  "mqtt_client",
  "serde_json",
+ "strum",
+ "strum_macros",
  "tedge_config",
  "tedge_users",
  "thin_edge_json",
@@ -2192,6 +2222,7 @@ dependencies = [
  "chrono",
  "clock",
  "json",
+ "json-writer",
  "mockall",
  "pretty_assertions",
  "proptest",
