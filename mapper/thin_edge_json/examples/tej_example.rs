@@ -19,8 +19,8 @@ fn tej_build_serialize() -> anyhow::Result<()> {
     //Serialize the TEJ to u8 bytes
     let mut visitor = ThinEdgeJsonSerializer::new();
     grp_msg.accept(&mut visitor)?;
-    let bytes = visitor.bytes()?;
-    println!("Serialized Tej=> {:?}", std::str::from_utf8(&bytes));
+
+    println!("Serialized Tej=> {:?}", visitor.into_string()?);
     Ok(())
 }
 fn main() -> anyhow::Result<()> {

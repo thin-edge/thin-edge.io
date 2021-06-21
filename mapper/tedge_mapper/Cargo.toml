@@ -32,6 +32,8 @@ env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 log = "0.4"
 mqtt_client = {path = "../../common/mqtt_client" }
+strum = "0.21"
+strum_macros = "0.21"
 tokio = { version = "1.6", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"

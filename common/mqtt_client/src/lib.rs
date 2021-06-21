@@ -133,6 +133,10 @@ impl Client {
             mqtt_options.set_inflight(inflight);
         }
 
+        if let Some(packet_size) = config.packet_size {
+            mqtt_options.set_max_packet_size(packet_size, packet_size);
+        }
+
         let (mqtt_client, eventloop) =
             rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
         let requests_tx = eventloop.requests_tx.clone();
@@ -368,6 +372,10 @@ pub struct Config {
     /// If `None` is provided, the default setting of `rumqttc` is used.
     pub inflight: Option<u16>,
 
+    /// Max packet size limit for outgoing an incoming packets
+    /// If `None` is provided, 10KB size limit is imposed
+    pub packet_size: Option<usize>,
+
     /// Capacity of various internal message queues.
     ///
     /// This is used to decouple both `rumqttc` and our background event loop from
@@ -389,6 +397,7 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
+            packet_size: None,
             queue_capacity: 10,
             clean_session: false,
         }
@@ -428,6 +437,14 @@ impl Config {
     /// Use this config to connect a MQTT client
     pub async fn connect(&self, name: &str) -> Result<Client, Error> {
         Client::connect(name, self).await
+    }
+
+    /// Set a max packet size
+    pub fn with_packet_size(self, packet_size: usize) -> Self {
+        Self {
+            packet_size: Some(packet_size),
+            ..self
+        }
     }
 }
 
@@ -523,11 +540,23 @@ impl Message {
         Self { qos, ..self }
     }
 
-    /// trimming the trailing null char
-    pub fn payload_trimmed(&self) -> &[u8] {
+    // trims the trailing null char if one exists
+    fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())
+    }
+
+    // This function trims the null character at the end of the payload before converting into UTF8
+    // Some MQTT messages contain the payload with trailing null char, such payload is invalid payload.
+    pub fn payload_str(&self) -> Result<&str, Error> {
+        let payload_trimmed = self.payload_trimmed();
+        std::str::from_utf8(payload_trimmed)
+            .map_err(|err| new_invalid_utf8_payload(payload_trimmed, err))
+    }
+
+    pub fn payload_raw(&self) -> &[u8] {
+        &self.payload[..]
     }
 }
 
@@ -699,6 +728,31 @@ pub enum Error {
 
     #[error("Join Error")]
     JoinError,
+
+    #[error("Invalid UTF8 payload: {from}: {input_excerpt}...")]
+    InvalidUtf8Payload {
+        input_excerpt: String,
+        from: std::str::Utf8Error,
+    },
+}
+
+fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> Error {
+    const EXCERPT_LEN: usize = 80;
+    let index = from.valid_up_to();
+    let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
+
+    Error::InvalidUtf8Payload {
+        input_excerpt: input_prefix(input, EXCERPT_LEN),
+        from,
+    }
+}
+
+fn input_prefix(input: &str, len: usize) -> String {
+    input
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(len)
+        .collect()
 }
 
 #[cfg(test)]
@@ -756,12 +810,29 @@ mod tests {
 
         assert_eq!(message.payload_trimmed(), b"");
     }
-
     #[test]
     fn check_non_null_terminated_messages() {
         let topic = Topic::new("trimmed").unwrap();
         let message = Message::new(&topic, &b"123"[..]);
 
         assert_eq!(message.payload_trimmed(), b"123");
+    }
+    #[test]
+    fn payload_str_with_invalid_utf8_char_in_the_middle() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"temperature\xc3\x28"[..]);
+        assert_eq!(
+            message.payload_str().unwrap_err().to_string(),
+            "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 11: temperature..."
+        );
+    }
+    #[test]
+    fn payload_str_with_invalid_utf8_char_in_the_beginning() {
+        let topic = Topic::new("trimmed").unwrap();
+        let message = Message::new(&topic, &b"\xc3\x28"[..]);
+        assert_eq!(
+            message.payload_str().unwrap_err().to_string(),
+            "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 0: ..."
+        );
     }
 }
