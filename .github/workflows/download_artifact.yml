@@ -18,6 +18,9 @@ jobs:
         - name: checkout
           uses: actions/checkout@v2
 
+        - name: cross check with curl
+          run:  curl https://api.github.com/repos/abelikt/thin-edge.io/actions/workflows/build-workflow.yml/runs?branch=continuous_integration&event=&status=success
+
         - name: Action dawidd6
           uses: dawidd6/action-download-artifact@v2
           # https://github.com/marketplace/actions/download-workflow-artifact
@@ -60,6 +63,9 @@ jobs:
     steps:
         - name: checkout
           uses: actions/checkout@v2
+
+        - name: cross check with curl
+          run:  curl https://api.github.com/repos/abelikt/thin-edge.io/actions/workflows/build-workflow.yml/runs?branch=continuous_integration&event=&status=success
 
         - name: Action benday-inc
           uses: benday-inc/download-latest-artifact@main
