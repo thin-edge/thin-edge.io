@@ -24,14 +24,14 @@ pub async fn create_mapper<'a>(
     mapper_config: impl Into<MapperConfig>,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
-    let _flockfile = check_another_instance_is_not_running(app_name)?;
+    let flock = check_another_instance_is_not_running(app_name)?;
 
     info!("{} starting", app_name);
 
     let mqtt_config = mqtt_config(tedge_config)?;
     let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
 
-    Ok(Mapper::new(mqtt_client, mapper_config, converter))
+    Ok(Mapper::new(mqtt_client, mapper_config, converter, flock))
 }
 
 fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<mqtt_client::Config, anyhow::Error> {
@@ -52,6 +52,7 @@ pub struct Mapper {
     client: mqtt_client::Client,
     config: MapperConfig,
     converter: Box<dyn Converter<Error = ConversionError>>,
+    _flock: Flockfile,
 }
 
 impl Mapper {
@@ -69,11 +70,13 @@ impl Mapper {
         client: mqtt_client::Client,
         config: impl Into<MapperConfig>,
         converter: Box<dyn Converter<Error = ConversionError>>,
+        _flock: Flockfile,
     ) -> Self {
         Self {
             client,
             config: config.into(),
             converter,
+            _flock,
         }
     }
 
