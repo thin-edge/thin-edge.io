@@ -222,7 +222,7 @@ def assert_values(
         values.append(value)
         timestamps.append(tstamp)
 
-    expected = list(range(0, int(publish_amount)))
+    expected = list(map(float,range(0, int(publish_amount))))
 
     print("Retrieved:", values)
     print("Expected:", expected)
