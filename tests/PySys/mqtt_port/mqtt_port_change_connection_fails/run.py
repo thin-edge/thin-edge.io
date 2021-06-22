@@ -1,11 +1,10 @@
 import sys
+import time
 
 sys.path.append("environments")
-from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
+from environment_c8y import EnvironmentC8y
 from pysys.basetest import BaseTest
 
-import time
 
 """
 Validate changing the mqtt port using the tedge command fails without restarting the mqtt server
@@ -17,7 +16,7 @@ When the sudo tedge mqtt pub tries to publish a message and fails to connect to 
 
 """
 
-class MqttPortChangeConnectionFails(Environment_roundtrip_c8y):
+class MqttPortChangeConnectionFails(EnvironmentC8y):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
@@ -72,4 +71,11 @@ class MqttPortChangeConnectionFails(Environment_roundtrip_c8y):
             command=self.sudo,
             arguments=[self.tedge, "config", "unset", "mqtt.port"],
             stdouterr="mqtt_port_unset",
+        )
+
+        # restart the tedge services
+        connect_c8y = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y"],
+            stdouterr="connect_c8y",
         )

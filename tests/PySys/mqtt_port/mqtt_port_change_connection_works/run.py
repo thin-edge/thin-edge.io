@@ -1,11 +1,8 @@
+from environment_c8y import EnvironmentC8y
 import sys
+import time
 
 sys.path.append("environments")
-from environment_roundtrip_c8y import Environment_roundtrip_c8y
-
-from pysys.basetest import BaseTest
-
-import time
 
 """
 Validate changing the mqtt port using the tedge command
@@ -22,7 +19,8 @@ Now validate the services that use the mqtt port
 
 """
 
-class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
+
+class MqttPortChangeConnectionWorks(EnvironmentC8y):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
@@ -54,8 +52,6 @@ class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
         )
 
     def validate(self):
-        # validate the mqtt port set
-        self.validate_mqtt_port_set()
         # validate tedge mqtt pub/sub
         self.validate_tedge_mqtt()
         # validate c8y connection
@@ -63,17 +59,6 @@ class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
                         "connection check is successful", contains=True)
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
-
-    def validate_mqtt_port_set(self):
-        # subscribe for messages
-        tedge_get = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "config", "list"],
-            stdouterr="tedge_get",
-        )
-
-        self.assertGrep(
-            "tedge_get.out", "8889", contains=True)
 
     def validate_tedge_mqtt(self):
         # subscribe for messages
@@ -115,13 +100,6 @@ class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
     def mqtt_cleanup(self):
-        # unset a new mqtt port, falls back to default port (1883)
-        mqtt_port = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "config", "unset", "mqtt.port"],
-            stdouterr="mqtt_port_unset",
-        )
-
         # disconnect from c8y cloud
         disconnect_c8y = self.startProcess(
             command=self.sudo,
@@ -129,4 +107,9 @@ class MqttPortChangeConnectionWorks(Environment_roundtrip_c8y):
             stdouterr="disconnect_c8y",
         )
 
-
+        # unset a new mqtt port, falls back to default port (1883)
+        mqtt_port = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "config", "unset", "mqtt.port"],
+            stdouterr="mqtt_port_unset",
+        )

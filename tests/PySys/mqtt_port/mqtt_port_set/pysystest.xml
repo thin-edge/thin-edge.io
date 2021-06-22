@@ -2,8 +2,9 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate the mqtt connection works after mqtt port change.
-			Validate all the dependent services work successfully after changing the port.
+			Validate the mqtt port set
+			Set the mqtt port using tedge command and verify the 
+			port has set properly or not.
 		</title>
 		<purpose>
 			<![CDATA[ ]]>
@@ -18,7 +19,7 @@
 		</modes>
 	</classification>
 	<data>
-		<class name="MqttPortChangeConnectionWorks" module="run" />
+		<class name="MqttPortSet" module="run" />
 	</data>
 	<traceability>
 		<requirements>
