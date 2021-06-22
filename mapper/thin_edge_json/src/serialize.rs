@@ -1,6 +1,5 @@
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
-use std::io::Write;
 
 use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {

@@ -58,7 +58,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
     select! {
         error = errors.next().fuse() => {
             if let Some(err) = error {
-                if let mqtt_client::Error::ConnectionError(..) = *err {
+                if let mqtt_client::MQTTClientError::ConnectionError(..) = *err {
                     return Err(MqttError::ServerError(err.to_string()));
                 }
             }

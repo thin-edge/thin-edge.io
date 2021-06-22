@@ -4,7 +4,7 @@ async fn publish(
     config: &Config,
     qos: QoS,
     payload: impl Into<String>,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), mqtt_client::MQTTClientError> {
     let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
     let client = config.connect("publisher").await?;
     let message = Message::new(&topic, payload.into()).qos(qos);
@@ -17,7 +17,7 @@ async fn publish(
 async fn pipelined_publish(
     config: &Config,
     payload: impl Into<String>,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), mqtt_client::MQTTClientError> {
     let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
     let client = config.connect("publisher").await?;
 

@@ -5,7 +5,7 @@ use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {
     #[error(transparent)]
-    MqttClientError(#[from] mqtt_client::Error),
+    MqttClientError(#[from] mqtt_client::MQTTClientError),
 
     #[error(
         "tedge_mapper accepts only one argument. Run `tedge_mapper c8y` or `tedge_mapper az`."

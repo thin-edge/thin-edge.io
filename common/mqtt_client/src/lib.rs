@@ -28,9 +28,12 @@ use tokio::sync::{broadcast, oneshot};
 pub trait MqttClient: Send + Sync {
     fn subscribe_errors(&self) -> Box<dyn MqttErrorStream>;
 
-    async fn subscribe(&self, filter: TopicFilter) -> Result<Box<dyn MqttMessageStream>, Error>;
+    async fn subscribe(
+        &self,
+        filter: TopicFilter,
+    ) -> Result<Box<dyn MqttMessageStream>, MQTTClientError>;
 
-    async fn publish(&self, message: Message) -> Result<MessageId, Error>;
+    async fn publish(&self, message: Message) -> Result<MessageId, MQTTClientError>;
 }
 
 #[async_trait]
@@ -42,7 +45,7 @@ pub trait MqttMessageStream: Send + Sync {
 #[async_trait]
 #[automock]
 pub trait MqttErrorStream: Send + Sync {
-    async fn next(&mut self) -> Option<Arc<Error>>;
+    async fn next(&mut self) -> Option<Arc<MQTTClientError>>;
 }
 
 /// A connection to the local MQTT bus.
@@ -65,7 +68,7 @@ pub struct Client {
     name: String,
     mqtt_client: rumqttc::AsyncClient,
     message_sender: broadcast::Sender<Message>,
-    error_sender: broadcast::Sender<Arc<Error>>,
+    error_sender: broadcast::Sender<Arc<MQTTClientError>>,
     ack_event_sender: broadcast::Sender<AckEvent>,
     join_handle: tokio::task::JoinHandle<()>,
     requests_tx: rumqttc::Sender<Request>,
@@ -125,7 +128,7 @@ impl Client {
     ///     // process the messages even those sent during the pause
     /// }
     /// ```
-    pub async fn connect(name: &str, config: &Config) -> Result<Client, Error> {
+    pub async fn connect(name: &str, config: &Config) -> Result<Client, MQTTClientError> {
         let name = String::from(name);
         let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
         mqtt_options.set_clean_session(config.clean_session);
@@ -189,7 +192,7 @@ impl Client {
     pub async fn publish_with_ack(
         &self,
         message: Message,
-    ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
+    ) -> Result<impl Future<Output = Result<(), MQTTClientError>>, MQTTClientError> {
         let qos = message.qos;
 
         // Subscribe to the acknowledgement events. In case of QoS=1 or QoS=2 we
@@ -213,9 +216,11 @@ impl Client {
     }
 
     /// Disconnect the client and drop it.
-    pub async fn disconnect(self) -> Result<(), Error> {
+    pub async fn disconnect(self) -> Result<(), MQTTClientError> {
         let () = self.mqtt_client.disconnect().await?;
-        self.join_handle.await.map_err(|_| Error::JoinError)
+        self.join_handle
+            .await
+            .map_err(|_| MQTTClientError::JoinError)
     }
 
     /// Process all the MQTT events
@@ -224,7 +229,7 @@ impl Client {
     async fn bg_process(
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
-        error_sender: broadcast::Sender<Arc<Error>>,
+        error_sender: broadcast::Sender<Arc<MQTTClientError>>,
         ack_event_sender: broadcast::Sender<AckEvent>,
     ) {
         let mut pending: HashMap<MessageId, Message> = HashMap::new();
@@ -307,7 +312,7 @@ impl MqttClient for Client {
     ///
     /// Upon success, this returns the `pkid` of the published message.
     ///
-    async fn publish(&self, message: Message) -> Result<MessageId, Error> {
+    async fn publish(&self, message: Message) -> Result<MessageId, MQTTClientError> {
         let (sender, receiver) = oneshot::channel();
         let request = Request::PublishWithNotify {
             publish: message.into(),
@@ -318,7 +323,7 @@ impl MqttClient for Client {
             .requests_tx
             .send(request)
             .await
-            .map_err(|err| Error::ClientError(rumqttc::ClientError::Request(err)))?;
+            .map_err(|err| MQTTClientError::ClientError(rumqttc::ClientError::Request(err)))?;
 
         // Wait for the confirmation from the `rumqttc` backend that a `pkid` has been assigned
         // to the message. We need the `pkid` in order to wait for the corresponding
@@ -329,7 +334,10 @@ impl MqttClient for Client {
     }
 
     /// Subscribe to the messages published on the given topics
-    async fn subscribe(&self, filter: TopicFilter) -> Result<Box<dyn MqttMessageStream>, Error> {
+    async fn subscribe(
+        &self,
+        filter: TopicFilter,
+    ) -> Result<Box<dyn MqttMessageStream>, MQTTClientError> {
         let () = self
             .mqtt_client
             .subscribe(&filter.pattern, filter.qos)
@@ -435,7 +443,7 @@ impl Config {
     }
 
     /// Use this config to connect a MQTT client
-    pub async fn connect(&self, name: &str) -> Result<Client, Error> {
+    pub async fn connect(&self, name: &str) -> Result<Client, MQTTClientError> {
         Client::connect(name, self).await
     }
 
@@ -456,12 +464,12 @@ pub struct Topic {
 
 impl Topic {
     /// Check if the topic name is valid and build a new topic.
-    pub fn new(name: &str) -> Result<Topic, Error> {
+    pub fn new(name: &str) -> Result<Topic, MQTTClientError> {
         let name = String::from(name);
         if rumqttc::valid_topic(&name) {
             Ok(Topic { name })
         } else {
-            Err(Error::InvalidTopic { name })
+            Err(MQTTClientError::InvalidTopic { name })
         }
     }
 
@@ -489,13 +497,13 @@ pub struct TopicFilter {
 
 impl TopicFilter {
     /// Check if the pattern is valid and build a new topic filter.
-    pub fn new(pattern: &str) -> Result<TopicFilter, Error> {
+    pub fn new(pattern: &str) -> Result<TopicFilter, MQTTClientError> {
         let pattern = String::from(pattern);
         let qos = QoS::AtLeastOnce;
         if rumqttc::valid_filter(&pattern) {
             Ok(TopicFilter { pattern, qos })
         } else {
-            Err(Error::InvalidFilter { pattern })
+            Err(MQTTClientError::InvalidFilter { pattern })
         }
     }
 
@@ -549,7 +557,7 @@ impl Message {
 
     // This function trims the null character at the end of the payload before converting into UTF8
     // Some MQTT messages contain the payload with trailing null char, such payload is invalid payload.
-    pub fn payload_str(&self) -> Result<&str, Error> {
+    pub fn payload_str(&self) -> Result<&str, MQTTClientError> {
         let payload_trimmed = self.payload_trimmed();
         std::str::from_utf8(payload_trimmed)
             .map_err(|err| new_invalid_utf8_payload(payload_trimmed, err))
@@ -593,14 +601,14 @@ impl From<Publish> for Message {
 pub struct MessageStream {
     filter: TopicFilter,
     receiver: broadcast::Receiver<Message>,
-    error_sender: broadcast::Sender<Arc<Error>>,
+    error_sender: broadcast::Sender<Arc<MQTTClientError>>,
 }
 
 impl MessageStream {
     fn new(
         filter: TopicFilter,
         receiver: broadcast::Receiver<Message>,
-        error_sender: broadcast::Sender<Arc<Error>>,
+        error_sender: broadcast::Sender<Arc<MQTTClientError>>,
     ) -> MessageStream {
         MessageStream {
             filter,
@@ -627,7 +635,7 @@ impl MqttMessageStream for MessageStream {
                     // Forward the error to the client.
                     send_discarding_error!(
                         self.error_sender,
-                        Arc::new(Error::MessagesSkipped { lag })
+                        Arc::new(MQTTClientError::MessagesSkipped { lag })
                     );
                     continue;
                 }
@@ -638,11 +646,11 @@ impl MqttMessageStream for MessageStream {
 
 /// A stream of errors received asynchronously by the MQTT connection
 pub struct ErrorStream {
-    receiver: broadcast::Receiver<Arc<Error>>,
+    receiver: broadcast::Receiver<Arc<MQTTClientError>>,
 }
 
 impl ErrorStream {
-    fn new(receiver: broadcast::Receiver<Arc<Error>>) -> ErrorStream {
+    fn new(receiver: broadcast::Receiver<Arc<MQTTClientError>>) -> ErrorStream {
         ErrorStream { receiver }
     }
 }
@@ -654,12 +662,12 @@ impl MqttErrorStream for ErrorStream {
     /// - Return an `Error::ErrorsSkipped{lag}`
     ///   if too many errors have been received since the previous call to `next()`
     ///   and have been discarded.
-    async fn next(&mut self) -> Option<Arc<Error>> {
+    async fn next(&mut self) -> Option<Arc<MQTTClientError>> {
         match self.receiver.recv().await {
             Ok(error) => Some(error),
             Err(broadcast::error::RecvError::Closed) => None,
             Err(broadcast::error::RecvError::Lagged(lag)) => {
-                Some(Arc::new(Error::ErrorsSkipped { lag }))
+                Some(Arc::new(MQTTClientError::ErrorsSkipped { lag }))
             }
         }
     }
@@ -676,7 +684,7 @@ impl AckEventStream {
     }
 
     /// Waits for the next `AckEvent::PubAckReceived` event with the specified `pkid`.
-    async fn wait_for_pub_ack_received(&mut self, pkid: MessageId) -> Result<(), Error> {
+    async fn wait_for_pub_ack_received(&mut self, pkid: MessageId) -> Result<(), MQTTClientError> {
         loop {
             match self.receiver.recv().await? {
                 AckEvent::PubAckReceived(recv_pkid) if recv_pkid == pkid => return Ok(()),
@@ -686,7 +694,7 @@ impl AckEventStream {
     }
 
     /// Waits for the next `AckEvent::PubCompReceived` event with the specified `pkid`.
-    async fn wait_for_pub_comp_received(&mut self, pkid: MessageId) -> Result<(), Error> {
+    async fn wait_for_pub_comp_received(&mut self, pkid: MessageId) -> Result<(), MQTTClientError> {
         loop {
             match self.receiver.recv().await? {
                 AckEvent::PubCompReceived(recv_pkid) if recv_pkid == pkid => return Ok(()),
@@ -698,7 +706,7 @@ impl AckEventStream {
 
 /// An MQTT related error
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub enum MQTTClientError {
     #[error("Invalid topic name: {name:?}")]
     InvalidTopic { name: String },
 
@@ -709,7 +717,7 @@ pub enum Error {
     ClientError(#[from] rumqttc::ClientError),
 
     #[error("Stream error: {0}")]
-    StreamError(Box<Error>),
+    StreamError(Box<MQTTClientError>),
 
     #[error("MQTT connection error: {0}")]
     ConnectionError(#[from] rumqttc::ConnectionError),
@@ -736,12 +744,12 @@ pub enum Error {
     },
 }
 
-fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> Error {
+fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> MQTTClientError {
     const EXCERPT_LEN: usize = 80;
     let index = from.valid_up_to();
     let input = std::str::from_utf8(&bytes[..index]).unwrap_or("");
 
-    Error::InvalidUtf8Payload {
+    MQTTClientError::InvalidUtf8Payload {
         input_excerpt: input_prefix(input, EXCERPT_LEN),
         from,
     }

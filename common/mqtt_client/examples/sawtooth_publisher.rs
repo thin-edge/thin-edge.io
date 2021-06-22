@@ -115,7 +115,7 @@ async fn publish_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), mqtt_client::MQTTClientError> {
     info!("Publishing temperature measurements");
     println!();
     for iteration in 0..iterations {
@@ -142,7 +142,7 @@ async fn publish_multi_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), mqtt_client::MQTTClientError> {
     info!("Publishing temperature measurements");
     println!();
     let series_name = "\"Sawmill [S]\"";

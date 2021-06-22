@@ -18,13 +18,13 @@ pub struct Mapper {
 }
 
 impl Mapper {
-    pub(crate) async fn run(&self) -> Result<(), mqtt_client::Error> {
+    pub(crate) async fn run(&self) -> Result<(), mqtt_client::MQTTClientError> {
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
         errors_handle
             .await
-            .map_err(|_| mqtt_client::Error::JoinError)?;
+            .map_err(|_| mqtt_client::MQTTClientError::JoinError)?;
         Ok(())
     }
 
@@ -51,7 +51,7 @@ impl Mapper {
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn subscribe_messages(&self) -> Result<(), mqtt_client::Error> {
+    async fn subscribe_messages(&self) -> Result<(), mqtt_client::MQTTClientError> {
         let mut messages = self.client.subscribe(self.config.in_topic.filter()).await?;
         while let Some(message) = messages.next().await {
             debug!("Mapping {:?}", message.payload_str());

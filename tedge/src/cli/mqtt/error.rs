@@ -1,7 +1,7 @@
 #[derive(thiserror::Error, Debug)]
 pub enum MqttError {
     #[error("Client error")]
-    ConnectError(#[from] mqtt_client::Error),
+    ConnectError(#[from] mqtt_client::MQTTClientError),
 
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
