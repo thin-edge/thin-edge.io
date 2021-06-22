@@ -1,5 +1,5 @@
 use crate::collectd::CollectdError;
-use mqtt_client::MQTTClientError as MqttClientError;
+use mqtt_client::MqttClientError;
 use thin_edge_json::{
     group::{MeasurementGrouper, MeasurementGrouperError},
     serialize::ThinEdgeJsonSerializationError,

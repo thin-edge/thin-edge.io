@@ -8,7 +8,7 @@ fn sending_and_receiving_a_message() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MQTTClientError> {
+    async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
         let test_broker = Config::new("test.mosquitto.org", 1883);
 
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;

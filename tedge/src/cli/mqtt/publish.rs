@@ -1,7 +1,7 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::{Command, ExecutionContext};
 use futures::future::FutureExt;
-use mqtt_client::{Client, Message, MqttClient, QoS, Topic};
+use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic};
 use std::time::Duration;
 use tokio::select;
 
@@ -58,7 +58,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
     select! {
         error = errors.next().fuse() => {
             if let Some(err) = error {
-                if let mqtt_client::MQTTClientError::ConnectionError(..) = *err {
+                if let MqttClientError::ConnectionError(..) = *err {
                     return Err(MqttError::ServerError(err.to_string()));
                 }
             }
