@@ -41,8 +41,8 @@ impl CommonMosquittoConfig {
         Ok(())
     }
 
-    pub fn with_port(self, listener: u16) -> Self {
-        let listener = listener.to_string() + " localhost";
+    pub fn with_port(self, port: u16) -> Self {
+        let listener = port.to_string() + " localhost";
         Self { listener, ..self }
     }
 }
