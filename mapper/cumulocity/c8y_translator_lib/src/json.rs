@@ -52,8 +52,8 @@ mod tests {
     #[test]
     fn check_single_value_translation() {
         let single_value_thin_edge_json = r#"{
-                  "temperature": 23,
-                  "pressure": 220
+                  "temperature": 23.0,
+                  "pressure": 220.0
                }"#;
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
@@ -65,12 +65,12 @@ mod tests {
             "time": timestamp.to_rfc3339(),
             "temperature": {
                 "temperature": {
-                    "value": 23
+                    "value": 23.0
                 }
             },
             "pressure": {
                 "pressure": {
-                    "value": 220
+                    "value": 220.0
                 }
             }
         });
@@ -85,8 +85,8 @@ mod tests {
     fn check_thin_edge_translation_with_timestamp() {
         let single_value_thin_edge_json = r#"{
                   "time" : "2013-06-22T17:03:14.123+02:00",
-                  "temperature": 23,
-                  "pressure": 220
+                  "temperature": 23.0,
+                  "pressure": 220.0
                }"#;
 
         let expected_output = r#"{
@@ -94,12 +94,12 @@ mod tests {
                      "time": "2013-06-22T17:03:14.123+02:00",
                      "temperature": {
                          "temperature": {
-                               "value": 23
+                               "value": 23.0
                          }
                     },
                     "pressure" : {
                        "pressure": {
-                          "value" : 220
+                          "value" : 220.0
                           }
                        }
                   }"#;
@@ -115,13 +115,13 @@ mod tests {
     #[test]
     fn check_multi_value_translation() {
         let multi_value_thin_edge_json = r#"{
-            "temperature": 25 ,
+            "temperature": 25.0 ,
             "location": {
                   "latitude": 32.54,
                   "longitude": -117.67,
                   "altitude": 98.6
               },
-            "pressure": 98
+            "pressure": 98.0
         }"#;
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
@@ -133,7 +133,7 @@ mod tests {
             "time": timestamp.to_rfc3339(),
             "temperature": {
                 "temperature": {
-                    "value": 25
+                    "value": 25.0
                  }
             },
            "location": {
@@ -149,7 +149,7 @@ mod tests {
           },
          "pressure": {
             "pressure": {
-                 "value": 98
+                 "value": 98.0
             }
           }
         });
@@ -172,7 +172,7 @@ mod tests {
              "time": "2013-06-22T17:03:14+02:00",
              "temperature": {
                  "temperature": {
-                    "value": 0
+                    "value": 0.0
                  }
             }
         }"#;
@@ -197,7 +197,7 @@ mod tests {
                 return Ok(());
             }
             let input = format!(r#"{{"time": "2013-06-22T17:03:14.453+02:00",
-                        "{}": 123
+                        "{}": 123.0
                       }}"#, measurement);
             let time = "2013-06-22T17:03:14.453+02:00";
             let expected_output = format!(r#"{{
@@ -205,7 +205,7 @@ mod tests {
                   "time": "{}",
                   "{}": {{
                   "{}": {{
-                       "value": 123
+                       "value": 123.0
                       }}
                    }}
                 }}"#, time, measurement, measurement);

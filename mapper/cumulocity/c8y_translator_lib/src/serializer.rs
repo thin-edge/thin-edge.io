@@ -1,8 +1,10 @@
 use chrono::prelude::*;
+use json_writer::{JsonWriter, JsonWriterError};
+
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
 pub struct C8yJsonSerializer {
-    buffer: String,
+    json: JsonWriter,
     is_within_group: bool,
     needs_separator: bool,
     timestamp_present: bool,
@@ -22,6 +24,9 @@ pub enum C8yJsonSerializationError {
 
     #[error("Serializer produced invalid Utf8 string")]
     InvalidUtf8ConversionToString(std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    JsonWriterError(#[from] JsonWriterError),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -42,12 +47,14 @@ pub enum MeasurementStreamError {
 impl C8yJsonSerializer {
     pub fn new(default_timestamp: DateTime<FixedOffset>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut buffer = String::with_capacity(capa);
+        let mut json = JsonWriter::with_capacity(capa);
 
-        buffer.push_str(r#"{"type": "ThinEdgeMeasurement""#);
+        json.write_open_obj();
+        let _ = json.write_key("type");
+        let _ = json.write_str("ThinEdgeMeasurement");
 
         Self {
-            buffer,
+            json,
             is_within_group: false,
             needs_separator: true,
             timestamp_present: false,
@@ -66,42 +73,21 @@ impl C8yJsonSerializer {
 
         assert!(self.timestamp_present);
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         Ok(())
     }
 
-    pub fn bytes(mut self) -> Result<Vec<u8>, C8yJsonSerializationError> {
+    fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
+        self.json.write_open_obj();
+        self.json.write_key("value")?;
+        self.json.write_f64(value)?;
+        self.json.write_close_obj();
+        Ok(())
+    }
+
+    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
         self.end()?;
-        Ok(self.buffer.into())
-    }
-
-    fn write_key(&mut self, key: &str) {
-        self.write_str(key);
-        self.buffer.push(':');
-    }
-
-    fn write_str(&mut self, s: &str) {
-        self.buffer.push('"');
-        self.buffer.push_str(s);
-        self.buffer.push('"');
-    }
-
-    fn write_f64(&mut self, value: f64) -> std::fmt::Result {
-        use std::fmt::Write;
-        self.buffer.write_fmt(format_args!("{}", value))
-    }
-
-    fn write_value_obj(&mut self, value: f64) -> std::fmt::Result {
-        self.buffer.push('{');
-        self.write_key("value");
-        self.write_f64(value)?;
-        self.buffer.push('}');
-        Ok(())
-    }
-
-    pub fn into_string(self) -> Result<String, C8yJsonSerializationError> {
-        String::from_utf8(self.bytes()?)
-            .map_err(C8yJsonSerializationError::InvalidUtf8ConversionToString)
+        Ok(self.json.clone().into_string()?)
     }
 }
 
@@ -114,11 +100,11 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
 
-        self.write_key("time");
-        self.write_str(timestamp.to_rfc3339().as_str());
+        self.json.write_key("time")?;
+        self.json.write_str(timestamp.to_rfc3339().as_str())?;
 
         self.needs_separator = true;
         self.timestamp_present = true;
@@ -127,20 +113,20 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
 
     fn measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         } else {
             self.needs_separator = true;
         }
 
-        self.write_key(key);
+        self.json.write_key(key)?;
 
         if self.is_within_group {
             self.write_value_obj(value)?;
         } else {
-            self.buffer.push('{');
-            self.write_key(key);
+            self.json.write_open_obj();
+            self.json.write_key(key)?;
             self.write_value_obj(value)?;
-            self.buffer.push('}');
+            self.json.write_close_obj();
         }
         Ok(())
     }
@@ -151,10 +137,10 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         }
 
         if self.needs_separator {
-            self.buffer.push(',');
+            self.json.write_separator();
         }
-        self.write_key(group);
-        self.buffer.push('{');
+        self.json.write_key(group)?;
+        self.json.write_open_obj();
         self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
@@ -165,7 +151,7 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
-        self.buffer.push('}');
+        self.json.write_close_obj();
         self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
@@ -191,7 +177,7 @@ mod tests {
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -204,7 +190,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
         Ok(())
@@ -225,7 +211,7 @@ mod tests {
         serializer.end_group()?;
         serializer.measurement("pressure", 255.2)?;
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -255,7 +241,7 @@ mod tests {
         });
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -268,15 +254,15 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp);
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -297,10 +283,10 @@ mod tests {
             "time":"2021-06-22T17:03:14.123456789+05:00"
         });
 
-        let output = serializer.bytes()?;
+        let output = serializer.into_string()?;
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output)?,
+            serde_json::from_str::<serde_json::Value>(&output)?,
             expected_output
         );
 
@@ -383,7 +369,7 @@ mod tests {
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
-        let expected_err = serializer.bytes();
+        let expected_err = serializer.into_string();
 
         assert_matches!(
             expected_err,
