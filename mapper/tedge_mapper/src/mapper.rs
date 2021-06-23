@@ -1,9 +1,9 @@
 use crate::converter::*;
 use crate::error::*;
 
-use mqtt_client::{MqttClient, MqttClientError, Topic};
 use flockfile::{Flockfile, FlockfileError};
-use tedge_config::{MqttPortSetting, TEdgeConfig, ConfigSettingAccessor};
+use mqtt_client::{Client, MqttClient, MqttClientError, Topic};
+use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument};
 
