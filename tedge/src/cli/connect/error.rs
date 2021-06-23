@@ -13,7 +13,7 @@ pub enum ConnectError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MqttClient(#[from] mqtt_client::Error),
+    MqttClient(#[from] mqtt_client::MqttClientError),
 
     #[error(transparent)]
     PathsError(#[from] crate::utils::paths::PathsError),

@@ -19,5 +19,5 @@ pub enum TEdgeError {
     TEdgeConfigSettingError(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    MqttClientError(#[from] mqtt_client::Error),
+    MqttClientError(#[from] mqtt_client::MqttClientError),
 }
