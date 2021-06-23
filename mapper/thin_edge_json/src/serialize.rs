@@ -6,7 +6,6 @@ use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
     json: JsonWriter,
     is_within_group: bool,
-    needs_separator: bool,
     default_timestamp: Option<DateTime<FixedOffset>>,
     timestamp_present: bool,
 }
@@ -54,7 +53,6 @@ impl ThinEdgeJsonSerializer {
         Self {
             json,
             is_within_group: false,
-            needs_separator: false,
             default_timestamp,
             timestamp_present: false,
         }
@@ -99,24 +97,15 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
-        if self.needs_separator {
-            self.json.write_separator();
-        }
-
         self.json.write_key("time")?;
         self.json.write_str(timestamp.to_rfc3339().as_str())?;
-        self.needs_separator = true;
         self.timestamp_present = true;
         Ok(())
     }
 
     fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
-        if self.needs_separator {
-            self.json.write_separator();
-        }
         self.json.write_key(name)?;
         self.json.write_f64(value)?;
-        self.needs_separator = true;
         Ok(())
     }
 
@@ -125,12 +114,8 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
-        if self.needs_separator {
-            self.json.write_separator();
-        }
         self.json.write_key(group)?;
         self.json.write_open_obj();
-        self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
     }
@@ -141,14 +126,12 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         }
 
         self.json.write_close_obj();
-        self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
     }
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use chrono::{offset::FixedOffset, DateTime, Local};
