@@ -1,10 +1,7 @@
 use clock::{Clock, Timestamp};
 use mqtt_client::{Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use std::sync::Arc;
-use thin_edge_json::{
-    group::MeasurementGrouper, measurement::FlatMeasurementVisitor,
-    serialize::ThinEdgeJsonSerializer,
-};
+use thin_edge_json::{grouper::*, serializer::ThinEdgeJsonSerializer, stream::*};
 use tokio::{
     select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -18,7 +15,7 @@ use crate::error::*;
 
 #[derive(Debug)]
 pub struct MessageBatch {
-    message_grouper: MeasurementGrouper,
+    message_grouper: StreamBuilder<MeasurementGrouperError, MeasurementGrouper>,
 }
 
 impl MessageBatch {
@@ -26,8 +23,9 @@ impl MessageBatch {
         collectd_message: CollectdMessage,
         timestamp: Timestamp,
     ) -> Result<Self, DeviceMonitorError> {
-        let mut message_grouper = MeasurementGrouper::new();
-        message_grouper.timestamp(&timestamp)?;
+        let mut message_grouper = StreamBuilder::from(MeasurementGrouper::new());
+        message_grouper.start()?;
+        message_grouper.timestamp(timestamp)?;
 
         let mut message_batch = Self { message_grouper };
 
@@ -40,8 +38,8 @@ impl MessageBatch {
         &mut self,
         collectd_message: CollectdMessage,
     ) -> Result<(), DeviceMonitorError> {
-        self.message_grouper.measurement(
-            Some(collectd_message.metric_group_key),
+        self.message_grouper.measurement_in_group(
+            collectd_message.metric_group_key,
             collectd_message.metric_key,
             collectd_message.metric_value,
         )?;
@@ -49,8 +47,9 @@ impl MessageBatch {
         Ok(())
     }
 
-    fn end_batch(self) -> MeasurementGrouper {
-        self.message_grouper
+    fn end_batch(mut self) -> Result<MeasurementGrouper, DeviceMonitorError> {
+        let () = self.message_grouper.end()?;
+        Ok(self.message_grouper.inner())
     }
 }
 
@@ -152,7 +151,7 @@ impl MessageBatcher {
             }
         }
 
-        Ok(message_batch.end_batch())
+        Ok(message_batch.end_batch()?)
     }
 
     async fn receive_message(
@@ -199,10 +198,11 @@ impl MessageBatchPublisher {
         &mut self,
         message_grouper: MeasurementGrouper,
     ) -> Result<(), DeviceMonitorError> {
-        let mut tedge_json_serializer = ThinEdgeJsonSerializer::new();
-        message_grouper.accept(&mut tedge_json_serializer)?;
+        let bytes = message_grouper
+            .stream_to(ThinEdgeJsonSerializer::new())
+            .and_then(|serializer| serializer.bytes())?;
 
-        let tedge_message = Message::new(&self.target_topic, tedge_json_serializer.bytes()?);
+        let tedge_message = Message::new(&self.target_topic, bytes);
 
         self.mqtt_client.publish(tedge_message).await?;
 
@@ -241,7 +241,7 @@ mod tests {
         let collectd_message = CollectdMessage::new("coordinate", "z", 90.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let message_grouper = message_batch.end_batch();
+        let message_grouper = message_batch.end_batch()?;
 
         assert_matches!(message_grouper.timestamp, Some(_));
 
@@ -271,8 +271,8 @@ mod tests {
 
     #[tokio::test]
     async fn batch_publisher() -> anyhow::Result<()> {
-        let mut message_grouper = MeasurementGrouper::new();
-        message_grouper.measurement(Some("temperature"), "value", 32.5)?;
+        let mut message_grouper = StreamBuilder::from(MeasurementGrouper::new());
+        message_grouper.measurement_in_group("temperature", "value", 32.5)?;
 
         let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
@@ -287,7 +287,9 @@ mod tests {
             Arc::new(mqtt_client),
             Topic::new("tedge/measurements")?,
         );
-        publisher.publish_as_mqtt_message(message_grouper).await?;
+        publisher
+            .publish_as_mqtt_message(message_grouper.inner())
+            .await?;
 
         Ok(())
     }

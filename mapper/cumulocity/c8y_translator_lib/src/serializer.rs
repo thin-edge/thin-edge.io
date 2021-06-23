@@ -1,14 +1,26 @@
 use chrono::prelude::*;
 use json_writer::{JsonWriter, JsonWriterError};
+use thin_edge_json::{json::ThinEdgeJsonError, stream::*};
 
-use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
-
+#[derive(Debug)]
 pub struct C8yJsonSerializer {
     json: JsonWriter,
-    is_within_group: bool,
-    needs_separator: bool,
+    state: State,
     timestamp_present: bool,
     default_timestamp: DateTime<FixedOffset>,
+}
+
+/// The internal state of the serializer.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum State {
+    /// State before `start` was called.
+    NotStarted,
+    /// After `start` and when not within a group.
+    Started,
+    /// Within a group.
+    WithinGroup,
+    /// After `end` was called.
+    Finished,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -17,7 +29,7 @@ pub enum C8yJsonSerializationError {
     FormatError(#[from] std::fmt::Error),
 
     #[error(transparent)]
-    MeasurementCollectorError(#[from] MeasurementStreamError),
+    MeasurementStreamError(#[from] MeasurementStreamError),
 
     #[error(transparent)]
     ThinEdgeJsonParseError(#[from] ThinEdgeJsonError),
@@ -34,6 +46,9 @@ pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
     UnexpectedTimestamp,
 
+    #[error("Unexpected start of document")]
+    UnexpectedStartOfDocument,
+
     #[error("Unexpected end of data")]
     UnexpectedEndOfData,
 
@@ -42,39 +57,20 @@ pub enum MeasurementStreamError {
 
     #[error("Unexpected start of group")]
     UnexpectedStartOfGroup,
+
+    #[error("Unexpected measurement")]
+    UnexpectedMeasurement,
 }
 
 impl C8yJsonSerializer {
     pub fn new(default_timestamp: DateTime<FixedOffset>) -> Self {
-        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut json = JsonWriter::with_capacity(capa);
-
-        json.write_open_obj();
-        let _ = json.write_key("type");
-        let _ = json.write_str("ThinEdgeMeasurement");
-
+        let capacity = 1024; // XXX: Choose a capacity based on expected JSON length.
         Self {
-            json,
-            is_within_group: false,
-            needs_separator: true,
+            json: JsonWriter::with_capacity(capacity),
+            state: State::NotStarted,
             timestamp_present: false,
             default_timestamp,
         }
-    }
-
-    fn end(&mut self) -> Result<(), C8yJsonSerializationError> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedEndOfData.into());
-        }
-
-        if !self.timestamp_present {
-            self.timestamp(self.default_timestamp)?;
-        }
-
-        assert!(self.timestamp_present);
-
-        self.json.write_close_obj();
-        Ok(())
     }
 
     fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
@@ -85,76 +81,93 @@ impl C8yJsonSerializer {
         Ok(())
     }
 
-    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
-        self.end()?;
-        Ok(self.json.clone().into_string()?)
+    pub fn into_string(self) -> Result<String, C8yJsonSerializationError> {
+        match self.state {
+            State::Finished => Ok(self.json.into_string()?),
+            _ => Err(MeasurementStreamError::UnexpectedEndOfData.into()),
+        }
     }
 }
 
-impl GroupedMeasurementVisitor for C8yJsonSerializer {
+impl MeasurementStreamConsumer for C8yJsonSerializer {
     type Error = C8yJsonSerializationError;
 
-    fn timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedTimestamp.into());
+    fn consume<'a>(&mut self, item: MeasurementStreamItem<'a>) -> Result<(), Self::Error> {
+        match (item, self.state) {
+            (MeasurementStreamItem::StartDocument, State::NotStarted) => {
+                self.json.write_open_obj();
+                self.json.write_key("type")?;
+                self.json.write_str("ThinEdgeMeasurement")?;
+                self.state = State::Started;
+                Ok(())
+            }
+            (MeasurementStreamItem::StartDocument, _) => {
+                Err(MeasurementStreamError::UnexpectedStartOfDocument.into())
+            }
+            (MeasurementStreamItem::EndDocument, State::Started) => {
+                if !self.timestamp_present {
+                    self.consume(MeasurementStreamItem::Timestamp(self.default_timestamp))?;
+                }
+
+                assert!(self.timestamp_present);
+
+                self.json.write_close_obj();
+                self.state = State::Finished;
+                Ok(())
+            }
+            (MeasurementStreamItem::EndDocument, _) => {
+                Err(MeasurementStreamError::UnexpectedEndOfData.into())
+            }
+            (MeasurementStreamItem::Timestamp(timestamp), State::Started) => {
+                self.json.write_key("time")?;
+                self.json.write_str(timestamp.to_rfc3339().as_str())?;
+
+                self.timestamp_present = true;
+                Ok(())
+            }
+            (MeasurementStreamItem::Timestamp(_), _) => {
+                Err(MeasurementStreamError::UnexpectedTimestamp.into())
+            }
+
+            (MeasurementStreamItem::Measurement { name, value }, State::Started) => {
+                self.json.write_key(name)?;
+                self.json.write_open_obj();
+                self.json.write_key(name)?;
+                self.write_value_obj(value)?;
+                self.json.write_close_obj();
+                Ok(())
+            }
+            (MeasurementStreamItem::Measurement { name, value }, State::WithinGroup) => {
+                self.json.write_key(name)?;
+                self.write_value_obj(value)?;
+                Ok(())
+            }
+
+            (MeasurementStreamItem::Measurement { .. }, _) => {
+                Err(MeasurementStreamError::UnexpectedMeasurement.into())
+            }
+
+            (MeasurementStreamItem::StartGroup(group), State::Started) => {
+                self.json.write_key(group)?;
+                self.json.write_open_obj();
+                self.state = State::WithinGroup;
+                Ok(())
+            }
+
+            (MeasurementStreamItem::StartGroup(_), _) => {
+                Err(MeasurementStreamError::UnexpectedStartOfGroup.into())
+            }
+
+            (MeasurementStreamItem::EndGroup, State::WithinGroup) => {
+                self.json.write_close_obj();
+                self.state = State::Started;
+                Ok(())
+            }
+
+            (MeasurementStreamItem::EndGroup, _) => {
+                Err(MeasurementStreamError::UnexpectedEndOfGroup.into())
+            }
         }
-
-        if self.needs_separator {
-            self.json.write_separator();
-        }
-
-        self.json.write_key("time")?;
-        self.json.write_str(timestamp.to_rfc3339().as_str())?;
-
-        self.needs_separator = true;
-        self.timestamp_present = true;
-        Ok(())
-    }
-
-    fn measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
-        if self.needs_separator {
-            self.json.write_separator();
-        } else {
-            self.needs_separator = true;
-        }
-
-        self.json.write_key(key)?;
-
-        if self.is_within_group {
-            self.write_value_obj(value)?;
-        } else {
-            self.json.write_open_obj();
-            self.json.write_key(key)?;
-            self.write_value_obj(value)?;
-            self.json.write_close_obj();
-        }
-        Ok(())
-    }
-
-    fn start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
-        }
-
-        if self.needs_separator {
-            self.json.write_separator();
-        }
-        self.json.write_key(group)?;
-        self.json.write_open_obj();
-        self.needs_separator = false;
-        self.is_within_group = true;
-        Ok(())
-    }
-
-    fn end_group(&mut self) -> Result<(), Self::Error> {
-        if !self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
-        }
-
-        self.json.write_close_obj();
-        self.needs_separator = true;
-        self.is_within_group = false;
-        Ok(())
     }
 }
 
@@ -173,11 +186,13 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
+        serializer.end()?;
 
-        let output = serializer.into_string()?;
+        let output = serializer.inner().into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -201,7 +216,8 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.timestamp(timestamp)?;
         serializer.measurement("temperature", 25.5)?;
         serializer.start_group("location")?;
@@ -210,8 +226,9 @@ mod tests {
         serializer.measurement("lati", 2300.4)?;
         serializer.end_group()?;
         serializer.measurement("pressure", 255.2)?;
+        serializer.end()?;
 
-        let output = serializer.into_string()?;
+        let output = serializer.inner().into_string()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -254,12 +271,15 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+
+        serializer.start()?;
+        serializer.end()?;
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
 
-        let output = serializer.into_string()?;
+        let output = serializer.inner().into_string()?;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&output)?,
@@ -275,15 +295,17 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.timestamp(timestamp)?;
+        serializer.end()?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
             "time":"2021-06-22T17:03:14.123456789+05:00"
         });
 
-        let output = serializer.into_string()?;
+        let output = serializer.inner().into_string()?;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&output)?,
@@ -299,14 +321,15 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.start_group("location")?;
 
         let expected_err = serializer.timestamp(timestamp);
 
         assert_matches!(
             expected_err,
-            Err(C8yJsonSerializationError::MeasurementCollectorError(
+            Err(C8yJsonSerializationError::MeasurementStreamError(
                 MeasurementStreamError::UnexpectedTimestamp
             ))
         );
@@ -319,7 +342,8 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
@@ -327,7 +351,7 @@ mod tests {
 
         assert_matches!(
             expected_err,
-            Err(C8yJsonSerializationError::MeasurementCollectorError(
+            Err(C8yJsonSerializationError::MeasurementStreamError(
                 MeasurementStreamError::UnexpectedEndOfGroup
             ))
         );
@@ -341,7 +365,8 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
@@ -350,7 +375,7 @@ mod tests {
 
         assert_matches!(
             expected_err,
-            Err(C8yJsonSerializationError::MeasurementCollectorError(
+            Err(C8yJsonSerializationError::MeasurementStreamError(
                 MeasurementStreamError::UnexpectedStartOfGroup
             ))
         );
@@ -364,16 +389,17 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = StreamBuilder::from(C8yJsonSerializer::new(timestamp));
+        serializer.start()?;
         serializer.start_group("location")?;
         serializer.measurement("alti", 2100.4)?;
         serializer.measurement("longi", 2200.4)?;
 
-        let expected_err = serializer.into_string();
+        let expected_err = serializer.inner().into_string();
 
         assert_matches!(
             expected_err,
-            Err(C8yJsonSerializationError::MeasurementCollectorError(
+            Err(C8yJsonSerializationError::MeasurementStreamError(
                 MeasurementStreamError::UnexpectedEndOfData
             ))
         );

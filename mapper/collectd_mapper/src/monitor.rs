@@ -1,7 +1,7 @@
 use clock::WallClock;
 use mqtt_client::{Client, MqttClient};
 use std::sync::Arc;
-use thin_edge_json::group::MeasurementGrouper;
+use thin_edge_json::grouper::MeasurementGrouper;
 use tracing::{instrument, log::error};
 
 use crate::{

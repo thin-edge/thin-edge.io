@@ -1,8 +1,8 @@
 use crate::collectd::CollectdError;
 use mqtt_client::Error as MqttClientError;
 use thin_edge_json::{
-    group::{MeasurementGrouper, MeasurementGrouperError},
-    serialize::ThinEdgeJsonSerializationError,
+    grouper::{MeasurementGrouper, MeasurementGrouperError},
+    serializer::ThinEdgeJsonSerializationError,
 };
 use tokio::sync::mpsc::error::SendError;
 

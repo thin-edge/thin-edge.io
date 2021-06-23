@@ -1,6 +1,6 @@
 use crate::size_threshold::SizeThresholdExceeded;
 use tedge_config::TEdgeConfigError;
-use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
+use thin_edge_json::serializer::ThinEdgeJsonSerializationError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {

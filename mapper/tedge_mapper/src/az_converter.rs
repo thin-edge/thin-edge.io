@@ -2,7 +2,7 @@ use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use clock::Clock;
-use thin_edge_json::serialize::ThinEdgeJsonSerializer;
+use thin_edge_json::serializer::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
@@ -17,9 +17,8 @@ impl Converter for AzureConverter {
 
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
-        let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-
-        let () = thin_edge_json::json::parse_str(input, &mut serializer)?;
+        let serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
+        let serializer = thin_edge_json::json::parse_str(input, serializer)?;
         Ok(serializer.into_string()?)
     }
 }

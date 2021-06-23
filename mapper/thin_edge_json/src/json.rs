@@ -1,4 +1,4 @@
-use crate::measurement::GroupedMeasurementVisitor;
+use crate::stream::*;
 use chrono::{format::ParseError, prelude::*};
 use json::JsonValue;
 
@@ -41,84 +41,113 @@ pub struct MultiValueMeasurement {
     pub values: Vec<SingleValueMeasurement>,
 }
 
+#[derive(Debug)]
 struct ThinEdgeJsonBuilder {
     timestamp: Option<DateTime<FixedOffset>>,
-    inside_group: Option<MultiValueMeasurement>,
+    state: State,
     measurements: Vec<ThinEdgeValue>,
+}
+
+#[derive(Debug)]
+enum State {
+    /// State before `start` was called.
+    NotStarted,
+    /// After `start` and when not within a group.
+    Started,
+    /// Within a group.
+    WithinGroup(MultiValueMeasurement),
+    /// After `end` was called.
+    Finished,
+    /// Error state
+    Error,
 }
 
 impl ThinEdgeJsonBuilder {
     fn new() -> Self {
         Self {
             timestamp: None,
-            inside_group: None,
+            state: State::NotStarted,
             measurements: Vec::new(),
         }
     }
 
     fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        if self.inside_group.is_some() {
-            return Err(ThinEdgeJsonError::UnexpectedOpenGroup);
+        match self.state {
+            State::Finished => Ok(ThinEdgeJson {
+                timestamp: self.timestamp,
+                values: self.measurements,
+            }),
+            _ => Err(ThinEdgeJsonError::UnfinishedVisitor),
         }
-
-        if self.measurements.is_empty() {
-            return Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot);
-        }
-
-        Ok(ThinEdgeJson {
-            timestamp: self.timestamp,
-            values: self.measurements,
-        })
     }
 }
 
-impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
+impl MeasurementStreamConsumer for ThinEdgeJsonBuilder {
     type Error = ThinEdgeJsonError;
 
-    fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        match self.timestamp {
-            None => {
-                self.timestamp = Some(value);
+    fn consume<'a>(&mut self, item: MeasurementStreamItem<'a>) -> Result<(), Self::Error> {
+        match (item, &mut self.state) {
+            (MeasurementStreamItem::StartDocument, State::NotStarted) => {
+                self.state = State::Started;
                 Ok(())
             }
-            Some(_) => Err(ThinEdgeJsonError::DuplicatedTimestamp),
-        }
-    }
-
-    fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
-        let measurement = SingleValueMeasurement::new(name, value)?;
-        if let Some(group) = &mut self.inside_group {
-            group.values.push(measurement);
-        } else {
-            self.measurements.push(ThinEdgeValue::Single(measurement));
-        }
-        Ok(())
-    }
-
-    fn start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.inside_group.is_none() {
-            self.inside_group = Some(MultiValueMeasurement {
-                name: group.into(),
-                values: Vec::new(),
-            });
-            Ok(())
-        } else {
-            Err(ThinEdgeJsonError::UnexpectedStartOfGroup)
-        }
-    }
-
-    fn end_group(&mut self) -> Result<(), Self::Error> {
-        match self.inside_group.take() {
-            Some(group) => {
-                if group.values.is_empty() {
-                    return Err(ThinEdgeJsonError::EmptyThinEdgeJson { name: group.name });
+            (MeasurementStreamItem::EndDocument, State::Started) => {
+                if self.measurements.is_empty() {
+                    Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot)
                 } else {
-                    self.measurements.push(ThinEdgeValue::Multi(group))
+                    self.state = State::Finished;
+                    Ok(())
                 }
             }
-            None => return Err(ThinEdgeJsonError::UnexpectedEndOfGroup),
+            (MeasurementStreamItem::Timestamp(timestamp), State::Started) => match self.timestamp {
+                None => {
+                    self.timestamp = Some(timestamp);
+                    Ok(())
+                }
+                Some(_) => Err(ThinEdgeJsonError::DuplicatedTimestamp),
+            },
+            (MeasurementStreamItem::Measurement { name, value }, State::Started) => {
+                let measurement = SingleValueMeasurement::new(name, value)?;
+                self.measurements.push(ThinEdgeValue::Single(measurement));
+                Ok(())
+            }
+            (MeasurementStreamItem::Measurement { name, value }, State::WithinGroup(group)) => {
+                let measurement = SingleValueMeasurement::new(name, value)?;
+                group.values.push(measurement);
+                Ok(())
+            }
+            (MeasurementStreamItem::StartGroup(group), State::Started) => {
+                self.state = State::WithinGroup(MultiValueMeasurement {
+                    name: group.into(),
+                    values: Vec::new(),
+                });
+                Ok(())
+            }
+            (MeasurementStreamItem::EndGroup, State::WithinGroup(group))
+                if group.values.len() > 0 =>
+            {
+                if let State::WithinGroup(group) =
+                    std::mem::replace(&mut self.state, State::Started)
+                {
+                    self.measurements.push(ThinEdgeValue::Multi(group));
+                } else {
+                    unreachable!()
+                }
+                Ok(())
+            }
+            (MeasurementStreamItem::EndGroup, State::WithinGroup(group))
+                if group.values.is_empty() =>
+            {
+                Err(ThinEdgeJsonError::EmptyThinEdgeJson {
+                    name: group.name.clone(),
+                })
+            }
+
+            _ => {
+                self.state = State::Error;
+                Err(ThinEdgeJsonError::InvalidStateTransition)
+            }
         }
-        Ok(())
     }
 }
 
@@ -131,12 +160,18 @@ pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'stati
     VisitorError(T),
 }
 
-pub fn parse_str<T: GroupedMeasurementVisitor>(
+pub fn parse_str<T: MeasurementStreamConsumer>(
     json_string: &str,
-    visitor: &mut T,
-) -> Result<(), ThinEdgeJsonParserError<T::Error>> {
+    sink: T,
+) -> Result<T, ThinEdgeJsonParserError<T::Error>> {
     let thin_edge_obj = json::parse(json_string)
         .map_err(|err| ThinEdgeJsonError::new_invalid_json(json_string, err))?;
+
+    let mut stream = StreamBuilder::from(sink);
+
+    let () = stream
+        .start()
+        .map_err(ThinEdgeJsonParserError::VisitorError)?;
 
     match &thin_edge_obj {
         JsonValue::Object(thin_edge_obj) => {
@@ -153,7 +188,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                     }
                     .into());
                 } else if key.eq("time") {
-                    let () = visitor
+                    let () = stream
                         .timestamp(parse_from_rfc3339(
                             value
                                 .as_str()
@@ -164,13 +199,13 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                     match value {
                         // Single Value object
                         JsonValue::Number(num) => {
-                            let () = visitor
+                            let () = stream
                                 .measurement(key, (*num).into())
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
                         }
                         // Multi value object
                         JsonValue::Object(multi_value_thin_edge_object) => {
-                            let () = visitor
+                            let () = stream
                                 .start_group(key)
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
 
@@ -178,7 +213,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                                 match v {
                                     JsonValue::Number(num) => {
                                         // Single Value object
-                                        let () = visitor
+                                        let () = stream
                                             .measurement(k, (*num).into())
                                             .map_err(ThinEdgeJsonParserError::VisitorError)?;
                                     }
@@ -197,7 +232,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                                 }
                             }
 
-                            let () = visitor
+                            let () = stream
                                 .end_group()
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
                         }
@@ -214,7 +249,11 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
         _ => return Err(ThinEdgeJsonError::new_invalid_json_root(&thin_edge_obj).into()),
     }
 
-    Ok(())
+    let () = stream
+        .end()
+        .map_err(ThinEdgeJsonParserError::VisitorError)?;
+
+    Ok(stream.inner())
 }
 
 fn parse_from_rfc3339(timestamp: &str) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
@@ -231,8 +270,8 @@ impl ThinEdgeJson {
     pub fn from_str(
         json_string: &str,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
-        let mut builder = ThinEdgeJsonBuilder::new();
-        let () = parse_str(json_string, &mut builder)?;
+        let builder = ThinEdgeJsonBuilder::new();
+        let builder = parse_str(json_string, builder)?;
         Ok(builder.done()?)
     }
 
@@ -307,17 +346,29 @@ pub enum ThinEdgeJsonError {
     #[error("Invalid measurement name: {name:?} is a reserved word.")]
     ThinEdgeReservedWordError { name: String },
 
+    #[error("Unexpected start of document")]
+    UnexpectedStartOfDocument,
+
+    #[error("Unexpected end of document")]
+    UnexpectedEndOfDocument,
+
     #[error("Unexpected end of group")]
     UnexpectedEndOfGroup,
-
-    #[error("Unexpected open group")]
-    UnexpectedOpenGroup,
 
     #[error("Unexpected start of group")]
     UnexpectedStartOfGroup,
 
     #[error("Unexpected time stamp within a group")]
     UnexpectedTimestamp,
+
+    #[error("Unexpected measurement")]
+    UnexpectedMeasurement,
+
+    #[error("Visitor in unfinished state")]
+    UnfinishedVisitor,
+
+    #[error("Invalid state transition")]
+    InvalidStateTransition,
 }
 
 impl ThinEdgeJsonError {

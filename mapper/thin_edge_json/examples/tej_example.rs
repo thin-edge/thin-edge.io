@@ -1,26 +1,23 @@
 use clock::{Clock, WallClock};
-use thin_edge_json::group::MeasurementGrouper;
-use thin_edge_json::measurement::*;
-use thin_edge_json::serialize::ThinEdgeJsonSerializer;
+use thin_edge_json::serializer::ThinEdgeJsonSerializer;
+use thin_edge_json::stream::*;
 
 fn tej_build_serialize() -> anyhow::Result<()> {
     //Produce the TEJ from raw data
-    let mut grp_msg = MeasurementGrouper::new();
+    let mut serializer = StreamBuilder::from(ThinEdgeJsonSerializer::new());
 
-    grp_msg.timestamp(&WallClock.now())?;
-    grp_msg.measurement(None, "temperature", 25.0)?;
-    grp_msg.measurement(Some("location"), "alti", 2100.4)?;
-    grp_msg.measurement(Some("location"), "longi", 2100.4)?;
-    grp_msg.measurement(Some("location"), "lati", 2100.4)?;
-    grp_msg.measurement(Some("location"), "alti", 2100.5)?;
+    serializer.start()?;
+    serializer.timestamp(WallClock.now())?;
+    serializer.measurement("temperature", 25.0)?;
+    serializer.measurement_in_group("location", "alti", 2100.4)?;
+    serializer.measurement_in_group("location", "longi", 2100.4)?;
+    serializer.measurement_in_group("location", "lati", 2100.4)?;
+    serializer.measurement_in_group("location", "alti", 2100.5)?;
+    serializer.end()?;
 
-    println!("Deserialized Tej=> {:#?}", grp_msg);
+    // Serialize the TEJ to u8 bytes
 
-    //Serialize the TEJ to u8 bytes
-    let mut visitor = ThinEdgeJsonSerializer::new();
-    grp_msg.accept(&mut visitor)?;
-
-    println!("Serialized Tej=> {:?}", visitor.into_string()?);
+    println!("Serialized Tej=> {:?}", serializer.inner().into_string()?);
     Ok(())
 }
 fn main() -> anyhow::Result<()> {
