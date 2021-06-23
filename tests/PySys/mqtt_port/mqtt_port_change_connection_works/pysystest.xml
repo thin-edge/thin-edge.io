@@ -2,8 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate the mqtt connection works after mqtt port change.
-			Validate all the dependent services work successfully after changing the port.
+			mqtt port change connection works
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

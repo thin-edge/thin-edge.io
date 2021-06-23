@@ -8,8 +8,8 @@ from pysys.basetest import BaseTest
 Validate changing the mqtt port using the tedge command
 
 Given a configured system
-When mqtt.port is set using tedge mqtt.port set with sudo
-When the tedge config is listed and searched for the port that has been set 
+When `mqtt.port` is set using `tedge mqtt.port set` with `sudo`
+When listed config using `tedge config list` the newly set port should be there.
 
 """
 
@@ -37,6 +37,7 @@ class MqttPortSet(BaseTest):
 
         self.assertGrep(
             "tedge_get.out", "mqtt.port=8880", contains=True)
+        self.assertGrep("/etc/tedge/tedge.toml", "port = 8880", contains=True)    
 
     def mqtt_cleanup(self):
         # unset a new mqtt port, falls back to default port (1883)

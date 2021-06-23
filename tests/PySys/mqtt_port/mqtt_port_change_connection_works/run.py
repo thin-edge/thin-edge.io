@@ -1,26 +1,24 @@
-from environment_c8y import EnvironmentC8y
 import sys
 import time
 
-sys.path.append("environments")
+from pysys.basetest import BaseTest
 
 """
 Validate changing the mqtt port using the tedge command
 
 Given a configured system, that is configured with certificate created and registered in a cloud
-When the thin edge device is disconnected from cloud, sudo tedge disconnect c8y/az
-When mqtt.port is set using tedge with sudo
-When the thin edge device is connected to cloud, sudo tedge connect c8y/az
+When the thin edge device is disconnected from cloud, `sudo tedge disconnect c8y`
+When `tedge mqtt.port set` with sudo
+When the thin edge device is connected to cloud, `sudo tedge connect c8y`
 Now validate the services that use the mqtt port
-   Validate tedge config set mqtt.port
    Validate tedge mqtt pub/sub
-   Validate tedge connect c8y/az --test
+   Validate tedge connect c8y --test
    Validate tedge_mapper status
 
 """
 
 
-class MqttPortChangeConnectionWorks(EnvironmentC8y):
+class MqttPortChangeConnectionWorks(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
@@ -100,12 +98,14 @@ class MqttPortChangeConnectionWorks(EnvironmentC8y):
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
     def mqtt_cleanup(self):
-        # disconnect from c8y cloud
-        disconnect_c8y = self.startProcess(
+        
+        # Disconnect Bridge
+        c8y_disconnect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="disconnect_c8y",
+            stdouterr="c8y_disconnect",
         )
+
 
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(

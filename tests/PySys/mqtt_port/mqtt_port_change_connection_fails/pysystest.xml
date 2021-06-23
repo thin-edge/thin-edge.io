@@ -2,8 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validates the mqtt port change that fails mqtt clients
-			The tedge mqtt pub/sub fail to connect to broker
+			mqtt port change connection fails
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

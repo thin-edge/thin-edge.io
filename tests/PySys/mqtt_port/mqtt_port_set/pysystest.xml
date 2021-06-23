@@ -2,9 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate the mqtt port set
-			Set the mqtt port using tedge command and verify the 
-			port has set properly or not.
+			mqtt port set
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

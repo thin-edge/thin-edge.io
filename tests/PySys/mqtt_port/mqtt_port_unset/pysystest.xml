@@ -2,9 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate the mqtt port unset
-			Unset the mqtt port using tedge command and verify the 
-			port has reverted to default port (1883) or not.
+			mqtt port unset
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

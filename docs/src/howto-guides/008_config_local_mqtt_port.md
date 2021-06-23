@@ -32,11 +32,16 @@ This prints out the port that has been set.
 
 Using `tedge` command connect to the desired cloud as below.
 
-This will force all the services (mosquitto, tedge_mappers) to use newer port.
+This will force all the services (mosquitto, tedge_mappers) to use newely set port.
 
 ```shell
-tedge connect c8y/az
+tedge connect c8y
+
+#or
+
+tedge connect az
 ```
+
 
 Note: The step 1 and 2 can be followed in any order.
 
@@ -47,16 +52,17 @@ To use the default port (1883), the mqtt.port has to be unset using the `tedge` 
 ```shell
 tedge config unset mqtt.port
 ```
-Once the port is reverted to default, the step 1 and 3 has to be followed to use the default port.
+Once the port is reverted to default, the [step 1](#Step-3:-Connect-the-thin-edge-device-to-cloud)
+and 3 has to be followed to use the default port.
 
 ## Error case
 
 Below example shows that we can not set string value for the port number.
 
 ```shell
-tedge config set mqtt.port '"1024"'
+tedge config set mqtt.port '"1234"'
 
-Error: failed to set the configuration key: mqtt.port with value: "1024".
+Error: failed to set the configuration key: mqtt.port with value: "1234".
 
 Caused by:
     Conversion from String failed
@@ -64,7 +70,7 @@ Caused by:
 
 ## Updating the mqtt port in collectd
 
-Update the `collectd.conf` with the newer port in `<Plugin mqtt>`
+Update the `collectd.conf` with the new port in `<Plugin mqtt>`
 
 Restart the collectd
 

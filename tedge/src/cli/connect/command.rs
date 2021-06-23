@@ -57,14 +57,14 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        let mut config = self.config_repository.load()?;
+
         if self.is_test_connection {
-            return match self.check_connection() {
+            return match self.check_connection(&config) {
                 Ok(()) => Ok(()),
                 Err(err) => Err(err.into()),
             };
         }
-
-        let mut config = self.config_repository.load()?;
 
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
@@ -76,7 +76,7 @@ impl Command for ConnectCommand {
             .common_mosquitto_config
             .clone()
             .with_port(config.query(MqttPortSetting)?.into());
-        self.config_repository.store(config)?;
+        self.config_repository.store(&config)?;
 
         new_bridge(
             &bridge_config,
@@ -86,7 +86,7 @@ impl Command for ConnectCommand {
             &self.config_location,
         )?;
 
-        if self.check_connection().is_err() {
+        if self.check_connection(&config).is_err() {
             println!(
                 "Warning: Bridge has been configured, but {} connection check failed.\n",
                 self.cloud.as_str()
@@ -128,8 +128,7 @@ impl ConnectCommand {
         }
     }
 
-    fn check_connection(&self) -> Result<(), ConnectError> {
-        let config = self.config_repository.load()?;
+    fn check_connection(&self, config: &TEdgeConfig) -> Result<(), ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
