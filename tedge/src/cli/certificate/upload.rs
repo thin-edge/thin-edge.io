@@ -28,6 +28,7 @@ pub struct UploadCertCmd {
     pub path: FilePath,
     pub host: ConnectUrl,
     pub username: String,
+    pub verify_server_cert: bool,
 }
 
 impl Command for UploadCertCmd {
@@ -42,14 +43,17 @@ impl Command for UploadCertCmd {
 
 impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
-        let client = reqwest::blocking::Client::new();
-
         // Read the password from /dev/tty
         // Unless a password is provided using the `C8YPASS` env var.
         let password = match std::env::var("C8YPASS") {
             Ok(password) => password,
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
+
+        // Use a builder instead of `Client::new`, `new` could panic, builder adds option to allow invalid certs.
+        let client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(self.verify_server_cert)
+            .build()?;
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates

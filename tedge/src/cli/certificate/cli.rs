@@ -56,11 +56,15 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::Upload(cmd) => {
                 let cmd = match cmd {
-                    UploadCertCli::C8y { username } => UploadCertCmd {
+                    UploadCertCli::C8y {
+                        username,
+                        verify_server_cert,
+                    } => UploadCertCmd {
                         device_id: config.query(DeviceIdSetting)?,
                         path: config.query(DeviceCertPathSetting)?,
                         host: config.query(C8yUrlSetting)?,
                         username,
+                        verify_server_cert,
                     },
                 };
                 cmd.into_boxed()
@@ -81,5 +85,9 @@ pub enum UploadCertCli {
         /// Provided username should be a Cumulocity user with tenant management permissions.
         /// The password is requested on /dev/tty, unless the $C8YPASS env var is set to the user password.
         username: String,
+
+        #[structopt(long = "no-verify-server")]
+        /// Allow upload to a server with invalid certificate, default = false.
+        verify_server_cert: bool,
     },
 }
