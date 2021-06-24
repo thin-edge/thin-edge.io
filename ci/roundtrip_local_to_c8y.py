@@ -224,8 +224,16 @@ def assert_values(
 
     expected = list(range(0, int(publish_amount)))
 
-    print("Retrieved:", values)
-    print("Expected:", expected)
+    print("Retrieved values:")
+
+    for v in values:
+        print(f"{v:5} ", end="")
+        if int(v+1)%20 == 0: # use a new line when data is
+            print("")
+    print("")
+
+    #print("Expected:", expected)
+    print("Expected: ", expected[0], " ... ", expected[-1])
 
     if values == expected:
         print("Data verification PASSED")
