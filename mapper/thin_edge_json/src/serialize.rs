@@ -1,8 +1,8 @@
+use crate::measurement::GroupedMeasurementVisitor;
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
 use json_writer::{JsonWriter, JsonWriterError};
 
-use crate::measurement::GroupedMeasurementVisitor;
 pub struct ThinEdgeJsonSerializer {
     json: JsonWriter,
     is_within_group: bool,

@@ -4,7 +4,9 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_client::{Client, Config, Message, MqttClient, MqttErrorStream, MqttMessageStream, Topic};
+use mqtt_client::{
+    Client, Config, Message, MqttClient, MqttClientError, MqttErrorStream, MqttMessageStream, Topic,
+};
 use std::convert::TryFrom;
 use std::env;
 use std::io::Write;
@@ -115,7 +117,7 @@ async fn publish_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), MqttClientError> {
     info!("Publishing temperature measurements");
     println!();
     for iteration in 0..iterations {
@@ -142,7 +144,7 @@ async fn publish_multi_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), MqttClientError> {
     info!("Publishing temperature measurements");
     println!();
     let series_name = "\"Sawmill [S]\"";
