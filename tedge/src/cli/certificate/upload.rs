@@ -28,7 +28,7 @@ pub struct UploadCertCmd {
     pub path: FilePath,
     pub host: ConnectUrl,
     pub username: String,
-    pub verify_server_cert: bool,
+    pub ignore_server_certficate_validity: bool,
 }
 
 impl Command for UploadCertCmd {
@@ -52,7 +52,7 @@ impl UploadCertCmd {
 
         // Use a builder instead of `Client::new`, `new` could panic, builder adds option to allow invalid certs.
         let client = reqwest::blocking::Client::builder()
-            .danger_accept_invalid_certs(self.verify_server_cert)
+            .danger_accept_invalid_certs(self.ignore_server_certficate_validity)
             .build()?;
 
         // To post certificate c8y requires one of the following endpoints:
