@@ -226,10 +226,20 @@ def assert_values(
 
     print("Retrieved values:")
 
-    for v in values:
-        print(f"{v:5} ", end="")
-        if int(v+1)%20 == 0: # use a new line when data is
+    del values[10]
+
+    for v in range(len(values)):
+
+        if v >= 1:
+            if (values[v-1] + 1) != values[v]:
+                print("error!", end="")
+
+        print(f"{values[v]:5} ", end="")
+        if int(values[v]+1)%20 == 0: # use a new line when data is
             print("")
+
+
+
     print("")
 
     #print("Expected:", expected)
