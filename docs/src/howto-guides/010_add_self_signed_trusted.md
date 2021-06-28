@@ -26,7 +26,7 @@ sudo mkdir /usr/local/share/ca-certificates/
 
 The directory should be owned by `root:root` and have `755` permissions set for it. The certificates files should be `644`.
 
-Copy your root certificate (.crt file) to the created directory:
+Copy your root certificate (`pem` format with `.crt` extension) to the created directory:
 
 ```shell
 sudo cp <full_path_to_the_certificate> /usr/local/share/ca-certificates/
