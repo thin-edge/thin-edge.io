@@ -58,13 +58,13 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = match cmd {
                     UploadCertCli::C8y {
                         username,
-                        ignore_server_certficate_validity,
+                        ignore_server_certificate_validity,
                     } => UploadCertCmd {
                         device_id: config.query(DeviceIdSetting)?,
                         path: config.query(DeviceCertPathSetting)?,
                         host: config.query(C8yUrlSetting)?,
                         username,
-                        ignore_server_certficate_validity,
+                        ignore_server_certificate_validity,
                     },
                 };
                 cmd.into_boxed()
@@ -88,6 +88,6 @@ pub enum UploadCertCli {
 
         #[structopt(long = "no-verify-server")]
         /// Allow upload to a server with invalid certificate, default = false.
-        ignore_server_certficate_validity: bool,
+        ignore_server_certificate_validity: bool,
     },
 }

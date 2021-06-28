@@ -8,4 +8,4 @@
 6. [How to test the cloud connection?](./007_test_connection.md)
 7. [How to configure the local mqtt port?](./008_config_local_mqtt_port.md)
 8. [How to trouble shoot device monitoring?](./009_touble_shooting_monitoring.md)
-9. [How to add self-signed certificate root to trusted?](./010_add_self_signed_trusted.md)
+9. [How to add self-signed certificate root to trusted certificates list?](./010_add_self_signed_trusted.md)
