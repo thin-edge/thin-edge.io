@@ -281,7 +281,7 @@ def main():
     delay = args.delay
 
     if "C8YPASS" in os.environ:
-        password= os.environ["C8YPASS"]
+        password = os.environ["C8YPASS"]
     else:
         print("Error environment variable C8YPASS not set")
         sys.exit(1)
