@@ -226,14 +226,14 @@ def assert_values(
 
     print("Retrieved values:")
 
-    for v in range(len(values)):
+    for value in range(len(values)):
 
-        if v >= 1:
-            if (values[v - 1] + 1) != values[v]:
+        if value >= 1:
+            if (values[value - 1] + 1) != values[value]:
                 print("error!")
 
-        print(f"{values[v]:5} ", end="")
-        if int(values[v] + 1) % 20 == 0:  # use a new line when data is
+        print(f"{values[value]:5} ", end="")
+        if int(values[value] + 1) % 20 == 0:  # use a new line when data is
             print("")
     print("")
 
