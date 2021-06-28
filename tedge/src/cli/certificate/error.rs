@@ -141,33 +141,33 @@ pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
             rustls::TLSError::WebPKIError(cert_validation_error) => {
                 match cert_validation_error {
                     webpki::Error::CAUsedAsEndEntity => CertError::WebpkiValidation {
-                        hint: "A CA certificate is used as an end-entity certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
+                        hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
                         msg: cert_validation_error.to_string(),
                     },
 
                     webpki::Error::CertExpired => CertError::WebpkiValidation {
-                        hint: "The certificate is expired, the time it is being validated for is later than the certificate's `notAfter` time."
+                        hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time."
                         .into(),
                         msg: cert_validation_error.to_string(),
                     },
 
                     webpki::Error::CertNotValidYet => CertError::WebpkiValidation {
-                        hint: "The certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
+                        hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
                         msg: cert_validation_error.to_string(),
                     },
 
                     webpki::Error::EndEntityUsedAsCA => CertError::WebpkiValidation {
-                        hint: "An end-entity certificate is used as a CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
+                        hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
                         msg: cert_validation_error.to_string(),
                     },
 
                     webpki::Error::InvalidCertValidity => CertError::WebpkiValidation {
-                        hint: "The certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
+                        hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
                         msg: cert_validation_error.to_string(),
                     },
 
                     _ => CertError::WebpkiValidation {
-                        hint: "Certificate validation error.".into(),
+                        hint: "Server certificate validation error.".into(),
                         msg: cert_validation_error.to_string(),
                     },
                 }
