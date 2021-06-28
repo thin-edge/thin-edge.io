@@ -33,6 +33,7 @@ def publish_az(amount):
     for i in range(amount):
         message = f'{{"cafe": {i} }}'
         cmd = ["/usr/bin/tedge", "mqtt", "pub", "az/messages/events/", message]
+        #cmd = ["/usr/bin/tedge", "mqtt", "pub", "tedge/measurements", message]
 
         try:
             subprocess.run(cmd, check=True)
