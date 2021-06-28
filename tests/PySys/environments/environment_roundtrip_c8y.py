@@ -37,8 +37,6 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
                 self.project.username,
                 "-t",
                 self.project.tenant,
-                "-pass",
-                self.project.c8ypass,
                 "-id",
                 self.project.deviceid,
                 "-o",

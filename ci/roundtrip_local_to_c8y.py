@@ -229,8 +229,20 @@ def assert_values(
 
     expected = list(map(float,range(0, int(publish_amount))))
 
-    print("Retrieved:", values)
-    print("Expected:", expected)
+    print("Retrieved values:")
+
+    for value in range(len(values)):
+
+        if value >= 1:
+            if (values[value - 1] + 1) != values[value]:
+                print("error!")
+
+        print(f"{values[value]:5} ", end="")
+        if int(values[value] + 1) % 20 == 0:  # use a new line when data is
+            print("")
+    print("")
+
+    print("Expected: ", expected[0], " ... ", expected[-1])
 
     if values == expected:
         print("Data verification PASSED")
@@ -251,7 +263,6 @@ def main():
     parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
     parser.add_argument("-u", "--user", help="C8y username")
     parser.add_argument("-t", "--tenant", help="C8y tenant")
-    parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument(
@@ -269,11 +280,16 @@ def main():
     verbose = args.verbose
     user = args.user
     tenant = args.tenant
-    password = args.password
     device_id = args.id
     publish_amount = args.size
     timeslot = args.slot
     delay = args.delay
+
+    if "C8YPASS" in os.environ:
+        password = os.environ["C8YPASS"]
+    else:
+        print("Error environment variable C8YPASS not set")
+        sys.exit(1)
 
     if verbose:
         print(f"Mode: {mode}")
