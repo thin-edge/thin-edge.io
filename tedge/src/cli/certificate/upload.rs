@@ -5,7 +5,7 @@ use crate::{
 };
 
 use reqwest::{StatusCode, Url};
-use std::{io::prelude::*, path::Path};
+use std::{error::Error, io::prelude::*, path::Path};
 
 use tedge_config::*;
 
@@ -87,7 +87,8 @@ impl UploadCertCmd {
             .post(post_url)
             .json(&post_body)
             .basic_auth(&self.username, Some(password))
-            .send()?;
+            .send()
+            .map_err(get_error_from_reqwest)?;
 
         match res.status() {
             StatusCode::OK | StatusCode::CREATED => {
@@ -131,11 +132,27 @@ fn get_tenant_id_blocking(
     let res = client
         .get(url)
         .basic_auth(username, Some(password))
-        .send()?
+        .send()
+        .map_err(get_error_from_reqwest)?
         .error_for_status()?;
 
     let body = res.json::<CumulocityResponse>()?;
     Ok(body.name)
+}
+
+fn get_error_from_reqwest(err: reqwest::Error) -> CertError {
+    if let Some(hyper_error) = err
+        .source()
+        .and_then(|e| e.downcast_ref::<hyper::Error>())
+        .and_then(|e| e.source())
+    {
+        CertError::HttpConnection {
+            during: "trying to send request".into(),
+            msg: hyper_error.to_string(),
+        }
+    } else {
+        CertError::ReqwestError(err)
+    }
 }
 
 fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {

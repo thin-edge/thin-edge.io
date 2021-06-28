@@ -2115,6 +2115,7 @@ dependencies = [
  "certificate",
  "chrono",
  "futures",
+ "hyper",
  "mockito",
  "mqtt_client",
  "pem",

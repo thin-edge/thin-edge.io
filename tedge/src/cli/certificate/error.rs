@@ -59,6 +59,9 @@ pub enum CertError {
     )]
     CertificateReadFailed(#[source] std::io::Error, String),
 
+    #[error("HTTP Connection Problem while {during}: {msg}")]
+    HttpConnection { during: String, msg: String },
+
     #[error(transparent)]
     PathsError(#[from] PathsError),
 
