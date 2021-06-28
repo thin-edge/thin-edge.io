@@ -16,7 +16,7 @@ Below are instructions on how to add new CA certificate and update the certifica
 > sudo apt install ca-certificates
 > ```
 
-To manually add a self-signed certificate to the trusted certificate repository by Linux system:
+To add a self-signed certificate to the trusted certificate repository on thin-edge.io system:
 
 Create a `/usr/local/share/ca-certificates/` directory if it does not exist on your computer:
 
