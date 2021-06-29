@@ -23,7 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.6", features = ["rt", "signal", "io-util", "sync"] }
+tokio = { version = "1.7", features = ["rt", "signal", "io-util", "io-std", "sync"] }
 toml = "0.5"
 url = "2.2"
 which = "4.0"

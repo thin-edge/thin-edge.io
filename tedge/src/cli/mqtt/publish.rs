@@ -3,7 +3,7 @@ use crate::command::{Command, ExecutionContext};
 use futures::future::FutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic};
 use std::time::Duration;
-use tokio::select;
+use tokio::{pin, select};
 
 pub struct MqttPublishCommand {
     pub topic: Topic,
@@ -47,27 +47,33 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
 async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
     let mut errors = mqtt.subscribe_errors();
 
-    // This requires 2 awaits as publish_with_ack returns a future which returns a future.
-    let ack = async {
-        match mqtt.publish_with_ack(msg).await {
-            Ok(fut) => fut.await,
+    let fut = async move {
+        match mqtt.publish(msg).await {
+            Ok(()) => {
+                // Wait until all messages have been published.
+                while mqtt.pending_published_count() > 0 {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+                Ok(())
+            }
             Err(err) => Err(err),
         }
     };
+    pin!(fut);
 
-    select! {
-        error = errors.next().fuse() => {
-            if let Some(err) = error {
-                if let MqttClientError::ConnectionError(..) = *err {
-                    return Err(MqttError::ServerError(err.to_string()));
+    loop {
+        select! {
+            error = errors.next().fuse() => {
+                if let Some(err) = error {
+                    if let MqttClientError::ConnectionError(..) = *err {
+                        return Err(MqttError::ServerError(err.to_string()));
+                    }
                 }
             }
-        }
 
-        result = ack.fuse() => {
-            result?
+            result = &mut fut => {
+                return result.map_err(Into::into);
+            }
         }
     }
-
-    Ok(())
 }
