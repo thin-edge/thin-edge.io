@@ -53,3 +53,10 @@ class MqttPortSet(BaseTest):
             arguments=[self.tedge, "connect", "c8y"],
             stdouterr="connect_c8y",
         )
+
+        # disconnect the tedge services
+        connect_c8y = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="disconnect_c8y",
+        )
