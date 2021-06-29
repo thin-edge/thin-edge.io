@@ -18,10 +18,30 @@ class PySysTest(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
-        c8y_connect = self.startProcess(
-            c8y_connect=self.sudo,
+        c8y_disconnect = self.startProcess(
+            command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_connect",
+            stdouterr="c8y_disconnect",
+        )
+
+        create_cert_dir = self.startProcess(
+            command=self.sudo,
+            arguments=["mkdir test-device-certs"],
+            stdouterr="create_cert_dir",
+        )
+
+        set_cert_path = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "config", "set", "device.cert.path",
+                       "/tmp/test-device-certs/tedge-certificate.pem"],
+            stdouterr="set_cert_path",
+        )
+
+        set_key_path = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "config", "set", "device.key.path",
+                       "/tmp/test-device-certs/tedge-private-key.pem"],
+            stdouterr="set_key_path",
         )
 
         self.addCleanupFunction(self.device_id_cleanup)
@@ -56,4 +76,22 @@ class PySysTest(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="c8y_disconnect",
+        )
+
+        unset_cert_path = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "config", "unset", "device.cert.path"],
+            stdouterr="unset_cert_path",
+        )
+
+        unset_key_path = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "config", "unset", "device.key.path"],
+            stdouterr="unset_key_path",
+        )
+
+        remove_cert_dir = self.startProcess(
+            command=self.sudo,
+            arguments=["rm -rf test-device-certs"],
+            stdouterr="remove_cert_dir",
         )
