@@ -26,7 +26,6 @@ class MqttPortUnSet(BaseTest):
             stdouterr="mqtt_port_set",
         )
 
-        self.addCleanupFunction(self.mqtt_cleanup)
 
     def execute(self):
         # set a new mqtt port for local communication
@@ -46,10 +45,3 @@ class MqttPortUnSet(BaseTest):
         self.assertGrep(
             "tedge_get.out", "mqtt.port=1883", contains=True)
 
-    def mqtt_cleanup(self):
-        # restart the tedge services
-        connect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="connect_c8y",
-        )

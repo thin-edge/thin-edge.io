@@ -22,10 +22,8 @@ class RuntimeMultiMappers(BaseTest):
 
         tedge_mapper1 = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper, "c8y"],
+            arguments=["systemctl", "start", "tedge-mapper-c8y"],
             stdouterr="tedge_mapper1",
-            expectedExitStatus="==0",
-            background=True
         )
 
         self.wait(0.1)
@@ -37,14 +35,11 @@ class RuntimeMultiMappers(BaseTest):
             expectedExitStatus="==1",
         )
 
-        # since the first mapper is running with different user rights the
-        # test runner can't kill it for us. So we need to kill it ourselves
-        kill = self.startProcess(
+        stop = self.startProcess(
             command=self.sudo,
-            arguments=["sh", "-c", "kill -9 $(pgrep -x tedge_mapper)"],
-            stdouterr="kill",
-            ignoreExitStatus=True
-            )
+            arguments=["systemctl", "stop", "tedge-mapper-c8y"],
+            stdouterr="tedge_mapper1",
+        )
 
     def validate(self):
         self.assertGrep("tedge_mapper2.err", "Error: Couldn't acquire file lock.", contains=True)

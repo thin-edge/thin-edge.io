@@ -1,3 +1,6 @@
+import os
+
+import toml
 import pysys
 from pysys.basetest import BaseTest
 
@@ -16,6 +19,15 @@ Then we find the string tedge 0.1.0 in the output
 
 
 class PySysTest(BaseTest):
+
+    def setup(self):
+
+        # retrieve the expected toml version from the Cargo.toml
+        tomlname = os.path.join( self.project.tebasedir, "tedge/Cargo.toml" )
+        with open(tomlname, 'r') as tomlfile:
+            tedgetoml= toml.load(tomlfile)
+            self.tedgeversion = tedgetoml['package']['version']
+
     def execute(self):
         tedge = "/usr/bin/tedge"
 
@@ -27,4 +39,4 @@ class PySysTest(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("tedge.out", "tedge 0.2.0", contains=True)
+        self.assertGrep("tedge.out", f"tedge {self.tedgeversion}", contains=True)

@@ -65,11 +65,11 @@ mod tests {
         };
 
         let input = r#"{
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
@@ -91,12 +91,12 @@ mod tests {
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
            "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
@@ -118,12 +118,12 @@ mod tests {
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
            "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
@@ -144,11 +144,11 @@ mod tests {
         };
 
         let input = r#"{
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
-           "temperature": 23,
+           "temperature": 23.0,
            "time": "2021-04-08T00:00:00+05:00"
         });
 
