@@ -14,6 +14,7 @@ Now validate the services that use the mqtt port
    Validate tedge mqtt pub/sub
    Validate tedge connect c8y --test
    Validate tedge_mapper status
+   Validate collectd_mapper status
 
 """
 
@@ -58,6 +59,9 @@ class MqttPortChangeConnectionWorks(BaseTest):
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
 
+        # validate collectd mapper
+        self.validate_collectd_mapper()
+
     def validate_tedge_mqtt(self):
         # subscribe for messages
         mqtt_sub = self.startProcess(
@@ -97,15 +101,33 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.assertGrep("c8y_mapper_status.out",
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
+    def validate_collectd_mapper(self):
+
+        # restart the collectd mapper
+        c8y_mapper_status = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "restart", "collectd-mapper.service"],
+            stdouterr="collectd_mapper_restart",
+        )
+
+        # check the status of the collectd mapper
+        c8y_mapper_status = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "status", "collectd-mapper.service"],
+            stdouterr="collectd_mapper_status",
+        )
+
+        self.assertGrep("collectd_mapper_status.out",
+                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+
     def mqtt_cleanup(self):
-        
+
         # Disconnect Bridge
         c8y_disconnect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="c8y_disconnect",
         )
-
 
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(

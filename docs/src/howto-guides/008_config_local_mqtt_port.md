@@ -68,13 +68,21 @@ Caused by:
     Conversion from String failed
 ```
 
-## Updating the mqtt port in collectd
+## Updating the mqtt port in collectd & for collectd-mapper
 
 Update the `collectd.conf` with the new port in `<Plugin mqtt>`
 
-Restart the collectd
+Restart the collectd service
 
 ```shell
 sudo systemctl restart collectd.service
 ```
 
+After changing the mqtt port and connected to cloud using `tedge connect c8y/az`,
+(Steps 1-3) the collectd-mapper has to be restarted to use the newly set port.
+
+Restart the collectd-mapper service
+
+```shell
+sudo systemctl restart collectd-mapper.service
+```
