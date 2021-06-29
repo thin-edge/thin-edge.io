@@ -138,7 +138,6 @@ pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
     {
         match cert_validation_error {
             webpki::Error::CAUsedAsEndEntity => CertError::WebpkiValidation {
-
                 hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
                 msg: cert_validation_error.to_string(),
             },
