@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate local publishing and subscribing</title>
+	<title>Valid device ID</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
@@ -15,7 +15,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="PySysTest" module="run"/>
+	<class name="ValidateValidDeviceId" module="run"/>
   </data>
   <traceability>
 	<requirements>
