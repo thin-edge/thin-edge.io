@@ -102,8 +102,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
     def validate_collectd_mapper(self):
-
-        # restart the collectd mapper
+        # restart the collectd mapper to use recently set port
         c8y_mapper_status = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "restart", "collectd-mapper.service"],
@@ -122,7 +121,11 @@ class MqttPortChangeConnectionWorks(BaseTest):
 
     def mqtt_cleanup(self):
 
-        # Disconnect Bridge
+        # To leave the system in the previous working state
+        # disconnect the device, unset the port, connect again and
+        # disconnect again
+
+        # disconnect Bridge
         c8y_disconnect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
@@ -135,3 +138,18 @@ class MqttPortChangeConnectionWorks(BaseTest):
             arguments=[self.tedge, "config", "unset", "mqtt.port"],
             stdouterr="mqtt_port_unset",
         )
+
+        # connect Bridge
+        c8y_disconnect = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y"],
+            stdouterr="c8y_connect",
+        )
+
+        # disconnect Bridge
+        c8y_disconnect = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="c8y_disconnect",
+        )
+

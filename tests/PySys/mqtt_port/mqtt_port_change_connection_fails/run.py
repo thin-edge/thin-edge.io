@@ -68,14 +68,6 @@ class MqttPortChangeConnectionFails(BaseTest):
             "mqtt_pub.err", "MQTT connection error: I/O: Connection refused", contains=True)
 
     def mqtt_cleanup(self):
-
-        # Disconnect Bridge
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
-
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(
             command=self.sudo,
