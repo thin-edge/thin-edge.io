@@ -14,6 +14,7 @@ When the `sudo tedge mqtt pub` tries to publish a message and fails to connect t
 
 """
 
+
 class MqttPortChangeConnectionFails(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
@@ -34,7 +35,7 @@ class MqttPortChangeConnectionFails(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
             stdouterr="mqtt_sub",
-            #dont exit test if status is 1, as the error messages are needed for validation
+            # dont exit test if status is 1, as the error messages are needed for validation
             expectedExitStatus="==1",
             background=True,
         )
@@ -45,19 +46,20 @@ class MqttPortChangeConnectionFails(BaseTest):
             arguments=[self.tedge, "mqtt", "pub",
                        "tedge/measurements", "{ \"temperature\": 25 }"],
             stdouterr="mqtt_pub",
-            #dont exit test if status is 1, as the error messages are needed for validation
+            # dont exit test if status is 1, as the error messages are needed for validation
             expectedExitStatus="==1",
         )
 
-        time.sleep(0.5)
         # wait for a while
+        time.sleep(0.5)
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
             stdouterr="kill_out",
-            expectedExitStatus="==1", #dont exit test if status is 1
+            # kill all the tedge processes, if not found, dont exit test as the
+            # validation process has to be completed.
+            expectedExitStatus="==1",
         )
-
 
     def validate(self):
         self.assertGrep(
@@ -73,11 +75,10 @@ class MqttPortChangeConnectionFails(BaseTest):
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="c8y_disconnect",
         )
-    
+
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "config", "unset", "mqtt.port"],
             stdouterr="mqtt_port_unset",
         )
-
