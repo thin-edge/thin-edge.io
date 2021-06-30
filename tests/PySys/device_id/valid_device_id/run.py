@@ -83,9 +83,17 @@ class ValidateValidDeviceId(BaseTest):
             stdouterr="c8y_connect",
         )
 
+        # test connect to the c8y cloud
+        c8y_connect_test = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y", "--test"],
+            stdouterr="c8y_connect_test",
+        )
+
     def validate(self):
         # validate the connection is successfull
         self.assertGrep("c8y_connect.out", "Successfull", contains=True)
+        self.assertGrep("c8y_connect_test.out", "Successfull", contains=True)
 
     def device_id_cleanup(self):
         
