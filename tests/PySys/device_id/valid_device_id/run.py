@@ -71,7 +71,7 @@ class ValidateValidDeviceId(BaseTest):
         # upload the certificate
         c8y_connect = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "cert", "upload",
+            arguments=["-E", self.tedge, "cert", "upload",
                        "c8y", "--user", self.project.username],
             stdouterr="cert_upload",
         )
