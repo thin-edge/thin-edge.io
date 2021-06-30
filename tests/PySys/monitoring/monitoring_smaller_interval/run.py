@@ -4,11 +4,11 @@ import time
 import json
 
 """
-Validate collectd-mapper  messages that are published
+Validate tedge-mapper-dm  messages that are published
 on tedge/measurements
 
 Given a configured system
-When we start the collectd-mapper with sudo in the background
+When we start the tedge-mapper-dm with sudo in the background
 When we start tedge sub with sudo in the background
 When we start two publishers to publish the simulated collectd messages
 Publish the messages in 100ms interval
@@ -37,7 +37,7 @@ class MonitoringSmallInterval(BaseTest):
 
         collectd_mapper = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "start", "collectd-mapper"],
+            arguments=["systemctl", "start", "tedge-mapper-dm"],
             stdouterr="collectd_mapper",
         )
         self.addCleanupFunction(self.monitoring_cleanup)
@@ -56,7 +56,7 @@ class MonitoringSmallInterval(BaseTest):
         # runs.
         time.sleep(0.1)
 
-        for i in range(10):
+        for _ in range(10):
 
             pub = self.startProcess(
                 command=self.sudo,
@@ -75,7 +75,7 @@ class MonitoringSmallInterval(BaseTest):
             # publish every 100ms
             time.sleep(0.1)
 
-        # wait for collectd-mapper to batch messages
+        # wait for tedge-mapper-dm to batch messages
         time.sleep(1)
 
         # Kill the subscriber process explicitly with sudo as PySys does
@@ -145,6 +145,6 @@ class MonitoringSmallInterval(BaseTest):
         self.log.info("monitoring_cleanup")
         collectd = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "stop", "collectd-mapper"],
+            arguments=["systemctl", "stop", "tedge-mapper-dm"],
             stdouterr="collectd_mapper",
         )

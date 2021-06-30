@@ -11,8 +11,8 @@ depends = "tedge"
 maintainer-scripts = "configuration/debian/tedge_mapper"
 assets = [
     ["../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
-    ["../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
+    ["../../configuration/init/systemd/tedge-mapper-dm.service", "/lib/systemd/system/tedge-mapper-dm.service", "644"],
     ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
 ]
 
