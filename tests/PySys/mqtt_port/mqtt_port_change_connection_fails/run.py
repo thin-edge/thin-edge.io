@@ -30,16 +30,6 @@ class MqttPortChangeConnectionFails(BaseTest):
             stdouterr="mqtt_port_set",
         )
 
-        # validate tedge mqtt pub/sub
-        mqtt_sub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
-            stdouterr="mqtt_sub",
-            # dont exit test if status is 1, as the error messages are needed for validation
-            expectedExitStatus="==1",
-            background=True,
-        )
-
         # publish a message
         mqtt_pub = self.startProcess(
             command=self.sudo,
@@ -50,20 +40,7 @@ class MqttPortChangeConnectionFails(BaseTest):
             expectedExitStatus="==1",
         )
 
-        # wait for a while
-        time.sleep(0.5)
-        kill = self.startProcess(
-            command=self.sudo,
-            arguments=["killall", "tedge"],
-            stdouterr="kill_out",
-            # kill all the tedge processes, if not found, dont exit test as the
-            # validation process has to be completed.
-            expectedExitStatus="==1",
-        )
-
     def validate(self):
-        self.assertGrep(
-            "mqtt_sub.err", "MQTT connection error: I/O: Connection refused", contains=True)
         self.assertGrep(
             "mqtt_pub.err", "MQTT connection error: I/O: Connection refused", contains=True)
 
