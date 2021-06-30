@@ -1,12 +1,10 @@
 use chrono::prelude::*;
 use json_writer::{JsonWriter, JsonWriterError};
-
 use thin_edge_json::{json::ThinEdgeJsonError, measurement::GroupedMeasurementVisitor};
 
 pub struct C8yJsonSerializer {
     json: JsonWriter,
     is_within_group: bool,
-    needs_separator: bool,
     timestamp_present: bool,
     default_timestamp: DateTime<FixedOffset>,
 }
@@ -56,7 +54,6 @@ impl C8yJsonSerializer {
         Self {
             json,
             is_within_group: false,
-            needs_separator: true,
             timestamp_present: false,
             default_timestamp,
         }
@@ -99,25 +96,14 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
-        if self.needs_separator {
-            self.json.write_separator();
-        }
-
         self.json.write_key("time")?;
         self.json.write_str(timestamp.to_rfc3339().as_str())?;
 
-        self.needs_separator = true;
         self.timestamp_present = true;
         Ok(())
     }
 
     fn measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
-        if self.needs_separator {
-            self.json.write_separator();
-        } else {
-            self.needs_separator = true;
-        }
-
         self.json.write_key(key)?;
 
         if self.is_within_group {
@@ -136,12 +122,8 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
-        if self.needs_separator {
-            self.json.write_separator();
-        }
         self.json.write_key(group)?;
         self.json.write_open_obj();
-        self.needs_separator = false;
         self.is_within_group = true;
         Ok(())
     }
@@ -152,7 +134,6 @@ impl GroupedMeasurementVisitor for C8yJsonSerializer {
         }
 
         self.json.write_close_obj();
-        self.needs_separator = true;
         self.is_within_group = false;
         Ok(())
     }
