@@ -222,22 +222,28 @@ def assert_values(
         values.append(value)
         timestamps.append(tstamp)
 
-    expected = list(range(0, int(publish_amount)))
+    expected = list(map(float, range(0, int(publish_amount))))
 
     print("Retrieved values:")
 
-    for value in range(len(values)):
+    for index, value in enumerate(values):
+        if index >= 1:  # start analysis with index 1
+            # make sure the new value got increased by one
+            if values[index - 1] != value - 1:
+                print("error:")
 
-        if value >= 1:
-            if (values[value - 1] + 1) != values[value]:
-                print("error!")
+        # preserve space for 5 digits
+        print(f"{value:5} ", end="")
 
-        print(f"{values[value]:5} ", end="")
-        if int(values[value] + 1) % 20 == 0:  # use a new line when data is
-            print("")
-    print("")
+        try:
+            # add newline every 20 published values
+            if (int(value) + 1) % 20 == 0:
+                print("")
+        except ValueError:
+            print("Value analysis failed!")
+            raise ValueError
 
-    print("Expected: ", expected[0], " ... ", expected[-1])
+    print("\nExpected: ", expected[0], " ... ", expected[-1])
 
     if values == expected:
         print("Data verification PASSED")
