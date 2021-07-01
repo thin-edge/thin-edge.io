@@ -279,7 +279,7 @@ mod tests {
         let mut mqtt_client = MockMqttClient::new();
         mqtt_client.expect_publish().times(1).returning(|message| {
             assert_eq!(message.topic.name, "tedge/measurements"); // The test assertion happens here
-            Ok(123)
+            Ok(())
         });
 
         let mut publisher = MessageBatchPublisher::new(
