@@ -5,12 +5,12 @@ import re
 import json
 
 """
-Validate tedge-mapper-dm  messages that are published
+Validate tedge-mapper-collectd  messages that are published
 on tedge/measurements
 
 Given a configured system
 When we start the collectd with sudo in the background
-When we start the tedge-mapper-dm with sudo in the background
+When we start the tedge-mapper-collectd with sudo in the background
 When we start tedge sub with sudo in the background
 Wait for couple of seconds to publish couple of batch of messages
 Then we kill tedge sub with sudo as it is running with a different user account
@@ -38,7 +38,7 @@ class MonitoringWithCollectd(BaseTest):
 
         collectd_mapper = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "start", "tedge-mapper-dm"],
+            arguments=["systemctl", "start", "tedge-mapper-collectd"],
             stdouterr="collectd_mapper",
         )
         self.addCleanupFunction(self.monitoring_cleanup)
@@ -62,7 +62,7 @@ class MonitoringWithCollectd(BaseTest):
 
         # Wait for a small amount of time to give tedge sub time
         # to initialize and capture couple of batches of messages
-        # that are published by tedge-mapper-dm.
+        # that are published by tedge-mapper-collectd.
         time.sleep(12)
 
         # Kill the subscriber process explicitly with sudo as PySys does
@@ -144,7 +144,7 @@ class MonitoringWithCollectd(BaseTest):
 
         collectd = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "stop", "tedge-mapper-dm"],
+            arguments=["systemctl", "stop", "tedge-mapper-collectd"],
             stdouterr="collectd_mapper",
         )
 

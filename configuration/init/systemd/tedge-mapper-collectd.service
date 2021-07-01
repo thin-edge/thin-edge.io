@@ -1,10 +1,10 @@
 [Unit]
-Description=tedge-mapper-dm converts Thin Edge JSON measurements to Cumulocity JSON format.
+Description=tedge-mapper-collectd converts Thin Edge JSON measurements to Cumulocity JSON format.
 After=syslog.target network.target mosquitto.service
 
 [Service]
 User=tedge-mapper
-ExecStart=/usr/bin/tedge_mapper dm
+ExecStart=/usr/bin/tedge_mapper collectd
 Restart=on-failure
 RestartPreventExitStatus=255
 

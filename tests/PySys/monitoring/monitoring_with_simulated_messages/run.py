@@ -4,11 +4,11 @@ import time
 import json
 
 """
-Validate tedge-mapper-dm  messages that are published
+Validate tedge-mapper-collectd  messages that are published
 on tedge/measurements
 
 Given a configured system
-When we start the tedge-mapper-dm with sudo in the background
+When we start the tedge-mapper-collectd with sudo in the background
 When we start tedge sub with sudo in the background
 When we start two publishers to publish the simulated collectd messages
 Wait for couple of seconds to publish couple of batch of messages
@@ -36,7 +36,7 @@ class MonitoringWithSimulatedMessages(BaseTest):
 
         collectd_mapper = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "start", "tedge-mapper-dm"],
+            arguments=["systemctl", "start", "tedge-mapper-collectd"],
             stdouterr="collectd_mapper",
         )
         self.addCleanupFunction(self.monitoring_cleanup)
@@ -138,6 +138,6 @@ class MonitoringWithSimulatedMessages(BaseTest):
         self.log.info("monitoring_cleanup")
         collectd = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "stop", "tedge-mapper-dm"],
+            arguments=["systemctl", "stop", "tedge-mapper-collectd"],
             stdouterr="collectd_mapper",
         )
