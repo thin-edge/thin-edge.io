@@ -92,8 +92,8 @@ class ValidateValidDeviceId(BaseTest):
 
     def validate(self):
         # validate the connection is successfull
-        self.assertGrep("c8y_connect.out", "Successfull", contains=True)
-        self.assertGrep("c8y_connect_test.out", "Successfull", contains=True)
+        self.assertGrep("c8y_connect.out", "successful", contains=True)
+        self.assertGrep("c8y_connect_test.out", "successful", contains=True)
 
     def device_id_cleanup(self):
         
