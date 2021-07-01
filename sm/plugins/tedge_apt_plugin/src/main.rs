@@ -19,13 +19,16 @@ pub enum PluginOp {
     },
 
     /// Uninstall a module
-    Uninstall {
+    Remove {
         module: String,
         version: Option<String>,
     },
 
-    /// Display the installed version of a module
-    Version { module: String },
+    /// Prepare a sequences of install/remove commands
+    Prepare,
+
+    /// Finalize a sequences of install/remove commands
+    Finalize,
 }
 
 fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
@@ -43,7 +46,7 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
                 .spawn()?;
 
             let status = Command::new("awk")
-                .arg(r#"{print "{\"type\":\"debian\",\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
+                .arg(r#"{print "{\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
                 .stdin(cmd2.stdout.unwrap())
                 .status()?;
             status
@@ -60,15 +63,21 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
             }
         }
 
-        PluginOp::Uninstall {
+        PluginOp::Remove {
             module,
             version: _unused,
         } => run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?,
 
-        PluginOp::Version { module } => run_cmd(
-            "dpkg-query",
-            &format!(" --show --showformat=${{Version}}\\n {}", module),
+        PluginOp::Prepare => run_cmd(
+            "apt-get",
+            &format!("update --quiet --yes"),
         )?,
+
+        PluginOp::Finalize => run_cmd(
+            "apt-get",
+            &format!("auto-remove --quiet --yes"),
+        )?,
+
     };
 
     Ok(status)
