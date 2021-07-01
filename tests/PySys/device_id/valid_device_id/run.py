@@ -38,7 +38,7 @@ class ValidateValidDeviceId(BaseTest):
         change_owner_of_dir = self.startProcess(
             command=self.sudo,
             arguments=["chown", "mosquitto:mosquitto", "/tmp/test-device-certs"],
-            stdouterr="create_cert_dir",
+            stdouterr="change_owner_of_dir",
         )
         
         # set the custom certificate path
@@ -69,7 +69,7 @@ class ValidateValidDeviceId(BaseTest):
         )
 
         # upload the certificate
-        c8y_connect = self.startProcess(
+        cert_upload = self.startProcess(
             command=self.sudo,
             arguments=["-E", self.tedge, "cert", "upload",
                        "c8y", "--user", self.project.username],
