@@ -33,7 +33,7 @@ class TedgeMapperAzWithTimestamp(BaseTest):
     def execute(self):
         sub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "az/messages/events"],
+            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "az/messages/events/"],
             stdouterr="tedge_sub",
             background=True,
         )
