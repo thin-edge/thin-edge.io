@@ -7,7 +7,7 @@ Validate local publishing while no mosquitto is running
 
 Given a configured system
 When we stop mosquitto
-When we publish something
+When we publish something without specifing qos level
 Then we expect an error code
 Then we restart mosquitto
 """
