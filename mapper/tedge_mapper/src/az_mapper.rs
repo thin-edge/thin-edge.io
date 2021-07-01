@@ -23,7 +23,7 @@ impl TEdgeComponent for AzureMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let mapper_config = MapperConfig {
             in_topic: make_valid_topic_or_panic("tedge/measurements"),
-            out_topic: make_valid_topic_or_panic("az/messages/events"),
+            out_topic: make_valid_topic_or_panic("az/messages/events/"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
 
