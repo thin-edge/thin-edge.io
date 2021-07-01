@@ -222,10 +222,28 @@ def assert_values(
         values.append(value)
         timestamps.append(tstamp)
 
-    expected = list(range(0, int(publish_amount)))
+    expected = list(map(float, range(0, int(publish_amount))))
 
-    print("Retrieved:", values)
-    print("Expected:", expected)
+    print("Retrieved values:")
+
+    for index, value in enumerate(values):
+        if index >= 1:  # start analysis with index 1
+            # make sure the new value got increased by one
+            if values[index - 1] != value - 1:
+                print("error:")
+
+        # preserve space for 5 digits
+        print(f"{value:5} ", end="")
+
+        try:
+            # add newline every 20 published values
+            if (int(value) + 1) % 20 == 0:
+                print("")
+        except ValueError:
+            print("Value analysis failed!")
+            raise ValueError
+
+    print("\nExpected: ", expected[0], " ... ", expected[-1])
 
     if values == expected:
         print("Data verification PASSED")
@@ -246,7 +264,6 @@ def main():
     parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
     parser.add_argument("-u", "--user", help="C8y username")
     parser.add_argument("-t", "--tenant", help="C8y tenant")
-    parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument(
@@ -264,11 +281,16 @@ def main():
     verbose = args.verbose
     user = args.user
     tenant = args.tenant
-    password = args.password
     device_id = args.id
     publish_amount = args.size
     timeslot = args.slot
     delay = args.delay
+
+    if "C8YPASS" in os.environ:
+        password = os.environ["C8YPASS"]
+    else:
+        print("Error environment variable C8YPASS not set")
+        sys.exit(1)
 
     if verbose:
         print(f"Mode: {mode}")

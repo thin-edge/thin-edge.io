@@ -27,6 +27,7 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
         time.sleep(int(self.timeslot))
 
         sub = self.startPython(
+            environs={"C8YPASS":self.project.c8ypass},
             arguments=[
                 self.cmd,
                 "-m",
@@ -37,8 +38,6 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
                 self.project.username,
                 "-t",
                 self.project.tenant,
-                "-pass",
-                self.project.c8ypass,
                 "-id",
                 self.project.deviceid,
                 "-o",
