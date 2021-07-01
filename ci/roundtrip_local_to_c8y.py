@@ -193,13 +193,10 @@ def assert_values(
     for i in response["measurements"]:
         source = i["source"]["id"]
         assert source == device_id
-        mtype = i["type"]
 
         if mode == "JSON":
 
-            if mtype != "ThinEdgeMeasurement":
-                print(f"Error: Expected Type  ThinEdgeMeasurement got {mtype}")
-                sys.exit(1)
+            assert i["type"] == "ThinEdgeMeasurement"
 
             try:
                 value = i["Flux [F]"]["Flux [F]"]["value"]
@@ -208,9 +205,7 @@ def assert_values(
                 sys.exit(1)
         elif mode == "REST":
 
-            if mtype != "c8y_TemperatureMeasurement":
-                print(f"Error: Expected Type  c8y_TemperatureMeasurement got {mtype}")
-                sys.exit(1)
+            assert i["type"] == "c8y_TemperatureMeasurement"
 
             try:
                 value = i["c8y_TemperatureMeasurement"]["T"]["value"]
@@ -227,22 +222,28 @@ def assert_values(
         values.append(value)
         timestamps.append(tstamp)
 
-    expected = list(map(float,range(0, int(publish_amount))))
+    expected = list(map(float, range(0, int(publish_amount))))
 
     print("Retrieved values:")
 
-    for value in range(len(values)):
+    for index, value in enumerate(values):
+        if index >= 1:  # start analysis with index 1
+            # make sure the new value got increased by one
+            if values[index - 1] != value - 1:
+                print("error:")
 
-        if value >= 1:
-            if (values[value - 1] + 1) != values[value]:
-                print("error!")
+        # preserve space for 5 digits
+        print(f"{value:5} ", end="")
 
-        print(f"{values[value]:5} ", end="")
-        if int(values[value] + 1) % 20 == 0:  # use a new line when data is
-            print("")
-    print("")
+        try:
+            # add newline every 20 published values
+            if (int(value) + 1) % 20 == 0:
+                print("")
+        except ValueError:
+            print("Value analysis failed!")
+            raise ValueError
 
-    print("Expected: ", expected[0], " ... ", expected[-1])
+    print("\nExpected: ", expected[0], " ... ", expected[-1])
 
     if values == expected:
         print("Data verification PASSED")
@@ -263,6 +264,7 @@ def main():
     parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
     parser.add_argument("-u", "--user", help="C8y username")
     parser.add_argument("-t", "--tenant", help="C8y tenant")
+    parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument(
@@ -280,6 +282,7 @@ def main():
     verbose = args.verbose
     user = args.user
     tenant = args.tenant
+    password = args.password
     device_id = args.id
     publish_amount = args.size
     timeslot = args.slot

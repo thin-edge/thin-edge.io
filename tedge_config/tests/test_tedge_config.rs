@@ -138,7 +138,7 @@ port = 1883
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
         config.update(MqttPortSetting, updated_mqtt_port)?;
-        config_repo.store(config)?;
+        config_repo.store(&config)?;
     }
 
     {
@@ -414,7 +414,7 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
         config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
-        config_repo.store(config)?;
+        config_repo.store(&config)?;
     }
 
     {
