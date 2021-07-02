@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate local publishing when mosquitto is stopped</title>
+	<title>Check error code when mosquitto is not running with QoS set to 2</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
