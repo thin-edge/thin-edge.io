@@ -4,7 +4,6 @@ use crate::{
 };
 use std::path::PathBuf;
 use structopt::*;
-// use strum_macros::*;
 use tedge_config::*;
 
 mod az_converter;
@@ -18,7 +17,6 @@ mod error;
 mod mapper;
 mod size_threshold;
 
-const DEFAULT_LOG_LEVEL: &str = "info";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
@@ -29,16 +27,15 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     }
 }
 
-#[derive(Clone, Copy, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 #[structopt(
     name = clap::crate_name!(),
     version = clap::crate_version!(),
     about = clap::crate_description!()
 )]
-pub enum MapperName {
+enum MapperName {
     Az,
     C8y,
-    #[structopt(name = "dm")]
     Collectd,
 }
 

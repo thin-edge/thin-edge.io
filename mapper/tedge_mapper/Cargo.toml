@@ -34,8 +34,6 @@ futures = "0.3"
 log = "0.4"
 mockall = "0.9"
 mqtt_client = {path = "../../common/mqtt_client" }
-strum = "0.21"
-strum_macros = "0.21"
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
