@@ -34,15 +34,15 @@ pub enum PluginOp {
 #[derive(thiserror::Error, Debug)]
 pub enum InternalError {
     #[error("Fail to run `{cmd}`: {from}")]
-    ExecError {
-        cmd: String,
-        from: std::io::Error,
-    },
+    ExecError { cmd: String, from: std::io::Error },
 }
 
 impl InternalError {
     pub fn exec_error(cmd: impl Into<String>, from: std::io::Error) -> InternalError {
-        InternalError::ExecError { cmd: cmd.into(), from }
+        InternalError::ExecError {
+            cmd: cmd.into(),
+            from,
+        }
     }
 }
 
@@ -51,20 +51,20 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
         PluginOp::List {} => {
             let apt = Command::new("apt")
                 .args(vec!["--installed", "list"])
-                .stdout(Stdio::piped())   // To pipe apt.stdout into grep.stdin
+                .stdout(Stdio::piped()) // To pipe apt.stdout into grep.stdin
                 .spawn()
                 .map_err(|err| InternalError::exec_error("apt", err))?;
 
             let grep = Command::new("grep")
                 .args(vec!["-v", "automatic"])
-                .stdin(apt.stdout.unwrap())// Cannot panics: apt.stdout has been set
-                .stdout(Stdio::piped())    // To pipe grep.stdout into awk.stdin
+                .stdin(apt.stdout.unwrap()) // Cannot panics: apt.stdout has been set
+                .stdout(Stdio::piped()) // To pipe grep.stdout into awk.stdin
                 .spawn()
                 .map_err(|err| InternalError::exec_error("grep", err))?;
 
             let status = Command::new("awk")
                 .arg(r#"{print "{\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
-                .stdin(grep.stdout.unwrap())// Cannot panics: grep.stdout has been set
+                .stdin(grep.stdout.unwrap()) // Cannot panics: grep.stdout has been set
                 .status()
                 .map_err(|err| InternalError::exec_error("awk", err))?;
 
@@ -87,16 +87,9 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
             version: _unused,
         } => run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?,
 
-        PluginOp::Prepare => run_cmd(
-            "apt-get",
-            &format!("update --quiet --yes"),
-        )?,
+        PluginOp::Prepare => run_cmd("apt-get", &format!("update --quiet --yes"))?,
 
-        PluginOp::Finalize => run_cmd(
-            "apt-get",
-            &format!("auto-remove --quiet --yes"),
-        )?,
-
+        PluginOp::Finalize => run_cmd("apt-get", &format!("auto-remove --quiet --yes"))?,
     };
 
     Ok(status)
