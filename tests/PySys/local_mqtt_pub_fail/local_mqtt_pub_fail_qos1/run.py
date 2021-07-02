@@ -1,7 +1,5 @@
 from pysys.basetest import BaseTest
 
-import time
-
 """
 Validate local publishing while no mosquitto is running
 
@@ -11,7 +9,6 @@ When we publish something with qos 1
 Then we expect an error code
 Then we restart mosquitto
 """
-
 
 class PySysTest(BaseTest):
     def execute(self):
