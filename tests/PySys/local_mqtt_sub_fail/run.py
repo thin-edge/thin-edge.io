@@ -12,28 +12,36 @@ Then we expect an error code
 Then we restart mosquitto
 """
 
-
 class PySysTest(BaseTest):
-    def execute(self):
-        tedge = "/usr/bin/tedge"
-        sudo = "/usr/bin/sudo"
-        systemctl = "/usr/bin/systemctl"
+    def setup(self):
+        self.tedge = "/usr/bin/tedge"
+        self.sudo = "/usr/bin/sudo"
+        self.systemctl = "/usr/bin/systemctl"
 
         self.startProcess(
-            command=sudo,
-            arguments=[systemctl, "stop", "mosquitto"],
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "mosquitto"],
             stdouterr="stop",
         )
 
-        self.startProcess(
-            command=sudo,
-            arguments=[tedge, "mqtt", "sub", "atopic"],
-            stdouterr="tedge_pub_fail",
+        self.addCleanupFunction(self.mycleanup)
+
+    def execute(self):
+
+        pub = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "atopic"],
+            stdouterr="tedge_sub_fail",
             expectedExitStatus="==1",
         )
 
+        # validate exit status with the expected status from calling startProcess
+        self.assertThat("value" + pub.expectedExitStatus, value=pub.exitStatus)
+
+    def mycleanup(self):
         self.startProcess(
-            command=sudo,
-            arguments=[systemctl, "start", "mosquitto"],
+            command=self.sudo,
+            arguments=[self.systemctl, "start", "mosquitto"],
             stdouterr="start",
         )
+
