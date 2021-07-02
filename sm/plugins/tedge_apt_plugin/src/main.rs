@@ -31,24 +31,43 @@ pub enum PluginOp {
     Finalize,
 }
 
-fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
+#[derive(thiserror::Error, Debug)]
+pub enum InternalError {
+    #[error("Fail to run `{cmd}`: {from}")]
+    ExecError {
+        cmd: String,
+        from: std::io::Error,
+    },
+}
+
+impl InternalError {
+    pub fn exec_error(cmd: impl Into<String>, from: std::io::Error) -> InternalError {
+        InternalError::ExecError { cmd: cmd.into(), from }
+    }
+}
+
+fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List {} => {
             let cmd = Command::new("apt")
                 .args(vec!["--installed", "list"])
                 .stdout(Stdio::piped())
-                .spawn()?;
+                .spawn()
+                .map_err(|err| InternalError::exec_error("apt", err))?;
 
             let cmd2 = Command::new("grep")
                 .args(vec!["-v", "automatic"])
                 .stdin(cmd.stdout.unwrap())
                 .stdout(Stdio::piped())
-                .spawn()?;
+                .spawn()
+                .map_err(|err| InternalError::exec_error("grep", err))?;
 
             let status = Command::new("awk")
                 .arg(r#"{print "{\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
                 .stdin(cmd2.stdout.unwrap())
-                .status()?;
+                .status()
+                .map_err(|err| InternalError::exec_error("awk", err))?;
+
             status
         }
 
@@ -83,18 +102,37 @@ fn run(operation: PluginOp) -> anyhow::Result<std::process::ExitStatus> {
     Ok(status)
 }
 
-fn run_cmd(cmd: &str, args: &str) -> anyhow::Result<std::process::ExitStatus> {
+fn run_cmd(cmd: &str, args: &str) -> Result<std::process::ExitStatus, InternalError> {
     let args: Vec<&str> = args.split_whitespace().collect();
-    let status = Command::new(cmd).args(args).stdin(Stdio::null()).status()?;
+    let status = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::null())
+        .status()
+        .map_err(|err| InternalError::exec_error(cmd, err))?;
     Ok(status)
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
+    // On usage error, the process exits with a status code of 1
     let apt = AptCli::from_args();
-    let status = run(apt.operation)?;
-    if let Some(code) = status.code() {
-        std::process::exit(code);
-    } else {
-        anyhow::bail!("Interrupted by a signal!");
+
+    match run(apt.operation) {
+        Ok(status) if status.success() => {
+            std::process::exit(0);
+        }
+
+        Ok(status) => {
+            if let Some(_) = status.code() {
+                std::process::exit(2);
+            } else {
+                eprintln!("Interrupted by a signal!");
+                std::process::exit(4);
+            }
+        }
+
+        Err(err) => {
+            eprintln!("ERROR: {}", err);
+            std::process::exit(5);
+        }
     }
 }
