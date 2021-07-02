@@ -49,22 +49,22 @@ impl InternalError {
 fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List {} => {
-            let cmd = Command::new("apt")
+            let apt = Command::new("apt")
                 .args(vec!["--installed", "list"])
-                .stdout(Stdio::piped())
+                .stdout(Stdio::piped())   // To pipe apt.stdout into grep.stdin
                 .spawn()
                 .map_err(|err| InternalError::exec_error("apt", err))?;
 
-            let cmd2 = Command::new("grep")
+            let grep = Command::new("grep")
                 .args(vec!["-v", "automatic"])
-                .stdin(cmd.stdout.unwrap())
-                .stdout(Stdio::piped())
+                .stdin(apt.stdout.unwrap())// Cannot panics: apt.stdout has been set
+                .stdout(Stdio::piped())    // To pipe grep.stdout into awk.stdin
                 .spawn()
                 .map_err(|err| InternalError::exec_error("grep", err))?;
 
             let status = Command::new("awk")
                 .arg(r#"{print "{\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
-                .stdin(cmd2.stdout.unwrap())
+                .stdin(grep.stdout.unwrap())// Cannot panics: grep.stdout has been set
                 .status()
                 .map_err(|err| InternalError::exec_error("awk", err))?;
 
