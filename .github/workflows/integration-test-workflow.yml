@@ -113,7 +113,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --verbose --features integration-test
+          args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi-self-hosted:
 
