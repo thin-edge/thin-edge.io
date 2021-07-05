@@ -19,11 +19,15 @@ class AptPluginTest(BaseTest):
 
         self.startProcess(
             command="/usr/bin/dpkg-query",
-            arguments=['--show', '--showformat=${Version}\\n', 'openssl'],
+            arguments=['--show', '--showformat=${Version}\\n', 'grep'],
             stdouterr="dpkg_query",
         )
 
     def validate(self):
-        openssl_version = open(self.output + '/dpkg_query.out', 'r').read().strip()
+        grep_version = open(self.output + '/dpkg_query.out', 'r').read().strip()
 
-        self.assertGrep ("apt_plugin.out", '{"name":"openssl","version":"'+ openssl_version + '"}', contains=True)
+        # Assuming grep is installed
+        self.assertGrep ("apt_plugin.out", '{"name":"grep","version":"'+ grep_version + '"}', contains=True)
+
+        # systemd is installed but should not be listed
+        self.assertGrep ("apt_plugin.out", '"name":"systemd"', contains=False)
