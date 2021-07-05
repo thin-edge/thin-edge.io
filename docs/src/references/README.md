@@ -10,3 +10,6 @@ Following sections show the tedge sub commands.
 * [`tedge disconnect` command](../references/tedge-disconnect.md)
 * [`tedge mqtt` command](../references/tedge-mqtt.md)
 * [Bridged Topics](../references/bridged-topics.md)
+
+Software Management (under development)
+* [Plugin API](./plugin-api.md)
