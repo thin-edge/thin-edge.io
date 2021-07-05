@@ -113,7 +113,7 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
@@ -126,7 +126,7 @@ chmod +x ./examples/sawtooth_publisher
 cp ./examples/sawtooth_publisher ~/
 
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -pass $C8YPASS -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 echo "Disonnect again"
 sudo tedge disconnect c8y

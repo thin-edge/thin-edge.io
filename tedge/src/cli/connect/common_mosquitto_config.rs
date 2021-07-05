@@ -1,6 +1,6 @@
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CommonMosquittoConfig {
     pub config_file: String,
     pub listener: String,
@@ -40,6 +40,11 @@ impl CommonMosquittoConfig {
 
         Ok(())
     }
+
+    pub fn with_port(self, port: u16) -> Self {
+        let listener = port.to_string() + " localhost";
+        Self { listener, ..self }
+    }
 }
 
 #[test]
@@ -68,6 +73,18 @@ fn test_serialize() -> anyhow::Result<()> {
     expected.insert("log_type unsubscribe");
 
     assert_eq!(config_set, expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_serialize_with_port() -> anyhow::Result<()> {
+    let common_mosquitto_config = CommonMosquittoConfig::default();
+    let mosquitto_config_with_port = common_mosquitto_config.with_port(1234);
+
+    assert!(mosquitto_config_with_port
+        .listener
+        .eq(&String::from("1234 localhost")));
 
     Ok(())
 }
