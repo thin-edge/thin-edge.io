@@ -36,6 +36,13 @@ class EnvironmentC8y(BaseTest):
             stdouterr="tedge_connect",
         )
 
+        # Test the bridge connection
+        connect = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y", "--test"],
+            stdouterr="tedge_connect",
+        )
+
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
             command=self.systemctl,

@@ -13,7 +13,7 @@ pub struct TEdgeConfigRepository {
 pub trait ConfigRepository<T> {
     type Error;
     fn load(&self) -> Result<T, Self::Error>;
-    fn store(&self, config: T) -> Result<(), Self::Error>;
+    fn store(&self, config: &T) -> Result<(), Self::Error>;
 }
 
 impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
@@ -26,7 +26,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     }
 
     // TODO: Explicitly set the file permissions in this function and file ownership!
-    fn store(&self, config: TEdgeConfig) -> Result<(), TEdgeConfigError> {
+    fn store(&self, config: &TEdgeConfig) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config.data)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
