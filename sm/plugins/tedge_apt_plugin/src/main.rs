@@ -62,8 +62,15 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
                 .spawn()
                 .map_err(|err| InternalError::exec_error("grep", err))?;
 
+            // apt output    = openssl/focal-security,now 1.1.1f-1ubuntu2.3 amd64 [installed]
+            // awk -F '[/ ]' =   $1   ^       $2         ^   $3            ^   $4
+            // awk print     =   name ^                  ^   version       ^
             let status = Command::new("awk")
-                .arg(r#"{print "{\"name\":\""$1"\",\"version\":\""$2"\"}"}"#)
+                .args(vec![
+                    "-F",
+                    "[/ ]",
+                    r#"{print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}"#,
+                ])
                 .stdin(grep.stdout.unwrap()) // Cannot panics: grep.stdout has been set
                 .status()
                 .map_err(|err| InternalError::exec_error("awk", err))?;
