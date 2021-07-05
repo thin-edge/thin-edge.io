@@ -136,12 +136,16 @@ jobs:
           command: build
           args: --release --target=${{ matrix.target }}
 
-      - name: strip binaries (cargo deb fails to strip)
-        # TODO This does not seem to work right
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: strip
+      # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
+      # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
+      - name: Install binutils to add `strip` for striping arm binaries
+        run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
+
+      - name: Strip tedge
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge
+
+      - name: Strip tedge_mapper
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_mapper
 
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
