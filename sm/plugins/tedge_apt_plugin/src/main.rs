@@ -10,7 +10,7 @@ struct AptCli {
 #[derive(StructOpt)]
 pub enum PluginOp {
     /// List all the installed modules
-    List {},
+    List,
 
     /// Install a module
     Install {
