@@ -1,8 +1,10 @@
 [package]
 name = "tedge_apt_plugin"
 version = "0.1.0"
-authors = ["diw"]
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "Thin.edge.io plugin for software management using apt"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
