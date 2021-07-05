@@ -32,4 +32,10 @@ pub enum ConnectError {
 
     #[error("Couldn't receive packets from {cloud} within fixed time.")]
     NoPacketsReceived { cloud: String },
+
+    #[error(transparent)]
+    PortSettingError(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    ConfigLoadError(#[from] tedge_config::TEdgeConfigError),
 }
