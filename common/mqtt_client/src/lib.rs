@@ -73,11 +73,13 @@ pub struct Client {
     error_sender: broadcast::Sender<Arc<MqttClientError>>,
     join_handle: tokio::task::JoinHandle<()>,
     requests_tx: rumqttc::Sender<Request>,
-    /// Tracks the number of pending publish requests of either QoS=1 or 2.
-    /// We do not track QoS=0 messages as they are fire and forget.
-    ///
-    /// Use `isize` to avoid wraparounds.
-    pending_published_count: Arc<AtomicIsize>,
+    /// Tracks number of pending publish message until they are
+    /// known to be sent out by the event loop.
+    pending_publish_count: Arc<AtomicIsize>,
+    /// Tracks number of pending puback's (not completed messages of QoS=1).
+    pending_puback_count: Arc<AtomicIsize>,
+    /// Tracks number of pending pubcomp's (not completed messages of QoS=2).
+    pending_pubcomp_count: Arc<AtomicIsize>,
 }
 
 // Send a message on a broadcast channel discarding any error.
@@ -136,13 +138,17 @@ impl Client {
         let (message_sender, _) = broadcast::channel(config.queue_capacity);
         let (error_sender, _) = broadcast::channel(config.queue_capacity);
 
-        let pending_published_count = Arc::new(AtomicIsize::new(0));
+        let pending_publish_count = Arc::new(AtomicIsize::new(0));
+        let pending_puback_count = Arc::new(AtomicIsize::new(0));
+        let pending_pubcomp_count = Arc::new(AtomicIsize::new(0));
 
         let join_handle = tokio::spawn(Client::bg_process(
             eventloop,
             message_sender.clone(),
             error_sender.clone(),
-            pending_published_count.clone(),
+            pending_publish_count.clone(),
+            pending_puback_count.clone(),
+            pending_pubcomp_count.clone(),
         ));
 
         Ok(Client {
@@ -152,7 +158,9 @@ impl Client {
             error_sender,
             join_handle,
             requests_tx,
-            pending_published_count,
+            pending_publish_count,
+            pending_puback_count,
+            pending_pubcomp_count,
         })
     }
 
@@ -169,10 +177,11 @@ impl Client {
             .map_err(|_| MqttClientError::JoinError)
     }
 
-    pub fn pending_published_count(&self) -> isize {
-        self.pending_published_count
-            .as_ref()
-            .load(Ordering::Relaxed)
+    /// Returns `true` if there are pending inflight messages.
+    pub fn has_pending(&self) -> bool {
+        self.pending_publish_count.as_ref().load(Ordering::Relaxed) > 0
+            || self.pending_puback_count.as_ref().load(Ordering::Relaxed) > 0
+            || self.pending_pubcomp_count.as_ref().load(Ordering::Relaxed) > 0
     }
 
     /// Process all the MQTT events
@@ -182,7 +191,9 @@ impl Client {
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
         error_sender: broadcast::Sender<Arc<MqttClientError>>,
-        pending_published_count: Arc<AtomicIsize>,
+        pending_publish_count: Arc<AtomicIsize>,
+        pending_puback_count: Arc<AtomicIsize>,
+        pending_pubcomp_count: Arc<AtomicIsize>,
     ) {
         // Delay announcing a QoS=2 message to the client until we have seen a PUBREL.
         let mut pending_received_messages: HashMap<MessageId, Message> = HashMap::new();
@@ -209,12 +220,25 @@ impl Client {
                     }
                 }
 
-                Ok(Event::Incoming(Packet::PubAck(_)))
-                | Ok(Event::Incoming(Packet::PubComp(_))) => {
+                Ok(Event::Outgoing(Outgoing::Publish(_id))) => {
+                    // Reduce the count for pending messages.
+                    pending_publish_count
+                        .as_ref()
+                        .fetch_sub(1, Ordering::Relaxed);
+                }
+
+                Ok(Event::Incoming(Packet::PubAck(_))) => {
                     // Reception of PUBACK means that a QoS=1 request completed.
+                    // Reduce the count accordingly.
+                    pending_puback_count
+                        .as_ref()
+                        .fetch_sub(1, Ordering::Relaxed);
+                }
+
+                Ok(Event::Incoming(Packet::PubComp(_))) => {
                     // Reception of PUBCOMP means that a QoS=2 request completed.
-                    // Reduce the pending published count accordingly.
-                    pending_published_count
+                    // Reduce the count accordingly.
+                    pending_pubcomp_count
                         .as_ref()
                         .fetch_sub(1, Ordering::Relaxed);
                 }
@@ -269,12 +293,16 @@ impl MqttClient for Client {
             .await
             .map_err(|err| MqttClientError::ClientError(rumqttc::ClientError::Request(err)))?;
 
+        // Track number of pending publish requests.
+        self.pending_publish_count.fetch_add(1, Ordering::Relaxed);
         match qos {
-            // Track number of pending publish requests in case of QoS=1 and 2.
-            QoS::AtLeastOnce | QoS::ExactlyOnce => {
-                self.pending_published_count.fetch_add(1, Ordering::Relaxed);
+            QoS::AtLeastOnce => {}
+            QoS::AtMostOnce => {
+                self.pending_puback_count.fetch_add(1, Ordering::Relaxed);
             }
-            _ => {}
+            QoS::ExactlyOnce => {
+                self.pending_pubcomp_count.fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         Ok(())
