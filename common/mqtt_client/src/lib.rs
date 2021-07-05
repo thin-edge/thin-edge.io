@@ -206,7 +206,7 @@ impl Client {
                             send_discarding_error!(message_sender, msg.into());
                         }
                         QoS::ExactlyOnce => {
-                            // Do not annouce the incoming publish message immediatly in case
+                            // Do not announce the incoming publish message immediately in case
                             // of QoS=2. Wait for the PUBREL.
                             let _ = pending_received_messages.insert(msg.pkid, msg.into());
                         }
@@ -296,8 +296,8 @@ impl MqttClient for Client {
         // Track number of pending publish requests.
         self.pending_publish_count.fetch_add(1, Ordering::Relaxed);
         match qos {
-            QoS::AtLeastOnce => {}
-            QoS::AtMostOnce => {
+            QoS::AtMostOnce => {}
+            QoS::AtLeastOnce => {
                 self.pending_puback_count.fetch_add(1, Ordering::Relaxed);
             }
             QoS::ExactlyOnce => {
@@ -401,7 +401,7 @@ impl Config {
         Self { port, ..self }
     }
 
-    /// Update queue_capcity.
+    /// Update queue_capacity.
     pub fn queue_capacity(self, queue_capacity: usize) -> Self {
         Self {
             queue_capacity,
