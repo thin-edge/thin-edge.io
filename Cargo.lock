@@ -2067,12 +2067,14 @@ dependencies = [
  "certificate",
  "chrono",
  "futures",
+ "hyper",
  "mockito",
  "mqtt_client",
  "pem",
  "predicates",
  "reqwest",
  "rpassword",
+ "rustls",
  "serde",
  "structopt",
  "tedge_config",
@@ -2082,6 +2084,7 @@ dependencies = [
  "tokio",
  "toml",
  "url",
+ "webpki",
  "which",
 ]
 
