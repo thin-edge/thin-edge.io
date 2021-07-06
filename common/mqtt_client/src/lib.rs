@@ -99,6 +99,13 @@ impl InflightTracking {
             || self.pending_pubcomp_count.load(Ordering::Relaxed) > 0
     }
 
+    /// Waits until all pending requests have been completed.
+    async fn wait_all_completed(&self) {
+        while self.has_pending() {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
     fn track_publish_request(&self, qos: QoS) {
         self.pending_publish_count.fetch_add(1, Ordering::Relaxed);
         match qos {
@@ -217,6 +224,11 @@ impl Client {
     /// Returns `true` if there are pending inflight messages.
     pub fn has_pending(&self) -> bool {
         self.inflight.has_pending()
+    }
+
+    /// Waits until all pending requests have been completed.
+    pub async fn wait_all_completed(&self) {
+        self.inflight.wait_all_completed().await
     }
 
     /// Process all the MQTT events
