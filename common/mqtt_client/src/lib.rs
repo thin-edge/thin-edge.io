@@ -110,9 +110,12 @@ impl InflightTracking {
     /// Resolves when all pending requests have been completed.
     async fn all_completed(&self) {
         while self.has_pending() {
-            // We use a timeout to avoid missing a notification.
+            // Calling `notify_one()` before `notified().await` is safe, no signal is lost.
+            //
+            // Nevertheless, we still use a timeout (but a larger one) to be on the safe side and
+            // not risk any race condition.
             let _ = tokio::time::timeout(
-                std::time::Duration::from_millis(50),
+                std::time::Duration::from_millis(500),
                 self.notify_completed.notified(),
             )
             .await;
