@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -32,6 +32,8 @@ env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 log = "0.4"
 mqtt_client = {path = "../../common/mqtt_client" }
+strum = "0.21"
+strum_macros = "0.21"
 tokio = { version = "1.6", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"

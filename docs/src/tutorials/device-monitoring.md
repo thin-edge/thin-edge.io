@@ -39,7 +39,7 @@ Simply copy that file to the main collectd configuration file and restart the da
 (it might be good to keep a copy of the original configuration).
 
 ``` shell
-sudo cp /etc/collectd/collectd.conf sudo cp /etc/collectd/collectd.conf.backup
+sudo cp /etc/collectd/collectd.conf /etc/collectd/collectd.conf.backup
 sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 ```

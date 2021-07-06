@@ -1,7 +1,7 @@
 name: hosted-post-merge_version_update
 on:
   workflow_dispatch:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,4 +37,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: release
-          args: patch -vv --no-confirm --token ${{secrets.GITHUB_TOKEN}}
+          args: patch --skip-publish --skip-push --skip-tag -vv --no-dev-version --no-confirm
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          commit-message: Patch version bump
+          delete-branch: true
+          title: Patch version bump
+          body: Patch version bump
+          reviewers: itsyitsy
