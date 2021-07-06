@@ -77,7 +77,7 @@ pub struct Client {
 }
 
 /// Tracks the number of inflight / pending publish requests.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct InflightTracking {
     /// Tracks number of pending publish message until they are
     /// known to be sent out by the event loop.
