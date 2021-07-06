@@ -52,7 +52,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
             Ok(()) => {
                 // Wait until all messages have been published.
                 while mqtt.has_pending() {
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 }
                 Ok(())
             }
