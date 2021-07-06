@@ -23,7 +23,7 @@ use std::sync::{
     atomic::{AtomicIsize, Ordering},
     Arc,
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Notify};
 
 #[automock]
 #[async_trait]
@@ -73,13 +73,88 @@ pub struct Client {
     error_sender: broadcast::Sender<Arc<MqttClientError>>,
     join_handle: tokio::task::JoinHandle<()>,
     requests_tx: rumqttc::Sender<Request>,
+    inflight: Arc<InflightTracking>,
+}
+
+/// Tracks the number of inflight / pending publish requests.
+#[derive(Debug)]
+struct InflightTracking {
     /// Tracks number of pending publish message until they are
     /// known to be sent out by the event loop.
-    pending_publish_count: Arc<AtomicIsize>,
+    pending_publish_count: AtomicIsize,
     /// Tracks number of pending puback's (not completed messages of QoS=1).
-    pending_puback_count: Arc<AtomicIsize>,
+    pending_puback_count: AtomicIsize,
     /// Tracks number of pending pubcomp's (not completed messages of QoS=2).
-    pending_pubcomp_count: Arc<AtomicIsize>,
+    pending_pubcomp_count: AtomicIsize,
+
+    /// Notify on the condition when all requests have completed.
+    notify_completed: Notify,
+}
+
+impl InflightTracking {
+    fn new() -> Self {
+        Self {
+            pending_publish_count: AtomicIsize::new(0),
+            pending_puback_count: AtomicIsize::new(0),
+            pending_pubcomp_count: AtomicIsize::new(0),
+            notify_completed: Notify::new(),
+        }
+    }
+
+    fn has_pending(&self) -> bool {
+        self.pending_publish_count.load(Ordering::Relaxed) > 0
+            || self.pending_puback_count.load(Ordering::Relaxed) > 0
+            || self.pending_pubcomp_count.load(Ordering::Relaxed) > 0
+    }
+
+    /// Resolves when all pending requests have been completed.
+    async fn all_completed(&self) {
+        while self.has_pending() {
+            // Calling `notify_one()` before `notified().await` is safe, no signal is lost.
+            //
+            // Nevertheless, we still use a timeout (but a larger one) to be on the safe side and
+            // not risk any race condition.
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_millis(500),
+                self.notify_completed.notified(),
+            )
+            .await;
+        }
+    }
+
+    fn track_publish_request(&self, qos: QoS) {
+        self.pending_publish_count.fetch_add(1, Ordering::Relaxed);
+        match qos {
+            QoS::AtMostOnce => {}
+            QoS::AtLeastOnce => {
+                self.pending_puback_count.fetch_add(1, Ordering::Relaxed);
+            }
+            QoS::ExactlyOnce => {
+                self.pending_pubcomp_count.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn track_publish_request_sentout(&self) {
+        self.pending_publish_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
+    }
+
+    fn track_publish_qos1_completed(&self) {
+        self.pending_puback_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
+    }
+
+    fn track_publish_qos2_completed(&self) {
+        self.pending_pubcomp_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
+    }
+
+    fn check_completed(&self) {
+        if !self.has_pending() {
+            self.notify_completed.notify_one();
+        }
+    }
 }
 
 // Send a message on a broadcast channel discarding any error.
@@ -138,17 +213,13 @@ impl Client {
         let (message_sender, _) = broadcast::channel(config.queue_capacity);
         let (error_sender, _) = broadcast::channel(config.queue_capacity);
 
-        let pending_publish_count = Arc::new(AtomicIsize::new(0));
-        let pending_puback_count = Arc::new(AtomicIsize::new(0));
-        let pending_pubcomp_count = Arc::new(AtomicIsize::new(0));
+        let inflight = Arc::new(InflightTracking::new());
 
         let join_handle = tokio::spawn(Client::bg_process(
             eventloop,
             message_sender.clone(),
             error_sender.clone(),
-            pending_publish_count.clone(),
-            pending_puback_count.clone(),
-            pending_pubcomp_count.clone(),
+            inflight.clone(),
         ));
 
         Ok(Client {
@@ -158,9 +229,7 @@ impl Client {
             error_sender,
             join_handle,
             requests_tx,
-            pending_publish_count,
-            pending_puback_count,
-            pending_pubcomp_count,
+            inflight,
         })
     }
 
@@ -179,9 +248,12 @@ impl Client {
 
     /// Returns `true` if there are pending inflight messages.
     pub fn has_pending(&self) -> bool {
-        self.pending_publish_count.as_ref().load(Ordering::Relaxed) > 0
-            || self.pending_puback_count.as_ref().load(Ordering::Relaxed) > 0
-            || self.pending_pubcomp_count.as_ref().load(Ordering::Relaxed) > 0
+        self.inflight.has_pending()
+    }
+
+    /// Resolves when all pending requests have been completed.
+    pub async fn all_completed(&self) {
+        self.inflight.all_completed().await
     }
 
     /// Process all the MQTT events
@@ -191,9 +263,7 @@ impl Client {
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
         error_sender: broadcast::Sender<Arc<MqttClientError>>,
-        pending_publish_count: Arc<AtomicIsize>,
-        pending_puback_count: Arc<AtomicIsize>,
-        pending_pubcomp_count: Arc<AtomicIsize>,
+        inflight: Arc<InflightTracking>,
     ) {
         // Delay announcing a QoS=2 message to the client until we have seen a PUBREL.
         let mut pending_received_messages: HashMap<MessageId, Message> = HashMap::new();
@@ -206,7 +276,7 @@ impl Client {
                             send_discarding_error!(message_sender, msg.into());
                         }
                         QoS::ExactlyOnce => {
-                            // Do not annouce the incoming publish message immediatly in case
+                            // Do not announce the incoming publish message immediately in case
                             // of QoS=2. Wait for the PUBREL.
                             let _ = pending_received_messages.insert(msg.pkid, msg.into());
                         }
@@ -221,26 +291,17 @@ impl Client {
                 }
 
                 Ok(Event::Outgoing(Outgoing::Publish(_id))) => {
-                    // Reduce the count for pending messages.
-                    pending_publish_count
-                        .as_ref()
-                        .fetch_sub(1, Ordering::Relaxed);
+                    inflight.track_publish_request_sentout();
                 }
 
                 Ok(Event::Incoming(Packet::PubAck(_))) => {
                     // Reception of PUBACK means that a QoS=1 request completed.
-                    // Reduce the count accordingly.
-                    pending_puback_count
-                        .as_ref()
-                        .fetch_sub(1, Ordering::Relaxed);
+                    inflight.track_publish_qos1_completed();
                 }
 
                 Ok(Event::Incoming(Packet::PubComp(_))) => {
                     // Reception of PUBCOMP means that a QoS=2 request completed.
-                    // Reduce the count accordingly.
-                    pending_pubcomp_count
-                        .as_ref()
-                        .fetch_sub(1, Ordering::Relaxed);
+                    inflight.track_publish_qos2_completed();
                 }
 
                 Ok(Event::Incoming(Incoming::Disconnect))
@@ -294,16 +355,7 @@ impl MqttClient for Client {
             .map_err(|err| MqttClientError::ClientError(rumqttc::ClientError::Request(err)))?;
 
         // Track number of pending publish requests.
-        self.pending_publish_count.fetch_add(1, Ordering::Relaxed);
-        match qos {
-            QoS::AtLeastOnce => {}
-            QoS::AtMostOnce => {
-                self.pending_puback_count.fetch_add(1, Ordering::Relaxed);
-            }
-            QoS::ExactlyOnce => {
-                self.pending_pubcomp_count.fetch_add(1, Ordering::Relaxed);
-            }
-        }
+        self.inflight.track_publish_request(qos);
 
         Ok(())
     }
@@ -401,7 +453,7 @@ impl Config {
         Self { port, ..self }
     }
 
-    /// Update queue_capcity.
+    /// Update queue_capacity.
     pub fn queue_capacity(self, queue_capacity: usize) -> Self {
         Self {
             queue_capacity,
