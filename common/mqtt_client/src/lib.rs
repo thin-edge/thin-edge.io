@@ -73,19 +73,19 @@ pub struct Client {
     error_sender: broadcast::Sender<Arc<MqttClientError>>,
     join_handle: tokio::task::JoinHandle<()>,
     requests_tx: rumqttc::Sender<Request>,
-    inflight: InflightTracking,
+    inflight: Arc<InflightTracking>,
 }
 
 /// Tracks the number of inflight / pending publish requests.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 struct InflightTracking {
     /// Tracks number of pending publish message until they are
     /// known to be sent out by the event loop.
-    pending_publish_count: Arc<AtomicIsize>,
+    pending_publish_count: AtomicIsize,
     /// Tracks number of pending puback's (not completed messages of QoS=1).
-    pending_puback_count: Arc<AtomicIsize>,
+    pending_puback_count: AtomicIsize,
     /// Tracks number of pending pubcomp's (not completed messages of QoS=2).
-    pending_pubcomp_count: Arc<AtomicIsize>,
+    pending_pubcomp_count: AtomicIsize,
 }
 
 impl InflightTracking {
@@ -94,9 +94,9 @@ impl InflightTracking {
     }
 
     fn has_pending(&self) -> bool {
-        self.pending_publish_count.as_ref().load(Ordering::Relaxed) > 0
-            || self.pending_puback_count.as_ref().load(Ordering::Relaxed) > 0
-            || self.pending_pubcomp_count.as_ref().load(Ordering::Relaxed) > 0
+        self.pending_publish_count.load(Ordering::Relaxed) > 0
+            || self.pending_puback_count.load(Ordering::Relaxed) > 0
+            || self.pending_pubcomp_count.load(Ordering::Relaxed) > 0
     }
 
     fn track_publish_request(&self, qos: QoS) {
@@ -113,21 +113,15 @@ impl InflightTracking {
     }
 
     fn track_publish_request_sentout(&self) {
-        self.pending_publish_count
-            .as_ref()
-            .fetch_sub(1, Ordering::Relaxed);
+        self.pending_publish_count.fetch_sub(1, Ordering::Relaxed);
     }
 
     fn track_publish_qos1_completed(&self) {
-        self.pending_puback_count
-            .as_ref()
-            .fetch_sub(1, Ordering::Relaxed);
+        self.pending_puback_count.fetch_sub(1, Ordering::Relaxed);
     }
 
     fn track_publish_qos2_completed(&self) {
-        self.pending_pubcomp_count
-            .as_ref()
-            .fetch_sub(1, Ordering::Relaxed);
+        self.pending_pubcomp_count.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -187,7 +181,7 @@ impl Client {
         let (message_sender, _) = broadcast::channel(config.queue_capacity);
         let (error_sender, _) = broadcast::channel(config.queue_capacity);
 
-        let inflight = InflightTracking::new();
+        let inflight = Arc::new(InflightTracking::new());
 
         let join_handle = tokio::spawn(Client::bg_process(
             eventloop,
@@ -232,7 +226,7 @@ impl Client {
         mut event_loop: rumqttc::EventLoop,
         message_sender: broadcast::Sender<Message>,
         error_sender: broadcast::Sender<Arc<MqttClientError>>,
-        inflight: InflightTracking,
+        inflight: Arc<InflightTracking>,
     ) {
         // Delay announcing a QoS=2 message to the client until we have seen a PUBREL.
         let mut pending_received_messages: HashMap<MessageId, Message> = HashMap::new();
