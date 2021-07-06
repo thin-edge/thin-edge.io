@@ -4,7 +4,7 @@ use std::sync::Arc;
 use thin_edge_json::group::MeasurementGrouper;
 use tracing::{instrument, log::error};
 
-use crate::{
+use crate::collectd_mapper::{
     batcher::{MessageBatchPublisher, MessageBatcher},
     error::DeviceMonitorError,
 };
