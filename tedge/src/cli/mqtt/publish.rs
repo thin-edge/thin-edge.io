@@ -51,7 +51,7 @@ async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
         match mqtt.publish(msg).await {
             Ok(()) => {
                 // Wait until all messages have been published.
-                let () = mqtt.wait_all_completed().await;
+                let () = mqtt.all_completed().await;
                 Ok(())
             }
             Err(err) => Err(err),

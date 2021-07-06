@@ -107,8 +107,8 @@ impl InflightTracking {
             || self.pending_pubcomp_count.load(Ordering::Relaxed) > 0
     }
 
-    /// Waits until all pending requests have been completed.
-    async fn wait_all_completed(&self) {
+    /// Resolves when all pending requests have been completed.
+    async fn all_completed(&self) {
         while self.has_pending() {
             // We use a timeout to avoid missing a notification.
             let _ = tokio::time::timeout(
@@ -248,9 +248,9 @@ impl Client {
         self.inflight.has_pending()
     }
 
-    /// Waits until all pending requests have been completed.
-    pub async fn wait_all_completed(&self) {
-        self.inflight.wait_all_completed().await
+    /// Resolves when all pending requests have been completed.
+    pub async fn all_completed(&self) {
+        self.inflight.all_completed().await
     }
 
     /// Process all the MQTT events
