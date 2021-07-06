@@ -13,8 +13,7 @@ use tokio::{
 };
 use tracing::{error, log::warn};
 
-use crate::collectd::CollectdMessage;
-use crate::error::*;
+use crate::collectd_mapper::{collectd::CollectdMessage, error::DeviceMonitorError};
 
 #[derive(Debug)]
 pub struct MessageBatch {
@@ -218,10 +217,7 @@ mod tests {
     use clock::WallClock;
     use futures::future::{pending, ready};
     use mockall::Sequence;
-    use mqtt_client::MockMqttClient;
-    use mqtt_client::MockMqttErrorStream;
-    use mqtt_client::MockMqttMessageStream;
-    use mqtt_client::QoS;
+    use mqtt_client::{MockMqttClient, MockMqttErrorStream, MockMqttMessageStream, QoS};
     use tokio::time::{self, Instant};
 
     #[test]
@@ -314,7 +310,7 @@ mod tests {
         message_stream
             .expect_next()
             .times(1)
-            .in_sequence(&mut seq) // The second value to be returend by this mock stream
+            .in_sequence(&mut seq) // The second value to be returned by this mock stream
             .returning(|| {
                 Box::pin(async {
                     time::advance(Duration::from_millis(100)).await; // Advance time, but stay within the batching window so that this message is part of the batch
@@ -327,7 +323,7 @@ mod tests {
         message_stream
             .expect_next()
             .times(1)
-            .in_sequence(&mut seq) // The second value to be returend by this mock stream
+            .in_sequence(&mut seq) // The second value to be returned by this mock stream
             .returning(|| {
                 Box::pin(async {
                     time::advance(Duration::from_millis(1000)).await; // Advance time beyond the batching window so that upcoming messages arrive after the window is closed
@@ -342,7 +338,7 @@ mod tests {
         message_stream
             .expect_next()
             .times(0)
-            .in_sequence(&mut seq) // The third value to be returend by this mock stream
+            .in_sequence(&mut seq) // The third value to be returned by this mock stream
             .returning(|| {
                 println!("Third message time: {:?}", Instant::now());
                 Box::pin(async {
@@ -396,7 +392,7 @@ mod tests {
 
         let mut message_stream = build_message_stream_from_messages(vec![
             ("collectd/localhost/temperature/value", 32.5),
-            ("collectd/pressure/value", 98.0), // Erraneous collectd message with invalid topic
+            ("collectd/pressure/value", 98.0), // Erroneous collectd message with invalid topic
             ("collectd/localhost/speed/value", 350.0),
         ]);
 
@@ -419,18 +415,18 @@ mod tests {
         );
         assert_eq!(
             message_grouper.get_measurement_value(Some("pressure"), "value"),
-            None // This measurement isn't included in the batch because the value was erraneous
+            None // This measurement isn't included in the batch because the value was erroneous
         );
         assert_eq!(
             message_grouper.get_measurement_value(Some("speed"), "value"),
-            Some(350.0) // This measurement is included in the batch even though the last message was erraneous
+            Some(350.0) // This measurement is included in the batch even though the last message was erroneous
         );
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn batching_with_erraneous_first_message() -> anyhow::Result<()> {
+    async fn batching_with_erroneous_first_message() -> anyhow::Result<()> {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
 
         let mqtt_client = build_mock_mqtt_client();
@@ -477,7 +473,7 @@ mod tests {
             Ok(Box::new(message_stream))
         });
 
-        return mqtt_client;
+        mqtt_client
     }
 
     fn build_message_stream_from_messages(
@@ -490,7 +486,7 @@ mod tests {
             message_stream
                 .expect_next()
                 .times(1)
-                .in_sequence(&mut seq) // The third value to be returend by this mock stream
+                .in_sequence(&mut seq) // The third value to be returned by this mock stream
                 .returning(move || {
                     let topic = Topic::new(message.0).unwrap();
                     let message = Message::new(&topic, format!("123456789:{}", message.1));
@@ -503,6 +499,6 @@ mod tests {
             .expect_next()
             .returning(|| Box::pin(pending())); // Block the stream with a pending future
 
-        return message_stream;
+        message_stream
     }
 }

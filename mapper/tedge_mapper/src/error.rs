@@ -8,11 +8,6 @@ pub enum MapperError {
     #[error(transparent)]
     MqttClientError(#[from] MqttClientError),
 
-    #[error(
-        "tedge_mapper accepts only one argument. Run `tedge_mapper c8y` or `tedge_mapper az`."
-    )]
-    IncorrectArgument,
-
     #[error("Home directory is not found.")]
     HomeDirNotFound,
 
