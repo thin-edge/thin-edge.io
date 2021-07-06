@@ -23,7 +23,7 @@ use std::sync::{
     atomic::{AtomicIsize, Ordering},
     Arc,
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Notify};
 
 #[automock]
 #[async_trait]
@@ -86,11 +86,19 @@ struct InflightTracking {
     pending_puback_count: AtomicIsize,
     /// Tracks number of pending pubcomp's (not completed messages of QoS=2).
     pending_pubcomp_count: AtomicIsize,
+
+    /// Notify on the condition when all requests have completed.
+    notify_completed: Notify,
 }
 
 impl InflightTracking {
     fn new() -> Self {
-        Self::default()
+        Self {
+            pending_publish_count: AtomicIsize::new(0),
+            pending_puback_count: AtomicIsize::new(0),
+            pending_pubcomp_count: AtomicIsize::new(0),
+            notify_completed: Notify::new(),
+        }
     }
 
     fn has_pending(&self) -> bool {
@@ -102,7 +110,12 @@ impl InflightTracking {
     /// Waits until all pending requests have been completed.
     async fn wait_all_completed(&self) {
         while self.has_pending() {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            // We use a timeout to avoid missing a notification.
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_millis(50),
+                self.notify_completed.notified(),
+            )
+            .await;
         }
     }
 
@@ -121,14 +134,23 @@ impl InflightTracking {
 
     fn track_publish_request_sentout(&self) {
         self.pending_publish_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
     }
 
     fn track_publish_qos1_completed(&self) {
         self.pending_puback_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
     }
 
     fn track_publish_qos2_completed(&self) {
         self.pending_pubcomp_count.fetch_sub(1, Ordering::Relaxed);
+        self.check_completed();
+    }
+
+    fn check_completed(&self) {
+        if !self.has_pending() {
+            self.notify_completed.notify_one();
+        }
     }
 }
 
