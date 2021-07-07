@@ -240,7 +240,7 @@ mod tests {
 
         let message_group = message_batch.end_batch()?;
 
-        assert_matches!(message_group.timestamp, Some(_));
+        assert_matches!(message_group.timestamp(), Some(_));
 
         assert_eq!(
             message_group.get_measurement_value(Some("temperature"), "value"),

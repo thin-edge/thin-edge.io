@@ -6,8 +6,8 @@ use crate::measurement::MeasurementVisitor;
 
 #[derive(Debug)]
 pub struct MeasurementGroup {
-    pub timestamp: Option<DateTime<FixedOffset>>,
-    pub values: HashMap<String, Measurement>,
+    timestamp: Option<DateTime<FixedOffset>>,
+    values: HashMap<String, Measurement>,
 }
 
 impl MeasurementGroup {
@@ -16,6 +16,10 @@ impl MeasurementGroup {
             timestamp: None,
             values: HashMap::new(),
         }
+    }
+
+    pub fn timestamp(&self) -> Option<DateTime<FixedOffset>> {
+        self.timestamp
     }
 
     pub fn is_empty(&self) -> bool {
