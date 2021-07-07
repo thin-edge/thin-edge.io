@@ -1,67 +1,59 @@
-use crate::az_mapper::AzureMapper;
-use crate::c8y_mapper::CumulocityMapper;
-use crate::component::TEdgeComponent;
-use crate::error::*;
+use crate::{
+    az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
+    component::TEdgeComponent, error::*,
+};
 use std::path::PathBuf;
-use std::str::FromStr;
-use strum_macros::*;
+use structopt::*;
 use tedge_config::*;
 
 mod az_converter;
 mod az_mapper;
 mod c8y_converter;
 mod c8y_mapper;
+mod collectd_mapper;
 mod component;
 mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
 
-const DEFAULT_LOG_LEVEL: &str = "warn";
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
-#[derive(EnumString)]
-pub enum ComponentName {
-    #[strum(serialize = "az")]
-    Azure,
-
-    #[strum(serialize = "c8y")]
-    C8y,
+fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
+    match component_name {
+        MapperName::Az => Box::new(AzureMapper::new()),
+        MapperName::Collectd => Box::new(CollectdMapper::new()),
+        MapperName::C8y => Box::new(CumulocityMapper::new()),
+    }
 }
 
-fn lookup_component(component_name: &ComponentName) -> Box<dyn TEdgeComponent> {
-    match component_name {
-        ComponentName::C8y => Box::new(CumulocityMapper::new()),
-        ComponentName::Azure => Box::new(AzureMapper::new()),
-    }
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!()
+)]
+enum MapperName {
+    Az,
+    C8y,
+    Collectd,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-
-    // Only one argument is allowed
-    if args.len() != 2 {
-        return Err(MapperError::IncorrectArgument.into());
-    }
-
     initialise_logging();
 
-    let component_name = ComponentName::from_str(&args[1])?;
-    let component = lookup_component(&component_name);
+    let component = lookup_component(&MapperName::from_args());
 
     let config = tedge_config()?;
-    Ok(component.start(config).await?)
+    component.start(config).await
 }
 
 fn initialise_logging() {
-    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
             TIME_FORMAT.into(),
         ))
-        .with_env_filter(filter)
-        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .init();
 }
 

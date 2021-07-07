@@ -54,12 +54,12 @@ jobs:
           command: deb
           args: -p tedge_mapper
 
-      - name: Build collectd_mapper debian package
+      - name: Build tedge_apt_plugin debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p collectd_mapper
+          args: -p tedge_apt_plugin
 
       - name: build examples for amd64
         uses: actions-rs/cargo@v1
@@ -161,12 +161,12 @@ jobs:
           command: deb
           args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
 
-      - name: build collectd_mapper debian package for target
+      - name: build tedge_apt_plugin debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p collectd_mapper --no-strip --no-build --target=${{ matrix.target }}
+          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build examples
         uses: actions-rs/cargo@v1

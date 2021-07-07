@@ -31,7 +31,7 @@ Error: failed to create a test certificate for the device +.
 
 Caused by:
     0: DeviceID Error
-    1: The string '"+"' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) , - . : ? % * _ ! @]
+    1: The string '"+"' contains characters which cannot be used in a name [use only A-Z, a-z, 0-9, ' = ( ) , - . ? % * _ ! @]
 ```
 
 

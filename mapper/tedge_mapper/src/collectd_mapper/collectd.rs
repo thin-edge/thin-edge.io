@@ -211,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_collectd_payload_no_seperator() {
+    fn invalid_collectd_payload_no_separator() {
         let payload = "123456789";
         let result = CollectdPayload::parse_from(payload);
 
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_collectd_payload_more_seperators() {
+    fn invalid_collectd_payload_more_separators() {
         let payload = "123456789:98.6:abc";
         let result = CollectdPayload::parse_from(payload);
 

@@ -1,7 +1,7 @@
 # Monitor your device with collectd
 
 With thin-edge.io device monitoring, you can collect metrics from your device
-and forward these device metrics to IoT platforms in the cloud. 
+and forward these device metrics to IoT platforms in the cloud.
 
 Using these metrics, you can monitor the health of devices
 and can proactively initiate actions in case the device seems to malfunction.
@@ -61,12 +61,12 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
    * Here is a config snippet to configure the MQTT write plugin:
      ```
         LoadPlugin mqtt
-        
+
         <Plugin mqtt>
             <Publish "tedge">
                 Host "localhost"
                 Port 1883
-                ClientId "tedge-dm"
+                ClientId "tedge-collectd"
             </Publish>
         </Plugin>
      ```
@@ -86,9 +86,9 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
      filtering out every metric emitted by the memory plugin other than the used metric":
     ```
         PreCacheChain "PreCache"
-        
+
         LoadPlugin match_regex
-        
+
         <Chain "PreCache">
             <Rule "memory_free_only">
                 <Match "regex">
@@ -101,15 +101,15 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
                 Target "stop"
             </Rule>
         </Chain>
-    ```    
-     
+    ```
+
 ## Enable thin-edge monitoring
 
-To enable monitoring on your device, you have to launch the `collectd-mapper` daemon process.
+To enable monitoring on your device, you have to launch the `tedge-mapper-collectd` daemon process.
 
 ``` shell
-sudo systemctl enable collectd-mapper
-sudo systemctl start collectd-mapper
+sudo systemctl enable tedge-mapper-collectd
+sudo systemctl start tedge-mapper-collectd
 ```
 
 This process subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
@@ -129,7 +129,7 @@ $ tedge mqtt sub 'collectd/#'
 
 ```
 
-The `collectd-mapper` translates these collectd measurements into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
+The `tedge-mapper-collectd` translates these collectd measurements into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
 [grouping the measurements](../references/bridged-topics.md#collectd-topics) emitted by each plugin:
 
 ```
