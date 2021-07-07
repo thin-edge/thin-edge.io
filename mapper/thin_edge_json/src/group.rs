@@ -216,18 +216,27 @@ mod tests {
         }
     }
 
+    // XXX: These test cases should be split into those test cases that test the MeasurementGrouper and
+    // those that test the MeasurementGroup.
     #[test]
     fn new_measurement_grouper_is_empty() -> anyhow::Result<()> {
         let grouper = MeasurementGrouper::new();
         let group = grouper.end()?;
         assert!(group.is_empty());
 
+        Ok(())
+    }
+
+    #[test]
+    fn empty_measurement_group_visits_nothing() -> anyhow::Result<()> {
+        let group = MeasurementGroup::new();
+
         let mut mock = MockGroupedVisitor::new();
         mock.expect_visit_measurement().never();
         mock.expect_visit_start_group().never();
         mock.expect_visit_end_group().never();
 
-        let _ = group.accept(&mut mock);
+        let _ = group.accept(&mut mock)?;
 
         Ok(())
     }
