@@ -7,7 +7,7 @@ Validate apt plugin remove
 Using `rolldice` as a guinea pig: [small and without impacts](https://askubuntu.com/questions/422362/very-small-package-for-apt-get-experimentation)
 """
 
-class AptPluginTest(BaseTest):
+class AptPluginRemoveTest(BaseTest):
     def setup(self):
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"

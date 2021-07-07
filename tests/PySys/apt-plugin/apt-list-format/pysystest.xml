@@ -15,7 +15,7 @@
         </modes>
     </classification>
     <data>
-        <class name="AptPluginTest" module="run"/>
+        <class name="AptPluginListTest" module="run"/>
     </data>
     <traceability>
         <requirements>
