@@ -54,6 +54,13 @@ jobs:
           command: deb
           args: -p tedge_mapper
 
+      - name: Build tedge_apt_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_apt_plugin
+
       - name: build examples for amd64
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -141,6 +148,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+ 
+      - name: build tedge_apt_plugin debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p build tedge_apt_plugin --no-strip --no-build --target=${{ env.TARGET }}
 
       - name: build examples
         uses: actions-rs/cargo@v1

@@ -2049,6 +2049,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_apt_plugin"
+version = "0.1.0"
+dependencies = [
+ "structopt",
+ "thiserror",
+]
+
+[[package]]
 name = "tedge_config"
 version = "0.2.1"
 dependencies = [
