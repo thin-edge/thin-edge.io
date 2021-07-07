@@ -154,7 +154,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p build tedge_apt_plugin --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ env.TARGET }}
 
       - name: build examples
         uses: actions-rs/cargo@v1
