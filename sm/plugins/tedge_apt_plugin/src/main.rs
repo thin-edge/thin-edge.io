@@ -62,7 +62,7 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
                 .args(vec![
                     "-F",
                     "[/ ]",
-                    r#"{print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}"#,
+                    r#"{if ($1 != "Listing...") { print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}}"#,
                 ])
                 .stdin(apt.stdout.unwrap()) // Cannot panics: apt.stdout has been set
                 .status()
