@@ -31,9 +31,6 @@ class AptPluginListTest(BaseTest):
         grep_version = open(self.output + '/dpkg_query.out', 'r').read().strip()
         self.assertGrep ("apt_plugin.out", '{"name":"grep","version":"'+ grep_version + '"}', contains=True)
 
-        # systemd is installed but should not be listed
-        self.assertGrep ("apt_plugin.out", '"name":"systemd"', contains=False)
-
     def validate_json(self):
         f = open(self.output + '/apt_plugin.out', 'r')
         lines = f.readlines()
