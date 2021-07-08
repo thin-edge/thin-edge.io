@@ -86,8 +86,12 @@ where
                     let timestamp_str: &str = map.next_value()?;
                     let timestamp = DateTime::parse_from_rfc3339(timestamp_str).map_err(|err| {
                         de::Error::custom(format!(
-"Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}",
-    timestamp_str, err))
+                            concat!(
+                                "Invalid ISO8601 timestamp ",
+                                "(expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}"
+                            ),
+                            timestamp_str, err
+                        ))
                     })?;
 
                     let () = self
