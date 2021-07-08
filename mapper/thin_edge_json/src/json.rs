@@ -116,8 +116,7 @@ impl ThinEdgeJson {
     pub fn from_str(
         json_string: &str,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
-        use crate::builder::*;
-        let mut builder = ThinEdgeJsonBuilder::new();
+        let mut builder = crate::builder::ThinEdgeJsonBuilder::new();
         let () = parse_str(json_string, &mut builder)?;
         Ok(builder.done()?)
     }
