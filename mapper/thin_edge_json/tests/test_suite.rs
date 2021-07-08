@@ -52,12 +52,12 @@ fn it_transforms_valid_thin_edge_json() -> anyhow::Result<()> {
 
         assert_eq!(output_json_parser, output_stream_parser);
 
-        if let Ok(expected_output) = std::fs::read_to_string(fixture.path().with_extension("exp")) {
+        if let Ok(expected_output) = std::fs::read_to_string(fixture.path().with_extension("expected_output")) {
             assert_eq!(expected_output, output_json_parser);
             assert_eq!(expected_output, output_stream_parser);
         } else {
             // we don't have a test fixture yet. Create one and abort.
-            std::fs::write(fixture.path().with_extension("exp"), output_json_parser)?;
+            std::fs::write(fixture.path().with_extension("expected_output"), output_json_parser)?;
             had_missing_test_fixtures = true;
         }
     }
