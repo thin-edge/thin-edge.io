@@ -50,7 +50,7 @@ where
 struct ThinEdgeValueParser<'key, 'vis, T> {
     /// Recursion depth.
     ///
-    /// When `depth = 0`, we accept both number of multi-value measurements.
+    /// When `depth = 0`, we accept both number or multi-value measurements.
     /// When `depth > 0`, we only accept numbers.
     depth: usize,
     /// The associated key of the single or multi-value measurement.
