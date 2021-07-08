@@ -32,14 +32,14 @@ env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 futures = "0.3"
 log = "0.4"
-mockall = "0.9"
+mockall = "0.10"
 mqtt_client = {path = "../../common/mqtt_client" }
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
 thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
-tokio = { version = "1.6", features = ["rt", "sync", "time"] }
+tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
 
