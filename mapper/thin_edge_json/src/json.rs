@@ -9,16 +9,49 @@ pub struct ThinEdgeJson {
     pub values: Vec<ThinEdgeValue>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ThinEdgeValue {
     Single(SingleValueMeasurement),
     Multi(MultiValueMeasurement),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SingleValueMeasurement {
     pub name: String,
     pub value: f64,
+}
+
+impl<T> From<(T, f64)> for SingleValueMeasurement
+where
+    T: Into<String>,
+{
+    fn from((name, value): (T, f64)) -> Self {
+        SingleValueMeasurement {
+            name: name.into(),
+            value,
+        }
+    }
+}
+
+impl<T> From<(T, f64)> for ThinEdgeValue
+where
+    T: Into<String>,
+{
+    fn from((name, value): (T, f64)) -> Self {
+        ThinEdgeValue::Single((name, value).into())
+    }
+}
+
+impl<T> From<(T, Vec<SingleValueMeasurement>)> for ThinEdgeValue
+where
+    T: Into<String>,
+{
+    fn from((name, values): (T, Vec<SingleValueMeasurement>)) -> Self {
+        ThinEdgeValue::Multi(MultiValueMeasurement {
+            name: name.into(),
+            values,
+        })
+    }
 }
 
 impl SingleValueMeasurement {
@@ -35,20 +68,20 @@ impl SingleValueMeasurement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MultiValueMeasurement {
     pub name: String,
     pub values: Vec<SingleValueMeasurement>,
 }
 
-struct ThinEdgeJsonBuilder {
+pub struct ThinEdgeJsonBuilder {
     timestamp: Option<DateTime<FixedOffset>>,
     inside_group: Option<MultiValueMeasurement>,
     measurements: Vec<ThinEdgeValue>,
 }
 
 impl ThinEdgeJsonBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             timestamp: None,
             inside_group: None,
@@ -56,7 +89,7 @@ impl ThinEdgeJsonBuilder {
         }
     }
 
-    fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
+    pub fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
         if self.inside_group.is_some() {
             return Err(ThinEdgeJsonError::UnexpectedOpenGroup);
         }
