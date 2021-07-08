@@ -21,6 +21,7 @@ mockall = "0.10"
 pretty_assertions = "0.7"
 proptest = "1.0"
 criterion = "0.3"
+walkdir = "2"
 
 [[bench]]
 name = "parsing"

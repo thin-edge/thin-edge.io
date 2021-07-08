@@ -2149,11 +2149,11 @@ dependencies = [
  "json",
  "json-writer",
  "mockall",
- "pretty_assertions",
  "proptest",
  "serde",
  "serde_json",
  "thiserror",
+ "walkdir",
 ]
 
 [[package]]

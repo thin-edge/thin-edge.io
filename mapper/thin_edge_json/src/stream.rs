@@ -73,6 +73,8 @@ where
     where
         V: MapAccess<'de>,
     {
+        let mut measurements_count: usize = 0;
+
         while let Some(key) = map.next_key()? {
             let key: Cow<str> = key;
 
@@ -100,9 +102,15 @@ where
                     };
 
                     let () = map.next_value_seed(parser)?;
+                    measurements_count += 1;
                 }
             }
         }
+
+        if measurements_count == 0 {
+            return Err(de::Error::custom(invalid_empty_root()));
+        }
+
         Ok(())
     }
 }
@@ -137,6 +145,8 @@ where
             .visit_start_group(self.key.as_ref())
             .map_err(de::Error::custom)?;
 
+        let mut measurements_count: usize = 0;
+
         while let Some(key) = map.next_key()? {
             let parser = ThinEdgeValueParser {
                 depth: self.depth + 1,
@@ -145,6 +155,11 @@ where
             };
 
             let () = map.next_value_seed(parser)?;
+            measurements_count += 1;
+        }
+
+        if measurements_count == 0 {
+            return Err(de::Error::custom(invalid_empty_measurement(&self.key)));
         }
 
         let () = self.visitor.visit_end_group().map_err(de::Error::custom)?;
@@ -238,6 +253,17 @@ fn invalid_timestamp(value: &str, err: impl std::fmt::Display) -> String {
     format!(
         "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}",
         value, err
+    )
+}
+
+fn invalid_empty_root() -> &'static str {
+    "Empty Thin Edge measurement: it must contain at least one measurement"
+}
+
+fn invalid_empty_measurement(key: &str) -> String {
+    format!(
+        "Empty Thin Edge measurement: {:?} must contain at least one measurement",
+        key
     )
 }
 
