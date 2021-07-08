@@ -1,8 +1,8 @@
 [package]
 name = "clock"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2018"
 
 [dependencies]
 chrono = "0.4"
-mockall = "0.9"
+mockall = "0.10"
