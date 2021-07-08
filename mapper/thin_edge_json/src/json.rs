@@ -1,159 +1,7 @@
+use crate::data::*;
 use crate::measurement::MeasurementVisitor;
 use chrono::{format::ParseError, prelude::*};
 use json::JsonValue;
-
-/// Before populating the struct members the thin edge json values and names will be validated
-#[derive(Debug)]
-pub struct ThinEdgeJson {
-    pub timestamp: Option<DateTime<FixedOffset>>,
-    pub values: Vec<ThinEdgeValue>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ThinEdgeValue {
-    Single(SingleValueMeasurement),
-    Multi(MultiValueMeasurement),
-}
-
-#[derive(Debug, PartialEq)]
-pub struct SingleValueMeasurement {
-    pub name: String,
-    pub value: f64,
-}
-
-impl<T> From<(T, f64)> for SingleValueMeasurement
-where
-    T: Into<String>,
-{
-    fn from((name, value): (T, f64)) -> Self {
-        SingleValueMeasurement {
-            name: name.into(),
-            value,
-        }
-    }
-}
-
-impl<T> From<(T, f64)> for ThinEdgeValue
-where
-    T: Into<String>,
-{
-    fn from((name, value): (T, f64)) -> Self {
-        ThinEdgeValue::Single((name, value).into())
-    }
-}
-
-impl<T> From<(T, Vec<SingleValueMeasurement>)> for ThinEdgeValue
-where
-    T: Into<String>,
-{
-    fn from((name, values): (T, Vec<SingleValueMeasurement>)) -> Self {
-        ThinEdgeValue::Multi(MultiValueMeasurement {
-            name: name.into(),
-            values,
-        })
-    }
-}
-
-impl SingleValueMeasurement {
-    fn new(name: impl Into<String>, value: f64) -> Result<Self, ThinEdgeJsonError> {
-        if value == 0.0 || value.is_normal() {
-            let single_value = SingleValueMeasurement {
-                name: name.into(),
-                value,
-            };
-            Ok(single_value)
-        } else {
-            Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber { name: name.into() })
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct MultiValueMeasurement {
-    pub name: String,
-    pub values: Vec<SingleValueMeasurement>,
-}
-
-pub struct ThinEdgeJsonBuilder {
-    timestamp: Option<DateTime<FixedOffset>>,
-    inside_group: Option<MultiValueMeasurement>,
-    measurements: Vec<ThinEdgeValue>,
-}
-
-impl ThinEdgeJsonBuilder {
-    pub fn new() -> Self {
-        Self {
-            timestamp: None,
-            inside_group: None,
-            measurements: Vec::new(),
-        }
-    }
-
-    pub fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
-        if self.inside_group.is_some() {
-            return Err(ThinEdgeJsonError::UnexpectedOpenGroup);
-        }
-
-        if self.measurements.is_empty() {
-            return Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot);
-        }
-
-        Ok(ThinEdgeJson {
-            timestamp: self.timestamp,
-            values: self.measurements,
-        })
-    }
-}
-
-impl MeasurementVisitor for ThinEdgeJsonBuilder {
-    type Error = ThinEdgeJsonError;
-
-    fn visit_timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
-        match self.timestamp {
-            None => {
-                self.timestamp = Some(value);
-                Ok(())
-            }
-            Some(_) => Err(ThinEdgeJsonError::DuplicatedTimestamp),
-        }
-    }
-
-    fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
-        let measurement = SingleValueMeasurement::new(name, value)?;
-        if let Some(group) = &mut self.inside_group {
-            group.values.push(measurement);
-        } else {
-            self.measurements.push(ThinEdgeValue::Single(measurement));
-        }
-        Ok(())
-    }
-
-    fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.inside_group.is_none() {
-            self.inside_group = Some(MultiValueMeasurement {
-                name: group.into(),
-                values: Vec::new(),
-            });
-            Ok(())
-        } else {
-            Err(ThinEdgeJsonError::UnexpectedStartOfGroup)
-        }
-    }
-
-    fn visit_end_group(&mut self) -> Result<(), Self::Error> {
-        match self.inside_group.take() {
-            Some(group) => {
-                if group.values.is_empty() {
-                    return Err(ThinEdgeJsonError::EmptyThinEdgeJson { name: group.name });
-                } else {
-                    self.measurements.push(ThinEdgeValue::Multi(group))
-                }
-            }
-            None => return Err(ThinEdgeJsonError::UnexpectedEndOfGroup),
-        }
-        Ok(())
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'static> {
@@ -191,8 +39,9 @@ pub fn parse_str<T: MeasurementVisitor>(
                     match value {
                         // Single Value object
                         JsonValue::Number(num) => {
+                            let value = validate_measurement_value((*num).into(), key)?;
                             let () = visitor
-                                .visit_measurement(key, (*num).into())
+                                .visit_measurement(key, value)
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
                         }
                         // Multi value object
@@ -205,8 +54,9 @@ pub fn parse_str<T: MeasurementVisitor>(
                                 match v {
                                     JsonValue::Number(num) => {
                                         // Single Value object
+                                        let value = validate_measurement_value((*num).into(), k)?;
                                         let () = visitor
-                                            .visit_measurement(k, (*num).into())
+                                            .visit_measurement(k, value)
                                             .map_err(ThinEdgeJsonParserError::VisitorError)?;
                                     }
                                     JsonValue::Object(_object) => {
@@ -244,6 +94,14 @@ pub fn parse_str<T: MeasurementVisitor>(
     Ok(())
 }
 
+fn validate_measurement_value(value: f64, name: &str) -> Result<f64, ThinEdgeJsonError> {
+    if value == 0.0 || value.is_normal() {
+        Ok(value)
+    } else {
+        Err(ThinEdgeJsonError::InvalidThinEdgeJsonNumber { name: name.into() })
+    }
+}
+
 fn parse_from_rfc3339(timestamp: &str) -> Result<DateTime<FixedOffset>, ThinEdgeJsonError> {
     let time = DateTime::parse_from_rfc3339(&timestamp).map_err(|err| {
         ThinEdgeJsonError::InvalidTimestamp {
@@ -258,17 +116,10 @@ impl ThinEdgeJson {
     pub fn from_str(
         json_string: &str,
     ) -> Result<ThinEdgeJson, ThinEdgeJsonParserError<ThinEdgeJsonError>> {
+        use crate::builder::*;
         let mut builder = ThinEdgeJsonBuilder::new();
         let () = parse_str(json_string, &mut builder)?;
         Ok(builder.done()?)
-    }
-
-    pub fn has_timestamp(&self) -> bool {
-        self.timestamp.is_some()
-    }
-
-    pub fn set_timestamp(&mut self, timestamp: DateTime<FixedOffset>) {
-        self.timestamp = Option::from(timestamp)
     }
 }
 

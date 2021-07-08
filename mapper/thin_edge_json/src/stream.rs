@@ -228,7 +228,7 @@ where
 
 #[test]
 fn can_deserialize_thin_edge_json() -> anyhow::Result<()> {
-    use crate::json::ThinEdgeJsonBuilder;
+    use crate::builder::ThinEdgeJsonBuilder;
     let input = r#"{
             "time" : "2021-04-30T17:03:14.123+02:00",
             "pressure": 123.4,
