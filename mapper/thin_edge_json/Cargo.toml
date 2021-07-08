@@ -22,6 +22,7 @@ pretty_assertions = "0.7"
 proptest = "1.0"
 criterion = "0.3"
 walkdir = "2"
+stats_alloc = "0.1.8"
 
 [[bench]]
 name = "parsing"
