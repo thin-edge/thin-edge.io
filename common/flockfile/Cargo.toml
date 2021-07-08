@@ -9,7 +9,7 @@ thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 log = "0.4"
-nix = "0.20"
+nix = "0.21"
 
 [dev-dependencies]
 assert_matches = "1.5"
