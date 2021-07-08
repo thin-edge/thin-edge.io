@@ -84,22 +84,15 @@ where
                 }
                 "time" => {
                     let timestamp_str: &str = map.next_value()?;
-                    let timestamp = DateTime::parse_from_rfc3339(timestamp_str).map_err(|err| {
-                        de::Error::custom(format!(
-                            concat!(
-                                "Invalid ISO8601 timestamp ",
-                                "(expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}"
-                            ),
-                            timestamp_str, err
-                        ))
-                    })?;
+                    let timestamp = DateTime::parse_from_rfc3339(timestamp_str)
+                        .map_err(|err| de::Error::custom(invalid_timestamp(timestamp_str, err)))?;
 
                     let () = self
                         .visitor
                         .visit_timestamp(timestamp)
                         .map_err(de::Error::custom)?;
                 }
-                _ => {
+                _key => {
                     let parser = ThinEdgeValueParser {
                         depth: 0,
                         key,
@@ -176,6 +169,10 @@ where
     where
         E: serde::de::Error,
     {
+        if value != 0.0 && !value.is_normal() {
+            return Err(de::Error::custom(invalid_json_number(&self.key)));
+        }
+
         let () = self
             .visitor
             .visit_measurement(self.key.as_ref(), value)
@@ -190,7 +187,7 @@ where
         E: serde::de::Error,
     {
         let value = i32::try_from(value)
-            .map_err(|_| de::Error::custom("Numeric conversion from i64 to f64 failed"))?
+            .map_err(|_| de::Error::custom(invalid_json_number(&self.key)))?
             .into();
 
         self.visit_f64(value)
@@ -202,7 +199,7 @@ where
         E: serde::de::Error,
     {
         let value = u32::try_from(value)
-            .map_err(|_| de::Error::custom("Numeric conversion from u64 to f64 failed"))?
+            .map_err(|_| de::Error::custom(invalid_json_number(&self.key)))?
             .into();
 
         self.visit_f64(value)
@@ -228,6 +225,20 @@ where
         // Use `self` as `de::Visitor`
         deserializer.deserialize_any(self)
     }
+}
+
+fn invalid_json_number(key: &str) -> String {
+    format!(
+        "Number out-of-range: the {:?} value is too large to be represented as a float64.",
+        key
+    )
+}
+
+fn invalid_timestamp(value: &str, err: impl std::fmt::Display) -> String {
+    format!(
+        "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}",
+        value, err
+    )
 }
 
 #[test]
