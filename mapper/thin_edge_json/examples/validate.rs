@@ -1,5 +1,5 @@
-use std::env;
 use chrono::prelude::*;
+use std::env;
 use thin_edge_json::measurement::MeasurementVisitor;
 
 #[global_allocator]
@@ -17,16 +17,9 @@ fn main() -> anyhow::Result<()> {
 
     let mut builder = DummyVisitor;
 
-    let res: anyhow::Result<()> =
-    match parser.as_str() {
-        "json" => {
-            thin_edge_json::json::parse_str(&input, &mut builder)
-                .map_err(Into::into)
-        }
-        "stream" => {
-            thin_edge_json::stream::parse_str(&input, &mut builder)
-                .map_err(Into::into)
-        }
+    let res: anyhow::Result<()> = match parser.as_str() {
+        "json" => thin_edge_json::json::parse_str(&input, &mut builder).map_err(Into::into),
+        "stream" => thin_edge_json::stream::parse_str(&input, &mut builder).map_err(Into::into),
         _ => {
             anyhow::bail!("Invalid parser: either `json` or `stream`.");
         }
@@ -62,4 +55,3 @@ impl MeasurementVisitor for DummyVisitor {
         Ok(())
     }
 }
-
