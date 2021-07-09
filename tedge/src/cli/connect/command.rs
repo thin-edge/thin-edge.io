@@ -7,6 +7,7 @@ use crate::{
 };
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
 use tempfile::NamedTempFile;
@@ -27,6 +28,7 @@ pub struct ConnectCommand {
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
+    pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
 pub enum Cloud {
@@ -87,7 +89,7 @@ impl Command for ConnectCommand {
             &bridge_config,
             &self.cloud,
             &updated_mosquitto_config,
-            &DummySystemServiceManager, // XXX
+            self.service_manager.as_ref(),
             &self.config_location,
         )?;
 

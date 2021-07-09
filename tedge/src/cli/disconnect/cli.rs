@@ -1,7 +1,5 @@
 use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
-use crate::system_services::*;
-use std::sync::Arc;
 use structopt::StructOpt;
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
@@ -23,14 +21,14 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
-                service_manager: Arc::new(DummySystemServiceManager), // XXX
+                service_manager: context.service_manager.clone(),
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_location: context.config_location,
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
-                service_manager: Arc::new(DummySystemServiceManager), // XXX
+                service_manager: context.service_manager.clone(),
             },
         };
         Ok(cmd.into_boxed())

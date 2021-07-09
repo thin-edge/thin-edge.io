@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use crate::system_services::*;
 use anyhow::Context;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 mod cli;
 mod command;
 mod error;
-// mod services;
 mod system_services;
 mod utils;
 
@@ -35,6 +36,7 @@ fn main() -> anyhow::Result<()> {
     let build_context = BuildContext {
         config_repository,
         config_location: tedge_config_location,
+        service_manager: Arc::new(SystemdServiceManager::new(context.user_manager.clone())),
     };
 
     let cmd = opt

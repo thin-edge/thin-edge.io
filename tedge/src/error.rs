@@ -20,7 +20,4 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     MqttClientError(#[from] mqtt_client::MqttClientError),
-
-    #[error(transparent)]
-    SystemServiceError(crate::system_services::SystemServiceError),
 }
