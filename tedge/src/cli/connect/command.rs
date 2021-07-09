@@ -1,15 +1,18 @@
-use crate::cli::connect::*;
-use crate::command::{Command, ExecutionContext};
-use crate::services::{
-    self, mosquitto::MosquittoService, tedge_mapper::TedgeMapperService, SystemdService,
+use crate::{
+    cli::connect::*,
+    command::{Command, ExecutionContext},
+    services::{
+        self, mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
+        tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
+    },
+    utils::paths,
+    ConfigError,
 };
-use crate::utils::paths;
-use crate::utils::users::UserManager;
-use crate::ConfigError;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tedge_config::*;
+use tedge_users::{UserManager, ROOT_USER};
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
@@ -23,6 +26,7 @@ const MQTT_TLS_PORT: u16 = 8883;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
+    pub config_location: TEdgeConfigLocation,
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
@@ -53,29 +57,36 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+        let mut config = self.config_repository.load()?;
+
         if self.is_test_connection {
-            return match self.check_connection() {
+            return match self.check_connection(&config) {
                 Ok(()) => Ok(()),
                 Err(err) => Err(err.into()),
             };
         }
 
-        let mut config = self.config_repository.load()?;
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
             Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
         }
         let bridge_config = self.bridge_config(&config)?;
-        self.config_repository.store(config)?;
+        let updated_mosquitto_config = self
+            .common_mosquitto_config
+            .clone()
+            .with_port(config.query(MqttPortSetting)?.into());
+        self.config_repository.store(&config)?;
 
         new_bridge(
             &bridge_config,
-            &self.common_mosquitto_config,
+            &self.cloud,
+            &updated_mosquitto_config,
             &context.user_manager,
+            &self.config_location,
         )?;
 
-        if self.check_connection().is_err() {
+        if self.check_connection(&config).is_err() {
             println!(
                 "Warning: Bridge has been configured, but {} connection check failed.\n",
                 self.cloud.as_str()
@@ -117,14 +128,15 @@ impl ConnectCommand {
         }
     }
 
-    fn check_connection(&self) -> Result<(), ConnectError> {
+    fn check_connection(&self, config: &TEdgeConfig) -> Result<(), ConnectError> {
+        let port = config.query(MqttPortSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
-            Cloud::Azure => check_connection_azure(),
-            Cloud::C8y => check_connection_c8y(),
+            Cloud::Azure => check_connection_azure(port),
+            Cloud::C8y => check_connection_c8y(port),
         }
     }
 }
@@ -150,7 +162,7 @@ where
 // the check can finish in the second try as there is no error response in the first try.
 
 #[tokio::main]
-async fn check_connection_c8y() -> Result<(), ConnectError> {
+async fn check_connection_c8y(port: u16) -> Result<(), ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
     const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -158,14 +170,15 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
     let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
     let mut error_response = mqtt.subscribe(c8y_error_sub_topic.filter()).await?;
 
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
 
     let _task_handle = tokio::spawn(async move {
         while let Some(message) = error_response.next().await {
-            if std::str::from_utf8(&message.payload)
+            if message
+                .payload_str()
                 .unwrap_or("")
                 .contains("41,100,Device already existing")
             {
@@ -178,9 +191,17 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
     for i in 0..2 {
         print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        // 100: Device creation
-        mqtt.publish(Message::new(&c8y_msg_pub_topic, "100"))
-            .await?;
+        if timeout(
+            RESPONSE_TIMEOUT,
+            // 100: Device creation
+            mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
+        )
+        .await
+        .is_err()
+        {
+            println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+            return Err(ConnectError::TimeoutElapsedError);
+        }
 
         let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
         match fut.await {
@@ -210,7 +231,7 @@ async fn check_connection_c8y() -> Result<(), ConnectError> {
 // Here if the status is 200 then it's success.
 
 #[tokio::main]
-async fn check_connection_azure() -> Result<(), ConnectError> {
+async fn check_connection_azure(port: u16) -> Result<(), ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
@@ -218,7 +239,7 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
     let device_twin_pub_topic = Topic::new(AZURE_TOPIC_DEVICE_TWIN_UPSTREAM)?;
     let device_twin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM)?;
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default()).await?;
+    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
     let mut device_twin_response = mqtt.subscribe(device_twin_sub_filter).await?;
 
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
@@ -234,8 +255,16 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
         }
     });
 
-    mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string()))
-        .await?;
+    if timeout(
+        RESPONSE_TIMEOUT,
+        mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string())),
+    )
+    .await
+    .is_err()
+    {
+        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+        return Err(ConnectError::TimeoutElapsedError);
+    }
 
     let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
     match fut.await {
@@ -251,28 +280,32 @@ async fn check_connection_azure() -> Result<(), ConnectError> {
 
 fn new_bridge(
     bridge_config: &BridgeConfig,
+    cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
     user_manager: &UserManager,
+    config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if systemd is available.\n");
     let () = services::systemd_available()?;
 
     println!("Checking if configuration for requested bridge already exists.\n");
-    let () = bridge_config_exists(bridge_config)?;
+    let () = bridge_config_exists(config_location, bridge_config)?;
 
     println!("Validating the bridge certificates.\n");
     let () = bridge_config.validate()?;
 
     println!("Saving configuration for requested bridge.\n");
-    if let Err(err) = write_bridge_config_to_file(bridge_config, common_mosquitto_config) {
+    if let Err(err) =
+        write_bridge_config_to_file(config_location, bridge_config, common_mosquitto_config)
+    {
         // We want to preserve previous errors and therefore discard result of this function.
-        let _ = clean_up(bridge_config);
+        let _ = clean_up(config_location, bridge_config);
         return Err(err);
     }
 
     println!("Restarting mosquitto service.\n");
     if let Err(err) = MosquittoService.restart(user_manager) {
-        clean_up(bridge_config)?;
+        clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
 
@@ -286,7 +319,7 @@ fn new_bridge(
 
     println!("Persisting mosquitto on reboot.\n");
     if let Err(err) = MosquittoService.enable(user_manager) {
-        clean_up(bridge_config)?;
+        clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
 
@@ -298,7 +331,14 @@ fn new_bridge(
         if which("tedge_mapper").is_err() {
             println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
         } else {
-            start_and_enable_tedge_mapper(user_manager);
+            match cloud {
+                Cloud::Azure => {
+                    start_and_enable_tedge_mapper_az(user_manager);
+                }
+                Cloud::C8y => {
+                    start_and_enable_tedge_mapper_c8y(user_manager);
+                }
+            }
         }
     }
 
@@ -307,14 +347,20 @@ fn new_bridge(
 
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
-fn clean_up(bridge_config: &BridgeConfig) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(bridge_config)?;
-    let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+fn clean_up(
+    config_location: &TEdgeConfigLocation,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    let path = get_bridge_config_file_path(config_location, bridge_config);
+    let _ = std::fs::remove_file(&path).or_else(paths::ok_if_not_found)?;
     Ok(())
 }
 
-fn bridge_config_exists(bridge_config: &BridgeConfig) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(bridge_config)?;
+fn bridge_config_exists(
+    config_location: &TEdgeConfigLocation,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    let path = get_bridge_config_file_path(config_location, bridge_config);
     if Path::new(&path).exists() {
         return Err(ConnectError::ConfigurationExists {
             cloud: bridge_config.cloud_name.to_string(),
@@ -324,45 +370,43 @@ fn bridge_config_exists(bridge_config: &BridgeConfig) -> Result<(), ConnectError
 }
 
 fn write_bridge_config_to_file(
+    config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = paths::build_path_for_sudo_or_user(&[TEDGE_BRIDGE_CONF_DIR_PATH])?;
+    let dir_path = config_location
+        .tedge_config_root_path
+        .join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     let _ = paths::create_directories(&dir_path)?;
 
     let mut common_temp_file = NamedTempFile::new()?;
     common_mosquitto_config.serialize(&mut common_temp_file)?;
-    let common_config_path = get_common_mosquitto_config_file_path(common_mosquitto_config)?;
+    let common_config_path =
+        get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
     let () = paths::persist_tempfile(common_temp_file, &common_config_path)?;
 
     let mut temp_file = NamedTempFile::new()?;
     bridge_config.serialize(&mut temp_file)?;
-    let config_path = get_bridge_config_file_path(bridge_config)?;
+    let config_path = get_bridge_config_file_path(config_location, bridge_config);
     let () = paths::persist_tempfile(temp_file, &config_path)?;
 
     Ok(())
 }
 
-fn get_bridge_config_file_path(bridge_config: &BridgeConfig) -> Result<String, ConnectError> {
-    Ok(paths::build_path_for_sudo_or_user(&[
-        TEDGE_BRIDGE_CONF_DIR_PATH,
-        &bridge_config.config_file,
-    ])?)
-}
-
-fn start_and_enable_tedge_mapper(user_manager: &UserManager) {
+fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
     let mut failed = false;
 
     println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperService.restart(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.restart(user_manager) {
         println!("Failed to stop tedge-mapper service: {:?}", err);
         failed = true;
     }
 
     println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperService.enable(user_manager) {
+    if let Err(err) = TedgeMapperC8yService.enable(user_manager) {
         println!("Failed to enable tedge-mapper service: {:?}", err);
         failed = true;
     }
@@ -372,18 +416,43 @@ fn start_and_enable_tedge_mapper(user_manager: &UserManager) {
     }
 }
 
-fn get_common_mosquitto_config_file_path(
-    common_mosquitto_config: &CommonMosquittoConfig,
-) -> Result<String, ConnectError> {
-    Ok(paths::build_path_for_sudo_or_user(&[
-        TEDGE_BRIDGE_CONF_DIR_PATH,
-        &common_mosquitto_config.config_file,
-    ])?)
+fn start_and_enable_tedge_mapper_az(user_manager: &UserManager) {
+    let _root_guard = user_manager.become_user(ROOT_USER);
+    let mut failed = false;
+
+    println!("Starting tedge-mapper service.\n");
+    if let Err(err) = TedgeMapperAzService.restart(user_manager) {
+        println!("Failed to stop tedge-mapper service: {:?}", err);
+        failed = true;
+    }
+
+    println!("Persisting tedge-mapper on reboot.\n");
+    if let Err(err) = TedgeMapperAzService.enable(user_manager) {
+        println!("Failed to enable tedge-mapper service: {:?}", err);
+        failed = true;
+    }
+
+    if !failed {
+        println!("tedge-mapper service successfully started and enabled!\n");
+    }
 }
 
-fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
-    match err.kind() {
-        std::io::ErrorKind::NotFound => Ok(()),
-        _ => Err(err),
-    }
+fn get_bridge_config_file_path(
+    config_location: &TEdgeConfigLocation,
+    bridge_config: &BridgeConfig,
+) -> PathBuf {
+    config_location
+        .tedge_config_root_path
+        .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+        .join(&bridge_config.config_file)
+}
+
+fn get_common_mosquitto_config_file_path(
+    config_location: &TEdgeConfigLocation,
+    common_mosquitto_config: &CommonMosquittoConfig,
+) -> PathBuf {
+    config_location
+        .tedge_config_root_path
+        .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+        .join(&common_mosquitto_config.config_file)
 }

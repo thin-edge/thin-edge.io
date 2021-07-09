@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.1.0"
+version = "0.2.2"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -9,34 +9,42 @@ description = "tedge_mapper is the mapper that translates thin-edge.io data mode
 [package.metadata.deb]
 depends = "tedge"
 maintainer-scripts = "configuration/debian/tedge_mapper"
+assets = [
+    ["../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
+    ["../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
+    ["../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
+    ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
+]
 
 [package.metadata.deb.systemd-units]
 unit-scripts = "../../configuration/init/systemd"
-unit-name = "tedge-mapper"
 enable = false
 start = false
 stop-on-upgrade = false
 
 [dependencies]
 anyhow = "1.0"
-clock = {path = "../../common/clock" }
+async-trait = "0.1"
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
-tedge_config = {path = "../../tedge_config" }
-thin_edge_json = {path = "../../mapper/thin_edge_json"}
 chrono = "0.4"
+clock = {path = "../../common/clock" }
 env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
+futures = "0.3"
 log = "0.4"
+mockall = "0.10"
 mqtt_client = {path = "../../common/mqtt_client" }
-tokio = { version = "1.1", features = ["full"] }
+structopt = "0.3"
+tedge_config = {path = "../../tedge_config" }
+tedge_users = { path = "../../common/tedge_users" }
+thin_edge_json = {path = "../thin_edge_json" }
+thiserror = "1.0"
+tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
-async-trait = "0.1"
-thiserror = "1.0"
-users = "0.11"
 
 [dev-dependencies]
+assert_matches = "1.5"
 assert-json-diff = "2.0"
 serde_json = "1.0"
-assert_matches = "1.5"
 tokio-test = "0.4"

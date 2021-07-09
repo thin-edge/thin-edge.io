@@ -1,5 +1,5 @@
 from pysys.basetest import BaseTest
-
+from datetime import datetime, timedelta
 
 """
 Validate mapper doesn't reconnect too often.
@@ -8,7 +8,7 @@ Validate mapper doesn't reconnect too often.
 Given unconnected system
 
 When we start mosquitto_sub to use fixed MQTT Client ID
-When we start tedge_mapper to use fixed MQTT Client ID
+When we start tedge_mapper systemd service to use fixed MQTT Client ID
 When we observe tedge_mapper tries to reconnect
 
 Then we wait for 5 seconds
@@ -33,32 +33,38 @@ class MapperReconnectAwait(BaseTest):
 
         mapper = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper, "c8y"],
+            arguments=["systemctl", "start", "tedge-mapper-c8y"],
             stdouterr="tedge_mapper",
-            background=True,
         )
 
         self.wait(5)
 
-        # since the first mapper is running with different user rights the
-        # test runner can't kill it for us. So we need to kill it ourselves
-        kill = self.startProcess(
+        mapper = self.startProcess(
             command=self.sudo,
-            arguments=["sh", "-c", "kill -9 $(pgrep -x tedge_mapper)"],
-            stdouterr="kill",
-            ignoreExitStatus=True,
+            arguments=["systemctl", "stop", "tedge-mapper-c8y"],
+            stdouterr="tedge_mapper",
         )
 
     def validate(self):
-        self.assertGrep("tedge_mapper.out", "ERROR", contains=True)
+        dt = datetime.now()
+        dt_end = dt.strftime('%Y-%m-%d %H:%M:%S')
+        dt_start = (dt - timedelta(seconds=5)).strftime('%Y-%m-%d %H:%M:%S')
+
+        journal = self.startProcess(
+            command=self.sudo,
+            arguments=["journalctl", "-u", "tedge-mapper-c8y.service", "--since", dt_start, "--until", dt_end],
+            stdouterr="tedge_mapper_journal",
+        )
+
+        self.assertGrep("tedge_mapper_journal.out", "ERROR", contains=True)
         self.assertLineCount(
-            "tedge_mapper.out",
+            "tedge_mapper_journal.out",
             condition="<=5",
             abortOnError=True,
             expr="tedge_mapper::mapper: MQTT connection error:",
         )
         self.assertLineCount(
-            "tedge_mapper.out",
+            "tedge_mapper_journal.out",
             condition=">=2",
             abortOnError=True,
             expr="tedge_mapper::mapper: MQTT connection error:",

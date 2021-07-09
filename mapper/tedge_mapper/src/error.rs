@@ -1,16 +1,12 @@
 use crate::size_threshold::SizeThresholdExceeded;
+use mqtt_client::MqttClientError;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {
     #[error(transparent)]
-    MqttClientError(#[from] mqtt_client::Error),
-
-    #[error(
-        "tedge_mapper accepts only one argument. Run `tedge_mapper c8y` or `tedge_mapper az`."
-    )]
-    IncorrectArgument,
+    MqttClientError(#[from] MqttClientError),
 
     #[error("Home directory is not found.")]
     HomeDirNotFound,

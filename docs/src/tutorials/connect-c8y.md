@@ -18,7 +18,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
 
 If not done yet, [install `thin-edge.io` on your device](../howto-guides/002_installation.md).
 
-You can now to use [`tedge` command](../references/tedge.md) to:
+You can now use the [`tedge` command](../references/tedge.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),
 * [make the device certificate trusted by Cumulocity](connect-c8y.md#make-the-device-trusted-by-cumulocity),
 * [connect the device](connect-c8y.md#connect-the-device), and
@@ -98,7 +98,7 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the cloud,
 * to forward local messages to the cloud and vice versa.
 
-Also, if you have installed `tedge_mapper`, this command starts and enables the tedge_mapper systemd service.
+Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-c8y systemd service.
 At last, it sends packets to Cumulocity to check the connection.
 If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
 

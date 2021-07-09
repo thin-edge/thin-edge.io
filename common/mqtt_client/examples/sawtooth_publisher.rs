@@ -4,7 +4,9 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_client::{Client, Config, Message, MqttClient, MqttErrorStream, MqttMessageStream, Topic};
+use mqtt_client::{
+    Client, Config, Message, MqttClient, MqttClientError, MqttErrorStream, MqttMessageStream, Topic,
+};
 use std::convert::TryFrom;
 use std::env;
 use std::io::Write;
@@ -115,7 +117,7 @@ async fn publish_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), MqttClientError> {
     info!("Publishing temperature measurements");
     println!();
     for iteration in 0..iterations {
@@ -142,7 +144,7 @@ async fn publish_multi_topic(
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), mqtt_client::Error> {
+) -> Result<(), MqttClientError> {
     info!("Publishing temperature measurements");
     println!();
     let series_name = "\"Sawmill [S]\"";
@@ -178,8 +180,8 @@ async fn publish_multi_topic(
 
 async fn listen_command(mut messages: Box<dyn MqttMessageStream>) {
     while let Some(message) = messages.next().await {
-        debug!("C8Y command: {:?}", message.payload);
-        if let Some(cmd) = std::str::from_utf8(&message.payload).ok() {
+        debug!("C8Y command: {:?}", message.payload_str());
+        if let Ok(cmd) = message.payload_str() {
             if cmd.contains(C8Y_TEMPLATE_RESTART) {
                 info!("Stopping on remote request ... should be restarted by the daemon monitor.");
                 break;
@@ -191,7 +193,7 @@ async fn listen_command(mut messages: Box<dyn MqttMessageStream>) {
 async fn listen_c8y_error(mut messages: Box<dyn MqttMessageStream>) {
     let mut count: u32 = 0;
     while let Some(message) = messages.next().await {
-        error!("C8Y error: {:?}", message.payload);
+        error!("C8Y error: {:?}", message.payload_str());
         if count >= 3 {
             panic!("Panic!");
         }

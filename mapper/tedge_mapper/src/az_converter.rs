@@ -12,15 +12,15 @@ pub struct AzureConverter {
 
 impl Converter for AzureConverter {
     type Error = ConversionError;
-    fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    fn convert(&self, input: &str) -> Result<String, Self::Error> {
         let () = self.size_threshold.validate(input)?;
 
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
 
-        let () = thin_edge_json::json::parse_utf8(input, &mut serializer)?;
-        Ok(serializer.bytes()?)
+        let () = thin_edge_json::json::parse_str(input, &mut serializer)?;
+        Ok(serializer.into_string()?)
     }
 }
 
@@ -65,17 +65,17 @@ mod tests {
         };
 
         let input = r#"{
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -91,18 +91,18 @@ mod tests {
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
            "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -118,18 +118,18 @@ mod tests {
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
            "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23
+           "temperature": 23.0
         });
 
         let output = converter.convert(input.as_ref());
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }
@@ -144,18 +144,18 @@ mod tests {
         };
 
         let input = r#"{
-                  "temperature": 23
+                  "temperature": 23.0
                }"#;
 
         let expected_output = json!({
-           "temperature": 23,
+           "temperature": 23.0,
            "time": "2021-04-08T00:00:00+05:00"
         });
 
         let output = converter.convert(input.as_ref());
 
         assert_json_eq!(
-            serde_json::from_slice::<serde_json::Value>(&output.unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
         );
     }

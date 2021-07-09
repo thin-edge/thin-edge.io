@@ -61,7 +61,7 @@ fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> Con
 impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
     fn query(&self, _setting: AzureUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.data
-            .azure
+            .az
             .url
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
@@ -70,12 +70,12 @@ impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
     }
 
     fn update(&mut self, _setting: AzureUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
-        self.data.azure.url = Some(value);
+        self.data.az.url = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: AzureUrlSetting) -> ConfigSettingResult<()> {
-        self.data.azure.url = None;
+        self.data.az.url = None;
         Ok(())
     }
 }
@@ -156,7 +156,7 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
-            .azure
+            .az
             .root_cert_path
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_azure_root_cert_path.clone()))
@@ -167,12 +167,12 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
         _setting: AzureRootCertPathSetting,
         value: FilePath,
     ) -> ConfigSettingResult<()> {
-        self.data.azure.root_cert_path = Some(value);
+        self.data.az.root_cert_path = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<()> {
-        self.data.azure.root_cert_path = None;
+        self.data.az.root_cert_path = None;
         Ok(())
     }
 }
@@ -181,19 +181,19 @@ impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
     fn query(&self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<Flag> {
         Ok(self
             .data
-            .azure
+            .az
             .mapper_timestamp
             .map(Flag)
-            .unwrap_or_else(|| Flag(true)))
+            .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
     }
 
     fn update(&mut self, _setting: AzureMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
-        self.data.azure.mapper_timestamp = Some(value.into());
+        self.data.az.mapper_timestamp = Some(value.into());
         Ok(())
     }
 
     fn unset(&mut self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<()> {
-        self.data.azure.mapper_timestamp = None;
+        self.data.az.mapper_timestamp = None;
         Ok(())
     }
 }

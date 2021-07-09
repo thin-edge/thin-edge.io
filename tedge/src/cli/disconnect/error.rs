@@ -1,5 +1,5 @@
 use crate::services;
-use crate::utils::paths;
+use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DisconnectBridgeError {
@@ -7,13 +7,10 @@ pub enum DisconnectBridgeError {
     Configuration(#[from] crate::ConfigError),
 
     #[error("File operation error. Check permissions for {1}.")]
-    FileOperationFailed(#[source] std::io::Error, String),
+    FileOperationFailed(#[source] std::io::Error, PathBuf),
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-
-    #[error(transparent)]
-    PathsError(#[from] paths::PathsError),
 
     #[error(transparent)]
     ServicesError(#[from] services::ServicesError),

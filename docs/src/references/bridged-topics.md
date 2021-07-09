@@ -1,13 +1,13 @@
 # The bridged topics
 
-This document lists the mqtt topics that are supported by the thin-edge.io.
+This document lists the MQTT topics that are supported by the thin-edge.io.
 
-## Thin Edge JSON Mqtt Topics
+## Thin Edge JSON MQTT Topics
 To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish the measurements on
 **tedge/measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and
 send them to the cloud that the device has been connected to by the `tedge connect` command.
 
-## Cumulocity Mqtt Topics
+## Cumulocity MQTT Topics
 The topics follow the below format
 `<protocol>/<direction><type>[/<template>][/<child id>] `
 
@@ -52,7 +52,7 @@ The topics follow the below format
 
 You can find more information about Cumulocity topics [Here](https://tech.forums.softwareag.com/t/cumulocity-iot-tips-and-tricks-mqtt-cheat-sheet/237187)
 
-## Azure Mqtt Topics
+## Azure MQTT Topics
 MQTT clients on Thin Edge device must use the below topics to communicate with the Azure cloud.
 The Azure topics are prefixed by `az/`.
 
@@ -63,3 +63,20 @@ The Azure topics are prefixed by `az/`.
  * `az/messages/devicebound/#` - Use this topic to subscribe for the messages that were sent from cloud to device.
  Any message published by Azure on one the subtopics of `devices/{device_id}/messages/devicebound/#`
  is republished here.
+ 
+ 
+## Collectd topics
+
+When the [device monitoring feature is enabled](../tutorials/device-monitoring.md),
+monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
+
+* `collectd/$HOSTNAME/#` - All the metrics collected on the device (which hostname is `$HOSTNAME`).
+* `collectd/$HOSTNAME/$PLUGIN/#` - All the metrics collected by a given collectd plugin, named `$PLUGIN`.
+* `collectd/$HOSTNAME/$PLUGIN/$METRIC` - The topic for a given metric, named `$METRIC`.
+   All the measurements are published as a pair of a Unix timestamp in milli-seconds and a numeric value
+   in the format `$TIMESTAMP:$VALUE`. For example, `1623155717:98.6`.
+
+The `collectd-mapper` daemon process ingests these measurements and emits translated messages
+the `tedge/measurements` topic.
+* This process groups the atomic measurements that have been received during the same time-window (currently 200 ms)
+* and produces a single thin-edge-json for the whole group of measurements.

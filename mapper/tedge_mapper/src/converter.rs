@@ -1,5 +1,5 @@
-pub trait Converter {
+pub trait Converter: Send + Sync {
     type Error;
 
-    fn convert(&self, input: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    fn convert(&self, input: &str) -> Result<String, Self::Error>;
 }

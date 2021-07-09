@@ -1,0 +1,12 @@
+[Unit]
+Description=tedge-mapper-c8y converts Thin Edge JSON measurements to Cumulocity JSON format.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge-mapper
+ExecStart=/usr/bin/tedge_mapper c8y
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target
