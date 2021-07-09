@@ -7,7 +7,8 @@ use structopt::StructOpt;
 mod cli;
 mod command;
 mod error;
-mod services;
+// mod services;
+mod system_services;
 mod utils;
 
 type ConfigError = crate::error::TEdgeError;
