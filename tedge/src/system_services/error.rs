@@ -6,6 +6,12 @@ pub enum SystemServiceError {
     #[error(transparent)]
     SystemdError(#[from] SystemdError),
 
+    #[error(transparent)]
+    OpenRcServiceError(#[from] OpenRcServiceError),
+
+    #[error(transparent)]
+    BsdServiceError(#[from] BsdServiceError),
+
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
 
@@ -13,6 +19,7 @@ pub enum SystemServiceError {
     UnsupportedOperation,
 }
 
+/// The error type used by the `SystemdServiceManager`
 #[derive(thiserror::Error, Debug)]
 pub enum SystemdError {
     #[error("Systemd returned unspecific error for service {service} while performing {cmd} it.\nHint: {hint}")]
@@ -35,4 +42,30 @@ pub enum SystemdError {
 
     #[error("Returned exit code: '{code:?}' for: systemd' is unhandled.")]
     UnhandledReturnCode { code: i32 },
+}
+
+/// The error type used by the `OpenRcServiceManager`
+#[derive(thiserror::Error, Debug)]
+pub enum OpenRcServiceError {
+    #[error("OpenRC is not available on the system.")]
+    ServiceManagerNotAvailable,
+
+    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
+    ServiceCommandFailed {
+        service_command: String,
+        code: Option<i32>,
+    },
+}
+
+/// The error type used by the `BsdServiceManager`
+#[derive(thiserror::Error, Debug)]
+pub enum BsdServiceError {
+    #[error("service(8) is not available on the system.")]
+    ServiceManagerNotAvailable,
+
+    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
+    ServiceCommandFailed {
+        service_command: String,
+        code: Option<i32>,
+    },
 }

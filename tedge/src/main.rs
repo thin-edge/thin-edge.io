@@ -50,8 +50,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn service_manager(user_manager: UserManager) -> Arc<dyn SystemServiceManager> {
-    if cfg!(target_os = "linux") {
+    if cfg!(feature = "openrc") {
+        Arc::new(OpenRcServiceManager::new(user_manager))
+    } else if cfg!(target_os = "linux") {
         Arc::new(SystemdServiceManager::new(user_manager))
+    } else if cfg!(target_os = "freebsd") {
+        Arc::new(BsdServiceManager::new(user_manager))
     } else {
         Arc::new(NullSystemServiceManager)
     }
