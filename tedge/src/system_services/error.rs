@@ -8,6 +8,9 @@ pub enum SystemServiceError {
 
     #[error("Unexpected value for exit status.")]
     UnexpectedExitStatus,
+
+    #[error("Unsupported operation.")]
+    UnsupportedOperation,
 }
 
 #[derive(thiserror::Error, Debug)]

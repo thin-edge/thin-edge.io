@@ -1,34 +1,35 @@
 use crate::system_services::*;
 
+/// A system service manager that always fails.
 #[derive(Debug)]
-pub struct DummySystemServiceManager;
+pub struct NullSystemServiceManager;
 
-impl SystemServiceManager for DummySystemServiceManager {
+impl SystemServiceManager for NullSystemServiceManager {
     fn name(&self) -> &str {
-        "dummy"
+        "null (no service manager)"
     }
 
     fn check_operational(&self) -> Result<(), SystemServiceError> {
-        Ok(())
+        Err(SystemServiceError::UnsupportedOperation)
     }
 
     fn stop_service(&self, _service: SystemService) -> Result<(), SystemServiceError> {
-        Ok(())
+        Err(SystemServiceError::UnsupportedOperation)
     }
 
     fn restart_service(&self, _service: SystemService) -> Result<(), SystemServiceError> {
-        Ok(())
+        Err(SystemServiceError::UnsupportedOperation)
     }
 
     fn enable_service(&self, _service: SystemService) -> Result<(), SystemServiceError> {
-        Ok(())
+        Err(SystemServiceError::UnsupportedOperation)
     }
 
     fn disable_service(&self, _service: SystemService) -> Result<(), SystemServiceError> {
-        Ok(())
+        Err(SystemServiceError::UnsupportedOperation)
     }
 
     fn is_service_running(&self, _service: SystemService) -> Result<bool, SystemServiceError> {
-        Ok(false)
+        Err(SystemServiceError::UnsupportedOperation)
     }
 }

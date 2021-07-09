@@ -1,4 +1,4 @@
-mod dummy;
+mod null;
 mod systemd;
 
-pub use self::{dummy::*, systemd::*};
+pub use self::{null::*, systemd::*};
