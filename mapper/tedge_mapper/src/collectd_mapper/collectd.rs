@@ -28,10 +28,7 @@ impl<'a> CollectdMessage<'a> {
     where
         T: MeasurementVisitor,
     {
-        let () = visitor.visit_start_group(self.metric_group_key)?;
-        let () = visitor.visit_measurement(self.metric_key, self.metric_value)?;
-        let () = visitor.visit_end_group()?;
-        Ok(())
+        visitor.visit_grouped_measurement(self.metric_group_key, self.metric_key, self.metric_value)
     }
 
     #[cfg(test)]
