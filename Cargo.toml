@@ -2,17 +2,18 @@
 
 members = [
     "common/certificate",
-    "common/flockfile",
-    "common/mqtt_client",
     "common/clock",
-    "common/tedge_users",
+    "common/flockfile",
     "common/json_writer",
-    "tedge",
-    "tedge_config",
+    "common/mqtt_client",
+    "common/tedge_users",
     "mapper/cumulocity/c8y_translator_lib",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
-    "sm/plugins/tedge_apt_plugin"
+    "sm/agent",
+    "sm/plugins/tedge_apt_plugin",
+    "tedge_config",
+    "tedge",
 ]
 
 [profile.release]

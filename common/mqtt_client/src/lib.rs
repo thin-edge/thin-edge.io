@@ -169,6 +169,56 @@ macro_rules! send_discarding_error {
 type MessageId = u16;
 
 impl Client {
+    // pub fn new(name: String, config: &Config) -> Self {
+    //     let name = String::from(name);
+
+    //     let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
+    //     mqtt_options.set_clean_session(config.clean_session);
+
+    //     if let Some(inflight) = config.inflight {
+    //         mqtt_options.set_inflight(inflight);
+    //     }
+
+    //     if let Some(packet_size) = config.packet_size {
+    //         mqtt_options.set_max_packet_size(packet_size, packet_size);
+    //     }
+
+    //     let (mqtt_client, eventloop) =
+    //         rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
+
+    //     let requests_tx = eventloop.requests_tx.clone();
+
+    //     let (message_sender, _) = broadcast::channel(config.queue_capacity);
+    //     let (error_sender, _) = broadcast::channel(config.queue_capacity);
+
+    //     let inflight = Arc::new(InflightTracking::new());
+
+    //     let join_handle = tokio::spawn(async {});
+
+    //     Self {
+    //         name,
+    //         mqtt_client,
+    //         message_sender,
+    //         error_sender,
+    //         join_handle,
+    //         requests_tx,
+    //         inflight,
+    //     }
+    // }
+
+    // pub async fn connect(&self) -> Result<Client, MqttClientError> {
+    //     let join_handle = tokio::spawn(Client::bg_process(
+    //         self.eventloop,
+    //         self.message_sender.clone(),
+    //         self.error_sender.clone(),
+    //         self.inflight.clone(),
+    //     ));
+    //     Ok(Client {
+    //         join_handle,
+    //         // ..self,
+    //     })
+    // }
+
     /// Open a connection to the local MQTT bus, using the given name to register an MQTT session.
     ///
     /// Reusing the same session name on each connection allows a client
@@ -544,6 +594,9 @@ impl TopicFilter {
     }
 }
 
+// Why this is not a type?
+pub type Payload = Vec<u8>;
+
 /// A message to be sent to or received from MQTT.
 ///
 /// NOTE: We never set the `pkid` of the `Publish` message,
@@ -551,7 +604,7 @@ impl TopicFilter {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
-    payload: Vec<u8>,
+    payload: Payload,
     pub qos: QoS,
     pkid: u16,
     retain: bool,
@@ -560,7 +613,7 @@ pub struct Message {
 impl Message {
     pub fn new<B>(topic: &Topic, payload: B) -> Message
     where
-        B: Into<Vec<u8>>,
+        B: Into<Payload>,
     {
         Message {
             topic: topic.clone(),
@@ -576,7 +629,7 @@ impl Message {
     }
 
     // trims the trailing null char if one exists
-    fn payload_trimmed(&self) -> &[u8] {
+    pub fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())

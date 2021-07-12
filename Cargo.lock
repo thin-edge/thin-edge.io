@@ -967,7 +967,7 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "json-writer"
-version = "0.1.2"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1139,6 +1139,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-test",
+]
+
+[[package]]
+name = "mqtt_client"
+version = "0.2.2"
+source = "git+https://github.com/thin-edge/thin-edge.io?branch=main#315f01048c61bed5c9b2463fd1a0d9c05faa1672"
+dependencies = [
+ "async-trait",
+ "futures",
+ "mockall",
+ "rumqttc",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -2027,7 +2040,7 @@ dependencies = [
  "futures",
  "hyper",
  "mockito",
- "mqtt_client",
+ "mqtt_client 0.2.2",
  "pem",
  "predicates 2.0.0",
  "reqwest",
@@ -2044,6 +2057,32 @@ dependencies = [
  "url",
  "webpki",
  "which",
+]
+
+[[package]]
+name = "tedge_agent"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "clock",
+ "env_logger",
+ "flockfile",
+ "futures",
+ "log",
+ "mockall",
+ "mqtt_client 0.2.2",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tedge_config",
+ "tedge_software_management_lib",
+ "tedge_users",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2083,7 +2122,7 @@ dependencies = [
  "futures",
  "log",
  "mockall",
- "mqtt_client",
+ "mqtt_client 0.2.2",
  "serde_json",
  "structopt",
  "tedge_config",
@@ -2094,6 +2133,21 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tedge_software_management_lib"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "log",
+ "mqtt_client 0.2.2 (git+https://github.com/thin-edge/thin-edge.io?branch=main)",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

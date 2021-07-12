@@ -1,0 +1,30 @@
+[package]
+name = "tedge_agent"
+version = "0.2.2"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = "0.4"
+clock = {path = "../../common/clock" }
+env_logger = "0.8"
+flockfile = {path = "../../common/flockfile" }
+futures = "0.3"
+log = "0.4"
+mockall = "0.10"
+mqtt_client = {path = "../../common/mqtt_client" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3"
+tedge_config = {path = "../../tedge_config" }
+tedge_software_management_lib = { path = "../sm" }
+tedge_users = { path = "../../common/tedge_users" }
+
+thiserror = "1.0"
+tokio = { version = "1.8", features = ["rt"] }
+tracing = { version = "0.1", features = ["attributes", "log"] }
+tracing-subscriber = "0.2"
+
+[dev-dependencies]
