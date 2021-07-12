@@ -95,7 +95,7 @@ mod test {
             let output_err = is_valid_device_id(id, 64);
             assert_matches!(
                 output_err,
-                Err(DeviceIdError::InvalidCharacter { name: id })
+                Err(DeviceIdError::InvalidCharacter { ref name }) if name == id
             );
         }
         Ok(())
@@ -116,9 +116,9 @@ mod test {
         assert_matches!(
             output_err,
             Err(DeviceIdError::TooLongName {
-                name: id,
+                name,
                 max_cn_size: 64
-            })
+            }) if name == id
         );
 
         Ok(())
