@@ -321,7 +321,6 @@ impl Client {
                         {
                             true
                         }
-
                         _ => false,
                     };
 
