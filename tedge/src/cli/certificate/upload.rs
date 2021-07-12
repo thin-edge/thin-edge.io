@@ -1,4 +1,4 @@
-use super::error::CertError;
+use super::error::{get_webpki_error_from_reqwest, CertError};
 use crate::{
     command::{Command, ExecutionContext},
     utils,
@@ -42,14 +42,15 @@ impl Command for UploadCertCmd {
 
 impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
-        let client = reqwest::blocking::Client::new();
-
         // Read the password from /dev/tty
         // Unless a password is provided using the `C8YPASS` env var.
         let password = match std::env::var("C8YPASS") {
             Ok(password) => password,
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
+
+        // Use a builder instead of `Client::new`, `new` could panic, builder adds option to allow invalid certs.
+        let client = reqwest::blocking::Client::builder().build()?;
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
@@ -83,7 +84,8 @@ impl UploadCertCmd {
             .post(post_url)
             .json(&post_body)
             .basic_auth(&self.username, Some(password))
-            .send()?;
+            .send()
+            .map_err(get_webpki_error_from_reqwest)?;
 
         match res.status() {
             StatusCode::OK | StatusCode::CREATED => {
@@ -127,7 +129,8 @@ fn get_tenant_id_blocking(
     let res = client
         .get(url)
         .basic_auth(username, Some(password))
-        .send()?
+        .send()
+        .map_err(get_webpki_error_from_reqwest)?
         .error_for_status()?;
 
     let body = res.json::<CumulocityResponse>()?;

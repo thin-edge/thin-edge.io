@@ -12,83 +12,74 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
-  install-and-use-amd64-github-hosted:
-
+  install-and-use-amd64:
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-        - name: checkout
-          uses: actions/checkout@v2
+      - name: checkout
+        uses: actions/checkout@v2
 
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-amd64
-            path: debian-package_unpack
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: main
+          name: debian-packages-amd64
+          path: debian-package_unpack
 
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
-          continue-on-error: true
+      - name: purge
+        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        continue-on-error: true
 
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
+      - name: install mosquitto
+        run: sudo apt-get --assume-yes install mosquitto
 
-          #install collectd-core
-        - name: install collectd-core
-          run:  sudo apt-get --assume-yes install collectd-core
+        #install collectd-core
+      - name: install collectd-core
+        run: sudo apt-get --assume-yes install collectd-core
 
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
+      - name: install packages
+        run: sudo dpkg -i ./debian-package_unpack/*.deb
 
-        - name: run tedge help
-          run: tedge --help
+      - name: run tedge help
+        run: tedge --help
 
-         #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: examples_amd64
+          path: examples
 
+      - name: Run Smoke Test
+        run: ./ci/ci_smoke_test.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
 
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_amd64
-            path: examples
-
-        - name: Run Smoke Test
-          run: ./ci/ci_smoke_test.sh
-          env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
-
-#        - name: Run Smoke Test
-#          run: ./ci/ci_smoke_test_az.sh
-#          env:
-#            SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-#            SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#      - name: Run Smoke Test
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
 
   cargo-test-features:
-
     name: Run cargo test features
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -115,69 +106,62 @@ jobs:
           command: test
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
-  install-and-use-rpi-self-hosted:
-
-    runs-on: [self-hosted, Linux, ARM ] #, offsite]
+  install-and-use-rpi:
+    runs-on: [self-hosted, Linux, ARM]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-        - name: checkout
-          uses: actions/checkout@v2
+      - name: checkout
+        uses: actions/checkout@v2
 
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: debian-packages-armv7-unknown-linux-gnueabihf
-            path: debian-package_unpack
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: debian-packages-armv7-unknown-linux-gnueabihf
+          path: debian-package_unpack
 
-        - name: purge
-          run: sudo dpkg -P mosquitto tedge tedge_mapper collectd-core collectd_mapper
-          continue-on-error: true
+      - name: purge
+        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        continue-on-error: true
 
-        - name: install mosquitto
-          run: sudo apt-get --assume-yes install mosquitto
+      - name: install mosquitto
+        run: sudo apt-get --assume-yes install mosquitto
 
-          #install collectd-core
-        - name: install collectd-core
-          run:  sudo apt-get --assume-yes install collectd-core
+        #install collectd-core
+      - name: install collectd-core
+        run: sudo apt-get --assume-yes install collectd-core
 
-        - name: install packages
-          run: sudo dpkg -i ./debian-package_unpack/*.deb
+      - name: install packages
+        run: sudo dpkg -i ./debian-package_unpack/*.deb
 
-        - name: run tedge help
-          run: tedge --help
+      - name: run tedge help
+        run: tedge --help
 
-          #replace the default config file with tedge custom config file
-        - name: configure collectd
-          run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+        #replace the default config file with tedge custom config file
+      - name: configure collectd
+        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-        - name: Download artifact
-          uses: dawidd6/action-download-artifact@v2
-          # https://github.com/marketplace/actions/download-workflow-artifact
-          with:
-            github_token: ${{secrets.GITHUB_TOKEN}}
-            workflow: build-workflow.yml
-            workflow_conclusion: success
-            branch: continuous_integration
-            name: examples_armv7-unknown-linux-gnueabihf
-            path: examples
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: examples_armv7-unknown-linux-gnueabihf
+          path: examples
 
-        - name: Run Smoke Test Cumulocity
-          run: ./ci/ci_smoke_test.sh
-          env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
-
-        - name: Run Smoke Test Azure IoT
-          run: ./ci/ci_smoke_test_az.sh
-          env:
-            SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-            SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+      - name: Run Smoke Test
+        run: ./ci/ci_smoke_test.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}

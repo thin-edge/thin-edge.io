@@ -10,14 +10,13 @@ members = [
     "tedge",
     "tedge_config",
     "mapper/cumulocity/c8y_translator_lib",
-    "mapper/collectd_mapper",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
+    "sm/plugins/tedge_apt_plugin"
 ]
 
 [profile.release]
+codegen-units = 1
 lto = true
-
-# opt-level = "z" # See https://doc.rust-lang.org/cargo/reference/profiles.html
-# codegen-units = 1
-# panic = 'abort'
+opt-level = "z"
+panic = 'abort'

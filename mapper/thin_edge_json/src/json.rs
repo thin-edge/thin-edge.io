@@ -1,4 +1,4 @@
-use crate::measurement::GroupedMeasurementVisitor;
+use crate::measurement::MeasurementVisitor;
 use chrono::{format::ParseError, prelude::*};
 use json::JsonValue;
 
@@ -72,10 +72,10 @@ impl ThinEdgeJsonBuilder {
     }
 }
 
-impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
+impl MeasurementVisitor for ThinEdgeJsonBuilder {
     type Error = ThinEdgeJsonError;
 
-    fn timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
         match self.timestamp {
             None => {
                 self.timestamp = Some(value);
@@ -85,7 +85,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
         }
     }
 
-    fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
+    fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
         let measurement = SingleValueMeasurement::new(name, value)?;
         if let Some(group) = &mut self.inside_group {
             group.values.push(measurement);
@@ -95,7 +95,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
         Ok(())
     }
 
-    fn start_group(&mut self, group: &str) -> Result<(), Self::Error> {
+    fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
         if self.inside_group.is_none() {
             self.inside_group = Some(MultiValueMeasurement {
                 name: group.into(),
@@ -107,7 +107,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonBuilder {
         }
     }
 
-    fn end_group(&mut self) -> Result<(), Self::Error> {
+    fn visit_end_group(&mut self) -> Result<(), Self::Error> {
         match self.inside_group.take() {
             Some(group) => {
                 if group.values.is_empty() {
@@ -131,7 +131,7 @@ pub enum ThinEdgeJsonParserError<T: std::error::Error + std::fmt::Debug + 'stati
     VisitorError(T),
 }
 
-pub fn parse_str<T: GroupedMeasurementVisitor>(
+pub fn parse_str<T: MeasurementVisitor>(
     json_string: &str,
     visitor: &mut T,
 ) -> Result<(), ThinEdgeJsonParserError<T::Error>> {
@@ -141,12 +141,6 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
     match &thin_edge_obj {
         JsonValue::Object(thin_edge_obj) => {
             for (key, value) in thin_edge_obj.iter() {
-                if key.contains('\\') {
-                    return Err(ThinEdgeJsonError::InvalidThinEdgeJsonKey {
-                        key: String::from(key),
-                    }
-                    .into());
-                }
                 if key.eq("type") {
                     return Err(ThinEdgeJsonError::ThinEdgeReservedWordError {
                         name: String::from(key),
@@ -154,7 +148,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                     .into());
                 } else if key.eq("time") {
                     let () = visitor
-                        .timestamp(parse_from_rfc3339(
+                        .visit_timestamp(parse_from_rfc3339(
                             value
                                 .as_str()
                                 .ok_or_else(|| ThinEdgeJsonError::new_invalid_json_time(value))?,
@@ -165,13 +159,13 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                         // Single Value object
                         JsonValue::Number(num) => {
                             let () = visitor
-                                .measurement(key, (*num).into())
+                                .visit_measurement(key, (*num).into())
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
                         }
                         // Multi value object
                         JsonValue::Object(multi_value_thin_edge_object) => {
                             let () = visitor
-                                .start_group(key)
+                                .visit_start_group(key)
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
 
                             for (k, v) in multi_value_thin_edge_object.iter() {
@@ -179,7 +173,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                                     JsonValue::Number(num) => {
                                         // Single Value object
                                         let () = visitor
-                                            .measurement(k, (*num).into())
+                                            .visit_measurement(k, (*num).into())
                                             .map_err(ThinEdgeJsonParserError::VisitorError)?;
                                     }
                                     JsonValue::Object(_object) => {
@@ -198,7 +192,7 @@ pub fn parse_str<T: GroupedMeasurementVisitor>(
                             }
 
                             let () = visitor
-                                .end_group()
+                                .visit_end_group()
                                 .map_err(ThinEdgeJsonParserError::VisitorError)?;
                         }
 
@@ -692,17 +686,14 @@ mod tests {
     }
 
     #[test]
-    fn thin_edge_json_reject_invalid_key() {
+    fn thin_edge_json_accept_backslash_in_key() {
         let input = r#"{
             "key with backslash: \\": 220
           }"#;
 
-        let expected_error = "Invalid Thin Edge key: key with backslash: \\";
         let output = ThinEdgeJson::from_str(input);
 
-        let error = output.unwrap_err();
-
-        assert_eq!(expected_error, error.to_string());
+        assert!(output.is_ok());
     }
 
     use proptest::prelude::*;

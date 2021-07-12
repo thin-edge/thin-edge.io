@@ -1,6 +1,6 @@
 [package]
 name = "tedge"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -20,23 +20,26 @@ futures = "0.3"
 mqtt_client = {path = "../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
+hyper = { version = "0.14", default-features = false }
+rustls = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.7", features = ["rt", "signal", "io-util", "io-std", "sync"] }
+tokio = { version = "1.8", features = ["rt", "signal", "io-util", "io-std", "sync"] }
 toml = "0.5"
 url = "2.2"
-which = "4.0"
+webpki = "0.21"
+which = "4.1"
 tedge_config = { path = "../tedge_config" }
 tedge_users = { path = "../common/tedge_users" }
 
 [dev-dependencies]
 assert_cmd = "1.0"
 assert_matches = "1.4"
-mockito = "0.29"
+mockito = "0.30"
 pem = "0.8"
-predicates = "1.0"
+predicates = "2.0"
 which = "4.0"
 
 [features]
