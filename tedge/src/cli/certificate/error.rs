@@ -10,7 +10,7 @@ use std::error::Error;
 pub enum CertError {
     #[error(
         r#"A certificate already exists and would be overwritten.
-        Existing file: {path:?}
+        Existing file: "{path}"
         Run `tedge cert remove` first to generate a new certificate.
     "#
     )]
