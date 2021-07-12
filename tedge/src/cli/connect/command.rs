@@ -108,6 +108,7 @@ impl ConnectCommand {
                     remote_clientid: config.query(DeviceIdSetting)?,
                     bridge_certfile: config.query(DeviceCertPathSetting)?,
                     bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_max_packet_size: "256KB".into(),
                 };
 
                 Ok(BridgeConfig::from(params))
@@ -121,6 +122,7 @@ impl ConnectCommand {
                     remote_clientid: config.query(DeviceIdSetting)?,
                     bridge_certfile: config.query(DeviceCertPathSetting)?,
                     bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_max_packet_size: "16KB".into(),
                 };
 
                 Ok(BridgeConfig::from(params))

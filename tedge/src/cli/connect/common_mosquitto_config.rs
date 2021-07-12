@@ -7,6 +7,7 @@ pub struct CommonMosquittoConfig {
     pub allow_anonymous: bool,
     pub connection_messages: bool,
     pub log_types: Vec<String>,
+    pub message_size_limit: String,
 }
 
 impl Default for CommonMosquittoConfig {
@@ -24,6 +25,7 @@ impl Default for CommonMosquittoConfig {
                 "subscribe".into(),
                 "unsubscribe".into(),
             ],
+            message_size_limit: "4MB".into(),
         }
     }
 }
@@ -37,6 +39,7 @@ impl CommonMosquittoConfig {
         for log_type in &self.log_types {
             writeln!(writer, "log_type {}", log_type)?;
         }
+        writeln!(writer, "message_size_limit {}", self.message_size_limit)?;
 
         Ok(())
     }
@@ -71,6 +74,7 @@ fn test_serialize() -> anyhow::Result<()> {
     expected.insert("log_type information");
     expected.insert("log_type subscribe");
     expected.insert("log_type unsubscribe");
+    expected.insert("message_size_limit 4MB");
 
     assert_eq!(config_set, expected);
 

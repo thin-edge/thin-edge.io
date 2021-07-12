@@ -21,6 +21,7 @@ pub struct BridgeConfig {
     pub notifications: bool,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
+    pub bridge_max_packet_size: String,
 }
 
 impl BridgeConfig {
@@ -60,6 +61,11 @@ impl BridgeConfig {
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
         }
+        writeln!(
+            writer,
+            "bridge_max_packet_size {}",
+            self.bridge_max_packet_size
+        )?;
         Ok(())
     }
 
@@ -111,6 +117,7 @@ mod test {
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
+            bridge_max_packet_size: "32KB".into(),
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -137,6 +144,7 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
+bridge_max_packet_size 32KB
 "#,
         );
 
@@ -168,6 +176,7 @@ bridge_attempt_unsubscribe false
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
+            bridge_max_packet_size: "32KB".into(),
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -193,6 +202,7 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
+bridge_max_packet_size 32KB
 "#,
         );
 
@@ -227,6 +237,7 @@ bridge_attempt_unsubscribe false
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
+            bridge_max_packet_size: "32KB".into(),
         };
 
         let mut buffer = Vec::new();
@@ -256,7 +267,7 @@ bridge_attempt_unsubscribe false
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
-
+        expected.insert("bridge_max_packet_size 32KB");
         assert_eq!(config_set, expected);
 
         Ok(())
@@ -357,6 +368,7 @@ bridge_attempt_unsubscribe false
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![],
+            bridge_max_packet_size: "32KB".into(),
         }
     }
 }

@@ -312,13 +312,29 @@ impl Client {
                 Err(err) => {
                     let delay = match &err {
                         rumqttc::ConnectionError::Io(_) => true,
-                        rumqttc::ConnectionError::MqttState(_) => true,
+                        rumqttc::ConnectionError::MqttState(state_error)
+                            if matches!(state_error, StateError::Io(_)) =>
+                        {
+                            true
+                        }
+                        rumqttc::ConnectionError::MqttState(state_error)
+                            if matches!(
+                                state_error,
+                                StateError::Deserialization(
+                                    rumqttc::Error::PayloadSizeLimitExceeded(_)
+                                )
+                            ) =>
+                        {
+                            println!("Payloadsizelimit exceeded");
+                            true
+                        }
                         rumqttc::ConnectionError::Mqtt4Bytes(packet_size)
                             if matches!(
                                 packet_size,
                                 rumqttc::Error::PayloadSizeLimitExceeded(_)
                             ) =>
                         {
+                            println!("Payloadsizelimit exceeded");
                             true
                         }
                         _ => false,
