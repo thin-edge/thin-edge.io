@@ -12,11 +12,13 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
 
+pub type ThinEdgeJsonParserError = serde_json::Error;
+
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(
     input: &str,
     visitor: &mut T,
-) -> Result<(), serde_json::Error> {
+) -> Result<(), ThinEdgeJsonParserError> {
     let mut deserializer = serde_json::Deserializer::from_str(input);
 
     let parser = ThinEdgeJsonParser { visitor };

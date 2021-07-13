@@ -16,7 +16,7 @@
 use crate::serializer;
 use chrono::prelude::*;
 use clock::{Clock, WallClock};
-use thin_edge_json::json::*;
+use thin_edge_json::stream::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
@@ -24,7 +24,7 @@ pub enum CumulocityJsonError {
     C8yJsonSerializationError(#[from] serializer::C8yJsonSerializationError),
 
     #[error(transparent)]
-    ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError<serializer::C8yJsonSerializationError>),
+    ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError),
 }
 
 /// Converts from thin-edge Json to c8y_json
