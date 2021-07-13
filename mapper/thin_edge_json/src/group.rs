@@ -33,7 +33,7 @@ impl MeasurementGroup {
     ) -> Option<f64> {
         match group_key {
             Some(group_key) => match self.values.get(group_key) {
-                Some(Measurement::Multi(map)) => map.get(measurement_key).cloned(), //hippo can we avoid this clone?
+                Some(Measurement::Multi(map)) => map.get(measurement_key).cloned(),
                 _ => None,
             },
             None => match self.values.get(measurement_key) {
