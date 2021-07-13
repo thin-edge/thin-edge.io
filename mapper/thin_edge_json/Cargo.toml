@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 chrono = "0.4"
 clock = { path = "../../common/clock" }
-json = "0.12"
 json-writer = { path = "../../common/json_writer" }
 thiserror = "1.0"
 serde = "1"

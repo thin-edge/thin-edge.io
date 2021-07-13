@@ -2152,7 +2152,6 @@ dependencies = [
  "chrono",
  "clock",
  "criterion",
- "json",
  "json-writer",
  "mockall",
  "proptest",
