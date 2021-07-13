@@ -15,12 +15,12 @@ mod utils;
 
 type ConfigError = crate::error::TEdgeError;
 
-use command::{BuildCommand, BuildContext, ExecutionContext};
+use command::{BuildCommand, BuildContext};
 
 fn main() -> anyhow::Result<()> {
-    let context = ExecutionContext::new();
+    let user_manager = UserManager::new();
 
-    let _user_guard = context.user_manager.become_user(tedge_users::TEDGE_USER)?;
+    let _user_guard = user_manager.become_user(tedge_users::TEDGE_USER)?;
 
     let opt = cli::Opt::from_args();
 
@@ -37,7 +37,8 @@ fn main() -> anyhow::Result<()> {
     let build_context = BuildContext {
         config_repository,
         config_location: tedge_config_location,
-        service_manager: service_manager(context.user_manager.clone()),
+        service_manager: service_manager(user_manager.clone()),
+        user_manager,
     };
 
     let cmd = opt
@@ -45,7 +46,7 @@ fn main() -> anyhow::Result<()> {
         .build_command(build_context)
         .with_context(|| "missing configuration parameter")?;
 
-    cmd.execute(&context)
+    cmd.execute()
         .with_context(|| format!("failed to {}", cmd.description()))
 }
 

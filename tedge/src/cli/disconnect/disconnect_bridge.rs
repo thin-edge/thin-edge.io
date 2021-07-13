@@ -45,7 +45,7 @@ impl Command for DisconnectBridgeCommand {
         format!("remove the bridge to disconnect {:?} cloud", self.cloud)
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         match self.stop_bridge() {
             Ok(()) | Err(DisconnectBridgeError::BridgeFileDoesNotExist) => Ok(()),
             Err(err) => Err(err.into()),
