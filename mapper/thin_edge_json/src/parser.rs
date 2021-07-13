@@ -91,11 +91,7 @@ where
             let key: Cow<str> = key;
 
             match key.as_ref() {
-                "type" => {
-                    return Err(de::Error::custom(
-                        "Invalid measurement name: \"type\" is a reserved word.",
-                    ))
-                }
+                "type" => return Err(de::Error::custom(invalid_measurement_name("type"))),
                 "time" => {
                     let timestamp_str: &str = map.next_value()?;
                     let timestamp = DateTime::parse_from_rfc3339(timestamp_str)
@@ -279,6 +275,10 @@ fn invalid_empty_measurement(key: &str) -> String {
     )
 }
 
+fn invalid_measurement_name(name: &str) -> String {
+    format!("Invalid measurement name: \"{}\" is a reserved word.", name)
+}
+
 fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
     const MAX_INPUT_EXCERPT: usize = 80;
     let input_excerpt =
@@ -290,7 +290,7 @@ fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
 }
 
 #[test]
-fn can_deserialize_thin_edge_json() -> anyhow::Result<()> {
+fn it_deserializes_thin_edge_json() -> anyhow::Result<()> {
     use crate::builder::ThinEdgeJsonBuilder;
     let input = r#"{
             "time" : "2021-04-30T17:03:14.123+02:00",
