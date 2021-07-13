@@ -56,5 +56,5 @@ OPTIONS:
     -q, --qos <qos>    QoS level (0, 1, 2) [default: 0]
 
 ARGS:
-    <topic>    Topic to publish
+    <topic>    Topic to subscribe to
 ```
