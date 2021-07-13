@@ -25,7 +25,7 @@ impl Default for CommonMosquittoConfig {
                 "subscribe".into(),
                 "unsubscribe".into(),
             ],
-            message_size_limit: "4MB".into(),
+            message_size_limit: "256MB".into(),
         }
     }
 }
@@ -74,7 +74,7 @@ fn test_serialize() -> anyhow::Result<()> {
     expected.insert("log_type information");
     expected.insert("log_type subscribe");
     expected.insert("log_type unsubscribe");
-    expected.insert("message_size_limit 4MB");
+    expected.insert("message_size_limit 256MB");
 
     assert_eq!(config_set, expected);
 

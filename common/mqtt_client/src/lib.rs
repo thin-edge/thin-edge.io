@@ -446,7 +446,8 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
-            packet_size: None,
+            // 256MB by default
+            packet_size: Some(268435456),
             queue_capacity: 10,
             clean_session: false,
         }
