@@ -25,7 +25,7 @@ pub enum TEdgeMqttCli {
 
     /// Subscribe a MQTT topic.
     Sub {
-        /// Topic to publish
+        /// Topic to subscribe to
         topic: String,
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
