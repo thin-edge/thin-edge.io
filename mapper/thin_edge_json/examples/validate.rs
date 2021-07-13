@@ -10,20 +10,14 @@ fn main() -> anyhow::Result<()> {
 
     let mut args = env::args();
     let _ = args.next();
-    let parser = args.next().expect("parser: json | stream");
     let input_file = args.next().expect("input: file name");
 
     let input = std::fs::read_to_string(input_file)?;
 
     let mut builder = DummyVisitor;
 
-    let res: anyhow::Result<()> = match parser.as_str() {
-        "json" => thin_edge_json::json::parse_str(&input, &mut builder).map_err(Into::into),
-        "stream" => thin_edge_json::stream::parse_str(&input, &mut builder).map_err(Into::into),
-        _ => {
-            anyhow::bail!("Invalid parser: either `json` or `stream`.");
-        }
-    };
+    let res: anyhow::Result<()> =
+        thin_edge_json::parser::parse_str(&input, &mut builder).map_err(Into::into);
 
     if res.is_ok() {
         println!("OK");

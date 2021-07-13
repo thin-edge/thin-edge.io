@@ -16,7 +16,7 @@
 use crate::serializer;
 use chrono::prelude::*;
 use clock::{Clock, WallClock};
-use thin_edge_json::stream::*;
+use thin_edge_json::parser::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {

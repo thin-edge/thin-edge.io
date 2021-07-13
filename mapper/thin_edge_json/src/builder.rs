@@ -1,4 +1,4 @@
-use crate::{data::*, json::ThinEdgeJsonError, measurement::*};
+use crate::{data::*, measurement::*};
 use chrono::prelude::*;
 
 /// A `MeasurementVisitor` that builds up `ThinEdgeJson`.
@@ -17,13 +17,13 @@ impl ThinEdgeJsonBuilder {
         }
     }
 
-    pub fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonError> {
+    pub fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonBuilderError> {
         if self.inside_group.is_some() {
-            return Err(ThinEdgeJsonError::UnexpectedOpenGroup);
+            return Err(ThinEdgeJsonBuilderError::UnexpectedOpenGroup);
         }
 
         if self.measurements.is_empty() {
-            return Err(ThinEdgeJsonError::EmptyThinEdgeJsonRoot);
+            return Err(ThinEdgeJsonBuilderError::EmptyThinEdgeJsonRoot);
         }
 
         Ok(ThinEdgeJson {
@@ -34,7 +34,7 @@ impl ThinEdgeJsonBuilder {
 }
 
 impl MeasurementVisitor for ThinEdgeJsonBuilder {
-    type Error = ThinEdgeJsonError;
+    type Error = ThinEdgeJsonBuilderError;
 
     fn visit_timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
         match self.timestamp {
@@ -42,7 +42,7 @@ impl MeasurementVisitor for ThinEdgeJsonBuilder {
                 self.timestamp = Some(value);
                 Ok(())
             }
-            Some(_) => Err(ThinEdgeJsonError::DuplicatedTimestamp),
+            Some(_) => Err(ThinEdgeJsonBuilderError::DuplicatedTimestamp),
         }
     }
 
@@ -63,7 +63,7 @@ impl MeasurementVisitor for ThinEdgeJsonBuilder {
             });
             Ok(())
         } else {
-            Err(ThinEdgeJsonError::UnexpectedStartOfGroup)
+            Err(ThinEdgeJsonBuilderError::UnexpectedStartOfGroup)
         }
     }
 
@@ -71,13 +71,34 @@ impl MeasurementVisitor for ThinEdgeJsonBuilder {
         match self.inside_group.take() {
             Some(group) => {
                 if group.values.is_empty() {
-                    return Err(ThinEdgeJsonError::EmptyThinEdgeJson { name: group.name });
+                    return Err(ThinEdgeJsonBuilderError::EmptyThinEdgeJson { name: group.name });
                 } else {
                     self.measurements.push(ThinEdgeValue::Multi(group))
                 }
             }
-            None => return Err(ThinEdgeJsonError::UnexpectedEndOfGroup),
+            None => return Err(ThinEdgeJsonBuilderError::UnexpectedEndOfGroup),
         }
         Ok(())
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ThinEdgeJsonBuilderError {
+    #[error("Empty Thin Edge measurement: it must contain at least one measurement")]
+    EmptyThinEdgeJsonRoot,
+
+    #[error("Empty Thin Edge measurement: {name:?} must contain at least one measurement")]
+    EmptyThinEdgeJson { name: String },
+
+    #[error("... time stamp within a group")]
+    DuplicatedTimestamp,
+
+    #[error("Unexpected open group")]
+    UnexpectedOpenGroup,
+
+    #[error("Unexpected start of group")]
+    UnexpectedStartOfGroup,
+
+    #[error("Unexpected end of group")]
+    UnexpectedEndOfGroup,
 }

@@ -44,15 +44,10 @@ fn parse_stream(input: &str) {
     thin_edge_json::stream::parse_str(input, &mut DummyVisitor).unwrap();
 }
 
-fn parse_json(input: &str) {
-    thin_edge_json::json::parse_str(input, &mut DummyVisitor).unwrap();
-}
-
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("parse_stream", |b| {
         b.iter(|| parse_stream(black_box(INPUT)))
     });
-    c.bench_function("parse_json", |b| b.iter(|| parse_json(black_box(INPUT))));
 }
 
 criterion_group!(benches, criterion_benchmark);

@@ -12,8 +12,6 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
 
-pub type ThinEdgeJsonParserError = serde_json::Error;
-
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(
     input: &str,
@@ -23,8 +21,20 @@ pub fn parse_str<T: MeasurementVisitor>(
 
     let parser = ThinEdgeJsonParser { visitor };
 
-    let () = deserializer.deserialize_map(parser)?;
+    let () = deserializer
+        .deserialize_map(parser)
+        .map_err(|error| map_error(error, input))?;
     Ok(())
+}
+
+/// The error returned by `parse_str`.
+#[derive(Debug, thiserror::Error)]
+#[error("{error}: `{input_excerpt}`")]
+pub struct ThinEdgeJsonParserError {
+    /// The underlying serde error.
+    error: serde_json::Error,
+    /// An excerpt from the input string near the error location.
+    input_excerpt: String,
 }
 
 /// Parses top-level ThinEdge JSON:
@@ -269,6 +279,16 @@ fn invalid_empty_measurement(key: &str) -> String {
     )
 }
 
+fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
+    const MAX_INPUT_EXCERPT: usize = 80;
+    let input_excerpt =
+        crate::utils::excerpt(input, error.line(), error.column(), MAX_INPUT_EXCERPT);
+    ThinEdgeJsonParserError {
+        error,
+        input_excerpt,
+    }
+}
+
 #[test]
 fn can_deserialize_thin_edge_json() -> anyhow::Result<()> {
     use crate::builder::ThinEdgeJsonBuilder;
@@ -312,5 +332,25 @@ fn can_deserialize_thin_edge_json() -> anyhow::Result<()> {
             (r#"escaped\"#, 123.0).into(),
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn it_shows_input_excerpt_on_error() -> anyhow::Result<()> {
+    use crate::builder::ThinEdgeJsonBuilder;
+
+    let input = "{\n\"time\" : null\n}";
+
+    let mut builder = ThinEdgeJsonBuilder::new();
+
+    let res = parse_str(input, &mut builder);
+
+    assert!(res.is_err());
+
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "invalid type: null, expected a borrowed string at line 2 column 13: `l\n}`",
+    );
+
     Ok(())
 }
