@@ -32,6 +32,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 cloud: Cloud::C8y,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
+                service_manager: context.service_manager.clone(),
             },
             TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
                 config_location: context.config_location,
@@ -39,6 +40,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 cloud: Cloud::Azure,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
+                service_manager: context.service_manager.clone(),
             },
         }
         .into_boxed())

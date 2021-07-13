@@ -1,13 +1,16 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use crate::system_services::*;
 use anyhow::Context;
+use std::sync::Arc;
 use structopt::StructOpt;
+use tedge_users::UserManager;
 
 mod cli;
 mod command;
 mod error;
-mod services;
+mod system_services;
 mod utils;
 
 type ConfigError = crate::error::TEdgeError;
@@ -34,6 +37,7 @@ fn main() -> anyhow::Result<()> {
     let build_context = BuildContext {
         config_repository,
         config_location: tedge_config_location,
+        service_manager: service_manager(context.user_manager.clone()),
     };
 
     let cmd = opt
@@ -43,4 +47,16 @@ fn main() -> anyhow::Result<()> {
 
     cmd.execute(&context)
         .with_context(|| format!("failed to {}", cmd.description()))
+}
+
+fn service_manager(user_manager: UserManager) -> Arc<dyn SystemServiceManager> {
+    if cfg!(feature = "openrc") {
+        Arc::new(OpenRcServiceManager::new(user_manager))
+    } else if cfg!(target_os = "linux") {
+        Arc::new(SystemdServiceManager::new(user_manager))
+    } else if cfg!(target_os = "freebsd") {
+        Arc::new(BsdServiceManager::new(user_manager))
+    } else {
+        Arc::new(NullSystemServiceManager)
+    }
 }
