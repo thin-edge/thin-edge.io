@@ -1,10 +1,9 @@
 use clock::WallClock;
 use mqtt_client::{Client, MqttClient};
 use std::sync::Arc;
-use thin_edge_json::group::MeasurementGrouper;
 use tracing::{instrument, log::error};
 
-use crate::{
+use crate::collectd_mapper::{
     batcher::{MessageBatchPublisher, MessageBatcher},
     error::DeviceMonitorError,
 };
@@ -70,7 +69,8 @@ impl DeviceMonitor {
         let mqtt_client: Arc<dyn MqttClient> =
             Arc::new(Client::connect(self.device_monitor_config.mqtt_client_id, &config).await?);
 
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<MeasurementGrouper>();
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<thin_edge_json::group::MeasurementGroup>();
 
         let message_batch_producer = MessageBatcher::new(
             sender,

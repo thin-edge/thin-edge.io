@@ -1,4 +1,4 @@
-use crate::measurement::GroupedMeasurementVisitor;
+use crate::measurement::MeasurementVisitor;
 use chrono::offset::FixedOffset;
 use chrono::DateTime;
 use json_writer::{JsonWriter, JsonWriterError};
@@ -65,7 +65,7 @@ impl ThinEdgeJsonSerializer {
 
         if !self.timestamp_present {
             if let Some(default_timestamp) = self.default_timestamp {
-                let () = self.timestamp(default_timestamp)?;
+                let () = self.visit_timestamp(default_timestamp)?;
             }
         }
 
@@ -89,10 +89,10 @@ impl Default for ThinEdgeJsonSerializer {
     }
 }
 
-impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
+impl MeasurementVisitor for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
 
-    fn timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
@@ -103,13 +103,13 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         Ok(())
     }
 
-    fn measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
+    fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
         self.json.write_key(name)?;
         self.json.write_f64(value)?;
         Ok(())
     }
 
-    fn start_group(&mut self, group: &str) -> Result<(), Self::Error> {
+    fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
@@ -120,7 +120,7 @@ impl GroupedMeasurementVisitor for ThinEdgeJsonSerializer {
         Ok(())
     }
 
-    fn end_group(&mut self) -> Result<(), Self::Error> {
+    fn visit_end_group(&mut self) -> Result<(), Self::Error> {
         if !self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
@@ -145,8 +145,8 @@ mod tests {
         let mut serializer = ThinEdgeJsonSerializer::new();
         let timestamp = test_timestamp();
 
-        serializer.timestamp(timestamp)?;
-        serializer.measurement("temperature", 25.5)?;
+        serializer.visit_timestamp(timestamp)?;
+        serializer.visit_measurement("temperature", 25.5)?;
 
         let body = r#""temperature":25.5"#;
         let expected_output = format!(r#"{{"time":"{}",{}}}"#, timestamp.to_rfc3339(), body);
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn serialize_single_value_no_timestamp_message() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
-        serializer.measurement("temperature", 25.5)?;
+        serializer.visit_measurement("temperature", 25.5)?;
         let expected_output = r#"{"temperature":25.5}"#;
         let output = serializer.into_string()?;
         assert_eq!(output, expected_output);
@@ -169,14 +169,14 @@ mod tests {
     fn serialize_multi_value_message() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
         let timestamp = test_timestamp();
-        serializer.timestamp(timestamp)?;
-        serializer.measurement("temperature", 25.5)?;
-        serializer.start_group("location")?;
-        serializer.measurement("alti", 2100.4)?;
-        serializer.measurement("longi", 2200.4)?;
-        serializer.measurement("lati", 2300.4)?;
-        serializer.end_group()?;
-        serializer.measurement("pressure", 255.0)?;
+        serializer.visit_timestamp(timestamp)?;
+        serializer.visit_measurement("temperature", 25.5)?;
+        serializer.visit_start_group("location")?;
+        serializer.visit_measurement("alti", 2100.4)?;
+        serializer.visit_measurement("longi", 2200.4)?;
+        serializer.visit_measurement("lati", 2300.4)?;
+        serializer.visit_end_group()?;
+        serializer.visit_measurement("pressure", 255.0)?;
         let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255.0}"#;
         let expected_output = format!(r#"{{"time":"{}",{}"#, timestamp.to_rfc3339(), body);
         let output = serializer.into_string()?;
@@ -197,7 +197,7 @@ mod tests {
     fn serialize_timestamp_message() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
         let timestamp = test_timestamp();
-        serializer.timestamp(timestamp)?;
+        serializer.visit_timestamp(timestamp)?;
         let expected_output = format!(r#"{{"time":"{}"{}"#, timestamp.to_rfc3339(), "}");
         let output = serializer.into_string()?;
         assert_eq!(expected_output, output);
@@ -208,8 +208,8 @@ mod tests {
     fn serialize_timestamp_within_group() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
         let timestamp = test_timestamp();
-        serializer.start_group("location")?;
-        let result = serializer.timestamp(timestamp);
+        serializer.visit_start_group("location")?;
+        let result = serializer.visit_timestamp(timestamp);
         let expected_error = "Unexpected time stamp within a group";
         assert_eq!(expected_error, result.unwrap_err().to_string());
         Ok(())
@@ -218,9 +218,9 @@ mod tests {
     #[test]
     fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
-        serializer.measurement("alti", 2100.4)?;
-        serializer.measurement("longi", 2200.4)?;
-        let result = serializer.end_group();
+        serializer.visit_measurement("alti", 2100.4)?;
+        serializer.visit_measurement("longi", 2200.4)?;
+        let result = serializer.visit_end_group();
         let expected_error = "Unexpected end of group";
         assert_eq!(expected_error, result.unwrap_err().to_string());
         Ok(())
@@ -229,10 +229,10 @@ mod tests {
     #[test]
     fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
-        serializer.start_group("location")?;
-        serializer.measurement("alti", 2100.4)?;
-        serializer.measurement("longi", 2200.4)?;
-        let result = serializer.start_group("location");
+        serializer.visit_start_group("location")?;
+        serializer.visit_measurement("alti", 2100.4)?;
+        serializer.visit_measurement("longi", 2200.4)?;
+        let result = serializer.visit_start_group("location");
         let expected_error = "Unexpected start of group";
         assert_eq!(expected_error, result.unwrap_err().to_string());
         Ok(())
@@ -241,9 +241,9 @@ mod tests {
     #[test]
     fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
         let mut serializer = ThinEdgeJsonSerializer::new();
-        serializer.start_group("location")?;
-        serializer.measurement("alti", 2100.4)?;
-        serializer.measurement("longi", 2200.4)?;
+        serializer.visit_start_group("location")?;
+        serializer.visit_measurement("alti", 2100.4)?;
+        serializer.visit_measurement("longi", 2200.4)?;
         let expected_error = "Unexpected end of data";
         let result = serializer.into_string();
         assert_eq!(expected_error, result.unwrap_err().to_string());

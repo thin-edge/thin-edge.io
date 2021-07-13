@@ -1,4 +1,3 @@
-
 name: build-workflow
 
 on:
@@ -8,21 +7,18 @@ on:
     types:
       - completed
   workflow_dispatch:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
   build_amd64:
-
     name: Build tedge and mapper Debian packages for amd64
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -58,12 +54,12 @@ jobs:
           command: deb
           args: -p tedge_mapper
 
-      - name: Build collectd_mapper debian package
+      - name: Build tedge_apt_plugin debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p collectd_mapper
+          args: -p tedge_apt_plugin
 
       - name: build examples for amd64
         uses: actions-rs/cargo@v1
@@ -86,17 +82,23 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-  build_armv7:
-
+  build_matrix_arm:
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    env:
-      TARGET: armv7-unknown-linux-gnueabihf
+    strategy:
+      matrix:
+        # Currently only arm targets, as we use a custom strip binary !
+        target:
+          [
+            aarch64-unknown-linux-gnu,
+            aarch64-unknown-linux-musl,
+            arm-unknown-linux-gnueabihf,
+            armv7-unknown-linux-gnueabihf,
+            armv7-unknown-linux-musleabihf,
+          ]
 
     steps:
-
       - name: checkout
         uses: actions/checkout@v2
 
@@ -105,7 +107,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ env.TARGET}}
+          target: ${{ matrix.target }}
           override: true
 
       - name: Enable cache
@@ -132,55 +134,61 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=${{ env.TARGET }}
+          args: --release --target=${{ matrix.target }}
 
-      - name: strip binaries (cargo deb fails to strip)
-        # TODO This does not seem to work right
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: strip
+      # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
+      # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
+      - name: Install binutils to add `strip` for striping arm binaries
+        run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
+
+      - name: Strip tedge
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge
+
+      - name: Strip tedge_mapper
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_mapper
+
+      - name: Strip tedge_apt_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
 
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build tedge_mapper debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge_mapper --no-strip --no-build --target=${{ env.TARGET }}
+          args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
 
-      - name: build collectd_mapper debian package for target
+      - name: build tedge_apt_plugin debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p collectd_mapper --no-strip --no-build --target=${{ env.TARGET }}
- 
+          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
+
       - name: build examples
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           use-cross: true
           command: build
-          args: --release --examples --target=${{ env.TARGET }}
+          args: --release --examples --target=${{ matrix.target }}
 
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: debian-packages-armhf
-          path: target/${{ env.TARGET }}/debian/*.deb
+          name: debian-packages-${{ matrix.target }}
+          path: target/${{ matrix.target }}/debian/*.deb
 
       - name: upload examples as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: examples_armhf
-          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
-
+          name: examples_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
