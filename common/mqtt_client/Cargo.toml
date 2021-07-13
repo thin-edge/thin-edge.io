@@ -12,7 +12,7 @@ thiserror = "1.0"
 tokio = { version = "1.8", features = ["sync", "macros"] }
 mockall = "0.10"
 async-trait = "0.1"
-anyhow = "1.0"
+anyhow="1.0.0"
 
 [dev-dependencies]
 async-log = "2.0"

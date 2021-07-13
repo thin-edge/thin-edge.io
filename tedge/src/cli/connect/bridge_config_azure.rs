@@ -10,7 +10,6 @@ pub struct BridgeConfigAzureParams {
     pub bridge_root_cert_path: FilePath,
     pub bridge_certfile: FilePath,
     pub bridge_keyfile: FilePath,
-    pub bridge_max_packet_size: String,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -23,7 +22,6 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             remote_clientid,
             bridge_certfile,
             bridge_keyfile,
-            bridge_max_packet_size,
         } = params;
 
         let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
@@ -60,7 +58,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
-            bridge_max_packet_size: "256KB".into(),
+            bridge_max_packet_size: 262144,
         }
     }
 }
@@ -77,7 +75,6 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_root_cert_path: "./test_root.pem".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
-        bridge_max_packet_size: "256KB".into(),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -105,7 +102,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         clean_session: true,
         notifications: false,
         bridge_attempt_unsubscribe: false,
-        bridge_max_packet_size: "256KB".into(),
+        bridge_max_packet_size: 262144,
     };
 
     assert_eq!(bridge, expected);

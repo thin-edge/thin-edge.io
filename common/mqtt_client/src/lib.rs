@@ -325,7 +325,6 @@ impl Client {
                                 )
                             ) =>
                         {
-                            println!("Payloadsizelimit exceeded");
                             true
                         }
                         rumqttc::ConnectionError::Mqtt4Bytes(packet_size)
@@ -334,7 +333,6 @@ impl Client {
                                 rumqttc::Error::PayloadSizeLimitExceeded(_)
                             ) =>
                         {
-                            println!("Payloadsizelimit exceeded");
                             true
                         }
                         _ => false,
@@ -447,7 +445,7 @@ impl Default for Config {
             port: 1883,
             inflight: None,
             // 256MB by default
-            packet_size: Some(268435456),
+            packet_size: Some(268435455),
             queue_capacity: 10,
             clean_session: false,
         }

@@ -1,4 +1,5 @@
 use crate::cli::connect::ConnectError;
+
 use tedge_config::FilePath;
 use url::Url;
 
@@ -21,7 +22,7 @@ pub struct BridgeConfig {
     pub notifications: bool,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
-    pub bridge_max_packet_size: String,
+    pub bridge_max_packet_size: u32,
 }
 
 impl BridgeConfig {
@@ -64,7 +65,7 @@ impl BridgeConfig {
         writeln!(
             writer,
             "bridge_max_packet_size {}",
-            self.bridge_max_packet_size
+            self.bridge_max_packet_size.to_string()
         )?;
         Ok(())
     }
@@ -92,6 +93,7 @@ impl BridgeConfig {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     #[test]
@@ -117,7 +119,7 @@ mod test {
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: "32KB".into(),
+            bridge_max_packet_size: 16384,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -144,7 +146,7 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
-bridge_max_packet_size 32KB
+bridge_max_packet_size 16384
 "#,
         );
 
@@ -176,7 +178,7 @@ bridge_max_packet_size 32KB
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: "32KB".into(),
+            bridge_max_packet_size: 16384,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -202,7 +204,7 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
-bridge_max_packet_size 32KB
+bridge_max_packet_size 16384
 "#,
         );
 
@@ -237,7 +239,7 @@ bridge_max_packet_size 32KB
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: "32KB".into(),
+            bridge_max_packet_size: 16384,
         };
 
         let mut buffer = Vec::new();
@@ -267,7 +269,7 @@ bridge_max_packet_size 32KB
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
-        expected.insert("bridge_max_packet_size 32KB");
+        expected.insert("bridge_max_packet_size 16384");
         assert_eq!(config_set, expected);
 
         Ok(())
@@ -368,7 +370,7 @@ bridge_max_packet_size 32KB
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![],
-            bridge_max_packet_size: "32KB".into(),
+            bridge_max_packet_size: 16384,
         }
     }
 }
