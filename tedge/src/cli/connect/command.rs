@@ -1,10 +1,4 @@
-use crate::{
-    cli::connect::*,
-    command::{Command, ExecutionContext},
-    system_services::*,
-    utils::paths,
-    ConfigError,
-};
+use crate::{cli::connect::*, command::Command, system_services::*, utils::paths, ConfigError};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -63,7 +57,7 @@ impl Command for ConnectCommand {
         }
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         let mut config = self.config_repository.load()?;
 
         if self.is_test_connection {

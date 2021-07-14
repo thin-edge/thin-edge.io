@@ -1,8 +1,5 @@
 use super::error::{get_webpki_error_from_reqwest, CertError};
-use crate::{
-    command::{Command, ExecutionContext},
-    utils,
-};
+use crate::{command::Command, utils};
 
 use reqwest::{StatusCode, Url};
 use std::{io::prelude::*, path::Path};
@@ -35,7 +32,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         Ok(self.upload_certificate()?)
     }
 }
