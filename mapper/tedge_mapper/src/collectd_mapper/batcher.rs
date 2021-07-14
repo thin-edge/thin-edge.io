@@ -40,12 +40,7 @@ impl MessageBatch {
         &mut self,
         collectd_message: CollectdMessage,
     ) -> Result<(), DeviceMonitorError> {
-        self.message_grouper
-            .visit_start_group(&collectd_message.metric_group_key)?;
-        self.message_grouper
-            .visit_measurement(collectd_message.metric_key, collectd_message.metric_value)?;
-        self.message_grouper.visit_end_group()?;
-
+        collectd_message.accept(&mut self.message_grouper)?;
         Ok(())
     }
 
@@ -240,7 +235,7 @@ mod tests {
 
         let message_group = message_batch.end_batch()?;
 
-        assert_matches!(message_group.timestamp, Some(_));
+        assert_matches!(message_group.timestamp(), Some(_));
 
         assert_eq!(
             message_group.get_measurement_value(Some("temperature"), "value"),

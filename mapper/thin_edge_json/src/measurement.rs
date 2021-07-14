@@ -77,4 +77,18 @@ pub trait MeasurementVisitor {
 
     /// End to gather measurements for the current group.
     fn visit_end_group(&mut self) -> Result<(), Self::Error>;
+
+    /// A single measurement contained in `group`. Defaults to a sequence of
+    /// `visit_start_group`, `visit_measurement` and `visit_end_group`.
+    fn visit_grouped_measurement(
+        &mut self,
+        group: &str,
+        name: &str,
+        value: f64,
+    ) -> Result<(), Self::Error> {
+        let () = self.visit_start_group(group)?;
+        let () = self.visit_measurement(name, value)?;
+        let () = self.visit_end_group()?;
+        Ok(())
+    }
 }

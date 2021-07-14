@@ -1,4 +1,5 @@
 use mqtt_client::Message;
+use thin_edge_json::measurement::MeasurementVisitor;
 
 #[derive(Debug)]
 pub struct CollectdMessage<'a> {
@@ -23,6 +24,13 @@ pub enum CollectdError {
 }
 
 impl<'a> CollectdMessage<'a> {
+    pub fn accept<T>(&self, visitor: &mut T) -> Result<(), T::Error>
+    where
+        T: MeasurementVisitor,
+    {
+        visitor.visit_grouped_measurement(self.metric_group_key, self.metric_key, self.metric_value)
+    }
+
     #[cfg(test)]
     pub fn new(metric_group_key: &'a str, metric_key: &'a str, metric_value: f64) -> Self {
         Self {
