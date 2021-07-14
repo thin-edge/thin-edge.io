@@ -1,5 +1,5 @@
 use crate::cli::mqtt::MqttError;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Message, MqttClient, QoS, TopicFilter};
@@ -21,7 +21,7 @@ impl Command for MqttSubscribeCommand {
         )
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         Ok(subscribe(self)?)
     }
 }
