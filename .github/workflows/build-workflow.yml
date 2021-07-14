@@ -92,11 +92,11 @@ jobs:
         # Currently only arm targets, as we use a custom strip binary !
         target:
           [
-            aarch64-unknown-linux-gnu,
-            aarch64-unknown-linux-musl,
-            arm-unknown-linux-gnueabihf,
+            #aarch64-unknown-linux-gnu,
+            #aarch64-unknown-linux-musl,
+            #arm-unknown-linux-gnueabihf,
             armv7-unknown-linux-gnueabihf,
-            armv7-unknown-linux-musleabihf,
+            #armv7-unknown-linux-musleabihf,
           ]
 
     steps:
