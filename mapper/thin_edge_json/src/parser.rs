@@ -29,7 +29,7 @@ pub fn parse_str<T: MeasurementVisitor>(
 
 /// The error returned by `parse_str`.
 #[derive(Debug, thiserror::Error)]
-#[error("{error}: `{input_excerpt}`")]
+#[error("Invalid JSON: {error}: `{input_excerpt}`")]
 pub struct ThinEdgeJsonParserError {
     /// The underlying serde error.
     error: serde_json::Error,
@@ -349,7 +349,7 @@ fn it_shows_input_excerpt_on_error() -> anyhow::Result<()> {
 
     assert_eq!(
         res.unwrap_err().to_string(),
-        "invalid type: null, expected a borrowed string at line 2 column 13: `l\n}`",
+        "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}`",
     );
 
     Ok(())
