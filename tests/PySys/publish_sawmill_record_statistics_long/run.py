@@ -110,7 +110,7 @@ class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
             command="/bin/sh",
             arguments=[
                 "-c",
-                "while true; do cat /proc/$(pgrep -x tedge_mapper)/statm; sleep 1; done",
+                "while true; do cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/statm; sleep 1; done",
             ],
             stdouterr="statm_mapper_stdout",
             background=True,
@@ -152,11 +152,9 @@ class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
         self.assertGrep('stat_mapper_stdout.out', 'tedge_mapper', contains=True)
         self.assertGrep('stat_mosquitto_stdout.out', 'mosquitto', contains=True)
 
-        self.assertGrep('statm_mapper_stdout.out', expr=r'\d', contains=True)
-        self.assertGrep('statm_mosquitto_stdout.out', expr=r'\d', contains=True)
-
-
-
+        # Match 7 numbers separated by space
+        self.assertGrep('statm_mapper_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
+        self.assertGrep('statm_mosquitto_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
 
     def mycleanup(self):
         self.log.info("My Cleanup")
