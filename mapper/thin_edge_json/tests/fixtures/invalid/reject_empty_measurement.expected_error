@@ -1,0 +1,3 @@
+Invalid JSON: Empty Thin Edge measurement: "foo" must contain at least one measurement at line 2 column 12: `}
+}
+`
