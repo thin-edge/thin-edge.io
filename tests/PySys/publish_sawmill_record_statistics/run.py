@@ -128,8 +128,9 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
         self.assertGrep('stat_mapper_stdout.out', 'tedge_mapper', contains=True)
         self.assertGrep('stat_mosquitto_stdout.out', 'mosquitto', contains=True)
 
-        self.assertGrep('statm_mapper_stdout.out', expr=r'\d', contains=True)
-        self.assertGrep('statm_mosquitto_stdout.out', expr=r'\d', contains=True)
+        # Match 7 numbers separated by space
+        self.assertGrep('statm_mapper_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
+        self.assertGrep('statm_mosquitto_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
 
 
 
