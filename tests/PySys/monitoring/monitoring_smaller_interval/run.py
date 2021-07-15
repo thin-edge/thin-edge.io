@@ -11,10 +11,10 @@ Given a configured system
 When we start the tedge-mapper-collectd with sudo in the background
 When we start tedge sub with sudo in the background
 When we start two publishers to publish the simulated collectd messages
-Publish the messages in 100ms interval
+Publish the messages in 200ms interval
 Wait for couple of seconds to publish couple of batch of messages
 Then we kill tedge sub with sudo as it is running with a different user account
-Then we validate the  messages in the output of tedge sub,
+Then we validate the messages in the output of tedge sub,
 
 """
 
