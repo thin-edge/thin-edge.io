@@ -54,7 +54,7 @@ class MonitoringSmallInterval(BaseTest):
         # to initialize. This is a heuristic measure.
         # Without an additional wait we observe failures in 1% of the test
         # runs.
-        time.sleep(0.1)
+        time.sleep(0.2)
 
         for _ in range(10):
 
@@ -73,7 +73,7 @@ class MonitoringSmallInterval(BaseTest):
             )
 
             # publish every 100ms
-            time.sleep(0.1)
+            time.sleep(0.2)
 
         # wait for tedge-mapper-collectd to batch messages
         time.sleep(1)
