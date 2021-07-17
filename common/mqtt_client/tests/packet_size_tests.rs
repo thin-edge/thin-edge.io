@@ -5,7 +5,7 @@ use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, Topi
 use tokio::time::Duration;
 #[derive(Debug)]
 enum TestJoinError {
-    MyMqttClientError(MqttClientError),
+    TestMqttClientError(MqttClientError),
     ElapseTime,
 }
 
@@ -81,13 +81,7 @@ async fn subscribe_messages() -> Result<(), anyhow::Error> {
 
 async fn publish_messages() -> Result<(), anyhow::Error> {
     // create a 128MB message
-    let data: String = "Some data!".into();
-    let loops = 134217728 / data.len();
-    let mut buffer = String::with_capacity(134217728);
-    for _ in 0..loops {
-        buffer.push_str("Some data!");
-    }
-
+    let buffer = create_packet(134217728);
     let topic = Topic::new("test/hello")?;
     let client = Client::connect("publish_big_data", &mqtt_client::Config::default()).await?;
 
@@ -108,30 +102,25 @@ async fn publish_messages() -> Result<(), anyhow::Error> {
 
 async fn publish_big_message() -> Result<(), anyhow::Error> {
     // create a 260MB message
-    let data: String = "Some data!".into();
-    let loops = 272629760 / data.len();
-    let mut buffer = String::with_capacity(272629760);
-    //let mut buffer: String = "hello".into();
-    for _ in 0..loops {
-        buffer.push_str("Some data!");
-    }
+    let buffer = create_packet(272629760);
 
     let topic = Topic::new("test/hello")?;
     let publish_client =
         Client::connect("publish_big_data", &mqtt_client::Config::default()).await?;
 
     let message = Message::new(&topic, buffer.clone()).qos(QoS::ExactlyOnce);
+
     let publish_handle = publish_client.publish(message);
 
     let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(8),
-        subscribe_errors(&publish_client).map_err(|e| TestJoinError::MyMqttClientError(e)),
+        std::time::Duration::from_secs(2),
+        subscribe_errors(&publish_client).map_err(|e| TestJoinError::TestMqttClientError(e)),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
 
     let res = tokio::try_join!(
         timeout,
-        publish_handle.map_err(|e| TestJoinError::MyMqttClientError(e))
+        publish_handle.map_err(|e| TestJoinError::TestMqttClientError(e))
     );
 
     match res {
@@ -148,4 +137,14 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
             return Ok(());
         }
     }
+}
+
+fn create_packet(size: usize) -> String {
+    let data: String = "Some data!".into();
+    let loops = size / data.len();
+    let mut buffer = String::with_capacity(size);
+    for _ in 0..loops {
+        buffer.push_str("Some data!");
+    }
+    buffer
 }
