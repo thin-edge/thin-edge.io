@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use json_writer::{JsonWriter, JsonWriterError};
-use thin_edge_json::{json::ThinEdgeJsonError, measurement::MeasurementVisitor};
+use thin_edge_json::measurement::MeasurementVisitor;
 
 pub struct C8yJsonSerializer {
     json: JsonWriter,
@@ -12,16 +12,7 @@ pub struct C8yJsonSerializer {
 #[derive(thiserror::Error, Debug)]
 pub enum C8yJsonSerializationError {
     #[error(transparent)]
-    FormatError(#[from] std::fmt::Error),
-
-    #[error(transparent)]
     MeasurementCollectorError(#[from] MeasurementStreamError),
-
-    #[error(transparent)]
-    ThinEdgeJsonParseError(#[from] ThinEdgeJsonError),
-
-    #[error("Serializer produced invalid Utf8 string")]
-    InvalidUtf8ConversionToString(std::string::FromUtf8Error),
 
     #[error(transparent)]
     JsonWriterError(#[from] JsonWriterError),

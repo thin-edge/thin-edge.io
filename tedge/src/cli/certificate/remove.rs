@@ -1,4 +1,4 @@
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 use crate::utils::paths::*;
 
 use tedge_config::*;
@@ -13,6 +13,9 @@ pub struct RemoveCertCmd {
 
     /// The path of the private key to be removed
     pub key_path: FilePath,
+
+    /// The UserManager required to change effective user id.
+    pub user_manager: UserManager,
 }
 
 impl Command for RemoveCertCmd {
@@ -20,15 +23,15 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
-        let () = self.remove_certificate(&context.user_manager)?;
+    fn execute(&self) -> anyhow::Result<()> {
+        let () = self.remove_certificate()?;
         Ok(())
     }
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self, user_manager: &UserManager) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
+    fn remove_certificate(&self) -> Result<(), CertError> {
+        let _user_guard = self.user_manager.become_user(tedge_users::BROKER_USER)?;
         std::fs::remove_file(&self.cert_path).or_else(ok_if_not_found)?;
         std::fs::remove_file(&self.key_path).or_else(ok_if_not_found)?;
 

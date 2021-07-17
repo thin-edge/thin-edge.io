@@ -57,7 +57,7 @@ fn initialise_logging() {
         .init();
 }
 
-fn tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+fn tedge_config() -> anyhow::Result<TEdgeConfig> {
     let config_repository = config_repository()?;
     Ok(config_repository.load()?)
 }

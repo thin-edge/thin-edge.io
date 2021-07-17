@@ -105,14 +105,14 @@ class MqttPortChangeConnectionWorks(BaseTest):
         # restart the collectd mapper to use recently set port
         c8y_mapper_status = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "restart", "collectd-mapper.service"],
+            arguments=["systemctl", "restart", "tedge-mapper-collectd.service"],
             stdouterr="collectd_mapper_restart",
         )
 
         # check the status of the collectd mapper
         c8y_mapper_status = self.startProcess(
             command=self.sudo,
-            arguments=["systemctl", "status", "collectd-mapper.service"],
+            arguments=["systemctl", "status", "tedge-mapper-collectd.service"],
             stdouterr="collectd_mapper_status",
         )
 

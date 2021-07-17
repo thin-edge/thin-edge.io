@@ -1,5 +1,5 @@
 use crate::cli::config::ConfigKey;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 
 pub struct GetConfigCommand {
     pub config_key: ConfigKey,
@@ -14,7 +14,7 @@ impl Command for GetConfigCommand {
         )
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         match (self.config_key.get)(&self.config) {
             Ok(value) => {
                 println!("{}", value);

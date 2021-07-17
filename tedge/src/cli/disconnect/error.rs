@@ -1,4 +1,3 @@
-use crate::services;
 use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
@@ -13,7 +12,7 @@ pub enum DisconnectBridgeError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    ServicesError(#[from] services::ServicesError),
+    SystemServiceError(#[from] crate::system_services::SystemServiceError),
 
     #[error("Bridge file does not exist.")]
     BridgeFileDoesNotExist,

@@ -1,5 +1,5 @@
 use crate::cli::config::config_key::*;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 use crate::ConfigError;
 use tedge_config::*;
 
@@ -15,7 +15,7 @@ impl Command for ListConfigCommand {
         "list the configuration keys and values".into()
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         if self.is_doc {
             print_config_doc(&self.config_keys);
         } else {

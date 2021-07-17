@@ -33,9 +33,7 @@ pub enum ConversionError {
     ThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    ThinEdgeJsonParserError(
-        #[from] thin_edge_json::json::ThinEdgeJsonParserError<ThinEdgeJsonSerializationError>,
-    ),
+    ThinEdgeJsonParserError(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]
     MessageSizeExceededError(#[from] SizeThresholdExceeded),
