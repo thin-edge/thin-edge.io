@@ -278,6 +278,7 @@ impl Client {
                         QoS::ExactlyOnce => {
                             // Do not announce the incoming publish message immediately in case
                             // of QoS=2. Wait for the PUBREL.
+
                             let _ = pending_received_messages.insert(msg.pkid, msg.into());
                         }
                     }
@@ -317,24 +318,8 @@ impl Client {
                         {
                             true
                         }
-                        rumqttc::ConnectionError::MqttState(state_error)
-                            if matches!(
-                                state_error,
-                                StateError::Deserialization(
-                                    rumqttc::Error::PayloadSizeLimitExceeded(_)
-                                )
-                            ) =>
-                        {
-                            true
-                        }
-                        rumqttc::ConnectionError::Mqtt4Bytes(packet_size)
-                            if matches!(
-                                packet_size,
-                                rumqttc::Error::PayloadSizeLimitExceeded(_)
-                            ) =>
-                        {
-                            true
-                        }
+                        rumqttc::ConnectionError::MqttState(_) => true,
+                        rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
                         _ => false,
                     };
 

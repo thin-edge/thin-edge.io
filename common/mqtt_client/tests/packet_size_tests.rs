@@ -1,15 +1,10 @@
-use std::ops::Deref;
-
-use assert_matches::*;
 use futures::future::TryFutureExt;
 use librumqttd::{async_locallink, Config};
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
-use rumqttc::MqttState;
+
 use tokio::time::Duration;
 #[derive(Debug)]
-enum MyJoinError {
-    // MyMqttConnectionError(MqttConnectionError),
-    MyJoinHandleError(anyhow::Error),
+enum TestJoinError {
     MyMqttClientError(MqttClientError),
     ElapseTime,
 }
@@ -17,20 +12,18 @@ enum MyJoinError {
 #[tokio::test]
 //#[cfg(feature = "integration-test")]
 // This checks the mqtt packets are within the limit or not
-
-async fn pub_sub_packets_within_limit() -> anyhow::Result<()> {
-    println!("Start the broker");
+async fn packet_size_within_limit() -> anyhow::Result<()> {
+    println!("Start the local broker");
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
 
     println!("Start the subscriber");
-    let _subscriber = tokio::spawn(async move { sub().await });
+    let _subscriber = tokio::spawn(async move { subscribe().await });
 
     println!("Start the publisher and publish 3 messages");
 
     // create a 128MB message
     let data: String = "Some data!".into();
     let loops = 134217728 / data.len();
-
     let mut buffer: String = "hello".into();
     for _ in 0..loops {
         buffer.push_str("Some data!");
@@ -52,23 +45,21 @@ async fn pub_sub_packets_within_limit() -> anyhow::Result<()> {
     }
 
     client.disconnect().await?;
-    mqtt_server_handle.abort();
     assert!(cnt >= 3);
-    //std::process::exit(1);
+    mqtt_server_handle.abort();
     Ok(())
 }
 
 #[tokio::test]
-async fn packetsize_fail() -> anyhow::Result<()> {
+//#[cfg(feature = "integration-test")]
+// This checks the mqtt packet size that exceeds the limit
+async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
     println!("Start the broker");
-    let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
 
-    // println!("Start the subscriber");
-    // let _subscriber = tokio::spawn(async move { sub().await });
+    println!("Start the publisher and publish a message");
 
-    println!("Start the publisher and publish 3 messages");
-
-    // create a 128MB message
+    // create a 260MB message
     let data: String = "Some data!".into();
     let loops = 272629760 / data.len();
 
@@ -81,70 +72,39 @@ async fn packetsize_fail() -> anyhow::Result<()> {
     let publish_client =
         Client::connect("publish_big_data", &mqtt_client::Config::default()).await?;
 
-    //let error_handle = subscribe_errors(publish_client).await;
-
-    // let mut errors = publish_client.subscribe_errors();
-    // let error_handle = tokio::spawn(async move {
-    //     while let Some(error) = errors.next().await {
-    //         // assert_matches!(
-    //         //     mqtt_client::MqttClientError::ConnectionError(
-    //         //         rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong)
-    //         //     ),
-    //         //     error
-    //         // );
-    //         // assert_matches!(mqtt_client::MqttClientError::ConnectionError(_), error);
-    //         //assert!(false);
-
-    //         dbg!(error);
-    //         anyhow::bail!("Packet size exceed limit");
-    //         //error
-    //         //Ok(())
-    //     }
-    //     Ok(())
-    // });
-
-    let mut cnt: i32 = 0;
-
-    let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
-
+    let message = Message::new(&topic, buffer.clone()).qos(QoS::ExactlyOnce);
     let publish_handle = publish_client.publish(message);
+
     let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(7),
-        subscribe_errors(&publish_client).map_err(|e| MyJoinError::MyMqttClientError(e)),
+        std::time::Duration::from_secs(8),
+        subscribe_errors(&publish_client).map_err(|e| TestJoinError::MyMqttClientError(e)),
     )
-    .map_err(|e| MyJoinError::ElapseTime);
+    .map_err(|_e| TestJoinError::ElapseTime);
 
     let res = tokio::try_join!(
         timeout,
-        publish_handle.map_err(|e| MyJoinError::MyMqttClientError(e))
+        publish_handle.map_err(|e| TestJoinError::MyMqttClientError(e))
     );
 
     match res {
-        Ok((first, second)) => {
-            anyhow::bail!("packetsize is ok")
+        Ok((_first, _second)) => {
+            // if packet exceeds return Ok
+            return Ok(());
         }
-        Err(MyJoinError::ElapseTime) => {
-            anyhow::bail!("packetsize is ok")
+        Err(TestJoinError::ElapseTime) => {
+            // timer elapsed, no packet size errors were caught
+            anyhow::bail!("Elapsed time packetsize is ok");
         }
         Err(err) => {
-            println!("processing failed; error = {:?}", err);
+            dbg!("processing failed; error = {:?}", err);
             return Ok(());
         }
     }
-
-    publish_client.disconnect().await?;
-    mqtt_server_handle.abort();
-    Ok(())
-    //std::process::exit(1);
 }
 
 async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     let mut errors = pub_client.subscribe_errors();
-
-    while let Some(error) = errors.next().await {
-        //dbg!("{}", &error);
-        //return Err(*error.clone());
-        //return Err(MqttClientError::ConnectionError(rumqttc::ConnectionError::));
+    while let Some(_error) = errors.next().await {
         return Err(mqtt_client::MqttClientError::ConnectionError(
             rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong),
         ));
@@ -153,9 +113,7 @@ async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
 }
 
 async fn start_broker_local() -> anyhow::Result<()> {
-    //dbg!(std::env::current_dir());
     let config: Config = confy::load_path("../../configuration/rumqttd/rumqttd.conf")?;
-
     let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
     let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
     servers.await;
@@ -163,10 +121,9 @@ async fn start_broker_local() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn sub() -> Result<(), anyhow::Error> {
+async fn subscribe() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
     let client = Client::connect("subscribe", &mqtt_client::Config::default()).await?;
-
     let mut messages = client.subscribe(sub_filter).await?;
     let mut cnt: i32 = 0;
     while let Some(_message) = messages.next().await {
@@ -179,6 +136,5 @@ async fn sub() -> Result<(), anyhow::Error> {
     println!("Subscriber: Received all messages, test passed");
     assert!(cnt >= 3);
     client.disconnect().await?;
-
     Ok(())
 }
