@@ -1347,7 +1347,6 @@ name = "mqtt_client"
 version = "0.2.2"
 dependencies = [
  "anyhow",
- "assert_matches",
  "async-log",
  "async-trait",
  "confy",

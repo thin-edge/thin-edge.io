@@ -27,7 +27,7 @@ json = "0.12"
 log = "0.4"
 rand = "0.8"
 tokio-test = "0.4"
-assert_matches = "1.5.0"
+
 
 [features]
 integration-test = []

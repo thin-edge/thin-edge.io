@@ -17,14 +17,73 @@ async fn packet_size_within_limit() -> anyhow::Result<()> {
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
 
     println!("Start the subscriber");
-    let _subscriber = tokio::spawn(async move { subscribe().await });
+    let subscriber = tokio::spawn(async move { subscribe_messages().await });
 
     println!("Start the publisher and publish 3 messages");
+    let publisher = tokio::spawn(async move { publish_messages().await });
 
+    let _ = publisher.await?;
+    let _ = subscriber.await?;
+    mqtt_server_handle.abort();
+    Ok(())
+}
+
+#[tokio::test]
+//#[cfg(feature = "integration-test")]
+// This checks the mqtt packet size that exceeds the limit
+async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
+    println!("Start the broker");
+    let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
+
+    println!("Start the publisher and publish a message");
+    let publish = tokio::spawn(async { publish_big_message().await });
+
+    mqtt_server_handle.abort();
+    publish.await?
+}
+
+async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
+    let mut errors = pub_client.subscribe_errors();
+    while let Some(_error) = errors.next().await {
+        return Err(mqtt_client::MqttClientError::ConnectionError(
+            rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong),
+        ));
+    }
+    Ok(())
+}
+
+async fn start_broker_local() -> anyhow::Result<()> {
+    let config: Config = confy::load_path("../../configuration/rumqttd/rumqttd.conf")?;
+    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
+    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
+    servers.await;
+    let _ = router.await;
+    Ok(())
+}
+
+async fn subscribe_messages() -> Result<(), anyhow::Error> {
+    let sub_filter = TopicFilter::new("test/hello")?;
+    let client = Client::connect("subscribe", &mqtt_client::Config::default()).await?;
+    let mut messages = client.subscribe(sub_filter).await?;
+    let mut cnt: i32 = 0;
+    while let Some(_message) = messages.next().await {
+        if cnt >= 3 {
+            break;
+        } else {
+            cnt += 1;
+        }
+    }
+    println!("Subscriber: Received all messages, test passed");
+    assert!(cnt >= 3);
+    client.disconnect().await?;
+    Ok(())
+}
+
+async fn publish_messages() -> Result<(), anyhow::Error> {
     // create a 128MB message
     let data: String = "Some data!".into();
     let loops = 134217728 / data.len();
-    let mut buffer: String = "hello".into();
+    let mut buffer = String::with_capacity(134217728);
     for _ in 0..loops {
         buffer.push_str("Some data!");
     }
@@ -43,27 +102,16 @@ async fn packet_size_within_limit() -> anyhow::Result<()> {
             cnt += 1;
         }
     }
-
     client.disconnect().await?;
-    assert!(cnt >= 3);
-    mqtt_server_handle.abort();
     Ok(())
 }
 
-#[tokio::test]
-//#[cfg(feature = "integration-test")]
-// This checks the mqtt packet size that exceeds the limit
-async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
-    println!("Start the broker");
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
-
-    println!("Start the publisher and publish a message");
-
+async fn publish_big_message() -> Result<(), anyhow::Error> {
     // create a 260MB message
     let data: String = "Some data!".into();
     let loops = 272629760 / data.len();
-
-    let mut buffer: String = "hello".into();
+    let mut buffer = String::with_capacity(272629760);
+    //let mut buffer: String = "hello".into();
     for _ in 0..loops {
         buffer.push_str("Some data!");
     }
@@ -100,41 +148,4 @@ async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
             return Ok(());
         }
     }
-}
-
-async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
-    let mut errors = pub_client.subscribe_errors();
-    while let Some(_error) = errors.next().await {
-        return Err(mqtt_client::MqttClientError::ConnectionError(
-            rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong),
-        ));
-    }
-    Ok(())
-}
-
-async fn start_broker_local() -> anyhow::Result<()> {
-    let config: Config = confy::load_path("../../configuration/rumqttd/rumqttd.conf")?;
-    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
-    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
-    servers.await;
-    let _ = router.await;
-    Ok(())
-}
-
-async fn subscribe() -> Result<(), anyhow::Error> {
-    let sub_filter = TopicFilter::new("test/hello")?;
-    let client = Client::connect("subscribe", &mqtt_client::Config::default()).await?;
-    let mut messages = client.subscribe(sub_filter).await?;
-    let mut cnt: i32 = 0;
-    while let Some(_message) = messages.next().await {
-        if cnt >= 3 {
-            break;
-        } else {
-            cnt += 1;
-        }
-    }
-    println!("Subscriber: Received all messages, test passed");
-    assert!(cnt >= 3);
-    client.disconnect().await?;
-    Ok(())
 }
