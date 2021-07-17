@@ -1,6 +1,7 @@
 use futures::future::TryFutureExt;
 use librumqttd::{async_locallink, Config};
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
+use rumqttc::StateError;
 
 use tokio::time::Duration;
 #[derive(Debug)]
@@ -10,16 +11,14 @@ enum TestJoinError {
 }
 
 #[tokio::test]
-//#[cfg(feature = "integration-test")]
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> anyhow::Result<()> {
-    println!("Start the local broker");
+    // Start the local broker
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
-
-    println!("Start the subscriber");
+    // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_messages().await });
 
-    println!("Start the publisher and publish 3 messages");
+    // Start the publisher and publish 3 messages
     let publisher = tokio::spawn(async move { publish_messages().await });
 
     let _ = publisher.await?;
@@ -29,13 +28,12 @@ async fn packet_size_within_limit() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-//#[cfg(feature = "integration-test")]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
-    println!("Start the broker");
+    // Start the broker
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
 
-    println!("Start the publisher and publish a message");
+    // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message().await });
 
     mqtt_server_handle.abort();
@@ -44,11 +42,21 @@ async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
 
 async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     let mut errors = pub_client.subscribe_errors();
-    while let Some(_error) = errors.next().await {
-        return Err(mqtt_client::MqttClientError::ConnectionError(
-            rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong),
-        ));
+    while let Some(error) = errors.next().await {
+        match *error {
+            MqttClientError::ConnectionError(rumqttc::ConnectionError::MqttState(
+                StateError::Deserialization(rumqttc::Error::PayloadTooLong),
+            )) => {
+                return Err(mqtt_client::MqttClientError::ConnectionError(
+                    rumqttc::ConnectionError::Mqtt4Bytes(rumqttc::Error::PayloadTooLong),
+                ));
+            }
+            _ => {
+                return Ok(());
+            }
+        }
     }
+
     Ok(())
 }
 
@@ -124,17 +132,16 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
     );
 
     match res {
-        Ok((_first, _second)) => {
-            // if packet exceeds return Ok
-            return Ok(());
-        }
-        Err(TestJoinError::ElapseTime) => {
-            // timer elapsed, no packet size errors were caught
-            anyhow::bail!("Elapsed time packetsize is ok");
-        }
-        Err(err) => {
-            dbg!("processing failed; error = {:?}", err);
-            return Ok(());
+        Ok((first, _second)) => match first {
+            Err(TestJoinError::TestMqttClientError(_)) => {
+                return Ok(());
+            }
+            _ => {
+                anyhow::bail!("Did not catch error correctly");
+            }
+        },
+        _ => {
+            anyhow::bail!("test failed");
         }
     }
 }
