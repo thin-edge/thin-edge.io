@@ -1,5 +1,5 @@
 use crate::cli::mqtt::MqttError;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic};
 use std::time::Duration;
@@ -22,7 +22,7 @@ impl Command for MqttPublishCommand {
         )
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         Ok(publish(self)?)
     }
 }

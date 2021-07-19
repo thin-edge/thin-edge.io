@@ -1,5 +1,5 @@
 use super::error::CertError;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 
 use certificate::PemCertificate;
 use tedge_config::*;
@@ -15,7 +15,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         let () = self.show_certificate()?;
         Ok(())
     }

@@ -21,12 +21,14 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
+                service_manager: context.service_manager.clone(),
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_location: context.config_location,
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
+                service_manager: context.service_manager.clone(),
             },
         };
         Ok(cmd.into_boxed())

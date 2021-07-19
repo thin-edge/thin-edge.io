@@ -1,5 +1,5 @@
 use crate::cli::config::ConfigKey;
-use crate::command::{Command, ExecutionContext};
+use crate::command::Command;
 use tedge_config::*;
 
 pub struct UnsetConfigCommand {
@@ -15,7 +15,7 @@ impl Command for UnsetConfigCommand {
         )
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         let mut config = self.config_repository.load()?;
         let () = (self.config_key.unset)(&mut config)?;
         self.config_repository.store(&config)?;

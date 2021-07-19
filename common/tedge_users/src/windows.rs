@@ -1,9 +1,16 @@
+use std::fmt;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct UserManager {
     _force_not_send: PhantomData<Rc<()>>,
+}
+
+impl fmt::Debug for UserManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UserManager").finish()
+    }
 }
 
 pub struct UserGuard {
