@@ -18,10 +18,10 @@ class AptPluginInstallTest(AptPlugin):
     def setup(self):
         super().setup()
         self.apt_remove("rolldice")
+        self.assert_isinstalled("rolldice", False)
         self.addCleanupFunction(self.cleanup_remove_rolldice_module)
 
     def execute(self):
-        self.assert_isinstalled("rolldice", False)
         self.plugin_cmd("install", "outp_install", 0, "rolldice")
 
     def validate(self):

@@ -8,9 +8,7 @@ class AptPlugin(BaseTest):
         self.apt_get = "/usr/bin/apt-get"
         self.sudo = "/usr/bin/sudo"
 
-        # Generator function to diffenciate the output of
-        # consecutive calls of isinstalled
-        self.generator = self.newval()
+        self.list_calls = 0
 
     def plugin_cmd(self, command, outputfile, exit_code, argument=None):
         """Call a plugin with command and an optional argument,
@@ -27,21 +25,16 @@ class AptPlugin(BaseTest):
             expectedExitStatus=f"=={exit_code}",
         )
 
-    def newval(self):
-        """Generator function that returns values 0..call_count"""
-        val = 0
-        while True:
-            yield val
-            val += 1
-
     def assert_isinstalled(self, package, state):
         """Asserts that a package is installed or not"""
-        val = next(self.generator)
-        self.plugin_cmd("list", f"outp_check_{val}", 0)
-        self.assertGrep(f"outp_check_{val}.out", package, contains=state)
+        self.plugin_cmd("list", f"outp_check_{self.list_calls}", 0)
+        self.assertGrep(f"outp_check_{self.list_calls}.out", package, contains=state)
+        self.list_calls += 1
 
     def apt_remove(self, package):
-        """Use apt to remove a package"""
+        """Use apt to remove a package.
+        Added so that we can avoid to use the code under test for maintenance.
+        """
         self.startProcess(
             command=self.sudo,
             arguments=[self.apt_get, "remove", "-y", package],
