@@ -11,7 +11,6 @@ class AptPlugin(BaseTest):
         self.list_calls = 0
         self.list_calls_auto = 0
 
-
     def plugin_cmd(self, command, outputfile, exit_code, argument=None):
         """Call a plugin with command and an optional argument,
         expect exit code and store output to outputfile
@@ -36,13 +35,13 @@ class AptPlugin(BaseTest):
     def assert_isinstalled_automatic(self, package, state):
         """Asserts that a package is installed or not"""
         if state:
-            status=0
+            status = 0
         else:
-            status=1
+            status = 1
         process = self.startProcess(
-            command='/usr/bin/dpkg-query',
-            arguments=[ '-s', package],
-            stdouterr=f'outp_check_{self.list_calls_auto}',
+            command="/usr/bin/dpkg-query",
+            arguments=["-s", package],
+            stdouterr=f"outp_check_{self.list_calls_auto}",
             expectedExitStatus=f"=={status}",
         )
         self.list_calls_auto += 1
