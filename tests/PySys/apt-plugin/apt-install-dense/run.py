@@ -15,12 +15,23 @@ class AptPlugin(BaseTest):
         self.sudo = "/usr/bin/sudo"
 
 
-    def plugin_call( self, command, outputfile, exit_code, argument):
+    def plugin_cmd( self, command, outputfile, exit_code, argument=None):
+        args=[self.apt_plugin, command]
+        if argument:
+            args.append(argument)
+
         process = self.startProcess(
             command=self.sudo,
-            arguments=[self.apt_plugin, command],
+            arguments=args,
             stdouterr=outputfile,
             expectedExitStatus=f"=={exit_code}",
+        )
+
+    def apt_remove(self, package):
+            self.startProcess(
+            command=self.sudo,
+            arguments=[self.apt_get, 'remove', '-y', package],
+            abortOnError=False,
         )
 
 class AptPluginInstallTest(AptPlugin):
@@ -30,31 +41,13 @@ class AptPluginInstallTest(AptPlugin):
         self.addCleanupFunction(self.remove_rolldice_module)
 
     def execute(self):
-
-        self.plugin_call('list', 'before', 0)
-
-
-        install = self.startProcess(
-            command=self.sudo,
-            arguments=[self.apt_plugin, "install", "rolldice"],
-            stdouterr="install",
-            expectedExitStatus="==0",
-        )
-
-        after = self.startProcess(
-            command=self.sudo,
-            arguments=[self.apt_plugin, "list"],
-            stdouterr="after",
-            expectedExitStatus="==0",
-        )
+        self.plugin_cmd('list', 'outp_before', 0)
+        self.plugin_cmd('install', 'outp_install', 0, "rolldice")
+        self.plugin_cmd('list', 'outp_after', 0)
 
     def validate(self):
-        self.assertGrep ("before.out", 'rolldice', contains=False)
-        self.assertGrep ("after.out", 'rolldice', contains=True)
+        self.assertGrep ("outp_before.out", 'rolldice', contains=False)
+        self.assertGrep ("outp_after.out", 'rolldice', contains=True)
 
     def remove_rolldice_module(self):
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.apt_get, 'remove', '-y', 'rolldice'],
-            abortOnError=False,
-        )
+        self.apt_remove('rolldice')
