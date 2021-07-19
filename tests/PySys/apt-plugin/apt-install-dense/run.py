@@ -17,17 +17,15 @@ Then we find the package in the list of installed packages
 class AptPluginInstallTest(AptPlugin):
     def setup(self):
         super().setup()
-        self.remove_rolldice_module()
-        self.addCleanupFunction(self.remove_rolldice_module)
+        self.apt_remove("rolldice")
+        self.addCleanupFunction(self.cleanup_remove_rolldice_module)
 
     def execute(self):
-        self.plugin_cmd("list", "outp_before", 0)
+        self.assert_isinstalled("rolldice", False)
         self.plugin_cmd("install", "outp_install", 0, "rolldice")
-        self.plugin_cmd("list", "outp_after", 0)
 
     def validate(self):
-        self.assertGrep("outp_before.out", "rolldice", contains=False)
-        self.assertGrep("outp_after.out", "rolldice", contains=True)
+        self.assert_isinstalled("rolldice", True)
 
-    def remove_rolldice_module(self):
+    def cleanup_remove_rolldice_module(self):
         self.apt_remove("rolldice")
