@@ -9,6 +9,8 @@ class AptPlugin(BaseTest):
         self.sudo = "/usr/bin/sudo"
 
         self.list_calls = 0
+        self.list_calls_auto = 0
+
 
     def plugin_cmd(self, command, outputfile, exit_code, argument=None):
         """Call a plugin with command and an optional argument,
@@ -30,6 +32,20 @@ class AptPlugin(BaseTest):
         self.plugin_cmd("list", f"outp_check_{self.list_calls}", 0)
         self.assertGrep(f"outp_check_{self.list_calls}.out", package, contains=state)
         self.list_calls += 1
+
+    def assert_isinstalled_automatic(self, package, state):
+        """Asserts that a package is installed or not"""
+        if state:
+            status=0
+        else:
+            status=1
+        process = self.startProcess(
+            command='/usr/bin/dpkg-query',
+            arguments=[ '-s', package],
+            stdouterr=f'outp_check_{self.list_calls_auto}',
+            expectedExitStatus=f"=={status}",
+        )
+        self.list_calls_auto += 1
 
     def apt_remove(self, package):
         """Use apt to remove a package.
