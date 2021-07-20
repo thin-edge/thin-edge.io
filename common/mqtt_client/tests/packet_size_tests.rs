@@ -12,7 +12,7 @@ enum TestJoinError {
 
 #[tokio::test]
 // This checks the mqtt packets are within the limit or not
-async fn packet_size_within_limit() -> anyhow::Result<()> {
+async fn packet_size_within_limit() ->  Result<(), anyhow::Error>  {
     // Start the local broker
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
     // Start the subscriber
@@ -22,9 +22,16 @@ async fn packet_size_within_limit() -> anyhow::Result<()> {
     let publisher = tokio::spawn(async move { publish_messages().await });
 
     let _ = publisher.await?;
-    let _ = subscriber.await?;
+    let res = subscriber.await?;
     mqtt_server_handle.abort();
-    Ok(())
+    match res {
+        Err(e) => {
+            return Err(e);
+        }
+        _ => {
+            return Ok(());
+        }
+    }
 }
 
 #[tokio::test]
