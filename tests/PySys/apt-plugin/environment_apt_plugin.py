@@ -21,7 +21,7 @@ class AptPlugin(BaseTest):
 
         if version:
             # TODO The version is specified but there is a name clash
-            # TODO Clarify
+            # TODO Clarify CIT-473
             # args.append("--version")
             args.append(version)
 
