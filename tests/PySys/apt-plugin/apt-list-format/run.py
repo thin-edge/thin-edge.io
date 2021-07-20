@@ -20,7 +20,7 @@ class AptPluginListTest(BaseTest):
 
         self.startProcess(
             command="/usr/bin/dpkg-query",
-            arguments=['--show', '--showformat=${Version}\\n', 'grep'],
+            arguments=["--show", "--showformat=${Version}\\n", "grep"],
             stdouterr="dpkg_query",
         )
 
@@ -28,11 +28,15 @@ class AptPluginListTest(BaseTest):
         self.validate_json()
 
         # Assuming grep is installed
-        grep_version = open(self.output + '/dpkg_query.out', 'r').read().strip()
-        self.assertGrep ("apt_plugin.out", '{"name":"grep","version":"'+ grep_version + '"}', contains=True)
+        grep_version = open(self.output + "/dpkg_query.out", "r").read().strip()
+        self.assertGrep(
+            "apt_plugin.out",
+            '{"name":"grep","version":"' + grep_version + '"}',
+            contains=True,
+        )
 
     def validate_json(self):
-        f = open(self.output + '/apt_plugin.out', 'r')
+        f = open(self.output + "/apt_plugin.out", "r")
         lines = f.readlines()
         for line in lines:
             self.js_msg = json.loads(line)
