@@ -28,7 +28,7 @@ class AptPluginInstallTest(AptPlugin):
         super().setup()
 
         self.package = "rolldice"
-        self.version = "1.16-1+b0" # Version is too old
+        self.version = "1.16-1+b0"  # Version is too old
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)
 
@@ -39,4 +39,3 @@ class AptPluginInstallTest(AptPlugin):
 
     def validate(self):
         self.assert_isinstalled(self.package, False)
-

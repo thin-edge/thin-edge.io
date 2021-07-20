@@ -11,6 +11,7 @@ When we remove the package
 Then we dont find it in the list of installed packages
 """
 
+
 class AptPluginInstallTest(AptPlugin):
     def setup(self):
         super().setup()
