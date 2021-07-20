@@ -15,13 +15,13 @@ enum TestJoinError {
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
     let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_1883.conf").await
+        start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
     });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_messages().await });
 
     // Start the publisher and publish 3 messages
-    let publisher = tokio::spawn(async move { publish_messages().await });
+    let publisher = tokio::spawn(async move { publish_3_messages().await });
 
     let _ = publisher.await?;
     let res = subscriber.await?;
@@ -41,7 +41,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
     let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_1884.conf").await
+        start_broker_local("../../configuration/rumqttd/rumqttd_5884.conf").await
     });
 
     // Start the publisher and publish a message
@@ -90,7 +90,7 @@ async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
 
 async fn subscribe_messages() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
-    let client = Client::connect("subscribe", &mqtt_client::Config::default()).await?;
+    let client = Client::connect("subscribe", &mqtt_client::Config::default().with_port(5883)).await?;
     let mut messages = client.subscribe(sub_filter).await?;
     let mut cnt: i32 = 0;
     while let Some(_message) = messages.next().await {
@@ -105,16 +105,16 @@ async fn subscribe_messages() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_messages() -> Result<(), anyhow::Error> {
+async fn publish_3_messages() -> Result<(), anyhow::Error> {
     // create a 128MB message
     let buffer = create_packet(134217728);
     let topic = Topic::new("test/hello")?;
-    let client = Client::connect("publish_big_data", &mqtt_client::Config::default()).await?;
-
+    let client = Client::connect("publish_big_data", &mqtt_client::Config::default().with_port(5883)).await?;
+    let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
     let mut cnt: i32 = 0;
     loop {
-        let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
-        let () = client.publish(message).await?;
+      
+        let () = client.publish(message.clone()).await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
         if cnt >= 3 {
             break;
@@ -133,7 +133,7 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let publish_client = Client::connect(
         "publish_big_data",
-        &mqtt_client::Config::default().with_port(1884),
+        &mqtt_client::Config::default().with_port(5884),
     )
     .await?;
 
@@ -142,7 +142,7 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
     let publish_handle = publish_client.publish(message);
 
     let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(6),
+        std::time::Duration::from_secs(2),
         subscribe_errors(&publish_client).map_err(|e| TestJoinError::TestMqttClientError(e)),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
