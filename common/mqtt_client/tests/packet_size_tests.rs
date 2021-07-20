@@ -90,7 +90,8 @@ async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
 
 async fn subscribe_messages() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
-    let client = Client::connect("subscribe", &mqtt_client::Config::default().with_port(5883)).await?;
+    let client =
+        Client::connect("subscribe", &mqtt_client::Config::default().with_port(5883)).await?;
     let mut messages = client.subscribe(sub_filter).await?;
     let mut cnt: i32 = 0;
     while let Some(_message) = messages.next().await {
@@ -109,11 +110,14 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     // create a 128MB message
     let buffer = create_packet(134217728);
     let topic = Topic::new("test/hello")?;
-    let client = Client::connect("publish_big_data", &mqtt_client::Config::default().with_port(5883)).await?;
+    let client = Client::connect(
+        "publish_big_data",
+        &mqtt_client::Config::default().with_port(5883),
+    )
+    .await?;
     let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
     let mut cnt: i32 = 0;
     loop {
-      
         let () = client.publish(message.clone()).await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
         if cnt >= 3 {
