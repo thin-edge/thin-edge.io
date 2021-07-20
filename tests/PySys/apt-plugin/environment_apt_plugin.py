@@ -55,3 +55,13 @@ class AptPlugin(BaseTest):
             arguments=[self.apt_get, "remove", "-y", package],
             abortOnError=False,
         )
+
+    def apt_install(self, package):
+        """Use apt to install a package.
+        Added so that we can avoid to use the code under test for maintenance.
+        """
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apt_get, "install", "-y", package],
+            abortOnError=False,
+        )
