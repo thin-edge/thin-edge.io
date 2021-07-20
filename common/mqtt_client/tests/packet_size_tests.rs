@@ -12,9 +12,11 @@ enum TestJoinError {
 
 #[tokio::test]
 // This checks the mqtt packets are within the limit or not
-async fn packet_size_within_limit() ->  Result<(), anyhow::Error>  {
+async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
+    let mqtt_server_handle = tokio::spawn(async {
+        start_broker_local("../../configuration/rumqttd/rumqttd_1883.conf").await
+    });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_messages().await });
 
@@ -38,7 +40,9 @@ async fn packet_size_within_limit() ->  Result<(), anyhow::Error>  {
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
+    let mqtt_server_handle = tokio::spawn(async {
+        start_broker_local("../../configuration/rumqttd/rumqttd_1884.conf").await
+    });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message().await });
@@ -75,8 +79,8 @@ async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     Ok(())
 }
 
-async fn start_broker_local() -> anyhow::Result<()> {
-    let config: Config = confy::load_path("../../configuration/rumqttd/rumqttd.conf")?;
+async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
+    let config: Config = confy::load_path(cfile)?;
     let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
     let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
     servers.await;
@@ -127,8 +131,11 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
     let buffer = create_packet(272629760);
 
     let topic = Topic::new("test/hello")?;
-    let publish_client =
-        Client::connect("publish_big_data", &mqtt_client::Config::default()).await?;
+    let publish_client = Client::connect(
+        "publish_big_data",
+        &mqtt_client::Config::default().with_port(1884),
+    )
+    .await?;
 
     let message = Message::new(&topic, buffer.clone()).qos(QoS::ExactlyOnce);
 
