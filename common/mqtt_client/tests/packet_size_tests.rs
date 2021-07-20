@@ -29,15 +29,23 @@ async fn packet_size_within_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 // This checks the mqtt packet size that exceeds the limit
-async fn packet_size_exceeds_limit() -> anyhow::Result<()> {
+async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
     let mqtt_server_handle = tokio::spawn(async { start_broker_local().await });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message().await });
 
+    let res = publish.await?;
     mqtt_server_handle.abort();
-    publish.await?
+    match res {
+        Err(e) => {
+            return Err(e);
+        }
+        _ => {
+            return Ok(());
+        }
+    }
 }
 
 async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
@@ -81,7 +89,6 @@ async fn subscribe_messages() -> Result<(), anyhow::Error> {
             cnt += 1;
         }
     }
-    println!("Subscriber: Received all messages, test passed");
     assert!(cnt >= 3);
     client.disconnect().await?;
     Ok(())
@@ -121,7 +128,7 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
     let publish_handle = publish_client.publish(message);
 
     let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
+        std::time::Duration::from_secs(6),
         subscribe_errors(&publish_client).map_err(|e| TestJoinError::TestMqttClientError(e)),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
