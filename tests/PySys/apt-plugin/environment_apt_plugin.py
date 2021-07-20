@@ -11,7 +11,9 @@ class AptPlugin(BaseTest):
         self.list_calls = 0
         self.list_calls_auto = 0
 
-    def plugin_cmd(self, command, outputfile, exit_code, argument=None, version=None):
+    def plugin_cmd(
+        self, command, outputfile, exit_code, argument=None, version=None, extra=None
+    ):
         """Call a plugin with command and an optional argument,
         expect exit code and store output to outputfile
         """
@@ -21,9 +23,13 @@ class AptPlugin(BaseTest):
 
         if version:
             # TODO The version is specified but there is a name clash
-            # TODO Clarify
+            # TODO Clarify CIT-473
             # args.append("--version")
             args.append(version)
+
+        if extra:
+            # Does not happen in normal cases, just for testing
+            args.append(extra)
 
         process = self.startProcess(
             command=self.sudo,
