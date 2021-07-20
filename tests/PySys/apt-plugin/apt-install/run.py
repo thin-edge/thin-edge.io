@@ -7,6 +7,7 @@ Validate apt plugin install
 Using `rolldice` as a guinea pig: [small and without impacts](https://askubuntu.com/questions/422362/very-small-package-for-apt-get-experimentation)
 """
 
+
 class AptPluginInstallTest(BaseTest):
     def setup(self):
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
@@ -39,11 +40,11 @@ class AptPluginInstallTest(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep ("before.out", 'rolldice', contains=False)
-        self.assertGrep ("after.out", 'rolldice', contains=True)
+        self.assertGrep("before.out", "rolldice", contains=False)
+        self.assertGrep("after.out", "rolldice", contains=True)
 
     def remove_rolldice_module(self):
         self.startProcess(
             command=self.sudo,
-            arguments=[self.apt_get, 'remove', '-y', 'rolldice'],
+            arguments=[self.apt_get, "remove", "-y", "rolldice"],
         )
