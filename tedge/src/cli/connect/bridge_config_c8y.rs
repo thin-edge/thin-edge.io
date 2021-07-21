@@ -67,7 +67,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
             ],
-            bridge_max_packet_size: 16384,
         }
     }
 }
@@ -129,7 +128,6 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         clean_session: true,
         notifications: false,
         bridge_attempt_unsubscribe: false,
-        bridge_max_packet_size: 16384,
     };
 
     assert_eq!(bridge, expected);

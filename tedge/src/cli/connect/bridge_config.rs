@@ -22,7 +22,6 @@ pub struct BridgeConfig {
     pub notifications: bool,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
-    pub bridge_max_packet_size: u32,
 }
 
 impl BridgeConfig {
@@ -62,11 +61,12 @@ impl BridgeConfig {
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
         }
-        writeln!(
-            writer,
-            "bridge_max_packet_size {}",
-            self.bridge_max_packet_size.to_string()
-        )?;
+        match &self.remote_username {
+            Some(name) => {
+                writeln!(writer, "remote_username {}", name)?;
+            }
+            None => {}
+        }
         Ok(())
     }
 
@@ -119,7 +119,6 @@ mod test {
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: 16384,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -146,7 +145,6 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
-bridge_max_packet_size 16384
 "#,
         );
 
@@ -178,7 +176,6 @@ bridge_max_packet_size 16384
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: 16384,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -204,7 +201,6 @@ notifications false
 bridge_attempt_unsubscribe false
 
 ### Topics
-bridge_max_packet_size 16384
 "#,
         );
 
@@ -239,7 +235,6 @@ bridge_max_packet_size 16384
             clean_session: true,
             notifications: false,
             bridge_attempt_unsubscribe: false,
-            bridge_max_packet_size: 16384,
         };
 
         let mut buffer = Vec::new();
@@ -269,9 +264,7 @@ bridge_max_packet_size 16384
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
-        expected.insert("bridge_max_packet_size 16384");
         assert_eq!(config_set, expected);
-
         Ok(())
     }
 
@@ -351,26 +344,25 @@ bridge_max_packet_size 16384
 
         Ok(())
     }
-    fn default_bridge_config() -> BridgeConfig {
-        BridgeConfig {
-            cloud_name: "az/c8y".into(),
-            config_file: "cfg".to_string(),
-            connection: "edge_to_az/c8y".into(),
-            address: "".into(),
-            remote_username: None,
-            bridge_root_cert_path: "".into(),
-            bridge_certfile: "".into(),
-            bridge_keyfile: "".into(),
-            remote_clientid: "".into(),
-            local_clientid: "".into(),
-            use_mapper: true,
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            topics: vec![],
-            bridge_max_packet_size: 16384,
-        }
+}
+fn default_bridge_config() -> BridgeConfig {
+    BridgeConfig {
+        cloud_name: "az/c8y".into(),
+        config_file: "cfg".to_string(),
+        connection: "edge_to_az/c8y".into(),
+        address: "".into(),
+        remote_username: None,
+        bridge_root_cert_path: "".into(),
+        bridge_certfile: "".into(),
+        bridge_keyfile: "".into(),
+        remote_clientid: "".into(),
+        local_clientid: "".into(),
+        use_mapper: true,
+        try_private: false,
+        start_type: "automatic".into(),
+        clean_session: true,
+        notifications: false,
+        bridge_attempt_unsubscribe: false,
+        topics: vec![],
     }
 }

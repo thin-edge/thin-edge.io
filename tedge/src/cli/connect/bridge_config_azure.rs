@@ -58,7 +58,6 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
             ],
-            bridge_max_packet_size: 262144,
         }
     }
 }
@@ -102,7 +101,6 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         clean_session: true,
         notifications: false,
         bridge_attempt_unsubscribe: false,
-        bridge_max_packet_size: 262144,
     };
 
     assert_eq!(bridge, expected);
