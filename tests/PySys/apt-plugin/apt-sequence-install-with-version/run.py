@@ -34,15 +34,15 @@ class AptPluginInstallTest(AptPlugin):
         # Debian: buster 1.16-1+b1
         # Debian: bullseye 1.16-1+b3
         with open("/etc/debian_version") as thefile:
-            version = thefile.read()
-            if version.startswith("11.") or self.version == "bullseye/sid":
+            osversion = thefile.read()
+            if osversion.startswith("11.") or osversion == "bullseye/sid":
                 # this is debian bullseye / Ubuntu 20.4
                 self.version = "1.16-1+b3"
-            elif version.startswith("10."):
+            elif osversion.startswith("10."):
                 # this is debian buster
                 self.version = "1.16-1+b1"
             else:
-                raise SystemError("Please configure OS: %s", self.version)
+                raise SystemError("Please configure OS: %s", osversion)
 
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)
