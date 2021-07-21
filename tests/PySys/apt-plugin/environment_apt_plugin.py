@@ -37,6 +37,7 @@ class AptPlugin(BaseTest):
             stdouterr=outputfile,
             expectedExitStatus=f"=={exit_code}",
         )
+        self.assertThat("value" + process.expectedExitStatus, value=process.exitStatus)
 
     def assert_isinstalled(self, package, state):
         """Asserts that a package is installed or not"""
