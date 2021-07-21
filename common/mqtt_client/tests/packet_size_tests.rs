@@ -18,7 +18,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
         start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
     });
     // Start the subscriber
-    let subscriber = tokio::spawn(async move { subscribe_messages().await });
+    let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
 
     // Start the publisher and publish 3 messages
     let publisher = tokio::spawn(async move { publish_3_messages().await });
@@ -45,8 +45,9 @@ async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     });
 
     // Start the publisher and publish a message
-    let publish = tokio::spawn(async { publish_big_message().await });
+    let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
 
+    // if error is received then test is ok, else test should fail
     let res = publish.await?;
     mqtt_server_handle.abort();
     match res {
@@ -61,6 +62,7 @@ async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
 
 async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     let mut errors = pub_client.subscribe_errors();
+    // return particular error else return Ok
     while let Some(error) = errors.next().await {
         match *error {
             MqttClientError::ConnectionError(rumqttc::ConnectionError::MqttState(
@@ -88,7 +90,7 @@ async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn subscribe_messages() -> Result<(), anyhow::Error> {
+async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
     let client =
         Client::connect("subscribe", &mqtt_client::Config::default().with_port(5883)).await?;
@@ -130,7 +132,7 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_big_message() -> Result<(), anyhow::Error> {
+async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     // create a 260MB message
     let buffer = create_packet(272629760);
 
@@ -145,12 +147,14 @@ async fn publish_big_message() -> Result<(), anyhow::Error> {
 
     let publish_handle = publish_client.publish(message);
 
+    // wait for error else timeout
     let timeout = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         subscribe_errors(&publish_client).map_err(|e| TestJoinError::TestMqttClientError(e)),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
 
+    // wait until one of the future returns error
     let res = tokio::try_join!(
         timeout,
         publish_handle.map_err(|e| TestJoinError::TestMqttClientError(e))
