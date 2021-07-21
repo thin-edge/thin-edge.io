@@ -28,6 +28,9 @@ class AptPluginInstallTest(AptPlugin):
         super().setup()
 
         self.package = "rolldice"
+
+        # Retrive the exact version of rolldice to be installed
+        # Alterntively "apt-cache showpkg rolldice" could be used if versions change often
         # Debian: buster 1.16-1+b1
         # Debian: bullseye 1.16-1+b3
         with open("/etc/debian_version") as thefile:
