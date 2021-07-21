@@ -278,6 +278,7 @@ impl Client {
                         QoS::ExactlyOnce => {
                             // Do not announce the incoming publish message immediately in case
                             // of QoS=2. Wait for the PUBREL.
+
                             let _ = pending_received_messages.insert(msg.pkid, msg.into());
                         }
                     }
@@ -311,18 +312,14 @@ impl Client {
 
                 Err(err) => {
                     let delay = match &err {
-                        rumqttc::ConnectionError::Io(io_err)
-                            if matches!(io_err.kind(), std::io::ErrorKind::ConnectionRefused) =>
-                        {
-                            true
-                        }
-
+                        rumqttc::ConnectionError::Io(_) => true,
                         rumqttc::ConnectionError::MqttState(state_error)
                             if matches!(state_error, StateError::Io(_)) =>
                         {
                             true
                         }
-
+                        rumqttc::ConnectionError::MqttState(_) => true,
+                        rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
                         _ => false,
                     };
 
@@ -432,7 +429,8 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
-            packet_size: None,
+            // 256MB by default
+            packet_size: Some(268435455),
             queue_capacity: 10,
             clean_session: false,
         }
