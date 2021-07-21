@@ -30,7 +30,17 @@ class AptPluginInstallTest(AptPlugin):
         self.package = "rolldice"
         # Debian: buster 1.16-1+b1
         # Debian: bullseye 1.16-1+b3
-        self.version = "1.16-1+b3"  # this test will fail if the version changes
+        with open("/etc/debian_version") as thefile:
+            version = thefile.read()
+            if version.startswith("11.") or self.version == "bullseye/sid":
+                # this is debian bullseye / Ubuntu 20.4
+                self.version = "1.16-1+b3"
+            elif version.startswith("10."):
+                # this is debian buster
+                self.version = "1.16-1+b1"
+            else:
+                raise SystemError("Please configure OS: %s", self.version)
+
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)
         self.addCleanupFunction(self.cleanup_prepare)
