@@ -23,7 +23,7 @@ apt-install 0.1.0
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginInstallWithVersionFails(AptPlugin):
     def setup(self):
         super().setup()
 

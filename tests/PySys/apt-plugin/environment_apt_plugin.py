@@ -22,7 +22,7 @@ class AptPlugin(BaseTest):
             args.append(argument)
 
         if version:
-            # TODO The version is specified but there is a name clash
+            # TODO The version is specified but there is a name clashs
             # TODO Clarify CIT-473
             # args.append("--version")
             args.append(version)
@@ -37,6 +37,8 @@ class AptPlugin(BaseTest):
             stdouterr=outputfile,
             expectedExitStatus=f"=={exit_code}",
         )
+
+        self.assertThat("value" + process.expectedExitStatus, value=process.exitStatus)
 
     def assert_isinstalled(self, package, state):
         """Asserts that a package is installed or not"""

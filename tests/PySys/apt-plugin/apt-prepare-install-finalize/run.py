@@ -15,7 +15,7 @@ Then the package is installed
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginPrepareInstallFinalize(AptPlugin):
     def setup(self):
         super().setup()
 

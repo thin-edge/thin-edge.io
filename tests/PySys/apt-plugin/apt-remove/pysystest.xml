@@ -15,7 +15,7 @@
         </modes>
     </classification>
     <data>
-        <class name="AptPluginRemoveTest" module="run"/>
+        <class name="AptPluginRemove" module="run"/>
     </data>
     <traceability>
         <requirements>

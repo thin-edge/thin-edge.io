@@ -11,14 +11,13 @@ Then we expect an error code from the plugin
 """
 
 
-class AptPluginTestFail(AptPlugin):
+class AptPluginFailNoArg(AptPlugin):
     def setup(self):
         super().setup()
 
     def execute(self):
         self.plugin_cmd("install", "outp_install", 1)
         self.plugin_cmd("remove", "outp_install", 1)
-
         self.plugin_cmd("prepare", "outp_install", 1, "nonsense")
         self.plugin_cmd("list", "outp_install", 1, "nonsense")
         self.plugin_cmd("finalize", "outp_install", 1, "nonsense")

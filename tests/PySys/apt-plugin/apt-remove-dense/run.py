@@ -12,7 +12,7 @@ Then we dont find it in the list of installed packages
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginRemoveDense(AptPlugin):
     def setup(self):
         super().setup()
         self.plugin_cmd("install", "outp_install", 0, "rolldice")

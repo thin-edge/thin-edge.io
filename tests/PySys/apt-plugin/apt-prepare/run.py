@@ -16,7 +16,7 @@ Then we compare the timestamps, to make sure that the cache was updated
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginPrepare(AptPlugin):
     def setup(self):
         super().setup()
         self.addCleanupFunction(self.cleanup_prepare)

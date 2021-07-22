@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
     <description>
-        <title>Validate apt plugin prepare - failing</title>
+        <title>Validate apt plugin featurs(prepare, list, install, remove finalize) without arguments</title>
         <purpose><![CDATA[
 ]]>
         </purpose>
@@ -15,7 +15,7 @@
         </modes>
     </classification>
     <data>
-        <class name="AptPluginTestFail" module="run"/>
+        <class name="AptPluginFailNoArg" module="run"/>
     </data>
     <traceability>
         <requirements>

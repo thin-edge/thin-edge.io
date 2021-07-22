@@ -6,12 +6,12 @@ from environment_apt_plugin import AptPlugin
 """
 Validate apt plugin install fails
 
-When we install a non exiisting package
+When we install a non existing package
 Then we expect an error code from the plugin
 """
 
 
-class AptPluginInstallTestFail(AptPlugin):
+class AptPluginInstallFail(AptPlugin):
     def setup(self):
         super().setup()
         self.assert_isinstalled("notapackage", False)

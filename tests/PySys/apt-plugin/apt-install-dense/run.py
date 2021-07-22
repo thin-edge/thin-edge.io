@@ -14,7 +14,7 @@ Then we find the package in the list of installed packages
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginInstallDense(AptPlugin):
     def setup(self):
         super().setup()
         self.apt_remove("rolldice")

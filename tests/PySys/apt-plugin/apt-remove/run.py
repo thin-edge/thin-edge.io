@@ -8,7 +8,7 @@ Using `rolldice` as a guinea pig: [small and without impacts](https://askubuntu.
 """
 
 
-class AptPluginRemoveTest(BaseTest):
+class AptPluginRemove(BaseTest):
     def setup(self):
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"

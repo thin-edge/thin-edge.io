@@ -7,7 +7,7 @@ Validate apt plugin output format
 """
 
 
-class AptPluginListTest(BaseTest):
+class AptPluginListFormat(BaseTest):
     def execute(self):
         apt_plugin = "/etc/tedge/sm-plugins/apt"
 

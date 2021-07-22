@@ -16,7 +16,7 @@ Then the package is not installed
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginInstallPrepareRemoveFinalize(AptPlugin):
     def setup(self):
         super().setup()
 

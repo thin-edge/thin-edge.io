@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
     <description>
-        <title>Validate apt plugin install use case</title>
+        <title>Validate apt plugin install with version use case</title>
         <purpose><![CDATA[
 ]]>
         </purpose>
@@ -15,7 +15,7 @@
         </modes>
     </classification>
     <data>
-        <class name="AptPluginInstallTest" module="run"/>
+        <class name="AptPluginPrepInstallWithVersionFinalize" module="run"/>
     </data>
     <traceability>
         <requirements>

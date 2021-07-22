@@ -11,7 +11,7 @@ Then we expect an error code from the plugin
 """
 
 
-class AptPluginRemoveTestFail(AptPlugin):
+class AptPluginRemoveFails(AptPlugin):
     def setup(self):
         super().setup()
         self.assert_isinstalled("notapackage", False)

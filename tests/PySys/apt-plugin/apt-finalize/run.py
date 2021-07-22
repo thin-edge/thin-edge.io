@@ -23,7 +23,7 @@ We use package squirrel3 as is a command-line program and it depends only on on 
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginFinalize(AptPlugin):
     def setup(self):
         super().setup()
 

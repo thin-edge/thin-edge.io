@@ -9,7 +9,7 @@ Validate apt plugin behaviour when we use nonsense parameters
 """
 
 
-class AptPluginInstallTest(AptPlugin):
+class AptPluginWrongOption(AptPlugin):
     def setup(self):
         super().setup()
 
