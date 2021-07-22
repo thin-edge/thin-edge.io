@@ -1,8 +1,9 @@
 import sys
 import os
+import subprocess
 import time
 
-sys.path.append("apt-plugin")
+sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 
 """
@@ -18,8 +19,6 @@ whenever there is a parameter --version the output will be "apt-install 0.1.0"
 
 sudo /etc/tedge/sm-plugins/apt install rolldice 1.16-1+b3 --version
 apt-install 0.1.0
-
-
 """
 
 
@@ -29,20 +28,16 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
 
         self.package = "rolldice"
 
-        # Retrive the exact version of rolldice to be installed
-        # Alterntively "apt-cache showpkg rolldice" could be used if versions change often
-        # Debian: buster 1.16-1+b1
-        # Debian: bullseye 1.16-1+b3
-        with open("/etc/debian_version") as thefile:
-            osversion = thefile.read()
-            if osversion.startswith("11.") or osversion == "bullseye/sid":
-                # this is debian bullseye / Ubuntu 20.4
-                self.version = "1.16-1+b3"
-            elif osversion.startswith("10."):
-                # this is debian buster
-                self.version = "1.16-1+b1"
-            else:
-                raise SystemError("Please configure OS: %s", osversion)
+        # Use apt extension madison-lite to get the version of rolldice easily
+        # Output of the call:
+        # apt-cache madison rolldice
+        # rolldice |  1.16-1+b3 | http://ftp.uni-stuttgart.de/debian bullseye/main amd64 Packages
+        # rolldice |     1.16-1 | http://ftp.uni-stuttgart.de/debian bullseye/main Sources
+
+        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", "rolldice"])
+
+        # Lets assume it is the package in the first line of the output
+        self.version = output.split()[2]  # E.g. "1.16-1+b3"
 
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)
