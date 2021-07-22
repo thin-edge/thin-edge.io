@@ -2,7 +2,7 @@ import sys
 import os
 import time
 
-sys.path.append("apt-plugin")
+sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 
 """
