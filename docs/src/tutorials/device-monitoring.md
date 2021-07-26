@@ -16,6 +16,14 @@ Enabling monitoring on your device is a 3-steps process:
 2. [Configure `collectd`](#configure-collectd),
 3. [Enable thin-edge.io monitoring](#enable-thin-edge-monitoring).
 
+## Install `mosquitto` client library
+collectd depends on mosquitto client library.
+So, need to install libmosquitto.
+
+``` shell
+sudo apt-get install libmosquitto1
+```
+
 ## Install `collectd`
 
 Device monitoring is not enabled by default when you install thin edge.
