@@ -39,7 +39,7 @@ jobs:
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install mosquitto client library
-        run:  sudo apt-get install libmosquitto1
+        run:  sudo apt-get --assume-yes install libmosquitto1
 
         # install collectd-core
       - name: install collectd-core
@@ -114,7 +114,7 @@ jobs:
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install mosquitto client library
-        run:  sudo apt-get install libmosquitto1
+        run:  sudo apt-get --assume-yes install libmosquitto1
 
         # install collectd-core
       - name: install collectd-core

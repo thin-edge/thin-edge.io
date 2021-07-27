@@ -17,11 +17,17 @@ Enabling monitoring on your device is a 3-steps process:
 3. [Enable thin-edge.io monitoring](#enable-thin-edge-monitoring).
 
 ## Install `mosquitto` client library
-collectd depends on mosquitto client library.
-So, need to install libmosquitto.
+Since thin-edge.io uses the MQTT plugin of `collectd`, one needs to install the mosquitto client library
+(either `libmosquitto1` or `mosquitto-clients`).
 
 ``` shell
 sudo apt-get install libmosquitto1
+```
+
+or
+
+``` shell
+sudo apt-get install mosquitto-clients
 ```
 
 ## Install `collectd`
