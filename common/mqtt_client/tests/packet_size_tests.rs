@@ -15,7 +15,7 @@ enum TestJoinError {
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
     let mqtt_server_handle = tokio::spawn(async {
-        rumqttd_broker::start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
+        rumqttd_broker::start_broker_local("tests/rumqttd/rumqttd_5883.conf").await
     });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
@@ -41,7 +41,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
     let mqtt_server_handle = tokio::spawn(async {
-        rumqttd_broker::start_broker_local("../../configuration/rumqttd/rumqttd_5884.conf").await
+        rumqttd_broker::start_broker_local("tests/rumqttd/rumqttd_5884.conf").await
     });
 
     // Start the publisher and publish a message

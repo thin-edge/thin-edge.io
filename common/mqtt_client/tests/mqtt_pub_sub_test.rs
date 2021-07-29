@@ -8,8 +8,7 @@ fn sending_and_receiving_a_message() {
 
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
         let _mqtt_server_handle = tokio::spawn(async {
-            rumqttd_broker::start_broker_local("../../configuration/rumqttd/rumqttd_5885.conf")
-                .await
+            rumqttd_broker::start_broker_local("tests/rumqttd/rumqttd_5885.conf").await
         });
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber =
