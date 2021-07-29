@@ -1,16 +1,14 @@
 use reqwest::StatusCode;
-use tedge_config::FilePath;
-
-use crate::utils::paths::PathsError;
-use tedge_users::UserSwitchError;
-
 use std::error::Error;
+use tedge_config::FilePath;
+use tedge_users::UserSwitchError;
+use tedge_utils::paths::PathsError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertError {
     #[error(
         r#"A certificate already exists and would be overwritten.
-        Existing file: {path:?}
+        Existing file: "{path}"
         Run `tedge cert remove` first to generate a new certificate.
     "#
     )]

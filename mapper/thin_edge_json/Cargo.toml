@@ -1,6 +1,6 @@
 [package]
 name = "thin_edge_json"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Software AG <thin-edge-team@softwareag.com>"]
 edition = "2018"
 
@@ -9,12 +9,19 @@ edition = "2018"
 [dependencies]
 chrono = "0.4"
 clock = { path = "../../common/clock" }
-json = "0.12"
 json-writer = { path = "../../common/json_writer" }
 thiserror = "1.0"
+serde = "1"
+serde_json = "1"
 
 [dev-dependencies]
 anyhow = "1.0"
 mockall = "0.10"
-pretty_assertions = "0.7"
 proptest = "1.0"
+criterion = "0.3"
+walkdir = "2"
+stats_alloc = "0.1.8"
+
+[[bench]]
+name = "parsing"
+harness = false

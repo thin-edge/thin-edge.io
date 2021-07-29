@@ -1,13 +1,9 @@
 use super::error::{get_webpki_error_from_reqwest, CertError};
-use crate::{
-    command::{Command, ExecutionContext},
-    utils,
-};
-
+use crate::command::Command;
 use reqwest::{StatusCode, Url};
 use std::{io::prelude::*, path::Path};
-
 use tedge_config::*;
+use tedge_utils::paths::pathbuf_to_string;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -35,7 +31,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -139,7 +135,7 @@ fn get_tenant_id_blocking(
 
 fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
     let path = path.as_ref();
-    let path = utils::paths::pathbuf_to_string(path.to_owned())?;
+    let path = pathbuf_to_string(path.to_owned())?;
 
     let mut file =
         std::fs::File::open(&path).map_err(|err| CertError::CertificateReadFailed(err, path))?;

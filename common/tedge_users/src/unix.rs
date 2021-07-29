@@ -1,3 +1,4 @@
+use std::fmt;
 use std::rc::Rc;
 use std::sync::Mutex;
 
@@ -19,6 +20,12 @@ pub struct UserManager {
     // If one thread changes the user, it affects another thread that might have wanted a different user.
     // So, let's use Rc rather than Arc to force !Send.
     inner: Rc<Mutex<InnerUserManager>>,
+}
+
+impl fmt::Debug for UserManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UserManager").finish()
+    }
 }
 
 struct InnerUserManager {

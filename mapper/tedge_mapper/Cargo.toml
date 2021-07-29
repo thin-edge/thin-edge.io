@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -13,6 +13,7 @@ assets = [
     ["../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
+    ["../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],
     ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
 ]
 
@@ -37,6 +38,7 @@ mqtt_client = {path = "../../common/mqtt_client" }
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
+tedge_utils = { path = "../../common/tedge_utils" }
 thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }

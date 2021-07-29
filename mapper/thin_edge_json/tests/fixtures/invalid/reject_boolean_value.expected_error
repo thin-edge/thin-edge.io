@@ -1,0 +1,4 @@
+Invalid JSON: invalid type: boolean `true`, expected ThinEdge single or multi-value measurement at line 3 column 21: `e,
+  "pressure": 220
+}
+`

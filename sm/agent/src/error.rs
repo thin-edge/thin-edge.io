@@ -1,20 +1,45 @@
 use mqtt_client::MqttClientError;
-use tedge_config::TEdgeConfigError;
+use tedge_sm_lib::error::SoftwareError;
+use tedge_users::UserSwitchError;
 
 #[derive(Debug, thiserror::Error)]
-pub enum MapperError {
+pub enum AgentError {
     #[error(transparent)]
-    MqttClientError(#[from] MqttClientError),
-
-    #[error("Home directory is not found.")]
-    HomeDirNotFound,
+    Io(#[from] std::io::Error),
 
     #[error(transparent)]
-    TEdgeConfigError(#[from] TEdgeConfigError),
+    JoinError(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
-    ConfigSettingError(#[from] tedge_config::ConfigSettingError),
+    MqttClient(#[from] MqttClientError),
+
+    #[error("Couldn't load plugins from /etc/tedge/sm-plugins")]
+    NoPlugins,
 
     #[error(transparent)]
-    FlockfileError(#[from] flockfile::FlockfileError),
+    SerdeJson(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    SoftwareError(#[from] SoftwareError),
+
+    #[error(transparent)]
+    State(#[from] StateError),
+
+    #[error(transparent)]
+    UserSwitchError(#[from] UserSwitchError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum StateError {
+    #[error(transparent)]
+    TOMLParseError(#[from] toml::de::Error),
+
+    #[error(transparent)]
+    InvalidTOMLError(#[from] toml::ser::Error),
+
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+
+    #[error("State file not found in /etc/tedge/.state")]
+    FileNotFound,
 }
