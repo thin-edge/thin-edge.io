@@ -26,22 +26,28 @@ pub trait Jsonify<'a>
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct SoftwareRequestList {
+pub struct SoftwareListRequest {
     pub id: usize,
 }
 
-impl<'a> Jsonify<'a> for SoftwareRequestList {}
+impl<'a> Jsonify<'a> for SoftwareListRequest {}
+
+impl SoftwareListRequest {
+    pub fn new(id: usize) -> SoftwareListRequest {
+        SoftwareListRequest { id }
+    }
+}
 
 /// Message payload definition for SoftwareUpdate request.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct SoftwareRequestUpdate {
+pub struct SoftwareUpdateRequest {
     pub id: usize,
     pub update_list: Vec<SoftwareRequestResponseSoftwareList>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareRequestUpdate {}
+impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
 /// Sub list of modules grouped by plugin type.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
@@ -60,6 +66,38 @@ pub enum SoftwareOperationStatus {
     Successful,
     Failed,
     Executing,
+}
+
+/// Message payload definition for SoftwareList response.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SoftwareListResponse {
+    #[serde(flatten)]
+    response: SoftwareRequestResponse,
+}
+
+impl<'a> Jsonify<'a> for SoftwareListResponse {}
+
+impl SoftwareListResponse {
+    pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
+        let response = SoftwareRequestResponse {
+            id: req.id,
+            status: SoftwareOperationStatus::Successful,
+            reason: None,
+            current_software_list: vec![],
+            failures: vec![],
+        };
+
+        SoftwareListResponse {
+            response
+        }
+    }
+
+    pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
+        self.response.current_software_list.push(SoftwareRequestResponseSoftwareList {
+            plugin_type: plugin_type.to_string(),
+            list: modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+        })
+    }
 }
 
 /// Software Operation Response payload format.
@@ -177,7 +215,7 @@ mod tests {
 
     #[test]
     fn serde_software_request_list() {
-        let request = SoftwareRequestList { id: 1234 };
+        let request = SoftwareListRequest { id: 1234 };
         let expected_json = r#"{"id":1234}"#;
 
         let actual_json = request.to_json().expect("Failed to serialize");
@@ -185,7 +223,7 @@ mod tests {
         assert_eq!(actual_json, expected_json);
 
         let de_request =
-            SoftwareRequestList::from_json(actual_json.as_str()).expect("failed to deserialize");
+            SoftwareListRequest::from_json(actual_json.as_str()).expect("failed to deserialize");
         assert_eq!(request, de_request);
     }
 
@@ -225,7 +263,7 @@ mod tests {
             list: vec![docker_module1],
         };
 
-        let request = SoftwareRequestUpdate {
+        let request = SoftwareUpdateRequest {
             id: 1234,
             update_list: vec![debian_list, docker_list],
         };
@@ -236,7 +274,7 @@ mod tests {
         assert_eq!(actual_json, expected_json);
 
         let parsed_request =
-            SoftwareRequestUpdate::from_json(&actual_json).expect("Fail to parse the json request");
+            SoftwareUpdateRequest::from_json(&actual_json).expect("Fail to parse the json request");
         assert_eq!(parsed_request, request);
     }
 
