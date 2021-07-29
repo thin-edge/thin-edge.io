@@ -1,7 +1,7 @@
 use futures::future::TryFutureExt;
-use librumqttd::{async_locallink, Config};
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
+mod rumqttd_broker;
 
 use tokio::time::Duration;
 #[derive(Debug)]
@@ -15,7 +15,7 @@ enum TestJoinError {
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
     let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
+        rumqttd_broker::start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
     });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
@@ -41,7 +41,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
     let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_5884.conf").await
+        rumqttd_broker::start_broker_local("../../configuration/rumqttd/rumqttd_5884.conf").await
     });
 
     // Start the publisher and publish a message
@@ -78,15 +78,6 @@ async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
         }
     }
 
-    Ok(())
-}
-
-async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
-    let config: Config = confy::load_path(cfile)?;
-    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
-    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
-    servers.await;
-    let _ = router.await;
     Ok(())
 }
 
