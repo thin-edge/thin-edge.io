@@ -1,10 +1,8 @@
+use super::error::CertError;
 use crate::command::Command;
-use crate::utils::paths::*;
-
 use tedge_config::*;
 use tedge_users::UserManager;
-
-use super::error::CertError;
+use tedge_utils::paths::ok_if_not_found;
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
