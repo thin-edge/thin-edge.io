@@ -1,5 +1,5 @@
+use super::error::CertError;
 use crate::command::Command;
-use crate::utils::paths;
 use certificate::{KeyCertPair, NewCertificateConfig};
 use std::{
     fs::{File, OpenOptions},
@@ -8,8 +8,7 @@ use std::{
 };
 use tedge_config::*;
 use tedge_users::UserManager;
-
-use super::error::CertError;
+use tedge_utils::paths::{set_permission, validate_parent_dir_exists};
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -42,8 +41,8 @@ impl CreateCertCmd {
     fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let _user_guard = self.user_manager.become_user(tedge_users::BROKER_USER)?;
 
-        paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
-        paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
+        validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
+        validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
         let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
 
@@ -58,11 +57,11 @@ impl CreateCertCmd {
         cert_file.sync_all()?;
 
         // Prevent the certificate to be overwritten
-        paths::set_permission(&cert_file, 0o444)?;
+        set_permission(&cert_file, 0o444)?;
 
         {
             // Make sure the key is secret, before write
-            paths::set_permission(&key_file, 0o600)?;
+            set_permission(&key_file, 0o600)?;
 
             // Zero the private key on drop
             let cert_key = cert.private_key_pem_string()?;
@@ -70,7 +69,7 @@ impl CreateCertCmd {
             key_file.sync_all()?;
 
             // Prevent the key to be overwritten
-            paths::set_permission(&key_file, 0o400)?;
+            set_permission(&key_file, 0o400)?;
         }
 
         Ok(())
