@@ -4,6 +4,15 @@ from pysys.basetest import BaseTest
 
 class AptPlugin(BaseTest):
     def setup(self):
+
+        # Static class member that can be overriden by a command line argument
+        # E.g.:
+        # pysys.py run 'apt_*' -XmyPlatform='container'
+        myPlatform=None
+
+        if self.myPlatform != 'container':
+            self.skipTest('Testint the apt plugin is not supported on this platform')
+
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"
         self.sudo = "/usr/bin/sudo"
