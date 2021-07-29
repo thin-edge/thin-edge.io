@@ -50,6 +50,19 @@ pub struct SoftwareUpdateRequest {
 
 impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
+impl SoftwareUpdateRequest {
+    pub fn new(id: usize) -> SoftwareUpdateRequest {
+        SoftwareUpdateRequest { id, update_list: vec![] }
+    }
+
+    pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
+        self.update_list.push(SoftwareRequestResponseSoftwareList {
+            plugin_type: plugin_type.to_string(),
+            modules: updates.into_iter().map(|update| update.into()).collect::<Vec<SoftwareModuleItem>>(),
+        })
+    }
+}
+
 /// Sub list of modules grouped by plugin type.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,7 +70,7 @@ impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 pub struct SoftwareRequestResponseSoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
-    pub list: Vec<SoftwareModuleItem>,
+    pub modules: Vec<SoftwareModuleItem>,
 }
 
 /// Possible statuses for result of Software operation.
@@ -96,7 +109,7 @@ impl SoftwareListResponse {
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
         self.response.current_software_list.push(SoftwareRequestResponseSoftwareList {
             plugin_type: plugin_type.to_string(),
-            list: modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+            modules: modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
         })
     }
 }
@@ -120,10 +133,10 @@ pub struct SoftwareModuleItem {
     pub version: Option<SoftwareVersion>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub action: Option<SoftwareModuleAction>,
+    pub url: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub action: Option<SoftwareModuleAction>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
@@ -149,7 +162,6 @@ pub struct SoftwareRequestResponse {
 
 impl<'a> Jsonify<'a> for SoftwareRequestResponse {}
 
-// TODO: Add methods to handle response changes, eg add_failure, update reason ...
 impl SoftwareRequestResponse {
     pub fn new(id: usize, status: SoftwareOperationStatus) -> Self {
         SoftwareRequestResponse {
@@ -273,7 +285,7 @@ mod tests {
 
         let debian_list = SoftwareRequestResponseSoftwareList {
             plugin_type: "debian".into(),
-            list: vec![debian_module1, debian_module2],
+            modules: vec![debian_module1, debian_module2],
         };
 
         let docker_module1 = SoftwareModuleItem {
@@ -286,7 +298,7 @@ mod tests {
 
         let docker_list = SoftwareRequestResponseSoftwareList {
             plugin_type: "docker".into(),
-            list: vec![docker_module1],
+            modules: vec![docker_module1],
         };
 
         let request = SoftwareUpdateRequest {
@@ -294,7 +306,7 @@ mod tests {
             update_list: vec![debian_list, docker_list],
         };
 
-        let expected_json = r#"{"id":1234,"updateList":[{"type":"debian","list":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","list":[{"name":"docker1","version":"0.0.1","action":"remove","url":"test.com"}]}]}"#;
+        let expected_json = r#"{"id":1234,"updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
 
         let actual_json = request.to_json().expect("Fail to serialize the request");
         assert_eq!(actual_json, expected_json);
@@ -336,7 +348,7 @@ mod tests {
 
         let docker_module1 = SoftwareRequestResponseSoftwareList {
             plugin_type: "debian".into(),
-            list: vec![module1],
+            modules: vec![module1],
         };
 
         let request = SoftwareRequestResponse {
@@ -347,7 +359,7 @@ mod tests {
             failures: vec![],
         };
 
-        let expected_json = r#"{"id":1234,"status":"successful","currentSoftwareList":[{"type":"debian","list":[{"name":"debian1","version":"0.0.1"}]}]}"#;
+        let expected_json = r#"{"id":1234,"status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
 
         let actual_json = request.to_json().expect("Fail to serialize the request");
         assert_eq!(actual_json, expected_json);

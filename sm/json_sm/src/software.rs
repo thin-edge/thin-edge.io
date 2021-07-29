@@ -24,3 +24,13 @@ pub struct SoftwareModuleUpdateResult {
     pub update: SoftwareModuleUpdate,
     pub error: Option<SoftwareError>,
 }
+
+impl SoftwareModuleUpdate {
+    pub fn install(module: SoftwareModule) -> SoftwareModuleUpdate {
+        SoftwareModuleUpdate::Install { module }
+    }
+
+    pub fn remove(module: SoftwareModule) -> SoftwareModuleUpdate {
+        SoftwareModuleUpdate::Remove { module }
+    }
+}
