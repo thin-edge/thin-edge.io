@@ -1,6 +1,7 @@
 use crate::{error::SoftwareError, software::*};
 use serde::{Deserialize, Serialize};
 
+/// All the messages are serialized using json.
 pub trait Jsonify<'a>
     where
         Self: Deserialize<'a> + Serialize + Sized,
@@ -100,6 +101,34 @@ impl SoftwareListResponse {
     }
 }
 
+/// Variants represent Software Operations Supported actions.
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SoftwareModuleAction {
+    Install,
+    Remove,
+}
+
+/// Software module payload definition.
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct SoftwareModuleItem {
+    pub name: SoftwareName,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<SoftwareVersion>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<SoftwareModuleAction>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 /// Software Operation Response payload format.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -111,10 +140,10 @@ pub struct SoftwareRequestResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub current_software_list: Vec<SoftwareRequestResponseSoftwareList>,
 
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<SoftwareRequestResponseSoftwareList>,
 }
 
@@ -208,9 +237,6 @@ impl From<SoftwareModuleUpdateResult> for SoftwareModuleItem {
 
 #[cfg(test)]
 mod tests {
-
-    use crate::software::SoftwareModuleAction;
-
     use super::*;
 
     #[test]
@@ -277,30 +303,6 @@ mod tests {
             SoftwareUpdateRequest::from_json(&actual_json).expect("Fail to parse the json request");
         assert_eq!(parsed_request, request);
     }
-
-    // #[test]
-    // fn serialize_and_parse_update_status() {
-    //     let status = SoftwareUpdateStatus {
-    //         update: SoftwareUpdate::Install {
-    //             module: SoftwareModule {
-    //                 software_type: "".into(),
-    //                 name: "test_core".into(),
-    //                 version: None,
-    //                 url: None,
-    //             },
-    //         },
-    //         status: UpdateStatus::Success,
-    //     };
-
-    //     let expected_json =
-    //         r#"{"update":{"action":"install","name":"test_core"},"status":"Success"}"#;
-    //     let actual_json = serde_json::to_string(&status).expect("Fail to serialize a status");
-    //     assert_eq!(actual_json, expected_json);
-
-    //     let parsed_status: SoftwareUpdateStatus =
-    //         serde_json::from_str(&actual_json).expect("Fail to parse the json status");
-    //     assert_eq!(parsed_status, status);
-    // }
 
     #[test]
     fn serde_software_list_empty_successful() {
