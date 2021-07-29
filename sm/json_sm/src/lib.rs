@@ -25,6 +25,14 @@ mod tests {
     }
 
     #[test]
+    fn using_a_software_list_request() {
+        let json_request = r#"{"id":123}"#;
+        let request = SoftwareListRequest::from_json(json_request).expect("Failed to deserialize");
+
+        assert_eq!(request.id, 123);
+    }
+
+    #[test]
     fn creating_a_software_list_response() {
         let request = SoftwareListRequest::new(1);
         let mut response = SoftwareListResponse::new(&request);
@@ -56,6 +64,60 @@ mod tests {
             ]}"#;
         let actual_json = response.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn using_a_software_list_response() {
+        let json_response = r#"{
+            "id": 123,
+            "status": "successful",
+            "currentSoftwareList":[
+                {"type":"debian", "modules":[
+                    {"name":"a"},
+                    {"name":"b","version":"1.0"},
+                    {"name":"c","url":"https://foobar.io/c.deb"},
+                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
+                ]},
+                {"type":"apama","modules":[
+                    {"name":"m","url":"https://foobar.io/m.epl"}
+                ]}
+            ]}"#;
+
+        let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
+
+        assert_eq!(response.id(), 123);
+        assert_eq!(response.error(), None);
+    }
+
+    #[test]
+    fn creating_a_software_list_error() {
+        let request = SoftwareListRequest::new(123);
+        let mut response = SoftwareListResponse::new(&request);
+
+        response.set_error("Request_timed-out");
+
+        let expected_json = r#"{
+            "id": 123,
+            "status": "failed",
+            "reason": "Request_timed-out",
+            "currentSoftwareList": []
+        }"#;
+
+        let actual_json = response.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn using_a_software_list_error() {
+        let json_response = r#"{
+            "id": 123,
+            "status": "failed",
+            "reason": "Request timed-out"
+        }"#;
+        let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
+
+        assert_eq!(response.id(), 123);
+        assert_eq!(response.error(), Some("Request timed-out".into()));
     }
 
     #[test]

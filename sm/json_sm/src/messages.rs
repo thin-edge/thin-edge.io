@@ -112,6 +112,19 @@ impl SoftwareListResponse {
             modules: modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
         })
     }
+
+    pub fn set_error(&mut self, reason: &str) {
+        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.reason = Some(reason.into());
+    }
+
+    pub fn id(&self) -> usize {
+        self.response.id
+    }
+
+    pub fn error(&self) -> Option<String> {
+        self.response.reason.clone()
+    }
 }
 
 /// Variants represent Software Operations Supported actions.
