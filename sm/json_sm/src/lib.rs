@@ -240,6 +240,99 @@ mod tests {
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
+    #[test]
+    fn finalizing_a_software_update_error() {
+        let request = SoftwareUpdateRequest::new(123);
+        let mut response = SoftwareUpdateResponse::new(&request);
+
+        response.add_errors("debian", vec![
+            SoftwareError::Install {
+                module: SoftwareModule {
+                    name: "collectd".to_string(),
+                    version: Some("5.7".to_string()),
+                    url: None },
+                reason: "Network timeout".to_string(),
+            },
+        ]);
+
+        response.add_errors("docker", vec![
+            SoftwareError::Remove {
+                module: SoftwareModule {
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None
+                },
+                reason: "Other components dependent on it".to_string(),
+            },
+        ]);
+
+        response.add_modules("debian", vec![
+            SoftwareModule { name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None },
+        ]);
+
+        response.add_modules("docker", vec![
+            SoftwareModule { name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None },
+            SoftwareModule { name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None },
+        ]);
+
+        let expected_json = r#"{
+            "id": 123,
+            "status":"failed",
+            "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
+            "currentSoftwareList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6"
+                        }
+                    ]
+                }
+            ],
+            "failures":[
+                {
+                    "type":"debian",
+                    "modules": [
+                        {
+                            "name":"collectd",
+                            "version":"5.7",
+                            "action":"install",
+                            "reason":"Network timeout"
+                        }
+                    ]
+                },
+                {
+                    "type":"docker",
+                    "modules": [
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action":"remove",
+                            "reason":"Other components dependent on it"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let actual_json = response.to_json().expect("Failed to serialize");
+        assert_eq!(remove_whitespace(&actual_json), remove_whitespace(expected_json));
+    }
+
     fn remove_whitespace(s: &str) -> String {
         let mut s = String::from(s);
         s.retain(|c| !c.is_whitespace());

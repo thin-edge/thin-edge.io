@@ -1,4 +1,3 @@
-use crate::error::SoftwareError;
 use serde::{Deserialize, Serialize};
 
 pub type SoftwareType = String;
@@ -17,12 +16,6 @@ pub struct SoftwareModule {
 pub enum SoftwareModuleUpdate {
     Install { module: SoftwareModule },
     Remove { module: SoftwareModule },
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct SoftwareModuleUpdateResult {
-    pub update: SoftwareModuleUpdate,
-    pub error: Option<SoftwareError>,
 }
 
 impl SoftwareModuleUpdate {

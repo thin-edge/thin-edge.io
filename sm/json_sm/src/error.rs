@@ -32,7 +32,7 @@ pub enum SoftwareError {
     },
 
     #[error("Failed to uninstall {module:?}")]
-    Uninstall {
+    Remove {
         module: SoftwareModule,
         reason: String,
     },
