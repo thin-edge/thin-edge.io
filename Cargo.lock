@@ -1189,6 +1189,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_sm"
+version = "0.2.3"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
