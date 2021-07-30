@@ -13,8 +13,48 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  system-test:
-    runs-on: [self-hosted, Linux, ARM ] #, offsite]
+  system-test_onsite:
+    runs-on: [self-hosted, Linux, ARM, onsite]
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_${{ github.run_number }}
+        path: tests/
+
+    # Trigger repo dispatch here.
+    # This is here a limitation of the amount of workflows
+    # that trigger each other (GitHub Bug).
+    # It would be nicer to use the postprocess trigger instead
+    - name: Repository Dispatch
+      uses: peter-evans/repository-dispatch@v1
+      with:
+          token: ${{ secrets.SECRET_THEGHTOKEN  }}
+          event-type: postprocess
+          repository: abelikt/thin-edge.io_analytics
+
+  system-test_offsite:
+    runs-on: [self-hosted, Linux, ARM, offsite]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
