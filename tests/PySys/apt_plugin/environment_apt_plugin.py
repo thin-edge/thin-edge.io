@@ -11,7 +11,7 @@ class AptPlugin(BaseTest):
         myPlatform=None
 
         if self.myPlatform != 'container':
-            self.skipTest('Testint the apt plugin is not supported on this platform')
+            self.skipTest('Testing the apt plugin is not supported on this platform')
 
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"
