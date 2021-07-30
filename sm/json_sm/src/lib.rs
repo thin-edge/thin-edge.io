@@ -272,6 +272,94 @@ mod tests {
     }
 
     #[test]
+    fn using_a_software_update_request() {
+        let json_request = r#"{
+            "id": 123,
+            "updateList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let request =
+            SoftwareUpdateRequest::from_json(json_request).expect("Failed to deserialize");
+
+        assert_eq!(request.id, 123);
+
+        assert_eq!(
+            request.modules_types(),
+            vec!["debian".to_string(), "docker".to_string(),]
+        );
+
+        assert_eq!(
+            request.updates_for("debian"),
+            vec![
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "nodered".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    url: None,
+                }),
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "collectd".to_string(),
+                    version: Some("5.7".to_string()),
+                    url: Some(
+                        "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+                            .to_string(),
+                    ),
+                }),
+            ]
+        );
+
+        assert_eq!(
+            request.updates_for("docker"),
+            vec![
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "nginx".to_string(),
+                    version: Some("1.21.0".to_string()),
+                    url: None,
+                }),
+                SoftwareModuleUpdate::remove(SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None,
+                }),
+            ]
+        );
+    }
+
+    #[test]
     fn creating_a_software_update_response() {
         let request = SoftwareUpdateRequest::new(123);
         let response = SoftwareUpdateResponse::new(&request);

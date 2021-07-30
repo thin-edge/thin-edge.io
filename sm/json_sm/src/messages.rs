@@ -67,6 +67,46 @@ impl SoftwareUpdateRequest {
                 .collect::<Vec<SoftwareModuleItem>>(),
         })
     }
+
+    pub fn modules_types(&self) -> Vec<SoftwareType> {
+        let mut modules_types = vec![];
+
+        for updates_per_type in self.update_list.iter() {
+            modules_types.push(updates_per_type.plugin_type.clone())
+        }
+
+        modules_types
+    }
+
+    pub fn updates_for(&self, module_type: &str) -> Vec<SoftwareModuleUpdate> {
+        let mut updates = vec![];
+
+        if let Some(items) = self
+            .update_list
+            .iter()
+            .find(|&items| items.plugin_type == module_type)
+        {
+            for item in items.modules.iter() {
+                let module = SoftwareModule {
+                    module_type: module_type.to_string(),
+                    name: item.name.clone(),
+                    version: item.version.clone(),
+                    url: item.url.clone(),
+                };
+                match item.action {
+                    None => {}
+                    Some(SoftwareModuleAction::Install) => {
+                        updates.push(SoftwareModuleUpdate::install(module));
+                    }
+                    Some(SoftwareModuleAction::Remove) => {
+                        updates.push(SoftwareModuleUpdate::remove(module));
+                    }
+                }
+            }
+        }
+
+        updates
+    }
 }
 
 /// Sub list of modules grouped by plugin type.
