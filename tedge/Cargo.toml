@@ -13,16 +13,17 @@ maintainer-scripts = "configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0"
-certificate = {path = "../common/certificate" }
+certificate = { path = "../common/certificate" }
 chrono = "0.4"
 futures = "0.3"
-mqtt_client = {path = "../common/mqtt_client" }
+mqtt_client = { path = "../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
 hyper = { version = "0.14", default-features = false }
 rustls = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
+tedge_utils = { path = "../common/tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "signal", "io-util", "io-std", "sync"] }
