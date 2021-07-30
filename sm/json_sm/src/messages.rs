@@ -93,24 +93,19 @@ impl<'a> Jsonify<'a> for SoftwareListResponse {}
 
 impl SoftwareListResponse {
     pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
-        let response = SoftwareRequestResponse {
-            id: req.id,
-            status: SoftwareOperationStatus::Successful,
-            reason: None,
-            current_software_list: vec![],
-            failures: vec![],
-        };
-
         SoftwareListResponse {
-            response
+            response: SoftwareRequestResponse::new(
+                req.id,
+                SoftwareOperationStatus::Executing
+            )
         }
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
-        self.response.current_software_list.push(SoftwareRequestResponseSoftwareList {
-            plugin_type: plugin_type.to_string(),
-            modules: modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
-        })
+        self.response.add_modules(
+            plugin_type.to_string(),
+            modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+        );
     }
 
     pub fn set_error(&mut self, reason: &str) {
@@ -124,6 +119,33 @@ impl SoftwareListResponse {
 
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
+    }
+}
+
+/// Message payload definition for SoftwareUpdate response.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SoftwareUpdateResponse {
+    #[serde(flatten)]
+    response: SoftwareRequestResponse,
+}
+
+impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
+
+impl SoftwareUpdateResponse {
+    pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
+        SoftwareUpdateResponse {
+            response: SoftwareRequestResponse::new(
+                req.id,
+                SoftwareOperationStatus::Executing
+            )
+        }
+    }
+
+    pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
+        self.response.add_modules(
+            plugin_type.to_string(),
+            modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+        );
     }
 }
 
@@ -166,8 +188,8 @@ pub struct SoftwareRequestResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 
-    #[serde(default)]
-    pub current_software_list: Vec<SoftwareRequestResponseSoftwareList>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_software_list: Option<Vec<SoftwareRequestResponseSoftwareList>>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<SoftwareRequestResponseSoftwareList>,
@@ -180,18 +202,27 @@ impl SoftwareRequestResponse {
         SoftwareRequestResponse {
             id,
             status,
-            current_software_list: vec![],
+            current_software_list: None,
             reason: None,
             failures: vec![],
         }
     }
 
-    pub fn finalize_response(&mut self, software_list: Vec<SoftwareRequestResponseSoftwareList>) {
+    pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
         if self.failures.is_empty() {
             self.status = SoftwareOperationStatus::Successful;
         }
 
-        self.current_software_list = software_list;
+        if self.current_software_list.is_none() {
+            self.current_software_list = Some(vec![]);
+        }
+
+        if let Some(list) = self.current_software_list.as_mut() {
+            list.push(SoftwareRequestResponseSoftwareList {
+                plugin_type: plugin_type.to_string(),
+                modules,
+            })
+        }
     }
 }
 
@@ -335,7 +366,7 @@ mod tests {
             id: 1234,
             status: SoftwareOperationStatus::Successful,
             reason: None,
-            current_software_list: vec![],
+            current_software_list: Some(vec![]),
             failures: vec![],
         };
 
@@ -368,7 +399,7 @@ mod tests {
             id: 1234,
             status: SoftwareOperationStatus::Successful,
             reason: None,
-            current_software_list: vec![docker_module1],
+            current_software_list: Some(vec![docker_module1]),
             failures: vec![],
         };
 

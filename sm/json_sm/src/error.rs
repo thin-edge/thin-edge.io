@@ -4,8 +4,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareError {
-    #[error("Failed to finalize")]
-    Finalize { reason: String },
+    #[error("Failed to finalize updates for {software_type:?}")]
+    Finalize {
+        software_type: SoftwareType,
+        reason: String,
+    },
 
     #[error("Failed to install {module:?}")]
     Install {
@@ -22,8 +25,11 @@ pub enum SoftwareError {
         reason: String,
     },
 
-    #[error("Failed to prepare")]
-    Prepare { reason: String },
+    #[error("Failed to prepare updates for {software_type:?}")]
+    Prepare {
+        software_type: SoftwareType,
+        reason: String,
+    },
 
     #[error("Failed to uninstall {module:?}")]
     Uninstall {
@@ -45,12 +51,6 @@ pub enum SoftwareError {
         software_type: SoftwareType,
         name: SoftwareName,
         version: SoftwareVersion,
-    },
-
-    #[error("Unexpected module type: actual: {actual_type:?}, expected: {expected_type:?}")]
-    WrongModuleType {
-        actual_type: SoftwareType,
-        expected_type: SoftwareType,
     },
 }
 

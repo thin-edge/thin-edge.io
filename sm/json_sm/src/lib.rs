@@ -9,6 +9,7 @@ pub use messages::{
     SoftwareListRequest,
     SoftwareListResponse,
     SoftwareUpdateRequest,
+    SoftwareUpdateResponse,
 };
 
 #[cfg(test)]
@@ -99,8 +100,7 @@ mod tests {
         let expected_json = r#"{
             "id": 123,
             "status": "failed",
-            "reason": "Request_timed-out",
-            "currentSoftwareList": []
+            "reason": "Request_timed-out"
         }"#;
 
         let actual_json = response.to_json().expect("Failed to serialize");
@@ -171,6 +171,72 @@ mod tests {
             ]
         }"#;
         let actual_json = request.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn creating_a_software_update_response() {
+        let request = SoftwareUpdateRequest::new(123);
+        let response = SoftwareUpdateResponse::new(&request);
+
+        let expected_json = r#"{
+            "id": 123,
+            "status": "executing"
+        }"#;
+
+        let actual_json = response.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn finalizing_a_software_update_response() {
+        let request = SoftwareUpdateRequest::new(123);
+        let mut response = SoftwareUpdateResponse::new(&request);
+
+        response.add_modules("debian", vec![
+            SoftwareModule { name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None },
+            SoftwareModule { name: "collectd".to_string(), version: Some("5.7".to_string()), url: None },
+        ]);
+
+        response.add_modules("docker", vec![
+            SoftwareModule { name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None },
+            SoftwareModule { name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None },
+        ]);
+
+        let expected_json = r#"{
+            "id": 123,
+            "status": "successful",
+            "currentSoftwareList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let actual_json = response.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
