@@ -1,6 +1,6 @@
 [package]
 name = "json_sm"
-version = "0.1.0"
+version = "0.2.3"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
