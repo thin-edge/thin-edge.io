@@ -122,7 +122,7 @@ jobs:
             onsite, offsite
           ]
 
-    runs-on: [self-hosted, Linux, ARM, matrix.target]
+    runs-on: [self-hosted, Linux, ARM, ${{matrix.target}} ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
