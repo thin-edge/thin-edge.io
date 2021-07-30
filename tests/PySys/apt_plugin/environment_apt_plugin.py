@@ -3,13 +3,13 @@ from pysys.basetest import BaseTest
 
 
 class AptPlugin(BaseTest):
+
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'apt_*' -XmyPlatform='container'
+    myPlatform=None
+
     def setup(self):
-
-        # Static class member that can be overriden by a command line argument
-        # E.g.:
-        # pysys.py run 'apt_*' -XmyPlatform='container'
-        myPlatform=None
-
         if self.myPlatform != 'container':
             self.skipTest('Testing the apt plugin is not supported on this platform')
 
