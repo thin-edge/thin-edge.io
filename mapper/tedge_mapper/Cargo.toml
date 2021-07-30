@@ -39,6 +39,7 @@ mqtt_client = {path = "../../common/mqtt_client" }
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
+tedge_utils = { path = "../../common/tedge_utils" }
 thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
