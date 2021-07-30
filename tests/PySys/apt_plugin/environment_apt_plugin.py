@@ -46,7 +46,6 @@ class AptPlugin(BaseTest):
             stdouterr=outputfile,
             expectedExitStatus=f"=={exit_code}",
         )
-        self.assertThat("value" + process.expectedExitStatus, value=process.exitStatus)
 
         self.assertThat("value" + process.expectedExitStatus, value=process.exitStatus)
 
