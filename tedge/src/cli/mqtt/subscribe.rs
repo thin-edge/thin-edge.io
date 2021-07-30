@@ -1,8 +1,8 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
-use crate::utils::signals;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Message, MqttClient, QoS, TopicFilter};
+use tedge_utils::signals;
 use tokio::{io::AsyncWriteExt, select};
 
 pub struct MqttSubscribeCommand {

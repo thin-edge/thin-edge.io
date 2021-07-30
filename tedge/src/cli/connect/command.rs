@@ -1,9 +1,10 @@
-use crate::{cli::connect::*, command::Command, system_services::*, utils::paths, ConfigError};
+use crate::{cli::connect::*, command::Command, system_services::*, ConfigError};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
+use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
@@ -347,7 +348,7 @@ fn clean_up(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    let _ = std::fs::remove_file(&path).or_else(paths::ok_if_not_found)?;
+    let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
     Ok(())
 }
 
@@ -374,18 +375,18 @@ fn write_bridge_config_to_file(
         .join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    let _ = paths::create_directories(&dir_path)?;
+    let _ = create_directories(&dir_path)?;
 
     let mut common_temp_file = NamedTempFile::new()?;
     common_mosquitto_config.serialize(&mut common_temp_file)?;
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let () = paths::persist_tempfile(common_temp_file, &common_config_path)?;
+    let () = persist_tempfile(common_temp_file, &common_config_path)?;
 
     let mut temp_file = NamedTempFile::new()?;
     bridge_config.serialize(&mut temp_file)?;
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
-    let () = paths::persist_tempfile(temp_file, &config_path)?;
+    let () = persist_tempfile(temp_file, &config_path)?;
 
     Ok(())
 }
