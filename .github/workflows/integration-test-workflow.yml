@@ -114,7 +114,15 @@ jobs:
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi:
-    runs-on: [self-hosted, Linux, ARM]
+
+    strategy:
+      matrix:
+        target:
+          [
+            onsite, offsite
+          ]
+
+    runs-on: [self-hosted, Linux, ARM, matrix.target]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
