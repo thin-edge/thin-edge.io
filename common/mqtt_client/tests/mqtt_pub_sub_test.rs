@@ -7,17 +7,22 @@ fn sending_and_receiving_a_message() {
     use tokio::time::sleep;
 
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        let _mqtt_server_handle = tokio::spawn(async {
-            rumqttd_broker::start_broker_local("tests/rumqttd/rumqttd_5885.conf").await
-        });
+        let _mqtt_server_handle =
+            tokio::spawn(async { rumqttd_broker::start_broker_local().await });
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
-        let subscriber =
-            Client::connect("subscribe", &mqtt_client::Config::default().with_port(5885)).await?;
+        let subscriber = Client::connect(
+            "subscribe",
+            &mqtt_client::Config::default().with_port(58585),
+        )
+        .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
 
         let message = Message::new(&topic, payload);
-        let publisher =
-            Client::connect("publisher", &mqtt_client::Config::default().with_port(5885)).await?;
+        let publisher = Client::connect(
+            "publisher",
+            &mqtt_client::Config::default().with_port(58585),
+        )
+        .await?;
         let _pkid = publisher.publish(message).await?;
 
         tokio::select! {
