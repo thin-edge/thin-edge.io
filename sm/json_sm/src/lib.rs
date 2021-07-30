@@ -14,6 +14,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn topic_names() {
+        // There are two topics for each kind of requests,
+        // one for the requests, the other for the responses
+        assert_eq!(SoftwareListRequest::topic_name(), "tedge/commands/req/software/list");
+        assert_eq!(SoftwareListResponse::topic_name(), "tedge/commands/res/software/list");
+        assert_eq!(SoftwareUpdateRequest::topic_name(), "tedge/commands/req/software/update");
+        assert_eq!(SoftwareUpdateResponse::topic_name(), "tedge/commands/res/software/update");
+    }
+
+    #[test]
     fn creating_a_software_list_request() {
         let request = SoftwareListRequest::new(1);
 

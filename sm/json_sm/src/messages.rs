@@ -37,6 +37,10 @@ impl SoftwareListRequest {
     pub fn new(id: usize) -> SoftwareListRequest {
         SoftwareListRequest { id }
     }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/req/software/list"
+    }
 }
 
 /// Message payload definition for SoftwareUpdate request.
@@ -56,6 +60,10 @@ impl SoftwareUpdateRequest {
             id,
             update_list: vec![],
         }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/req/software/update"
     }
 
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
@@ -144,6 +152,10 @@ impl SoftwareListResponse {
         }
     }
 
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/res/software/list"
+    }
+
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
         self.response.add_modules(
             plugin_type.to_string(),
@@ -194,6 +206,10 @@ impl SoftwareUpdateResponse {
             response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
             errors: vec![],
         }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/res/software/update"
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
