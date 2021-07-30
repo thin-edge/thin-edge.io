@@ -6,7 +6,7 @@ pub type SoftwareVersion = String;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareModule {
-    // pub module_type: SoftwareType,
+    pub module_type: SoftwareType,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
     pub url: Option<String>,

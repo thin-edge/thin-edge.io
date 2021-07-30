@@ -122,6 +122,10 @@ impl SoftwareListResponse {
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
     }
+
+    pub fn modules(&self) -> Vec<SoftwareModule> {
+        self.response.modules()
+    }
 }
 
 /// Message payload definition for SoftwareUpdate response.
@@ -171,6 +175,10 @@ impl SoftwareUpdateResponse {
 
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
+    }
+
+    pub fn modules(&self) -> Vec<SoftwareModule> {
+        self.response.modules()
     }
 }
 
@@ -313,29 +321,25 @@ impl SoftwareRequestResponse {
             }
         )
     }
-}
 
-impl From<SoftwareModuleItem> for SoftwareModule {
-    fn from(val: SoftwareModuleItem) -> Self {
-        SoftwareModule {
-            name: val.name,
-            version: val.version,
-            url: val.url,
-        }
-    }
-}
+    pub fn modules(&self) -> Vec<SoftwareModule> {
+        let mut modules = vec![];
 
-impl From<SoftwareModuleItem> for Option<SoftwareModuleUpdate> {
-    fn from(val: SoftwareModuleItem) -> Self {
-        match val.action {
-            Some(SoftwareModuleAction::Install) => {
-                Some(SoftwareModuleUpdate::Install { module: val.into() })
+        if let Some(list) = &self.current_software_list {
+            for module_per_plugin in list.iter() {
+                let module_type = &module_per_plugin.plugin_type;
+                for module in module_per_plugin.modules.iter() {
+                    modules.push(SoftwareModule {
+                        module_type: module_type.clone(),
+                        name: module.name.clone(),
+                        version: module.version.clone(),
+                        url: module.url.clone(),
+                    });
+                }
             }
-            Some(SoftwareModuleAction::Remove) => {
-                Some(SoftwareModuleUpdate::Remove { module: val.into() })
-            }
-            None => None,
         }
+
+        modules
     }
 }
 
