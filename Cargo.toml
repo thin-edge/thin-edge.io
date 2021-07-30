@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "common/batcher",
     "common/certificate",
     "common/flockfile",
     "common/mqtt_client",

@@ -6,12 +6,12 @@ use anyhow::Context;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tedge_users::UserManager;
+use tedge_utils::paths::{home_dir, PathsError};
 
 mod cli;
 mod command;
 mod error;
 mod system_services;
-mod utils;
 
 type ConfigError = crate::error::TEdgeError;
 
@@ -28,8 +28,7 @@ fn main() -> anyhow::Result<()> {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
     } else {
         tedge_config::TEdgeConfigLocation::from_users_home_location(
-            crate::utils::paths::home_dir()
-                .ok_or(crate::utils::paths::PathsError::HomeDirNotFound)?,
+            home_dir().ok_or(PathsError::HomeDirNotFound)?,
         )
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());

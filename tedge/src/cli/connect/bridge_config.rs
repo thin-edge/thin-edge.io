@@ -1,4 +1,5 @@
 use crate::cli::connect::ConnectError;
+
 use tedge_config::FilePath;
 use url::Url;
 
@@ -60,6 +61,12 @@ impl BridgeConfig {
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
         }
+        match &self.remote_username {
+            Some(name) => {
+                writeln!(writer, "remote_username {}", name)?;
+            }
+            None => {}
+        }
         Ok(())
     }
 
@@ -86,6 +93,7 @@ impl BridgeConfig {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     #[test]
@@ -256,9 +264,7 @@ bridge_attempt_unsubscribe false
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
-
         assert_eq!(config_set, expected);
-
         Ok(())
     }
 
@@ -338,25 +344,25 @@ bridge_attempt_unsubscribe false
 
         Ok(())
     }
-    fn default_bridge_config() -> BridgeConfig {
-        BridgeConfig {
-            cloud_name: "az/c8y".into(),
-            config_file: "cfg".to_string(),
-            connection: "edge_to_az/c8y".into(),
-            address: "".into(),
-            remote_username: None,
-            bridge_root_cert_path: "".into(),
-            bridge_certfile: "".into(),
-            bridge_keyfile: "".into(),
-            remote_clientid: "".into(),
-            local_clientid: "".into(),
-            use_mapper: true,
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            notifications: false,
-            bridge_attempt_unsubscribe: false,
-            topics: vec![],
-        }
+}
+fn default_bridge_config() -> BridgeConfig {
+    BridgeConfig {
+        cloud_name: "az/c8y".into(),
+        config_file: "cfg".to_string(),
+        connection: "edge_to_az/c8y".into(),
+        address: "".into(),
+        remote_username: None,
+        bridge_root_cert_path: "".into(),
+        bridge_certfile: "".into(),
+        bridge_keyfile: "".into(),
+        remote_clientid: "".into(),
+        local_clientid: "".into(),
+        use_mapper: true,
+        try_private: false,
+        start_type: "automatic".into(),
+        clean_session: true,
+        notifications: false,
+        bridge_attempt_unsubscribe: false,
+        topics: vec![],
     }
 }
