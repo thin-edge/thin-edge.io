@@ -6,6 +6,7 @@ pub use error::*;
 pub use software::*;
 pub use messages::{
     Jsonify,
+    SoftwareOperationStatus,
     SoftwareListRequest,
     SoftwareListResponse,
     SoftwareUpdateRequest,
@@ -87,6 +88,7 @@ mod tests {
         let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
+        assert_eq!(response.status(), SoftwareOperationStatus::Successful);
         assert_eq!(response.error(), None);
     }
 
@@ -117,6 +119,7 @@ mod tests {
         let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
+        assert_eq!(response.status(), SoftwareOperationStatus::Failed);
         assert_eq!(response.error(), Some("Request timed-out".into()));
     }
 
@@ -186,6 +189,19 @@ mod tests {
 
         let actual_json = response.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn using_a_software_update_executing_response() {
+        let json_response = r#"{
+            "id": 123,
+            "status": "executing"
+        }"#;
+        let response = SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
+
+        assert_eq!(response.id(), 123);
+        assert_eq!(response.status(), SoftwareOperationStatus::Executing);
+        assert_eq!(response.error(), None);
     }
 
     #[test]
@@ -332,6 +348,75 @@ mod tests {
         let actual_json = response.to_json().expect("Failed to serialize");
         assert_eq!(remove_whitespace(&actual_json), remove_whitespace(expected_json));
     }
+
+    #[test]
+    fn using_a_software_update_response() {
+        let json_response = r#"{
+            "id": 123,
+            "status":"failed",
+            "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
+            "currentSoftwareList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6"
+                        }
+                    ]
+                }
+            ],
+            "failures": [
+                {
+                    "type":"debian",
+                    "modules": [
+                        {
+                            "name":"collectd",
+                            "version":"5.7",
+                            "action":"install",
+                            "reason":"Network timeout"
+                        }
+                    ]
+                },
+                {
+                    "type":"docker",
+                    "modules": [
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action":"remove",
+                            "reason":"Other components dependent on it"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let response = SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
+
+        assert_eq!(response.id(), 123);
+        assert_eq!(response.status(), SoftwareOperationStatus::Failed);
+        assert_eq!(response.error(), Some("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".into()));
+
+        // The C8Y mapper doesn't use the failures list
+        // => no support for now
+
+        // The mapper can request the update list of modules
+        // TODO
+    }
+
 
     fn remove_whitespace(s: &str) -> String {
         let mut s = String::from(s);

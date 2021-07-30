@@ -74,7 +74,7 @@ pub struct SoftwareRequestResponseSoftwareList {
 }
 
 /// Possible statuses for result of Software operation.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum SoftwareOperationStatus {
     Successful,
@@ -116,6 +116,8 @@ impl SoftwareListResponse {
     pub fn id(&self) -> usize {
         self.response.id
     }
+
+    pub fn status(&self) -> SoftwareOperationStatus { self.response.status }
 
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
@@ -159,6 +161,16 @@ impl SoftwareUpdateResponse {
             plugin_type.to_string(),
             errors.into_iter().filter_map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
         );
+    }
+
+    pub fn id(&self) -> usize {
+        self.response.id
+    }
+
+    pub fn status(&self) -> SoftwareOperationStatus { self.response.status }
+
+    pub fn error(&self) -> Option<String> {
+        self.response.reason.clone()
     }
 }
 
