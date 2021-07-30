@@ -3,15 +3,11 @@ mod messages;
 mod software;
 
 pub use error::*;
-pub use software::*;
 pub use messages::{
-    Jsonify,
-    SoftwareOperationStatus,
-    SoftwareListRequest,
-    SoftwareListResponse,
-    SoftwareUpdateRequest,
-    SoftwareUpdateResponse,
+    Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
+    SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
+pub use software::*;
 
 #[cfg(test)]
 mod tests {
@@ -39,16 +35,45 @@ mod tests {
         let request = SoftwareListRequest::new(1);
         let mut response = SoftwareListResponse::new(&request);
 
-        response.add_modules("debian", vec![
-            SoftwareModule { module_type: "debian".to_string(), name: "a".to_string(), version: None, url: None },
-            SoftwareModule { module_type: "debian".to_string(), name: "b".to_string(), version: Some("1.0".to_string()), url: None },
-            SoftwareModule { module_type: "debian".to_string(), name: "c".to_string(), version: None, url: Some("https://foobar.io/c.deb".to_string()) },
-            SoftwareModule { module_type: "debian".to_string(), name: "d".to_string(), version: Some("beta".to_string()), url: Some("https://foobar.io/d.deb".to_string()) },
-        ]);
+        response.add_modules(
+            "debian",
+            vec![
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "a".to_string(),
+                    version: None,
+                    url: None,
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "b".to_string(),
+                    version: Some("1.0".to_string()),
+                    url: None,
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "c".to_string(),
+                    version: None,
+                    url: Some("https://foobar.io/c.deb".to_string()),
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "d".to_string(),
+                    version: Some("beta".to_string()),
+                    url: Some("https://foobar.io/d.deb".to_string()),
+                },
+            ],
+        );
 
-        response.add_modules("apama", vec![
-            SoftwareModule { module_type: "apama".to_string(), name: "m".to_string(), version: None, url: Some("https://foobar.io/m.epl".to_string()) },
-        ]);
+        response.add_modules(
+            "apama",
+            vec![SoftwareModule {
+                module_type: "apama".to_string(),
+                name: "m".to_string(),
+                version: None,
+                url: Some("https://foobar.io/m.epl".to_string()),
+            }],
+        );
 
         let expected_json = r#"{
             "id":1,
@@ -85,20 +110,49 @@ mod tests {
                 ]}
             ]}"#;
 
-        let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
+        let response =
+            SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
         assert_eq!(response.status(), SoftwareOperationStatus::Successful);
         assert_eq!(response.error(), None);
 
         // The mapper can use then the current list of modules
-        assert_eq!(response.modules(), vec![
-            SoftwareModule { module_type: "debian".to_string(), name: "a".to_string(), version: None, url: None },
-            SoftwareModule { module_type: "debian".to_string(), name: "b".to_string(), version: Some("1.0".to_string()), url: None },
-            SoftwareModule { module_type: "debian".to_string(), name: "c".to_string(), version: None, url: Some("https://foobar.io/c.deb".to_string()) },
-            SoftwareModule { module_type: "debian".to_string(), name: "d".to_string(), version: Some("beta".to_string()), url: Some("https://foobar.io/d.deb".to_string()) },
-            SoftwareModule { module_type: "apama".to_string(), name: "m".to_string(), version: None, url: Some("https://foobar.io/m.epl".to_string()) },
-        ]);
+        assert_eq!(
+            response.modules(),
+            vec![
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "a".to_string(),
+                    version: None,
+                    url: None
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "b".to_string(),
+                    version: Some("1.0".to_string()),
+                    url: None
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "c".to_string(),
+                    version: None,
+                    url: Some("https://foobar.io/c.deb".to_string())
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "d".to_string(),
+                    version: Some("beta".to_string()),
+                    url: Some("https://foobar.io/d.deb".to_string())
+                },
+                SoftwareModule {
+                    module_type: "apama".to_string(),
+                    name: "m".to_string(),
+                    version: None,
+                    url: Some("https://foobar.io/m.epl".to_string())
+                },
+            ]
+        );
     }
 
     #[test]
@@ -125,7 +179,8 @@ mod tests {
             "status": "failed",
             "reason": "Request timed-out"
         }"#;
-        let response = SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
+        let response =
+            SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
@@ -137,15 +192,44 @@ mod tests {
     fn creating_a_software_update_request() {
         let mut request = SoftwareUpdateRequest::new(123);
 
-        request.add_updates("debian", vec![
-            SoftwareModuleUpdate::install(SoftwareModule { module_type: "debian".to_string(), name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None }),
-            SoftwareModuleUpdate::install(SoftwareModule { module_type: "debian".to_string(), name: "collectd".to_string(), version: Some("5.7".to_string()), url: Some("https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2".to_string()) }),
-        ]);
+        request.add_updates(
+            "debian",
+            vec![
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "nodered".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    url: None,
+                }),
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "collectd".to_string(),
+                    version: Some("5.7".to_string()),
+                    url: Some(
+                        "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+                            .to_string(),
+                    ),
+                }),
+            ],
+        );
 
-        request.add_updates("docker", vec![
-            SoftwareModuleUpdate::install(SoftwareModule { module_type: "docker".to_string(), name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None }),
-            SoftwareModuleUpdate::remove(SoftwareModule { module_type: "docker".to_string(), name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None }),
-        ]);
+        request.add_updates(
+            "docker",
+            vec![
+                SoftwareModuleUpdate::install(SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "nginx".to_string(),
+                    version: Some("1.21.0".to_string()),
+                    url: None,
+                }),
+                SoftwareModuleUpdate::remove(SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None,
+                }),
+            ],
+        );
 
         let expected_json = r#"{
             "id": 123,
@@ -207,7 +291,8 @@ mod tests {
             "id": 123,
             "status": "executing"
         }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
+        let response =
+            SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
         assert_eq!(response.status(), SoftwareOperationStatus::Executing);
@@ -220,15 +305,41 @@ mod tests {
         let request = SoftwareUpdateRequest::new(123);
         let mut response = SoftwareUpdateResponse::new(&request);
 
-        response.add_modules("debian", vec![
-            SoftwareModule { module_type: "debian".to_string(), name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None },
-            SoftwareModule { module_type: "debian".to_string(), name: "collectd".to_string(), version: Some("5.7".to_string()), url: None },
-        ]);
+        response.add_modules(
+            "debian",
+            vec![
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "nodered".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    url: None,
+                },
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "collectd".to_string(),
+                    version: Some("5.7".to_string()),
+                    url: None,
+                },
+            ],
+        );
 
-        response.add_modules("docker", vec![
-            SoftwareModule { module_type: "docker".to_string(), name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None },
-            SoftwareModule { module_type: "docker".to_string(), name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None },
-        ]);
+        response.add_modules(
+            "docker",
+            vec![
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "nginx".to_string(),
+                    version: Some("1.21.0".to_string()),
+                    url: None,
+                },
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None,
+                },
+            ],
+        );
 
         let expected_json = r#"{
             "id": 123,
@@ -272,37 +383,59 @@ mod tests {
         let request = SoftwareUpdateRequest::new(123);
         let mut response = SoftwareUpdateResponse::new(&request);
 
-        response.add_errors("debian", vec![
-            SoftwareError::Install {
+        response.add_errors(
+            "debian",
+            vec![SoftwareError::Install {
                 module: SoftwareModule {
                     module_type: "debian".to_string(),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
-                    url: None },
+                    url: None,
+                },
                 reason: "Network timeout".to_string(),
-            },
-        ]);
+            }],
+        );
 
-        response.add_errors("docker", vec![
-            SoftwareError::Remove {
+        response.add_errors(
+            "docker",
+            vec![SoftwareError::Remove {
                 module: SoftwareModule {
                     module_type: "docker".to_string(),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
-                    url: None
+                    url: None,
                 },
                 reason: "Other components dependent on it".to_string(),
-            },
-        ]);
+            }],
+        );
 
-        response.add_modules("debian", vec![
-            SoftwareModule { module_type: "debian".to_string(), name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None },
-        ]);
+        response.add_modules(
+            "debian",
+            vec![SoftwareModule {
+                module_type: "debian".to_string(),
+                name: "nodered".to_string(),
+                version: Some("1.0.0".to_string()),
+                url: None,
+            }],
+        );
 
-        response.add_modules("docker", vec![
-            SoftwareModule { module_type: "docker".to_string(), name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None },
-            SoftwareModule { module_type: "docker".to_string(), name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None },
-        ]);
+        response.add_modules(
+            "docker",
+            vec![
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "nginx".to_string(),
+                    version: Some("1.21.0".to_string()),
+                    url: None,
+                },
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None,
+                },
+            ],
+        );
 
         let expected_json = r#"{
             "id": 123,
@@ -359,7 +492,10 @@ mod tests {
         }"#;
 
         let actual_json = response.to_json().expect("Failed to serialize");
-        assert_eq!(remove_whitespace(&actual_json), remove_whitespace(expected_json));
+        assert_eq!(
+            remove_whitespace(&actual_json),
+            remove_whitespace(expected_json)
+        );
     }
 
     #[test]
@@ -417,21 +553,43 @@ mod tests {
                 }
             ]
         }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
+        let response =
+            SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), 123);
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
-        assert_eq!(response.error(), Some("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".into()));
+        assert_eq!(
+            response.error(),
+            Some("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".into())
+        );
 
         // The C8Y mapper doesn't use the failures list
         // => no support for now
 
         // The mapper can request the updated list of modules
-        assert_eq!(response.modules(), vec![
-            SoftwareModule { module_type: "debian".to_string(), name: "nodered".to_string(), version: Some("1.0.0".to_string()), url: None },
-            SoftwareModule { module_type: "docker".to_string(), name: "nginx".to_string(), version: Some("1.21.0".to_string()), url: None },
-            SoftwareModule { module_type: "docker".to_string(), name: "mongodb".to_string(), version: Some("4.4.6".to_string()), url: None },
-        ]);
+        assert_eq!(
+            response.modules(),
+            vec![
+                SoftwareModule {
+                    module_type: "debian".to_string(),
+                    name: "nodered".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    url: None
+                },
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "nginx".to_string(),
+                    version: Some("1.21.0".to_string()),
+                    url: None
+                },
+                SoftwareModule {
+                    module_type: "docker".to_string(),
+                    name: "mongodb".to_string(),
+                    version: Some("4.4.6".to_string()),
+                    url: None
+                },
+            ]
+        );
     }
 
     fn remove_whitespace(s: &str) -> String {

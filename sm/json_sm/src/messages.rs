@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
-    where
-        Self: Deserialize<'a> + Serialize + Sized,
+where
+    Self: Deserialize<'a> + Serialize + Sized,
 {
     fn from_json(json_str: &'a str) -> Result<Self, SoftwareError> {
         Ok(serde_json::from_str(json_str)?)
@@ -52,13 +52,19 @@ impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
 impl SoftwareUpdateRequest {
     pub fn new(id: usize) -> SoftwareUpdateRequest {
-        SoftwareUpdateRequest { id, update_list: vec![] }
+        SoftwareUpdateRequest {
+            id,
+            update_list: vec![],
+        }
     }
 
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
         self.update_list.push(SoftwareRequestResponseSoftwareList {
             plugin_type: plugin_type.to_string(),
-            modules: updates.into_iter().map(|update| update.into()).collect::<Vec<SoftwareModuleItem>>(),
+            modules: updates
+                .into_iter()
+                .map(|update| update.into())
+                .collect::<Vec<SoftwareModuleItem>>(),
         })
     }
 }
@@ -94,17 +100,17 @@ impl<'a> Jsonify<'a> for SoftwareListResponse {}
 impl SoftwareListResponse {
     pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
         SoftwareListResponse {
-            response: SoftwareRequestResponse::new(
-                req.id,
-                SoftwareOperationStatus::Executing
-            )
+            response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
         }
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
         self.response.add_modules(
             plugin_type.to_string(),
-            modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+            modules
+                .into_iter()
+                .map(|module| module.into())
+                .collect::<Vec<SoftwareModuleItem>>(),
         );
     }
 
@@ -117,7 +123,9 @@ impl SoftwareListResponse {
         self.response.id
     }
 
-    pub fn status(&self) -> SoftwareOperationStatus { self.response.status }
+    pub fn status(&self) -> SoftwareOperationStatus {
+        self.response.status
+    }
 
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
@@ -143,10 +151,7 @@ impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
 impl SoftwareUpdateResponse {
     pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         SoftwareUpdateResponse {
-            response: SoftwareRequestResponse::new(
-                req.id,
-                SoftwareOperationStatus::Executing
-            ),
+            response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
             errors: vec![],
         }
     }
@@ -154,7 +159,10 @@ impl SoftwareUpdateResponse {
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
         self.response.add_modules(
             plugin_type.to_string(),
-            modules.into_iter().map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+            modules
+                .into_iter()
+                .map(|module| module.into())
+                .collect::<Vec<SoftwareModuleItem>>(),
         );
     }
 
@@ -163,7 +171,10 @@ impl SoftwareUpdateResponse {
         self.response.set_reason_errors(&self.errors);
         self.response.add_errors(
             plugin_type.to_string(),
-            errors.into_iter().filter_map(|module| module.into()).collect::<Vec<SoftwareModuleItem>>(),
+            errors
+                .into_iter()
+                .filter_map(|module| module.into())
+                .collect::<Vec<SoftwareModuleItem>>(),
         );
     }
 
@@ -171,7 +182,9 @@ impl SoftwareUpdateResponse {
         self.response.id
     }
 
-    pub fn status(&self) -> SoftwareOperationStatus { self.response.status }
+    pub fn status(&self) -> SoftwareOperationStatus {
+        self.response.status
+    }
 
     pub fn error(&self) -> Option<String> {
         self.response.reason.clone()
@@ -289,18 +302,17 @@ impl SoftwareRequestResponse {
 
         let mut reason = String::from(format!("{} errors:", count));
 
-        if ! failed_package.is_empty() {
+        if !failed_package.is_empty() {
             reason.push_str(" fail to update [");
             reason.push_str(&failed_package);
             reason.push_str(" ]");
-
         }
-        if ! failed_install.is_empty() {
+        if !failed_install.is_empty() {
             reason.push_str(" fail to install [");
             reason.push_str(&failed_install);
             reason.push_str(" ]");
         }
-        if ! failed_remove.is_empty() {
+        if !failed_remove.is_empty() {
             reason.push_str(" fail to remove [");
             reason.push_str(&failed_remove);
             reason.push_str(" ]");
@@ -308,18 +320,15 @@ impl SoftwareRequestResponse {
 
         self.status = SoftwareOperationStatus::Failed;
         self.reason = Some(reason);
-
     }
 
     pub fn add_errors(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
         self.status = SoftwareOperationStatus::Failed;
 
-        self.failures.push(
-            SoftwareRequestResponseSoftwareList {
-                plugin_type,
-                modules,
-            }
-        )
+        self.failures.push(SoftwareRequestResponseSoftwareList {
+            plugin_type,
+            modules,
+        })
     }
 
     pub fn modules(&self) -> Vec<SoftwareModule> {
@@ -393,7 +402,7 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
                 action: Some(SoftwareModuleAction::Remove),
                 reason: Some(reason),
             }),
-            _ => None
+            _ => None,
         }
     }
 }
