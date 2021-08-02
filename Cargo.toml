@@ -13,7 +13,8 @@ members = [
     "mapper/cumulocity/c8y_translator_lib",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
-    "sm/plugins/tedge_apt_plugin"
+    "sm/plugins/tedge_apt_plugin",
+    "sm/json_sm"
 ]
 
 [profile.release]
