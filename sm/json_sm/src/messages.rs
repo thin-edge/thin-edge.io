@@ -37,6 +37,10 @@ impl SoftwareListRequest {
     pub fn new(id: usize) -> SoftwareListRequest {
         SoftwareListRequest { id }
     }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/req/software/list"
+    }
 }
 
 /// Message payload definition for SoftwareUpdate request.
@@ -58,6 +62,10 @@ impl SoftwareUpdateRequest {
         }
     }
 
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/req/software/update"
+    }
+
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
         self.update_list.push(SoftwareRequestResponseSoftwareList {
             plugin_type: plugin_type.to_string(),
@@ -66,6 +74,46 @@ impl SoftwareUpdateRequest {
                 .map(|update| update.into())
                 .collect::<Vec<SoftwareModuleItem>>(),
         })
+    }
+
+    pub fn modules_types(&self) -> Vec<SoftwareType> {
+        let mut modules_types = vec![];
+
+        for updates_per_type in self.update_list.iter() {
+            modules_types.push(updates_per_type.plugin_type.clone())
+        }
+
+        modules_types
+    }
+
+    pub fn updates_for(&self, module_type: &str) -> Vec<SoftwareModuleUpdate> {
+        let mut updates = vec![];
+
+        if let Some(items) = self
+            .update_list
+            .iter()
+            .find(|&items| items.plugin_type == module_type)
+        {
+            for item in items.modules.iter() {
+                let module = SoftwareModule {
+                    module_type: module_type.to_string(),
+                    name: item.name.clone(),
+                    version: item.version.clone(),
+                    url: item.url.clone(),
+                };
+                match item.action {
+                    None => {}
+                    Some(SoftwareModuleAction::Install) => {
+                        updates.push(SoftwareModuleUpdate::install(module));
+                    }
+                    Some(SoftwareModuleAction::Remove) => {
+                        updates.push(SoftwareModuleUpdate::remove(module));
+                    }
+                }
+            }
+        }
+
+        updates
     }
 }
 
@@ -102,6 +150,10 @@ impl SoftwareListResponse {
         SoftwareListResponse {
             response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
         }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/res/software/list"
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
@@ -154,6 +206,10 @@ impl SoftwareUpdateResponse {
             response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
             errors: vec![],
         }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/res/software/update"
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
