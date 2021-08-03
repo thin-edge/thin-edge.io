@@ -1660,6 +1660,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "plugin_sm"
+version = "0.2.3"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "env_logger 0.9.0",
+ "json_sm",
+ "log",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "pollster"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2498,17 +2515,18 @@ dependencies = [
  "env_logger 0.9.0",
  "flockfile",
  "futures",
+ "json_sm",
  "log",
  "mockall",
  "mqtt_client",
  "once_cell",
+ "plugin_sm",
  "rumqttd",
  "rumqttlog",
  "serde",
  "serde_json",
  "structopt",
  "tedge_config",
- "tedge_sm_lib",
  "tedge_users",
  "tedge_utils",
  "tempfile",
@@ -2541,14 +2559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge_dummy_plugin"
-version = "0.2.3"
-dependencies = [
- "structopt",
- "thiserror",
-]
-
-[[package]]
 name = "tedge_mapper"
 version = "0.2.3"
 dependencies = [
@@ -2576,22 +2586,6 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "tedge_sm_lib"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "env_logger 0.9.0",
- "log",
- "serde",
- "serde_json",
- "structopt",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]

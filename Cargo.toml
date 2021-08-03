@@ -14,10 +14,10 @@ members = [
     "mapper/thin_edge_json",
     "sm/agent",
     "sm/json_sm",
+    "sm/plugin_sm",
     "sm/plugins/tedge_apt_plugin",
-    "sm/plugins/tedge_dummy_plugin",
     "tedge_config",
-    "tedge"
+    "tedge",
 ]
 
 [profile.release]

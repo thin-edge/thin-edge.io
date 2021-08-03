@@ -73,10 +73,10 @@ pub struct SoftwareRequestResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub current_software_list: Vec<SoftwareRequestResponseSoftwareList>,
 
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<SoftwareRequestResponseSoftwareList>,
 }
 

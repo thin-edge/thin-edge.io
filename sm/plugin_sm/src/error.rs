@@ -1,9 +1,9 @@
-use crate::software::{SoftwareModule, SoftwareName, SoftwareType, SoftwareVersion};
+use json_sm::software::{SoftwareModule, SoftwareName, SoftwareType, SoftwareVersion};
 
 use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub enum SoftwareError {
+pub enum PluginError {
     #[error("Failed to finalize")]
     Finalize { reason: String },
 
@@ -52,12 +52,4 @@ pub enum SoftwareError {
         actual_type: SoftwareType,
         expected_type: SoftwareType,
     },
-}
-
-impl From<serde_json::Error> for SoftwareError {
-    fn from(err: serde_json::Error) -> Self {
-        SoftwareError::ParseError {
-            reason: format!("{}", err),
-        }
-    }
 }

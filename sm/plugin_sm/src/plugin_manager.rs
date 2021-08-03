@@ -1,9 +1,9 @@
-use crate::{
-    error::SoftwareError,
-    message::{
-        self, SoftwareOperationStatus, SoftwareRequestResponse, SoftwareRequestResponseSoftwareList,
+use crate::{error::PluginError, plugin::*};
+use json_sm::{
+    messages::{
+        SoftwareModuleItem, SoftwareOperationStatus, SoftwareRequestResponse,
+        SoftwareRequestResponseSoftwareList,
     },
-    plugin::*,
     software::*,
 };
 use std::{collections::HashMap, fs, io, path::PathBuf};
@@ -21,9 +21,9 @@ pub trait Plugins {
     /// Return the plugin associated with the file extension of the module name, if any.
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin>;
 
-    fn plugin(&self, software_type: &str) -> Result<&Self::Plugin, SoftwareError> {
+    fn plugin(&self, software_type: &str) -> Result<&Self::Plugin, PluginError> {
         let module_plugin = self.by_software_type(software_type).ok_or_else(|| {
-            SoftwareError::UnknownSoftwareType {
+            PluginError::UnknownSoftwareType {
                 software_type: software_type.into(),
             }
         })?;
@@ -94,7 +94,7 @@ impl ExternalPlugins {
         self.plugin_map.is_empty()
     }
 
-    pub async fn list(&self) -> Result<Vec<SoftwareRequestResponseSoftwareList>, SoftwareError> {
+    pub async fn list(&self) -> Result<Vec<SoftwareRequestResponseSoftwareList>, PluginError> {
         let mut complete_software_list = Vec::new();
         for software_type in self.plugin_map.keys() {
             let software_list = self.plugin(&software_type)?.list().await?;
@@ -113,8 +113,8 @@ impl ExternalPlugins {
 
     pub async fn process(
         &self,
-        request: &message::SoftwareRequestUpdate,
-    ) -> Result<SoftwareRequestResponse, SoftwareError> {
+        request: &SoftwareRequestUpdate,
+    ) -> Result<SoftwareRequestResponse, PluginError> {
         let mut response = SoftwareRequestResponse {
             id: request.id,
             status: SoftwareOperationStatus::Failed,
