@@ -1189,6 +1189,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_sm"
+version = "0.2.3"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2459,6 +2468,7 @@ dependencies = [
  "structopt",
  "tedge_config",
  "tedge_users",
+ "tedge_utils",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2512,6 +2522,7 @@ dependencies = [
  "structopt",
  "tedge_config",
  "tedge_users",
+ "tedge_utils",
  "thin_edge_json",
  "thiserror",
  "tokio",
@@ -2525,6 +2536,16 @@ version = "0.2.3"
 dependencies = [
  "thiserror",
  "users",
+]
+
+[[package]]
+name = "tedge_utils"
+version = "0.2.3"
+dependencies = [
+ "assert_matches",
+ "tempfile",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

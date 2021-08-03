@@ -2,9 +2,9 @@ use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
     component::TEdgeComponent, error::*,
 };
-use std::path::PathBuf;
 use structopt::*;
 use tedge_config::*;
+use tedge_utils::paths::home_dir;
 
 mod az_converter;
 mod az_mapper;
@@ -74,11 +74,4 @@ fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     Ok(config_repository)
-}
-
-// Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .and_then(|home| if home.is_empty() { None } else { Some(home) })
-        .map(PathBuf::from)
 }
