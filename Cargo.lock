@@ -2511,6 +2511,7 @@ dependencies = [
  "rumqttd",
  "rumqttlog",
  "serde",
+ "serde_json",
  "structopt",
  "tedge_config",
  "tedge_users",
