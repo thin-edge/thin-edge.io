@@ -2,6 +2,7 @@ use futures::future::TryFutureExt;
 use librumqttd::{async_locallink, Config};
 use mqtt_client::{Client, Message, MqttClient, QoS, Topic, TopicFilter};
 use std::process::Command;
+use std::{thread, time};
 
 #[derive(Debug)]
 enum TestJoinError {
@@ -19,6 +20,10 @@ async fn c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 
     // set the port
     setup();
+
+    // wait for c8y mapper to start
+    let ten_millis = time::Duration::from_secs(1);
+    thread::sleep(ten_millis);
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
@@ -79,7 +84,7 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
 
     // wait for error else timeout
     let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
+        std::time::Duration::from_secs(1),
         subscribe_errors(&publish_client).map_err(|_s| TestJoinError::TestThresholdError),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
@@ -124,21 +129,23 @@ fn setup() {
 
     // start the tedge mapper
     let _sysctl_output = Command::new("sudo")
-        .args(&["systemctl", "restart", "tedge-mapper-c8y.service"])
+        .args(&["systemctl", "start", "tedge-mapper-c8y.service"])
         .output()
         .expect("failed to execute process");
 }
 
 fn cleanup() {
-    // set the port
+
+    dbg!("cleanup");
+    // revert to default port
     let _tedge_output = Command::new("sudo")
         .args(&["tedge", "config", "unset", "mqtt.port"])
         .output()
         .expect("failed to execute process");
 
-    // start the tedge mapper
+    // stop tedge mapper
     let _sysctl_output = Command::new("sudo")
-        .args(&["systemctl", "restart", "tedge-mapper-c8y.service"])
+        .args(&["systemctl", "stop", "tedge-mapper-c8y.service"])
         .output()
         .expect("failed to execute process");
 }
