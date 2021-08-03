@@ -2507,9 +2507,6 @@ dependencies = [
  "log",
  "mockall",
  "mqtt_client",
- "rumqttc",
- "rumqttd",
- "rumqttlog",
  "serde",
  "serde_json",
  "structopt",
@@ -2518,7 +2515,6 @@ dependencies = [
  "thin_edge_json",
  "thiserror",
  "tokio",
- "tokio-test",
  "tracing",
  "tracing-subscriber",
 ]
