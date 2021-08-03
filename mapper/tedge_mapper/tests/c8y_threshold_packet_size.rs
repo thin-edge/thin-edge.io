@@ -18,16 +18,7 @@ async fn c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     });
 
     // set the port
-    let _tedge_output = Command::new("sudo")
-        .args(&["tedge", "config", "set", "mqtt.port", "5885"])
-        .output()
-        .expect("failed to execute process");
-
-    // start the tedge mapper
-    let _sysctl_output = Command::new("sudo")
-        .args(&["systemctl", "restart", "tedge-mapper-c8y.service"])
-        .output()
-        .expect("failed to execute process");
+    setup();
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
@@ -37,9 +28,11 @@ async fn c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     mqtt_server_handle.abort();
     match res {
         Err(e) => {
+            cleanup();
             return Err(e);
         }
         _ => {
+            cleanup();
             return Ok(());
         }
     }
@@ -73,7 +66,7 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     let buffer = create_packet(1024 * 20);
 
     let topic = Topic::new("tedge/measurements")?;
-    
+
     let publish_client = Client::connect(
         "publish_big_data",
         &mqtt_client::Config::default().with_port(5885),
@@ -120,4 +113,32 @@ fn create_packet(size: usize) -> String {
         buffer.push_str("Some data!");
     }
     buffer
+}
+
+fn setup() {
+    // set the port
+    let _tedge_output = Command::new("sudo")
+        .args(&["tedge", "config", "set", "mqtt.port", "5885"])
+        .output()
+        .expect("failed to execute process");
+
+    // start the tedge mapper
+    let _sysctl_output = Command::new("sudo")
+        .args(&["systemctl", "restart", "tedge-mapper-c8y.service"])
+        .output()
+        .expect("failed to execute process");
+}
+
+fn cleanup() {
+    // set the port
+    let _tedge_output = Command::new("sudo")
+        .args(&["tedge", "config", "unset", "mqtt.port"])
+        .output()
+        .expect("failed to execute process");
+
+    // start the tedge mapper
+    let _sysctl_output = Command::new("sudo")
+        .args(&["systemctl", "restart", "tedge-mapper-c8y.service"])
+        .output()
+        .expect("failed to execute process");
 }
