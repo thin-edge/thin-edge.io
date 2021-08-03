@@ -23,7 +23,10 @@ mod test {
         let converter = CumulocityConverter { size_threshold };
         let buffer = create_packet(1024 * 20);
         let err = converter.size_threshold.validate(&buffer).unwrap_err();
-        assert_eq!(err.to_string(), "The input size 20480 is too big. The threshold is 16384.");
+        assert_eq!(
+            err.to_string(),
+            "The input size 20480 is too big. The threshold is 16384."
+        );
         Ok(())
     }
 
