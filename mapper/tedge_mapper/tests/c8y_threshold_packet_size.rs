@@ -135,7 +135,6 @@ fn setup() {
 }
 
 fn cleanup() {
-
     dbg!("cleanup");
     // revert to default port
     let _tedge_output = Command::new("sudo")
