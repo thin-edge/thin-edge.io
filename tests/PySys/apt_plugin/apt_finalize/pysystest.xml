@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
     <description>
-        <title>Validate apt plugin remove</title>
+        <title>Validate apt plugin finalize - dense version</title>
         <purpose><![CDATA[
 ]]>
         </purpose>
@@ -15,7 +15,7 @@
         </modes>
     </classification>
     <data>
-        <class name="AptPluginRemoveTest" module="run"/>
+        <class name="AptPluginFinalize" module="run"/>
     </data>
     <traceability>
         <requirements>

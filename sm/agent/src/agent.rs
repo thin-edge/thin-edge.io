@@ -22,7 +22,7 @@ pub struct SmAgentConfig {
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
-        let request_topic =
+        let request_topics =
             TopicFilter::new("tedge/commands/req/software/#").expect("Invalid topic");
 
         let request_topic_list =
@@ -42,7 +42,7 @@ impl Default for SmAgentConfig {
         let mqtt_client_config = mqtt_client::Config::default().with_packet_size(50 * 1024);
 
         Self {
-            request_topics: request_topic,
+            request_topics,
             request_topic_list,
             request_topic_update,
             response_topic_list,
@@ -220,7 +220,7 @@ impl SmAgent {
                 SoftwareOperation::SoftwareUpdates => &self.config.response_topic_update,
 
                 SoftwareOperation::UnknownOperation => {
-                    error!("UnknownOperation to in store.");
+                    error!("UnknownOperation in store.");
                     &self.config.errors_topic
                 }
             };
