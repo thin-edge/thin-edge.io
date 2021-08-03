@@ -2,11 +2,12 @@ use crate::{
     error::AgentError,
     state::{AgentStateRepository, State, StateRepository},
 };
+use json_sm::*;
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+use plugin_sm::plugin_manager::ExternalPlugins;
 use std::sync::Arc;
 use tedge_config::TEdgeConfigLocation;
-use tedge_sm_lib::{error::SoftwareError, message::*, plugin_manager::*};
 use tedge_users::{UserManager, ROOT_USER};
 
 #[derive(Debug)]
@@ -26,16 +27,16 @@ impl Default for SmAgentConfig {
             TopicFilter::new("tedge/commands/req/software/#").expect("Invalid topic");
 
         let request_topic_list =
-            Topic::new("tedge/commands/req/software/list").expect("Invalid topic");
+            Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");
 
         let request_topic_update =
-            Topic::new("tedge/commands/req/software/update").expect("Invalid topic");
+            Topic::new(SoftwareUpdateRequest::topic_name()).expect("Invalid topic");
 
         let response_topic_list =
-            Topic::new("tedge/commands/res/software/list").expect("Invalid topic");
+            Topic::new(SoftwareListResponse::topic_name()).expect("Invalid topic");
 
         let response_topic_update =
-            Topic::new("tedge/commands/res/software/update").expect("Invalid topic");
+            Topic::new(SoftwareUpdateResponse::topic_name()).expect("Invalid topic");
 
         let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
 
@@ -112,30 +113,36 @@ impl SmAgent {
         plugins: &Arc<ExternalPlugins>,
     ) -> Result<(), AgentError> {
         let mut operations = mqtt.subscribe(self.config.request_topics.clone()).await?;
-        let software_list_request = &self.config.request_topic_list;
-        let software_update_request = &self.config.request_topic_update;
         while let Some(message) = operations.next().await {
             info!("Request {:?}", message);
 
             match &message.topic {
-                topic if topic == software_list_request => {
-                    self.handle_software_list_request(
-                        mqtt,
-                        plugins.clone(),
-                        &self.config.response_topic_list,
-                        &message,
-                    )
-                    .await?;
+                topic if topic == &self.config.request_topic_list => {
+                    let _success = self
+                        .handle_software_list_request(
+                            mqtt,
+                            plugins.clone(),
+                            &self.config.response_topic_list,
+                            &message,
+                        )
+                        .await
+                        .map_err(|err| {
+                            error!("{:?}", err); // log error and discard such that the agent doesn't exit.
+                        });
                 }
 
-                topic if topic == software_update_request => {
-                    self.handle_software_update_request(
-                        mqtt,
-                        plugins.clone(),
-                        &self.config.response_topic_update,
-                        &message,
-                    )
-                    .await?;
+                topic if topic == &self.config.request_topic_update => {
+                    let _success = self
+                        .handle_software_update_request(
+                            mqtt,
+                            plugins.clone(),
+                            &self.config.response_topic_update,
+                            &message,
+                        )
+                        .await
+                        .map_err(|err| {
+                            error!("{:?}", err); // log error and discard such that the agent doesn't exit.
+                        });
                 }
 
                 _ => self.handle_unknown_operation(),
@@ -149,6 +156,58 @@ impl SmAgent {
         log_error();
     }
 
+    async fn handle_software_list_request(
+        &self,
+        mqtt: &Client,
+        plugins: Arc<ExternalPlugins>,
+        response_topic: &Topic,
+        message: &Message,
+    ) -> Result<(), AgentError> {
+        let request = match SoftwareListRequest::from_slice(message.payload_trimmed()) {
+            Ok(request) => {
+                let () = self
+                    .persistance_store
+                    .store(&State {
+                        operation_id: Some(request.id),
+                        operation: Some("list".into()),
+                    })
+                    .await?;
+
+                request
+            }
+
+            Err(error) => {
+                debug!("Parsing error: {}", error);
+                let _ = mqtt
+                    .publish(Message::new(response_topic, format!("{}", error)))
+                    .await?;
+
+                return Err(SoftwareError::ParseError {
+                    reason: "Parsing Error".into(),
+                }
+                .into());
+            }
+        };
+        let executing_response = SoftwareListResponse::new(&request);
+
+        let _ = mqtt
+            .publish(Message::new(
+                &self.config.response_topic_list,
+                executing_response.to_bytes()?,
+            ))
+            .await?;
+
+        let response = plugins.list(&request).await;
+
+        let _ = mqtt
+            .publish(Message::new(response_topic, response.to_bytes()?))
+            .await?;
+
+        let _state = self.persistance_store.clear().await?;
+
+        Ok(())
+    }
+
     async fn handle_software_update_request(
         &self,
         mqtt: &Client,
@@ -156,7 +215,7 @@ impl SmAgent {
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
-        let request = match SoftwareRequestUpdate::from_slice(message.payload_trimmed()) {
+        let request = match SoftwareUpdateRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
                 let () = self
                     .persistance_store
@@ -164,10 +223,6 @@ impl SmAgent {
                         operation_id: Some(request.id),
                         operation: Some("update".into()),
                     })
-                    .await?;
-
-                let () = self
-                    .publish_status_executing(mqtt, response_topic, request.id)
                     .await?;
 
                 request
@@ -186,14 +241,16 @@ impl SmAgent {
             }
         };
 
+        let executing_response = SoftwareUpdateResponse::new(&request);
+        let _ = mqtt
+            .publish(Message::new(
+                &self.config.response_topic_list,
+                executing_response.to_bytes()?,
+            ))
+            .await?;
+
         let _user_guard = self.user_manager.become_user(ROOT_USER)?;
-
-        let mut response = plugins.process(&request).await?;
-
-        let software_list = plugins.list().await?;
-
-        let () = response.finalize_response(software_list.to_vec());
-
+        let response = plugins.process(&request).await;
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
@@ -225,76 +282,12 @@ impl SmAgent {
                 }
             };
 
-            let mut response = SoftwareRequestResponse::new(id, SoftwareOperationStatus::Failed);
-            response.reason = Some("unfinished operation request".into());
+            let response = SoftwareErrorResponse::new(id, "unfinished operation request");
 
             let _ = mqtt
                 .publish(Message::new(topic, response.to_bytes()?))
                 .await?;
         }
-
-        Ok(())
-    }
-
-    async fn publish_status_executing(
-        &self,
-        mqtt: &Client,
-        response_topic: &Topic,
-        id: usize,
-    ) -> Result<(), AgentError> {
-        let response = SoftwareRequestResponse::new(id, SoftwareOperationStatus::Executing);
-
-        let _ = mqtt
-            .publish(Message::new(response_topic, response.to_bytes()?))
-            .await?;
-
-        Ok(())
-    }
-
-    async fn handle_software_list_request(
-        &self,
-        mqtt: &Client,
-        plugins: Arc<ExternalPlugins>,
-        response_topic: &Topic,
-        message: &Message,
-    ) -> Result<(), AgentError> {
-        let request = match SoftwareRequestList::from_slice(message.payload_trimmed()) {
-            Ok(request) => {
-                let () = self
-                    .persistance_store
-                    .store(&State {
-                        operation_id: Some(request.id),
-                        operation: Some("list".into()),
-                    })
-                    .await?;
-
-                request
-            }
-
-            Err(error) => {
-                debug!("Parsing error: {}", error);
-                let _ = mqtt
-                    .publish(Message::new(response_topic, format!("{}", error)))
-                    .await?;
-
-                return Err(SoftwareError::ParseError {
-                    reason: "Parsing Error".into(),
-                }
-                .into());
-            }
-        };
-
-        let current_software_list = plugins.list().await?;
-
-        let mut response =
-            SoftwareRequestResponse::new(request.id, SoftwareOperationStatus::Successful);
-        response.finalize_response(current_software_list);
-
-        let _ = mqtt
-            .publish(Message::new(response_topic, response.to_bytes()?))
-            .await?;
-
-        let _state = self.persistance_store.clear().await?;
 
         Ok(())
     }

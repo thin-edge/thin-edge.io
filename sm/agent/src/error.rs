@@ -1,5 +1,5 @@
+use json_sm::error::SoftwareError;
 use mqtt_client::MqttClientError;
-use tedge_sm_lib::error::SoftwareError;
 use tedge_users::UserSwitchError;
 
 #[derive(Debug, thiserror::Error)]

@@ -1,6 +1,5 @@
-use crate::error::PluginError;
 use async_trait::async_trait;
-use json_sm::{SoftwareModule, SoftwareModuleUpdate, SoftwareType};
+use json_sm::*;
 use std::{
     iter::Iterator,
     path::PathBuf,
@@ -10,37 +9,37 @@ use tokio::process::Command;
 
 #[async_trait]
 pub trait Plugin {
-    async fn prepare(&self) -> Result<(), PluginError>;
-    async fn install(&self, module: &SoftwareModule) -> Result<(), PluginError>;
-    async fn remove(&self, module: &SoftwareModule) -> Result<(), PluginError>;
-    async fn finalize(&self) -> Result<(), PluginError>;
-    async fn list(&self) -> Result<Vec<SoftwareModule>, PluginError>;
-    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, PluginError>;
+    async fn prepare(&self) -> Result<(), SoftwareError>;
+    async fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
+    async fn remove(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
+    async fn finalize(&self) -> Result<(), SoftwareError>;
+    async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
+    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
 
-    async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), PluginError> {
+    async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update {
             SoftwareModuleUpdate::Install { module } => self.install(&module).await,
             SoftwareModuleUpdate::Remove { module } => self.remove(&module).await,
         }
     }
 
-    async fn apply_all(&self, updates: &[SoftwareModuleUpdate]) -> Vec<SoftwareModuleUpdateResult> {
+    async fn apply_all(&self, updates: Vec<SoftwareModuleUpdate>) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
-        // TODO: Implement proper handling of results here.
-        let _ = self.prepare().await;
+        if let Err(prepare_error) = self.prepare().await {
+            failed_updates.push(prepare_error);
+            return failed_updates;
+        }
 
         for update in updates.iter() {
             if let Err(error) = self.apply(update).await {
-                let () = failed_updates.push(SoftwareModuleUpdateResult {
-                    update: update.clone(),
-                    error: Some(error),
-                });
+                failed_updates.push(error);
             };
         }
 
-        // TODO: Implement proper handling of results here.
-        let _ = self.finalize().await;
+        if let Err(finalize_error) = self.finalize().await {
+            failed_updates.push(finalize_error);
+        }
 
         failed_updates
     }
@@ -64,7 +63,7 @@ impl ExternalPluginCommand {
         &self,
         action: &str,
         maybe_module: Option<&SoftwareModule>,
-    ) -> Result<Command, PluginError> {
+    ) -> Result<Command, SoftwareError> {
         let mut command = Command::new(&self.path);
         command.arg(action);
 
@@ -85,7 +84,7 @@ impl ExternalPluginCommand {
         Ok(command)
     }
 
-    pub async fn execute(&self, mut command: Command) -> Result<Output, PluginError> {
+    pub async fn execute(&self, mut command: Command) -> Result<Output, SoftwareError> {
         let output = command
             .output()
             .await
@@ -93,12 +92,12 @@ impl ExternalPluginCommand {
         Ok(output)
     }
 
-    pub fn content(&self, bytes: Vec<u8>) -> Result<String, PluginError> {
+    pub fn content(&self, bytes: Vec<u8>) -> Result<String, SoftwareError> {
         String::from_utf8(bytes).map_err(|err| self.plugin_error(err))
     }
 
-    pub fn plugin_error(&self, err: impl std::fmt::Display) -> PluginError {
-        PluginError::Plugin {
+    pub fn plugin_error(&self, err: impl std::fmt::Display) -> SoftwareError {
+        SoftwareError::Plugin {
             software_type: self.name.clone(),
             reason: format!("{}", err),
         }
@@ -114,61 +113,63 @@ const VERSION: &str = "version";
 
 #[async_trait]
 impl Plugin for ExternalPluginCommand {
-    async fn prepare(&self) -> Result<(), PluginError> {
+    async fn prepare(&self) -> Result<(), SoftwareError> {
         let command = self.command(PREPARE, None)?;
         let output = self.execute(command).await?;
 
         if output.status.success() {
             Ok(())
         } else {
-            Err(PluginError::Prepare {
+            Err(SoftwareError::Prepare {
+                software_type: self.name.clone(),
                 reason: self.content(output.stderr)?,
             })
         }
     }
 
-    async fn install(&self, module: &SoftwareModule) -> Result<(), PluginError> {
+    async fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
         let command = self.command(INSTALL, Some(module))?;
         let output = self.execute(command).await?;
 
         if output.status.success() {
             Ok(())
         } else {
-            Err(PluginError::Install {
+            Err(SoftwareError::Install {
                 module: module.clone(),
                 reason: self.content(output.stderr)?,
             })
         }
     }
 
-    async fn remove(&self, module: &SoftwareModule) -> Result<(), PluginError> {
+    async fn remove(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
         let command = self.command(REMOVE, Some(module))?;
         let output = self.execute(command).await?;
 
         if output.status.success() {
             Ok(())
         } else {
-            Err(PluginError::Uninstall {
+            Err(SoftwareError::Remove {
                 module: module.clone(),
                 reason: self.content(output.stderr)?,
             })
         }
     }
 
-    async fn finalize(&self) -> Result<(), PluginError> {
+    async fn finalize(&self) -> Result<(), SoftwareError> {
         let command = self.command(FINALIZE, None)?;
         let output = self.execute(command).await?;
 
         if output.status.success() {
             Ok(())
         } else {
-            Err(PluginError::Finalize {
+            Err(SoftwareError::Finalize {
+                software_type: self.name.clone(),
                 reason: self.content(output.stderr)?,
             })
         }
     }
 
-    async fn list(&self) -> Result<Vec<SoftwareModule>, PluginError> {
+    async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError> {
         let command = self.command(LIST, None)?;
         let output = self.execute(command).await?;
 
@@ -181,22 +182,23 @@ impl Plugin for ExternalPluginCommand {
                 .filter(|split| !split.is_empty())
                 .for_each(|split: &[u8]| {
                     let software_json_line = std::str::from_utf8(split).unwrap();
-                    let software_module =
+                    let mut software_module =
                         serde_json::from_str::<SoftwareModule>(software_json_line).unwrap();
+                    software_module.module_type = self.name.clone();
                     software_list.push(software_module);
                 });
 
             dbg!(&software_list);
             Ok(software_list)
         } else {
-            Err(PluginError::Plugin {
+            Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
                 reason: self.content(output.stderr)?,
             })
         }
     }
 
-    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, PluginError> {
+    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError> {
         let command = self.command(VERSION, Some(module))?;
         let output = self.execute(command).await?;
 
@@ -208,7 +210,7 @@ impl Plugin for ExternalPluginCommand {
                 Ok(Some(version))
             }
         } else {
-            Err(PluginError::Plugin {
+            Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
                 reason: self.content(output.stderr)?,
             })

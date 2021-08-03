@@ -136,6 +136,25 @@ pub enum SoftwareOperationStatus {
     Executing,
 }
 
+/// Message payload definition to send an error response.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SoftwareErrorResponse {
+    #[serde(flatten)]
+    response: SoftwareRequestResponse,
+}
+
+impl<'a> Jsonify<'a> for SoftwareErrorResponse {}
+
+impl SoftwareErrorResponse {
+    pub fn new(id: usize, reason: &str) -> SoftwareErrorResponse {
+        let mut error = SoftwareErrorResponse {
+            response: SoftwareRequestResponse::new(id, SoftwareOperationStatus::Failed),
+        };
+        error.response.reason = Some(reason.to_string());
+        error
+    }
+}
+
 /// Message payload definition for SoftwareList response.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareListResponse {

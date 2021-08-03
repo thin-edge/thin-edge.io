@@ -1,11 +1,5 @@
-use crate::{error::PluginError, plugin::*};
-use json_sm::{
-    messages::{
-        SoftwareModuleItem, SoftwareOperationStatus, SoftwareRequestResponse,
-        SoftwareRequestResponseSoftwareList,
-    },
-    software::*,
-};
+use crate::plugin::*;
+use json_sm::*;
 use std::{collections::HashMap, fs, io, path::PathBuf};
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
@@ -21,9 +15,9 @@ pub trait Plugins {
     /// Return the plugin associated with the file extension of the module name, if any.
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin>;
 
-    fn plugin(&self, software_type: &str) -> Result<&Self::Plugin, PluginError> {
+    fn plugin(&self, software_type: &str) -> Result<&Self::Plugin, SoftwareError> {
         let module_plugin = self.by_software_type(software_type).ok_or_else(|| {
-            PluginError::UnknownSoftwareType {
+            SoftwareError::UnknownSoftwareType {
                 software_type: software_type.into(),
             }
         })?;
@@ -32,11 +26,10 @@ pub trait Plugins {
     }
 }
 
-// type PluginName = String;
 #[derive(Debug)]
 pub struct ExternalPlugins {
     plugin_dir: PathBuf,
-    plugin_map: HashMap<String, ExternalPluginCommand>,
+    plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
 }
 
 impl Plugins for ExternalPlugins {
@@ -77,6 +70,7 @@ impl ExternalPlugins {
             let path = entry.path();
             if path.is_file() {
                 // TODO check the file is exec
+                // TODO check the command is actually a plugin
 
                 if let Some(file_name) = path.file_name() {
                     if let Some(plugin_name) = file_name.to_str() {
@@ -94,77 +88,46 @@ impl ExternalPlugins {
         self.plugin_map.is_empty()
     }
 
-    pub async fn list(&self) -> Result<Vec<SoftwareRequestResponseSoftwareList>, PluginError> {
-        let mut complete_software_list = Vec::new();
-        for software_type in self.plugin_map.keys() {
-            let software_list = self.plugin(&software_type)?.list().await?;
-            let plugin_software_list = software_list
-                .into_iter()
-                .map(|item| item.into())
-                .collect::<Vec<SoftwareModuleItem>>();
+    pub async fn list(&self, request: &SoftwareListRequest) -> SoftwareListResponse {
+        let mut response = SoftwareListResponse::new(request);
 
-            complete_software_list.push(SoftwareRequestResponseSoftwareList {
-                plugin_type: software_type.clone(),
-                list: plugin_software_list,
-            });
+        for (software_type, plugin) in self.plugin_map.iter() {
+            match plugin.list().await {
+                Ok(software_list) => response.add_modules(&software_type, software_list),
+                Err(err) => {
+                    // TODO fix the response format to handle an error per module type
+                    let reason = format!("{}", err);
+                    response.set_error(&reason);
+                    return response;
+                }
+            }
         }
-        Ok(complete_software_list)
+        response
     }
 
-    pub async fn process(
-        &self,
-        request: &SoftwareRequestUpdate,
-    ) -> Result<SoftwareRequestResponse, PluginError> {
-        let mut response = SoftwareRequestResponse {
-            id: request.id,
-            status: SoftwareOperationStatus::Failed,
-            reason: None,
-            current_software_list: Vec::new(),
-            failures: Vec::new(),
-        };
+    pub async fn process(&self, request: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
+        let mut response = SoftwareUpdateResponse::new(request);
 
-        for software_list_type in &request.update_list {
-            let plugin = self
-                .by_software_type(&software_list_type.plugin_type)
-                .unwrap();
-
-            // What to do if prepare fails?
-            // What should be in failures list?
-            if let Err(e) = plugin.prepare().await {
-                response.reason = Some(format!("Failed prepare stage: {}", e));
-
-                continue;
+        for software_type in request.modules_types() {
+            let errors = if let Some(plugin) = self.plugin_map.get(&software_type) {
+                let updates = request.updates_for(&software_type);
+                plugin.apply_all(updates).await
+            } else {
+                vec![SoftwareError::UnknownSoftwareType {
+                    software_type: software_type.clone(),
+                }]
             };
 
-            let failed_actions = self
-                .install_or_remove(&software_list_type.list, plugin)
-                .await;
-
-            // What to do if finalize fails?
-            let () = plugin.finalize().await?;
-
-            response.failures.push(SoftwareRequestResponseSoftwareList {
-                plugin_type: plugin.name.clone(),
-                list: failed_actions,
-            });
+            response.add_errors(&software_type, errors)
         }
 
-        Ok(response)
-    }
+        for (software_type, plugin) in self.plugin_map.iter() {
+            match plugin.list().await {
+                Ok(software_list) => response.add_modules(&software_type, software_list),
+                Err(err) => response.add_errors(&software_type, vec![err]),
+            }
+        }
 
-    async fn install_or_remove(
-        &self,
-        items: &[SoftwareModuleItem],
-        plugin: &ExternalPluginCommand,
-    ) -> Vec<SoftwareModuleItem> {
-        let updates = items
-            .iter()
-            .filter_map(|item| item.clone().into())
-            .collect::<Vec<SoftwareModuleUpdate>>();
-        let failed_updates = plugin.apply_all(&updates).await;
-        failed_updates
-            .into_iter()
-            .map(|update_result| update_result.into())
-            .collect::<Vec<SoftwareModuleItem>>()
+        response
     }
 }

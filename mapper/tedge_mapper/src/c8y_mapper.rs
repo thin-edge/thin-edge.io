@@ -1,6 +1,7 @@
 use crate::c8y_converter::CumulocityConverter;
 use crate::component::TEdgeComponent;
 use crate::mapper::*;
+use crate::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use tedge_config::TEdgeConfig;
 use tracing::{debug_span, Instrument};
@@ -24,7 +25,9 @@ impl TEdgeComponent for CumulocityMapper {
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
 
-        let converter = Box::new(CumulocityConverter);
+        let size_threshold = SizeThreshold(16 * 1024);
+
+        let converter = Box::new(CumulocityConverter { size_threshold });
 
         let mapper = create_mapper(
             CUMULOCITY_MAPPER_NAME,

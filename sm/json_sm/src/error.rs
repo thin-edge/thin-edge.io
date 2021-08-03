@@ -16,6 +16,12 @@ pub enum SoftwareError {
         reason: String,
     },
 
+    #[error("Failed to list modules for {software_type:?}")]
+    ListError {
+        software_type: SoftwareType,
+        reason: String,
+    },
+
     #[error("JSON parse error: {reason:?}")]
     ParseError { reason: String },
 
