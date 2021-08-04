@@ -29,6 +29,5 @@ rumqttlog = "0.7"
 tokio-test = "0.4"
 port_scanner = "0.1.5"
 
-
 [features]
 integration-test = []
