@@ -2,7 +2,10 @@ use crate::{
     error::AgentError,
     state::{AgentStateRepository, State, StateRepository},
 };
-use json_sm::*;
+use json_sm::{
+    Jsonify, SoftwareError, SoftwareErrorResponse, SoftwareListRequest, SoftwareListResponse,
+    SoftwareUpdateRequest, SoftwareUpdateResponse, SOFTWARE_REQUEST_FILTER,
+};
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
@@ -23,8 +26,7 @@ pub struct SmAgentConfig {
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
-        let request_topics =
-            TopicFilter::new("tedge/commands/req/software/#").expect("Invalid topic");
+        let request_topics = TopicFilter::new(SOFTWARE_REQUEST_FILTER).expect("Invalid topic");
 
         let request_topic_list =
             Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");
@@ -40,7 +42,7 @@ impl Default for SmAgentConfig {
 
         let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
 
-        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(50 * 1024);
+        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
 
         Self {
             request_topics,
@@ -81,7 +83,7 @@ impl SmAgent {
     }
 
     pub async fn start(&self) -> Result<(), AgentError> {
-        info!("Starting sm-agent");
+        info!("Starting tedge-agent");
 
         let plugins = Arc::new(ExternalPlugins::open("/etc/tedge/sm-plugins")?);
         if plugins.empty() {
@@ -114,7 +116,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let mut operations = mqtt.subscribe(self.config.request_topics.clone()).await?;
         while let Some(message) = operations.next().await {
-            info!("Request {:?}", message);
+            debug!("Request {:?}", message);
 
             match &message.topic {
                 topic if topic == &self.config.request_topic_list => {
@@ -165,6 +167,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareListRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
+                let _user_guard = self.user_manager.become_user(ROOT_USER)?;
                 let () = self
                     .persistance_store
                     .store(&State {
@@ -179,7 +182,10 @@ impl SmAgent {
             Err(error) => {
                 debug!("Parsing error: {}", error);
                 let _ = mqtt
-                    .publish(Message::new(response_topic, format!("{}", error)))
+                    .publish(Message::new(
+                        &self.config.errors_topic,
+                        format!("{}", error),
+                    ))
                     .await?;
 
                 return Err(SoftwareError::ParseError {
@@ -217,6 +223,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareUpdateRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
+                let _user_guard = self.user_manager.become_user(ROOT_USER)?;
                 let () = self
                     .persistance_store
                     .store(&State {
@@ -231,7 +238,10 @@ impl SmAgent {
             Err(error) => {
                 error!("Parsing error: {}", error);
                 let _ = mqtt
-                    .publish(Message::new(response_topic, format!("{}", error)))
+                    .publish(Message::new(
+                        &self.config.errors_topic,
+                        format!("{}", error),
+                    ))
                     .await?;
 
                 return Err(SoftwareError::ParseError {
@@ -249,8 +259,11 @@ impl SmAgent {
             ))
             .await?;
 
-        let _user_guard = self.user_manager.become_user(ROOT_USER)?;
-        let response = plugins.process(&request).await;
+        let response = {
+            let _user_guard = self.user_manager.become_user(ROOT_USER)?;
+            plugins.process(&request).await
+        };
+
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;

@@ -6,6 +6,7 @@ pub use error::*;
 pub use messages::{
     Jsonify, SoftwareErrorResponse, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareUpdateRequest, SoftwareUpdateResponse,
+    SOFTWARE_REQUEST_FILTER,
 };
 pub use software::*;
 

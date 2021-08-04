@@ -7,7 +7,7 @@ pub enum AgentError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error(transparent)]
+    #[error("An internal task failed to complete.")]
     JoinError(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
@@ -39,7 +39,4 @@ pub enum StateError {
 
     #[error(transparent)]
     IOError(#[from] std::io::Error),
-
-    #[error("State file not found in /etc/tedge/.state")]
-    FileNotFound,
 }

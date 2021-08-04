@@ -68,7 +68,7 @@ impl AgentStateRepository {
         state_repo_root.push(PathBuf::from_str(".agent").expect("infallible"));
 
         let mut state_repo_path = state_repo_root.clone();
-        state_repo_path.push(PathBuf::from_str("software").expect("infallible"));
+        state_repo_path.push(PathBuf::from_str("current-operation").expect("infallible"));
 
         Self {
             state_repo_path,
@@ -153,7 +153,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
 
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/software");
+        let destination_path = temp_dir.path().join(".agent/current-operation");
 
         let content = "operation_id = 1234\noperation = \"list\"";
 
@@ -182,7 +182,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
 
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/software");
+        let destination_path = temp_dir.path().join(".agent/current-operation");
 
         let content = "";
 
@@ -212,7 +212,7 @@ mod tests {
         let temp_config_file = NamedTempFile::new().unwrap();
 
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/software");
+        let destination_path = temp_dir.path().join(".agent/current-operation");
 
         let config = tedge_config::TEdgeConfigLocation {
             tedge_config_root_path: temp_dir.into_path(),

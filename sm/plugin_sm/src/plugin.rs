@@ -68,7 +68,7 @@ impl ExternalPluginCommand {
         command.arg(action);
 
         if let Some(module) = maybe_module {
-            // self.check_module_type(module)?;
+            self.check_module_type(module)?;
             command.arg(&module.name);
             if let Some(ref version) = module.version {
                 command.arg(version);
@@ -100,6 +100,17 @@ impl ExternalPluginCommand {
         SoftwareError::Plugin {
             software_type: self.name.clone(),
             reason: format!("{}", err),
+        }
+    }
+
+    pub fn check_module_type(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+        if module.module_type == self.name {
+            Ok(())
+        } else {
+            Err(SoftwareError::WrongModuleType {
+                expected: module.module_type.clone(),
+                actual: self.name.clone(),
+            })
         }
     }
 }

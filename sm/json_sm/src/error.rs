@@ -52,6 +52,12 @@ pub enum SoftwareError {
     #[error("Unknown software type: {software_type:?}")]
     UnknownSoftwareType { software_type: SoftwareType },
 
+    #[error("Unexpected module type: {actual:?}, should be: {expected:?}")]
+    WrongModuleType {
+        actual: SoftwareType,
+        expected: SoftwareType,
+    },
+
     #[error("Unknown {software_type:?} version: {name:?} - {version:?}")]
     UnknownVersion {
         software_type: SoftwareType,

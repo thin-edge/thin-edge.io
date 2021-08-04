@@ -169,56 +169,6 @@ macro_rules! send_discarding_error {
 type MessageId = u16;
 
 impl Client {
-    // pub fn new(name: String, config: &Config) -> Self {
-    //     let name = String::from(name);
-
-    //     let mut mqtt_options = rumqttc::MqttOptions::new(&name, &config.host, config.port);
-    //     mqtt_options.set_clean_session(config.clean_session);
-
-    //     if let Some(inflight) = config.inflight {
-    //         mqtt_options.set_inflight(inflight);
-    //     }
-
-    //     if let Some(packet_size) = config.packet_size {
-    //         mqtt_options.set_max_packet_size(packet_size, packet_size);
-    //     }
-
-    //     let (mqtt_client, eventloop) =
-    //         rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
-
-    //     let requests_tx = eventloop.requests_tx.clone();
-
-    //     let (message_sender, _) = broadcast::channel(config.queue_capacity);
-    //     let (error_sender, _) = broadcast::channel(config.queue_capacity);
-
-    //     let inflight = Arc::new(InflightTracking::new());
-
-    //     let join_handle = tokio::spawn(async {});
-
-    //     Self {
-    //         name,
-    //         mqtt_client,
-    //         message_sender,
-    //         error_sender,
-    //         join_handle,
-    //         requests_tx,
-    //         inflight,
-    //     }
-    // }
-
-    // pub async fn connect(&self) -> Result<Client, MqttClientError> {
-    //     let join_handle = tokio::spawn(Client::bg_process(
-    //         self.eventloop,
-    //         self.message_sender.clone(),
-    //         self.error_sender.clone(),
-    //         self.inflight.clone(),
-    //     ));
-    //     Ok(Client {
-    //         join_handle,
-    //         // ..self,
-    //     })
-    // }
-
     /// Open a connection to the local MQTT bus, using the given name to register an MQTT session.
     ///
     /// Reusing the same session name on each connection allows a client
@@ -592,7 +542,6 @@ impl TopicFilter {
     }
 }
 
-// Why this is not a type?
 pub type Payload = Vec<u8>;
 
 /// A message to be sent to or received from MQTT.
