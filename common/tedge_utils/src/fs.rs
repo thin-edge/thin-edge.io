@@ -72,7 +72,9 @@ mod tests {
         std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {
             assert_eq!(destination_content, content.as_bytes());
-        };
+        } else {
+            panic!("failed to read the new file");
+        }
     }
 
     #[test]
@@ -89,6 +91,8 @@ mod tests {
         std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {
             assert_eq!(destination_content, content.as_bytes());
-        };
+        } else {
+            panic!("failed to read the new file");
+        }
     }
 }
