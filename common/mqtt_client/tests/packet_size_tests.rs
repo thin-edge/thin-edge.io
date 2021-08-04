@@ -40,7 +40,8 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let _mqtt_server_handle = tokio::spawn(async { rumqttd_broker::start_broker_local(58585).await });
+    let _mqtt_server_handle =
+        tokio::spawn(async { rumqttd_broker::start_broker_local(58585).await });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });

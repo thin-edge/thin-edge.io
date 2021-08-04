@@ -1,6 +1,9 @@
-use std::{collections::HashMap, net::{Ipv4Addr, SocketAddr, SocketAddrV4}};
+use std::{
+    collections::HashMap,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+};
 
-use librumqttd::{Config, ConnectionSettings, ConsoleSettings, ServerSettings, async_locallink};
+use librumqttd::{async_locallink, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
 use port_scanner::scan_port;
 
 pub async fn start_broker_local(port: u16) -> anyhow::Result<()> {
@@ -16,7 +19,7 @@ pub async fn start_broker_local(port: u16) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_rumqttd_config(port:u16) -> librumqttd::Config {
+fn get_rumqttd_config(port: u16) -> librumqttd::Config {
     let router_config = rumqttlog::Config {
         id: 0,
         dir: "/tmp/rumqttd".into(),
