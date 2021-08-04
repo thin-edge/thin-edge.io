@@ -14,6 +14,10 @@ pub struct SoftwareModule {
 }
 
 impl SoftwareModule {
+    pub fn default_type() -> SoftwareType {
+        "default".to_string()
+    }
+
     pub fn is_default_type(module_type: &str) -> bool {
         module_type.is_empty() || module_type == "default"
     }
@@ -56,5 +60,12 @@ impl SoftwareModuleUpdate {
 
     pub fn remove(module: SoftwareModule) -> SoftwareModuleUpdate {
         SoftwareModuleUpdate::Remove { module }
+    }
+
+    pub fn module(&self) -> &SoftwareModule {
+        match self {
+            SoftwareModuleUpdate::Install { module } |
+            SoftwareModuleUpdate::Remove { module } => module
+        }
     }
 }

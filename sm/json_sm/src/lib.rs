@@ -294,6 +294,78 @@ mod tests {
     }
 
     #[test]
+    fn creating_a_software_update_request_grouping_updates_per_plugin() {
+        let mut request = SoftwareUpdateRequest::new(123);
+
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "nodered".to_string(),
+            version: Some("1.0.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("docker".to_string()),
+            name: "nginx".to_string(),
+            version: Some("1.21.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "collectd".to_string(),
+            version: Some("5.7".to_string()),
+            url: Some(
+                "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+                    .to_string(),
+            ),
+        }));
+        request.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: Some("docker".to_string()),
+            name: "mongodb".to_string(),
+            version: Some("4.4.6".to_string()),
+            url: None,
+        }));
+
+        let expected_json = r#"{
+            "id": 123,
+            "updateList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let actual_json = request.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
     fn using_a_software_update_request() {
         let json_request = r#"{
             "id": 123,
