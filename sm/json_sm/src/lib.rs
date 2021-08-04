@@ -61,25 +61,25 @@ mod tests {
             "debian",
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "a".to_string(),
                     version: None,
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
                     url: Some("https://foobar.io/c.deb".to_string()),
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
                     url: Some("https://foobar.io/d.deb".to_string()),
@@ -90,7 +90,7 @@ mod tests {
         response.add_modules(
             "apama",
             vec![SoftwareModule {
-                module_type: "apama".to_string(),
+                module_type: Some("apama".to_string()),
                 name: "m".to_string(),
                 version: None,
                 url: Some("https://foobar.io/m.epl".to_string()),
@@ -144,31 +144,31 @@ mod tests {
             response.modules(),
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "a".to_string(),
                     version: None,
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
                     url: Some("https://foobar.io/c.deb".to_string())
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
                     url: Some("https://foobar.io/d.deb".to_string())
                 },
                 SoftwareModule {
-                    module_type: "apama".to_string(),
+                    module_type: Some("apama".to_string()),
                     name: "m".to_string(),
                     version: None,
                     url: Some("https://foobar.io/m.epl".to_string())
@@ -218,13 +218,13 @@ mod tests {
             "debian",
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: Some(
@@ -239,13 +239,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -345,13 +345,13 @@ mod tests {
             request.updates_for("debian"),
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: Some(
@@ -366,13 +366,13 @@ mod tests {
             request.updates_for("docker"),
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -419,13 +419,13 @@ mod tests {
             "debian",
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
@@ -437,13 +437,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -497,7 +497,7 @@ mod tests {
             "debian",
             vec![SoftwareError::Install {
                 module: SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
@@ -510,7 +510,7 @@ mod tests {
             "docker",
             vec![SoftwareError::Remove {
                 module: SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -522,7 +522,7 @@ mod tests {
         response.add_modules(
             "debian",
             vec![SoftwareModule {
-                module_type: "debian".to_string(),
+                module_type: Some("debian".to_string()),
                 name: "nodered".to_string(),
                 version: Some("1.0.0".to_string()),
                 url: None,
@@ -533,13 +533,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -681,19 +681,19 @@ mod tests {
             response.modules(),
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None

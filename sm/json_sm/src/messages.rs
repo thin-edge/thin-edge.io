@@ -96,7 +96,7 @@ impl SoftwareUpdateRequest {
         {
             for item in items.modules.iter() {
                 let module = SoftwareModule {
-                    module_type: module_type.to_string(),
+                    module_type: Some(module_type.to_string()),
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
@@ -395,7 +395,7 @@ impl SoftwareRequestResponse {
                 let module_type = &module_per_plugin.plugin_type;
                 for module in module_per_plugin.modules.iter() {
                     modules.push(SoftwareModule {
-                        module_type: module_type.clone(),
+                        module_type: Some(module_type.clone()),
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
