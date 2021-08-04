@@ -1,13 +1,11 @@
 use crate::error::StateError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{path::PathBuf, str::FromStr};
 use tedge_config::TEdgeConfigLocation;
+use tedge_utils::fs::atomically_write_file_async;
 
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::fs;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
@@ -46,7 +44,8 @@ impl StateRepository<State> for AgentStateRepository {
         let mut temppath = self.state_repo_path.clone();
         temppath.set_extension("tmp");
 
-        let () = atomically_write_file(temppath, &self.state_repo_path, toml.as_bytes()).await?;
+        let () =
+            atomically_write_file_async(temppath, &self.state_repo_path, toml.as_bytes()).await?;
 
         Ok(())
     }
@@ -84,53 +83,11 @@ pub struct State {
     pub operation: Option<String>,
 }
 
-async fn atomically_write_file(
-    tempfile: impl AsRef<Path>,
-    dest: impl AsRef<Path>,
-    content: &[u8],
-) -> std::io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(tempfile.as_ref())
-        .await?;
-
-    if let Err(err) = file.write_all(content).await {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-
-    if let Err(err) = fs::rename(tempfile.as_ref(), dest).await {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::state::{atomically_write_file, AgentStateRepository, State, StateRepository};
+    use crate::state::{AgentStateRepository, State, StateRepository};
 
     use tempfile::{tempdir, NamedTempFile};
-
-    #[tokio::test]
-    async fn atomically_write_file_file() {
-        let temp_dir = tempdir().unwrap();
-        let temp_path = temp_dir.path().join("test1");
-        let destination_path = temp_dir.path().join("test2");
-
-        let content = "test_data";
-
-        let () = atomically_write_file(&temp_path, &destination_path, &content.as_bytes())
-            .await
-            .unwrap();
-
-        std::fs::File::open(&temp_path).unwrap_err();
-        if let Ok(destination_content) = std::fs::read(&destination_path) {
-            assert_eq!(destination_content, content.as_bytes());
-        };
-    }
 
     #[tokio::test]
     async fn agent_state_repository_not_exists_fail() {
