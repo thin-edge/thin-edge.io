@@ -28,22 +28,28 @@ impl SoftwareModule {
         version: Option<SoftwareVersion>,
         url: Option<String>,
     ) -> SoftwareModule {
-        let module_type = match module_type {
-            Some(module_type) if SoftwareModule::is_default_type(&module_type) => None,
-            module_type => module_type,
-        };
-
-        let version = match version {
-            Some(version) if version.is_empty() => None,
-            version => version,
-        };
-
-        SoftwareModule {
+        let mut module = SoftwareModule {
             module_type,
             name,
             version,
             url,
-        }
+        };
+        module.normalize();
+        module
+    }
+
+    pub fn normalize(&mut self) {
+        match &self.module_type {
+            Some(module_type) if SoftwareModule::is_default_type(&module_type) => {
+                self.module_type = None
+            }
+            _ => {}
+        };
+
+        match &self.version {
+            Some(version) if version.is_empty() => self.version = None,
+            _ => {}
+        };
     }
 }
 
@@ -64,8 +70,18 @@ impl SoftwareModuleUpdate {
 
     pub fn module(&self) -> &SoftwareModule {
         match self {
-            SoftwareModuleUpdate::Install { module } |
-            SoftwareModuleUpdate::Remove { module } => module
+            SoftwareModuleUpdate::Install { module } | SoftwareModuleUpdate::Remove { module } => {
+                module
+            }
         }
+    }
+
+    pub fn normalize(&mut self) {
+        let module = match self {
+            SoftwareModuleUpdate::Install { module } | SoftwareModuleUpdate::Remove { module } => {
+                module
+            }
+        };
+        module.normalize();
     }
 }

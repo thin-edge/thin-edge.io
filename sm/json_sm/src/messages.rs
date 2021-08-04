@@ -66,10 +66,19 @@ impl SoftwareUpdateRequest {
         "tedge/commands/req/software/update"
     }
 
-    pub fn add_update(&mut self, update: SoftwareModuleUpdate) {
-        let plugin_type = update.module().module_type.clone().unwrap_or(SoftwareModule::default_type()) ;
+    pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
+        update.normalize();
+        let plugin_type = update
+            .module()
+            .module_type
+            .clone()
+            .unwrap_or(SoftwareModule::default_type());
 
-        if let Some(list) = self.update_list.iter_mut().find(|list| list.plugin_type == plugin_type) {
+        if let Some(list) = self
+            .update_list
+            .iter_mut()
+            .find(|list| list.plugin_type == plugin_type)
+        {
             list.modules.push(update.into());
         } else {
             self.update_list.push(SoftwareRequestResponseSoftwareList {
