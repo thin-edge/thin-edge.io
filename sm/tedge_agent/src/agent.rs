@@ -83,7 +83,7 @@ impl SmAgent {
     }
 
     pub async fn start(&self) -> Result<(), AgentError> {
-        info!("Starting tedge-agent");
+        info!("Starting tedge agent");
 
         let plugins = Arc::new(ExternalPlugins::open("/etc/tedge/sm-plugins")?);
         if plugins.empty() {
@@ -167,7 +167,6 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareListRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
-                let _user_guard = self.user_manager.become_user(ROOT_USER)?;
                 let () = self
                     .persistance_store
                     .store(&State {
@@ -223,7 +222,6 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareUpdateRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
-                let _user_guard = self.user_manager.become_user(ROOT_USER)?;
                 let () = self
                     .persistance_store
                     .store(&State {

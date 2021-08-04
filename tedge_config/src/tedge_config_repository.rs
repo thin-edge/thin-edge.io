@@ -1,8 +1,7 @@
-use tedge_utils::fs::atomically_write_file_sync;
-
 use crate::*;
 use std::fs;
 use std::path::PathBuf;
+use tedge_utils::fs::atomically_write_file_sync;
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
