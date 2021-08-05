@@ -37,24 +37,24 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_request() {
-        let request = SoftwareListRequest::new(1);
+        let request = SoftwareListRequest::new("1");
 
-        let expected_json = r#"{"id":1}"#;
+        let expected_json = r#"{"id":"1"}"#;
         let actual_json = request.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, expected_json);
     }
 
     #[test]
     fn using_a_software_list_request() {
-        let json_request = r#"{"id":123}"#;
+        let json_request = r#"{"id":"123"}"#;
         let request = SoftwareListRequest::from_json(json_request).expect("Failed to deserialize");
 
-        assert_eq!(request.id, 123);
+        assert_eq!(request.id, "123");
     }
 
     #[test]
     fn creating_a_software_list_response() {
-        let request = SoftwareListRequest::new(1);
+        let request = SoftwareListRequest::new("1");
         let mut response = SoftwareListResponse::new(&request);
 
         response.add_modules(
@@ -98,7 +98,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id":1,
+            "id":"1",
             "status":"successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn using_a_software_list_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -135,7 +135,7 @@ mod tests {
         let response =
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Successful);
         assert_eq!(response.error(), None);
 
@@ -179,13 +179,13 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_error() {
-        let request = SoftwareListRequest::new(123);
+        let request = SoftwareListRequest::new("123");
         let mut response = SoftwareListResponse::new(&request);
 
         response.set_error("Request_timed-out");
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "failed",
             "reason": "Request_timed-out"
         }"#;
@@ -197,14 +197,14 @@ mod tests {
     #[test]
     fn using_a_software_list_error() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "failed",
             "reason": "Request timed-out"
         }"#;
         let response =
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
         assert_eq!(response.error(), Some("Request timed-out".into()));
         assert_eq!(response.modules(), vec![]);
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request() {
-        let mut request = SoftwareUpdateRequest::new(123);
+        let mut request = SoftwareUpdateRequest::new("123");
 
         request.add_updates(
             "debian",
@@ -254,7 +254,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "debian",
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn using_a_software_update_request() {
         let json_request = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "debian",
@@ -474,7 +474,7 @@ mod tests {
         let request =
             SoftwareUpdateRequest::from_json(json_request).expect("Failed to deserialize");
 
-        assert_eq!(request.id, 123);
+        assert_eq!(request.id, "123");
 
         assert_eq!(
             request.modules_types(),
@@ -523,11 +523,11 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new("123");
         let response = SoftwareUpdateResponse::new(&request);
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "executing"
         }"#;
 
@@ -538,13 +538,13 @@ mod tests {
     #[test]
     fn using_a_software_update_executing_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "executing"
         }"#;
         let response =
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123".to_string());
         assert_eq!(response.status(), SoftwareOperationStatus::Executing);
         assert_eq!(response.error(), None);
         assert_eq!(response.modules(), vec![]);
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_modules(
@@ -592,7 +592,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "successful",
             "currentSoftwareList": [
                 {
@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_error() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_errors(
@@ -688,7 +688,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status":"failed",
             "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
             "currentSoftwareList": [
@@ -751,7 +751,7 @@ mod tests {
     #[test]
     fn using_a_software_update_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status":"failed",
             "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
             "currentSoftwareList": [
@@ -806,7 +806,7 @@ mod tests {
         let response =
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
         assert_eq!(
             response.error(),
