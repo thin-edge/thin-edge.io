@@ -12,6 +12,7 @@ pub use software::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
 
     #[test]
     fn topic_names() {
@@ -37,49 +38,59 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_request() {
-        let request = SoftwareListRequest::new(1);
+        let request = SoftwareListRequest::new_with_id("1");
 
-        let expected_json = r#"{"id":1}"#;
+        let expected_json = r#"{"id":"1"}"#;
         let actual_json = request.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, expected_json);
     }
 
     #[test]
+    fn creating_a_software_list_request_with_generated_id() {
+        let request = SoftwareListRequest::new();
+        let generated_id = request.id;
+
+        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
+        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
+        assert!(re.is_match(&generated_id));
+    }
+
+    #[test]
     fn using_a_software_list_request() {
-        let json_request = r#"{"id":123}"#;
+        let json_request = r#"{"id":"123"}"#;
         let request = SoftwareListRequest::from_json(json_request).expect("Failed to deserialize");
 
-        assert_eq!(request.id, 123);
+        assert_eq!(request.id, "123");
     }
 
     #[test]
     fn creating_a_software_list_response() {
-        let request = SoftwareListRequest::new(1);
+        let request = SoftwareListRequest::new_with_id("1");
         let mut response = SoftwareListResponse::new(&request);
 
         response.add_modules(
             "debian",
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "a".to_string(),
                     version: None,
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
                     url: Some("https://foobar.io/c.deb".to_string()),
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
                     url: Some("https://foobar.io/d.deb".to_string()),
@@ -90,7 +101,7 @@ mod tests {
         response.add_modules(
             "apama",
             vec![SoftwareModule {
-                module_type: "apama".to_string(),
+                module_type: Some("apama".to_string()),
                 name: "m".to_string(),
                 version: None,
                 url: Some("https://foobar.io/m.epl".to_string()),
@@ -98,7 +109,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id":1,
+            "id":"1",
             "status":"successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -118,7 +129,7 @@ mod tests {
     #[test]
     fn using_a_software_list_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -135,7 +146,7 @@ mod tests {
         let response =
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Successful);
         assert_eq!(response.error(), None);
 
@@ -144,31 +155,31 @@ mod tests {
             response.modules(),
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "a".to_string(),
                     version: None,
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
                     url: Some("https://foobar.io/c.deb".to_string())
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
                     url: Some("https://foobar.io/d.deb".to_string())
                 },
                 SoftwareModule {
-                    module_type: "apama".to_string(),
+                    module_type: Some("apama".to_string()),
                     name: "m".to_string(),
                     version: None,
                     url: Some("https://foobar.io/m.epl".to_string())
@@ -179,13 +190,13 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_error() {
-        let request = SoftwareListRequest::new(123);
+        let request = SoftwareListRequest::new_with_id("123");
         let mut response = SoftwareListResponse::new(&request);
 
         response.set_error("Request_timed-out");
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "failed",
             "reason": "Request_timed-out"
         }"#;
@@ -197,14 +208,14 @@ mod tests {
     #[test]
     fn using_a_software_list_error() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "failed",
             "reason": "Request timed-out"
         }"#;
         let response =
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
         assert_eq!(response.error(), Some("Request timed-out".into()));
         assert_eq!(response.modules(), vec![]);
@@ -212,19 +223,19 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request() {
-        let mut request = SoftwareUpdateRequest::new(123);
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
 
         request.add_updates(
             "debian",
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: Some(
@@ -239,13 +250,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -254,7 +265,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "debian",
@@ -294,9 +305,159 @@ mod tests {
     }
 
     #[test]
+    fn creating_a_software_update_request_grouping_updates_per_plugin() {
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
+
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "nodered".to_string(),
+            version: Some("1.0.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("docker".to_string()),
+            name: "nginx".to_string(),
+            version: Some("1.21.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "collectd".to_string(),
+            version: Some("5.7".to_string()),
+            url: Some(
+                "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+                    .to_string(),
+            ),
+        }));
+        request.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: Some("docker".to_string()),
+            name: "mongodb".to_string(),
+            version: Some("4.4.6".to_string()),
+            url: None,
+        }));
+
+        let expected_json = r#"{
+            "id": "123",
+            "updateList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let actual_json = request.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn creating_a_software_update_request_grouping_updates_per_plugin_using_default() {
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
+
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: None, // I.e. default
+            name: "nodered".to_string(),
+            version: Some("1.0.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("".to_string()), // I.e. default
+            name: "nginx".to_string(),
+            version: Some("1.21.0".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("default".to_string()), // I.e. default
+            name: "collectd".to_string(),
+            version: Some("5.7".to_string()),
+            url: None,
+        }));
+        request.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: Some("debian".to_string()), // Unless specified otherwise, this is not the default
+            name: "mongodb".to_string(),
+            version: Some("4.4.6".to_string()),
+            url: None,
+        }));
+
+        let expected_json = r#"{
+            "id": "123",
+            "updateList": [
+                {
+                    "type": "default",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let actual_json = request.to_json().expect("Failed to serialize");
+        assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn creating_a_software_update_request_with_generated_id() {
+        let request = SoftwareUpdateRequest::new();
+        let generated_id = request.id;
+
+        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
+        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
+        assert!(re.is_match(&generated_id));
+    }
+
+    #[test]
     fn using_a_software_update_request() {
         let json_request = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "debian",
@@ -334,7 +495,7 @@ mod tests {
         let request =
             SoftwareUpdateRequest::from_json(json_request).expect("Failed to deserialize");
 
-        assert_eq!(request.id, 123);
+        assert_eq!(request.id, "123");
 
         assert_eq!(
             request.modules_types(),
@@ -345,13 +506,13 @@ mod tests {
             request.updates_for("debian"),
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: Some(
@@ -366,13 +527,13 @@ mod tests {
             request.updates_for("docker"),
             vec![
                 SoftwareModuleUpdate::install(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -383,11 +544,11 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let response = SoftwareUpdateResponse::new(&request);
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "executing"
         }"#;
 
@@ -398,13 +559,13 @@ mod tests {
     #[test]
     fn using_a_software_update_executing_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status": "executing"
         }"#;
         let response =
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123".to_string());
         assert_eq!(response.status(), SoftwareOperationStatus::Executing);
         assert_eq!(response.error(), None);
         assert_eq!(response.modules(), vec![]);
@@ -412,20 +573,20 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_modules(
             "debian",
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
@@ -437,13 +598,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -452,7 +613,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status": "successful",
             "currentSoftwareList": [
                 {
@@ -490,14 +651,14 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_error() {
-        let request = SoftwareUpdateRequest::new(123);
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_errors(
             "debian",
             vec![SoftwareError::Install {
                 module: SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
@@ -510,7 +671,7 @@ mod tests {
             "docker",
             vec![SoftwareError::Remove {
                 module: SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -522,7 +683,7 @@ mod tests {
         response.add_modules(
             "debian",
             vec![SoftwareModule {
-                module_type: "debian".to_string(),
+                module_type: Some("debian".to_string()),
                 name: "nodered".to_string(),
                 version: Some("1.0.0".to_string()),
                 url: None,
@@ -533,13 +694,13 @@ mod tests {
             "docker",
             vec![
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
@@ -548,7 +709,7 @@ mod tests {
         );
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "status":"failed",
             "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
             "currentSoftwareList": [
@@ -611,7 +772,7 @@ mod tests {
     #[test]
     fn using_a_software_update_response() {
         let json_response = r#"{
-            "id": 123,
+            "id": "123",
             "status":"failed",
             "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
             "currentSoftwareList": [
@@ -666,7 +827,7 @@ mod tests {
         let response =
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
-        assert_eq!(response.id(), 123);
+        assert_eq!(response.id(), "123");
         assert_eq!(response.status(), SoftwareOperationStatus::Failed);
         assert_eq!(
             response.error(),
@@ -681,19 +842,19 @@ mod tests {
             response.modules(),
             vec![
                 SoftwareModule {
-                    module_type: "debian".to_string(),
+                    module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None
                 },
                 SoftwareModule {
-                    module_type: "docker".to_string(),
+                    module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None

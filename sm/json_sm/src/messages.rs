@@ -1,4 +1,5 @@
 use crate::{error::SoftwareError, software::*};
+use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
 /// All the messages are serialized using json.
@@ -28,14 +29,19 @@ where
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareListRequest {
-    pub id: usize,
+    pub id: String,
 }
 
 impl<'a> Jsonify<'a> for SoftwareListRequest {}
 
 impl SoftwareListRequest {
-    pub fn new(id: usize) -> SoftwareListRequest {
+    pub fn new() -> SoftwareListRequest {
+        let id = nanoid!();
         SoftwareListRequest { id }
+    }
+
+    pub fn new_with_id(id: &str) -> SoftwareListRequest {
+        SoftwareListRequest { id: id.to_string() }
     }
 
     pub fn topic_name() -> &'static str {
@@ -48,22 +54,52 @@ impl SoftwareListRequest {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareUpdateRequest {
-    pub id: usize,
+    pub id: String,
     pub update_list: Vec<SoftwareRequestResponseSoftwareList>,
 }
 
 impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
 impl SoftwareUpdateRequest {
-    pub fn new(id: usize) -> SoftwareUpdateRequest {
+    pub fn new() -> SoftwareUpdateRequest {
+        let id = nanoid!();
         SoftwareUpdateRequest {
             id,
             update_list: vec![],
         }
     }
 
+    pub fn new_with_id(id: &str) -> SoftwareUpdateRequest {
+        SoftwareUpdateRequest {
+            id: id.to_string(),
+            update_list: vec![],
+        }
+    }
+
     pub fn topic_name() -> &'static str {
         "tedge/commands/req/software/update"
+    }
+
+    pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
+        update.normalize();
+        let plugin_type = update
+            .module()
+            .module_type
+            .clone()
+            .unwrap_or(SoftwareModule::default_type());
+
+        if let Some(list) = self
+            .update_list
+            .iter_mut()
+            .find(|list| list.plugin_type == plugin_type)
+        {
+            list.modules.push(update.into());
+        } else {
+            self.update_list.push(SoftwareRequestResponseSoftwareList {
+                plugin_type,
+                modules: vec![update.into()],
+            });
+        }
     }
 
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
@@ -96,7 +132,7 @@ impl SoftwareUpdateRequest {
         {
             for item in items.modules.iter() {
                 let module = SoftwareModule {
-                    module_type: module_type.to_string(),
+                    module_type: Some(module_type.to_string()),
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
@@ -148,7 +184,7 @@ impl<'a> Jsonify<'a> for SoftwareListResponse {}
 impl SoftwareListResponse {
     pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
         SoftwareListResponse {
-            response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
+            response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
         }
     }
 
@@ -171,8 +207,8 @@ impl SoftwareListResponse {
         self.response.reason = Some(reason.into());
     }
 
-    pub fn id(&self) -> usize {
-        self.response.id
+    pub fn id(&self) -> &str {
+        &self.response.id
     }
 
     pub fn status(&self) -> SoftwareOperationStatus {
@@ -203,7 +239,7 @@ impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
 impl SoftwareUpdateResponse {
     pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         SoftwareUpdateResponse {
-            response: SoftwareRequestResponse::new(req.id, SoftwareOperationStatus::Executing),
+            response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
             errors: vec![],
         }
     }
@@ -234,8 +270,8 @@ impl SoftwareUpdateResponse {
         );
     }
 
-    pub fn id(&self) -> usize {
-        self.response.id
+    pub fn id(&self) -> &str {
+        &self.response.id
     }
 
     pub fn status(&self) -> SoftwareOperationStatus {
@@ -283,8 +319,7 @@ pub struct SoftwareModuleItem {
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareRequestResponse {
-    // TODO: Is this the right approach, maybe nanoid?
-    pub id: usize,
+    pub id: String,
     pub status: SoftwareOperationStatus,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -300,9 +335,9 @@ pub struct SoftwareRequestResponse {
 impl<'a> Jsonify<'a> for SoftwareRequestResponse {}
 
 impl SoftwareRequestResponse {
-    pub fn new(id: usize, status: SoftwareOperationStatus) -> Self {
+    pub fn new(id: &str, status: SoftwareOperationStatus) -> Self {
         SoftwareRequestResponse {
-            id,
+            id: id.to_string(),
             status,
             current_software_list: None,
             reason: None,
@@ -395,7 +430,7 @@ impl SoftwareRequestResponse {
                 let module_type = &module_per_plugin.plugin_type;
                 for module in module_per_plugin.modules.iter() {
                     modules.push(SoftwareModule {
-                        module_type: module_type.clone(),
+                        module_type: Some(module_type.clone()),
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
@@ -469,8 +504,10 @@ mod tests {
 
     #[test]
     fn serde_software_request_list() {
-        let request = SoftwareListRequest { id: 1234 };
-        let expected_json = r#"{"id":1234}"#;
+        let request = SoftwareListRequest {
+            id: "1234".to_string(),
+        };
+        let expected_json = r#"{"id":"1234"}"#;
 
         let actual_json = request.to_json().expect("Failed to serialize");
 
@@ -518,11 +555,11 @@ mod tests {
         };
 
         let request = SoftwareUpdateRequest {
-            id: 1234,
+            id: "1234".to_string(),
             update_list: vec![debian_list, docker_list],
         };
 
-        let expected_json = r#"{"id":1234,"updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
+        let expected_json = r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
 
         let actual_json = request.to_json().expect("Fail to serialize the request");
         assert_eq!(actual_json, expected_json);
@@ -535,14 +572,14 @@ mod tests {
     #[test]
     fn serde_software_list_empty_successful() {
         let request = SoftwareRequestResponse {
-            id: 1234,
+            id: "1234".to_string(),
             status: SoftwareOperationStatus::Successful,
             reason: None,
             current_software_list: Some(vec![]),
             failures: vec![],
         };
 
-        let expected_json = r#"{"id":1234,"status":"successful","currentSoftwareList":[]}"#;
+        let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[]}"#;
 
         let actual_json = request.to_json().expect("Fail to serialize the request");
         assert_eq!(actual_json, expected_json);
@@ -568,14 +605,14 @@ mod tests {
         };
 
         let request = SoftwareRequestResponse {
-            id: 1234,
+            id: "1234".to_string(),
             status: SoftwareOperationStatus::Successful,
             reason: None,
             current_software_list: Some(vec![docker_module1]),
             failures: vec![],
         };
 
-        let expected_json = r#"{"id":1234,"status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
+        let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
 
         let actual_json = request.to_json().expect("Fail to serialize the request");
         assert_eq!(actual_json, expected_json);
