@@ -1,4 +1,5 @@
 use crate::{error::SoftwareError, software::*};
+use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
 /// All the messages are serialized using json.
@@ -34,7 +35,12 @@ pub struct SoftwareListRequest {
 impl<'a> Jsonify<'a> for SoftwareListRequest {}
 
 impl SoftwareListRequest {
-    pub fn new(id: &str) -> SoftwareListRequest {
+    pub fn new() -> SoftwareListRequest {
+        let id = nanoid!();
+        SoftwareListRequest { id }
+    }
+
+    pub fn new_with_id(id: &str) -> SoftwareListRequest {
         SoftwareListRequest { id: id.to_string() }
     }
 
@@ -55,7 +61,15 @@ pub struct SoftwareUpdateRequest {
 impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
 impl SoftwareUpdateRequest {
-    pub fn new(id: &str) -> SoftwareUpdateRequest {
+    pub fn new() -> SoftwareUpdateRequest {
+        let id = nanoid!();
+        SoftwareUpdateRequest {
+            id,
+            update_list: vec![],
+        }
+    }
+
+    pub fn new_with_id(id: &str) -> SoftwareUpdateRequest {
         SoftwareUpdateRequest {
             id: id.to_string(),
             update_list: vec![],
@@ -305,7 +319,6 @@ pub struct SoftwareModuleItem {
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareRequestResponse {
-    // TODO: Is this the right approach, maybe nanoid?
     pub id: String,
     pub status: SoftwareOperationStatus,
 

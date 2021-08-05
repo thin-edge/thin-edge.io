@@ -9,6 +9,10 @@ description = "json_sm defines the thin-edge json extension for software managem
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+nanoid = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
+
+[dev-dependencies]
+regex = "1.5"

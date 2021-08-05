@@ -12,6 +12,7 @@ pub use software::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
 
     #[test]
     fn topic_names() {
@@ -37,11 +38,21 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_request() {
-        let request = SoftwareListRequest::new("1");
+        let request = SoftwareListRequest::new_with_id("1");
 
         let expected_json = r#"{"id":"1"}"#;
         let actual_json = request.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, expected_json);
+    }
+
+    #[test]
+    fn creating_a_software_list_request_with_generated_id() {
+        let request = SoftwareListRequest::new();
+        let generated_id = request.id;
+
+        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
+        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
+        assert!(re.is_match(&generated_id));
     }
 
     #[test]
@@ -54,7 +65,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_response() {
-        let request = SoftwareListRequest::new("1");
+        let request = SoftwareListRequest::new_with_id("1");
         let mut response = SoftwareListResponse::new(&request);
 
         response.add_modules(
@@ -179,7 +190,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_error() {
-        let request = SoftwareListRequest::new("123");
+        let request = SoftwareListRequest::new_with_id("123");
         let mut response = SoftwareListResponse::new(&request);
 
         response.set_error("Request_timed-out");
@@ -212,7 +223,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request() {
-        let mut request = SoftwareUpdateRequest::new("123");
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
 
         request.add_updates(
             "debian",
@@ -295,7 +306,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request_grouping_updates_per_plugin() {
-        let mut request = SoftwareUpdateRequest::new(123);
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
@@ -326,7 +337,7 @@ mod tests {
         }));
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "debian",
@@ -367,7 +378,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request_grouping_updates_per_plugin_using_default() {
-        let mut request = SoftwareUpdateRequest::new(123);
+        let mut request = SoftwareUpdateRequest::new_with_id("123");
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: None, // I.e. default
@@ -395,7 +406,7 @@ mod tests {
         }));
 
         let expected_json = r#"{
-            "id": 123,
+            "id": "123",
             "updateList": [
                 {
                     "type": "default",
@@ -431,6 +442,16 @@ mod tests {
         }"#;
         let actual_json = request.to_json().expect("Failed to serialize");
         assert_eq!(actual_json, remove_whitespace(expected_json));
+    }
+
+    #[test]
+    fn creating_a_software_update_request_with_generated_id() {
+        let request = SoftwareUpdateRequest::new();
+        let generated_id = request.id;
+
+        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
+        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
+        assert!(re.is_match(&generated_id));
     }
 
     #[test]
@@ -523,7 +544,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new("123");
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let response = SoftwareUpdateResponse::new(&request);
 
         let expected_json = r#"{
@@ -552,7 +573,7 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_response() {
-        let request = SoftwareUpdateRequest::new("123");
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_modules(
@@ -630,7 +651,7 @@ mod tests {
 
     #[test]
     fn finalizing_a_software_update_error() {
-        let request = SoftwareUpdateRequest::new("123");
+        let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
         response.add_errors(
