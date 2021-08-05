@@ -1,7 +1,7 @@
 use crate::*;
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use tedge_utils::fs::atomically_write_file_sync;
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
@@ -34,33 +34,13 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
             let () = fs::create_dir(self.config_location.tedge_config_root_path())?;
         }
 
-        let () = atomically_write_file(
+        let () = atomically_write_file_sync(
             self.config_location.temporary_tedge_config_file_path(),
             self.config_location.tedge_config_file_path(),
             toml.as_bytes(),
         )?;
         Ok(())
     }
-}
-
-fn atomically_write_file(
-    tempfile: impl AsRef<Path>,
-    dest: impl AsRef<Path>,
-    content: &[u8],
-) -> std::io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(tempfile.as_ref())?;
-    if let Err(err) = file.write_all(content) {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-    if let Err(err) = fs::rename(tempfile.as_ref(), dest) {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-    Ok(())
 }
 
 impl TEdgeConfigRepository {
