@@ -104,13 +104,16 @@ impl ExternalPluginCommand {
     }
 
     pub fn check_module_type(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
-        if module.module_type == self.name {
-            Ok(())
-        } else {
-            Err(SoftwareError::WrongModuleType {
-                expected: module.module_type.clone(),
+        match &module.module_type {
+            Some(name) if name == &self.name.clone() => Ok(()),
+            Some(name) => Err(SoftwareError::WrongModuleType {
                 actual: self.name.clone(),
-            })
+                expected: name.clone(),
+            }),
+            None => Err(SoftwareError::WrongModuleType {
+                actual: self.name.clone(),
+                expected: "default".into(),
+            }),
         }
     }
 }
@@ -195,7 +198,7 @@ impl Plugin for ExternalPluginCommand {
                     let software_json_line = std::str::from_utf8(split).unwrap();
                     let mut software_module =
                         serde_json::from_str::<SoftwareModule>(software_json_line).unwrap();
-                    software_module.module_type = self.name.clone();
+                    software_module.module_type = Some(self.name.clone());
                     software_list.push(software_module);
                 });
 

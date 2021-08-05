@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, str::FromStr};
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::fs::atomically_write_file_async;
-
 use tokio::fs;
 
 #[derive(Debug)]
@@ -79,7 +78,7 @@ impl AgentStateRepository {
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
-    pub operation_id: Option<usize>,
+    pub operation_id: Option<String>,
     pub operation: Option<String>,
 }
 
@@ -112,7 +111,7 @@ mod tests {
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
         let destination_path = temp_dir.path().join(".agent/current-operation");
 
-        let content = "operation_id = 1234\noperation = \"list\"";
+        let content = "operation_id = \'1234\'\noperation = \"list\"";
 
         let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
 
@@ -128,7 +127,7 @@ mod tests {
         assert_eq!(
             data,
             State {
-                operation_id: Some(1234),
+                operation_id: Some("1234".into()),
                 operation: Some("list".into()),
             }
         );
@@ -183,7 +182,7 @@ mod tests {
         let repo = AgentStateRepository::new(&config);
 
         repo.store(&State {
-            operation_id: Some(1234),
+            operation_id: Some("1234".into()),
             operation: Some("list".into()),
         })
         .await
@@ -191,6 +190,6 @@ mod tests {
 
         let data = tokio::fs::read_to_string(destination_path).await.unwrap();
 
-        assert_eq!(data, "operation_id = 1234\noperation = \'list\'\n");
+        assert_eq!(data, "operation_id = \'1234\'\noperation = \'list\'\n");
     }
 }

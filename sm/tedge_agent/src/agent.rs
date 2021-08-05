@@ -3,8 +3,9 @@ use crate::{
     state::{AgentStateRepository, State, StateRepository},
 };
 use json_sm::{
-    software_filter_topic, Jsonify, SoftwareError, SoftwareErrorResponse, SoftwareListRequest,
-    SoftwareListResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
+    messages::SoftwareRequestResponse, software_filter_topic, Jsonify, SoftwareError,
+    SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus, SoftwareUpdateRequest,
+    SoftwareUpdateResponse,
 };
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
@@ -99,7 +100,7 @@ impl SmAgent {
             }
         });
 
-        let () = self.check_state_store(&mqtt).await?;
+        let () = self.fail_pending_operation(&mqtt).await?;
 
         // * Maybe it would be nice if mapper/registry responds
         let () = publish_capabilities(&mqtt).await?;
@@ -170,7 +171,7 @@ impl SmAgent {
                 let () = self
                     .persistance_store
                     .store(&State {
-                        operation_id: Some(request.id),
+                        operation_id: Some(request.id.clone()),
                         operation: Some("list".into()),
                     })
                     .await?;
@@ -225,7 +226,7 @@ impl SmAgent {
                 let () = self
                     .persistance_store
                     .store(&State {
-                        operation_id: Some(request.id),
+                        operation_id: Some(request.id.clone()),
                         operation: Some("update".into()),
                     })
                     .await?;
@@ -271,7 +272,7 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn check_state_store(&self, mqtt: &Client) -> Result<(), AgentError> {
+    async fn fail_pending_operation(&self, mqtt: &Client) -> Result<(), AgentError> {
         if let State {
             operation_id: Some(id),
             operation: Some(operation_string),
@@ -293,7 +294,7 @@ impl SmAgent {
                 }
             };
 
-            let response = SoftwareErrorResponse::new(id, "unfinished operation request");
+            let response = SoftwareRequestResponse::new(&id, SoftwareOperationStatus::Failed);
 
             let _ = mqtt
                 .publish(Message::new(topic, response.to_bytes()?))
