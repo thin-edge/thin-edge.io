@@ -1,4 +1,4 @@
-use json_sm::error::SoftwareError;
+use json_sm::SoftwareError;
 use mqtt_client::MqttClientError;
 use tedge_users::UserSwitchError;
 

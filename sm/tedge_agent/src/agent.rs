@@ -3,8 +3,8 @@ use crate::{
     state::{AgentStateRepository, State, StateRepository},
 };
 use json_sm::{
-    messages::SoftwareRequestResponse, software_filter_topic, Jsonify, SoftwareError,
-    SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus, SoftwareUpdateRequest,
+    software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
+    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
 use log::{debug, error, info};

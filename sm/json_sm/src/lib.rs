@@ -1,11 +1,12 @@
-pub mod error;
-pub mod messages;
-pub mod software;
+mod error;
+mod messages;
+mod software;
 
 pub use error::*;
 pub use messages::{
     software_filter_topic, Jsonify, SoftwareListRequest, SoftwareListResponse,
-    SoftwareOperationStatus, SoftwareUpdateRequest, SoftwareUpdateResponse,
+    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
+    SoftwareUpdateResponse,
 };
 pub use software::*;
 

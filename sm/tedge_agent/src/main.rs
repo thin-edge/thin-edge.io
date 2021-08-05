@@ -1,7 +1,6 @@
 use tedge_users::UserManager;
 
 mod agent;
-mod component;
 mod error;
 mod state;
 
@@ -13,8 +12,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     initialise_logging();
 
-    let component = agent::SmAgent::new("tedge_agent", user_manager, tedge_config_location);
-    component.start().await?;
+    let agent = agent::SmAgent::new("tedge_agent", user_manager, tedge_config_location);
+    agent.start().await?;
     Ok(())
 }
 
