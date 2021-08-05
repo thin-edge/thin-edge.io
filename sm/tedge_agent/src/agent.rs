@@ -3,8 +3,8 @@ use crate::{
     state::{AgentStateRepository, State, StateRepository},
 };
 use json_sm::{
-    Jsonify, SoftwareError, SoftwareErrorResponse, SoftwareListRequest, SoftwareListResponse,
-    SoftwareUpdateRequest, SoftwareUpdateResponse, SOFTWARE_REQUEST_FILTER,
+    software_filter_topic, Jsonify, SoftwareError, SoftwareErrorResponse, SoftwareListRequest,
+    SoftwareListResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
@@ -26,7 +26,7 @@ pub struct SmAgentConfig {
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
-        let request_topics = TopicFilter::new(SOFTWARE_REQUEST_FILTER).expect("Invalid topic");
+        let request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
 
         let request_topic_list =
             Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");

@@ -23,7 +23,9 @@ where
     }
 }
 
-pub static SOFTWARE_REQUEST_FILTER: &str = "tedge/commands/req/software/#";
+pub const fn software_filter_topic() -> &'static str {
+    "tedge/commands/req/software/#"
+}
 
 /// Message payload definition for SoftwareList request.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
