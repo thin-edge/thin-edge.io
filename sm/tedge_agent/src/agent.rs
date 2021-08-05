@@ -148,15 +148,11 @@ impl SmAgent {
                         });
                 }
 
-                _ => self.handle_unknown_operation(),
+                _ => error!("Unknown operation. Discarded."),
             }
         }
 
         Ok(())
-    }
-
-    fn handle_unknown_operation(&self) {
-        log_error();
     }
 
     async fn handle_software_list_request(
@@ -303,10 +299,6 @@ impl SmAgent {
 
         Ok(())
     }
-}
-
-fn log_error() {
-    error!("error handler");
 }
 
 async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
