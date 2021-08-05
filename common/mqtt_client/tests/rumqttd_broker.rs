@@ -4,18 +4,14 @@ use std::{
 };
 
 use librumqttd::{async_locallink, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
-use port_scanner::scan_port;
 
 pub async fn start_broker_local(port: u16) -> anyhow::Result<()> {
-    if !scan_port(58585) {
-        //let config: Config = confy::load_path("tests/rumqttd_config/rumqttd_58585.conf")?;
-        let config: Config = get_rumqttd_config(port);
-        let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
-        let router =
-            tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
-        servers.await;
-        let _ = router.await;
-    }
+    let config: Config = get_rumqttd_config(port);
+    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
+    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
+    servers.await;
+    let _ = router.await;
+
     Ok(())
 }
 

@@ -5,6 +5,9 @@ use futures::future::TryFutureExt;
 
 use tokio::time::Duration;
 
+const MQTTTESTPORT1: u16 = 58584;
+const MQTTTESTPORT2: u16 = 58585;
+
 #[derive(Debug)]
 enum TestJoinError {
     TestMqttClientError(MqttClientError),
@@ -16,7 +19,7 @@ enum TestJoinError {
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
     let _mqtt_server_handle =
-        tokio::spawn(async { rumqttd_broker::start_broker_local(58584).await });
+        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT1).await });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
 
@@ -41,7 +44,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
     let _mqtt_server_handle =
-        tokio::spawn(async { rumqttd_broker::start_broker_local(58585).await });
+        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT2).await });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
@@ -83,7 +86,7 @@ async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
     let client = Client::connect(
         "subscribe",
-        &mqtt_client::Config::default().with_port(58584),
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
     )
     .await?;
     let mut messages = client.subscribe(sub_filter).await?;
@@ -106,7 +109,7 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let client = Client::connect(
         "publish_data",
-        &mqtt_client::Config::default().with_port(58584),
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
     )
     .await?;
     let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
@@ -131,7 +134,7 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let publish_client = Client::connect(
         "publish_big_data",
-        &mqtt_client::Config::default().with_port(58585),
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT2),
     )
     .await?;
 

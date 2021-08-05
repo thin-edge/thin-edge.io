@@ -1,5 +1,7 @@
 mod rumqttd_broker;
 
+const MQTTTESTPORT: u16 = 58586;
+
 #[test]
 fn sending_and_receiving_a_message() {
     use mqtt_client::{Client, Message, MqttClient, Topic};
@@ -8,11 +10,11 @@ fn sending_and_receiving_a_message() {
 
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
         let _mqtt_server_handle =
-            tokio::spawn(async { rumqttd_broker::start_broker_local(58586).await });
+            tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT).await });
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = Client::connect(
             "subscribe",
-            &mqtt_client::Config::default().with_port(58586),
+            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
         )
         .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
@@ -20,7 +22,7 @@ fn sending_and_receiving_a_message() {
         let message = Message::new(&topic, payload);
         let publisher = Client::connect(
             "publisher",
-            &mqtt_client::Config::default().with_port(58586),
+            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
         )
         .await?;
         let _pkid = publisher.publish(message).await?;
