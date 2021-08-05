@@ -66,6 +66,28 @@ impl SoftwareUpdateRequest {
         "tedge/commands/req/software/update"
     }
 
+    pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
+        update.normalize();
+        let plugin_type = update
+            .module()
+            .module_type
+            .clone()
+            .unwrap_or(SoftwareModule::default_type());
+
+        if let Some(list) = self
+            .update_list
+            .iter_mut()
+            .find(|list| list.plugin_type == plugin_type)
+        {
+            list.modules.push(update.into());
+        } else {
+            self.update_list.push(SoftwareRequestResponseSoftwareList {
+                plugin_type,
+                modules: vec![update.into()],
+            });
+        }
+    }
+
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
         self.update_list.push(SoftwareRequestResponseSoftwareList {
             plugin_type: plugin_type.to_string(),
@@ -96,7 +118,7 @@ impl SoftwareUpdateRequest {
         {
             for item in items.modules.iter() {
                 let module = SoftwareModule {
-                    module_type: module_type.to_string(),
+                    module_type: Some(module_type.to_string()),
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
@@ -395,7 +417,7 @@ impl SoftwareRequestResponse {
                 let module_type = &module_per_plugin.plugin_type;
                 for module in module_per_plugin.modules.iter() {
                     modules.push(SoftwareModule {
-                        module_type: module_type.clone(),
+                        module_type: Some(module_type.clone()),
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
