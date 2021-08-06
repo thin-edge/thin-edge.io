@@ -22,6 +22,7 @@ pub enum PluginOp {
     /// Uninstall a module
     Remove {
         module: String,
+        #[structopt(short = "v", long = "--module-version")]
         version: Option<String>,
     },
 
