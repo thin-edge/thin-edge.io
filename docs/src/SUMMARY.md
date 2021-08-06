@@ -9,6 +9,7 @@
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
+    - [Software Management - Basics](./tutorials/software-management.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
