@@ -86,7 +86,12 @@ impl SmAgent {
     pub async fn start(&self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
-        let plugins = Arc::new(ExternalPlugins::open("/etc/tedge/sm-plugins")?);
+        let plugins = Arc::new(ExternalPlugins::open(
+            &self
+                .config_location
+                .tedge_config_root_path
+                .join("sm-plugins"),
+        )?);
         if plugins.empty() {
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);

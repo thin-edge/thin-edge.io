@@ -9,7 +9,6 @@
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
-    - [Software Management - Basics](./tutorials/software-management.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
@@ -37,5 +36,6 @@
 - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
+    - [Software Management](./architecture/software-management.md)
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
