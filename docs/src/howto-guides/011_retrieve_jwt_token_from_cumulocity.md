@@ -1,9 +1,13 @@
-## How to retrieve the JWT Token
+## How to retrieve a JWT Token to authenticate on Cumulocity
 
-Once the Thin Edge device is connected to the Cumulocity cloud using the certificates, it can receive a token that
-can be used later to authenticate HTTP requests.
+## Overview
 
-To retrieve the token from the Cumulocity cloud follow the below steps.
+In order to [authenticate HTTP requests on Cumulocity](https://cumulocity.com/guides/10.5.0/reference/rest-implementation/#authentication),
+a device can retrieve a JWT token using MQTT.
+
+## Retrieving the token
+
+To retrieve the token from the Cumulocity cloud throught MQTT, follow the below steps.
 
 Subscribe to `c8y/s/dat` topic
 
@@ -19,5 +23,3 @@ $ tedge mqtt pub c8y/s/uat ''
 
 After a while the token will be published on the subscribed topic `c8y/s/dat` in the below format
 71,<<Base64 encoded JWT token>>
-
-Learn more about using JWT token [here](https://cumulocity.com/guides/10.6.0/reference/rest-implementation/)
