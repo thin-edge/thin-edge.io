@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+	<description>
+		<title>
+			Validate the Cumulocity Mapper accepted threshold packet size
+			when it receives a message on tedge/measurements.
+		</title>
+		<purpose>
+			<![CDATA[ ]]>
+		</purpose>
+	</description>
+	<classification>
+		<groups inherit="true">
+			<group>
+			</group>
+		</groups>
+		<modes inherit="true">
+		</modes>
+	</classification>
+	<data>
+		<class name="TedgeMapperC8yThresholdPacketSize" module="run" />
+	</data>
+	<traceability>
+		<requirements>
+			<requirement id="" />
+		</requirements>
+	</traceability>
+</pysystest>

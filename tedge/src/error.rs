@@ -10,7 +10,7 @@ pub enum TEdgeError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    PathsError(#[from] crate::utils::paths::PathsError),
+    PathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
     TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),

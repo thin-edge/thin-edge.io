@@ -16,7 +16,7 @@ pub enum ConnectError {
     MqttClient(#[from] mqtt_client::MqttClientError),
 
     #[error(transparent)]
-    PathsError(#[from] crate::utils::paths::PathsError),
+    PathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
     PersistError(#[from] tempfile::PersistError),
