@@ -364,10 +364,7 @@ impl MqttClient for Client {
     ) -> Result<Box<dyn MqttMessageStream>, MqttClientError> {
         let qos = filter.qos;
         for pattern in filter.patterns.iter() {
-            let () = self
-                .mqtt_client
-                .subscribe(pattern, qos)
-                .await?;
+            let () = self.mqtt_client.subscribe(pattern, qos).await?;
         }
 
         Ok(Box::new(MessageStream::new(
@@ -529,7 +526,20 @@ impl TopicFilter {
         let pattern = String::from(pattern);
         let qos = QoS::AtLeastOnce;
         if rumqttc::valid_filter(&pattern) {
-            Ok(TopicFilter { patterns: vec![pattern], qos })
+            Ok(TopicFilter {
+                patterns: vec![pattern],
+                qos,
+            })
+        } else {
+            Err(MqttClientError::InvalidFilter { pattern })
+        }
+    }
+
+    /// Check if the pattern is valid and at it to this topic filter.
+    pub fn add(&mut self, pattern: &str) -> Result<(), MqttClientError> {
+        let pattern = String::from(pattern);
+        if rumqttc::valid_filter(&pattern) {
+            Ok(self.patterns.push(pattern))
         } else {
             Err(MqttClientError::InvalidFilter { pattern })
         }
@@ -537,9 +547,9 @@ impl TopicFilter {
 
     /// Check if the given topic matches this filter pattern.
     fn accept(&self, topic: &Topic) -> bool {
-        self.patterns.iter().any(|pattern|
-            rumqttc::matches(&topic.name, &pattern)
-        )
+        self.patterns
+            .iter()
+            .any(|pattern| rumqttc::matches(&topic.name, &pattern))
     }
 
     pub fn qos(self, qos: QoS) -> Self {
