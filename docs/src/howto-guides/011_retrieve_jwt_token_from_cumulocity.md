@@ -22,4 +22,5 @@ $ tedge mqtt pub c8y/s/uat ''
 ```
 
 After a while the token will be published on the subscribed topic `c8y/s/dat` in the below format
-71,<<Base64 encoded JWT token>>
+
+71,[Base64 encoded JWT token]
