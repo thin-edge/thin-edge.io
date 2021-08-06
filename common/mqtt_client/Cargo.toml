@@ -14,6 +14,7 @@ mockall = "0.10"
 async-trait = "0.1"
 
 [dev-dependencies]
+anyhow="1.0"
 async-log = "2.0"
 env_logger = "0.9"
 futures = "0.3"
@@ -21,13 +22,10 @@ futures-timer = "3.0"
 json = "0.12"
 log = "0.4"
 rand = "0.8"
-tokio-test = "0.4"
-anyhow="1.0"
 rumqttd = "0.7"
 serde = "1.0.126"
-confy = "0.4"
 rumqttlog = "0.7"
-
+tokio-test = "0.4"
 
 [features]
 integration-test = []

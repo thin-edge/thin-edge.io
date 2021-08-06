@@ -1,22 +1,30 @@
+mod rumqttd_broker;
+
+const MQTTTESTPORT: u16 = 58586;
+
 #[test]
-#[cfg(feature = "integration-test")]
-// Requires fix for access to service on Internet which is not available in gh actions.
-// Proposed to use mock server instead of using live service on the Internet.
-// Run this test by calling 'cargo test --features integration-test' from the base path of the crate
 fn sending_and_receiving_a_message() {
-    use mqtt_client::{Config, Message, MqttClient, Topic};
+    use mqtt_client::{Client, Message, MqttClient, Topic};
     use std::time::Duration;
     use tokio::time::sleep;
 
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        let test_broker = Config::new("test.mosquitto.org", 1883);
-
+        let _mqtt_server_handle =
+            tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT).await });
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
-        let subscriber = test_broker.connect("subscriber").await?;
+        let subscriber = Client::connect(
+            "subscribe",
+            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+        )
+        .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
 
         let message = Message::new(&topic, payload);
-        let publisher = test_broker.connect("publisher").await?;
+        let publisher = Client::connect(
+            "publisher",
+            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+        )
+        .await?;
         let _pkid = publisher.publish(message).await?;
 
         tokio::select! {
