@@ -7,7 +7,7 @@ a device can retrieve a JWT token using MQTT.
 
 ## Retrieving the token
 
-To retrieve the token from the Cumulocity cloud throught MQTT, follow the below steps.
+Follow the below steps in order to retrieve the token from the Cumulocity cloud using MQTT.
 
 Subscribe to `c8y/s/dat` topic
 
