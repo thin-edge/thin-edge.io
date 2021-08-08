@@ -557,6 +557,8 @@ impl TopicFilter {
     }
 }
 
+pub type Payload = Vec<u8>;
+
 /// A message to be sent to or received from MQTT.
 ///
 /// NOTE: We never set the `pkid` of the `Publish` message,
@@ -564,16 +566,16 @@ impl TopicFilter {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
-    payload: Vec<u8>,
+    payload: Payload,
     pub qos: QoS,
     pkid: u16,
-    retain: bool,
+    pub retain: bool,
 }
 
 impl Message {
     pub fn new<B>(topic: &Topic, payload: B) -> Message
     where
-        B: Into<Vec<u8>>,
+        B: Into<Payload>,
     {
         Message {
             topic: topic.clone(),
@@ -588,8 +590,15 @@ impl Message {
         Self { qos, ..self }
     }
 
+    pub fn retain(self) -> Self {
+        Self {
+            retain: true,
+            ..self
+        }
+    }
+
     // trims the trailing null char if one exists
-    fn payload_trimmed(&self) -> &[u8] {
+    pub fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())
