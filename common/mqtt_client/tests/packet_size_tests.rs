@@ -1,9 +1,13 @@
-use futures::future::TryFutureExt;
-use librumqttd::{async_locallink, Config};
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
+mod rumqttd_broker;
+use futures::future::TryFutureExt;
 
 use tokio::time::Duration;
+
+const MQTTTESTPORT1: u16 = 58584;
+const MQTTTESTPORT2: u16 = 58585;
+
 #[derive(Debug)]
 enum TestJoinError {
     TestMqttClientError(MqttClientError),
@@ -14,9 +18,8 @@ enum TestJoinError {
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_5883.conf").await
-    });
+    let _mqtt_server_handle =
+        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT1).await });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
 
@@ -25,7 +28,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 
     let _ = publisher.await?;
     let res = subscriber.await?;
-    mqtt_server_handle.abort();
+
     match res {
         Err(e) => {
             return Err(e);
@@ -40,16 +43,14 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let mqtt_server_handle = tokio::spawn(async {
-        start_broker_local("../../configuration/rumqttd/rumqttd_5884.conf").await
-    });
+    let _mqtt_server_handle =
+        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT2).await });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
 
     // if error is received then test is ok, else test should fail
     let res = publish.await?;
-    mqtt_server_handle.abort();
     match res {
         Err(e) => {
             return Err(e);
@@ -81,19 +82,13 @@ async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     Ok(())
 }
 
-async fn start_broker_local(cfile: &str) -> anyhow::Result<()> {
-    let config: Config = confy::load_path(cfile)?;
-    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
-    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
-    servers.await;
-    let _ = router.await;
-    Ok(())
-}
-
 async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
-    let client =
-        Client::connect("subscribe", &mqtt_client::Config::default().with_port(5883)).await?;
+    let client = Client::connect(
+        "subscribe",
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
+    )
+    .await?;
     let mut messages = client.subscribe(sub_filter).await?;
     let mut cnt: i32 = 0;
     while let Some(_message) = messages.next().await {
@@ -113,8 +108,8 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     let buffer = create_packet(134217728);
     let topic = Topic::new("test/hello")?;
     let client = Client::connect(
-        "publish_big_data",
-        &mqtt_client::Config::default().with_port(5883),
+        "publish_data",
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
     )
     .await?;
     let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
@@ -139,7 +134,7 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let publish_client = Client::connect(
         "publish_big_data",
-        &mqtt_client::Config::default().with_port(5884),
+        &mqtt_client::Config::default().with_port(MQTTTESTPORT2),
     )
     .await?;
 

@@ -1386,7 +1386,6 @@ dependencies = [
  "anyhow",
  "async-log",
  "async-trait",
- "confy",
  "env_logger 0.9.0",
  "futures",
  "futures-timer",
