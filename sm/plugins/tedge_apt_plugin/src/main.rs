@@ -15,12 +15,14 @@ pub enum PluginOp {
     /// Install a module
     Install {
         module: String,
+        #[structopt(short = "v", long = "--module-version")]
         version: Option<String>,
     },
 
     /// Uninstall a module
     Remove {
         module: String,
+        #[structopt(short = "v", long = "--module-version")]
         version: Option<String>,
     },
 
