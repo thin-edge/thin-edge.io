@@ -1,4 +1,7 @@
-use std::process::{Command, Stdio};
+use std::{
+    os::unix::prelude::ExitStatusExt,
+    process::{Command, ExitStatus, Stdio},
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -11,6 +14,9 @@ struct AptCli {
 pub enum PluginOp {
     /// List all the installed modules
     List,
+
+    /// Print the software module type that can be handled by this plugin
+    Type,
 
     /// Install a module
     Install {
@@ -48,6 +54,12 @@ impl InternalError {
 
 fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     let status = match operation {
+        PluginOp::Type {} => {
+            println!("debian");
+            let status = ExitStatus::from_raw(0);
+            status
+        }
+
         PluginOp::List {} => {
             let apt = Command::new("apt")
                 .args(vec!["--manual-installed", "list"])
