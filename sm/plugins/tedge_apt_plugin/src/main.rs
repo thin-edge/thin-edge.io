@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -37,6 +37,9 @@ pub enum PluginOp {
 pub enum InternalError {
     #[error("Fail to run `{cmd}`: {from}")]
     ExecError { cmd: String, from: std::io::Error },
+
+    #[error("Package with the specified `{version}` version not installed")]
+    PackageNotInstalled { module: String, version: String },
 }
 
 impl InternalError {
@@ -48,7 +51,7 @@ impl InternalError {
     }
 }
 
-fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
+fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List {} => {
             let apt = Command::new("apt")
@@ -66,7 +69,7 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
                     "[/ ]",
                     r#"{if ($1 != "Listing...") { print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}}"#,
                 ])
-                .stdin(apt.stdout.unwrap()) // Cannot panics: apt.stdout has been set
+                .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()
                 .map_err(|err| InternalError::exec_error("awk", err))?;
 
@@ -84,10 +87,18 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
             }
         }
 
-        PluginOp::Remove {
-            module,
-            version: _unused,
-        } => run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?,
+        PluginOp::Remove { module, version } => {
+            if let Some(version) = version {
+                // check the version mentioned present or not
+                if check_if_the_module_version_installed("dpkg", &format!("-s {}", module))? {
+                    run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
+                } else {
+                    return Err(InternalError::PackageNotInstalled { module, version });
+                }
+            } else {
+                run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
+            }
+        }
 
         PluginOp::Prepare => run_cmd("apt-get", &format!("update --quiet --yes"))?,
 
@@ -97,7 +108,7 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     Ok(status)
 }
 
-fn run_cmd(cmd: &str, args: &str) -> Result<std::process::ExitStatus, InternalError> {
+fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
     let args: Vec<&str> = args.split_whitespace().collect();
     let status = Command::new(cmd)
         .args(args)
@@ -105,6 +116,36 @@ fn run_cmd(cmd: &str, args: &str) -> Result<std::process::ExitStatus, InternalEr
         .status()
         .map_err(|err| InternalError::exec_error(cmd, err))?;
     Ok(status)
+}
+
+fn check_if_the_module_version_installed(cmd: &str, args: &str) -> Result<bool, InternalError> {
+    let args: Vec<&str> = args.split_whitespace().collect();
+    let mut querry_package_output_child = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|err| InternalError::exec_error(cmd, err))?;
+
+    if let Some(querry_package_output) = querry_package_output_child.stdout.take() {
+        let status = Command::new("grep")
+            .arg("-i")
+            .arg("version")
+            .stdin(querry_package_output)
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|err| InternalError::exec_error(cmd, err))?;
+        querry_package_output_child
+            .wait()
+            .map_err(|err| InternalError::exec_error(cmd, err))?;
+
+        if status.success() {
+            return Ok(true);
+        } else {
+            return Ok(false);
+        }
+    }
+    return Ok(false);
 }
 
 fn main() {
