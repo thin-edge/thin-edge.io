@@ -8,7 +8,7 @@ use json_sm::{
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use tedge_config::TEdgeConfig;
-use tracing::{error, debug};
+use tracing::{debug, error};
 
 pub struct CumulocitySoftwareManagementMapper {}
 
