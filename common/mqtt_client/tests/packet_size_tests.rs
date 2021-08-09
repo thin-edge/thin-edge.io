@@ -1,8 +1,7 @@
+use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
-mod rumqttd_broker;
-use futures::future::TryFutureExt;
-
+use tedge_utils::test_mqtt_server::start_broker_local;
 use tokio::time::Duration;
 
 const MQTTTESTPORT1: u16 = 58584;
@@ -18,8 +17,7 @@ enum TestJoinError {
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    let _mqtt_server_handle =
-        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT1).await });
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT1).await });
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
 
@@ -43,8 +41,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let _mqtt_server_handle =
-        tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT2).await });
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT2).await });
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
