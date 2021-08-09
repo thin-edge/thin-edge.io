@@ -4,8 +4,9 @@ mod software;
 
 pub use error::*;
 pub use messages::{
-    Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
-    SoftwareUpdateRequest, SoftwareUpdateResponse,
+    software_filter_topic, Jsonify, SoftwareListRequest, SoftwareListResponse,
+    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
+    SoftwareUpdateResponse,
 };
 pub use software::*;
 

@@ -24,6 +24,10 @@ where
     }
 }
 
+pub const fn software_filter_topic() -> &'static str {
+    "tedge/commands/req/software/#"
+}
+
 /// Message payload definition for SoftwareList request.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
