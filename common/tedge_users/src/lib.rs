@@ -12,6 +12,7 @@ pub use windows::*;
 
 pub const ROOT_USER: &str = "root";
 pub const TEDGE_USER: &str = "tedge";
+pub const TEDGE_AGENT_USER: &str = "tedge-agent";
 pub const BROKER_USER: &str = "mosquitto";
 
 #[allow(dead_code)] // These errors are only raised from unix

@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+# Create a group "tedge-agent" if not created before
+if ! getent group tedge-agent > /dev/null; then
+    addgroup --quiet --system tedge-agent
+fi
+
+# Create a user "tedge-agent" if not created before
+if ! getent passwd tedge-agent > /dev/null; then
+    adduser --quiet --system --no-create-home --ingroup tedge-agent --shell /usr/sbin/nologin tedge-agent
+fi
+
+#DEBHELPER#
