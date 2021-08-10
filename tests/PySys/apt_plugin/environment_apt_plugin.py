@@ -31,15 +31,13 @@ class AptPlugin(BaseTest):
             args.append(argument)
 
         if version:
-            # TODO The version is specified but there is a name clashs
-            # TODO Clarify CIT-473
-            # args.append("--version")
+            args.append("--module-version")
             args.append(version)
 
         if extra:
             # Does not happen in normal cases, just for testing
             args.append(extra)
-
+            
         process = self.startProcess(
             command=self.sudo,
             arguments=args,
