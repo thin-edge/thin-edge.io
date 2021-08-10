@@ -66,6 +66,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 // c8y JSON
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
+                // c8y JWT token retrieval
+                r#"s/uat/# out 2 c8y/ """#.into(),
+                r#"s/dat/# in 2 c8y/ """#.into(),
             ],
         }
     }
@@ -122,6 +125,9 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             // c8y JSON
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
+            // c8y JWT token retrieval
+            r#"s/uat/# out 2 c8y/ """#.into(),
+            r#"s/dat/# in 2 c8y/ """#.into(),
         ],
         try_private: false,
         start_type: "automatic".into(),
