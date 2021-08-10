@@ -1678,6 +1678,8 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "tedge_utils",
+ "tempfile",
  "thiserror",
  "tokio",
  "url",
