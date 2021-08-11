@@ -1,7 +1,6 @@
 mod rumqttd_broker;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use std::time::Duration;
-use tokio::time::sleep;
+use tokio::time::{self, sleep, Duration};
 
 const MQTTTESTPORT: u16 = 58586;
 
@@ -25,10 +24,12 @@ fn sending_and_receiving_a_message() {
         )
         .await?;
         let _pkid = publisher.publish(message).await?;
+        let sleep = time::sleep(Duration::from_secs(1));
+        tokio::pin!(sleep);
 
         tokio::select! {
             msg = received.next() => Ok(msg),
-            _ = sleep(Duration::from_millis(1000)) => Ok(None)
+            _ = &mut sleep => Ok(None)
         }
     }
 
