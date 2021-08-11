@@ -1,12 +1,14 @@
-mod rumqttd_broker;
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+
 use tokio::time::{self, sleep, Duration};
+use tedge_utils::test_mqtt_server::start_broker_local;
 
 const MQTTTESTPORT: u16 = 58586;
 
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
+
         let mqtt_server_handle =
             tokio::spawn(async { rumqttd_broker::start_broker_local(MQTTTESTPORT).await });
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
@@ -47,6 +49,7 @@ fn sending_and_receiving_a_message() {
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker
     let mqtt_port: u16 = 55555;
+
     let mqtt_server_handle =
         tokio::spawn(async move { rumqttd_broker::start_broker_local(mqtt_port).await });
 

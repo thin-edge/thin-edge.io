@@ -14,7 +14,7 @@ mockall = "0.10"
 async-trait = "0.1"
 
 [dev-dependencies]
-anyhow="1.0"
+anyhow= "1.0"
 async-log = "2.0"
 env_logger = "0.9"
 futures = "0.3"
@@ -23,8 +23,9 @@ json = "0.12"
 log = "0.4"
 rand = "0.8"
 rumqttd = "0.7"
-serde = "1.0.126"
 rumqttlog = "0.7"
+serde = "1.0.126"
+tedge_utils = { path = "../../common/tedge_utils" }
 tokio-test = "0.4"
 
 [features]
