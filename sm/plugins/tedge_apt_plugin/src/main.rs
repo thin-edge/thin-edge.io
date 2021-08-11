@@ -55,7 +55,7 @@ impl InternalError {
 fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::Type {} => {
-            println!("debian");
+            println!(r#"{{"type": "apt"}}"#);
             let status = ExitStatus::from_raw(0);
             status
         }
