@@ -253,10 +253,7 @@ impl SmAgent {
 
         let executing_response = SoftwareUpdateResponse::new(&request);
         let _ = mqtt
-            .publish(Message::new(
-                &self.config.response_topic_list,
-                executing_response.to_bytes()?,
-            ))
+            .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
         let response = {
