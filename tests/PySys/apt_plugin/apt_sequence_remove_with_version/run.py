@@ -30,8 +30,8 @@ class AptPluginRemoveWithVersion(AptPlugin):
 
         output = subprocess.check_output(["/usr/bin/apt-cache", "madison", "rolldice"])
         # Lets assume it is the package in the first line of the output
-        #self.version = output.split()[2]  # E.g. "1.16-1+b3"
-        self.version = "1.16-1build1"
+        self.version = output.split()[2]  # E.g. "1.16-1+b3"
+        #self.version = "1.16-1build1"
         self.package = "rolldice"
         self.apt_remove(self.package)
         self.plugin_cmd("install", "outp_install", 0, "rolldice")
