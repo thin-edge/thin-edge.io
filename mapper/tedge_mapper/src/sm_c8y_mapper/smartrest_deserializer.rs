@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 enum CumulocitySoftwareUpdateActions {
     Install,
     Delete,
+    UnknownAction,
 }
 
 impl From<String> for CumulocitySoftwareUpdateActions {
@@ -14,7 +15,7 @@ impl From<String> for CumulocitySoftwareUpdateActions {
         match action.as_str() {
             "install" => Self::Install,
             "delete" => Self::Delete,
-            _ => unreachable!(),
+            _ => Self::UnknownAction,
         }
     }
 }
@@ -64,9 +65,11 @@ impl SmartRestUpdateSoftware {
         Ok(record)
     }
 
-    pub(crate) fn to_thin_edge_json(&self) -> SoftwareUpdateRequest {
+    pub(crate) fn to_thin_edge_json(
+        &self,
+    ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
         let request = SoftwareUpdateRequest::new();
-        self.map_to_software_update_request(request)
+        Ok(self.map_to_software_update_request(request)?)
     }
 
     pub(crate) fn modules(&self) -> Vec<SmartRestUpdateSoftwareModule> {
@@ -85,7 +88,7 @@ impl SmartRestUpdateSoftware {
     fn map_to_software_update_request(
         &self,
         mut request: SoftwareUpdateRequest,
-    ) -> SoftwareUpdateRequest {
+    ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
         for module in &self.modules() {
             match module.action.clone().into() {
                 CumulocitySoftwareUpdateActions::Install => {
@@ -108,9 +111,14 @@ impl SmartRestUpdateSoftware {
                         },
                     });
                 }
+                CumulocitySoftwareUpdateActions::UnknownAction => {
+                    return Err(SmartRestDeserializerError::ActionNotFound {
+                        action: module.action.clone().to_string(),
+                    })
+                }
             }
         }
-        request
+        Ok(request)
     }
 }
 
@@ -151,9 +159,12 @@ mod tests {
 
     // To avoid using an ID randomly generated, which is not convenient for testing.
     impl SmartRestUpdateSoftware {
-        fn to_thin_edge_json_with_id(&self, id: &str) -> SoftwareUpdateRequest {
+        fn to_thin_edge_json_with_id(
+            &self,
+            id: &str,
+        ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
             let request = SoftwareUpdateRequest::new_with_id(id);
-            self.map_to_software_update_request(request)
+            Ok(self.map_to_software_update_request(request)?)
         }
     }
 
@@ -239,7 +250,7 @@ mod tests {
                 },
             ],
         };
-        let thin_edge_json = smartrest_obj.to_thin_edge_json_with_id("123");
+        let thin_edge_json = smartrest_obj.to_thin_edge_json_with_id("123").unwrap();
 
         let mut expected_thin_edge_json = SoftwareUpdateRequest::new_with_id("123");
         let () =
@@ -270,7 +281,7 @@ mod tests {
             .from_smartrest(smartrest)
             .unwrap()
             .to_thin_edge_json_with_id("123");
-        let output_json = software_update_request.to_json().unwrap();
+        let output_json = software_update_request.unwrap().to_json().unwrap();
 
         let expected_json = json!({
             "id": "123",

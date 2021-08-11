@@ -4,7 +4,7 @@ use json_sm::{
     SoftwareListResponse, SoftwareOperationStatus, SoftwareType, SoftwareUpdateResponse,
     SoftwareVersion,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 type SmartRest = String;
 
@@ -21,7 +21,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
     }
 }
 
-pub(crate) trait Serializer<'a>
+pub(crate) trait SmartRestSerializer<'a>
 where
     Self: Serialize,
 {
@@ -45,7 +45,7 @@ impl Default for SmartRestSetSupportedOperations {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestSetSupportedOperations {}
+impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestSetSoftwareList {
@@ -86,7 +86,7 @@ impl SmartRestSetSoftwareList {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestSetSoftwareList {}
+impl<'a> SmartRestSerializer<'a> for SmartRestSetSoftwareList {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestGetPendingOperations {
@@ -99,7 +99,7 @@ impl Default for SmartRestGetPendingOperations {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestGetPendingOperations {}
+impl<'a> SmartRestSerializer<'a> for SmartRestGetPendingOperations {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestSetOperationToExecuting {
@@ -127,7 +127,7 @@ impl SmartRestSetOperationToExecuting {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestSetOperationToExecuting {}
+impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestSetOperationToSuccessful {
@@ -155,12 +155,13 @@ impl SmartRestSetOperationToSuccessful {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestSetOperationToSuccessful {}
+impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToSuccessful {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestSetOperationToFailed {
     pub message_id: &'static str,
     pub operation: &'static str,
+    #[serde(serialize_with = "reason_to_string_with_quotes")]
     pub reason: String,
 }
 
@@ -186,16 +187,14 @@ impl SmartRestSetOperationToFailed {
     }
 }
 
-impl<'a> Serializer<'a> for SmartRestSetOperationToFailed {
-    // If we add double quotes before serialization, csv crate adds two double quotes to escape.
-    // Therefore, add double quotes after serialization. But I don't like this implementation.
-    fn to_smartrest(&self) -> Result<SmartRest, SmartRestSerializerError> {
-        let mut s = serialize_smartrest(self)?;
-        let position_second_comma = find_second_comma(s.as_str())?;
-        let _ = s.insert(position_second_comma + 1, '"'); // insert a double-quote after the second comma
-        let _ = s.insert(s.len() - 1, '"'); // insert a double-quote before \n
-        Ok(s)
-    }
+impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToFailed {}
+
+fn reason_to_string_with_quotes<S>(reason: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let s = format!("\"{}\"", reason);
+    serializer.serialize_str(&s)
 }
 
 fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSerializerError> {
@@ -207,18 +206,6 @@ fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSeria
     wtr.serialize(record)?;
     let csv = String::from_utf8(wtr.into_inner()?)?;
     Ok(csv)
-}
-
-fn find_second_comma(s: &str) -> Result<usize, SmartRestSerializerError> {
-    let mut s_clone = s.to_string();
-    let position_first_comma = s_clone
-        .find(',')
-        .ok_or(SmartRestSerializerError::DoubleQuoteError)?;
-    let s_after_comma = s_clone.split_off(position_first_comma + 1);
-    let position_second_comma = s_after_comma
-        .find(',')
-        .ok_or(SmartRestSerializerError::DoubleQuoteError)?;
-    Ok(position_first_comma + position_second_comma + 1)
 }
 
 fn combine_version_and_type(

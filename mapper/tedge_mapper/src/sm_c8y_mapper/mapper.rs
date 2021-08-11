@@ -1,6 +1,8 @@
 use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
-use crate::sm_c8y_mapper::{smartrest_deserializer::*, smartrest_serializer::*, topic::*};
+use crate::sm_c8y_mapper::{
+    error::*, smartrest_deserializer::*, smartrest_serializer::*, topic::*,
+};
 use async_trait::async_trait;
 use json_sm::{
     Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
@@ -57,7 +59,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn subscribe_messages_runtime(&self) -> Result<(), anyhow::Error> {
+    async fn subscribe_messages_runtime(&self) -> Result<(), SMCumulocityMapperError> {
         let mut topic_filter = TopicFilter::new(self.topics.subscribe.software)?;
         topic_filter.add(self.topics.subscribe.c8y)?;
 
@@ -73,17 +75,17 @@ impl CumulocitySoftwareManagement {
             let operation: SoftwareCommand = message.topic.clone().into();
             match operation {
                 SoftwareCommand::SoftwareList => {
-                    debug!("software list");
+                    debug!("Software list");
                     let () = self.publish_software_list(message.payload_str()?).await?;
                 }
                 SoftwareCommand::SoftwareUpdate => {
-                    debug!("software update");
+                    debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
                 SoftwareCommand::Cumulocity => {
-                    debug!("c8y");
+                    debug!("Cumulocity");
                     let () = self
                         .forward_software_request(message.payload_str()?)
                         .await?;
@@ -94,7 +96,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn ask_software_list(&self) -> Result<(), anyhow::Error> {
+    async fn ask_software_list(&self) -> Result<(), SMCumulocityMapperError> {
         let request = SoftwareListRequest::new();
         let json_list_request = request.to_json()?;
         let () = self
@@ -104,7 +106,10 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn publish_software_list(&self, json_response: &str) -> Result<(), anyhow::Error> {
+    async fn publish_software_list(
+        &self,
+        json_response: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareListResponse::from_json(json_response)?;
         let smartrest_response =
             SmartRestSetSoftwareList::from_thin_edge_json(response).to_smartrest()?;
@@ -114,21 +119,24 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn publish_supported_operations(&self) -> Result<(), anyhow::Error> {
+    async fn publish_supported_operations(&self) -> Result<(), SMCumulocityMapperError> {
         let data = SmartRestSetSupportedOperations::default();
         let payload = data.to_smartrest()?;
         let () = self.publish(&self.topics.publish.c8y, payload).await?;
         Ok(())
     }
 
-    async fn publish_get_pending_operations(&self) -> Result<(), anyhow::Error> {
+    async fn publish_get_pending_operations(&self) -> Result<(), SMCumulocityMapperError> {
         let data = SmartRestGetPendingOperations::default();
         let payload = data.to_smartrest()?;
         let () = self.publish(&self.topics.publish.c8y, payload).await?;
         Ok(())
     }
 
-    async fn publish_operation_status(&self, json_response: &str) -> Result<(), anyhow::Error> {
+    async fn publish_operation_status(
+        &self,
+        json_response: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
         match response.status() {
             SoftwareOperationStatus::Executing => {
@@ -160,11 +168,14 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn forward_software_request(&self, smartrest: &str) -> Result<(), anyhow::Error> {
+    async fn forward_software_request(
+        &self,
+        smartrest: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
         let update_software = SmartRestUpdateSoftware::new();
         let json_update_request = update_software
             .from_smartrest(smartrest.into())?
-            .to_thin_edge_json()
+            .to_thin_edge_json()?
             .to_json()?;
         let () = self
             .publish(&self.topics.publish.update, json_update_request)
