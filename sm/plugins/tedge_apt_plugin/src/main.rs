@@ -90,7 +90,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
         PluginOp::Remove { module, version } => {
             if let Some(version) = version {
                 // check the version mentioned present or not
-                if check_if_the_module_version_installed("dpkg", &format!("-s {}", module))? {
+                if check_if_the_module_with_version_installed(&module, &version)? {
                     run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
                 } else {
                     return Err(InternalError::PackageNotInstalled { module, version });
@@ -118,24 +118,29 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
     Ok(status)
 }
 
-fn check_if_the_module_version_installed(cmd: &str, args: &str) -> Result<bool, InternalError> {
-    let args: Vec<&str> = args.split_whitespace().collect();
-    let mut querry_package_output_child = Command::new(cmd)
+fn check_if_the_module_with_version_installed(
+    module: &str,
+    version: &str,
+) -> Result<bool, InternalError> {
+    let cmd = "dpkg";
+    let cmd_args = &format!("-s {}", module);
+    let args: Vec<&str> = cmd_args.split_whitespace().collect();
+    let mut query_package_output_child = Command::new(cmd)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|err| InternalError::exec_error(cmd, err))?;
 
-    if let Some(querry_package_output) = querry_package_output_child.stdout.take() {
+    if let Some(query_package_output) = query_package_output_child.stdout.take() {
         let status = Command::new("grep")
             .arg("-i")
-            .arg("version")
-            .stdin(querry_package_output)
+            .arg(version)
+            .stdin(query_package_output)
             .stdout(Stdio::piped())
             .status()
             .map_err(|err| InternalError::exec_error(cmd, err))?;
-        querry_package_output_child
+        query_package_output_child
             .wait()
             .map_err(|err| InternalError::exec_error(cmd, err))?;
 
