@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import subprocess
 
 sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
@@ -39,7 +40,7 @@ class AptPluginRemoveWithVersion(AptPlugin):
 
     def execute(self):
         self.plugin_cmd(
-            "remove", "outp_install", 2, argument=self.package, version=self.version
+            "remove", "outp_remove", 0, argument=self.package, version=self.version
         )
 
     def validate(self):
