@@ -21,12 +21,9 @@ sudo /etc/tedge/sm-plugins/apt remove rolldice  --module-version 1.111111
 class AptPluginRemoveWithVersionFails(AptPlugin):
     def setup(self):
         super().setup()
-
-       
         self.version = "1.111111"
-
         self.package = "rolldice"
-        self.apt_remove(self.package)
+        self.plugin_cmd("install", "outp_install", 0, argument=self.package)
         self.addCleanupFunction(self.cleanup_remove_rolldice_module)
 
     def execute(self):
