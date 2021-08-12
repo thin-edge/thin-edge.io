@@ -7,15 +7,11 @@ sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 
 """
-Validate apt plugin install use case
 
-When we prepare
-When we install a package
-When we finalize
-Then the package is installed
-
-Issue:
-whenever there is a parameter --version the output will be "apt-install 0.1.0"
+Validate that package removal with version works well
+When we make sure a package is installed
+When we remove that package with the version that is currently installed
+Then the package is not installed anymore
 
 sudo /etc/tedge/sm-plugins/apt install rolldice 1.16-1+b3 --version
 apt-install 0.1.0

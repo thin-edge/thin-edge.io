@@ -34,17 +34,7 @@ class AptPluginRemoveWithVersionFails(AptPlugin):
 
     def validate(self):
        self.assertGrep("outp_remove.err", "ERROR: Package with the specified `1.111111` version not installed")
-       self.check_module_not_removed()
-       self.assertGrep("check_module.out", "rolldice/focal")
-       
-    def check_module_not_removed(self):
-        # verify that the module not removed
-        check_module = self.startProcess(            
-            command=self.sudo,
-            arguments=["/usr/bin/apt", "-qq", "list", "rolldice"],
-            stdouterr="check_module",
-        )
-       
+       self.assert_isinstalled(self.package, True)
 
     def cleanup_remove_rolldice_module(self):
         self.apt_remove("rolldice")
