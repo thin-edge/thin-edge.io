@@ -189,7 +189,7 @@ impl SmartRestSetOperationToFailed {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToFailed {}
 
-fn reason_to_string_with_quotes<S>(reason: &String, serializer: S) -> Result<S::Ok, S::Error>
+fn reason_to_string_with_quotes<S>(reason: &str, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {

@@ -15,7 +15,7 @@ pub(crate) enum SmartRestSerializerError {
     InvalidCsv(#[from] csv::Error),
 
     #[error(transparent)]
-    CsvWriterError(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
+    FromCsvWriter(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
@@ -41,11 +41,11 @@ pub(crate) enum SMCumulocityMapperError {
     InvalidThinEdgeJson(#[from] json_sm::SoftwareError),
 
     #[error(transparent)]
-    MqttClientError(#[from] mqtt_client::MqttClientError),
+    FromMqttClient(#[from] mqtt_client::MqttClientError),
 
     #[error(transparent)]
-    SmartRestSerializerError(#[from] SmartRestSerializerError),
+    FromSmartRestSerializer(#[from] SmartRestSerializerError),
 
     #[error(transparent)]
-    SmartRestDeserializerError(#[from] SmartRestDeserializerError),
+    FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
 }

@@ -68,8 +68,8 @@ impl SmartRestUpdateSoftware {
     pub(crate) fn to_thin_edge_json(
         &self,
     ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-        let request = SoftwareUpdateRequest::new();
-        Ok(self.map_to_software_update_request(request)?)
+        let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
+        Ok(request)
     }
 
     pub(crate) fn modules(&self) -> Vec<SmartRestUpdateSoftwareModule> {
@@ -113,7 +113,7 @@ impl SmartRestUpdateSoftware {
                 }
                 CumulocitySoftwareUpdateActions::UnknownAction => {
                     return Err(SmartRestDeserializerError::ActionNotFound {
-                        action: module.action.clone().to_string(),
+                        action: module.action.clone(),
                     })
                 }
             }
