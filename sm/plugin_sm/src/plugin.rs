@@ -202,7 +202,6 @@ impl Plugin for ExternalPluginCommand {
                     software_list.push(software_module);
                 });
 
-            dbg!(&software_list);
             Ok(software_list)
         } else {
             Err(SoftwareError::Plugin {
