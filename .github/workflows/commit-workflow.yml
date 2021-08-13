@@ -127,10 +127,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install rust v1.52.0
+      - name: Install rust v1.54.0
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: "1.52.0"
+          toolchain: "1.54.0"
           override: true
 
       - name: Enable cache
@@ -143,16 +143,17 @@ jobs:
       - name: Cargo install tarpaulin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
+        # Workaround see here: https://github.com/xd009642/tarpaulin/issues/756
         with:
           command: install
-          args: cargo-tarpaulin
+          args: cargo-tarpaulin --version 0.18.0-alpha3
 
       - name: Cargo tarpaulin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: tarpaulin
-          args: -v --out Xml
+          args: --avoid-cfg-tarpaulin -v --out Xml
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
@@ -219,4 +220,4 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.52.0
+          args: --minimum 1.54.0
