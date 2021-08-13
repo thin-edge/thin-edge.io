@@ -118,7 +118,9 @@ impl ExternalPlugins {
                 }]
             };
 
-            response.add_errors(&software_type, errors)
+            if !errors.is_empty() {
+                response.add_errors(&software_type, errors);
+            }
         }
 
         for (software_type, plugin) in self.plugin_map.iter() {
