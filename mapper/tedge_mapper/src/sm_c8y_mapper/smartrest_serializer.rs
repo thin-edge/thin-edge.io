@@ -122,7 +122,7 @@ impl SmartRestSetOperationToExecuting {
             SoftwareOperationStatus::Executing => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
-            _ => Err(SmartRestSerializerError::StatusIsNotExecuting { response }),
+            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
         }
     }
 }
@@ -150,7 +150,7 @@ impl SmartRestSetOperationToSuccessful {
             SoftwareOperationStatus::Successful => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
-            _ => Err(SmartRestSerializerError::StatusIsNotSuccessful { response }),
+            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
         }
     }
 }
@@ -182,7 +182,7 @@ impl SmartRestSetOperationToFailed {
                 CumulocitySupportedOperations::C8ySoftwareUpdate,
                 response.error().unwrap_or_else(|| "".to_string()),
             )),
-            _ => Err(SmartRestSerializerError::StatusIsNotFailed { response }),
+            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
         }
     }
 }

@@ -2,14 +2,8 @@ use json_sm::SoftwareUpdateResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum SmartRestSerializerError {
-    #[error("The operation status is not executing. {response:?}")]
-    StatusIsNotExecuting { response: SoftwareUpdateResponse },
-
-    #[error("The operation status is not successful. {response:?}")]
-    StatusIsNotSuccessful { response: SoftwareUpdateResponse },
-
-    #[error("The operation status is not failed. {response:?}")]
-    StatusIsNotFailed { response: SoftwareUpdateResponse },
+    #[error("The operation status is not supported. {response:?}")]
+    UnsupportedOperationStatus { response: SoftwareUpdateResponse },
 
     #[error("Failed to serialize SmartREST.")]
     InvalidCsv(#[from] csv::Error),
