@@ -237,7 +237,6 @@ fn combine_version_and_type(
 mod tests {
     use super::*;
     use json_sm::*;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn verify_combine_version_and_type() {

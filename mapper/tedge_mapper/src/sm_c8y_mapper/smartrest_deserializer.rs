@@ -2,20 +2,22 @@ use crate::sm_c8y_mapper::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
 use json_sm::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug)]
 enum CumulocitySoftwareUpdateActions {
     Install,
     Delete,
-    UnknownAction,
 }
 
-impl From<String> for CumulocitySoftwareUpdateActions {
-    fn from(action: String) -> Self {
+impl TryFrom<String> for CumulocitySoftwareUpdateActions {
+    type Error = SmartRestDeserializerError;
+
+    fn try_from(action: String) -> Result<Self, Self::Error> {
         match action.as_str() {
-            "install" => Self::Install,
-            "delete" => Self::Delete,
-            _ => Self::UnknownAction,
+            "install" => Ok(Self::Install),
+            "delete" => Ok(Self::Delete),
+            _ => Err(SmartRestDeserializerError::ActionNotFound { action }),
         }
     }
 }
@@ -51,7 +53,7 @@ impl SmartRestUpdateSoftware {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
         if message_id != self.message_id {
-            return Err(SmartRestDeserializerError::NotUpdateSoftwareOperation);
+            return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
         }
 
         let mut rdr = ReaderBuilder::new()
@@ -90,7 +92,7 @@ impl SmartRestUpdateSoftware {
         mut request: SoftwareUpdateRequest,
     ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
         for module in &self.modules() {
-            match module.action.clone().into() {
+            match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
                     request.add_update(SoftwareModuleUpdate::Install {
                         module: SoftwareModule {
@@ -110,11 +112,6 @@ impl SmartRestUpdateSoftware {
                             url: None,
                         },
                     });
-                }
-                CumulocitySoftwareUpdateActions::UnknownAction => {
-                    return Err(SmartRestDeserializerError::ActionNotFound {
-                        action: module.action.clone(),
-                    })
                 }
             }
         }
@@ -228,6 +225,25 @@ mod tests {
         };
 
         assert_eq!(update_software, expected_update_software);
+    }
+
+    #[test]
+    fn deserialize_incorrect_smartrest_message_id() {
+        let smartrest = String::from("516,external_id");
+        assert!(SmartRestUpdateSoftware::new()
+            .from_smartrest(smartrest)
+            .is_err());
+    }
+
+    #[test]
+    fn deserialize_incorrect_smartrest_action() {
+        let smartrest =
+            String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
+        assert!(SmartRestUpdateSoftware::new()
+            .from_smartrest(smartrest)
+            .unwrap()
+            .to_thin_edge_json()
+            .is_err());
     }
 
     #[test]
