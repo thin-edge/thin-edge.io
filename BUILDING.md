@@ -49,7 +49,7 @@ And then you can run `rustc` to view current version:
 
 ```shell
 $ rustc --version
-rustc 1.51.0 (2fd73fabe 2021-03-23)
+rustc 1.54.0 (a178d0322 2021-07-26)
 ```
 
 > Note: Above command will add rust to path only for existing session,
@@ -62,7 +62,7 @@ rustc 1.51.0 (2fd73fabe 2021-03-23)
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
-Current MSRV is `1.51.0`.
+Current MSRV is `1.54.0`.
 
 ### Cross compilation toolchain (optional)
 
