@@ -58,6 +58,9 @@ class SmManagement(BaseTest):
         self.log.info(req)
         self.log.info(req.text)
 
+        if req.status_code!=201: # Request was accepted
+            raise SystemError('Got HTTP status %s', req.status_code)
+
     def is_status_success(self):
 
         timeslot = 600
@@ -79,6 +82,10 @@ class SmManagement(BaseTest):
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
+
+        if req.status_code!=200: # Request was accepted
+            raise SystemError('Got HTTP status %s', req.status_code)
+
         j = json.loads(req.text)
 
         if not j["operations"]:
@@ -108,6 +115,9 @@ class SmManagement(BaseTest):
 
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
+
+        if req.status_code!=200:
+            raise SystemError('Got HTTP status %s', req.status_code)
 
         j = json.loads(req.text)
 
