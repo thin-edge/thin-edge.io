@@ -10,8 +10,7 @@ use json_sm::{
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
-use std::sync::Arc;
-use tedge_config::TEdgeConfigLocation;
+use std::{path::PathBuf, sync::Arc};
 use tedge_users::{UserManager, ROOT_USER};
 
 #[derive(Debug)]
@@ -23,6 +22,8 @@ pub struct SmAgentConfig {
     pub response_topic_update: Topic,
     pub errors_topic: Topic,
     pub mqtt_client_config: mqtt_client::Config,
+    pub sm_home: PathBuf,
+    pub default_plugin_type: Option<String>,
 }
 
 impl Default for SmAgentConfig {
@@ -45,6 +46,10 @@ impl Default for SmAgentConfig {
 
         let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
 
+        let sm_home = PathBuf::from("/etc/tedge");
+
+        let default_plugin_type = None;
+
         Self {
             request_topics,
             request_topic_list,
@@ -53,7 +58,22 @@ impl Default for SmAgentConfig {
             response_topic_update,
             errors_topic,
             mqtt_client_config,
+            sm_home,
+            default_plugin_type,
         }
+    }
+}
+
+impl SmAgentConfig {
+    pub fn with_default_plugin_type(self, default_plugin_type: Option<String>) -> Self {
+        Self {
+            default_plugin_type,
+            ..self
+        }
+    }
+
+    pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
+        Self { sm_home, ..self }
     }
 }
 
@@ -62,23 +82,17 @@ pub struct SmAgent {
     config: SmAgentConfig,
     name: String,
     user_manager: UserManager,
-    config_location: TEdgeConfigLocation,
     persistance_store: AgentStateRepository,
 }
 
 impl SmAgent {
-    pub fn new(
-        name: &str,
-        user_manager: UserManager,
-        config_location: TEdgeConfigLocation,
-    ) -> Self {
-        let persistance_store = AgentStateRepository::new(&config_location);
+    pub fn new(name: &str, config: SmAgentConfig, user_manager: UserManager) -> Self {
+        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
 
         Self {
-            config: SmAgentConfig::default(),
+            config,
             name: name.into(),
             user_manager,
-            config_location,
             persistance_store,
         }
     }
@@ -87,10 +101,8 @@ impl SmAgent {
         info!("Starting tedge agent");
 
         let plugins = Arc::new(ExternalPlugins::open(
-            &self
-                .config_location
-                .tedge_config_root_path
-                .join("sm-plugins"),
+            &self.config.sm_home.join("sm-plugins"),
+            self.config.default_plugin_type.clone(),
         )?);
         if plugins.empty() {
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");

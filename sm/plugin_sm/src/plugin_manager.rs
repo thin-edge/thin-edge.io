@@ -38,13 +38,22 @@ pub trait Plugins {
 pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
+    default_plugin_type: Option<String>,
 }
 
 impl Plugins for ExternalPlugins {
     type Plugin = ExternalPluginCommand;
 
     fn default(&self) -> Option<&Self::Plugin> {
-        self.by_software_type("default")
+        if let Some(default_plugin_type) = &self.default_plugin_type {
+            self.by_software_type(default_plugin_type.as_str())
+        } else {
+            if self.plugin_map.len() == 1 {
+                Some(self.plugin_map.iter().next().unwrap().1) //Unwrap is safe here as one entry is guaranteed
+            } else {
+                None
+            }
+        }
     }
 
     fn by_software_type(&self, software_type: &str) -> Option<&Self::Plugin> {
@@ -62,10 +71,14 @@ impl Plugins for ExternalPlugins {
 }
 
 impl ExternalPlugins {
-    pub fn open(plugin_dir: impl Into<PathBuf>) -> io::Result<ExternalPlugins> {
+    pub fn open(
+        plugin_dir: impl Into<PathBuf>,
+        default_plugin_type: Option<String>,
+    ) -> io::Result<ExternalPlugins> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
+            default_plugin_type,
         };
         let () = plugins.load()?;
         Ok(plugins)
@@ -168,5 +181,36 @@ impl ExternalPlugins {
         }
 
         response
+    }
+}
+
+mod tests {
+    use std::fs::File;
+
+    use super::{ExternalPlugins, Plugins};
+
+    #[test]
+    fn explicit_default_plugin() {
+        let plugin_dir = tempfile::tempdir().unwrap();
+        let _ = File::create(plugin_dir.path().join("apt")).unwrap();
+        let _ = File::create(plugin_dir.path().join("snap")).unwrap();
+        let _ = File::create(plugin_dir.path().join("docker")).unwrap();
+
+        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), Some("apt".into())).unwrap();
+        plugins.load().unwrap();
+
+        assert_eq!(plugins.default().unwrap().name, "apt");
+    }
+
+    #[test]
+    fn implicit_default_plugin_with_only_one_plugin() {
+        let plugin_dir = tempfile::tempdir().unwrap();
+        let plugin_file_path = plugin_dir.path().join("apt");
+        let _ = File::create(plugin_file_path).unwrap();
+
+        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
+        plugins.load().unwrap();
+
+        assert_eq!(plugins.default().unwrap().name, "apt");
     }
 }

@@ -2,7 +2,6 @@ use crate::error::StateError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, str::FromStr};
-use tedge_config::TEdgeConfigLocation;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
 
@@ -61,8 +60,8 @@ impl StateRepository<State> for AgentStateRepository {
 }
 
 impl AgentStateRepository {
-    pub fn new(config_location: &TEdgeConfigLocation) -> Self {
-        let mut state_repo_root = config_location.tedge_config_root_path.clone();
+    pub fn new(tedge_root: PathBuf) -> Self {
+        let mut state_repo_root = tedge_root.clone();
         state_repo_root.push(PathBuf::from_str(".agent").expect("infallible"));
 
         let mut state_repo_path = state_repo_root.clone();
@@ -86,20 +85,12 @@ pub struct State {
 mod tests {
     use crate::state::{AgentStateRepository, State, StateRepository};
 
-    use tempfile::{tempdir, NamedTempFile};
+    use tempfile::tempdir;
 
     #[tokio::test]
     async fn agent_state_repository_not_exists_fail() {
-        let _temp_dir = tempdir().unwrap();
-
         let temp_dir = tempdir().unwrap();
-        let temp_config_file = NamedTempFile::new().unwrap();
-
-        let config = tedge_config::TEdgeConfigLocation {
-            tedge_config_root_path: temp_dir.into_path(),
-            tedge_config_file_path: temp_config_file.path().to_owned(),
-        };
-        let repo = AgentStateRepository::new(&config);
+        let repo = AgentStateRepository::new(temp_dir.into_path());
 
         repo.load().await.unwrap_err();
     }
@@ -115,13 +106,7 @@ mod tests {
 
         let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
 
-        let temp_config_file = NamedTempFile::new().unwrap();
-        let config = tedge_config::TEdgeConfigLocation {
-            tedge_config_root_path: temp_dir.into_path(),
-            tedge_config_file_path: temp_config_file.path().to_owned(),
-        };
-
-        let repo = AgentStateRepository::new(&config);
+        let repo = AgentStateRepository::new(temp_dir.into_path());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -144,13 +129,7 @@ mod tests {
 
         let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
 
-        let temp_config_file = NamedTempFile::new().unwrap();
-        let config = tedge_config::TEdgeConfigLocation {
-            tedge_config_root_path: temp_dir.into_path(),
-            tedge_config_file_path: temp_config_file.path().to_owned(),
-        };
-
-        let repo = AgentStateRepository::new(&config);
+        let repo = AgentStateRepository::new(temp_dir.into_path());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -165,21 +144,15 @@ mod tests {
     #[tokio::test]
     async fn agent_state_repository_exists_store() {
         let temp_dir = tempdir().unwrap();
-        let temp_config_file = NamedTempFile::new().unwrap();
 
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
         let destination_path = temp_dir.path().join(".agent/current-operation");
-
-        let config = tedge_config::TEdgeConfigLocation {
-            tedge_config_root_path: temp_dir.into_path(),
-            tedge_config_file_path: temp_config_file.path().to_owned(),
-        };
 
         let content = "operation_id = 1234";
 
         let _ = tokio::fs::write(&destination_path, content.as_bytes()).await;
 
-        let repo = AgentStateRepository::new(&config);
+        let repo = AgentStateRepository::new(temp_dir.into_path());
 
         repo.store(&State {
             operation_id: Some("1234".into()),
