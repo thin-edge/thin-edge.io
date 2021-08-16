@@ -15,14 +15,20 @@ from datetime import datetime, timedelta, timezone
 
 PAGE_SIZE = "500"
 
+
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
     See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
     """
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
+
 class PySysTest(BaseTest):
     def setup(self):
+
+        if self.myPlatform != "container":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
+
         tenant = self.project.tenant
         user = self.project.username
         password = self.project.c8ypass
@@ -75,11 +81,11 @@ class PySysTest(BaseTest):
             "pageSize": PAGE_SIZE,
             "dateFrom": date_from,
             "dateTo": date_to,
-            "revert": "true"
-            }
+            "revert": "true",
+        }
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
-        req = requests.get(url, params = params, headers=self.header)
+        req = requests.get(url, params=params, headers=self.header)
         j = json.loads(req.text)
 
         if not j["operations"]:
@@ -91,6 +97,19 @@ class PySysTest(BaseTest):
         # Observed states: PENDING, SUCCESSFUL, EXECUTING
 
         return i["status"] == "SUCCESSFUL"
+
+    def wait_until_succcess(self):
+        """Wait until c8y reports a success
+        TODO This might block forever
+        """
+
+        # wait for some time to let c8y process a request until we can poll for it
+        time.sleep(1)
+
+        while True:
+            if self.is_status_success():
+                break
+            time.sleep(1)
 
     def check_isinstalled(self, package_name):
 
@@ -110,30 +129,15 @@ class PySysTest(BaseTest):
 
     def execute(self):
 
-        if self.myPlatform != "container":
-            self.skipTest("Testing the apt plugin is not supported on this platform")
-
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
 
-        # wait for some time to let c8y process the request until we can poll for it
-        time.sleep(1)
-
-        while True:
-            if self.is_status_success():
-                break
-            time.sleep(1)
+        self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
 
-        # wait for some time to let c8y process the request until we can poll for it
-        time.sleep(1)
-
-        while True:
-            if self.is_status_success():
-                break
-            time.sleep(1)
+        self.wait_until_succcess()
 
     def validate(self):
 
