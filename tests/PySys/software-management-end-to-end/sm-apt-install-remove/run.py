@@ -15,14 +15,11 @@ from datetime import datetime, timedelta, timezone
 
 PAGE_SIZE = "500"
 
-
-def is_timezone_aware(stamp):  #:datetime):
+def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
     See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
     """
-
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
-
 
 class PySysTest(BaseTest):
     def setup(self):
@@ -78,22 +75,17 @@ class PySysTest(BaseTest):
             "pageSize": PAGE_SIZE,
             "dateFrom": date_from,
             "dateTo": date_to,
-            "revert": "true",
-        }
+            "revert": "true"
+            }
 
-        # TODO Fix page size or just query todays operations
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
-        req = requests.get(url, params=params, headers=self.header)
+        req = requests.get(url, params = params, headers=self.header)
         j = json.loads(req.text)
-
-        # self.log.info (j)
 
         if not j["operations"]:
             self.log.error("No operations found")
             return None
         i = j["operations"][0]
-
-        # self.log.info( i )
 
         self.log.info(i["status"])
         # Observed states: PENDING, SUCCESSFUL, EXECUTING
@@ -106,7 +98,7 @@ class PySysTest(BaseTest):
         req = requests.get(url, headers=self.header)
 
         j = json.loads(req.text)
-        # self.log.info(j)
+
         ret = False
         for i in j["c8y_SoftwareList"]:
             if i["name"] == package_name:
@@ -123,7 +115,7 @@ class PySysTest(BaseTest):
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
 
-        # we need to wait for some time to let c8y process the request until we can poll for it
+        # wait for some time to let c8y process the request until we can poll for it
         time.sleep(1)
 
         while True:
@@ -135,7 +127,7 @@ class PySysTest(BaseTest):
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
 
-        # we need to wait for some time to let c8y process the request until we can poll for it
+        # wait for some time to let c8y process the request until we can poll for it
         time.sleep(1)
 
         while True:
