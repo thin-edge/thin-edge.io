@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    use std::{path::PathBuf, str::FromStr};
-
     use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
+    use std::{path::PathBuf, str::FromStr};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -33,7 +32,7 @@ mod tests {
         let mut plugins = ExternalPlugins::open(plugin_dir).unwrap();
         let _ = plugins.load();
 
-        // Registry has registered at least one plugin.
+        // Registry has registered no plugins.
         assert!(plugins.empty());
     }
 

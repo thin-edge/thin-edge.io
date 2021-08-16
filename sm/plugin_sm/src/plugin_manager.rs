@@ -1,6 +1,6 @@
 use crate::plugin::*;
 use json_sm::*;
-use log::info;
+use log::error;
 use std::{
     collections::HashMap,
     fs,
@@ -76,28 +76,32 @@ impl ExternalPlugins {
         for maybe_entry in fs::read_dir(&self.plugin_dir)? {
             let entry = maybe_entry?;
             let path = entry.path();
-            dbg!(&path);
             if path.is_file() {
                 match Command::new(&path).arg("list").status() {
                     Ok(code) if code.success() => {}
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
                     Ok(_) => {
-                        info!("File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.", pathbuf_to_string(path.clone()).unwrap());
+                        error!(
+                            "File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.",
+                            pathbuf_to_string(path.clone()).unwrap()
+                        );
                         continue;
                     }
 
                     Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-                        info!(
-                            "File {} Permission Denied, is the file executable?",
+                        error!(
+                            "File {} Permission Denied, is the file an executable?\n
+                            The file will not be registered as a plugin.",
                             pathbuf_to_string(path.clone()).unwrap()
                         );
                         continue;
                     }
 
                     Err(err) => {
-                        info!(
-                            "An error occurred while trying to run: {}: {}",
+                        error!(
+                            "An error occurred while trying to run: {}: {}\n
+                            The file will not be registered as a plugin.",
                             pathbuf_to_string(path.clone()).unwrap(),
                             err
                         );
