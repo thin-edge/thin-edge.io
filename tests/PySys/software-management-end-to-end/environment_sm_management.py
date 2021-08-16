@@ -71,7 +71,13 @@ class SmManagement(BaseTest):
         if req.status_code != 201:  # Request was accepted
             raise SystemError("Got HTTP status %s", req.status_code)
 
+    def is_status_fail(self):
+        return self.is_status("FAILED")
+
     def is_status_success(self):
+        return self.is_status("SUCCESSFUL")
+
+    def is_status(self, status):
         """Check if the last operation is successfull"""
 
         timeslot = 600
@@ -97,17 +103,17 @@ class SmManagement(BaseTest):
         if req.status_code != 200:  # Request was accepted
             raise SystemError("Got HTTP status %s", req.status_code)
 
-        j = json.loads(req.text)
+        jresponse = json.loads(req.text)
 
-        if not j["operations"]:
+        if not jresponse["operations"]:
             self.log.error("No operations found")
             return None
-        i = j["operations"][0]
+        operation = jresponse["operations"][0]
 
-        self.log.info(i["status"])
-        # Observed states: PENDING, SUCCESSFUL, EXECUTING
+        self.log.info(operation["status"])
+        # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
 
-        return i["status"] == "SUCCESSFUL"
+        return operation["status"] == status
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success
@@ -119,6 +125,19 @@ class SmManagement(BaseTest):
 
         while True:
             if self.is_status_success():
+                break
+            time.sleep(1)
+
+    def wait_until_fail(self):
+        """Wait until c8y reports a success
+        TODO This might block forever
+        """
+
+        # wait for some time to let c8y process a request until we can poll for it
+        time.sleep(1)
+
+        while True:
+            if self.is_status_fail():
                 break
             time.sleep(1)
 
