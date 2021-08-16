@@ -65,6 +65,17 @@ class PySysTest(BaseTest):
                 break
 
 
+        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations?deviceId=4430276&pageSize=200&revert=true"
+        req = requests.get(url, headers=header)
+        j = json.loads(req.text)
+
+
+        #for i in j["operations"]:
+        i = j["operations"][-1]
+
+        self.log.info( i )
+        self.log.info( i["status"] )
+
 
     def validate(self):
         pass
