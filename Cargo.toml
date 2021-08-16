@@ -16,6 +16,7 @@ members = [
     "sm/plugin_sm",
     "sm/tedge_agent",
     "sm/plugins/tedge_apt_plugin",
+    "sm/plugins/tedge_dummy_plugin",
     "tedge_config",
     "tedge",
 ]
