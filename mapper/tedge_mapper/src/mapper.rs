@@ -34,7 +34,9 @@ pub async fn create_mapper<'a>(
     Ok(Mapper::new(mqtt_client, mapper_config, converter, flock))
 }
 
-fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<mqtt_client::Config, anyhow::Error> {
+pub(crate) fn mqtt_config(
+    tedge_config: &TEdgeConfig,
+) -> Result<mqtt_client::Config, anyhow::Error> {
     Ok(mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
 }
 
