@@ -10,16 +10,25 @@ Validate ...
 import base64
 import json
 import requests
+import time
+
 
 class PySysTest(BaseTest):
-    def execute(self):
 
-        if self.myPlatform != 'container':
-            self.skipTest('Testing the apt plugin is not supported on this platform')
 
+    def setup(self):
         tenant = self.project.tenant
         user = self.project.username
         password = self.project.c8ypass
+
+        auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
+        self.header = {
+            b"Authorization": b"Basic " + base64.b64encode(auth),
+            b"content-type": b"application/json",
+            b"Accept": b"application/json",
+        }
+
+    def install(self):
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
 
@@ -38,23 +47,31 @@ class PySysTest(BaseTest):
             ],
         }
 
-        auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
-        header = {
-            b"Authorization": b"Basic " + base64.b64encode(auth),
-            b"content-type": b"application/json",
-            b"Accept": b"application/json",
-        }
-
-        req = requests.post(url, json=payload, headers=header)
+        req = requests.post(url, json=payload, headers=self.header)
 
         self.log.info(req)
         self.log.info(req.text)
 
-        url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
-        req = requests.get(url, headers=header)
+    def status(self):
+        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations?deviceId=4430276&pageSize=200&revert=true"
+        req = requests.get(url, headers=self.header)
+        j = json.loads(req.text)
 
-        #self.log.info(req)
-        #self.log.info(req.text)
+
+        #for i in j["operations"]:
+        i = j["operations"][-1]
+
+        #self.log.info( i )
+        self.log.info( i["status"] )
+        # PENDING, SUCCESSFUL, EXECUTING
+
+        return i["status"] == "SUCCESSFUL"
+
+
+    def check(self):
+
+        url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        req = requests.get(url, headers=self.header)
 
         j = json.loads(req.text)
 
@@ -64,17 +81,20 @@ class PySysTest(BaseTest):
                 self.log.info( i )
                 break
 
+    def execute(self):
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations?deviceId=4430276&pageSize=200&revert=true"
-        req = requests.get(url, headers=header)
-        j = json.loads(req.text)
+        if self.myPlatform != 'container':
+            self.skipTest('Testing the apt plugin is not supported on this platform')
+
+        self.install()
+
+        while True:
+            if self.status():
+                break
+            time.sleep(1)
 
 
-        #for i in j["operations"]:
-        i = j["operations"][-1]
-
-        self.log.info( i )
-        self.log.info( i["status"] )
+        self.check()
 
 
     def validate(self):
