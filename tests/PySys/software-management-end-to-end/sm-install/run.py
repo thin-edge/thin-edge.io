@@ -14,8 +14,6 @@ import time
 
 
 class PySysTest(BaseTest):
-
-
     def setup(self):
         tenant = self.project.tenant
         user = self.project.username
@@ -27,6 +25,8 @@ class PySysTest(BaseTest):
             b"content-type": b"application/json",
             b"Accept": b"application/json",
         }
+
+        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
 
     def trigger_action(self, package_name, package_id, version, url, action):
 
@@ -42,7 +42,7 @@ class PySysTest(BaseTest):
                     "version": version,
                     "url": url,
                     "action": action,
-                                   }
+                }
             ],
         }
 
@@ -57,16 +57,14 @@ class PySysTest(BaseTest):
         req = requests.get(url, headers=self.header)
         j = json.loads(req.text)
 
-
-        #for i in j["operations"]:
+        # for i in j["operations"]:
         i = j["operations"][-1]
 
-        #self.log.info( i )
-        self.log.info( i["status"] )
+        # self.log.info( i )
+        self.log.info(i["status"])
         # Observed states: PENDING, SUCCESSFUL, EXECUTING
 
         return i["status"] == "SUCCESSFUL"
-
 
     def check_isinstalled(self, package_name):
 
@@ -76,20 +74,28 @@ class PySysTest(BaseTest):
         j = json.loads(req.text)
         ret = False
         for i in j["c8y_SoftwareList"]:
-            if i["name"]== package_name:
-                self.log.info( "It is installed" )
-                self.log.info( i )
+            if i["name"] == package_name:
+                self.log.info("It is installed")
+                self.log.info(i)
                 ret = True
                 break
         return ret
 
     def execute(self):
 
-        if self.myPlatform != 'container':
-            self.skipTest('Testing the apt plugin is not supported on this platform')
+        if self.myPlatform != "container":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
-        #self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
+
+        while True:
+            if self.is_status_success():
+                break
+            time.sleep(1)
+
+        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+
+        self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
 
         while True:
             if self.is_status_success():
@@ -98,6 +104,4 @@ class PySysTest(BaseTest):
 
     def validate(self):
 
-        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
-
-
+        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
