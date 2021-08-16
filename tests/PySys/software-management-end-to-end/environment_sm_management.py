@@ -8,6 +8,7 @@ import requests
 import pysys
 from pysys.basetest import BaseTest
 
+
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
     See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
@@ -20,6 +21,7 @@ class SmManagement(BaseTest):
     PAGE_SIZE = "500"
 
     def setup(self):
+        """Setup Environment"""
 
         if self.myPlatform != "container":
             self.skipTest("Testing the apt plugin is not supported on this platform")
@@ -36,13 +38,10 @@ class SmManagement(BaseTest):
         }
 
     def trigger_action(self, package_name, package_id, version, url, action):
+        """Trigger a installation or deinstallation of a package"""
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
-
-        payload = {
-            "deviceId": self.project.deviceid,
-            "description": "Apply software changes, triggered from PySys test",
-            "c8y_SoftwareUpdate": [
+        self.trigger_action_json(
+            [
                 {
                     "id": package_id,
                     "name": package_name,
@@ -50,7 +49,18 @@ class SmManagement(BaseTest):
                     "url": url,
                     "action": action,
                 }
-            ],
+            ]
+        )
+
+    def trigger_action_json(self, json):
+        """Take an actions description that is then forwarded to c8y"""
+
+        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+
+        payload = {
+            "deviceId": self.project.deviceid,
+            "description": "Apply software changes, triggered from PySys test",
+            "c8y_SoftwareUpdate": json,
         }
 
         req = requests.post(url, json=payload, headers=self.header)
@@ -58,10 +68,11 @@ class SmManagement(BaseTest):
         self.log.info(req)
         self.log.info(req.text)
 
-        if req.status_code!=201: # Request was accepted
-            raise SystemError('Got HTTP status %s', req.status_code)
+        if req.status_code != 201:  # Request was accepted
+            raise SystemError("Got HTTP status %s", req.status_code)
 
     def is_status_success(self):
+        """Check if the last operation is successfull"""
 
         timeslot = 600
         time_to = datetime.now(timezone.utc).replace(microsecond=0)
@@ -83,8 +94,8 @@ class SmManagement(BaseTest):
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
-        if req.status_code!=200: # Request was accepted
-            raise SystemError('Got HTTP status %s', req.status_code)
+        if req.status_code != 200:  # Request was accepted
+            raise SystemError("Got HTTP status %s", req.status_code)
 
         j = json.loads(req.text)
 
@@ -112,12 +123,13 @@ class SmManagement(BaseTest):
             time.sleep(1)
 
     def check_isinstalled(self, package_name):
+        """Check if a package is installed"""
 
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
-        if req.status_code!=200:
-            raise SystemError('Got HTTP status %s', req.status_code)
+        if req.status_code != 200:
+            raise SystemError("Got HTTP status %s", req.status_code)
 
         j = json.loads(req.text)
 
@@ -129,4 +141,3 @@ class SmManagement(BaseTest):
                 ret = True
                 break
         return ret
-
