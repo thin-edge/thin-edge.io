@@ -7,7 +7,9 @@ Validate end to end behaviour for the apt plugin
 
 When we install a package
 Then it is installed
-When we deinstall it again
+When we deinstall it again with the wrong version
+Then it is still installed
+When we deinstall it again with the right version
 Then it is not installed
 
 """
@@ -34,9 +36,16 @@ class PySysTest(SmManagement):
 
         self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
 
+        self.trigger_action("rolldice", "5445239", "88::apt", "notanurl", "delete")
+
+        self.wait_until_fail()
+
+        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+
         self.trigger_action("rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete")
 
         self.wait_until_succcess()
+
 
     def validate(self):
 
