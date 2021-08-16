@@ -8,6 +8,7 @@ Validate ...
 """
 
 import base64
+import json
 import requests
 
 class PySysTest(BaseTest):
@@ -32,6 +33,7 @@ class PySysTest(BaseTest):
                     "version": "::apt",
                     "url": "notanurl",
                     "action": "install",
+                    #"action": "delete",
                 }
             ],
         }
@@ -45,10 +47,24 @@ class PySysTest(BaseTest):
 
         req = requests.post(url, json=payload, headers=header)
 
-
-
         self.log.info(req)
         self.log.info(req.text)
+
+        url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        req = requests.get(url, headers=header)
+
+        #self.log.info(req)
+        #self.log.info(req.text)
+
+        j = json.loads(req.text)
+
+        for i in j["c8y_SoftwareList"]:
+            if i["name"]=="rolldice":
+                self.log.info( "It is installed" )
+                self.log.info( i )
+                break
+
+
 
     def validate(self):
         pass
