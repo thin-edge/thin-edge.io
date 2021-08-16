@@ -9,6 +9,17 @@ import pysys
 from pysys.basetest import BaseTest
 
 
+"""
+This environment provides an interface to software management features
+through the C8y REST API.
+With these we can emulate a user doing operations in the C8y UI.
+They are rather slow as they use the complete chain from end to end.
+
+WARNING: Handle with care!!!
+The C8YDEVICEID will handle on which this test will install and remove packages.
+"""
+
+
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
     See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
@@ -65,8 +76,8 @@ class SmManagement(BaseTest):
 
         req = requests.post(url, json=payload, headers=self.header)
 
-        self.log.info(req)
-        self.log.info(req.text)
+        self.log.info(f"Response: {req}")
+        self.log.info(f"Response to action: {req.text}")
 
         if req.status_code != 201:  # Request was accepted
             raise SystemError("Got HTTP status %s", req.status_code)

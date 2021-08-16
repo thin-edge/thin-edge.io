@@ -3,8 +3,12 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate ...
+Validate end to end behaviour for the apt plugin
 
+When we install a bunch of packages
+Then they are installed
+When we deinstall them again
+Then they are not installed
 """
 
 import json

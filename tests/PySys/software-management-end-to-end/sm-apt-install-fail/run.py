@@ -3,8 +3,10 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate ...
+Validate end to end behaviour
 
+When we install a package that cannot be installed with the apt package manager
+Then we receive a failure from the apt plugin
 """
 
 import json
@@ -27,7 +29,8 @@ class PySysTest(SmManagement):
 
         self.wait_until_fail()
 
-
     def validate(self):
 
-        self.assertThat("False == value", value=self.check_isinstalled("does_not_exist"))
+        self.assertThat(
+            "False == value", value=self.check_isinstalled("does_not_exist")
+        )
