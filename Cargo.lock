@@ -2559,6 +2559,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_dummy_plugin"
+version = "0.0.0"
+dependencies = [
+ "structopt",
+ "thiserror",
+]
+
+[[package]]
 name = "tedge_mapper"
 version = "0.2.3"
 dependencies = [
