@@ -152,7 +152,7 @@ class SmManagement(BaseTest):
                 break
             time.sleep(1)
 
-    def check_isinstalled(self, package_name):
+    def check_isinstalled(self, package_name, version=None):
         """Check if a package is installed"""
 
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
@@ -161,13 +161,20 @@ class SmManagement(BaseTest):
         if req.status_code != 200:
             raise SystemError("Got HTTP status %s", req.status_code)
 
-        j = json.loads(req.text)
+        jresponse = json.loads(req.text)
 
         ret = False
-        for i in j["c8y_SoftwareList"]:
-            if i["name"] == package_name:
-                self.log.info("It is installed")
-                self.log.info(i)
-                ret = True
-                break
+        for package in jresponse["c8y_SoftwareList"]:
+            if package["name"] == package_name:
+                self.log.info(f"Package {package_name} is installed")
+                # self.log.info(package)
+                if version:
+                    if package["version"]==version:
+                        ret = True
+                        break
+                    else:
+                        raise SystemError("Wrong version is installed")
+                else:
+                    ret = True
+                    break
         return ret
