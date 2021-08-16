@@ -11,6 +11,17 @@ import base64
 import json
 import requests
 import time
+from datetime import datetime, timedelta, timezone
+
+PAGE_SIZE = "500"
+
+
+def is_timezone_aware(stamp):  #:datetime):
+    """determine if object is timezone aware or naive
+    See also: https://docs.python.org/3/library/datetime.html?highlight=tzinfo#determining-if-an-object-is-aware-or-naive
+    """
+
+    return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
 class PySysTest(BaseTest):
@@ -52,15 +63,38 @@ class PySysTest(BaseTest):
         self.log.info(req.text)
 
     def is_status_success(self):
+
+        timeslot = 600
+        time_to = datetime.now(timezone.utc).replace(microsecond=0)
+        time_from = time_to - timedelta(seconds=timeslot)
+
+        assert is_timezone_aware(time_from)
+
+        date_from = time_from.isoformat(sep="T")
+        date_to = time_to.isoformat(sep="T")
+
+        params = {
+            "deviceId": self.project.deviceid,
+            "pageSize": PAGE_SIZE,
+            "dateFrom": date_from,
+            "dateTo": date_to,
+            "revert": "true",
+        }
+
         # TODO Fix page size or just query todays operations
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations?deviceId=4430276&pageSize=200&revert=true"
-        req = requests.get(url, headers=self.header)
+        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+        req = requests.get(url, params=params, headers=self.header)
         j = json.loads(req.text)
 
-        # for i in j["operations"]:
-        i = j["operations"][-1]
+        # self.log.info (j)
+
+        if not j["operations"]:
+            self.log.error("No operations found")
+            return None
+        i = j["operations"][0]
 
         # self.log.info( i )
+
         self.log.info(i["status"])
         # Observed states: PENDING, SUCCESSFUL, EXECUTING
 
@@ -72,6 +106,7 @@ class PySysTest(BaseTest):
         req = requests.get(url, headers=self.header)
 
         j = json.loads(req.text)
+        # self.log.info(j)
         ret = False
         for i in j["c8y_SoftwareList"]:
             if i["name"] == package_name:
@@ -88,6 +123,9 @@ class PySysTest(BaseTest):
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
 
+        # we need to wait for some time to let c8y process the request until we can poll for it
+        time.sleep(1)
+
         while True:
             if self.is_status_success():
                 break
@@ -96,6 +134,9 @@ class PySysTest(BaseTest):
         self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
+
+        # we need to wait for some time to let c8y process the request until we can poll for it
+        time.sleep(1)
 
         while True:
             if self.is_status_success():
