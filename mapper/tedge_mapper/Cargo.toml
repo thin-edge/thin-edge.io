@@ -44,6 +44,10 @@ thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
+json_sm = {path = "../../sm/json_sm"}
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+csv = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.5"
@@ -51,3 +55,4 @@ assert-json-diff = "2.0"
 confy = "0.4"
 serde_json = "1.0"
 serde = "1.0.126"
+tokio-test = "0.4"

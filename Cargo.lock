@@ -1397,6 +1397,7 @@ dependencies = [
  "rumqttd",
  "rumqttlog",
  "serde",
+ "tedge_utils",
  "thiserror",
  "tokio",
  "tokio-test",
@@ -2578,9 +2579,11 @@ dependencies = [
  "chrono",
  "clock",
  "confy",
+ "csv",
  "env_logger 0.8.4",
  "flockfile",
  "futures",
+ "json_sm",
  "log",
  "mockall",
  "mqtt_client",
@@ -2593,6 +2596,7 @@ dependencies = [
  "thin_edge_json",
  "thiserror",
  "tokio",
+ "tokio-test",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2609,7 +2613,11 @@ dependencies = [
 name = "tedge_utils"
 version = "0.2.3"
 dependencies = [
+ "anyhow",
  "assert_matches",
+ "futures",
+ "rumqttd",
+ "rumqttlog",
  "tempfile",
  "thiserror",
  "tokio",
