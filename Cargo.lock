@@ -1679,6 +1679,8 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "tedge_utils",
+ "tempfile",
  "thiserror",
  "tokio",
  "url",
@@ -2555,6 +2557,14 @@ dependencies = [
  "thiserror",
  "toml",
  "url",
+]
+
+[[package]]
+name = "tedge_dummy_plugin"
+version = "0.0.0"
+dependencies = [
+ "structopt",
+ "thiserror",
 ]
 
 [[package]]
