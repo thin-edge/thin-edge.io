@@ -28,7 +28,7 @@ class PySysTest(BaseTest):
             b"Accept": b"application/json",
         }
 
-    def install(self):
+    def trigger_action(self, package_name, package_id, version, url, action):
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
 
@@ -37,13 +37,12 @@ class PySysTest(BaseTest):
             "description": "Apply software changes: install rolldice",
             "c8y_SoftwareUpdate": [
                 {
-                    "id": "5445239",
-                    "name": "rolldice",
-                    "version": "::apt",
-                    "url": "notanurl",
-                    "action": "install",
-                    #"action": "delete",
-                }
+                    "id": package_id,
+                    "name": package_name,
+                    "version": version,
+                    "url": url,
+                    "action": action,
+                                   }
             ],
         }
 
@@ -52,7 +51,8 @@ class PySysTest(BaseTest):
         self.log.info(req)
         self.log.info(req.text)
 
-    def status(self):
+    def is_status_success(self):
+        # TODO Fix page size or just query todays operations
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations?deviceId=4430276&pageSize=200&revert=true"
         req = requests.get(url, headers=self.header)
         j = json.loads(req.text)
@@ -63,39 +63,41 @@ class PySysTest(BaseTest):
 
         #self.log.info( i )
         self.log.info( i["status"] )
-        # PENDING, SUCCESSFUL, EXECUTING
+        # Observed states: PENDING, SUCCESSFUL, EXECUTING
 
         return i["status"] == "SUCCESSFUL"
 
 
-    def check(self):
+    def check_isinstalled(self, package_name):
 
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
         j = json.loads(req.text)
-
+        ret = False
         for i in j["c8y_SoftwareList"]:
-            if i["name"]=="rolldice":
+            if i["name"]== package_name:
                 self.log.info( "It is installed" )
                 self.log.info( i )
+                ret = True
                 break
+        return ret
 
     def execute(self):
 
         if self.myPlatform != 'container':
             self.skipTest('Testing the apt plugin is not supported on this platform')
 
-        self.install()
+        self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
+        #self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
 
         while True:
-            if self.status():
+            if self.is_status_success():
                 break
             time.sleep(1)
 
-
-        self.check()
-
-
     def validate(self):
-        pass
+
+        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+
+
