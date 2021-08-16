@@ -76,14 +76,14 @@ impl ExternalPlugins {
         for maybe_entry in fs::read_dir(&self.plugin_dir)? {
             let entry = maybe_entry?;
             let path = entry.path();
-
+            dbg!(&path);
             if path.is_file() {
                 match Command::new(&path).arg("list").status() {
-                    Ok(code) if !code.success() => {}
+                    Ok(code) if code.success() => {}
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
                     Ok(_) => {
-                        info!("File {} in plugin directory does not support list operation and may not be a proper plugin, skipping.", pathbuf_to_string(path.clone()).unwrap());
+                        info!("File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.", pathbuf_to_string(path.clone()).unwrap());
                         continue;
                     }
 
