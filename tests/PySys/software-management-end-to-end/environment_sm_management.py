@@ -151,27 +151,37 @@ class SmManagement(BaseTest):
         """Wait until c8y reports a success
         TODO This might block forever
         """
-
+        wait_time = 100
         # wait for some time to let c8y process a request until we can poll for it
         time.sleep(1)
-
+        timeout = 0
         while True:
             if self.is_status_success():
+                # Invalidate the old operation
+                self.operation_id = None
                 break
             time.sleep(1)
+            timeout += 1
+            if timeout > wait_time:
+                raise SystemError("Timeout while waiting for a success")
 
     def wait_until_fail(self):
         """Wait until c8y reports a success
         TODO This might block forever
         """
-
+        wait_time = 100
         # wait for some time to let c8y process a request until we can poll for it
         time.sleep(1)
-
+        timeout = 0
         while True:
             if self.is_status_fail():
+                # Invalidate the old operation
+                self.operation_id = None
                 break
             time.sleep(1)
+            timeout += 1
+            if timeout > wait_time:
+                raise SystemError("Timeout while waiting for a failure")
 
     def check_isinstalled(self, package_name, version=None):
         """Check if a package is installed"""
