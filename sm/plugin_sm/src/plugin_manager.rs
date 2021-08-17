@@ -183,34 +183,3 @@ impl ExternalPlugins {
         response
     }
 }
-
-mod tests {
-    use std::fs::File;
-
-    use super::{ExternalPlugins, Plugins};
-
-    #[test]
-    fn explicit_default_plugin() {
-        let plugin_dir = tempfile::tempdir().unwrap();
-        let _ = File::create(plugin_dir.path().join("apt")).unwrap();
-        let _ = File::create(plugin_dir.path().join("snap")).unwrap();
-        let _ = File::create(plugin_dir.path().join("docker")).unwrap();
-
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), Some("apt".into())).unwrap();
-        plugins.load().unwrap();
-
-        assert_eq!(plugins.default().unwrap().name, "apt");
-    }
-
-    #[test]
-    fn implicit_default_plugin_with_only_one_plugin() {
-        let plugin_dir = tempfile::tempdir().unwrap();
-        let plugin_file_path = plugin_dir.path().join("apt");
-        let _ = File::create(plugin_file_path).unwrap();
-
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
-        plugins.load().unwrap();
-
-        assert_eq!(plugins.default().unwrap().name, "apt");
-    }
-}

@@ -220,7 +220,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.1.1"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "tokio",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.1.2"
+version = "0.2.4"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2563,7 +2563,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.0.1"
+version = "0.2.4"
 dependencies = [
  "structopt",
  "thiserror",
