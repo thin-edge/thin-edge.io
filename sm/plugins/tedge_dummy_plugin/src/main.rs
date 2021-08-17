@@ -50,16 +50,11 @@ fn main() {
     let apt = PluginCli::from_args();
 
     match apt.operation {
-        PluginOp::List {} | PluginOp::Prepare | PluginOp::Finalize => process_call_with_file(),
-
-        PluginOp::Install {
-            module: _,
-            version: _,
-        }
-        | PluginOp::Remove {
-            module: _,
-            version: _,
-        } => process_call_with_file(),
+        PluginOp::List
+        | PluginOp::Prepare
+        | PluginOp::Finalize
+        | PluginOp::Install { .. }
+        | PluginOp::Remove { .. } => process_call_with_file(),
     };
 }
 
@@ -75,18 +70,33 @@ fn process_call_with_file() {
     // The file should be name as per following scheme:
     // <dummy_name>.<desired_exit_code>
     // The file contents should be exactly as expected stdout response.
-    let mut list = std::fs::read_dir(tedge_dummy_path).unwrap();
-    let data_path = list.next().unwrap().unwrap().path();
-    let file = data_path.extension().unwrap().to_str().unwrap().to_string();
+    // The process will terminate with code 0 if there is no files available to parse.
+    let mut list = match std::fs::read_dir(tedge_dummy_path) {
+        Ok(read_dir) => read_dir,
+        Err(_) => std::process::exit(0),
+    };
+
+    let data_path = if let Some(Ok(dir_entry)) = list.next() {
+        dir_entry.path()
+    } else {
+        std::process::exit(0)
+    };
+
+    let file_extension = match data_path.extension() {
+        Some(path) => match path.to_str() {
+            Some(path_str) => path_str,
+            None => std::process::exit(0),
+        },
+        None => std::process::exit(0),
+    };
 
     // Parse .<exitcode> from the filename.
-    let exit_code = file.parse::<i32>().unwrap();
+    if let Ok(exit_code) = file_extension.parse::<i32>() {
+        // Read content of the file as output of the plugin.
+        let dummy_data = std::fs::read(data_path).unwrap();
+        let dummy = String::from_utf8(dummy_data).unwrap();
 
-    // Read content of the file as output of the plugin.
-    let dummy_data = std::fs::read(data_path).unwrap();
-    let dummy = String::from_utf8(dummy_data).unwrap();
-
-    println!("{}", dummy);
-
-    std::process::exit(exit_code);
+        println!("{}", dummy);
+        std::process::exit(exit_code);
+    };
 }
