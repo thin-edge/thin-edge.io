@@ -1398,6 +1398,7 @@ dependencies = [
  "rumqttlog",
  "serde",
  "tedge_utils",
+ "tests_mqtt_server",
  "thiserror",
  "tokio",
  "tokio-test",
@@ -2530,6 +2531,7 @@ dependencies = [
  "tedge_users",
  "tedge_utils",
  "tempfile",
+ "tests_mqtt_server",
  "thiserror",
  "tokio",
  "toml",
@@ -2587,12 +2589,15 @@ dependencies = [
  "log",
  "mockall",
  "mqtt_client",
+ "once_cell",
  "serde",
  "serde_json",
  "structopt",
  "tedge_config",
  "tedge_users",
  "tedge_utils",
+ "tempfile",
+ "tests_mqtt_server",
  "thin_edge_json",
  "thiserror",
  "tokio",
@@ -2616,8 +2621,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "futures",
- "rumqttd",
- "rumqttlog",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2644,6 +2647,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "tests_mqtt_server"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
 ]
 
 [[package]]

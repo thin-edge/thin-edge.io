@@ -1,11 +1,10 @@
 use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
-use tedge_utils::test_mqtt_server::start_broker_local;
+use tests_mqtt_server::{mqtt_server_start, mqtt_server_stop};
 use tokio::time::Duration;
 
-const MQTTTESTPORT1: u16 = 58584;
-const MQTTTESTPORT2: u16 = 58585;
+const MQTT_TEST_PORT: u16 = 55555;
 
 #[derive(Debug)]
 enum TestJoinError {
@@ -14,10 +13,12 @@ enum TestJoinError {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT1).await });
+    mqtt_server_start(MQTT_TEST_PORT);
+
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
 
@@ -29,19 +30,22 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 
     match res {
         Err(e) => {
-            return Err(e);
+            mqtt_server_stop();
+            Err(e)
         }
         _ => {
-            return Ok(());
+            mqtt_server_stop();
+            Ok(())
         }
     }
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT2).await });
+    mqtt_server_start(MQTT_TEST_PORT);
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
@@ -50,10 +54,12 @@ async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     let res = publish.await?;
     match res {
         Err(e) => {
-            return Err(e);
+            mqtt_server_stop();
+            Err(e)
         }
         _ => {
-            return Ok(());
+            mqtt_server_stop();
+            Ok(())
         }
     }
 }
@@ -61,7 +67,7 @@ async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
 async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     let mut errors = pub_client.subscribe_errors();
     // return particular error else return Ok
-    while let Some(error) = errors.next().await {
+    if let Some(error) = errors.next().await {
         match *error {
             MqttClientError::ConnectionError(rumqttc::ConnectionError::MqttState(
                 StateError::Deserialization(rumqttc::Error::PayloadTooLong),
@@ -83,7 +89,7 @@ async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
     let client = Client::connect(
         "subscribe",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
     let mut messages = client.subscribe(sub_filter).await?;
@@ -106,7 +112,7 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let client = Client::connect(
         "publish_data",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
     let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
@@ -131,7 +137,7 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     let topic = Topic::new("test/hello")?;
     let publish_client = Client::connect(
         "publish_big_data",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT2),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
 
@@ -142,14 +148,14 @@ async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
     // wait for error else timeout
     let timeout = tokio::time::timeout(
         std::time::Duration::from_secs(2),
-        subscribe_errors(&publish_client).map_err(|e| TestJoinError::TestMqttClientError(e)),
+        subscribe_errors(&publish_client).map_err(TestJoinError::TestMqttClientError),
     )
     .map_err(|_e| TestJoinError::ElapseTime);
 
     // wait until one of the future returns error
     let res = tokio::try_join!(
         timeout,
-        publish_handle.map_err(|e| TestJoinError::TestMqttClientError(e))
+        publish_handle.map_err(TestJoinError::TestMqttClientError)
     );
 
     match res {

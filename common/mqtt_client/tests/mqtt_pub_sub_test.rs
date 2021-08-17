@@ -1,62 +1,61 @@
-use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, QoS, Topic, TopicFilter};
 use std::time::Duration;
-use tedge_utils::test_mqtt_server::start_broker_local;
-use tokio::time::sleep;
+use tests_mqtt_server::{mqtt_server_start, mqtt_server_stop};
 
-const MQTTTESTPORT: u16 = 58586;
+const MQTT_TEST_PORT: u16 = 55555;
 
-#[test]
-fn sending_and_receiving_a_message() {
-    async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT).await });
-        let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
-        let subscriber = Client::connect(
-            "subscribe",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
-        )
-        .await?;
-        let mut received = subscriber.subscribe(topic.filter()).await?;
+#[tokio::test]
+#[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
+async fn sending_and_receiving_a_message() {
+    mqtt_server_start(MQTT_TEST_PORT);
 
-        let message = Message::new(&topic, payload);
-        let publisher = Client::connect(
-            "publisher",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
-        )
-        .await?;
-        let _pkid = publisher.publish(message).await?;
-
-        tokio::select! {
-            msg = received.next() => Ok(msg),
-            _ = sleep(Duration::from_millis(1000)) => Ok(None)
-        }
-    }
+    let topic = Topic::new("test/uubpb9wyi9asi46l624f").unwrap();
+    let subscriber = Client::connect(
+        "subscribe",
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+    )
+    .await
+    .unwrap();
+    let mut received = subscriber.subscribe(topic.filter()).await.unwrap();
 
     let payload = String::from("Hello there!");
-    match tokio_test::block_on(scenario(payload.clone())) {
-        Ok(Some(rcv_message)) => assert_eq!(rcv_message.payload_str().unwrap(), payload),
-        Ok(None) => panic!("Got no message after 1s"),
-        Err(e) => panic!("Got an error: {}", e),
-    }
+    let message = Message::new(&topic, payload.clone()).qos(QoS::ExactlyOnce);
+    let publisher = Client::connect(
+        "publisher",
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+    )
+    .await
+    .unwrap();
+    let _pkid = publisher.publish(message).await.unwrap();
+    publisher.all_completed().await;
+
+    match tokio::time::timeout(Duration::from_millis(1000), received.next()).await {
+        Ok(Some(msg)) => assert_eq!(msg.payload_str().unwrap(), payload),
+        Ok(None) => todo!(),
+        Err(_err) => panic!("Got no message after 1s"),
+    };
+
+    mqtt_server_stop();
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
-    // Given an MQTT broker
-    let mqtt_port: u16 = 55555;
-    let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
+    mqtt_server_start(MQTT_TEST_PORT);
 
-    // And an MQTT client connected to that server
+    // std::thread::sleep(Duration::from_millis(1000));
+
     let subscriber = Client::connect(
         "client_subscribing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
 
     // The client can subscribe to many topics
-    let mut topic_filter = TopicFilter::new("/a/first/topic")?;
-    topic_filter.add("/a/second/topic")?;
-    topic_filter.add("/a/+/pattern")?; // one can use + pattern
-    topic_filter.add("/any/#")?; // one can use # pattern
+    let mut topic_filter = TopicFilter::new("a/first/topic")?;
+    topic_filter.add("a/second/topic")?;
+    topic_filter.add("a/+/pattern")?; // one can use + pattern
+    topic_filter.add("any/#")?; // one can use # pattern
 
     // The messages for these topics will all be received on the same message stream
     let mut messages = subscriber.subscribe(topic_filter).await?;
@@ -64,54 +63,54 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // So let us create another MQTT client publishing messages.
     let publisher = Client::connect(
         "client_publishing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
 
     // A message published on any of the subscribed topics must be received
     for (topic_name, payload) in vec![
-        ("/a/first/topic", "a first message"),
-        ("/a/second/topic", "a second message"),
-        ("/a/plus/pattern", "a third message"),
-        ("/any/sub/topic", "a fourth message"),
+        ("a/first/topic", "a first message"),
+        ("a/second/topic", "a second message"),
+        ("a/plus/pattern", "a third message"),
+        ("any/sub/topic", "a fourth message"),
     ]
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload);
+        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
         let () = publisher.publish(message).await?;
+        publisher.all_completed().await;
 
-        tokio::select! {
-            maybe_msg = messages.next() => {
-                let msg = maybe_msg.expect("Unexpected end of stream");
+        match tokio::time::timeout(Duration::from_millis(2000), messages.next()).await {
+            Ok(Some(msg)) => {
                 assert_eq!(msg.topic, topic);
                 assert_eq!(msg.payload_str()?, payload);
             }
-            _ = sleep(Duration::from_millis(1000)) => {
-                assert!(false, "No message received after a second");
-            }
+            Ok(None) => todo!(),
+            Err(_) => assert!(false, "No message received after a second"),
         }
     }
 
     // No message should be received from un-subscribed topics
     for (topic_name, payload) in vec![
-        ("/a/third/topic", "unrelated message"),
-        ("/unrelated/topic", "unrelated message"),
+        ("a/third/topic", "unrelated message"),
+        ("unrelated/topic", "unrelated message"),
     ]
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload);
+        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
         let () = publisher.publish(message).await?;
+        publisher.all_completed().await;
 
-        tokio::select! {
-            _ = messages.next() => {
-                assert!(false, "Unrelated message received");
-            }
-            _ = sleep(Duration::from_millis(1000)) => {
-            }
+        match tokio::time::timeout(Duration::from_millis(2000), messages.next()).await {
+            Ok(Some(_)) => assert!(false, "Unrelated message received"),
+            Ok(None) => {}
+            Err(_) => {}
         }
     }
+
+    mqtt_server_stop();
 
     Ok(())
 }

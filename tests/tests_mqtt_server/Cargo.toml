@@ -1,0 +1,11 @@
+[package]
+name = "tests_mqtt_server"
+version = "0.0.0"
+edition = "2018"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+license = "Apache-2.0"
+description = "tests_mqtt_server for tests"
+
+[dependencies]
+anyhow = "1.0"
+once_cell = "1.8"

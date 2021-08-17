@@ -26,7 +26,9 @@ rumqttd = "0.7"
 rumqttlog = "0.7"
 serde = "1.0.126"
 tedge_utils = { path = "../../common/tedge_utils" }
+tests_mqtt_server = { path = "../../tests/tests_mqtt_server" }
 tokio-test = "0.4"
 
 [features]
 integration-test = []
+requires-mosquitto = []

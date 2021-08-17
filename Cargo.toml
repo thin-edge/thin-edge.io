@@ -19,6 +19,7 @@ members = [
     "sm/plugins/tedge_dummy_plugin",
     "tedge_config",
     "tedge",
+    "tests/tests_mqtt_server"
 ]
 
 [profile.release]
