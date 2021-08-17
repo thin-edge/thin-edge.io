@@ -29,8 +29,6 @@ def is_timezone_aware(stamp):
 
 class SmManagement(BaseTest):
 
-    PAGE_SIZE = "500"
-
     def setup(self):
         """Setup Environment"""
 
@@ -41,12 +39,20 @@ class SmManagement(BaseTest):
         user = self.project.username
         password = self.project.c8ypass
 
+        # Place to save the id of the operation that we started.
+        # This is suitable for one operation and not for multiple ones running
+        # at the same time.
+        self.operation_id = None
+
         auth = bytes(f"{tenant}/{user}:{password}", "utf-8")
         self.header = {
             b"Authorization": b"Basic " + base64.b64encode(auth),
             b"content-type": b"application/json",
             b"Accept": b"application/json",
         }
+
+        # Make sure we have no last operations pending
+        self.wait_until_succcess()
 
     def trigger_action(self, package_name, package_id, version, url, action):
         """Trigger a installation or deinstallation of a package"""
@@ -83,28 +89,24 @@ class SmManagement(BaseTest):
             raise SystemError("Got HTTP status %s", req.status_code)
 
     def is_status_fail(self):
-        return self.is_status("FAILED")
+        if self.operation_id:
+            return self.check_status_of_operation("FAILED")
+        else:
+            return self.check_status("FAILED")
 
     def is_status_success(self):
-        return self.is_status("SUCCESSFUL")
+        if self.operation_id:
+            return self.check_status_of_operation("SUCCESSFUL")
+        else:
+            return self.check_status("SUCCESSFUL")
 
-    def is_status(self, status):
-        """Check if the last operation is successfull"""
-
-        timeslot = 600
-        time_to = datetime.now(timezone.utc).replace(microsecond=0)
-        time_from = time_to - timedelta(seconds=timeslot)
-
-        assert is_timezone_aware(time_from)
-
-        date_from = time_from.isoformat(sep="T")
-        date_to = time_to.isoformat(sep="T")
+    def check_status(self, status):
+        """Check if the last operation is successfull
+        """
 
         params = {
             "deviceId": self.project.deviceid,
-            "pageSize": self.PAGE_SIZE,
-            "dateFrom": date_from,
-            "dateTo": date_to,
+            "pageSize": 10,
             "revert": "true",
         }
 
@@ -119,10 +121,29 @@ class SmManagement(BaseTest):
         if not jresponse["operations"]:
             self.log.error("No operations found")
             return None
+
+        # Get the last operation, when we set "revert": "true" we can read it
+        # from the beginning of the list
         operation = jresponse["operations"][0]
 
-        self.log.info(operation["status"])
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
+        self.log.info(f"State of current operation: {operation['status']}")
+
+        return operation["status"] == status
+
+    def check_status_of_operation(self, status):
+        """Check if the last operation is successfull"""
+
+        url = f"https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations/{self.operation_id}"
+        req = requests.get(url, headers=self.header)
+
+        if req.status_code != 200:  # Request was accepted
+            raise SystemError("Got HTTP status %s", req.status_code)
+
+        operation = json.loads(req.text)
+
+        # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
+        self.log.info(f"State of operation {self.operation_id} : {operation['status']}")
 
         return operation["status"] == status
 
