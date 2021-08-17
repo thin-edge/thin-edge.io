@@ -2595,8 +2595,6 @@ dependencies = [
  "tedge_config",
  "tedge_users",
  "tedge_utils",
- "tempfile",
- "tests_mqtt_server",
  "thin_edge_json",
  "thiserror",
  "tokio",

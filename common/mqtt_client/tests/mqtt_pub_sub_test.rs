@@ -1,6 +1,7 @@
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::time::Duration;
 use tests_mqtt_server::TestsMqttServer;
+use tokio::time::sleep;
 
 const MQTT_TEST_PORT: u16 = 55555;
 
@@ -76,14 +77,16 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
         let topic = Topic::new(topic_name)?;
         let message = Message::new(&topic, payload);
         let () = publisher.publish(message).await?;
-        publisher.all_completed().await;
 
-        match tokio::time::timeout(Duration::from_millis(2000), messages.next()).await {
-            Ok(Some(msg)) => {
+        tokio::select! {
+            maybe_msg = messages.next() => {
+                let msg = maybe_msg.expect("Unexpected end of stream");
                 assert_eq!(msg.topic, topic);
                 assert_eq!(msg.payload_str()?, payload);
             }
-            _ => assert!(false, "No message received after a second"),
+            _ = sleep(Duration::from_millis(1000)) => {
+                assert!(false, "No message received after a second");
+            }
         }
     }
 
@@ -99,10 +102,12 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
         let () = publisher.publish(message).await?;
         publisher.all_completed().await;
 
-        if let Ok(Some(_)) =
-            tokio::time::timeout(Duration::from_millis(2000), messages.next()).await
-        {
-            assert!(false, "Unrelated message received")
+        tokio::select! {
+            _ = messages.next() => {
+                assert!(false, "Unrelated message received");
+            }
+            _ = sleep(Duration::from_millis(1000)) => {
+            }
         }
     }
 
