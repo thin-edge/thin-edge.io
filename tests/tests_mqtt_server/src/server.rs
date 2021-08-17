@@ -45,10 +45,17 @@ fn spawn_server_process(port: u16) -> Child {
         .unwrap()
 }
 
-pub fn mqtt_server_start(port: u16) {
-    start_server(port);
+pub struct TestsMqttServer {}
+
+impl TestsMqttServer {
+    pub fn new_with_port(port: u16) -> Self {
+        start_server(port);
+        Self {}
+    }
 }
 
-pub fn mqtt_server_stop() {
-    try_stop_server();
+impl Drop for TestsMqttServer {
+    fn drop(&mut self) {
+        try_stop_server();
+    }
 }

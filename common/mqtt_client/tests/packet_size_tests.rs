@@ -1,7 +1,7 @@
 use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
-use tests_mqtt_server::{mqtt_server_start, mqtt_server_stop};
+use tests_mqtt_server::TestsMqttServer;
 use tokio::time::Duration;
 
 const MQTT_TEST_PORT: u16 = 55555;
@@ -17,7 +17,7 @@ enum TestJoinError {
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    mqtt_server_start(MQTT_TEST_PORT);
+    let _server = TestsMqttServer::new_with_port(MQTT_TEST_PORT);
 
     // Start the subscriber
     let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
@@ -29,14 +29,8 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     let res = subscriber.await?;
 
     match res {
-        Err(e) => {
-            mqtt_server_stop();
-            Err(e)
-        }
-        _ => {
-            mqtt_server_stop();
-            Ok(())
-        }
+        Err(e) => Err(e),
+        _ => Ok(()),
     }
 }
 
@@ -44,8 +38,8 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
-    // Start the broker
-    mqtt_server_start(MQTT_TEST_PORT);
+    // Start the local broker
+    let _server = TestsMqttServer::new_with_port(MQTT_TEST_PORT);
 
     // Start the publisher and publish a message
     let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
@@ -53,14 +47,8 @@ async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // if error is received then test is ok, else test should fail
     let res = publish.await?;
     match res {
-        Err(e) => {
-            mqtt_server_stop();
-            Err(e)
-        }
-        _ => {
-            mqtt_server_stop();
-            Ok(())
-        }
+        Err(e) => Err(e),
+        _ => Ok(()),
     }
 }
 

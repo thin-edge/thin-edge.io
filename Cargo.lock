@@ -2589,7 +2589,6 @@ dependencies = [
  "log",
  "mockall",
  "mqtt_client",
- "once_cell",
  "serde",
  "serde_json",
  "structopt",

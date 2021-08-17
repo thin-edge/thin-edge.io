@@ -1,13 +1,13 @@
-use mqtt_client::{Client, Message, MqttClient, QoS, Topic, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::time::Duration;
-use tests_mqtt_server::{mqtt_server_start, mqtt_server_stop};
+use tests_mqtt_server::TestsMqttServer;
 
 const MQTT_TEST_PORT: u16 = 55555;
 
 #[tokio::test]
 #[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 async fn sending_and_receiving_a_message() {
-    mqtt_server_start(MQTT_TEST_PORT);
+    let _server = TestsMqttServer::new_with_port(MQTT_TEST_PORT);
 
     let topic = Topic::new("test/uubpb9wyi9asi46l624f").unwrap();
     let subscriber = Client::connect(
@@ -19,7 +19,7 @@ async fn sending_and_receiving_a_message() {
     let mut received = subscriber.subscribe(topic.filter()).await.unwrap();
 
     let payload = String::from("Hello there!");
-    let message = Message::new(&topic, payload.clone()).qos(QoS::ExactlyOnce);
+    let message = Message::new(&topic, payload.clone());
     let publisher = Client::connect(
         "publisher",
         &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
@@ -31,20 +31,17 @@ async fn sending_and_receiving_a_message() {
 
     match tokio::time::timeout(Duration::from_millis(1000), received.next()).await {
         Ok(Some(msg)) => assert_eq!(msg.payload_str().unwrap(), payload),
-        Ok(None) => todo!(),
-        Err(_err) => panic!("Got no message after 1s"),
+        _ => panic!("Got no message after 1s"),
     };
-
-    mqtt_server_stop();
 }
 
 #[tokio::test]
 #[cfg_attr(not(feature = "requires-mosquitto"), ignore)]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
-    mqtt_server_start(MQTT_TEST_PORT);
+    // Given an MQTT broker
+    let _server = TestsMqttServer::new_with_port(MQTT_TEST_PORT);
 
-    // std::thread::sleep(Duration::from_millis(1000));
-
+    // And an MQTT client connected to that server
     let subscriber = Client::connect(
         "client_subscribing_to_many_topics",
         &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
@@ -77,7 +74,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
+        let message = Message::new(&topic, payload);
         let () = publisher.publish(message).await?;
         publisher.all_completed().await;
 
@@ -86,8 +83,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
                 assert_eq!(msg.topic, topic);
                 assert_eq!(msg.payload_str()?, payload);
             }
-            Ok(None) => todo!(),
-            Err(_) => assert!(false, "No message received after a second"),
+            _ => assert!(false, "No message received after a second"),
         }
     }
 
@@ -99,18 +95,16 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
+        let message = Message::new(&topic, payload);
         let () = publisher.publish(message).await?;
         publisher.all_completed().await;
 
-        match tokio::time::timeout(Duration::from_millis(2000), messages.next()).await {
-            Ok(Some(_)) => assert!(false, "Unrelated message received"),
-            Ok(None) => {}
-            Err(_) => {}
+        if let Ok(Some(_)) =
+            tokio::time::timeout(Duration::from_millis(2000), messages.next()).await
+        {
+            assert!(false, "Unrelated message received")
         }
     }
-
-    mqtt_server_stop();
 
     Ok(())
 }
