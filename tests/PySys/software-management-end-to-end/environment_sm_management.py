@@ -84,8 +84,8 @@ class SmManagement(BaseTest):
 
         jresponse = json.loads(req.text)
 
-        self.log.info(f"Response: {req}")
-        self.log.info(f"Response to action: {jresponse}")
+        self.log.info(f"Response status: {req.status_code}")
+        self.log.info(f"Response to action: {json.dumps(jresponse, indent=4)}")
         self.log.info(f"Started operation: {jresponse['id']}")
 
         self.operation = jresponse
@@ -98,15 +98,15 @@ class SmManagement(BaseTest):
         if self.operation_id:
             return self.check_status_of_operation("FAILED")
         else:
-            return self.check_status("FAILED")
+            return self.check_last_status("FAILED")
 
     def is_status_success(self):
         if self.operation_id:
             return self.check_status_of_operation("SUCCESSFUL")
         else:
-            return self.check_status("SUCCESSFUL")
+            return self.check_last_status("SUCCESSFUL")
 
-    def check_status(self, status):
+    def check_last_status(self, status):
         """Check if the last operation is successfull
         """
 
@@ -155,35 +155,35 @@ class SmManagement(BaseTest):
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success
-        TODO This might block forever
         """
-        wait_time = 100
-        # wait for some time to let c8y process a request until we can poll for it
-        time.sleep(1)
-        timeout = 0
-        while True:
-            if self.is_status_success():
-                # Invalidate the old operation
-                self.operation_id = None
-                break
-            time.sleep(1)
-            timeout += 1
-            if timeout > wait_time:
-                raise SystemError("Timeout while waiting for a success")
+        self.wait_until_status("SUCCESSFUL")
 
     def wait_until_fail(self):
-        """Wait until c8y reports a success
-        TODO This might block forever
+        """Wait until c8y reports a fail
+        """
+        self.wait_until_status("FAIL")
+
+    def wait_until_status(self, status):
+        """Wait until c8y reports a specific status
         """
         wait_time = 100
+        timeout = 0
+
         # wait for some time to let c8y process a request until we can poll for it
         time.sleep(1)
-        timeout = 0
+
         while True:
-            if self.is_status_fail():
+
+            if self.operation_id:
+                stat = self.check_status_of_operation(status)
+            else:
+                stat = self.check_last_status(status)
+
+            if stat:
                 # Invalidate the old operation
                 self.operation_id = None
                 break
+
             time.sleep(1)
             timeout += 1
             if timeout > wait_time:
