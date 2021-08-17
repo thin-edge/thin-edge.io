@@ -1679,6 +1679,8 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "tedge_utils",
+ "tempfile",
  "thiserror",
  "tokio",
  "url",
@@ -2558,6 +2560,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_dummy_plugin"
+version = "0.0.0"
+dependencies = [
+ "structopt",
+ "thiserror",
+]
+
+[[package]]
 name = "tedge_mapper"
 version = "0.2.3"
 dependencies = [
@@ -2569,9 +2579,11 @@ dependencies = [
  "chrono",
  "clock",
  "confy",
+ "csv",
  "env_logger 0.8.4",
  "flockfile",
  "futures",
+ "json_sm",
  "log",
  "mockall",
  "mqtt_client",
@@ -2584,6 +2596,7 @@ dependencies = [
  "thin_edge_json",
  "thiserror",
  "tokio",
+ "tokio-test",
  "tracing",
  "tracing-subscriber",
 ]

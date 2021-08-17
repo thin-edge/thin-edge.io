@@ -1,3 +1,4 @@
+use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
     component::TEdgeComponent, error::*,
@@ -16,6 +17,7 @@ mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
+mod sm_c8y_mapper;
 
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
@@ -24,6 +26,7 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::Az => Box::new(AzureMapper::new()),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
+        MapperName::SmC8y => Box::new(CumulocitySoftwareManagementMapper::new()),
     }
 }
 
@@ -37,6 +40,7 @@ enum MapperName {
     Az,
     C8y,
     Collectd,
+    SmC8y,
 }
 
 #[tokio::main]

@@ -1,6 +1,14 @@
 use crate::plugin::*;
 use json_sm::*;
-use std::{collections::HashMap, fs, io, path::PathBuf};
+use log::error;
+use std::{
+    collections::HashMap,
+    fs,
+    io::{self, ErrorKind},
+    path::PathBuf,
+    process::Command,
+};
+use tedge_utils::paths::pathbuf_to_string;
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -69,8 +77,37 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                // TODO check the file is exec
-                // TODO check the command is actually a plugin
+                match Command::new(&path).arg("list").status() {
+                    Ok(code) if code.success() => {}
+
+                    // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
+                    Ok(_) => {
+                        error!(
+                            "File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.",
+                            pathbuf_to_string(path.clone()).unwrap()
+                        );
+                        continue;
+                    }
+
+                    Err(err) if err.kind() == ErrorKind::PermissionDenied => {
+                        error!(
+                            "File {} Permission Denied, is the file an executable?\n
+                            The file will not be registered as a plugin.",
+                            pathbuf_to_string(path.clone()).unwrap()
+                        );
+                        continue;
+                    }
+
+                    Err(err) => {
+                        error!(
+                            "An error occurred while trying to run: {}: {}\n
+                            The file will not be registered as a plugin.",
+                            pathbuf_to_string(path.clone()).unwrap(),
+                            err
+                        );
+                        continue;
+                    }
+                }
 
                 if let Some(file_name) = path.file_name() {
                     if let Some(plugin_name) = file_name.to_str() {

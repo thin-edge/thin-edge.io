@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -48,7 +48,7 @@ impl InternalError {
     }
 }
 
-fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
+fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List {} => {
             let apt = Command::new("apt")
@@ -66,7 +66,7 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
                     "[/ ]",
                     r#"{if ($1 != "Listing...") { print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}}"#,
                 ])
-                .stdin(apt.stdout.unwrap()) // Cannot panics: apt.stdout has been set
+                .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()
                 .map_err(|err| InternalError::exec_error("awk", err))?;
 
@@ -84,10 +84,17 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
             }
         }
 
-        PluginOp::Remove {
-            module,
-            version: _unused,
-        } => run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?,
+        PluginOp::Remove { module, version } => {
+            if let Some(version) = version {
+                // check the version mentioned present or not
+                run_cmd(
+                    "apt-get",
+                    &format!("remove --quiet --yes {}={}", module, version),
+                )?
+            } else {
+                run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
+            }
+        }
 
         PluginOp::Prepare => run_cmd("apt-get", &format!("update --quiet --yes"))?,
 
@@ -97,7 +104,7 @@ fn run(operation: PluginOp) -> Result<std::process::ExitStatus, InternalError> {
     Ok(status)
 }
 
-fn run_cmd(cmd: &str, args: &str) -> Result<std::process::ExitStatus, InternalError> {
+fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
     let args: Vec<&str> = args.split_whitespace().collect();
     let status = Command::new(cmd)
         .args(args)
