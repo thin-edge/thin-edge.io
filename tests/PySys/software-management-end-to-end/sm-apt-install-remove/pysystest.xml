@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Do something</title>
+	<title>Validate end to end behaviour for the apt plugin for installation and remove</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>

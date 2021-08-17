@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour
+Validate end to end behaviour for failing installation
 
 When we install a package that cannot be installed with the apt package manager
 Then we receive a failure from the apt plugin
