@@ -1,7 +1,10 @@
 use once_cell::sync::OnceCell;
 use std::{
+    net::TcpStream,
     process::{Child, Command, Stdio},
     sync::atomic::{AtomicUsize, Ordering},
+    thread::sleep,
+    time::Duration,
 };
 
 // Child doesn't implement `Drop` therefore we have to shutdown the process by hand.
@@ -14,6 +17,10 @@ fn start_server(port: u16) {
     unsafe {
         let _server_child_handle = SERVER.get_or_init(|| spawn_server_process(port));
     }
+
+    if TcpStream::connect(("127.0.0.1", port)).is_err() {
+        sleep(Duration::from_millis(100));
+    };
 
     CALLERS_COUNTER.fetch_add(1, Ordering::Relaxed);
 }
