@@ -69,7 +69,7 @@ class SmManagement(BaseTest):
             ]
         )
 
-    def trigger_action_json(self, json):
+    def trigger_action_json(self, json_content):
         """Take an actions description that is then forwarded to c8y"""
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
@@ -77,13 +77,19 @@ class SmManagement(BaseTest):
         payload = {
             "deviceId": self.project.deviceid,
             "description": "Apply software changes, triggered from PySys test",
-            "c8y_SoftwareUpdate": json,
+            "c8y_SoftwareUpdate": json_content,
         }
 
         req = requests.post(url, json=payload, headers=self.header)
 
+        jresponse = json.loads(req.text)
+
         self.log.info(f"Response: {req}")
-        self.log.info(f"Response to action: {req.text}")
+        self.log.info(f"Response to action: {jresponse}")
+        self.log.info(f"Started operation: {jresponse['id']}")
+
+        self.operation = jresponse
+        self.operation_id = jresponse["id"]
 
         if req.status_code != 201:  # Request was accepted
             raise SystemError("Got HTTP status %s", req.status_code)
