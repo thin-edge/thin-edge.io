@@ -71,6 +71,7 @@ impl ExternalPluginCommand {
             self.check_module_type(module)?;
             command.arg(&module.name);
             if let Some(ref version) = module.version {
+                command.arg("--module-version");
                 command.arg(version);
             }
         }
