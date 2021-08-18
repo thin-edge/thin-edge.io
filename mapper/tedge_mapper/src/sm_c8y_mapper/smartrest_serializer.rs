@@ -227,7 +227,13 @@ fn combine_version_and_type(
             }
         }
         None => match version {
-            Some(v) => v.to_string(),
+            Some(v) => {
+                if v.contains("::") {
+                    format!("{}::", v)
+                } else {
+                    v.to_string()
+                }
+            }
             None => "".to_string(),
         },
     }
@@ -241,6 +247,7 @@ mod tests {
     #[test]
     fn verify_combine_version_and_type() {
         let some_version: Option<SoftwareVersion> = Some("1.0".to_string());
+        let some_version_with_collon: Option<SoftwareVersion> = Some("1.0.0::1".to_string());
         let none_version: Option<SoftwareVersion> = None;
         let some_module_type: Option<SoftwareType> = Some("debian".to_string());
         let none_module_type: Option<SoftwareType> = None;
@@ -252,6 +259,14 @@ mod tests {
         assert_eq!(
             combine_version_and_type(&some_version, &none_module_type),
             "1.0"
+        );
+        assert_eq!(
+            combine_version_and_type(&some_version_with_collon, &some_module_type),
+            "1.0.0::1::debian"
+        );
+        assert_eq!(
+            combine_version_and_type(&some_version_with_collon, &none_module_type),
+            "1.0.0::1::"
         );
         assert_eq!(
             combine_version_and_type(&none_version, &some_module_type),
