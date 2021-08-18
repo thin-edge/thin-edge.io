@@ -99,10 +99,10 @@ class SmManagement(BaseTest):
         self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
-        if jresponse.get("id"):
-            self.operation_id = jresponse.get("id")
-        else:
-            raise SystemError("id is mising in response")
+        self.operation_id = jresponse.get("id")
+
+        if not self.operation_id:
+            raise SystemError("field id is mising in response")
 
         self.log.info("Started operation: %s", self.operation)
 
@@ -154,19 +154,25 @@ class SmManagement(BaseTest):
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
-        operation = jresponse["operations"][0]
+
+        operations = jresponse.get("operations")
+
+        if not operations or len(operations)!=1:
+            raise SystemError("field operations is mising in response or to long")
+
+        operation = operations[0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info("State of current operation: %s", operation["status"])
+        self.log.info("State of current operation: %s", operation.get("status"))
 
-        # In this case we just jump everything to se what is goin on
-        if operation["status"] in ["FAILED", "PENDING"]:
+        # In this case we just jump everything to see what is goin on
+        if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
             self.log.debug(
                 "State of current operation: %s", json.dumps(operation, indent=4)
             )
 
-        return operation["status"] == status
+        return operation.get("status") == status
 
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
@@ -183,7 +189,7 @@ class SmManagement(BaseTest):
             "State of operation %s : %s", self.operation_id, operation["status"]
         )
 
-        return operation["status"] == status
+        return operation.get("status") == status
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success"""
@@ -236,12 +242,15 @@ class SmManagement(BaseTest):
         jresponse = json.loads(req.text)
 
         ret = False
-        for package in jresponse["c8y_SoftwareList"]:
-            if package["name"] == package_name:
+
+        package_list = jresponse.get("c8y_SoftwareList")
+
+        for package in package_list :
+            if package.get("name") == package_name:
                 self.log.info("Package %s is installed", package_name)
                 # self.log.info(package)
                 if version:
-                    if package["version"] == version:
+                    if package.get("version") == version:
                         ret = True
                         break
 
