@@ -1,4 +1,4 @@
-use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+use mqtt_client::{Client, Message, MqttClient, QoS, Topic, TopicFilter};
 use std::time::Duration;
 use tests_mqtt_server::TestsMqttServer;
 use tokio::time::sleep;
@@ -20,7 +20,7 @@ async fn sending_and_receiving_a_message() {
     let mut received = subscriber.subscribe(topic.filter()).await.unwrap();
 
     let payload = String::from("Hello there!");
-    let message = Message::new(&topic, payload.clone());
+    let message = Message::new(&topic, payload.clone()).qos(QoS::ExactlyOnce);
     let publisher = Client::connect(
         "publisher",
         &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
@@ -75,7 +75,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload);
+        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
         let () = publisher.publish(message).await?;
 
         tokio::select! {
@@ -98,7 +98,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     .into_iter()
     {
         let topic = Topic::new(topic_name)?;
-        let message = Message::new(&topic, payload);
+        let message = Message::new(&topic, payload).qos(QoS::ExactlyOnce);
         let () = publisher.publish(message).await?;
         publisher.all_completed().await;
 
