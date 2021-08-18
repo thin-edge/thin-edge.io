@@ -20,14 +20,15 @@ import sys
 sys.path.append("software-management-end-to-end")
 from environment_sm_management import SmManagement
 
-#apple 5495053
-#banana 5494888
-#cherry 5495382
-#"watermelon", "5494510"
+# apple 5495053
+# banana 5494888
+# cherry 5495382
+# "watermelon", "5494510"
+
 
 class PySysTest(SmManagement):
     def setup(self):
-        #if self.myPlatform != "faked-plugin":
+        # if self.myPlatform != "faked-plugin":
         #    self.skipTest("Testing the apt plugin is not supported on this platform")
 
         super().setup()

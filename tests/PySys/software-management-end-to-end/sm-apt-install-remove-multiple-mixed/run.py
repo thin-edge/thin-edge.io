@@ -29,23 +29,23 @@ class PySysTest(SmManagement):
         self.assertThat("True == value", value=self.check_isinstalled("cherry"))
         self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
 
-
     def execute(self):
 
         pkgid = {
-        "apple":"5495053",
-        "banana":"5494888",
-        "cherry":"5495382",
-        "watermelon":"5494510",
-
-        "asciijump": "5475278",
-        "robotfindskitten" : "5473003",
-        "squirrel3": "5474871",
-        "rolldice": "5445239",
+            # fruits
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
         }
 
         mgt = "::fruits"
-        act =  "install"
+        act = "install"
         action = [
             {
                 "action": act,
@@ -86,7 +86,7 @@ class PySysTest(SmManagement):
         self.assertThat("True == value", value=self.check_isinstalled("cherry"))
         self.assertThat("True == value", value=self.check_isinstalled("asciijump"))
 
-        act =  "delete"
+        act = "delete"
         action = [
             {
                 "action": act,
