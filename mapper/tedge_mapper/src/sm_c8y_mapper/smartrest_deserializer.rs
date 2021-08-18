@@ -120,7 +120,6 @@ impl SmartRestUpdateSoftware {
 }
 
 impl SmartRestUpdateSoftwareModule {
-    // this doesn't cover the corner case '1.0.0::dd::debian::' for now (escape)
     fn get_module_version_and_type(&self) -> (Option<String>, Option<String>) {
         let split;
         match &self.version {
