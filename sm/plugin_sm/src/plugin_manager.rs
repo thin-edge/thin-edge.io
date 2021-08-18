@@ -40,7 +40,7 @@ pub trait Plugins {
 pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
-    default_plugin_type: Option<String>,
+    default_plugin_type: Option<SoftwareType>,
 }
 
 impl Plugins for ExternalPlugins {

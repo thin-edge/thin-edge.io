@@ -118,6 +118,7 @@ mod tests {
             ExternalPlugins::open(plugin_dir.into_path(), Some("apt".into())).unwrap();
         plugins.load().unwrap();
 
+        assert_eq!(plugins.by_software_type("default").unwrap().name, "apt");
         assert_eq!(plugins.default().unwrap().name, "apt");
     }
 
@@ -130,6 +131,7 @@ mod tests {
         let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
         plugins.load().unwrap();
 
+        assert_eq!(plugins.by_software_type("default").unwrap().name, "apt");
         assert_eq!(plugins.default().unwrap().name, "apt");
     }
 
