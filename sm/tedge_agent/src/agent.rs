@@ -9,7 +9,7 @@ use json_sm::{
 };
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use plugin_sm::plugin_manager::ExternalPlugins;
+use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{path::PathBuf, sync::Arc};
 use tedge_users::{UserManager, ROOT_USER};
 
@@ -100,13 +100,19 @@ impl SmAgent {
     pub async fn start(&self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
+        let default_plugin_type = self.config.default_plugin_type.clone();
         let plugins = Arc::new(ExternalPlugins::open(
-            &self.config.sm_home.join("sm-plugins"),
-            self.config.default_plugin_type.clone(),
+            self.config.sm_home.join("sm-plugins"),
+            default_plugin_type.clone(),
         )?);
+
         if plugins.empty() {
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);
+        }
+
+        if default_plugin_type.is_some() && plugins.by_software_type(default_plugin_type.clone().unwrap().as_str()).is_none() {
+            return Err(AgentError::InvalidDefaultPlugin(default_plugin_type.unwrap()));
         }
 
         let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
