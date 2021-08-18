@@ -94,13 +94,16 @@ class SmManagement(BaseTest):
 
         self.log.info("Response status: %s", req.status_code)
         self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
-        self.log.info("Started operation: %s", jresponse["id"])
 
         self.operation = jresponse
-        self.operation_id = jresponse["id"]
+        if jresponse.get("id"):
+            self.operation_id = jresponse.get("id")
+        else:
+            raise SystemError("id is mising in response")
 
-        if req.status_code != 201:  # Request was accepted
-            raise SystemError("Got HTTP status %s" % req.status_code)
+        self.log.info("Started operation: %s", self.operation)
+
+        req.raise_for_status()
 
     def is_status_fail(self):
         """Check if the current status is a fail"""
@@ -136,8 +139,7 @@ class SmManagement(BaseTest):
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
-        if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status ", req.status_code)
+        req.raise_for_status()
 
         self.log.debug("Final URL of the request: %s", req.url)
 
@@ -169,8 +171,7 @@ class SmManagement(BaseTest):
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header)
 
-        if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status", req.status_code)
+        req.raise_for_status()
 
         operation = json.loads(req.text)
 
@@ -227,8 +228,7 @@ class SmManagement(BaseTest):
         url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
-        if req.status_code != 200:
-            raise SystemError("Got HTTP status", req.status_code)
+        req.raise_for_status()
 
         jresponse = json.loads(req.text)
 
