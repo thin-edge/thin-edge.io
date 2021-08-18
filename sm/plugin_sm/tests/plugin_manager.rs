@@ -131,6 +131,16 @@ mod tests {
         assert_eq!(plugins.default().unwrap().name, "apt");
     }
 
+    #[test]
+    fn invalid_default_plugin() {
+        let plugin_dir = tempfile::tempdir().unwrap();
+        let plugin_file_path = plugin_dir.path().join("apt");
+        let _ = File::create(plugin_file_path).unwrap();
+
+        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into())).unwrap();
+        plugins.load().unwrap();
+    }
+
     fn create_some_plugin_in(dir: &tempfile::TempDir) -> NamedTempFile {
         tempfile::Builder::new()
             .suffix(".0")
