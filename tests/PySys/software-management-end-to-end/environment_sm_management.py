@@ -1,14 +1,3 @@
-import base64
-import time
-from datetime import datetime, timedelta, timezone
-
-import json
-import requests
-
-import pysys
-from pysys.basetest import BaseTest
-
-
 """
 This environment provides an interface to software management features
 through the C8y REST API.
@@ -19,6 +8,15 @@ WARNING: Handle with care!!!
 The C8YDEVICEID will handle on which this test will install and remove packages.
 """
 
+import base64
+import time
+
+import json
+import requests
+
+import pysys
+from pysys.basetest import BaseTest
+
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -28,6 +26,12 @@ def is_timezone_aware(stamp):
 
 
 class SmManagement(BaseTest):
+    """Base class for software management tests"""
+
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'apt_*' -XmyPlatform='container'
+    myPlatform = None
 
     def setup(self):
         """Setup Environment"""
@@ -55,13 +59,15 @@ class SmManagement(BaseTest):
         self.wait_until_succcess()
 
     def trigger_action(self, package_name, package_id, version, url, action):
-        """Trigger a installation or deinstallation of a package"""
+        """Trigger a installation or deinstallation of a package.
+        package_id is the id that is automatically assigned by C8y.
+        """
 
         self.trigger_action_json(
             [
                 {
-                    "id": package_id,
                     "name": package_name,
+                    "id": package_id,
                     "version": version,
                     "url": url,
                     "action": action,
@@ -70,7 +76,9 @@ class SmManagement(BaseTest):
         )
 
     def trigger_action_json(self, json_content):
-        """Take an actions description that is then forwarded to c8y"""
+        """Take an actions description that is then forwarded to c8y.
+        So far, no checks are done on the json_content.
+        """
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
 
@@ -84,27 +92,27 @@ class SmManagement(BaseTest):
 
         jresponse = json.loads(req.text)
 
-        self.log.info(f"Response status: {req.status_code}")
-        self.log.info(f"Response to action: {json.dumps(jresponse, indent=4)}")
-        self.log.info(f"Started operation: {jresponse['id']}")
+        self.log.info("Response status: %s", req.status_code)
+        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
+        self.log.info("Started operation: %s", jresponse["id"])
 
         self.operation = jresponse
         self.operation_id = jresponse["id"]
 
         if req.status_code != 201:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+            raise SystemError("Got HTTP status %s" % req.status_code)
 
     def is_status_fail(self):
+        """Check if the current status is a fail"""
         if self.operation_id:
             return self.check_status_of_operation("FAILED")
-        else:
-            return self.check_last_status("FAILED")
+        return self.check_last_status("FAILED")
 
     def is_status_success(self):
+        """Check if the current status is a success"""
         if self.operation_id:
             return self.check_status_of_operation("SUCCESSFUL")
-        else:
-            return self.check_last_status("SUCCESSFUL")
+        return self.check_last_status("SUCCESSFUL")
 
     def check_last_status(self, status):
         """Check if the last operation is successfull.
@@ -123,7 +131,7 @@ class SmManagement(BaseTest):
         req = requests.get(url, params=params, headers=self.header)
 
         if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+            raise SystemError("Got HTTP status ", req.status_code)
 
         jresponse = json.loads(req.text)
 
@@ -136,12 +144,14 @@ class SmManagement(BaseTest):
         operation = jresponse["operations"][0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info(f"State of current operation: {operation['status']}")
+        self.log.info("State of current operation: %s", operation["status"])
 
         # In this case we just jump everything to se what is goin on
-        if operation["status"] =="FAILED":
-          self.log.info(f"Final URL of the request: {req.url}")
-          self.log.info(f"State of current operation: {json.dumps(operation, indent=4)}")
+        if operation["status"] == "FAILED":
+            self.log.info("Final URL of the request: %s", req.url)
+            self.log.info(
+                "State of current operation: %s", json.dumps(operation, indent=4)
+            )
 
         return operation["status"] == status
 
@@ -152,28 +162,27 @@ class SmManagement(BaseTest):
         req = requests.get(url, headers=self.header)
 
         if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+            raise SystemError("Got HTTP status", req.status_code)
 
         operation = json.loads(req.text)
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info(f"State of operation {self.operation_id} : {operation['status']}")
+        self.log.info(
+            "State of operation %s : %s", self.operation_id, operation["status"]
+        )
 
         return operation["status"] == status
 
     def wait_until_succcess(self):
-        """Wait until c8y reports a success
-        """
+        """Wait until c8y reports a success"""
         self.wait_until_status("SUCCESSFUL")
 
     def wait_until_fail(self):
-        """Wait until c8y reports a fail
-        """
+        """Wait until c8y reports a fail"""
         self.wait_until_status("FAIL")
 
     def wait_until_status(self, status):
-        """Wait until c8y reports a specific status
-        """
+        """Wait until c8y reports a specific status"""
         wait_time = 100
         timeout = 0
 
@@ -204,22 +213,22 @@ class SmManagement(BaseTest):
         req = requests.get(url, headers=self.header)
 
         if req.status_code != 200:
-            raise SystemError("Got HTTP status %s", req.status_code)
+            raise SystemError("Got HTTP status", req.status_code)
 
         jresponse = json.loads(req.text)
 
         ret = False
         for package in jresponse["c8y_SoftwareList"]:
             if package["name"] == package_name:
-                self.log.info(f"Package {package_name} is installed")
+                self.log.info("Package %s is installed", package_name)
                 # self.log.info(package)
                 if version:
-                    if package["version"]==version:
+                    if package["version"] == version:
                         ret = True
                         break
-                    else:
-                        raise SystemError("Wrong version is installed")
-                else:
-                    ret = True
-                    break
+
+                    raise SystemError("Wrong version is installed")
+
+                ret = True
+                break
         return ret
