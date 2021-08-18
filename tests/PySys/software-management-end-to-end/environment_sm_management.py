@@ -58,6 +58,8 @@ class SmManagement(BaseTest):
         # Make sure we have no last operations pending
         self.wait_until_succcess()
 
+
+
     def trigger_action(self, package_name, package_id, version, url, action):
         """Trigger a installation or deinstallation of a package.
         package_id is the id that is automatically assigned by C8y.
@@ -123,8 +125,14 @@ class SmManagement(BaseTest):
 
         params = {
             "deviceId": self.project.deviceid,
-            "pageSize": 10,
+            "pageSize": 1,
+            # To get the latest records first
             "revert": "true",
+            # By using the date we make sure that the request comes
+            # sorted, otherwise the revert does not seem to have an
+            # effect. The lower boundary seems to be ok so we just
+            # use the beginning of the epoch same as the c8y ui.
+            "dateFrom":"1970-01-01T00:00:00.000Z"
         }
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
@@ -132,6 +140,8 @@ class SmManagement(BaseTest):
 
         if req.status_code != 200:  # Request was accepted
             raise SystemError("Got HTTP status ", req.status_code)
+
+        self.log.debug("Final URL of the request: %s", req.url)
 
         jresponse = json.loads(req.text)
 
@@ -147,9 +157,9 @@ class SmManagement(BaseTest):
         self.log.info("State of current operation: %s", operation["status"])
 
         # In this case we just jump everything to se what is goin on
-        if operation["status"] == "FAILED":
-            self.log.info("Final URL of the request: %s", req.url)
-            self.log.info(
+        if operation["status"] in [ "FAILED", "PENDING"]:
+            self.log.debug("Final URL of the request: %s", req.url)
+            self.log.debug(
                 "State of current operation: %s", json.dumps(operation, indent=4)
             )
 
