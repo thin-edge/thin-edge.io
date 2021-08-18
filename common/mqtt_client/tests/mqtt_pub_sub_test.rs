@@ -50,10 +50,10 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     .await?;
 
     // The client can subscribe to many topics
-    let mut topic_filter = TopicFilter::new("a/first/topic")?;
-    topic_filter.add("a/second/topic")?;
-    topic_filter.add("a/+/pattern")?; // one can use + pattern
-    topic_filter.add("any/#")?; // one can use # pattern
+    let mut topic_filter = TopicFilter::new("/a/first/topic")?;
+    topic_filter.add("/a/second/topic")?;
+    topic_filter.add("/a/+/pattern")?; // one can use + pattern
+    topic_filter.add("/any/#")?; // one can use # pattern
 
     // The messages for these topics will all be received on the same message stream
     let mut messages = subscriber.subscribe(topic_filter).await?;
@@ -67,10 +67,10 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
 
     // A message published on any of the subscribed topics must be received
     for (topic_name, payload) in vec![
-        ("a/first/topic", "a first message"),
-        ("a/second/topic", "a second message"),
-        ("a/plus/pattern", "a third message"),
-        ("any/sub/topic", "a fourth message"),
+        ("/a/first/topic", "a first message"),
+        ("/a/second/topic", "a second message"),
+        ("/a/plus/pattern", "a third message"),
+        ("/any/sub/topic", "a fourth message"),
     ]
     .into_iter()
     {
@@ -92,8 +92,8 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
 
     // No message should be received from un-subscribed topics
     for (topic_name, payload) in vec![
-        ("a/third/topic", "unrelated message"),
-        ("unrelated/topic", "unrelated message"),
+        ("/a/third/topic", "unrelated message"),
+        ("/unrelated/topic", "unrelated message"),
     ]
     .into_iter()
     {
