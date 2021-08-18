@@ -55,10 +55,8 @@ class SmManagement(BaseTest):
             b"Accept": b"application/json",
         }
 
-        # Make sure we have no last operations pending
-        self.wait_until_succcess()
-
-
+        # Make sure we have no last operations pending or executing
+        self.wait_until_end()
 
     def trigger_action(self, package_name, package_id, version, url, action):
         """Trigger a installation or deinstallation of a package.
@@ -132,7 +130,7 @@ class SmManagement(BaseTest):
             # sorted, otherwise the revert does not seem to have an
             # effect. The lower boundary seems to be ok so we just
             # use the beginning of the epoch same as the c8y ui.
-            "dateFrom":"1970-01-01T00:00:00.000Z"
+            "dateFrom": "1970-01-01T00:00:00.000Z",
         }
 
         url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
@@ -157,7 +155,7 @@ class SmManagement(BaseTest):
         self.log.info("State of current operation: %s", operation["status"])
 
         # In this case we just jump everything to se what is goin on
-        if operation["status"] in [ "FAILED", "PENDING"]:
+        if operation["status"] in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
             self.log.debug(
                 "State of current operation: %s", json.dumps(operation, indent=4)
@@ -191,8 +189,13 @@ class SmManagement(BaseTest):
         """Wait until c8y reports a fail"""
         self.wait_until_status("FAILED")
 
-    def wait_until_status(self, status):
-        """Wait until c8y reports a specific status"""
+    def wait_until_end(self):
+        """Wait until c8y reports a fail"""
+        self.wait_until_status("FAILED", "SUCCESSFUL")
+
+    def wait_until_status(self, status, status2=False):
+        """Wait until c8y reports status or status2."""
+
         wait_time = 100
         timeout = 0
 
@@ -202,9 +205,11 @@ class SmManagement(BaseTest):
         while True:
 
             if self.operation_id:
-                stat = self.check_status_of_operation(status)
+                stat = self.check_status_of_operation(
+                    status
+                ) or self.check_status_of_operation(status2)
             else:
-                stat = self.check_last_status(status)
+                stat = self.check_last_status(status) or self.check_last_status(status2)
 
             if stat:
                 # Invalidate the old operation
