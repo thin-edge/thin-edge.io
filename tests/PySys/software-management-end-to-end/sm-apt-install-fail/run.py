@@ -9,8 +9,6 @@ When we install a package that cannot be installed with the apt package manager
 Then we receive a failure from the apt plugin
 """
 
-import json
-import requests
 import time
 import sys
 
@@ -21,7 +19,6 @@ from environment_sm_management import SmManagement
 class PySysTest(SmManagement):
     def setup(self):
         super().setup()
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
 
     def execute(self):
 
