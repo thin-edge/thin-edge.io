@@ -107,7 +107,10 @@ class SmManagement(BaseTest):
             return self.check_last_status("SUCCESSFUL")
 
     def check_last_status(self, status):
-        """Check if the last operation is successfull
+        """Check if the last operation is successfull.
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
         """
 
         params = {
@@ -134,6 +137,11 @@ class SmManagement(BaseTest):
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
         self.log.info(f"State of current operation: {operation['status']}")
+
+        # In this case we just jump everything to se what is goin on
+        if operation["status"] =="FAILED":
+          self.log.info(f"Final URL of the request: {req.url}")
+          self.log.info(f"State of current operation: {json.dumps(operation, indent=4)}")
 
         return operation["status"] == status
 
