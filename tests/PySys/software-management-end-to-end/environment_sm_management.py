@@ -33,11 +33,14 @@ class SmManagement(BaseTest):
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform = None
 
+    tenant_url = "thin-edge-io.eu-latest"
+
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "container":
             self.skipTest("Testing the apt plugin is not supported on this platform")
+
 
         tenant = self.project.tenant
         user = self.project.username
@@ -80,7 +83,7 @@ class SmManagement(BaseTest):
         So far, no checks are done on the json_content.
         """
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
 
         payload = {
             "deviceId": self.project.deviceid,
@@ -136,7 +139,7 @@ class SmManagement(BaseTest):
             "dateFrom": "1970-01-01T00:00:00.000Z",
         }
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
         req.raise_for_status()
@@ -168,7 +171,7 @@ class SmManagement(BaseTest):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
 
-        url = f"https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations/{self.operation_id}"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
@@ -225,7 +228,7 @@ class SmManagement(BaseTest):
     def check_isinstalled(self, package_name, version=None):
         """Check if a package is installed"""
 
-        url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        url = f"https://{self.tenant_url}.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
