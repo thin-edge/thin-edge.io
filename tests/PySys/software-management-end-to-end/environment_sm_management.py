@@ -179,7 +179,7 @@ class SmManagement(BaseTest):
 
     def wait_until_fail(self):
         """Wait until c8y reports a fail"""
-        self.wait_until_status("FAIL")
+        self.wait_until_status("FAILED")
 
     def wait_until_status(self, status):
         """Wait until c8y reports a specific status"""
