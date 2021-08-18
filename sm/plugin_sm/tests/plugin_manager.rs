@@ -3,6 +3,8 @@ mod tests {
 
     use std::fs::File;
 
+    use assert_matches::assert_matches;
+    use json_sm::SoftwareError;
     use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
     use std::{path::PathBuf, str::FromStr};
     use tempfile::NamedTempFile;
@@ -137,8 +139,8 @@ mod tests {
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into())).unwrap();
-        plugins.load().unwrap();
+        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()));
+        assert_matches!(result.unwrap_err(), SoftwareError::InvalidDefaultPlugin(_));
     }
 
     fn create_some_plugin_in(dir: &tempfile::TempDir) -> NamedTempFile {

@@ -80,13 +80,18 @@ impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
-    ) -> io::Result<ExternalPlugins> {
+    ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
-            default_plugin_type,
+            default_plugin_type: default_plugin_type.clone(),
         };
         let () = plugins.load()?;
+
+        if default_plugin_type.is_some() && plugins.by_software_type(default_plugin_type.clone().unwrap().as_str()).is_none() {
+            return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type.unwrap()));
+        }
+
         Ok(plugins)
     }
 
@@ -165,7 +170,7 @@ impl ExternalPlugins {
         let mut response = SoftwareUpdateResponse::new(request);
 
         for software_type in request.modules_types() {
-            let errors = if let Some(plugin) = self.plugin_map.get(&software_type) {
+            let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
                 plugin.apply_all(updates).await
             } else {

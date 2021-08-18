@@ -111,10 +111,6 @@ impl SmAgent {
             return Err(AgentError::NoPlugins);
         }
 
-        if default_plugin_type.is_some() && plugins.by_software_type(default_plugin_type.clone().unwrap().as_str()).is_none() {
-            return Err(AgentError::InvalidDefaultPlugin(default_plugin_type.unwrap()));
-        }
-
         let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
         let mut errors = mqtt.subscribe_errors();
         tokio::spawn(async move {

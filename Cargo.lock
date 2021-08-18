@@ -1674,6 +1674,7 @@ name = "plugin_sm"
 version = "0.2.4"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
  "env_logger 0.9.0",
  "json_sm",

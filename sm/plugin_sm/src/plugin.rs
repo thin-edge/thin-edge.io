@@ -107,6 +107,7 @@ impl ExternalPluginCommand {
     pub fn check_module_type(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
         match &module.module_type {
             Some(name) if name == &self.name.clone() => Ok(()),
+            Some(name) if name == "default" => Ok(()),
             Some(name) => Err(SoftwareError::WrongModuleType {
                 actual: self.name.clone(),
                 expected: name.clone(),

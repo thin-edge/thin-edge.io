@@ -16,9 +16,6 @@ pub enum AgentError {
     #[error("Couldn't load plugins from /etc/tedge/sm-plugins")]
     NoPlugins,
 
-    #[error("The configured default plugin: {0} not found")]
-    InvalidDefaultPlugin(String),
-
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
 
