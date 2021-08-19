@@ -7,6 +7,10 @@ pub enum SystemService {
     TEdgeMapperAz,
     /// Cumulocity TEdge mapper
     TEdgeMapperC8y,
+    /// Cumulocity SM TEdge mapper
+    TEdgeSMMapperC8Y,
+    /// TEdge SM agent
+    TEdgeSMAgent,
 }
 
 impl std::fmt::Display for SystemService {
@@ -15,6 +19,8 @@ impl std::fmt::Display for SystemService {
             Self::Mosquitto => "mosquitto",
             Self::TEdgeMapperAz => "tedge-mapper-az",
             Self::TEdgeMapperC8y => "tedge-mapper-c8y",
+            Self::TEdgeSMMapperC8Y => "tedge-mapper-sm-c8y",
+            Self::TEdgeSMAgent => "tedge-agent",
         };
         write!(f, "{}", s)
     }

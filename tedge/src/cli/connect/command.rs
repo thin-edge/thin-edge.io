@@ -338,6 +338,21 @@ fn new_bridge(
         }
     }
 
+    match cloud {
+        Cloud::C8y => {
+            println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
+            if which("tedge_agent").is_err() && which("tedge_mapper").is_err() {
+                println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            } else {
+                service_manager
+                    .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
+                service_manager
+                    .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            }
+        }
+        Cloud::Azure => todo!(),
+    }
+
     Ok(())
 }
 

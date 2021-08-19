@@ -146,6 +146,8 @@ fn as_service_name(service: SystemService) -> &'static str {
         SystemService::Mosquitto => "mosquitto",
         SystemService::TEdgeMapperAz => "tedge-mapper-az",
         SystemService::TEdgeMapperC8y => "tedge-mapper-c8y",
+        SystemService::TEdgeSMMapperC8Y => "tedge-mapper-sm-c8y",
+        SystemService::TEdgeSMAgent => "tedge-agent",
     }
 }
 fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, Error> {
