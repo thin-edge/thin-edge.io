@@ -104,6 +104,7 @@ impl ExternalPluginCommand {
         }
     }
 
+    /// This test validates if an incoming module can be handled by it, by matching the module type with the plugin type
     pub fn check_module_type(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
         match &module.module_type {
             Some(name) if name == &self.name.clone() => Ok(()),
@@ -112,7 +113,7 @@ impl ExternalPluginCommand {
                 actual: self.name.clone(),
                 expected: name.clone(),
             }),
-            None => Ok(()),
+            None => Ok(()), // A software module without a type can be handled by any plugin that's configured as default plugin
         }
     }
 }

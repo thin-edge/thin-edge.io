@@ -185,7 +185,7 @@ mod tests {
 
         let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
 
-        // Create plugin with no known module type.
+        // Create software module without an explicit type.
         let module = SoftwareModule {
             module_type: None,
             name: "test".into(),
@@ -194,7 +194,7 @@ mod tests {
         };
         let res = plugin.check_module_type(&module);
 
-        // Plugin with type None is not registered and expected plugin to use would be `default`.
+        // A software module without an explicit type can be handled by any plugin, which in practice is the default plugin.
         assert_eq!(res, Ok(()));
     }
 
