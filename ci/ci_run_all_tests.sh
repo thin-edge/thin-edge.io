@@ -48,4 +48,7 @@ pysys.py run
 # TODO Ideally, as the keyword says we should run them in a container
 pysys.py run 'apt_*' -XmyPlatform='container'
 
+# Run the tests for software management
+pysys.py run 'apt_*' -XmyPlatform='specialcontainer'
+
 deactivate
