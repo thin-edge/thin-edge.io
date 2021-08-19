@@ -110,29 +110,55 @@ mod tests {
     #[test]
     fn explicit_default_plugin() {
         let plugin_dir = tempfile::tempdir().unwrap();
-        let _ = File::create(plugin_dir.path().join("apt")).unwrap();
-        let _ = File::create(plugin_dir.path().join("snap")).unwrap();
-        let _ = File::create(plugin_dir.path().join("docker")).unwrap();
+        let plugin1 = create_some_plugin_in(&plugin_dir);
+        let _res = std::fs::copy(get_dummy_plugin_path(), plugin1.path());
+
+        let plugin2 = create_some_plugin_in(&plugin_dir);
+        let _res = std::fs::copy(get_dummy_plugin_path(), plugin2.path());
+        let plugin_name2 = plugin2
+            .path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
+        let plugin3 = create_some_plugin_in(&plugin_dir);
+        let _res = std::fs::copy(get_dummy_plugin_path(), plugin3.path());
 
         let mut plugins =
-            ExternalPlugins::open(plugin_dir.into_path(), Some("apt".into())).unwrap();
+            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone())).unwrap();
         plugins.load().unwrap();
 
-        assert_eq!(plugins.by_software_type("default").unwrap().name, "apt");
-        assert_eq!(plugins.default().unwrap().name, "apt");
+        assert_eq!(
+            plugins.by_software_type("default").unwrap().name,
+            plugin_name2
+        );
+        assert_eq!(plugins.default().unwrap().name, plugin_name2);
     }
 
     #[test]
     fn implicit_default_plugin_with_only_one_plugin() {
         let plugin_dir = tempfile::tempdir().unwrap();
-        let plugin_file_path = plugin_dir.path().join("apt");
-        let _ = File::create(plugin_file_path).unwrap();
+
+        let plugin = create_some_plugin_in(&plugin_dir);
+        let _res = std::fs::copy(get_dummy_plugin_path(), plugin.path());
+        let plugin_name = plugin
+            .path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
 
         let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
         plugins.load().unwrap();
 
-        assert_eq!(plugins.by_software_type("default").unwrap().name, "apt");
-        assert_eq!(plugins.default().unwrap().name, "apt");
+        assert_eq!(
+            plugins.by_software_type("default").unwrap().name,
+            plugin_name
+        );
+        assert_eq!(plugins.default().unwrap().name, plugin_name);
     }
 
     #[test]

@@ -195,13 +195,7 @@ mod tests {
         let res = plugin.check_module_type(&module);
 
         // Plugin with type None is not registered and expected plugin to use would be `default`.
-        assert_eq!(
-            res,
-            Err(SoftwareError::WrongModuleType {
-                actual: "test".into(),
-                expected: "default".into()
-            })
-        );
+        assert_eq!(res, Ok(()));
     }
 
     fn get_dummy_plugin_path() -> PathBuf {
