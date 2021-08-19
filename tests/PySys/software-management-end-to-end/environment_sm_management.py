@@ -6,6 +6,12 @@ They are rather slow as they use the complete chain from end to end.
 
 WARNING: Handle with care!!!
 The C8YDEVICEID will handle on which this test will install and remove packages.
+
+Theese tests are disabled by default.
+To run them call:
+
+pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+
 """
 
 import base64
@@ -30,7 +36,7 @@ class SmManagement(BaseTest):
 
     # Static class member that can be overriden by a command line argument
     # E.g.:
-    # pysys.py run 'apt_*' -XmyPlatform='specialcontainer'
+    # pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
     myPlatform = None
 
     tenant_url = "thin-edge-io.eu-latest"
