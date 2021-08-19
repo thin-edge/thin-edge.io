@@ -123,14 +123,14 @@ class MqttPortChangeConnectionWorks(BaseTest):
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
     def validate_tedge_agent(self):
-        # restart the collectd mapper to use recently set port
+        # restart the tedge-agent to use recently set port
         tedge_agent_status = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "restart", "tedge-agent.service"],
             stdouterr="tedge_agent_restart",
         )
 
-        # check the status of the collectd mapper
+        # check the status of the tedge-agent
         tedge_agent_status = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "status", "tedge-agent.service"],
