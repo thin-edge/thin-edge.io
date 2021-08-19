@@ -11,7 +11,7 @@ use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
 use std::sync::Arc;
-use tedge_config::TEdgeConfigLocation;
+use tedge_config::{ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfigLocation};
 use tedge_users::{UserManager, ROOT_USER};
 
 #[derive(Debug)]
@@ -97,7 +97,19 @@ impl SmAgent {
             return Err(AgentError::NoPlugins);
         }
 
-        let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
+        let config_repository =
+            tedge_config::TEdgeConfigRepository::new(self.config_location.clone());
+        let tedge_config = config_repository.load()?;
+
+        let mqtt = Client::connect(
+            self.name.as_str(),
+            &self
+                .config
+                .mqtt_client_config
+                .clone()
+                .with_port(tedge_config.query(MqttPortSetting)?.into()),
+        )
+        .await?;
         let mut errors = mqtt.subscribe_errors();
         tokio::spawn(async move {
             while let Some(error) = errors.next().await {
