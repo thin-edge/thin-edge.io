@@ -112,6 +112,7 @@ mod tests {
         let plugin_dir = tempfile::tempdir().unwrap();
         let plugin1 = create_some_plugin_in(&plugin_dir);
         let _res = std::fs::copy(get_dummy_plugin_path(), plugin1.path());
+        let (_, _path) = plugin1.keep().unwrap();
 
         let plugin2 = create_some_plugin_in(&plugin_dir);
         let _res = std::fs::copy(get_dummy_plugin_path(), plugin2.path());
@@ -122,9 +123,11 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned();
+        let (_, _path) = plugin2.keep().unwrap();
 
         let plugin3 = create_some_plugin_in(&plugin_dir);
         let _res = std::fs::copy(get_dummy_plugin_path(), plugin3.path());
+        let (_, _path) = plugin3.keep().unwrap();
 
         let mut plugins =
             ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone())).unwrap();
@@ -150,6 +153,7 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned();
+        let (_, _path) = plugin.keep().unwrap();
 
         let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
         plugins.load().unwrap();
