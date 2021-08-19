@@ -30,7 +30,7 @@ class SmManagement(BaseTest):
 
     # Static class member that can be overriden by a command line argument
     # E.g.:
-    # pysys.py run 'apt_*' -XmyPlatform='container'
+    # pysys.py run 'apt_*' -XmyPlatform='specialcontainer'
     myPlatform = None
 
     tenant_url = "thin-edge-io.eu-latest"
@@ -38,7 +38,7 @@ class SmManagement(BaseTest):
     def setup(self):
         """Setup Environment"""
 
-        if self.myPlatform != "container":
+        if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
 
 
