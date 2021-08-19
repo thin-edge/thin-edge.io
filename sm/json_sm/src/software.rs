@@ -4,6 +4,8 @@ pub type SoftwareType = String;
 pub type SoftwareName = String;
 pub type SoftwareVersion = String;
 
+pub const DEFAULT: &str = "default";
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareModule {
     #[serde(default)]
@@ -15,11 +17,11 @@ pub struct SoftwareModule {
 
 impl SoftwareModule {
     pub fn default_type() -> SoftwareType {
-        "default".to_string()
+        DEFAULT.to_string()
     }
 
     pub fn is_default_type(module_type: &str) -> bool {
-        module_type.is_empty() || module_type == "default"
+        module_type.is_empty() || module_type == DEFAULT
     }
 
     pub fn new(
