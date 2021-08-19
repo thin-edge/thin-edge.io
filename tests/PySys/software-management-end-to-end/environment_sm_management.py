@@ -1,14 +1,3 @@
-import base64
-import time
-from datetime import datetime, timedelta, timezone
-
-import json
-import requests
-
-import pysys
-from pysys.basetest import BaseTest
-
-
 """
 This environment provides an interface to software management features
 through the C8y REST API.
@@ -19,6 +8,15 @@ WARNING: Handle with care!!!
 The C8YDEVICEID will handle on which this test will install and remove packages.
 """
 
+import base64
+import time
+
+import json
+import requests
+
+import pysys
+from pysys.basetest import BaseTest
+
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -28,12 +26,21 @@ def is_timezone_aware(stamp):
 
 
 class SmManagement(BaseTest):
+    """Base class for software management tests"""
+
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'apt_*' -XmyPlatform='container'
+    myPlatform = None
+
+    tenant_url = "thin-edge-io.eu-latest"
 
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "container":
             self.skipTest("Testing the apt plugin is not supported on this platform")
+
 
         tenant = self.project.tenant
         user = self.project.username
@@ -51,17 +58,19 @@ class SmManagement(BaseTest):
             b"Accept": b"application/json",
         }
 
-        # Make sure we have no last operations pending
-        self.wait_until_succcess()
+        # Make sure we have no last operations pending or executing
+        self.wait_until_end()
 
     def trigger_action(self, package_name, package_id, version, url, action):
-        """Trigger a installation or deinstallation of a package"""
+        """Trigger a installation or deinstallation of a package.
+        package_id is the id that is automatically assigned by C8y.
+        """
 
         self.trigger_action_json(
             [
                 {
-                    "id": package_id,
                     "name": package_name,
+                    "id": package_id,
                     "version": version,
                     "url": url,
                     "action": action,
@@ -70,9 +79,11 @@ class SmManagement(BaseTest):
         )
 
     def trigger_action_json(self, json_content):
-        """Take an actions description that is then forwarded to c8y"""
+        """Take an actions description that is then forwarded to c8y.
+        So far, no checks are done on the json_content.
+        """
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
 
         payload = {
             "deviceId": self.project.deviceid,
@@ -84,43 +95,56 @@ class SmManagement(BaseTest):
 
         jresponse = json.loads(req.text)
 
-        self.log.info(f"Response status: {req.status_code}")
-        self.log.info(f"Response to action: {json.dumps(jresponse, indent=4)}")
-        self.log.info(f"Started operation: {jresponse['id']}")
+        self.log.info("Response status: %s", req.status_code)
+        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
-        self.operation_id = jresponse["id"]
+        self.operation_id = jresponse.get("id")
 
-        if req.status_code != 201:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+        if not self.operation_id:
+            raise SystemError("field id is mising in response")
+
+        self.log.info("Started operation: %s", self.operation)
+
+        req.raise_for_status()
 
     def is_status_fail(self):
+        """Check if the current status is a fail"""
         if self.operation_id:
             return self.check_status_of_operation("FAILED")
-        else:
-            return self.check_last_status("FAILED")
+        return self.check_last_status("FAILED")
 
     def is_status_success(self):
+        """Check if the current status is a success"""
         if self.operation_id:
             return self.check_status_of_operation("SUCCESSFUL")
-        else:
-            return self.check_last_status("SUCCESSFUL")
+        return self.check_last_status("SUCCESSFUL")
 
     def check_last_status(self, status):
-        """Check if the last operation is successfull
+        """Check if the last operation is successfull.
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
         """
 
         params = {
             "deviceId": self.project.deviceid,
-            "pageSize": 10,
+            "pageSize": 1,
+            # To get the latest records first
             "revert": "true",
+            # By using the date we make sure that the request comes
+            # sorted, otherwise the revert does not seem to have an
+            # effect. The lower boundary seems to be ok so we just
+            # use the beginning of the epoch same as the c8y ui.
+            "dateFrom": "1970-01-01T00:00:00.000Z",
         }
 
-        url = "https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
-        if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+        req.raise_for_status()
+
+        self.log.debug("Final URL of the request: %s", req.url)
 
         jresponse = json.loads(req.text)
 
@@ -130,42 +154,58 @@ class SmManagement(BaseTest):
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
-        operation = jresponse["operations"][0]
+
+        operations = jresponse.get("operations")
+
+        if not operations or len(operations)!=1:
+            raise SystemError("field operations is mising in response or to long")
+
+        operation = operations[0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info(f"State of current operation: {operation['status']}")
+        self.log.info("State of current operation: %s", operation.get("status"))
 
-        return operation["status"] == status
+        # In this case we just jump everything to see what is goin on
+        if operation.get("status") in ["FAILED", "PENDING"]:
+            self.log.debug("Final URL of the request: %s", req.url)
+            self.log.debug(
+                "State of current operation: %s", json.dumps(operation, indent=4)
+            )
+
+        return operation.get("status") == status
 
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
 
-        url = f"https://thin-edge-io.eu-latest.cumulocity.com/devicecontrol/operations/{self.operation_id}"
+        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header)
 
-        if req.status_code != 200:  # Request was accepted
-            raise SystemError("Got HTTP status %s", req.status_code)
+        req.raise_for_status()
 
         operation = json.loads(req.text)
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info(f"State of operation {self.operation_id} : {operation['status']}")
+        self.log.info(
+            "State of operation %s : %s", self.operation_id, operation["status"]
+        )
 
-        return operation["status"] == status
+        return operation.get("status") == status
 
     def wait_until_succcess(self):
-        """Wait until c8y reports a success
-        """
+        """Wait until c8y reports a success"""
         self.wait_until_status("SUCCESSFUL")
 
     def wait_until_fail(self):
-        """Wait until c8y reports a fail
-        """
-        self.wait_until_status("FAIL")
+        """Wait until c8y reports a fail"""
+        self.wait_until_status("FAILED")
 
-    def wait_until_status(self, status):
-        """Wait until c8y reports a specific status
-        """
+    def wait_until_end(self):
+        """Wait until c8y reports a fail"""
+        self.wait_until_status("FAILED", "SUCCESSFUL")
+
+    def wait_until_status(self, status, status2=False):
+        """Wait until c8y reports status or status2."""
+
         wait_time = 100
         timeout = 0
 
@@ -175,9 +215,11 @@ class SmManagement(BaseTest):
         while True:
 
             if self.operation_id:
-                stat = self.check_status_of_operation(status)
+                stat = self.check_status_of_operation(
+                    status
+                ) or self.check_status_of_operation(status2)
             else:
-                stat = self.check_last_status(status)
+                stat = self.check_last_status(status) or self.check_last_status(status2)
 
             if stat:
                 # Invalidate the old operation
@@ -192,26 +234,28 @@ class SmManagement(BaseTest):
     def check_isinstalled(self, package_name, version=None):
         """Check if a package is installed"""
 
-        url = f"https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        url = f"https://{self.tenant_url}.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
-        if req.status_code != 200:
-            raise SystemError("Got HTTP status %s", req.status_code)
+        req.raise_for_status()
 
         jresponse = json.loads(req.text)
 
         ret = False
-        for package in jresponse["c8y_SoftwareList"]:
-            if package["name"] == package_name:
-                self.log.info(f"Package {package_name} is installed")
+
+        package_list = jresponse.get("c8y_SoftwareList")
+
+        for package in package_list :
+            if package.get("name") == package_name:
+                self.log.info("Package %s is installed", package_name)
                 # self.log.info(package)
                 if version:
-                    if package["version"]==version:
+                    if package.get("version") == version:
                         ret = True
                         break
-                    else:
-                        raise SystemError("Wrong version is installed")
-                else:
-                    ret = True
-                    break
+
+                    raise SystemError("Wrong version is installed")
+
+                ret = True
+                break
         return ret

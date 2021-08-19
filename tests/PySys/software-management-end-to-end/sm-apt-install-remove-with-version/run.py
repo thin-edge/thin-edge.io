@@ -30,7 +30,9 @@ class PySysTest(SmManagement):
 
     def execute(self):
 
-        self.trigger_action("rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "install")
+        self.trigger_action(
+            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "install"
+        )
 
         self.wait_until_succcess()
 
@@ -42,11 +44,14 @@ class PySysTest(SmManagement):
 
         self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
 
-        self.trigger_action("rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete")
+        self.trigger_action(
+            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete"
+        )
 
         self.wait_until_succcess()
 
-
     def validate(self):
 
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice", "1.16-1+b1::apt"))
+        self.assertThat(
+            "False == value", value=self.check_isinstalled("rolldice", "1.16-1+b1::apt")
+        )
