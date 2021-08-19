@@ -83,7 +83,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         # wait for a while
-        time.sleep(0.4)
+        time.sleep(1)
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
