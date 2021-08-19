@@ -18,9 +18,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     initialise_logging();
 
-    let default_plugin_type = tedge_config
-        .query_string_optional(SoftwarePluginDefaultSetting)?
-        .into();
+    let default_plugin_type = tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
     let tedge_config_path = config_repository
         .get_config_location()
         .tedge_config_root_path()

@@ -10,8 +10,6 @@ use std::{
 };
 use tedge_utils::paths::pathbuf_to_string;
 
-const DEFAULT: &str = "default";
-
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
     type Plugin;
@@ -88,8 +86,13 @@ impl ExternalPlugins {
         };
         let () = plugins.load()?;
 
-        if default_plugin_type.is_some() && plugins.by_software_type(default_plugin_type.clone().unwrap().as_str()).is_none() {
-            return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type.unwrap()));
+        if let Some(default_plugin_type) = default_plugin_type {
+            if plugins
+                .by_software_type(default_plugin_type.as_str())
+                .is_none()
+            {
+                return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+            }
         }
 
         Ok(plugins)

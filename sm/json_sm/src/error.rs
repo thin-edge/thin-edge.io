@@ -70,7 +70,6 @@ pub enum SoftwareError {
 
     #[error("I/O error: {reason:?}")]
     IoError { reason: String },
-
 }
 
 impl From<serde_json::Error> for SoftwareError {

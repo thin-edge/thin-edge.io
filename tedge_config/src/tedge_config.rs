@@ -260,7 +260,7 @@ impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
         _setting: SoftwarePluginDefaultSetting,
         value: String,
     ) -> ConfigSettingResult<()> {
-        self.data.software.default_plugin_type = Some(value.into());
+        self.data.software.default_plugin_type = Some(value);
         Ok(())
     }
 

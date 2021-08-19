@@ -9,7 +9,7 @@ use json_sm::{
 };
 use log::{debug, error, info};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
+use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
 use tedge_users::{UserManager, ROOT_USER};
 
