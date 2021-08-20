@@ -13,6 +13,11 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
 use tedge_users::{UserManager, ROOT_USER};
 
+use tedge_config::{
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
+    SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+};
+
 #[derive(Debug)]
 pub struct SmAgentConfig {
     pub request_topics: TopicFilter,
@@ -65,6 +70,26 @@ impl Default for SmAgentConfig {
 }
 
 impl SmAgentConfig {
+    pub fn try_new(tedge_config_location: TEdgeConfigLocation) -> Result<Self, anyhow::Error> {
+        let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
+        let tedge_config = config_repository.load()?;
+
+        let default_plugin_type =
+            tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
+        let mqtt_config =
+            mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
+
+        let tedge_config_path = config_repository
+            .get_config_location()
+            .tedge_config_root_path()
+            .to_path_buf();
+
+        Ok(SmAgentConfig::default()
+            .with_default_plugin_type(default_plugin_type)
+            .with_sm_home(tedge_config_path)
+            .with_mqtt_client_config(mqtt_config))
+    }
+
     pub fn with_default_plugin_type(self, default_plugin_type: Option<String>) -> Self {
         Self {
             default_plugin_type,
