@@ -71,7 +71,9 @@ impl CumulocitySoftwareManagement {
             match incoming_topic {
                 IncomingTopic::SoftwareListResponse => {
                     debug!("Software list");
-                    let () = self.validate_and_publish_software_list(message.payload_str()?).await?;
+                    let () = self
+                        .validate_and_publish_software_list(message.payload_str()?)
+                        .await?;
                 }
                 IncomingTopic::SoftwareUpdateResponse => {
                     debug!("Software update");
