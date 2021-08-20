@@ -5,9 +5,7 @@ use tokio::time::sleep;
 
 const MQTTTESTPORT: u16 = 58586;
 
-// Disabled as proven to be instable
-// Later on this feature should be named "integeration-test"
-#[cfg(feature = "integeration-test-disabled")]
+#[ignore = "CIT-515"]
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
@@ -42,9 +40,7 @@ fn sending_and_receiving_a_message() {
     }
 }
 
-// Disabled as proven to be instable
-// Later on this feature should be named "integeration-test"
-#[cfg(feature = "integeration-test-disabled")]
+#[ignore = "CIT-515"]
 #[tokio::test]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker

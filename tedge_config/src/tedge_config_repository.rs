@@ -5,6 +5,7 @@ use tedge_utils::fs::atomically_write_file_sync;
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
+#[derive(Debug)]
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
     config_defaults: TEdgeConfigDefaults,
@@ -57,6 +58,10 @@ impl TEdgeConfigRepository {
             config_location,
             config_defaults,
         }
+    }
+
+    pub fn get_config_location(&self) -> &TEdgeConfigLocation {
+        &self.config_location
     }
 
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
