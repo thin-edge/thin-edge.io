@@ -72,11 +72,7 @@ impl DisconnectBridgeCommand {
         }
         match self.cloud {
             Cloud::C8y => {
-                if which("tedge_agent").is_err() && which("tedge_mapper").is_err() {
-                    println!(
-                        "Warning: tedge_mapper is not installed. We recommend to install it.\n"
-                    );
-                } else {
+                if which("tedge_agent").is_ok() && which("tedge_mapper").is_ok() {
                     self.service_manager().stop_and_disable_service(
                         SystemService::TEdgeSMMapperC8Y,
                         std::io::stdout(),

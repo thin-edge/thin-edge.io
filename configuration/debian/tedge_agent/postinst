@@ -22,6 +22,6 @@ fi
 ## Enable the sm services if the device is connected to c8y cloud
 if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then 
     systemctl start tedge-agent.service
-    systemctl start tedge-mapper-sm-c8y.service    
+    systemctl start tedge-mapper-sm-c8y.service
 fi
 #DEBHELPER#
