@@ -9,9 +9,16 @@ The C8YDEVICEID will handle on which device this test will install and remove pa
 
 These tests are disabled by default as they will install and deinstall packages.
 Better run them in a VM or a container.
-To run them call:
+
+To run the tests:
 
     pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+
+To run the tests with another tenant url:
+
+    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
+
+
 
 """
 
@@ -41,7 +48,7 @@ class SoftwareManagement(BaseTest):
 
     myPlatform = None
 
-    tenant_url = "thin-edge-io.eu-latest"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
@@ -91,7 +98,7 @@ class SoftwareManagement(BaseTest):
         So far, no checks are done on the json_content.
         """
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}/devicecontrol/operations"
 
         payload = {
             "deviceId": self.project.deviceid,
@@ -147,7 +154,7 @@ class SoftwareManagement(BaseTest):
             "dateFrom": "1970-01-01T00:00:00.000Z",
         }
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
         req.raise_for_status()
@@ -185,7 +192,7 @@ class SoftwareManagement(BaseTest):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations/{self.operation_id}"
+        url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
@@ -242,7 +249,7 @@ class SoftwareManagement(BaseTest):
     def check_isinstalled(self, package_name, version=None):
         """Check if a package is installed"""
 
-        url = f"https://{self.tenant_url}.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        url = f"https://{self.tenant_url}/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
