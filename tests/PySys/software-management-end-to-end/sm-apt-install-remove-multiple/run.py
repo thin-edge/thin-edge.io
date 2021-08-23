@@ -34,6 +34,8 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
+        # The ID is currently hardcoded to the IDs for tenant thin-edge-io
+        # TODO Improve repository ID management
         action = [
             {
                 "action": "install",
@@ -70,6 +72,8 @@ class PySysTest(SoftwareManagement):
             "True == value", value=self.check_isinstalled("robotfindskitten")
         )
 
+        # The ID is currently hardcoded to the IDs for tenant thin-edge-io
+        # TODO Improve repository ID management
         action = [
             {
                 "action": "delete",

@@ -79,6 +79,8 @@ class SoftwareManagement(BaseTest):
     def trigger_action(self, package_name, package_id, version, url, action):
         """Trigger a installation or deinstallation of a package.
         package_id is the id that is automatically assigned by C8y.
+
+        TODO Improve repository ID management to avoid hardcoded IDs
         """
 
         self.trigger_action_json(
@@ -96,6 +98,8 @@ class SoftwareManagement(BaseTest):
     def trigger_action_json(self, json_content):
         """Take an actions description that is then forwarded to c8y.
         So far, no checks are done on the json_content.
+
+        TODO Improve repository ID management to avoid hardcoded IDs
         """
 
         url = f"https://{self.tenant_url}/devicecontrol/operations"
@@ -222,7 +226,7 @@ class SoftwareManagement(BaseTest):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 100
+        wait_time = 300
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
