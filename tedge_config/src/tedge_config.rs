@@ -244,6 +244,32 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: SoftwarePluginDefaultSetting) -> ConfigSettingResult<String> {
+        self.data
+            .software
+            .default_plugin_type
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: SoftwarePluginDefaultSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: SoftwarePluginDefaultSetting,
+        value: String,
+    ) -> ConfigSettingResult<()> {
+        self.data.software.default_plugin_type = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: SoftwarePluginDefaultSetting) -> ConfigSettingResult<()> {
+        self.data.software.default_plugin_type = None;
+        Ok(())
+    }
+}
+
 /// Generic extension trait implementation for all `ConfigSetting`s of `TEdgeConfig`
 /// that provide `TryFrom`/`TryInto` implementations for `String`.
 impl<T, E, F> ConfigSettingAccessorStringExt<T> for TEdgeConfig

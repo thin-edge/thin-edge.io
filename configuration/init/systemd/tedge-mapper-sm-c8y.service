@@ -1,0 +1,12 @@
+[Unit]
+Description=tedge-mapper-sm-c8y converts SmartREST2.0 format to/from Software Management Thin Edge JSON format.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge-mapper
+ExecStart=/usr/bin/tedge_mapper sm-c8y
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

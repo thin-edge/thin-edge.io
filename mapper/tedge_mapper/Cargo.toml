@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -13,6 +13,7 @@ assets = [
     ["../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
+    ["../../configuration/init/systemd/tedge-mapper-sm-c8y.service", "/lib/systemd/system/tedge-mapper-sm-c8y.service", "644"],
     ["../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],
     ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
 ]
@@ -44,6 +45,10 @@ thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
+json_sm = {path = "../../sm/json_sm"}
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+csv = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.5"
@@ -51,3 +56,4 @@ assert-json-diff = "2.0"
 confy = "0.4"
 serde_json = "1.0"
 serde = "1.0.126"
+tokio-test = "0.4"
