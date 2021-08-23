@@ -79,6 +79,8 @@ impl DisconnectBridgeCommand {
                     );
                     self.service_manager()
                         .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+                } else {
+                    println!("Software management is not installed. Skipping disabling related components");
                 }
             }
             _ => todo!(),

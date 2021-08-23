@@ -331,7 +331,7 @@ fn new_bridge(
         println!("Checking if tedge-mapper is installed.\n");
 
         if which("tedge_mapper").is_err() {
-            println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            println!("Warning: tedge_mapper is not installed.\n");
         } else {
             service_manager
                 .start_and_enable_service(cloud.dependent_mapper_service(), std::io::stdout());
@@ -342,7 +342,7 @@ fn new_bridge(
         Cloud::C8y => {
             println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
             if which("tedge_agent").is_err() && which("tedge_mapper").is_err() {
-                println!("Warning: tedge_agent and tedge_mapper_sm_c8y are not installed. We recommend to install them.\n");
+                println!("Warning: Software management is not installed. So, skipping enabling related components.\n");
             } else {
                 service_manager
                     .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
