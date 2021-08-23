@@ -24,7 +24,7 @@ from environment_sm_management import SoftwareManagement
 class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
     def execute(self):
 
@@ -32,7 +32,7 @@ class PySysTest(SoftwareManagement):
 
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
 
@@ -40,4 +40,4 @@ class PySysTest(SoftwareManagement):
 
     def validate(self):
 
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))

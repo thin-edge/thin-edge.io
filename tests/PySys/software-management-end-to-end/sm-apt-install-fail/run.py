@@ -29,5 +29,5 @@ class PySysTest(SoftwareManagement):
     def validate(self):
 
         self.assertThat(
-            "False == value", value=self.check_isinstalled("does_not_exist")
+            "False == value", value=self.check_is_installed("does_not_exist")
         )

@@ -24,12 +24,12 @@ class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
 
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
-        self.assertThat("False == value", value=self.check_isinstalled("squirrel3"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
+        self.assertThat("False == value", value=self.check_is_installed("squirrel3"))
         self.assertThat(
-            "False == value", value=self.check_isinstalled("robotfindskitten")
+            "False == value", value=self.check_is_installed("robotfindskitten")
         )
 
     def execute(self):
@@ -64,12 +64,12 @@ class PySysTest(SoftwareManagement):
 
         self.wait_until_succcess()
 
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
-        self.assertThat("True == value", value=self.check_isinstalled("asciijump"))
-        self.assertThat("True == value", value=self.check_isinstalled("squirrel3"))
+        self.assertThat("True == value", value=self.check_is_installed("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("squirrel3"))
         self.assertThat(
-            "True == value", value=self.check_isinstalled("robotfindskitten")
+            "True == value", value=self.check_is_installed("robotfindskitten")
         )
 
         # The ID is currently hardcoded to the IDs for tenant thin-edge-io
@@ -104,9 +104,9 @@ class PySysTest(SoftwareManagement):
 
     def validate(self):
 
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
-        self.assertThat("False == value", value=self.check_isinstalled("squirrel3"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
+        self.assertThat("False == value", value=self.check_is_installed("squirrel3"))
         self.assertThat(
-            "False == value", value=self.check_isinstalled("robotfindskitten")
+            "False == value", value=self.check_is_installed("robotfindskitten")
         )

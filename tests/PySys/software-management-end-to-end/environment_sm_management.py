@@ -121,7 +121,7 @@ class SoftwareManagement(BaseTest):
         self.operation_id = jresponse.get("id")
 
         if not self.operation_id:
-            raise SystemError("field id is mising in response")
+            raise SystemError("field id is missing in response")
 
         self.log.info("Started operation: %s", self.operation)
 
@@ -251,7 +251,7 @@ class SoftwareManagement(BaseTest):
             if timeout > wait_time:
                 raise SystemError("Timeout while waiting for a failure")
 
-    def check_isinstalled(self, package_name, version=None):
+    def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
 
         url = f"https://{self.tenant_url}/inventory/managedObjects/{self.project.deviceid}"
