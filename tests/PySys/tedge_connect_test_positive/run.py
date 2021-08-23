@@ -28,12 +28,6 @@ class TedgeConnectTestPositive(EnvironmentC8y):
             stdouterr="tedge_connect_c8y_test_positive",
         )
 
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.systemctl, "status", "tedge-agent.service"],
-            stdouterr="tedge_agent_status",
-        )
-
     def validate(self):
         super().validate()
         self.log.info("Validate")
@@ -41,5 +35,5 @@ class TedgeConnectTestPositive(EnvironmentC8y):
             "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
         )
         self.assertGrep(
-            "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
+            "tedge_connect_c8y_test_positive.out", "tedge-agent service successfully started and enabled!", contains=True
         )
