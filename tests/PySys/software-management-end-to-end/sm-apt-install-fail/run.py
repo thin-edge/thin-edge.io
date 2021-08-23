@@ -13,10 +13,10 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
 

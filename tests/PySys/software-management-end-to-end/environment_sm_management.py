@@ -31,12 +31,13 @@ def is_timezone_aware(stamp):
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
-class SmManagement(BaseTest):
+class SoftwareManagement(BaseTest):
     """Base class for software management tests"""
 
     # Static class member that can be overriden by a command line argument
     # E.g.:
     # pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+
     myPlatform = None
 
     tenant_url = "thin-edge-io.eu-latest"
