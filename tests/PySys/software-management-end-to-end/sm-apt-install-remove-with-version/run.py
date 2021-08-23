@@ -53,5 +53,6 @@ class PySysTest(SoftwareManagement):
     def validate(self):
 
         self.assertThat(
-            "False == value", value=self.check_is_installed("rolldice", "1.16-1+b1::apt")
+            "False == value",
+            value=self.check_is_installed("rolldice", "1.16-1+b1::apt"),
         )

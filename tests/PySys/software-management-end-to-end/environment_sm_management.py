@@ -56,7 +56,6 @@ class SoftwareManagement(BaseTest):
         if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
 
-
         tenant = self.project.tenant
         user = self.project.username
         password = self.project.c8ypass
@@ -177,7 +176,7 @@ class SoftwareManagement(BaseTest):
 
         operations = jresponse.get("operations")
 
-        if not operations or len(operations)!=1:
+        if not operations or len(operations) != 1:
             raise SystemError("field operations is mising in response or to long")
 
         operation = operations[0]
@@ -265,7 +264,7 @@ class SoftwareManagement(BaseTest):
 
         package_list = jresponse.get("c8y_SoftwareList")
 
-        for package in package_list :
+        for package in package_list:
             if package.get("name") == package_name:
                 self.log.info("Package %s is installed", package_name)
                 # self.log.info(package)
