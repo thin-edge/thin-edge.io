@@ -215,22 +215,24 @@ mod tests {
     use mockall::Sequence;
     use mqtt_client::{MockMqttClient, MockMqttErrorStream, MockMqttMessageStream, QoS};
     use tokio::time::{self, Instant};
+    use chrono::{Utc,TimeZone};
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let collectd_message = CollectdMessage::new("temperature", "value", 32.5);
+        let timestamp = Utc.ymd(2015, 5, 15).and_hms_milli(0, 0, 1, 444);
+        let collectd_message = CollectdMessage::new("temperature", "value", timestamp,32.5);
         let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "x", 50.0);
+        let collectd_message = CollectdMessage::new("coordinate", "x", timestamp,50.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "y", 70.0);
+        let collectd_message = CollectdMessage::new("coordinate", "y", timestamp,70.0);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("pressure", "value", 98.2);
+        let collectd_message = CollectdMessage::new("pressure", "value", timestamp,98.2);
         message_batch.add_to_batch(collectd_message)?;
 
-        let collectd_message = CollectdMessage::new("coordinate", "z", 90.0);
+        let collectd_message = CollectdMessage::new("coordinate", "z", timestamp,90.0);
         message_batch.add_to_batch(collectd_message)?;
 
         let message_group = message_batch.end_batch()?;

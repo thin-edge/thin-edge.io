@@ -1,10 +1,13 @@
 use mqtt_client::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
+use batcher::Batchable;
+use chrono::{Utc, TimeZone, DateTime, NaiveDateTime};
 
 #[derive(Debug)]
 pub struct CollectdMessage<'a> {
     pub metric_group_key: &'a str,
     pub metric_key: &'a str,
+    pub timestamp: DateTime::<Utc>,
     pub metric_value: f64,
 }
 
@@ -32,10 +35,11 @@ impl<'a> CollectdMessage<'a> {
     }
 
     #[cfg(test)]
-    pub fn new(metric_group_key: &'a str, metric_key: &'a str, metric_value: f64) -> Self {
+    pub fn new(metric_group_key: &'a str, metric_key: &'a str, timestamp: DateTime::<Utc>, metric_value: f64) -> Self {
         Self {
             metric_group_key,
             metric_key,
+            timestamp,
             metric_value,
         }
     }
@@ -59,13 +63,14 @@ impl<'a> CollectdMessage<'a> {
         Ok(CollectdMessage {
             metric_group_key: collectd_topic.metric_group_key,
             metric_key: collectd_topic.metric_key,
+            timestamp: collectd_payload.timestamp(),
             metric_value: collectd_payload.metric_value,
         })
     }
 }
 
-#[derive(Debug)]
-struct CollectdTopic<'a> {
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct CollectdTopic<'a> {
     metric_group_key: &'a str,
     metric_key: &'a str,
 }
@@ -93,7 +98,7 @@ impl<'a> CollectdTopic<'a> {
 
 #[derive(Debug)]
 struct CollectdPayload {
-    _timestamp: f64,
+    timestamp: f64,
     metric_value: f64,
 }
 
@@ -113,12 +118,12 @@ impl CollectdPayload {
     fn parse_from(payload: &str) -> Result<Self, CollectdPayloadError> {
         let mut iter = payload.split(':');
 
-        let _timestamp = iter.next().ok_or_else(|| {
+        let timestamp = iter.next().ok_or_else(|| {
             CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
         })?;
 
-        let _timestamp = _timestamp.parse::<f64>().map_err(|_err| {
-            CollectdPayloadError::InvalidMeasurementTimestamp(_timestamp.to_string())
+        let timestamp = timestamp.parse::<f64>().map_err(|_err| {
+            CollectdPayloadError::InvalidMeasurementTimestamp(timestamp.to_string())
         })?;
 
         let metric_value = iter.next().ok_or_else(|| {
@@ -131,13 +136,34 @@ impl CollectdPayload {
 
         match iter.next() {
             None => Ok(CollectdPayload {
-                _timestamp,
+                timestamp,
                 metric_value,
             }),
             Some(_) => Err(CollectdPayloadError::InvalidMeasurementPayloadFormat(
                 payload.to_string(),
             )),
         }
+    }
+
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        let timestamp = self.timestamp.trunc() as i64;
+        let nanoseconds = (self.timestamp.fract() * 1.0e9 )as u32 ;
+        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, nanoseconds), Utc)
+    }
+}
+
+impl<'a> Batchable for CollectdMessage<'a> {
+    type Key = CollectdTopic<'a>;
+
+    fn key(&self) -> Self::Key {
+        CollectdTopic {
+            metric_group_key: self.metric_group_key,
+            metric_key: self.metric_key,
+        }
+    }
+
+    fn event_time(&self) -> DateTime<Utc> {
+        self.timestamp
     }
 }
 
@@ -158,29 +184,33 @@ mod tests {
         let CollectdMessage {
             metric_group_key,
             metric_key,
+            timestamp,
             metric_value,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
+        assert_eq!(timestamp, Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0));
         assert_eq!(metric_value, 32.5);
     }
 
     #[test]
     fn collectd_null_terminated_message_parsing() {
         let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
-        let mqtt_message = Message::new(&topic, "123456789:32.5\u{0}");
+        let mqtt_message = Message::new(&topic, "123456789.125:32.5\u{0}");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
         let CollectdMessage {
             metric_group_key,
             metric_key,
+            timestamp,
             metric_value,
         } = collectd_message;
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
+        assert_eq!(timestamp, Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125));
         assert_eq!(metric_value, 32.5);
     }
 
