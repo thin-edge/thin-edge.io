@@ -5,12 +5,13 @@ With these we can emulate a user doing operations in the C8y UI.
 They are rather slow as they use the complete chain from end to end.
 
 WARNING: Handle with care!!!
-The C8YDEVICEID will handle on which this test will install and remove packages.
+The C8YDEVICEID will handle on which device this test will install and remove packages.
 
-Theese tests are disabled by default.
+These tests are disabled by default as they will install and deinstall packages.
+Better run them in a VM or a container.
 To run them call:
 
-pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
 
 """
 
