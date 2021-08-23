@@ -20,13 +20,13 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
-        self.assertThat("False == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
     def execute(self):
 
@@ -36,13 +36,13 @@ class PySysTest(SmManagement):
 
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action("rolldice", "5445239", "88::apt", "notanurl", "delete")
 
         self.wait_until_fail()
 
-        self.assertThat("True == value", value=self.check_isinstalled("rolldice"))
+        self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
             "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete"
@@ -53,5 +53,6 @@ class PySysTest(SmManagement):
     def validate(self):
 
         self.assertThat(
-            "False == value", value=self.check_isinstalled("rolldice", "1.16-1+b1::apt")
+            "False == value",
+            value=self.check_is_installed("rolldice", "1.16-1+b1::apt"),
         )

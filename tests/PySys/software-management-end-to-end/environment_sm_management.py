@@ -5,12 +5,20 @@ With these we can emulate a user doing operations in the C8y UI.
 They are rather slow as they use the complete chain from end to end.
 
 WARNING: Handle with care!!!
-The C8YDEVICEID will handle on which this test will install and remove packages.
+The C8YDEVICEID will handle on which device this test will install and remove packages.
 
-Theese tests are disabled by default.
-To run them call:
+These tests are disabled by default as they will install and deinstall packages.
+Better run them in a VM or a container.
 
-pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+To run the tests:
+
+    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+
+To run the tests with another tenant url:
+
+    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
+
+
 
 """
 
@@ -31,22 +39,22 @@ def is_timezone_aware(stamp):
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
-class SmManagement(BaseTest):
+class SoftwareManagement(BaseTest):
     """Base class for software management tests"""
 
     # Static class member that can be overriden by a command line argument
     # E.g.:
     # pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+
     myPlatform = None
 
-    tenant_url = "thin-edge-io.eu-latest"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
-
 
         tenant = self.project.tenant
         user = self.project.username
@@ -70,6 +78,8 @@ class SmManagement(BaseTest):
     def trigger_action(self, package_name, package_id, version, url, action):
         """Trigger a installation or deinstallation of a package.
         package_id is the id that is automatically assigned by C8y.
+
+        TODO Improve repository ID management to avoid hardcoded IDs
         """
 
         self.trigger_action_json(
@@ -87,9 +97,11 @@ class SmManagement(BaseTest):
     def trigger_action_json(self, json_content):
         """Take an actions description that is then forwarded to c8y.
         So far, no checks are done on the json_content.
+
+        TODO Improve repository ID management to avoid hardcoded IDs
         """
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}/devicecontrol/operations"
 
         payload = {
             "deviceId": self.project.deviceid,
@@ -108,7 +120,7 @@ class SmManagement(BaseTest):
         self.operation_id = jresponse.get("id")
 
         if not self.operation_id:
-            raise SystemError("field id is mising in response")
+            raise SystemError("field id is missing in response")
 
         self.log.info("Started operation: %s", self.operation)
 
@@ -145,7 +157,7 @@ class SmManagement(BaseTest):
             "dateFrom": "1970-01-01T00:00:00.000Z",
         }
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations"
+        url = f"https://{self.tenant_url}/devicecontrol/operations"
         req = requests.get(url, params=params, headers=self.header)
 
         req.raise_for_status()
@@ -155,15 +167,16 @@ class SmManagement(BaseTest):
         jresponse = json.loads(req.text)
 
         if not jresponse["operations"]:
-            self.log.error("No operations found")
-            return None
+            # This can happen e.g. after a weekend when C8y deleted the operations
+            self.log.error("No operations found, assuming it passed")
+            return True
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
 
         operations = jresponse.get("operations")
 
-        if not operations or len(operations)!=1:
+        if not operations or len(operations) != 1:
             raise SystemError("field operations is mising in response or to long")
 
         operation = operations[0]
@@ -183,7 +196,7 @@ class SmManagement(BaseTest):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
 
-        url = f"https://{self.tenant_url}.cumulocity.com/devicecontrol/operations/{self.operation_id}"
+        url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
@@ -212,7 +225,7 @@ class SmManagement(BaseTest):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 100
+        wait_time = 300
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
@@ -237,10 +250,10 @@ class SmManagement(BaseTest):
             if timeout > wait_time:
                 raise SystemError("Timeout while waiting for a failure")
 
-    def check_isinstalled(self, package_name, version=None):
+    def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
 
-        url = f"https://{self.tenant_url}.cumulocity.com/inventory/managedObjects/{self.project.deviceid}"
+        url = f"https://{self.tenant_url}/inventory/managedObjects/{self.project.deviceid}"
         req = requests.get(url, headers=self.header)
 
         req.raise_for_status()
@@ -251,7 +264,7 @@ class SmManagement(BaseTest):
 
         package_list = jresponse.get("c8y_SoftwareList")
 
-        for package in package_list :
+        for package in package_list:
             if package.get("name") == package_name:
                 self.log.info("Package %s is installed", package_name)
                 # self.log.info(package)

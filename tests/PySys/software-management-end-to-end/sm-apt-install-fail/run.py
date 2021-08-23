@@ -13,10 +13,10 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
 
@@ -29,5 +29,5 @@ class PySysTest(SmManagement):
     def validate(self):
 
         self.assertThat(
-            "False == value", value=self.check_isinstalled("does_not_exist")
+            "False == value", value=self.check_is_installed("does_not_exist")
         )
