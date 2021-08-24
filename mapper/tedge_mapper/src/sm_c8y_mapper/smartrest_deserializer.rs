@@ -159,7 +159,7 @@ impl SmartRestUpdateSoftwareModule {
 
 type JwtToken = String;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SmartRestJwtResponse {
     id: u16,
     token: JwtToken,

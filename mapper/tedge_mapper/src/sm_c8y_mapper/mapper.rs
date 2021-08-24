@@ -59,7 +59,7 @@ impl CumulocitySoftwareManagement {
 
         let url_host = self.config.query_string(C8yUrlSetting)?;
         let device_id = self.config.query_string(DeviceIdSetting)?;
-        let url_get_id = get_url_for_get_id(&url_host, &device_id)?;
+        let url_get_id = get_url_for_get_id(&url_host, &device_id);
 
         if self.c8y_internal_id.is_empty() {
             self.c8y_internal_id =
@@ -252,10 +252,7 @@ async fn publish_software_list_http(
     token: &str,
     list: &C8yUpdateSoftwareListResponse,
 ) -> Result<(), SMCumulocityMapperError> {
-    let url_update_swlist = format!(
-        "https://{}/inventory/managedObjects/{}",
-        url_host, internal_id
-    );
+    let url_update_swlist = get_url_for_sw_list(url_host, internal_id);
 
     let payload = list.to_json()?;
 
@@ -286,18 +283,27 @@ async fn try_get_internal_id(
     Ok(internal_id)
 }
 
-fn get_url_for_get_id(url_host: &str, device_id: &str) -> Result<String, SMCumulocityMapperError> {
-    let url_get_id = format!(
-        "https://{}/identity/externalIds/c8y_Serial/{}",
-        url_host, device_id
-    );
+fn get_url_for_sw_list(url_host: &str, internal_id: &str) -> String {
+    let mut url_update_swlist = String::new();
+    url_update_swlist.push_str("https://");
+    url_update_swlist.push_str(url_host);
+    url_update_swlist.push_str("/inventory/managedObjects/");
+    url_update_swlist.push_str(internal_id);
 
-    Ok(url_get_id)
+    url_update_swlist
 }
 
-async fn get_jwt_token(
-    client: &impl MqttClient,
-) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+fn get_url_for_get_id(url_host: &str, device_id: &str) -> String {
+    let mut url_get_id = String::new();
+    url_get_id.push_str("https://");
+    url_get_id.push_str(url_host);
+    url_get_id.push_str("/identity/externalIds/c8y_Serial/");
+    url_get_id.push_str(device_id);
+
+    url_get_id
+}
+
+async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
     let mut subscriber = client
         .subscribe(Topic::new("c8y/s/dat").unwrap().filter())
         .await?;
@@ -326,4 +332,90 @@ async fn get_jwt_token(
     }
 
     Ok(token)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use mqtt_client::MqttMessageStream;
+
+    use super::*;
+
+    const MQTT_TEST_PORT: u16 = 55555;
+    #[tokio::test]
+    #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+    async fn get_jwt_token_full_run() {
+        // Prepare subscribers to listen on messages on topic `c8y/s/us` where we expect to receive empty message.
+        let mut publish_messages_stream =
+            get_subscriber("c8y/s/uat", "get_jwt_token_full_run_sub1").await;
+
+        let publisher = Arc::new(
+            Client::connect(
+                "get_jwt_token_full_run",
+                &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+            )
+            .await
+            .unwrap(),
+        );
+
+        let publisher2 = publisher.clone();
+
+        // Setup listener stream to publish on first message received on topic `c8y/s/us`.
+        let task1 = tokio::spawn(async move {
+            match tokio::time::timeout(Duration::from_millis(1000), publish_messages_stream.next())
+                .await
+            {
+                Ok(Some(msg)) => {
+                    // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
+                    assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
+                    assert_eq!(msg.payload_str().unwrap(), "");
+
+                    // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
+                    let message =
+                        mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
+                    let _ = publisher.clone().publish(message).await;
+                }
+                _ => panic!("No message received after a second."),
+            }
+        });
+
+        // Wait till token received.
+        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher2), task1);
+
+        // `get_jwt_token` should return `Ok` and the valie of token should be as set above `1111`.
+        assert!(jwt_token.is_ok());
+        assert_eq!(jwt_token.unwrap().token(), "1111");
+    }
+
+    #[test]
+    fn get_url_for_get_id_returns_correct_address() {
+        let res = get_url_for_get_id("test_host", "test_device");
+
+        assert_eq!(
+            res,
+            "https://test_host/identity/externalIds/c8y_Serial/test_device"
+        );
+    }
+
+    #[test]
+    fn get_url_for_sw_list_returns_correct_address() {
+        let res = get_url_for_sw_list("test_host", "12345");
+
+        assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
+    }
+
+    async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
+        let topic_filter = TopicFilter::new(pattern).unwrap();
+        let subscriber = Client::connect(
+            client_name,
+            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+        )
+        .await
+        .unwrap();
+
+        // Obtain subscribe stream
+        let received = subscriber.subscribe(topic_filter).await.unwrap();
+        received
+    }
 }
