@@ -229,17 +229,13 @@ impl CumulocitySoftwareManagement {
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
         let url_host = self.config.query_string(C8yUrlSetting)?;
+        let url = get_url_for_sw_list(&url_host, &self.c8y_internal_id);
 
         let c8y_software_list: C8yUpdateSoftwareListResponse = json_response.into();
 
-        let _published = publish_software_list_http(
-            &reqwest_client,
-            &url_host,
-            &self.c8y_internal_id,
-            &token.token(),
-            &c8y_software_list,
-        )
-        .await?;
+        let _published =
+            publish_software_list_http(&reqwest_client, &url, &token.token(), &c8y_software_list)
+                .await?;
 
         Ok(())
     }
@@ -247,22 +243,15 @@ impl CumulocitySoftwareManagement {
 
 async fn publish_software_list_http(
     client: &reqwest::Client,
-    url_host: &str,
-    internal_id: &str,
+    url: &str,
     token: &str,
     list: &C8yUpdateSoftwareListResponse,
 ) -> Result<(), SMCumulocityMapperError> {
-    let url_update_swlist = get_url_for_sw_list(url_host, internal_id);
-
-    let payload = list.to_json()?;
-
     let request = client
-        .put(url_update_swlist)
-        .header("Authorization", format!("Bearer {}", token))
-        .body(payload)
-        // .json(payload)
-        // .bearer_auth(token.token)
-        .timeout(Duration::from_millis(2000))
+        .put(url)
+        .json(list)
+        .bearer_auth(token)
+        .timeout(Duration::from_millis(10000))
         .build()?;
 
     let _response = client.execute(request).await?;
