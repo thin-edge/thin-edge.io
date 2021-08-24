@@ -192,8 +192,30 @@ mod tests {
             id: &str,
         ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
             let request = SoftwareUpdateRequest::new_with_id(id);
-            Ok(self.map_to_software_update_request(request)?)
+            self.map_to_software_update_request(request)
         }
+    }
+
+    #[test]
+    fn jwt_token_create_new() {
+        let jwt = SmartRestJwtResponse::new();
+
+        assert!(jwt.token.is_empty());
+    }
+
+    #[test]
+    fn jwt_token_deserialize() {
+        let test_response = "71,123456";
+        let mut csv = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(test_response.as_bytes());
+
+        let mut jwt = SmartRestJwtResponse::new();
+        for result in csv.deserialize() {
+            jwt = result.unwrap();
+        }
+
+        assert_eq!(jwt.token(), "123456");
     }
 
     #[test]

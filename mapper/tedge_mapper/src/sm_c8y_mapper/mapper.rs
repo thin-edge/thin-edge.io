@@ -363,14 +363,14 @@ mod tests {
                     // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
                     let message =
                         mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
-                    let _ = publisher.clone().publish(message).await;
+                    let _ = publisher2.publish(message).await;
                 }
                 _ => panic!("No message received after a second."),
             }
         });
 
         // Wait till token received.
-        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher2), task1);
+        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher), task1);
 
         // `get_jwt_token` should return `Ok` and the valie of token should be as set above `1111`.
         assert!(jwt_token.is_ok());
