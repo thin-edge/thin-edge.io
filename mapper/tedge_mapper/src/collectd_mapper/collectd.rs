@@ -1,13 +1,13 @@
+use batcher::Batchable;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use mqtt_client::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
-use batcher::Batchable;
-use chrono::{Utc, DateTime, NaiveDateTime};
 
 #[derive(Debug)]
 pub struct CollectdMessage {
     pub metric_group_key: String,
     pub metric_key: String,
-    pub timestamp: DateTime::<Utc>,
+    pub timestamp: DateTime<Utc>,
     pub metric_value: f64,
 }
 
@@ -31,11 +31,20 @@ impl CollectdMessage {
     where
         T: MeasurementVisitor,
     {
-        visitor.visit_grouped_measurement(&self.metric_group_key, &self.metric_key, self.metric_value)
+        visitor.visit_grouped_measurement(
+            &self.metric_group_key,
+            &self.metric_key,
+            self.metric_value,
+        )
     }
 
     #[cfg(test)]
-    pub fn new(metric_group_key: &str, metric_key: &str, timestamp: DateTime::<Utc>, metric_value: f64) -> Self {
+    pub fn new(
+        metric_group_key: &str,
+        metric_key: &str,
+        timestamp: DateTime<Utc>,
+        metric_value: f64,
+    ) -> Self {
         Self {
             metric_group_key: metric_group_key.to_string(),
             metric_key: metric_key.to_string(),
@@ -147,7 +156,7 @@ impl CollectdPayload {
 
     pub fn timestamp(&self) -> DateTime<Utc> {
         let timestamp = self.timestamp.trunc() as i64;
-        let nanoseconds = (self.timestamp.fract() * 1.0e9 )as u32 ;
+        let nanoseconds = (self.timestamp.fract() * 1.0e9) as u32;
         DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, nanoseconds), Utc)
     }
 }
@@ -167,8 +176,8 @@ impl Batchable for CollectdMessage {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use mqtt_client::Topic;
     use chrono::TimeZone;
+    use mqtt_client::Topic;
 
     use super::*;
 
@@ -188,7 +197,10 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
-        assert_eq!(timestamp, Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0));
+        assert_eq!(
+            timestamp,
+            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
+        );
         assert_eq!(metric_value, 32.5);
     }
 
@@ -208,7 +220,10 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
-        assert_eq!(timestamp, Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125));
+        assert_eq!(
+            timestamp,
+            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125)
+        );
         assert_eq!(metric_value, 32.5);
     }
 

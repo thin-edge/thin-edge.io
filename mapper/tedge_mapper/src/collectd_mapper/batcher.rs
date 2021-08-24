@@ -7,8 +7,8 @@ use thin_edge_json::{
 };
 
 use crate::collectd_mapper::{collectd::CollectdMessage, error::DeviceMonitorError};
-use thin_edge_json::group::MeasurementGrouperError;
 use chrono::Local;
+use thin_edge_json::group::MeasurementGrouperError;
 
 #[derive(Debug)]
 pub struct MessageBatch {
@@ -16,8 +16,10 @@ pub struct MessageBatch {
 }
 
 impl MessageBatch {
-    pub fn thin_edge_json_bytes(messages: Vec<CollectdMessage>) -> Result<Payload, DeviceMonitorError> {
-        let mut messages= messages.into_iter();
+    pub fn thin_edge_json_bytes(
+        messages: Vec<CollectdMessage>,
+    ) -> Result<Payload, DeviceMonitorError> {
+        let mut messages = messages.into_iter();
 
         if let Some(first_message) = messages.next() {
             let timestamp = first_message.timestamp.with_timezone(Local::now().offset());
@@ -33,7 +35,9 @@ impl MessageBatch {
             let payload = tedge_json_serializer.bytes()?;
             Ok(payload)
         } else {
-            Err(DeviceMonitorError::InvalidThinEdgeJsonError(MeasurementGrouperError::UnexpectedEnd))
+            Err(DeviceMonitorError::InvalidThinEdgeJsonError(
+                MeasurementGrouperError::UnexpectedEnd,
+            ))
         }
     }
 
@@ -68,8 +72,8 @@ impl MessageBatch {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use chrono::{TimeZone, Utc};
     use clock::{Clock, WallClock};
-    use chrono::{Utc, TimeZone};
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {

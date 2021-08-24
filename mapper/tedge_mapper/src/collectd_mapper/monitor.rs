@@ -1,12 +1,12 @@
-use mqtt_client::{Client, MqttClient, Message};
+use mqtt_client::{Client, Message, MqttClient};
 use std::sync::Arc;
 use tracing::{instrument, log::error};
 
-use crate::collectd_mapper::error::DeviceMonitorError;
-use crate::collectd_mapper::collectd::CollectdMessage;
-use batcher::{BatchDriver, BatchConfigBuilder, Batcher, BatchDriverInput, BatchDriverOutput};
-use mqtt_client::{QoS, Topic, TopicFilter};
 use crate::collectd_mapper::batcher::MessageBatch;
+use crate::collectd_mapper::collectd::CollectdMessage;
+use crate::collectd_mapper::error::DeviceMonitorError;
+use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
+use mqtt_client::{QoS, Topic, TopicFilter};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -14,7 +14,6 @@ const DEFAULT_MQTT_CLIENT_ID: &str = "collectd-mapper";
 const DEFAULT_BATCHING_WINDOW: u64 = 200;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
-
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
@@ -64,8 +63,9 @@ impl DeviceMonitor {
             self.device_monitor_config.port,
         )
         .queue_capacity(1024);
-        let mqtt_client: Arc<dyn MqttClient> =
-            Arc::new(Client::connect(self.device_monitor_config.mqtt_client_id, &mqtt_config).await?);
+        let mqtt_client: Arc<dyn MqttClient> = Arc::new(
+            Client::connect(self.device_monitor_config.mqtt_client_id, &mqtt_config).await?,
+        );
 
         let batch_config = BatchConfigBuilder::new()
             .event_jitter(50)
@@ -83,26 +83,23 @@ impl DeviceMonitor {
         });
 
         let input_mqtt_client = mqtt_client.clone();
-        let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce);
-        let mut collectd_messages = input_mqtt_client
-            .subscribe(input_topic)
-            .await?;
+        let input_topic =
+            TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce);
+        let mut collectd_messages = input_mqtt_client.subscribe(input_topic).await?;
         let input_join_handle = tokio::task::spawn(async move {
             loop {
                 match collectd_messages.next().await {
-                    Some(message) => {
-                        match CollectdMessage::parse_from(&message) {
-                            Ok(collect_message) => {
-                                let batch_input = BatchDriverInput::Event(collect_message);
-                                if let Err(err) = msg_send.send(batch_input).await {
-                                    error!("Error while processing a collectd message: {}", err);
-                                }
-                            }
-                            Err(err) => {
-                                error!("Error while decoding a collectd message: {}", err);
+                    Some(message) => match CollectdMessage::parse_from(&message) {
+                        Ok(collect_message) => {
+                            let batch_input = BatchDriverInput::Event(collect_message);
+                            if let Err(err) = msg_send.send(batch_input).await {
+                                error!("Error while processing a collectd message: {}", err);
                             }
                         }
-                    }
+                        Err(err) => {
+                            error!("Error while decoding a collectd message: {}", err);
+                        }
+                    },
                     None => {
                         //If the message batching loop returns, it means the MQTT connection has closed
                         error!("MQTT connection closed. Retrying...");
