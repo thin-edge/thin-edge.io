@@ -17,6 +17,7 @@ Then the test has passed
 """
 
 class TedgeDisConnectTestSMServices(EnvironmentC8y):
+    # The base class rexecutes the `sudo tedge connect c8y`
     def validate(self):
         super().validate()
         

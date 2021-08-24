@@ -340,12 +340,12 @@ fn new_bridge(
 
     println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
 
-    if bridge_config.use_agent && which("tedge_agent").is_err() {
-        println!("Info: Software management is not installed. So, skipping enabling related components.\n");
-    } else {
+    if bridge_config.use_agent && which("tedge_agent").is_ok() {
         service_manager.start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
         service_manager
             .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
+    } else {
+        println!("Info: Software management is not installed. So, skipping enabling related components.\n");
     }
 
     Ok(())

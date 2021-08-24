@@ -18,6 +18,7 @@ Then the test has passed
 
 
 class TedgeConnectTestSMServices(EnvironmentC8y):
+    # `sudo tedge connect c8y` is run by the super.execute()
     def execute(self):
         super().execute()
       
