@@ -29,6 +29,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
+        let () = sm_mapper.init().await?;
         let () = sm_mapper.run().await?;
 
         Ok(())
@@ -51,25 +52,27 @@ impl CumulocitySoftwareManagement {
         }
     }
 
-    async fn run(&mut self) -> Result<(), anyhow::Error> {
-        let () = self.publish_supported_operations().await?;
-        let () = self.publish_get_pending_operations().await?;
-        let () = self.ask_software_list().await?;
+    async fn init(&mut self) -> Result<(), anyhow::Error> {
+        let token = get_jwt_token(&self.client).await?;
 
-        let token = get_jwt_token(&self.client).await.unwrap();
+        let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
-        let reqwest_client = reqwest::ClientBuilder::new().build().unwrap();
-
-        let url_host = get_url_host_config(&self.config).unwrap();
-        let device_id = get_device_id_config(&self.config).unwrap();
-        let url_get_id = get_url_for_get_id(&url_host, &device_id).unwrap();
+        let url_host = self.config.query_string(C8yUrlSetting)?;
+        let device_id = self.config.query_string(DeviceIdSetting)?;
+        let url_get_id = get_url_for_get_id(&url_host, &device_id)?;
 
         if self.c8y_internal_id.is_empty() {
             self.c8y_internal_id =
-                try_get_internal_id(&reqwest_client, &url_get_id, &token.token())
-                    .await
-                    .unwrap();
+                try_get_internal_id(&reqwest_client, &url_get_id, &token.token()).await?;
         }
+
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<(), anyhow::Error> {
+        let () = self.publish_supported_operations().await?;
+        let () = self.publish_get_pending_operations().await?;
+        let () = self.ask_software_list().await?;
 
         while let Err(err) = self.subscribe_messages_runtime().await {
             error!("{}", err);
@@ -221,25 +224,23 @@ impl CumulocitySoftwareManagement {
         &self,
         json_response: &SoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
-        let token = get_jwt_token(&self.client).await.unwrap();
+        let token = get_jwt_token(&self.client).await?;
 
-        let client = reqwest::ClientBuilder::new().build().unwrap();
+        let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
-        let url_host = get_url_host_config(&self.config).unwrap();
+        let url_host = self.config.query_string(C8yUrlSetting)?;
 
         let c8y_software_list: C8yUpdateSoftwareListResponse = json_response.into();
 
         let _published = publish_software_list_http(
-            &client,
+            &reqwest_client,
             &url_host,
             &self.c8y_internal_id,
             &token.token(),
             &c8y_software_list,
         )
-        .await
-        .unwrap();
+        .await?;
 
-        // Do we want to retry?
         Ok(())
     }
 }
@@ -256,7 +257,7 @@ async fn publish_software_list_http(
         url_host, internal_id
     );
 
-    let payload = list.to_json().unwrap();
+    let payload = list.to_json()?;
 
     let request = client
         .put(url_update_swlist)
@@ -265,10 +266,9 @@ async fn publish_software_list_http(
         // .json(payload)
         // .bearer_auth(token.token)
         .timeout(Duration::from_millis(2000))
-        .build()
-        .unwrap();
+        .build()?;
 
-    let _response = client.execute(request).await.unwrap();
+    let _response = client.execute(request).await?;
 
     Ok(())
 }
@@ -278,35 +278,12 @@ async fn try_get_internal_id(
     url_get_id: &str,
     token: &str,
 ) -> Result<String, SMCumulocityMapperError> {
-    let internal_id = client
-        .get(url_get_id)
-        .bearer_auth(token)
-        .send()
-        .await
-        .unwrap();
+    let internal_id = client.get(url_get_id).bearer_auth(token).send().await?;
 
-    let internal_id_response = internal_id.json::<InternalIdResponse>().await.unwrap();
+    let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
     let internal_id = internal_id_response.id();
     Ok(internal_id)
-}
-
-fn get_url_host_config(config: &TEdgeConfig) -> Result<String, SMCumulocityMapperError> {
-    let url_host = config
-        .query_string(C8yUrlSetting)
-        // TODO: Handle result
-        .unwrap();
-
-    Ok(url_host)
-}
-
-fn get_device_id_config(config: &TEdgeConfig) -> Result<String, SMCumulocityMapperError> {
-    let device_id = config
-        .query_string(DeviceIdSetting)
-        // TODO: Handle result
-        .unwrap();
-
-    Ok(device_id)
 }
 
 fn get_url_for_get_id(url_host: &str, device_id: &str) -> Result<String, SMCumulocityMapperError> {
@@ -318,25 +295,25 @@ fn get_url_for_get_id(url_host: &str, device_id: &str) -> Result<String, SMCumul
     Ok(url_get_id)
 }
 
-async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+async fn get_jwt_token(
+    client: &impl MqttClient,
+) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
     let mut subscriber = client
         .subscribe(Topic::new("c8y/s/dat").unwrap().filter())
-        .await
-        .unwrap();
+        .await?;
 
     let () = client
         .publish(mqtt_client::Message::new(
             &"c8y/s/uat".into(),
             "".to_string(),
         ))
-        .await
-        .unwrap();
+        .await?;
 
     let token_smartrest =
         match tokio::time::timeout(Duration::from_secs(10), subscriber.next()).await {
-            Ok(Some(msg)) => msg.payload_str().unwrap().to_string(),
-            Ok(None) => todo!(),
-            Err(_err) => todo!(),
+            Ok(Some(msg)) => msg.payload_str()?.to_string(),
+            Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
+            Err(err) => return Err(SMCumulocityMapperError::FromElapsed(err)),
         };
 
     let mut csv = csv::ReaderBuilder::new()
