@@ -28,12 +28,15 @@ class AptPluginRemoveWithVersionFails(AptPlugin):
 
     def execute(self):
         self.plugin_cmd(
-            "remove", "outp_remove", 5, argument=self.package, version=self.version
+            "remove", "outp_remove", 2, argument=self.package, version=self.version
         )
-       
+
 
     def validate(self):
-       self.assertGrep("outp_remove.err", "ERROR: Package with the specified `1.111111` version not installed")
+       # old error message:
+       # self.assertGrep("outp_remove.err", "ERROR: Package with the specified `1.111111` version not installed")
+       # new error message:
+       self.assertGrep("outp_remove.err", "E: Version '1.111111' for 'rolldice' was not found")
        self.assert_isinstalled(self.package, True)
 
     def cleanup_remove_rolldice_module(self):
