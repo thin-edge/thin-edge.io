@@ -350,7 +350,7 @@ fn new_bridge(
                     .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
             }
         }
-        _ => {},
+        _ => {}
     }
 
     Ok(())

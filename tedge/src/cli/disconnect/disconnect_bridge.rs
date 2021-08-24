@@ -81,7 +81,7 @@ impl DisconnectBridgeCommand {
                         .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());
                 }
             }
-            _ => {},
+            _ => {}
         }
 
         Ok(())

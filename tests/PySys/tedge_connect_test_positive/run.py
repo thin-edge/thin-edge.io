@@ -34,6 +34,3 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         self.assertGrep(
             "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
         )
-        self.assertGrep(
-            "tedge_connect_c8y_test_positive.out", "tedge-agent service successfully started and enabled!", contains=True
-        )
