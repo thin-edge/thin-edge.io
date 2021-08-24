@@ -50,7 +50,7 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
@@ -126,6 +126,83 @@ mod tests {
         let converted: C8ySoftwareModuleItem = software_module.into();
 
         assert_eq!(converted, expected_c8y_item);
+    }
+
+    #[test]
+    fn from_thin_edge_json_to_c8y_set_software_list() {
+        let input_json = r#"{
+            "id":"1",
+            "status":"successful",
+            "currentSoftwareList":[
+                {"type":"debian", "modules":[
+                    {"name":"a"},
+                    {"name":"b","version":"1.0"},
+                    {"name":"c","url":"https://foobar.io/c.deb"},
+                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
+                ]},
+                {"type":"apama","modules":[
+                    {"name":"m","url":"https://foobar.io/m.epl"}
+                ]}
+            ]}"#;
+
+        let json_obj = &SoftwareListResponse::from_json(input_json).unwrap();
+
+        let c8y_software_list: C8yUpdateSoftwareListResponse = json_obj.into();
+
+        let expected_struct = C8yUpdateSoftwareListResponse {
+            c8y_software_list: Some(vec![
+                C8ySoftwareModuleItem {
+                    name: "a".into(),
+                    version: Some("::debian".into()),
+                    url: Some("".into()),
+                },
+                C8ySoftwareModuleItem {
+                    name: "b".into(),
+                    version: Some("1.0::debian".into()),
+                    url: Some("".into()),
+                },
+                C8ySoftwareModuleItem {
+                    name: "c".into(),
+                    version: Some("::debian".into()),
+                    url: Some("https://foobar.io/c.deb".into()),
+                },
+                C8ySoftwareModuleItem {
+                    name: "d".into(),
+                    version: Some("beta::debian".into()),
+                    url: Some("https://foobar.io/d.deb".into()),
+                },
+                C8ySoftwareModuleItem {
+                    name: "m".into(),
+                    version: Some("::apama".into()),
+                    url: Some("https://foobar.io/m.epl".into()),
+                },
+            ]),
+        };
+
+        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":""},{"name":"b","version":"1.0::debian","url":""},{"name":"c","version":"::debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta::debian","url":"https://foobar.io/d.deb"},{"name":"m","version":"::apama","url":"https://foobar.io/m.epl"}]}"#;
+
+        assert_eq!(c8y_software_list, expected_struct);
+        assert_eq!(c8y_software_list.to_json().unwrap(), expected_json);
+    }
+
+    #[test]
+    fn empty_to_c8y_set_software_list() {
+        let input_json = r#"{
+            "id":"1",
+            "status":"successful",
+            "currentSoftwareList":[]
+            }"#;
+
+        let json_obj = &SoftwareListResponse::from_json(input_json).unwrap();
+        let c8y_software_list: C8yUpdateSoftwareListResponse = json_obj.into();
+
+        let expected_struct = C8yUpdateSoftwareListResponse {
+            c8y_software_list: Some(vec![]),
+        };
+        let expected_json = r#"{"c8y_SoftwareList":[]}"#;
+
+        assert_eq!(c8y_software_list, expected_struct);
+        assert_eq!(c8y_software_list.to_json().unwrap(), expected_json);
     }
 
     #[test]
