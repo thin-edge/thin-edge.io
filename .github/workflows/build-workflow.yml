@@ -62,6 +62,13 @@ jobs:
           command: deb
           args: -p tedge_apt_plugin
 
+      - name: Build tedge_agent debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_agent
+
       - name: build examples for amd64
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
