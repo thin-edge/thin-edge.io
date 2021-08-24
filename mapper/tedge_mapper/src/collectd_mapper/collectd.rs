@@ -1,12 +1,12 @@
 use mqtt_client::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
 use batcher::Batchable;
-use chrono::{Utc, TimeZone, DateTime, NaiveDateTime};
+use chrono::{Utc, DateTime, NaiveDateTime};
 
 #[derive(Debug)]
-pub struct CollectdMessage<'a> {
-    pub metric_group_key: &'a str,
-    pub metric_key: &'a str,
+pub struct CollectdMessage {
+    pub metric_group_key: String,
+    pub metric_key: String,
     pub timestamp: DateTime::<Utc>,
     pub metric_value: f64,
 }
@@ -26,25 +26,25 @@ pub enum CollectdError {
     NonUTF8MeasurementPayload(Vec<u8>),
 }
 
-impl<'a> CollectdMessage<'a> {
+impl CollectdMessage {
     pub fn accept<T>(&self, visitor: &mut T) -> Result<(), T::Error>
     where
         T: MeasurementVisitor,
     {
-        visitor.visit_grouped_measurement(self.metric_group_key, self.metric_key, self.metric_value)
+        visitor.visit_grouped_measurement(&self.metric_group_key, &self.metric_key, self.metric_value)
     }
 
     #[cfg(test)]
-    pub fn new(metric_group_key: &'a str, metric_key: &'a str, timestamp: DateTime::<Utc>, metric_value: f64) -> Self {
+    pub fn new(metric_group_key: &str, metric_key: &str, timestamp: DateTime::<Utc>, metric_value: f64) -> Self {
         Self {
-            metric_group_key,
-            metric_key,
+            metric_group_key: metric_group_key.to_string(),
+            metric_key: metric_key.to_string(),
             timestamp,
             metric_value,
         }
     }
 
-    pub fn parse_from(mqtt_message: &'a Message) -> Result<Self, CollectdError> {
+    pub fn parse_from(mqtt_message: &Message) -> Result<Self, CollectdError> {
         let topic = mqtt_message.topic.name.as_str();
         let collectd_topic = match CollectdTopic::from_str(topic) {
             Ok(collectd_topic) => collectd_topic,
@@ -61,8 +61,8 @@ impl<'a> CollectdMessage<'a> {
             .map_err(|err| CollectdError::InvalidMeasurementPayload(topic.into(), err))?;
 
         Ok(CollectdMessage {
-            metric_group_key: collectd_topic.metric_group_key,
-            metric_key: collectd_topic.metric_key,
+            metric_group_key: collectd_topic.metric_group_key.to_string(),
+            metric_key: collectd_topic.metric_key.to_string(),
             timestamp: collectd_payload.timestamp(),
             metric_value: collectd_payload.metric_value,
         })
@@ -152,14 +152,11 @@ impl CollectdPayload {
     }
 }
 
-impl<'a> Batchable for CollectdMessage<'a> {
-    type Key = CollectdTopic<'a>;
+impl Batchable for CollectdMessage {
+    type Key = String;
 
     fn key(&self) -> Self::Key {
-        CollectdTopic {
-            metric_group_key: self.metric_group_key,
-            metric_key: self.metric_key,
-        }
+        format!("{}/{}", &self.metric_group_key, &self.metric_key)
     }
 
     fn event_time(&self) -> DateTime<Utc> {
@@ -171,6 +168,7 @@ impl<'a> Batchable for CollectdMessage<'a> {
 mod tests {
     use assert_matches::assert_matches;
     use mqtt_client::Topic;
+    use chrono::TimeZone;
 
     use super::*;
 

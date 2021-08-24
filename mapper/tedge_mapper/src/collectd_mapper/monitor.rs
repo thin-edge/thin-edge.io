@@ -1,12 +1,12 @@
-use clock::WallClock;
-use mqtt_client::{Client, MqttClient};
+use mqtt_client::{Client, MqttClient, Message};
 use std::sync::Arc;
 use tracing::{instrument, log::error};
 
-use crate::collectd_mapper::{
-    batcher::{MessageBatchPublisher, MessageBatcher},
-    error::DeviceMonitorError,
-};
+use crate::collectd_mapper::error::DeviceMonitorError;
+use crate::collectd_mapper::collectd::CollectdMessage;
+use batcher::{BatchDriver, BatchConfigBuilder, Batcher, BatchDriverInput, BatchDriverOutput};
+use mqtt_client::{QoS, Topic, TopicFilter};
+use crate::collectd_mapper::batcher::MessageBatch;
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -15,8 +15,6 @@ const DEFAULT_BATCHING_WINDOW: u64 = 200;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 
-use mqtt_client::{QoS, Topic, TopicFilter};
-use std::time::Duration;
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
@@ -61,50 +59,87 @@ impl DeviceMonitor {
 
     #[instrument(name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let config = mqtt_client::Config::new(
+        let mqtt_config = mqtt_client::Config::new(
             self.device_monitor_config.host,
             self.device_monitor_config.port,
         )
         .queue_capacity(1024);
         let mqtt_client: Arc<dyn MqttClient> =
-            Arc::new(Client::connect(self.device_monitor_config.mqtt_client_id, &config).await?);
+            Arc::new(Client::connect(self.device_monitor_config.mqtt_client_id, &mqtt_config).await?);
 
-        let (sender, receiver) =
-            tokio::sync::mpsc::unbounded_channel::<thin_edge_json::group::MeasurementGroup>();
-
-        let message_batch_producer = MessageBatcher::new(
-            sender,
-            mqtt_client.clone(),
-            Duration::from_millis(self.device_monitor_config.batching_window),
-            TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce),
-            Arc::new(WallClock),
-        );
-        let join_handle1 = tokio::task::spawn(async move {
-            match message_batch_producer.run().await {
+        let batch_config = BatchConfigBuilder::new()
+            .event_jitter(50)
+            .delivery_jitter(20)
+            .message_leap_limit(0)
+            .build();
+        let (msg_send, msg_recv) = tokio::sync::mpsc::channel(100);
+        let (batch_send, mut batch_recv) = tokio::sync::mpsc::channel(100);
+        let driver = BatchDriver::new(Batcher::new(batch_config), msg_recv, batch_send);
+        let driver_join_handle = tokio::task::spawn(async move {
+            match driver.run().await {
                 Ok(_) => error!("Unexpected end of message batcher thread"),
                 Err(err) => error!("Error in message batcher thread: {}", err),
             }
         });
 
-        let mut message_batch_consumer = MessageBatchPublisher::new(
-            receiver,
-            mqtt_client.clone(),
-            Topic::new(self.device_monitor_config.mqtt_target_topic)?,
-        );
-        let join_handle2 = tokio::task::spawn(async move {
-            message_batch_consumer.run().await;
+        let input_mqtt_client = mqtt_client.clone();
+        let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce);
+        let mut collectd_messages = input_mqtt_client
+            .subscribe(input_topic)
+            .await?;
+        let input_join_handle = tokio::task::spawn(async move {
+            loop {
+                match collectd_messages.next().await {
+                    Some(message) => {
+                        match CollectdMessage::parse_from(&message) {
+                            Ok(collect_message) => {
+                                let batch_input = BatchDriverInput::Event(collect_message);
+                                if let Err(err) = msg_send.send(batch_input).await {
+                                    error!("Error while processing a collectd message: {}", err);
+                                }
+                            }
+                            Err(err) => {
+                                error!("Error while decoding a collectd message: {}", err);
+                            }
+                        }
+                    }
+                    None => {
+                        //If the message batching loop returns, it means the MQTT connection has closed
+                        error!("MQTT connection closed. Retrying...");
+                    }
+                }
+            }
+        });
+
+        let output_mqtt_client = mqtt_client.clone();
+        let output_topic = Topic::new(self.device_monitor_config.mqtt_target_topic)?;
+        let output_join_handle = tokio::task::spawn(async move {
+            while let Some(BatchDriverOutput::Batch(messages)) = batch_recv.recv().await {
+                match MessageBatch::thin_edge_json_bytes(messages) {
+                    Ok(payload) => {
+                        let tedge_message = Message::new(&output_topic, payload);
+                        if let Err(err) = output_mqtt_client.publish(tedge_message).await {
+                            error!("Error while sending a thin-edge jsom message: {}", err);
+                        }
+                    }
+                    Err(err) => {
+                        error!("Error while encoding a thin-edge jsom message: {}", err);
+                    }
+                }
+            }
         });
 
         let mut errors = mqtt_client.subscribe_errors();
-        let join_handle3 = tokio::task::spawn(async move {
+        let error_join_handle = tokio::task::spawn(async move {
             while let Some(error) = errors.next().await {
                 error!("MQTT error: {}", error);
             }
         });
 
-        let _ = join_handle1.await;
-        let _ = join_handle2.await;
-        let _ = join_handle3.await;
+        let _ = driver_join_handle.await;
+        let _ = input_join_handle.await;
+        let _ = output_join_handle.await;
+        let _ = error_join_handle.await;
 
         Ok(())
     }
