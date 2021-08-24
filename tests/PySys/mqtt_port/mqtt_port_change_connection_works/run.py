@@ -61,6 +61,9 @@ class MqttPortChangeConnectionWorks(BaseTest):
 
         # validate collectd mapper
         self.validate_collectd_mapper()
+        
+        # validate tedge agent
+        self.validate_tedge_agent()
 
     def validate_tedge_mqtt(self):
         # subscribe for messages
@@ -80,7 +83,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         # wait for a while
-        time.sleep(0.1)
+        time.sleep(3)
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
@@ -117,6 +120,24 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         self.assertGrep("collectd_mapper_status.out",
+                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+
+    def validate_tedge_agent(self):
+        # restart the tedge-agent to use recently set port
+        tedge_agent_status = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "restart", "tedge-agent.service"],
+            stdouterr="tedge_agent_restart",
+        )
+
+        # check the status of the tedge-agent
+        tedge_agent_status = self.startProcess(
+            command=self.sudo,
+            arguments=["systemctl", "status", "tedge-agent.service"],
+            stdouterr="tedge_agent_status",
+        )
+
+        self.assertGrep("tedge_agent_status.out",
                         " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
 
     def mqtt_cleanup(self):

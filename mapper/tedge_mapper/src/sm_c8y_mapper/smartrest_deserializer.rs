@@ -120,17 +120,26 @@ impl SmartRestUpdateSoftware {
 }
 
 impl SmartRestUpdateSoftwareModule {
-    // this doesn't cover the corner case '1.0.0::dd::debian::' for now (escape)
     fn get_module_version_and_type(&self) -> (Option<String>, Option<String>) {
+        let split;
         match &self.version {
             Some(version) => {
-                let split = version.split_once("::");
+                if version.matches("::").count() > 1 {
+                    split = version.rsplit_once("::");
+                } else {
+                    split = version.split_once("::");
+                }
+
                 match split {
                     Some((v, t)) => {
                         if v.is_empty() {
                             (None, Some(t.into())) // ::debian
                         } else {
-                            (Some(v.into()), Some(t.into())) // 1.0::debian
+                            if !t.is_empty() {
+                                (Some(v.into()), Some(t.into())) // 1.0::debian
+                            } else {
+                                (Some(v.into()), None)
+                            }
                         }
                     }
                     None => {
@@ -142,6 +151,7 @@ impl SmartRestUpdateSoftwareModule {
                     }
                 }
             }
+
             None => (None, None), // (empty)
         }
     }
@@ -188,6 +198,18 @@ mod tests {
         assert_eq!(
             module.get_module_version_and_type(),
             (Some("1.0.0".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = Some("1.0.0::1::debian".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = Some("1.0.0::1::".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), None)
         );
 
         module.version = Some("1.0.0".into());

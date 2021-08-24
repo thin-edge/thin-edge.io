@@ -38,17 +38,30 @@ pub trait Plugins {
 pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
+    default_plugin_type: Option<SoftwareType>,
 }
 
 impl Plugins for ExternalPlugins {
     type Plugin = ExternalPluginCommand;
 
     fn default(&self) -> Option<&Self::Plugin> {
-        self.by_software_type("default")
+        if let Some(default_plugin_type) = &self.default_plugin_type {
+            self.by_software_type(default_plugin_type.as_str())
+        } else {
+            if self.plugin_map.len() == 1 {
+                Some(self.plugin_map.iter().next().unwrap().1) //Unwrap is safe here as one entry is guaranteed
+            } else {
+                None
+            }
+        }
     }
 
     fn by_software_type(&self, software_type: &str) -> Option<&Self::Plugin> {
-        self.plugin_map.get(software_type)
+        if software_type.eq(DEFAULT) {
+            self.default()
+        } else {
+            self.plugin_map.get(software_type)
+        }
     }
 
     fn by_file_extension(&self, module_name: &str) -> Option<&Self::Plugin> {
@@ -62,12 +75,26 @@ impl Plugins for ExternalPlugins {
 }
 
 impl ExternalPlugins {
-    pub fn open(plugin_dir: impl Into<PathBuf>) -> io::Result<ExternalPlugins> {
+    pub fn open(
+        plugin_dir: impl Into<PathBuf>,
+        default_plugin_type: Option<String>,
+    ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
+            default_plugin_type: default_plugin_type.clone(),
         };
         let () = plugins.load()?;
+
+        if let Some(default_plugin_type) = default_plugin_type {
+            if plugins
+                .by_software_type(default_plugin_type.as_str())
+                .is_none()
+            {
+                return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+            }
+        }
+
         Ok(plugins)
     }
 
@@ -146,7 +173,7 @@ impl ExternalPlugins {
         let mut response = SoftwareUpdateResponse::new(request);
 
         for software_type in request.modules_types() {
-            let errors = if let Some(plugin) = self.plugin_map.get(&software_type) {
+            let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
                 plugin.apply_all(updates).await
             } else {

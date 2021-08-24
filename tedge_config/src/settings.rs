@@ -158,3 +158,17 @@ impl ConfigSetting for MqttPortSetting {
 
     type Value = Port;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct SoftwarePluginDefaultSetting;
+
+impl ConfigSetting for SoftwarePluginDefaultSetting {
+    const KEY: &'static str = "software.plugin.default";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default software plugin to be used for software management on the device",
+        "Example: apt"
+    );
+
+    type Value = String;
+}

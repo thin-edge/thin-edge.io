@@ -1,6 +1,6 @@
 [package]
 name = "plugin_sm"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
@@ -16,6 +16,7 @@ tokio = { version = "1.8", features = ["process", "rt"] }
 url = "2.2"
 
 [dev-dependencies]
+assert_matches = "1.5.0"
 anyhow = "1.0"
 env_logger = "0.9.0"
 structopt = "0.3"
