@@ -338,19 +338,14 @@ fn new_bridge(
         }
     }
 
-    match cloud {
-        Cloud::C8y => {
-            println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
-            if which("tedge_agent").is_err() && which("tedge_mapper").is_err() {
-                println!("Info: Software management is not installed. So, skipping enabling related components.\n");
-            } else {
-                service_manager
-                    .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
-                service_manager
-                    .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
-            }
-        }
-        _ => {}
+    println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
+
+    if bridge_config.use_agent && which("tedge_agent").is_err() {
+        println!("Info: Software management is not installed. So, skipping enabling related components.\n");
+    } else {
+        service_manager.start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+        service_manager
+            .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
     }
 
     Ok(())
