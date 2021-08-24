@@ -93,7 +93,9 @@ impl CumulocitySoftwareManagement {
             match incoming_topic {
                 IncomingTopic::SoftwareListResponse => {
                     debug!("Software list");
-                    let () = self.publish_software_list(message.payload_str()?).await?;
+                    let () = self
+                        .validate_and_publish_software_list(message.payload_str()?)
+                        .await?;
                 }
                 IncomingTopic::SoftwareUpdateResponse => {
                     debug!("Software update");
@@ -121,7 +123,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn publish_software_list(
+    async fn validate_and_publish_software_list(
         &self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
@@ -176,13 +178,17 @@ impl CumulocitySoftwareManagement {
                     SmartRestSetOperationToSuccessful::from_thin_edge_json(response)?
                         .to_smartrest()?;
                 let () = self.publish(&topic, smartrest_set_operation).await?;
-                let () = self.publish_software_list(json_response).await?;
+                let () = self
+                    .validate_and_publish_software_list(json_response)
+                    .await?;
             }
             SoftwareOperationStatus::Failed => {
                 let smartrest_set_operation =
                     SmartRestSetOperationToFailed::from_thin_edge_json(response)?.to_smartrest()?;
                 let () = self.publish(&topic, smartrest_set_operation).await?;
-                let () = self.publish_software_list(json_response).await?;
+                let () = self
+                    .validate_and_publish_software_list(json_response)
+                    .await?;
             }
         };
         Ok(())
