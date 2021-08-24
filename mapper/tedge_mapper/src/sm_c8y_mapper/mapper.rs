@@ -1,16 +1,17 @@
-use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
 use crate::sm_c8y_mapper::{
-    error::*, smartrest_deserializer::*, smartrest_serializer::*, topic::*,
+    error::*, json_c8y::C8yUpdateSoftwareListResponse, smartrest_deserializer::*,
+    smartrest_serializer::*, topic::*,
 };
+use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
 use json_sm::{
     Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
     SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
-use std::convert::TryInto;
-use tedge_config::TEdgeConfig;
+use std::{convert::TryInto, time::Duration};
+use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tracing::{debug, error};
 
 pub struct CumulocitySoftwareManagementMapper {}
@@ -27,7 +28,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_config = mqtt_config(&tedge_config)?;
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
-        let sm_mapper = CumulocitySoftwareManagement::new(mqtt_client);
+        let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
         let () = sm_mapper.run().await?;
 
         Ok(())
@@ -37,17 +38,38 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
 #[derive(Debug)]
 struct CumulocitySoftwareManagement {
     client: Client,
+    config: TEdgeConfig,
+    c8y_internal_id: String,
 }
 
 impl CumulocitySoftwareManagement {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(client: Client, config: TEdgeConfig) -> Self {
+        Self {
+            client,
+            config,
+            c8y_internal_id: "".into(),
+        }
     }
 
-    async fn run(&self) -> Result<(), anyhow::Error> {
+    async fn run(&mut self) -> Result<(), anyhow::Error> {
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
+
+        let token = get_jwt_token(&self.client).await.unwrap();
+
+        let reqwest_client = reqwest::ClientBuilder::new().build().unwrap();
+
+        let url_host = get_url_host_config(&self.config).unwrap();
+        let device_id = get_device_id_config(&self.config).unwrap();
+        let url_get_id = get_url_for_get_id(&url_host, &device_id).unwrap();
+
+        if self.c8y_internal_id.is_empty() {
+            self.c8y_internal_id =
+                try_get_internal_id(&reqwest_client, &url_get_id, &token.token())
+                    .await
+                    .unwrap();
+        }
 
         while let Err(err) = self.subscribe_messages_runtime().await {
             error!("{}", err);
@@ -107,14 +129,13 @@ impl CumulocitySoftwareManagement {
 
         match response.status() {
             SoftwareOperationStatus::Successful => {
-                let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-                let smartrest_response =
-                    SmartRestSetSoftwareList::from_thin_edge_json(response).to_smartrest()?;
-                let () = self.publish(&topic, smartrest_response).await?;
+                let () = self.send_software_list_http(&response).await?;
             }
+
             SoftwareOperationStatus::Failed => {
                 error!("Received a failed software response: {}", json_response);
             }
+
             SoftwareOperationStatus::Executing => {} // C8Y doesn't expect any message to be published
         }
 
@@ -189,4 +210,137 @@ impl CumulocitySoftwareManagement {
             .await?;
         Ok(())
     }
+
+    async fn send_software_list_http(
+        &self,
+        json_response: &SoftwareListResponse,
+    ) -> Result<(), SMCumulocityMapperError> {
+        let token = get_jwt_token(&self.client).await.unwrap();
+
+        let client = reqwest::ClientBuilder::new().build().unwrap();
+
+        let url_host = get_url_host_config(&self.config).unwrap();
+
+        let c8y_software_list: C8yUpdateSoftwareListResponse = json_response.into();
+
+        let _published = publish_software_list_http(
+            &client,
+            &url_host,
+            &self.c8y_internal_id,
+            &token.token(),
+            &c8y_software_list,
+        )
+        .await
+        .unwrap();
+
+        // Do we want to retry?
+        Ok(())
+    }
+}
+
+async fn publish_software_list_http(
+    client: &reqwest::Client,
+    url_host: &str,
+    internal_id: &str,
+    token: &str,
+    list: &C8yUpdateSoftwareListResponse,
+) -> Result<(), SMCumulocityMapperError> {
+    let url_update_swlist = format!(
+        "https://{}/inventory/managedObjects/{}",
+        url_host, internal_id
+    );
+
+    let payload = list.to_json().unwrap();
+
+    let request = client
+        .put(url_update_swlist)
+        .header("Authorization", format!("Bearer {}", token))
+        .body(payload)
+        // .json(payload)
+        // .bearer_auth(token.token)
+        .timeout(Duration::from_millis(2000))
+        .build()
+        .unwrap();
+
+    let _response = client.execute(request).await.unwrap();
+
+    Ok(())
+}
+
+async fn try_get_internal_id(
+    client: &reqwest::Client,
+    url_get_id: &str,
+    token: &str,
+) -> Result<String, SMCumulocityMapperError> {
+    let internal_id = client
+        .get(url_get_id)
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+
+    let internal_id_response = internal_id.json::<InternalIdResponse>().await.unwrap();
+
+    let internal_id = internal_id_response.id();
+    Ok(internal_id)
+}
+
+fn get_url_host_config(config: &TEdgeConfig) -> Result<String, SMCumulocityMapperError> {
+    let url_host = config
+        .query_string(C8yUrlSetting)
+        // TODO: Handle result
+        .unwrap();
+
+    Ok(url_host)
+}
+
+fn get_device_id_config(config: &TEdgeConfig) -> Result<String, SMCumulocityMapperError> {
+    let device_id = config
+        .query_string(DeviceIdSetting)
+        // TODO: Handle result
+        .unwrap();
+
+    Ok(device_id)
+}
+
+fn get_url_for_get_id(url_host: &str, device_id: &str) -> Result<String, SMCumulocityMapperError> {
+    let url_get_id = format!(
+        "https://{}/identity/externalIds/c8y_Serial/{}",
+        url_host, device_id
+    );
+
+    Ok(url_get_id)
+}
+
+async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+    let mut subscriber = client
+        .subscribe(Topic::new("c8y/s/dat").unwrap().filter())
+        .await
+        .unwrap();
+
+    let () = client
+        .publish(mqtt_client::Message::new(
+            &"c8y/s/uat".into(),
+            "".to_string(),
+        ))
+        .await
+        .unwrap();
+
+    let token_smartrest =
+        match tokio::time::timeout(Duration::from_secs(10), subscriber.next()).await {
+            Ok(Some(msg)) => msg.payload_str().unwrap().to_string(),
+            Ok(None) => todo!(),
+            Err(_err) => todo!(),
+        };
+
+    let mut csv = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(token_smartrest.as_bytes());
+
+    let mut token = SmartRestJwtResponse::new();
+    for result in csv.deserialize() {
+        token = result.unwrap();
+    }
+
+    Ok(token)
 }

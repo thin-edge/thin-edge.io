@@ -487,6 +487,17 @@ pub struct Topic {
     pub name: String,
 }
 
+impl<T> From<T> for Topic
+where
+    T: std::fmt::Display,
+{
+    fn from(topic: T) -> Self {
+        Topic {
+            name: topic.to_string(),
+        }
+    }
+}
+
 impl Topic {
     /// Check if the topic name is valid and build a new topic.
     pub fn new(name: &str) -> Result<Topic, MqttClientError> {

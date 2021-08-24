@@ -157,6 +157,27 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
+type JwtToken = String;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartRestJwtResponse {
+    id: u16,
+    token: JwtToken,
+}
+
+impl SmartRestJwtResponse {
+    pub fn new() -> Self {
+        Self {
+            id: 71,
+            token: "".into(),
+        }
+    }
+
+    pub fn token(&self) -> JwtToken {
+        self.token.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

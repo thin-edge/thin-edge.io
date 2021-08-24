@@ -30,12 +30,17 @@ async-trait = "0.1"
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 chrono = "0.4"
 clock = {path = "../../common/clock" }
+csv = "1.1"
 env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 futures = "0.3"
+json_sm = {path = "../../sm/json_sm"}
 log = "0.4"
 mockall = "0.10"
 mqtt_client = {path = "../../common/mqtt_client" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
@@ -45,10 +50,6 @@ thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = "0.2"
-json_sm = {path = "../../sm/json_sm"}
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-csv = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.5"
