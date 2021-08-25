@@ -64,11 +64,25 @@ pub enum SoftwareError {
         name: SoftwareName,
         version: SoftwareVersion,
     },
+
+    #[error("The configured default plugin: {0} not found")]
+    InvalidDefaultPlugin(String),
+
+    #[error("I/O error: {reason:?}")]
+    IoError { reason: String },
 }
 
 impl From<serde_json::Error> for SoftwareError {
     fn from(err: serde_json::Error) -> Self {
         SoftwareError::ParseError {
+            reason: format!("{}", err),
+        }
+    }
+}
+
+impl From<std::io::Error> for SoftwareError {
+    fn from(err: std::io::Error) -> Self {
+        SoftwareError::IoError {
             reason: format!("{}", err),
         }
     }

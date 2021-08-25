@@ -71,7 +71,9 @@ impl CumulocitySoftwareManagement {
             match incoming_topic {
                 IncomingTopic::SoftwareListResponse => {
                     debug!("Software list");
-                    let () = self.publish_software_list(message.payload_str()?).await?;
+                    let () = self
+                        .validate_and_publish_software_list(message.payload_str()?)
+                        .await?;
                 }
                 IncomingTopic::SoftwareUpdateResponse => {
                     debug!("Software update");
@@ -104,10 +106,31 @@ impl CumulocitySoftwareManagement {
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareListResponse::from_json(json_response)?;
+
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
         let smartrest_response =
             SmartRestSetSoftwareList::from_thin_edge_json(response).to_smartrest()?;
         let () = self.publish(&topic, smartrest_response).await?;
+
+        Ok(())
+    }
+
+    async fn validate_and_publish_software_list(
+        &self,
+        json_response: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
+        let response = SoftwareListResponse::from_json(json_response)?;
+
+        match response.status() {
+            SoftwareOperationStatus::Successful => {
+                self.publish_software_list(json_response).await?;
+            }
+            SoftwareOperationStatus::Failed => {
+                error!("Received a failed software response: {}", json_response);
+            }
+            SoftwareOperationStatus::Executing => {} // C8Y doesn't expect any message to be published
+        }
+
         Ok(())
     }
 

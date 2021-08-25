@@ -1,3 +1,4 @@
+use agent::SmAgentConfig;
 use tedge_users::UserManager;
 
 mod agent;
@@ -6,13 +7,13 @@ mod state;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let user_manager = UserManager::new();
-
-    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_default_system_location();
-
     initialise_logging();
-
-    let agent = agent::SmAgent::new("tedge_agent", user_manager, tedge_config_location);
+    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_default_system_location();
+    let agent = agent::SmAgent::new(
+        "tedge_agent",
+        SmAgentConfig::try_new(tedge_config_location)?,
+        UserManager::new(),
+    );
     agent.start().await?;
     Ok(())
 }
