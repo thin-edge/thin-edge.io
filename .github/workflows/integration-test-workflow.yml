@@ -74,6 +74,7 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
+          EXAMPLEDIR: /home/pi/examples
 
 #      - name: Run Smoke Test
 #        run: ./ci/ci_smoke_test_az.sh
@@ -176,6 +177,7 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+          EXAMPLEDIR: /home/pi/examples
 
   install-and-use-rpi_offsite:
 
@@ -240,4 +242,5 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE }}
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE }}
+          EXAMPLEDIR: /home/pi/examples
 

@@ -28,5 +28,6 @@ jobs:
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi
+            EXAMPLEDIR: /home/pi/examples
+
 

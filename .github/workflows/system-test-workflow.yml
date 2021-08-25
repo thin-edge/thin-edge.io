@@ -33,7 +33,8 @@ jobs:
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi
+            EXAMPLEDIR: /home/pi/examples
+
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -73,7 +74,7 @@ jobs:
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE }}
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi
+            EXAMPLEDIR: /home/pi/examples
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
