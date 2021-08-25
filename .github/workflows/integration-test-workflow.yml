@@ -64,7 +64,7 @@ jobs:
           workflow_conclusion: success
           branch: continuous_integration
           name: examples_amd64
-          path: /home/pi/examples
+          path: /home/runner/examples
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
@@ -74,7 +74,7 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}_gh_hosted
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_GH_HOSTED }}
-          EXAMPLEDIR: /home/pi/examples
+          EXAMPLEDIR: /home/runner/examples
 
 #      - name: Run Smoke Test
 #        run: ./ci/ci_smoke_test_az.sh
