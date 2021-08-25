@@ -1,5 +1,5 @@
 use crate::component::TEdgeComponent;
-use mqtt_client::{Client, MqttClient, Topic, TopicFilter};
+use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use serial_test::serial;
 use std::io::Write;
 use std::time::Duration;
@@ -12,17 +12,12 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
 #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
-    // Create a subscriber
-    let topic_filter = TopicFilter::new("tedge/commands/req/software/list").unwrap();
-    let subscriber = Client::connect(
+    // Create a subscriber to receive messages on the bus.
+    let mut received = get_subscriber(
+        "tedge/commands/req/software/list",
         "mapper_publishes_a_software_list_request",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    let mut received = subscriber.subscribe(topic_filter).await.unwrap();
+    .await;
 
     // Start Mapper
     let config = create_tedge_config();
@@ -33,7 +28,7 @@ async fn mapper_publishes_a_software_list_request() {
     });
 
     // The first message that arrives on `tedge/commands/req/software/list` should be software list request.
-    match tokio::time::timeout(Duration::from_millis(1000), received.next()).await {
+    match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
         Ok(Some(msg)) => {
             dbg!(&msg.payload_str().unwrap());
             assert!(&msg.payload_str().unwrap().contains("{\"id\":\""))
@@ -47,16 +42,11 @@ async fn mapper_publishes_a_software_list_request() {
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // Create a subscriber
-    let topic_filter = TopicFilter::new("c8y/s/us").unwrap();
-    let subscriber = Client::connect(
+    let mut received = get_subscriber(
+        "c8y/s/us",
         "mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    let mut received = subscriber.subscribe(topic_filter).await.unwrap();
+    .await;
 
     // Start Mapper
     let config = create_tedge_config();
@@ -95,16 +85,8 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 #[serial]
 async fn mapper_publishes_software_list_onto_c8y_topic() {
     // Create a subscriber
-    let topic_filter = TopicFilter::new("c8y/s/us").unwrap();
-    let subscriber = Client::connect(
-        "mapper_publishes_software_list_onto_c8y_topic",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-    )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    let mut received = subscriber.subscribe(topic_filter).await.unwrap();
+    let mut received =
+        get_subscriber("c8y/s/us", "mapper_publishes_software_list_onto_c8y_topic").await;
 
     // Start Mapper
     let config = create_tedge_config();
@@ -150,16 +132,11 @@ async fn mapper_publishes_software_list_onto_c8y_topic() {
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // Create a subscriber
-    let topic_filter = TopicFilter::new("tedge/commands/req/software/update").unwrap();
-    let subscriber = Client::connect(
+    let mut received = get_subscriber(
+        "tedge/commands/req/software/update",
         "mapper_publishes_software_update_request",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    let mut received = subscriber.subscribe(topic_filter).await.unwrap();
+    .await;
 
     // Start Mapper
     let config = create_tedge_config();
@@ -207,16 +184,11 @@ async fn mapper_publishes_software_update_request() {
 #[serial]
 async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topic() {
     // Create a subscriber
-    let topic_filter = TopicFilter::new("c8y/s/us").unwrap();
-    let subscriber = Client::connect(
+    let mut received = get_subscriber(
+        "c8y/s/us",
         "mapper_publishes_software_update_status_and_software_list_onto_c8y_topic",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    let mut received = subscriber.subscribe(topic_filter).await.unwrap();
+    .await;
 
     // Start Mapper
     let config = create_tedge_config();
@@ -377,4 +349,17 @@ fn remove_whitespace(s: &str) -> String {
     let mut s = String::from(s);
     s.retain(|c| !c.is_whitespace());
     s
+}
+
+async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
+    let topic_filter = TopicFilter::new(pattern).unwrap();
+    let subscriber = Client::connect(
+        client_name,
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+    )
+    .await
+    .unwrap();
+
+    // Obtain subscribe stream
+    subscriber.subscribe(topic_filter).await.unwrap()
 }
