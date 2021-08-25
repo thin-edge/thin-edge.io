@@ -115,7 +115,7 @@ chmod +x $EXAMPLEDIR/sawtooth_publisher
 
 # Make a backup so that we can use it later, github will clean up after running
 # TODO: Find a better solution for binary management
-cp $EXAMPLEDIR/sawtooth_publisher ~/
+cp $EXAMPLEDIR/sawtooth_publisher ~/sawtooth_publisher_bak
 
 # Uses thin-edge JSON for publishing
 ./ci/roundtrip_local_to_c8y.py -m JSON -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
