@@ -17,6 +17,7 @@
 #    C8YTENANT
 #    C8YPASS
 #    C8YDEVICEID
+#    EXAMPLEDIR
 
 # a simple function to append lines to files if not already there
 appendtofile() {
@@ -65,6 +66,16 @@ else
     echo "Your password: HIDDEN"
 fi
 
+if [ -z $EXAMPLEDIR ]; then
+    echo "Error: Please supply the path to the sawtooth_publisher as EXAMPLEDIR"
+    exit 1
+else
+    echo "Your password: EXAMPLEDIR"
+fi
+
+TEBASEDIR
+
+
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
@@ -94,20 +105,20 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m REST -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
 
 # Set executable bit as it was just downloaded
-chmod +x ./examples/sawtooth_publisher
+chmod +x $EXAMPLEDIR/sawtooth_publisher
 
 # Make a backup so that we can use it later, github will clean up after running
 # TODO: Find a better solution for binary management
-cp ./examples/sawtooth_publisher ~/
+cp $EXAMPLEDIR/sawtooth_publisher ~/
 
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m JSON -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 echo "Disonnect again"
 sudo tedge disconnect c8y
