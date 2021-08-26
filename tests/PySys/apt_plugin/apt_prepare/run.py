@@ -33,7 +33,8 @@ class AptPluginPrepare(AptPlugin):
         # make sure the cache was updated in the last N seconds
         # N=100 : Took 91s to update at mythic beasts
         # N=150 : Took 123s to update at mythic beasts (Why???)
-        self.assertThat("(new +150) >= now", new=self.mtime_new, now=self.now)
+        # N=200 : Took 160s to update at mythic beasts in august(Why???)
+        self.assertThat("(new +200) >= now", new=self.mtime_new, now=self.now)
 
     def cleanup_prepare(self):
         pass
