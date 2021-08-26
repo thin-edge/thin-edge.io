@@ -116,27 +116,27 @@ jobs:
           command: test
           args: --verbose --no-run --features integration-test
 
-  cargo-build-integration-tests-single-thread:
-
-    name: Run cargo build for integration tests in one thread
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Compile cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose -- --test-threads=1 --features integration-test
+#  cargo-build-integration-tests-single-thread:
+#
+#    name: Run cargo build for integration tests in one thread
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Compile cargo test features
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: test
+#          args: --verbose -- --test-threads=1 --features integration-test
 
   cargo-tarpaulin:
 
