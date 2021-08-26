@@ -40,7 +40,7 @@ class EnvironmentC8y(BaseTest):
         connect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y", "--test"],
-            stdouterr="tedge_connect",
+            stdouterr="tedge_connect_test",
         )
 
         # Check if mosquitto is running well
