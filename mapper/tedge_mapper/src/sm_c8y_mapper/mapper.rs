@@ -12,6 +12,7 @@ use json_sm::{
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
+use tokio::time::Instant;
 use tracing::{debug, error};
 
 pub struct CumulocitySoftwareManagementMapper {}
@@ -53,17 +54,13 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn init(&mut self) -> Result<(), anyhow::Error> {
-        if self.c8y_internal_id.is_empty() {
-            let token = get_jwt_token(&self.client).await?;
+        while self.c8y_internal_id.is_empty() {
+            if let Err(error) = self.try_get_and_set_internal_id().await {
+                error!("{:?}", error);
 
-            let reqwest_client = reqwest::ClientBuilder::new().build()?;
-
-            let url_host = self.config.query_string(C8yUrlSetting)?;
-            let device_id = self.config.query_string(DeviceIdSetting)?;
-            let url_get_id = get_url_for_get_id(&url_host, &device_id);
-
-            self.c8y_internal_id =
-                try_get_internal_id(&reqwest_client, &url_get_id, &token.token()).await?;
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
+                continue;
+            };
         }
 
         Ok(())
@@ -236,6 +233,21 @@ impl CumulocitySoftwareManagement {
         let _published =
             publish_software_list_http(&reqwest_client, &url, &token.token(), &c8y_software_list)
                 .await?;
+
+        Ok(())
+    }
+
+    async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
+        let token = get_jwt_token(&self.client).await?;
+
+        let reqwest_client = reqwest::ClientBuilder::new().build()?;
+
+        let url_host = self.config.query_string(C8yUrlSetting)?;
+        let device_id = self.config.query_string(DeviceIdSetting)?;
+        let url_get_id = get_url_for_get_id(&url_host, &device_id);
+
+        self.c8y_internal_id =
+            try_get_internal_id(&reqwest_client, &url_get_id, &token.token()).await?;
 
         Ok(())
     }
