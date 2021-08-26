@@ -173,6 +173,23 @@ impl SmartRestJwtResponse {
         }
     }
 
+    pub(crate) fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut csv = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(to_parse.as_bytes());
+
+        let mut jwt = Self::new();
+        for result in csv.deserialize() {
+            jwt = result.unwrap();
+        }
+
+        if jwt.id != 71 {
+            return Err(SmartRestDeserializerError::InvalidMessageId(jwt.id));
+        }
+
+        Ok(jwt)
+    }
+
     pub fn token(&self) -> JwtToken {
         self.token.clone()
     }
@@ -204,18 +221,21 @@ mod tests {
     }
 
     #[test]
-    fn jwt_token_deserialize() {
+    fn jwt_token_deserialize_correct_id_returns_token() {
         let test_response = "71,123456";
-        let mut csv = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .from_reader(test_response.as_bytes());
-
-        let mut jwt = SmartRestJwtResponse::new();
-        for result in csv.deserialize() {
-            jwt = result.unwrap();
-        }
+        let jwt = SmartRestJwtResponse::try_new(test_response).unwrap();
 
         assert_eq!(jwt.token(), "123456");
+    }
+
+    #[test]
+    fn jwt_token_deserialize_incorrect_id_returns_error() {
+        let test_response = "42,123456";
+
+        let jwt = SmartRestJwtResponse::try_new(test_response);
+
+        assert!(jwt.is_err());
+        assert_matches::assert_matches!(jwt, Err(SmartRestDeserializerError::InvalidMessageId(42)));
     }
 
     #[test]

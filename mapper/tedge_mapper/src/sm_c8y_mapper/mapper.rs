@@ -53,15 +53,15 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn init(&mut self) -> Result<(), anyhow::Error> {
-        let token = get_jwt_token(&self.client).await?;
-
-        let reqwest_client = reqwest::ClientBuilder::new().build()?;
-
-        let url_host = self.config.query_string(C8yUrlSetting)?;
-        let device_id = self.config.query_string(DeviceIdSetting)?;
-        let url_get_id = get_url_for_get_id(&url_host, &device_id);
-
         if self.c8y_internal_id.is_empty() {
+            let token = get_jwt_token(&self.client).await?;
+
+            let reqwest_client = reqwest::ClientBuilder::new().build()?;
+
+            let url_host = self.config.query_string(C8yUrlSetting)?;
+            let device_id = self.config.query_string(DeviceIdSetting)?;
+            let url_get_id = get_url_for_get_id(&url_host, &device_id);
+
             self.c8y_internal_id =
                 try_get_internal_id(&reqwest_client, &url_get_id, &token.token()).await?;
         }
@@ -293,13 +293,11 @@ fn get_url_for_get_id(url_host: &str, device_id: &str) -> String {
 }
 
 async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-    let mut subscriber = client
-        .subscribe(Topic::new("c8y/s/dat").unwrap().filter())
-        .await?;
+    let mut subscriber = client.subscribe(Topic::new("c8y/s/dat")?.filter()).await?;
 
     let () = client
         .publish(mqtt_client::Message::new(
-            &"c8y/s/uat".into(),
+            &Topic::new("c8y/s/uat")?,
             "".to_string(),
         ))
         .await?;
@@ -311,27 +309,18 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
             Err(err) => return Err(SMCumulocityMapperError::FromElapsed(err)),
         };
 
-    let mut csv = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_reader(token_smartrest.as_bytes());
-
-    let mut token = SmartRestJwtResponse::new();
-    for result in csv.deserialize() {
-        token = result.unwrap();
-    }
-
-    Ok(token)
+    Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use mqtt_client::MqttMessageStream;
     use std::sync::Arc;
 
-    use mqtt_client::MqttMessageStream;
-
-    use super::*;
-
     const MQTT_TEST_PORT: u16 = 55555;
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
+
     #[tokio::test]
     #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
     async fn get_jwt_token_full_run() {
@@ -351,10 +340,8 @@ mod tests {
         let publisher2 = publisher.clone();
 
         // Setup listener stream to publish on first message received on topic `c8y/s/us`.
-        let task1 = tokio::spawn(async move {
-            match tokio::time::timeout(Duration::from_millis(1000), publish_messages_stream.next())
-                .await
-            {
+        let responder_task = tokio::spawn(async move {
+            match tokio::time::timeout(TEST_TIMEOUT_MS, publish_messages_stream.next()).await {
                 Ok(Some(msg)) => {
                     // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
                     assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
@@ -370,9 +357,9 @@ mod tests {
         });
 
         // Wait till token received.
-        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher), task1);
+        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher), responder_task);
 
-        // `get_jwt_token` should return `Ok` and the valie of token should be as set above `1111`.
+        // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
         assert!(jwt_token.is_ok());
         assert_eq!(jwt_token.unwrap().token(), "1111");
     }
@@ -404,7 +391,6 @@ mod tests {
         .unwrap();
 
         // Obtain subscribe stream
-        let received = subscriber.subscribe(topic_filter).await.unwrap();
-        received
+        subscriber.subscribe(topic_filter).await.unwrap()
     }
 }

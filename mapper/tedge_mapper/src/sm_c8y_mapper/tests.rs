@@ -1,8 +1,7 @@
 use crate::component::TEdgeComponent;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use serial_test::serial;
-use std::io::Write;
-use std::time::Duration;
+use std::{io::Write, sync::Arc, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 
 const MQTT_TEST_PORT: u16 = 55555;

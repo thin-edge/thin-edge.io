@@ -23,6 +23,9 @@ pub(crate) enum SmartRestDeserializerError {
     #[error("Failed to deserialize SmartREST.")]
     InvalidCsv(#[from] csv::Error),
 
+    #[error("Jwt response contains incorrect ID: {0}")]
+    InvalidMessageId(u16),
+
     #[error("Action {action} is not recognized. It must be install or delete.")]
     ActionNotFound { action: String },
 }
