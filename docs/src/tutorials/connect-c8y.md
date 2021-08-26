@@ -91,6 +91,8 @@ This can be done:
 $ sudo tedge cert upload c8y --user <username>
 ```
 
+> To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights. If you get an error 503 here, check the appropriate rights in cumulocity user management.
+
 ## Connect the device
 
 Now, you are ready to run `tedge connect c8y`.

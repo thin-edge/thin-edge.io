@@ -94,6 +94,7 @@ impl Command for ConnectCommand {
                 self.cloud.as_str()
             );
         }
+
         Ok(())
     }
 }
@@ -331,10 +332,22 @@ fn new_bridge(
         println!("Checking if tedge-mapper is installed.\n");
 
         if which("tedge_mapper").is_err() {
-            println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            println!("Warning: tedge_mapper is not installed.\n");
         } else {
             service_manager
                 .start_and_enable_service(cloud.dependent_mapper_service(), std::io::stdout());
+        }
+    }
+
+    if bridge_config.use_agent {
+        println!("Checking if tedge-agent is installed.\n");
+        if which("tedge_agent").is_ok() {
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
+        } else {
+            println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
 
