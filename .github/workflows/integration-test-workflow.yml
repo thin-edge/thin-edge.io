@@ -32,13 +32,16 @@ jobs:
           path: debian-package_unpack
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-        #install collectd-core
+      - name: install mosquitto client library
+        run:  sudo apt-get --assume-yes install libmosquitto1
+
+        # install collectd-core
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
@@ -48,7 +51,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        #replace the default config file with tedge custom config file
+        # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -104,13 +107,16 @@ jobs:
           path: debian-package_unpack
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-        #install collectd-core
+      - name: install mosquitto client library
+        run:  sudo apt-get --assume-yes install libmosquitto1
+
+        # install collectd-core
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
@@ -120,7 +126,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        #replace the default config file with tedge custom config file
+        # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 

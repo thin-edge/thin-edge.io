@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.2.2"
+version = "0.2.4"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -13,6 +13,8 @@ assets = [
     ["../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
     ["../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
+    ["../../configuration/init/systemd/tedge-mapper-sm-c8y.service", "/lib/systemd/system/tedge-mapper-sm-c8y.service", "644"],
+    ["../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],
     ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
 ]
 
@@ -28,15 +30,20 @@ async-trait = "0.1"
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 chrono = "0.4"
 clock = {path = "../../common/clock" }
+csv = "1.1"
 env_logger = "0.8"
 flockfile = {path = "../../common/flockfile" }
 futures = "0.3"
+json_sm = {path = "../../sm/json_sm"}
 log = "0.4"
 mockall = "0.10"
 mqtt_client = {path = "../../common/mqtt_client" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 structopt = "0.3"
 tedge_config = {path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
+tedge_utils = { path = "../../common/tedge_utils" }
 thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
@@ -46,5 +53,12 @@ tracing-subscriber = "0.2"
 [dev-dependencies]
 assert_matches = "1.5"
 assert-json-diff = "2.0"
+serde = "1.0.126"
 serde_json = "1.0"
+serial_test = "0.5.1"
+tempfile = "3.2.0"
 tokio-test = "0.4"
+
+[features]
+integration-test = []
+mosquitto-available = []

@@ -1,0 +1,3 @@
+Invalid JSON: invalid type: sequence, expected ThinEdge single or multi-value measurement at line 3 column 18: `[50,60,70]
+}
+`

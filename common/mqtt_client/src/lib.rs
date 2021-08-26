@@ -278,6 +278,7 @@ impl Client {
                         QoS::ExactlyOnce => {
                             // Do not announce the incoming publish message immediately in case
                             // of QoS=2. Wait for the PUBREL.
+
                             let _ = pending_received_messages.insert(msg.pkid, msg.into());
                         }
                     }
@@ -311,18 +312,14 @@ impl Client {
 
                 Err(err) => {
                     let delay = match &err {
-                        rumqttc::ConnectionError::Io(io_err)
-                            if matches!(io_err.kind(), std::io::ErrorKind::ConnectionRefused) =>
-                        {
-                            true
-                        }
-
+                        rumqttc::ConnectionError::Io(_) => true,
                         rumqttc::ConnectionError::MqttState(state_error)
                             if matches!(state_error, StateError::Io(_)) =>
                         {
                             true
                         }
-
+                        rumqttc::ConnectionError::MqttState(_) => true,
+                        rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
                         _ => false,
                     };
 
@@ -365,10 +362,10 @@ impl MqttClient for Client {
         &self,
         filter: TopicFilter,
     ) -> Result<Box<dyn MqttMessageStream>, MqttClientError> {
-        let () = self
-            .mqtt_client
-            .subscribe(&filter.pattern, filter.qos)
-            .await?;
+        let qos = filter.qos;
+        for pattern in filter.patterns.iter() {
+            let () = self.mqtt_client.subscribe(pattern, qos).await?;
+        }
 
         Ok(Box::new(MessageStream::new(
             filter,
@@ -432,7 +429,8 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
-            packet_size: None,
+            // 256MB by default
+            packet_size: Some(268435455),
             queue_capacity: 10,
             clean_session: false,
         }
@@ -509,7 +507,7 @@ impl Topic {
     /// Build a topic filter filtering only that topic
     pub fn filter(&self) -> TopicFilter {
         TopicFilter {
-            pattern: self.name.clone(),
+            patterns: vec![self.name.clone()],
             qos: QoS::AtLeastOnce,
         }
     }
@@ -518,7 +516,7 @@ impl Topic {
 /// An MQTT topic filter
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TopicFilter {
-    pub pattern: String,
+    pub patterns: Vec<String>,
     pub qos: QoS,
 }
 
@@ -528,7 +526,20 @@ impl TopicFilter {
         let pattern = String::from(pattern);
         let qos = QoS::AtLeastOnce;
         if rumqttc::valid_filter(&pattern) {
-            Ok(TopicFilter { pattern, qos })
+            Ok(TopicFilter {
+                patterns: vec![pattern],
+                qos,
+            })
+        } else {
+            Err(MqttClientError::InvalidFilter { pattern })
+        }
+    }
+
+    /// Check if the pattern is valid and at it to this topic filter.
+    pub fn add(&mut self, pattern: &str) -> Result<(), MqttClientError> {
+        let pattern = String::from(pattern);
+        if rumqttc::valid_filter(&pattern) {
+            Ok(self.patterns.push(pattern))
         } else {
             Err(MqttClientError::InvalidFilter { pattern })
         }
@@ -536,13 +547,17 @@ impl TopicFilter {
 
     /// Check if the given topic matches this filter pattern.
     fn accept(&self, topic: &Topic) -> bool {
-        rumqttc::matches(&topic.name, &self.pattern)
+        self.patterns
+            .iter()
+            .any(|pattern| rumqttc::matches(&topic.name, &pattern))
     }
 
     pub fn qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
     }
 }
+
+pub type Payload = Vec<u8>;
 
 /// A message to be sent to or received from MQTT.
 ///
@@ -551,16 +566,16 @@ impl TopicFilter {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
-    payload: Vec<u8>,
+    payload: Payload,
     pub qos: QoS,
     pkid: u16,
-    retain: bool,
+    pub retain: bool,
 }
 
 impl Message {
     pub fn new<B>(topic: &Topic, payload: B) -> Message
     where
-        B: Into<Vec<u8>>,
+        B: Into<Payload>,
     {
         Message {
             topic: topic.clone(),
@@ -575,8 +590,15 @@ impl Message {
         Self { qos, ..self }
     }
 
+    pub fn retain(self) -> Self {
+        Self {
+            retain: true,
+            ..self
+        }
+    }
+
     // trims the trailing null char if one exists
-    fn payload_trimmed(&self) -> &[u8] {
+    pub fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or(self.payload.as_slice())

@@ -1,18 +1,10 @@
-use crate::{
-    cli::connect::*,
-    command::{Command, ExecutionContext},
-    services::{
-        self, mosquitto::MosquittoService, tedge_mapper_az::TedgeMapperAzService,
-        tedge_mapper_c8y::TedgeMapperC8yService, SystemdService,
-    },
-    utils::paths,
-    ConfigError,
-};
+use crate::{cli::connect::*, command::Command, system_services::*, ConfigError};
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_users::{UserManager, ROOT_USER};
+use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
 use tempfile::NamedTempFile;
 use tokio::time::timeout;
 use which::which;
@@ -31,11 +23,21 @@ pub struct ConnectCommand {
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
+    pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
 pub enum Cloud {
     Azure,
     C8y,
+}
+
+impl Cloud {
+    fn dependent_mapper_service(&self) -> SystemService {
+        match self {
+            Cloud::Azure => SystemService::TEdgeMapperAz,
+            Cloud::C8y => SystemService::TEdgeMapperC8y,
+        }
+    }
 }
 
 impl Cloud {
@@ -56,7 +58,7 @@ impl Command for ConnectCommand {
         }
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         let mut config = self.config_repository.load()?;
 
         if self.is_test_connection {
@@ -82,7 +84,7 @@ impl Command for ConnectCommand {
             &bridge_config,
             &self.cloud,
             &updated_mosquitto_config,
-            &context.user_manager,
+            self.service_manager.as_ref(),
             &self.config_location,
         )?;
 
@@ -92,6 +94,7 @@ impl Command for ConnectCommand {
                 self.cloud.as_str()
             );
         }
+
         Ok(())
     }
 }
@@ -282,11 +285,11 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
-    user_manager: &UserManager,
+    service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
-    println!("Checking if systemd is available.\n");
-    let () = services::systemd_available()?;
+    println!("Checking if {} is available.\n", service_manager.name());
+    let () = service_manager.check_operational()?;
 
     println!("Checking if configuration for requested bridge already exists.\n");
     let () = bridge_config_exists(config_location, bridge_config)?;
@@ -304,7 +307,7 @@ fn new_bridge(
     }
 
     println!("Restarting mosquitto service.\n");
-    if let Err(err) = MosquittoService.restart(user_manager) {
+    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
@@ -318,7 +321,7 @@ fn new_bridge(
     ));
 
     println!("Persisting mosquitto on reboot.\n");
-    if let Err(err) = MosquittoService.enable(user_manager) {
+    if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
@@ -329,16 +332,22 @@ fn new_bridge(
         println!("Checking if tedge-mapper is installed.\n");
 
         if which("tedge_mapper").is_err() {
-            println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            println!("Warning: tedge_mapper is not installed.\n");
         } else {
-            match cloud {
-                Cloud::Azure => {
-                    start_and_enable_tedge_mapper_az(user_manager);
-                }
-                Cloud::C8y => {
-                    start_and_enable_tedge_mapper_c8y(user_manager);
-                }
-            }
+            service_manager
+                .start_and_enable_service(cloud.dependent_mapper_service(), std::io::stdout());
+        }
+    }
+
+    if bridge_config.use_agent {
+        println!("Checking if tedge-agent is installed.\n");
+        if which("tedge_agent").is_ok() {
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
+        } else {
+            println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
 
@@ -352,7 +361,7 @@ fn clean_up(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    let _ = std::fs::remove_file(&path).or_else(paths::ok_if_not_found)?;
+    let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
     Ok(())
 }
 
@@ -379,62 +388,20 @@ fn write_bridge_config_to_file(
         .join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    let _ = paths::create_directories(&dir_path)?;
+    let _ = create_directories(&dir_path)?;
 
     let mut common_temp_file = NamedTempFile::new()?;
     common_mosquitto_config.serialize(&mut common_temp_file)?;
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let () = paths::persist_tempfile(common_temp_file, &common_config_path)?;
+    let () = persist_tempfile(common_temp_file, &common_config_path)?;
 
     let mut temp_file = NamedTempFile::new()?;
     bridge_config.serialize(&mut temp_file)?;
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
-    let () = paths::persist_tempfile(temp_file, &config_path)?;
+    let () = persist_tempfile(temp_file, &config_path)?;
 
     Ok(())
-}
-
-fn start_and_enable_tedge_mapper_c8y(user_manager: &UserManager) {
-    let _root_guard = user_manager.become_user(ROOT_USER);
-    let mut failed = false;
-
-    println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperC8yService.restart(user_manager) {
-        println!("Failed to stop tedge-mapper service: {:?}", err);
-        failed = true;
-    }
-
-    println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperC8yService.enable(user_manager) {
-        println!("Failed to enable tedge-mapper service: {:?}", err);
-        failed = true;
-    }
-
-    if !failed {
-        println!("tedge-mapper service successfully started and enabled!\n");
-    }
-}
-
-fn start_and_enable_tedge_mapper_az(user_manager: &UserManager) {
-    let _root_guard = user_manager.become_user(ROOT_USER);
-    let mut failed = false;
-
-    println!("Starting tedge-mapper service.\n");
-    if let Err(err) = TedgeMapperAzService.restart(user_manager) {
-        println!("Failed to stop tedge-mapper service: {:?}", err);
-        failed = true;
-    }
-
-    println!("Persisting tedge-mapper on reboot.\n");
-    if let Err(err) = TedgeMapperAzService.enable(user_manager) {
-        println!("Failed to enable tedge-mapper service: {:?}", err);
-        failed = true;
-    }
-
-    if !failed {
-        println!("tedge-mapper service successfully started and enabled!\n");
-    }
 }
 
 fn get_bridge_config_file_path(

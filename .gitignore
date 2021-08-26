@@ -9,6 +9,7 @@
 mapper/cumulocity/c8y_translator_lib/fuzz/Cargo.lock
 
 .idea/
+.vscode/
 *.iml
 .tmp/
 .venv/
@@ -20,3 +21,4 @@ tests/PySys/**/*.out
 tests/PySys/**/*.err
 **/__pycache__
 tests/PySys/**/Output/
+**/*venv

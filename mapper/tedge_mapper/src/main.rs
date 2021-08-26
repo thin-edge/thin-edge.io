@@ -1,10 +1,11 @@
+use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
     component::TEdgeComponent, error::*,
 };
-use std::path::PathBuf;
 use structopt::*;
 use tedge_config::*;
+use tedge_utils::paths::home_dir;
 
 mod az_converter;
 mod az_mapper;
@@ -16,6 +17,7 @@ mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
+mod sm_c8y_mapper;
 
 const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
 
@@ -24,6 +26,7 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::Az => Box::new(AzureMapper::new()),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
+        MapperName::SmC8y => Box::new(CumulocitySoftwareManagementMapper::new()),
     }
 }
 
@@ -37,6 +40,7 @@ enum MapperName {
     Az,
     C8y,
     Collectd,
+    SmC8y,
 }
 
 #[tokio::main]
@@ -57,7 +61,7 @@ fn initialise_logging() {
         .init();
 }
 
-fn tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+fn tedge_config() -> anyhow::Result<TEdgeConfig> {
     let config_repository = config_repository()?;
     Ok(config_repository.load()?)
 }
@@ -74,11 +78,4 @@ fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     Ok(config_repository)
-}
-
-// Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .and_then(|home| if home.is_empty() { None } else { Some(home) })
-        .map(PathBuf::from)
 }

@@ -1,8 +1,8 @@
 use crate::cli::mqtt::MqttError;
-use crate::command::{Command, ExecutionContext};
-use crate::utils::signals;
+use crate::command::Command;
 use futures::future::FutureExt;
 use mqtt_client::{Client, Message, MqttClient, QoS, TopicFilter};
+use tedge_utils::signals;
 use tokio::{io::AsyncWriteExt, select};
 
 pub struct MqttSubscribeCommand {
@@ -21,7 +21,7 @@ impl Command for MqttSubscribeCommand {
         )
     }
 
-    fn execute(&self, _context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         Ok(subscribe(self)?)
     }
 }

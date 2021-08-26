@@ -37,6 +37,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_certfile,
             bridge_keyfile,
             use_mapper: true,
+            use_agent: true,
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
@@ -66,6 +67,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 // c8y JSON
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
+                // c8y JWT token retrieval
+                r#"s/uat/# out 2 c8y/ """#.into(),
+                r#"s/dat/# in 2 c8y/ """#.into(),
             ],
         }
     }
@@ -98,6 +102,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         use_mapper: true,
+        use_agent: true,
         topics: vec![
             // Registration
             r#"s/dcr in 2 c8y/ """#.into(),
@@ -122,6 +127,9 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             // c8y JSON
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
+            // c8y JWT token retrieval
+            r#"s/uat/# out 2 c8y/ """#.into(),
+            r#"s/dat/# in 2 c8y/ """#.into(),
         ],
         try_private: false,
         start_type: "automatic".into(),

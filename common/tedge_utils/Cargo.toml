@@ -1,0 +1,21 @@
+[package]
+name = "tedge_utils"
+version = "0.2.4"
+edition = "2018"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+license = "Apache-2.0"
+description = "tedge_utils provide utilities for thin-edge.io components"
+
+[dependencies]
+anyhow = "1.0"
+futures = "0.3"
+rumqttd = "0.7"
+rumqttlog = "0.7"
+tempfile = "3.2"
+thiserror = "1.0"
+tokio = { version = "1.9", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
+
+[dev-dependencies]
+assert_matches = "1.5"
+
+

@@ -16,7 +16,7 @@ pub enum ConnectError {
     MqttClient(#[from] mqtt_client::MqttClientError),
 
     #[error(transparent)]
-    PathsError(#[from] crate::utils::paths::PathsError),
+    PathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
     PersistError(#[from] tempfile::PersistError),
@@ -25,7 +25,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
-    ServicesError(#[from] crate::services::ServicesError),
+    SystemServiceError(#[from] crate::system_services::SystemServiceError),
 
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,
