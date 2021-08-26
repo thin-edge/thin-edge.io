@@ -1,3 +1,4 @@
+use crate::system_services::SystemService::*;
 use crate::system_services::*;
 use std::process::*;
 use tedge_users::{UserManager, ROOT_USER};
@@ -122,18 +123,38 @@ impl ServiceCommand {
     fn to_string(self) -> String {
         match self {
             Self::CheckManager => format!("{} -l", SERVICE_BIN),
-            Self::Stop(service) => format!("{} {} stop", SERVICE_BIN, as_service_name(service)),
+            Self::Stop(service) => format!(
+                "{} {} stop",
+                SERVICE_BIN,
+                SystemService::as_service_name(service)
+            ),
             Self::Restart(service) => {
-                format!("{} {} restart", SERVICE_BIN, as_service_name(service))
+                format!(
+                    "{} {} restart",
+                    SERVICE_BIN,
+                    SystemService::as_service_name(service)
+                )
             }
             Self::Enable(service) => {
-                format!("{} {} enable", SERVICE_BIN, as_service_name(service))
+                format!(
+                    "{} {} enable",
+                    SERVICE_BIN,
+                    SystemService::as_service_name(service)
+                )
             }
             Self::Disable(service) => {
-                format!("{} {} forcedisable", SERVICE_BIN, as_service_name(service))
+                format!(
+                    "{} {} forcedisable",
+                    SERVICE_BIN,
+                    SystemService::as_service_name(service)
+                )
             }
             Self::IsActive(service) => {
-                format!("{} {} status", SERVICE_BIN, as_service_name(service))
+                format!(
+                    "{} {} status",
+                    SERVICE_BIN,
+                    SystemService::as_service_name(service)
+                )
             }
         }
     }
@@ -142,23 +163,23 @@ impl ServiceCommand {
         match self {
             Self::CheckManager => CommandBuilder::new(SERVICE_BIN).arg("-l").silent().build(),
             Self::Stop(service) => CommandBuilder::new(SERVICE_BIN)
-                .arg(as_service_name(service))
+                .arg(SystemService::as_service_name(service))
                 .arg("stop")
                 .silent()
                 .build(),
             Self::Restart(service) => CommandBuilder::new(SERVICE_BIN)
-                .arg(as_service_name(service))
+                .arg(SystemService::as_service_name(service))
                 .arg("restart")
                 .silent()
                 .build(),
             Self::Enable(service) => CommandBuilder::new(SERVICE_BIN)
-                .arg(as_service_name(service))
+                .arg(SystemService::as_service_name(service))
                 .arg("enable")
                 .silent()
                 .build(),
 
             Self::Disable(service) => CommandBuilder::new(SERVICE_BIN)
-                .arg(as_service_name(service))
+                .arg(SystemService::as_service_name(service))
                 //
                 // Use "forcedisable" as otherwise it could fail if you have a commented out
                 // `# mosquitto_enable="YES"` or
@@ -168,18 +189,10 @@ impl ServiceCommand {
                 .silent()
                 .build(),
             Self::IsActive(service) => CommandBuilder::new(SERVICE_BIN)
-                .arg(as_service_name(service))
+                .arg(SystemService::as_service_name(service))
                 .arg("status")
                 .silent()
                 .build(),
         }
-    }
-}
-
-fn as_service_name(service: SystemService) -> &'static str {
-    match service {
-        SystemService::Mosquitto => "mosquitto",
-        SystemService::TEdgeMapperAz => "tedge-mapper-az",
-        SystemService::TEdgeMapperC8y => "tedge-mapper-c8y",
     }
 }
