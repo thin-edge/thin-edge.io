@@ -95,6 +95,15 @@ impl Command for ConnectCommand {
             );
         }
 
+        // Restarting mosquitto here to resubscribe to bridged inbound cloud topics after device creation
+        restart_mosquitto(
+            &bridge_config,
+            self.service_manager.as_ref(),
+            &self.config_location,
+        )?;
+
+        enable_software_management(&bridge_config, self.service_manager.as_ref());
+
         Ok(())
     }
 }
@@ -306,11 +315,7 @@ fn new_bridge(
         return Err(err);
     }
 
-    println!("Restarting mosquitto service.\n");
-    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
+    restart_mosquitto(bridge_config, service_manager, config_location)?;
 
     println!(
         "Awaiting mosquitto to start. This may take up to {} seconds.\n",
@@ -339,6 +344,27 @@ fn new_bridge(
         }
     }
 
+    Ok(())
+}
+
+fn restart_mosquitto(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
+    config_location: &TEdgeConfigLocation,
+) -> Result<(), ConnectError> {
+    println!("Persisting mosquitto on reboot.\n");
+    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
+        clean_up(config_location, bridge_config)?;
+        return Err(err.into());
+    }
+
+    Ok(())
+}
+
+fn enable_software_management(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
+) {
     if bridge_config.use_agent {
         println!("Checking if tedge-agent is installed.\n");
         if which("tedge_agent").is_ok() {
@@ -350,10 +376,7 @@ fn new_bridge(
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
-
-    Ok(())
 }
-
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 fn clean_up(
