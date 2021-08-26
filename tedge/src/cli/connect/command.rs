@@ -340,7 +340,7 @@ fn new_bridge(
     }
 
     if bridge_config.use_agent {
-        println!("Checking if tedge-agent and sm-c8y mapper are installed.\n");
+        println!("Checking if tedge-agent is installed.\n");
         if which("tedge_agent").is_ok() {
             service_manager
                 .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
