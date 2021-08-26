@@ -42,8 +42,8 @@ impl CollectdMessage {
     pub fn new(
         metric_group_key: &str,
         metric_key: &str,
-        timestamp: DateTime<Utc>,
         metric_value: f64,
+        timestamp: DateTime<Utc>,
     ) -> Self {
         Self {
             metric_group_key: metric_group_key.to_string(),

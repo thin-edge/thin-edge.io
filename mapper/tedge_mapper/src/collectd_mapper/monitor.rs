@@ -90,8 +90,8 @@ impl DeviceMonitor {
             loop {
                 match collectd_messages.next().await {
                     Some(message) => match CollectdMessage::parse_from(&message) {
-                        Ok(collect_message) => {
-                            let batch_input = BatchDriverInput::Event(collect_message);
+                        Ok(collectd_message) => {
+                            let batch_input = BatchDriverInput::Event(collectd_message);
                             if let Err(err) = msg_send.send(batch_input).await {
                                 error!("Error while processing a collectd message: {}", err);
                             }
@@ -116,11 +116,11 @@ impl DeviceMonitor {
                     Ok(payload) => {
                         let tedge_message = Message::new(&output_topic, payload);
                         if let Err(err) = output_mqtt_client.publish(tedge_message).await {
-                            error!("Error while sending a thin-edge jsom message: {}", err);
+                            error!("Error while sending a thin-edge json message: {}", err);
                         }
                     }
                     Err(err) => {
-                        error!("Error while encoding a thin-edge jsom message: {}", err);
+                        error!("Error while encoding a thin-edge json message: {}", err);
                     }
                 }
             }
