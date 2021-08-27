@@ -19,6 +19,9 @@ if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
     echo "%tedge-agent   ALL = (ALL) NOPASSWD: /usr/bin/tedge_agent" > /etc/sudoers.d/tedge-agent-nopasswd
 fi
 
+# create /etc/tedge/.agent directory
+install -g tedge-agent -o tedge-agent -m 754 -d /etc/tedge/.agent
+
 ## Enable the sm services if the device is connected to c8y cloud
 if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then 
     # start and enable tedge-agent
