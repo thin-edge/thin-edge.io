@@ -2552,7 +2552,6 @@ dependencies = [
  "serde_json",
  "structopt",
  "tedge_config",
- "tedge_users",
  "tedge_utils",
  "tempfile",
  "thiserror",

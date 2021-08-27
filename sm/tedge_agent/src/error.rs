@@ -1,7 +1,6 @@
 use json_sm::SoftwareError;
 use mqtt_client::MqttClientError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
-use tedge_users::UserSwitchError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
@@ -25,9 +24,6 @@ pub enum AgentError {
 
     #[error(transparent)]
     State(#[from] StateError),
-
-    #[error(transparent)]
-    UserSwitchError(#[from] UserSwitchError),
 
     #[error(transparent)]
     TedgeConfigError(#[from] TEdgeConfigError),
