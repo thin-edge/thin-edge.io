@@ -140,7 +140,7 @@ jobs:
 
   cargo-tarpaulin-avoid-cfg-tarpaulin:
 
-    name: Run cargo tarpaulin
+    name: Run cargo tarpaulin --avoid-cfg-tarpaulin
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
     continue-on-error: true # WTF
