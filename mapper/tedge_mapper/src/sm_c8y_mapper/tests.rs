@@ -1,8 +1,7 @@
 use crate::component::TEdgeComponent;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use serial_test::serial;
-use std::io::Write;
-use std::time::Duration;
+use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 
 const MQTT_TEST_PORT: u16 = 55555;
@@ -15,7 +14,7 @@ async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
 
     // Create a subscriber to receive messages on the bus.
-    let mut received = get_subscriber(
+    let mut subscriber = get_subscriber(
         "tedge/commands/req/software/list",
         "mapper_publishes_a_software_list_request",
     )
@@ -30,7 +29,7 @@ async fn mapper_publishes_a_software_list_request() {
     });
 
     // Expect message that arrives on `tedge/commands/req/software/list` is software list request.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
         Ok(Some(msg)) => {
             dbg!(&msg.payload_str().unwrap());
             assert!(&msg.payload_str().unwrap().contains("{\"id\":\""))
@@ -46,7 +45,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut received = get_subscriber(
+    let mut subscriber = get_subscriber(
         "c8y/s/us",
         "mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic",
     )
@@ -64,7 +63,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     let mut received_supported_operation = false;
     let mut received_pending_operation_request = false;
     loop {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
                 match msg.payload_str().unwrap() {
@@ -92,7 +91,7 @@ async fn mapper_publishes_software_list_onto_c8y_topic() {
     // and converts it to smartrest message published on `c8y/s/us`.
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut received =
+    let mut subscriber =
         get_subscriber("c8y/s/us", "mapper_publishes_software_list_onto_c8y_topic").await;
 
     // Start SM Mapper
@@ -121,7 +120,7 @@ async fn mapper_publishes_software_list_onto_c8y_topic() {
 
     // Expect `116` message with correct payload has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     loop {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
                 match msg.payload_str().unwrap() {
@@ -142,7 +141,7 @@ async fn mapper_publishes_software_update_request() {
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut received = get_subscriber(
+    let mut subscriber = get_subscriber(
         "tedge/commands/req/software/update",
         "mapper_publishes_software_update_request",
     )
@@ -174,7 +173,7 @@ async fn mapper_publishes_software_update_request() {
             }"#;
 
     // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
         Ok(Some(msg)) => {
             dbg!(&msg.payload_str().unwrap());
             assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
@@ -198,7 +197,7 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
     // and converts it to smartrest messages published on `c8y/s/us`.
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut received = get_subscriber(
+    let mut subscriber = get_subscriber(
         "c8y/s/us",
         "mapper_publishes_software_update_status_and_software_list_onto_c8y_topic",
     )
@@ -226,7 +225,7 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
 
     // Expect `501` smartrest message on `c8y/s/us`.
     loop {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
                 match msg.payload_str().unwrap() {
@@ -258,7 +257,7 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
     let mut received_status_successful = false;
     let mut received_software_list = false;
     for _ in 0..2 {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
                 match msg.payload_str().unwrap() {
@@ -303,7 +302,7 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
     let mut received_status_failed = false;
     let mut received_software_list = false;
     for _ in 0..2 {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, received.next()).await {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
                 match msg.payload_str().unwrap() {
