@@ -13,10 +13,10 @@ if ! getent passwd tedge-agent > /dev/null; then
 fi
 
 ### Create file in /etc/sudoers.d directory
-echo "%tedge-agent   ALL = (ALL) /usr/bin/tedge_agent" > /etc/sudoers.d/tedge-agent
+echo "%tedge-agent   ALL = (ALL) NOPASSWD: /etc/tedge/sm-plugins/apt" > /etc/sudoers.d/tedge-agent
 
 if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
-    echo "%tedge-agent   ALL = (ALL) NOPASSWD: /usr/bin/tedge_agent" > /etc/sudoers.d/tedge-agent-nopasswd
+    echo "%tedge-agent   ALL = (ALL) NOPASSWD: /etc/tedge/sm-plugins/apt" > /etc/sudoers.d/tedge-agent-nopasswd
 fi
 
 ## Enable the sm services if the device is connected to c8y cloud
