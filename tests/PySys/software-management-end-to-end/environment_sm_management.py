@@ -20,6 +20,12 @@ To run the tests with another tenant url:
 
 
 
+TODO: Avoid hardcoded ids
+TODO: Get software package ids from c8y
+TODO: Add management for package creation and removal for c8y
+    -> Mabe as separte python module to access c8y
+
+
 """
 
 import base64
