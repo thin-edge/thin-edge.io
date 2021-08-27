@@ -64,7 +64,8 @@ impl ExternalPluginCommand {
         action: &str,
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<Command, SoftwareError> {
-        let mut command = Command::new(&self.path);
+        let mut command = Command::new("sudo");
+        command.arg(&self.path);
         command.arg(action);
 
         if let Some(module) = maybe_module {

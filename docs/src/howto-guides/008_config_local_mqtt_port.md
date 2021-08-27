@@ -32,7 +32,8 @@ This prints out the port that has been set.
 
 Using `tedge` command connect to the desired cloud as below.
 
-This will force all the services (mosquitto, tedge_mappers) to use newely set port.
+This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service, sm_agent,
+tedge-agent.service, tedge-mapper-sm-c8y.service) to use the newely set port.
 
 ```shell
 tedge connect c8y
