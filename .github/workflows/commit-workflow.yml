@@ -210,8 +210,10 @@ jobs:
         # Workaround see here: https://github.com/xd009642/tarpaulin/issues/756
         with:
           command: install
-          args: cargo-tarpaulin
-          # args: cargo-tarpaulin --version 0.18.0-alpha3
+
+          # args: cargo-tarpaulin
+          # Otherwise: Error: "Failed to compile tests! Error: bitvec: cannot find attribute `skip` in this scope"
+          args: cargo-tarpaulin --version 0.18.0-alpha3
 
       - name: Cargo tarpaulin
         uses: actions-rs/cargo@v1
