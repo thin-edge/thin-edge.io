@@ -1,9 +1,6 @@
 use crate::sm_c8y_mapper::error::SmartRestSerializerError;
 use csv::{QuoteStyle, WriterBuilder};
-use json_sm::{
-    SoftwareListResponse, SoftwareOperationStatus, SoftwareType, SoftwareUpdateResponse,
-    SoftwareVersion,
-};
+use json_sm::{SoftwareOperationStatus, SoftwareUpdateResponse};
 use serde::{Deserialize, Serialize, Serializer};
 
 type SmartRest = String;
@@ -48,45 +45,11 @@ impl Default for SmartRestSetSupportedOperations {
 impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSetSoftwareList {
-    pub message_id: &'static str,
-    pub software_list: Vec<SmartRestSoftwareModuleItem>,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestSoftwareModuleItem {
     pub software: String,
     pub version: Option<String>,
     pub url: Option<String>,
 }
-
-impl SmartRestSetSoftwareList {
-    pub(crate) fn new(list: Vec<SmartRestSoftwareModuleItem>) -> Self {
-        Self {
-            message_id: "116",
-            software_list: list,
-        }
-    }
-
-    pub(crate) fn from_thin_edge_json(response: SoftwareListResponse) -> Self {
-        let modules = response.modules();
-        let mut list: Vec<SmartRestSoftwareModuleItem> = Vec::new();
-        for module in modules {
-            let item = SmartRestSoftwareModuleItem {
-                software: module.name,
-                version: Option::from(combine_version_and_type(
-                    &module.version,
-                    &module.module_type,
-                )),
-                url: module.url,
-            };
-            list.push(item);
-        }
-        Self::new(list)
-    }
-}
-
-impl<'a> SmartRestSerializer<'a> for SmartRestSetSoftwareList {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SmartRestGetPendingOperations {
@@ -208,75 +171,10 @@ fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSeria
     Ok(csv)
 }
 
-fn combine_version_and_type(
-    version: &Option<SoftwareVersion>,
-    module_type: &Option<SoftwareType>,
-) -> String {
-    match module_type {
-        Some(m) => {
-            if m.is_empty() {
-                match version {
-                    Some(v) => v.to_string(),
-                    None => "".to_string(),
-                }
-            } else {
-                match version {
-                    Some(v) => format!("{}::{}", v, m),
-                    None => format!("::{}", m),
-                }
-            }
-        }
-        None => match version {
-            Some(v) => {
-                if v.contains("::") {
-                    format!("{}::", v)
-                } else {
-                    v.to_string()
-                }
-            }
-            None => "".to_string(),
-        },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use json_sm::*;
-
-    #[test]
-    fn verify_combine_version_and_type() {
-        let some_version: Option<SoftwareVersion> = Some("1.0".to_string());
-        let some_version_with_colon: Option<SoftwareVersion> = Some("1.0.0::1".to_string());
-        let none_version: Option<SoftwareVersion> = None;
-        let some_module_type: Option<SoftwareType> = Some("debian".to_string());
-        let none_module_type: Option<SoftwareType> = None;
-
-        assert_eq!(
-            combine_version_and_type(&some_version, &some_module_type),
-            "1.0::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version, &none_module_type),
-            "1.0"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version_with_colon, &some_module_type),
-            "1.0.0::1::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version_with_colon, &none_module_type),
-            "1.0.0::1::"
-        );
-        assert_eq!(
-            combine_version_and_type(&none_version, &some_module_type),
-            "::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&none_version, &none_module_type),
-            ""
-        );
-    }
 
     #[test]
     fn serialize_smartrest_supported_operations() {
@@ -284,124 +182,6 @@ mod tests {
             .to_smartrest()
             .unwrap();
         assert_eq!(smartrest, "114,c8y_SoftwareUpdate\n");
-    }
-
-    #[test]
-    fn serialize_smartrest_set_software_list() {
-        let smartrest = SmartRestSetSoftwareList::new(vec![
-            SmartRestSoftwareModuleItem {
-                software: "software1".into(),
-                version: Some("0.1.0".into()),
-                url: Some("https://test.com".into()),
-            },
-            SmartRestSoftwareModuleItem {
-                software: "software2".into(),
-                version: None,
-                url: None,
-            },
-        ])
-        .to_smartrest()
-        .unwrap();
-        assert_eq!(
-            smartrest,
-            "116,software1,0.1.0,https://test.com,software2,,\n"
-        );
-    }
-
-    #[test]
-    fn from_thin_edge_json_to_smartrest_object_set_software_list() {
-        let input_json = r#"{
-            "id":"123",
-            "status":"successful",
-            "currentSoftwareList":[
-                {"type":"debian", "modules":[
-                    {"name":"a"},
-                    {"name":"b","version":"1.0"},
-                    {"name":"c","url":"https://foobar.io/c.deb"},
-                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
-                ]},
-                {"type":"","modules":[
-                    {"name":"m","url":"https://foobar.io/m.epl"}
-                ]}
-            ]}"#;
-
-        let json_obj = SoftwareListResponse::from_json(input_json).unwrap();
-        let smartrest_obj = SmartRestSetSoftwareList::from_thin_edge_json(json_obj);
-
-        let expected_smartrest_obj = SmartRestSetSoftwareList {
-            message_id: "116",
-            software_list: vec![
-                SmartRestSoftwareModuleItem {
-                    software: "a".to_string(),
-                    version: Some("::debian".to_string()),
-                    url: None,
-                },
-                SmartRestSoftwareModuleItem {
-                    software: "b".to_string(),
-                    version: Some("1.0::debian".to_string()),
-                    url: None,
-                },
-                SmartRestSoftwareModuleItem {
-                    software: "c".to_string(),
-                    version: Some("::debian".to_string()),
-                    url: Some("https://foobar.io/c.deb".to_string()),
-                },
-                SmartRestSoftwareModuleItem {
-                    software: "d".to_string(),
-                    version: Some("beta::debian".to_string()),
-                    url: Some("https://foobar.io/d.deb".to_string()),
-                },
-                SmartRestSoftwareModuleItem {
-                    software: "m".to_string(),
-                    version: Some("".to_string()),
-                    url: Some("https://foobar.io/m.epl".to_string()),
-                },
-            ],
-        };
-        assert_eq!(smartrest_obj, expected_smartrest_obj);
-    }
-
-    #[test]
-    fn from_thin_edge_json_to_smartrest_set_software_list() {
-        let input_json = r#"{
-            "id":"1",
-            "status":"successful",
-            "currentSoftwareList":[
-                {"type":"debian", "modules":[
-                    {"name":"a"},
-                    {"name":"b","version":"1.0"},
-                    {"name":"c","url":"https://foobar.io/c.deb"},
-                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
-                ]},
-                {"type":"apama","modules":[
-                    {"name":"m","url":"https://foobar.io/m.epl"}
-                ]}
-            ]}"#;
-
-        let json_obj = SoftwareListResponse::from_json(input_json).unwrap();
-        let smartrest = SmartRestSetSoftwareList::from_thin_edge_json(json_obj)
-            .to_smartrest()
-            .unwrap();
-
-        let expected_smartrest= "116,a,::debian,,b,1.0::debian,,c,::debian,https://foobar.io/c.deb,d,beta::debian,https://foobar.io/d.deb,m,::apama,https://foobar.io/m.epl\n";
-        assert_eq!(smartrest, expected_smartrest.to_string());
-    }
-
-    #[test]
-    fn empty_to_smartrest_set_software_list() {
-        let input_json = r#"{
-            "id":"1",
-            "status":"successful",
-            "currentSoftwareList":[]
-            }"#;
-
-        let json_obj = SoftwareListResponse::from_json(input_json).unwrap();
-        let smartrest = SmartRestSetSoftwareList::from_thin_edge_json(json_obj)
-            .to_smartrest()
-            .unwrap();
-
-        let expected_smartrest = "116\n".to_string();
-        assert_eq!(smartrest, expected_smartrest);
     }
 
     #[test]
