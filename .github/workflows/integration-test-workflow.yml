@@ -183,6 +183,7 @@ jobs:
 
     runs-on: [self-hosted, Linux, ARM, offsite ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    continue-on-error: true # Only temporarily !!!
 
     steps:
       - name: checkout
