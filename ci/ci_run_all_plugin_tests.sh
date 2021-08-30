@@ -41,12 +41,12 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run
+# pysys.py run
 
 # Run the tests for the apt plugin
 # These are skipped by default, as the modify the operating system
 # TODO Ideally, as the keyword says we should run them in a container
-# pysys.py run 'apt_*' -XmyPlatform='container'
+pysys.py run 'apt_*' -XmyPlatform='container'
 
 # Disabled them until the agent is integrated right
 #

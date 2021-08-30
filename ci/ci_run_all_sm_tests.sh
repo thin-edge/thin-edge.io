@@ -41,7 +41,7 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run
+# pysys.py run
 
 # Run the tests for the apt plugin
 # These are skipped by default, as the modify the operating system
@@ -51,6 +51,6 @@ pysys.py run
 # Disabled them until the agent is integrated right
 #
 ## Run the tests for software management
-# pysys.py run 'sm-apt-*' -XmyPlatform='specialcontainer'
+pysys.py run 'sm-apt-*' -XmyPlatform='specialcontainer'
 
 deactivate
