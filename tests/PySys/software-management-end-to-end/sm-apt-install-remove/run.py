@@ -5,11 +5,12 @@ import time
 """
 Validate end to end behaviour for the apt plugin for installation and remove
 
+For the apt plugin with ::apt
+
 When we install a package
 Then it is installed
 When we deinstall it again
 Then it is not installed
-
 """
 
 import json
@@ -28,13 +29,13 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "install")
+        self.trigger_action("rolldice", self.repo_id_rolldice, "::apt", "notanurl", "install")
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        self.trigger_action("rolldice", "5445239", "::apt", "notanurl", "delete")
+        self.trigger_action("rolldice", self.repo_id_rolldice, "::apt", "notanurl", "delete")
 
         self.wait_until_succcess()
 
