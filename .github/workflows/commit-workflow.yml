@@ -218,6 +218,7 @@ jobs:
           args: cargo-tarpaulin --version 0.18.0-alpha3
 
       - name: Cargo tarpaulin
+        continue-on-error: true # Only temporarily !!!
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
