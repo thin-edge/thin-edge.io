@@ -127,6 +127,7 @@ jobs:
           args: cargo-tarpaulin
 
       - name: Cargo tarpaulin
+        continue-on-error: true # Only temporarily !!!
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
