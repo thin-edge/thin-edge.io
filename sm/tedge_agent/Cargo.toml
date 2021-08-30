@@ -5,7 +5,7 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [package.metadata.deb]
-depends = "tedge_mapper"
+depends = "tedge_mapper,tedge_apt_plugin"
 maintainer-scripts = "configuration/debian/tedge_agent"
 assets = [
     ["../../configuration/init/systemd/tedge-agent.service", "/lib/systemd/system/tedge-agent.service", "644"],

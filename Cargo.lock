@@ -2610,6 +2610,7 @@ dependencies = [
  "log",
  "mockall",
  "mqtt_client",
+ "reqwest",
  "serde",
  "serde_json",
  "serial_test",
