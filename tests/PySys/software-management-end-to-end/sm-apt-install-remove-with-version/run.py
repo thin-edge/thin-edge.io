@@ -26,26 +26,37 @@ from environment_sm_management import SoftwareManagement
 class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
+
+        # Also where we need management of versions
+        # e.g. with 1.16-1+b3
+        # Raspberry Pi OS:
+        self.version = '1.16-1+b1::apt'
+        # debian bullseye
+        # self.version = '1.16-1+b3::apt'
+
+        self.repo_id = "5445239"
+
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
     def execute(self):
 
         self.trigger_action(
-            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "install"
+            "rolldice", self.repo_id, self.version, "notanurl", "install"
         )
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        self.trigger_action("rolldice", "5445239", "88::apt", "notanurl", "delete")
+        fake_version = "88::apt" # does not exist in C8y
+        self.trigger_action("rolldice", self.version, fake_version, "notanurl", "delete")
 
         self.wait_until_fail()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
-            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete"
+            "rolldice", self.repo_id, self.version, "notanurl", "delete"
         )
 
         self.wait_until_succcess()
@@ -54,5 +65,5 @@ class PySysTest(SoftwareManagement):
 
         self.assertThat(
             "False == value",
-            value=self.check_is_installed("rolldice", "1.16-1+b1::apt"),
+            value=self.check_is_installed("rolldice", self.version),
         )

@@ -111,7 +111,7 @@ class SoftwareManagement(BaseTest):
 
         payload = {
             "deviceId": self.project.deviceid,
-            "description": "Apply software changes, triggered from PySys test",
+            "description": f"Apply software changes, triggered from PySys: {json_content}",
             "c8y_SoftwareUpdate": json_content,
         }
 
@@ -231,7 +231,7 @@ class SoftwareManagement(BaseTest):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 300
+        wait_time = 60
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
