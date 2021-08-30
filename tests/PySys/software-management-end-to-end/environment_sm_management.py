@@ -66,6 +66,16 @@ class SoftwareManagement(BaseTest):
         user = self.project.username
         password = self.project.c8ypass
 
+        # This is a mess and needs to be improved
+        # Also where we need management of versions
+        # e.g. with 1.16-1+b3
+        # Raspberry Pi OS:
+        self.version_rolldice = '1.16-1+b1::apt'
+        # debian bullseye
+        # self.version = '1.16-1+b3::apt'
+
+        self.repo_id_rolldice = "5445239"
+
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
         # at the same time.
