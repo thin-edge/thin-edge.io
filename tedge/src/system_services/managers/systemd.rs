@@ -46,7 +46,7 @@ impl SystemServiceManager for SystemdServiceManager {
     }
 
     fn stop_service(&self, service: SystemService) -> Result<(), Error> {
-        let service_name = as_service_name(service);
+        let service_name = SystemService::as_service_name(service);
         match self.call_systemd_subcmd_sudo(SystemCtlCmd::Stop, service_name)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
@@ -69,7 +69,7 @@ impl SystemServiceManager for SystemdServiceManager {
     // If it is intended that the file descriptor store is flushed out, too, during a restart operation an explicit
     // systemctl stop command followed by systemctl start should be issued.
     fn restart_service(&self, service: SystemService) -> Result<(), Error> {
-        let service_name = as_service_name(service);
+        let service_name = SystemService::as_service_name(service);
         match self.call_systemd_subcmd_sudo(SystemCtlCmd::Restart, service_name)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
@@ -87,7 +87,7 @@ impl SystemServiceManager for SystemdServiceManager {
     }
 
     fn enable_service(&self, service: SystemService) -> Result<(), Error> {
-        let service_name = as_service_name(service);
+        let service_name = SystemService::as_service_name(service);
         match self.call_systemd_subcmd_sudo(SystemCtlCmd::Enable, service_name)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
@@ -101,7 +101,7 @@ impl SystemServiceManager for SystemdServiceManager {
     }
 
     fn disable_service(&self, service: SystemService) -> Result<(), Error> {
-        let service_name = as_service_name(service);
+        let service_name = SystemService::as_service_name(service);
         match self.call_systemd_subcmd_sudo(SystemCtlCmd::Disable, service_name)? {
             SYSTEMCTL_OK => Ok(()),
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
@@ -115,7 +115,7 @@ impl SystemServiceManager for SystemdServiceManager {
     }
 
     fn is_service_running(&self, service: SystemService) -> Result<bool, Error> {
-        let service_name = as_service_name(service);
+        let service_name = SystemService::as_service_name(service);
         match self.call_systemd_subcmd(SystemCtlCmd::IsActive, service_name)? {
             SYSTEMCTL_OK => Ok(true),
             SYSTEMCTL_ERROR_UNIT_IS_NOT_ACTIVE => Ok(false),
@@ -141,13 +141,6 @@ impl SystemdServiceManager {
     }
 }
 
-fn as_service_name(service: SystemService) -> &'static str {
-    match service {
-        SystemService::Mosquitto => "mosquitto",
-        SystemService::TEdgeMapperAz => "tedge-mapper-az",
-        SystemService::TEdgeMapperC8y => "tedge-mapper-c8y",
-    }
-}
 fn cmd_nullstdio_args_with_code(command: &str, args: &[&str]) -> Result<ExitStatus, Error> {
     Ok(std::process::Command::new(command)
         .args(args)

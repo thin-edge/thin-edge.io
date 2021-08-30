@@ -94,6 +94,18 @@ impl Command for ConnectCommand {
                 self.cloud.as_str()
             );
         }
+
+        if let Cloud::C8y = self.cloud {
+            println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
+            restart_mosquitto(
+                &bridge_config,
+                self.service_manager.as_ref(),
+                &self.config_location,
+            )?;
+
+            enable_software_management(&bridge_config, self.service_manager.as_ref());
+        }
+
         Ok(())
     }
 }
@@ -305,11 +317,7 @@ fn new_bridge(
         return Err(err);
     }
 
-    println!("Restarting mosquitto service.\n");
-    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
+    restart_mosquitto(bridge_config, service_manager, config_location)?;
 
     println!(
         "Awaiting mosquitto to start. This may take up to {} seconds.\n",
@@ -319,7 +327,7 @@ fn new_bridge(
         MOSQUITTO_RESTART_TIMEOUT_SECONDS,
     ));
 
-    println!("Persisting mosquitto on reboot.\n");
+    println!("Enabling mosquitto service on reboots.\n");
     if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
@@ -331,7 +339,7 @@ fn new_bridge(
         println!("Checking if tedge-mapper is installed.\n");
 
         if which("tedge_mapper").is_err() {
-            println!("Warning: tedge_mapper is not installed. We recommend to install it.\n");
+            println!("Warning: tedge_mapper is not installed.\n");
         } else {
             service_manager
                 .start_and_enable_service(cloud.dependent_mapper_service(), std::io::stdout());
@@ -341,6 +349,37 @@ fn new_bridge(
     Ok(())
 }
 
+fn restart_mosquitto(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
+    config_location: &TEdgeConfigLocation,
+) -> Result<(), ConnectError> {
+    println!("Restarting mosquitto service.\n");
+    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
+        clean_up(config_location, bridge_config)?;
+        return Err(err.into());
+    }
+
+    Ok(())
+}
+
+fn enable_software_management(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
+) {
+    println!("Enabling software management.\n");
+    if bridge_config.use_agent {
+        println!("Checking if tedge-agent is installed.\n");
+        if which("tedge_agent").is_ok() {
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            service_manager
+                .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
+        } else {
+            println!("Info: Software management is not installed. So, skipping enabling related components.\n");
+        }
+    }
+}
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 fn clean_up(

@@ -157,6 +157,44 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
+type JwtToken = String;
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct SmartRestJwtResponse {
+    id: u16,
+    token: JwtToken,
+}
+
+impl SmartRestJwtResponse {
+    pub fn new() -> Self {
+        Self {
+            id: 71,
+            token: "".into(),
+        }
+    }
+
+    pub(crate) fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut csv = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(to_parse.as_bytes());
+
+        let mut jwt = Self::new();
+        for result in csv.deserialize() {
+            jwt = result.unwrap();
+        }
+
+        if jwt.id != 71 {
+            return Err(SmartRestDeserializerError::InvalidMessageId(jwt.id));
+        }
+
+        Ok(jwt)
+    }
+
+    pub fn token(&self) -> JwtToken {
+        self.token.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,8 +209,33 @@ mod tests {
             id: &str,
         ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
             let request = SoftwareUpdateRequest::new_with_id(id);
-            Ok(self.map_to_software_update_request(request)?)
+            self.map_to_software_update_request(request)
         }
+    }
+
+    #[test]
+    fn jwt_token_create_new() {
+        let jwt = SmartRestJwtResponse::new();
+
+        assert!(jwt.token.is_empty());
+    }
+
+    #[test]
+    fn jwt_token_deserialize_correct_id_returns_token() {
+        let test_response = "71,123456";
+        let jwt = SmartRestJwtResponse::try_new(test_response).unwrap();
+
+        assert_eq!(jwt.token(), "123456");
+    }
+
+    #[test]
+    fn jwt_token_deserialize_incorrect_id_returns_error() {
+        let test_response = "42,123456";
+
+        let jwt = SmartRestJwtResponse::try_new(test_response);
+
+        assert!(jwt.is_err());
+        assert_matches::assert_matches!(jwt, Err(SmartRestDeserializerError::InvalidMessageId(42)));
     }
 
     #[test]

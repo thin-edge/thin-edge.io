@@ -20,6 +20,7 @@ Then the test has passed
 class TedgeConnectTestPositive(EnvironmentC8y):
     def execute(self):
         super().execute()
+        self.systemctl="/usr/bin/systemctl"
         self.log.info("Execute `tedge connect c8y --test`")
         self.startProcess(
             command=self.sudo,
