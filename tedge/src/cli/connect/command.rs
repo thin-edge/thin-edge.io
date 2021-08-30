@@ -95,14 +95,16 @@ impl Command for ConnectCommand {
             );
         }
 
-        // Restarting mosquitto here to resubscribe to bridged inbound cloud topics after device creation
-        restart_mosquitto(
-            &bridge_config,
-            self.service_manager.as_ref(),
-            &self.config_location,
-        )?;
+        if let Cloud::C8y = self.cloud {
+            println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
+            restart_mosquitto(
+                &bridge_config,
+                self.service_manager.as_ref(),
+                &self.config_location,
+            )?;
 
-        enable_software_management(&bridge_config, self.service_manager.as_ref());
+            enable_software_management(&bridge_config, self.service_manager.as_ref());
+        }
 
         Ok(())
     }
@@ -325,7 +327,7 @@ fn new_bridge(
         MOSQUITTO_RESTART_TIMEOUT_SECONDS,
     ));
 
-    println!("Persisting mosquitto on reboot.\n");
+    println!("Enabling mosquitto service on reboots.\n");
     if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
@@ -352,7 +354,7 @@ fn restart_mosquitto(
     service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
-    println!("Persisting mosquitto on reboot.\n");
+    println!("Restarting mosquitto service.\n");
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
@@ -365,6 +367,7 @@ fn enable_software_management(
     bridge_config: &BridgeConfig,
     service_manager: &dyn SystemServiceManager,
 ) {
+    println!("Enabling software management.\n");
     if bridge_config.use_agent {
         println!("Checking if tedge-agent is installed.\n");
         if which("tedge_agent").is_ok() {
