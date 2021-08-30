@@ -5,7 +5,6 @@ mod tests {
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
     #[tokio::test]
-    #[cfg(not(tarpaulin))]
     async fn plugin_get_command_prepare() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -18,7 +17,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(not(tarpaulin))]
     async fn plugin_get_command_finalize() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -31,7 +29,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(not(tarpaulin))]
     async fn plugin_get_command_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -67,7 +64,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(not(tarpaulin))]
     async fn plugin_get_command_install() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -98,7 +94,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(not(tarpaulin))]
     async fn plugin_get_command_remove() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");

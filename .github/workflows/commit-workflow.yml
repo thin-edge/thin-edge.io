@@ -130,7 +130,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: tarpaulin
-          args: -v --out Xml
+          args: --avoid-cfg-tarpaulin -v --out Xml
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
