@@ -105,7 +105,7 @@ class SoftwareManagement(BaseTest):
 
         payload = {
             "deviceId": self.project.deviceid,
-            "description": "Apply software changes, triggered from PySys test",
+            "description": f"Apply software changes, triggered from PySys: {json_content}",
             "c8y_SoftwareUpdate": json_content,
         }
 
