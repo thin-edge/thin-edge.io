@@ -30,13 +30,15 @@ TODO: Add management for package creation and removal for c8y
 
 import base64
 import time
-
 import json
 import requests
+import sys
 
 import pysys
 from pysys.basetest import BaseTest
 
+sys.path.append('./environments')
+from environment_c8y import EnvironmentC8y
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -45,7 +47,7 @@ def is_timezone_aware(stamp):
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
-class SoftwareManagement(BaseTest):
+class SoftwareManagement(EnvironmentC8y):
     """Base class for software management tests"""
 
     # Static class member that can be overriden by a command line argument
@@ -61,6 +63,9 @@ class SoftwareManagement(BaseTest):
 
         if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        super().setup()
+        self.addCleanupFunction(self.mysmcleanup)
 
         tenant = self.project.tenant
         user = self.project.username
@@ -294,3 +299,7 @@ class SoftwareManagement(BaseTest):
                 ret = True
                 break
         return ret
+
+
+    def mysmenvcleanup(self):
+        time.sleep(5)
