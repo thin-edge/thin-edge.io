@@ -301,5 +301,6 @@ class SoftwareManagement(EnvironmentC8y):
         return ret
 
 
-    def mysmenvcleanup(self):
+    def mysmcleanup(self):
+        # Experiment
         time.sleep(5)
