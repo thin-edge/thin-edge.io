@@ -3,15 +3,16 @@
 
 This document describes how to install and use the **Software management** feature in thin-edge.
 
-> Note: As of now the software management supported only on the **apt** based systems(Ex: Ubuntu, Debian)
+> Note: As of now the software management supported only on the **debian** based distros(Ex: Ubuntu, Debian),
+ which use the **apt**.
 
-## Download and Install software management packages on to the device
+## Download and Install software management packages on the device
 
-As a prequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if already not installed. 
+As a prequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already. 
 
 The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
 
-To download the package from github repository use following command (use desired version):
+To download the package from github repository use the following command (use desired version):
 
 ```shell
 curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_<version>_<arch>.deb
@@ -29,10 +30,10 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.1/tedg
 curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.2.4/tedge_agent_0.2.4_amd64.deb
 ```
 
-Now, we have downloaded the package we can proceed to installation. First we will install cli tool `tedge`.
+Now the packages are downloaded, proceed to installation.
 > Note: Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
 
-To install tedge_apt_plugin and tedge_agent on thin-edge device do:
+To install `tedge_apt_plugin` and `tedge_agent` on thin-edge device do:
 
 ```shell
 dpkg -i tedge_apt_plugin_<version>_<arch>.deb
@@ -60,9 +61,10 @@ More info about managing the device software can be found [here](https://cumuloc
 
 1. In the Software repository page, click Add software at the right of the top menu bar.
 2. In the resulting dialog box,
-   - to add a new software, enter a name for the software (and confirm it by clicking Create new in the resulting window), a description and its version (all required).
+   - to add a new software, enter a name for the software (and confirm it by clicking Create new in the resulting window),
+     a description and its version.
    - to add a new version, select the software for which you want to add a new version from the dropdown list in the Software
-     field and enter a version and plugin type as **version::apt** (In the picture below the version is empty)
+     field and enter a version and plugin type as **version::apt** (In the picture below the version is empty and are optional)
 3. Optionally, you can define the device type filter when adding a new software.
 4. Either upload a binary from the file system or specify a URL from where the software can be downloaded. As of now thin-edge does not
    support both the options. So, select the **Provide a file path file path** option and give an **empty space**.
