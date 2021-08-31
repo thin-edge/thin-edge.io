@@ -18,62 +18,50 @@ import sys
 sys.path.append("software-management-end-to-end")
 from environment_sm_management import SoftwareManagement
 
-def getversion(pkg):
-        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
+class PySysTest(SoftwareManagement):
 
-        # Lets assume it is the package in the first line of the output
-        return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
-
-def getaction(act):
-
-        pkgid = {
-            # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
-            "moon-buggy": "5439204",
-        }
+    def getaction(self, act):
+        "create an action that we can use later"
 
         action = [
             {
                 "action": act,
-                "id": pkgid["asciijump"],
+                "id": self.pkgid["asciijump"],
                 "name": "asciijump",
                 "url": " ",
                 "version": "::apt", # apt manager
             },
             {
                 "action": act,
-                "id": pkgid["robotfindskitten"],
+                "id": self.pkgid["robotfindskitten"],
                 "name": "robotfindskitten",
                 "url": " ",
                 "version": " ", # default manager
             },
             {
                 "action": act,
-                "id": pkgid["squirrel3"],
+                "id": self.pkgid["squirrel3"],
                 "name": "squirrel3",
                 "url": " ",
-                "version": getversion("squirrel3")+"::apt", # verson and manager
+                "version": self.getpkgversion("squirrel3")+"::apt", # verson and manager
             },
             {
                 "action": act,
-                "id": pkgid["rolldice"],
+                "id": self.pkgid["rolldice"],
                 "name": "rolldice",
                 "url": " ",
-                "version": getversion("rolldice"), # only version
+                "version": self.getpkgversion("rolldice"), # only version
             },
             {
                 "action": act,
-                "id": pkgid["moon-buggy"],
+                "id": self.pkgid["moon-buggy"],
                 "name": "moon-buggy",
                 "url": " ",
-                "version": getversion("moon-buggy"), # nothing special
+                "version": self.getpkgversion("moon-buggy"), # nothing special
             },
             {
                 "action": act,
-                "id": pkgid["asciijump"],
+                "id": self.pkgid["asciijump"],
                 "name": "asciijump",
                 "url": " ",
                 "version": "::apt", # again same as above
@@ -81,7 +69,6 @@ def getaction(act):
         return action
 
 
-class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
 
@@ -93,7 +80,7 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        action = getaction("install")
+        action = self.getaction("install")
 
         self.trigger_action_json(action)
 
@@ -105,7 +92,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("squirrel3"))
         self.assertThat("True == value", value=self.check_is_installed("moon-buggy"))
 
-        action = getaction("delete")
+        action = self.getaction("delete")
 
         self.trigger_action_json(action)
 

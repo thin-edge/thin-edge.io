@@ -32,6 +32,7 @@ import base64
 import time
 import json
 import requests
+import subprocess
 import sys
 
 import pysys
@@ -82,6 +83,17 @@ class SoftwareManagement(EnvironmentC8y):
         # self.version_rolldice = '1.16-1+b3::apt'
 
         self.repo_id_rolldice = "5445239"
+
+        # Database with package IDs
+        # TODO use this everywhere
+        self.pkgid = {
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
+            "moon-buggy": "5439204",
+        }
 
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
@@ -307,6 +319,16 @@ class SoftwareManagement(EnvironmentC8y):
                 ret = True
                 break
         return ret
+
+    def getpkgversion(self, pkg):
+        """"Use apt-cache madison to derive a package version from
+        the apt cache even when it is not installed.
+        Not very bulletproof yet!!!
+        """
+        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
+
+        # Lets assume it is the package in the first line of the output
+        return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
 
 
     def mysmcleanup(self):
