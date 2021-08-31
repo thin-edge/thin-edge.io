@@ -71,6 +71,8 @@ class SoftwareManagement(EnvironmentC8y):
         user = self.project.username
         password = self.project.c8ypass
 
+        self.timeout_req = 10 # seconds
+
         # This is a mess and needs to be improved
         # Also where we need management of versions
         # e.g. with 1.16-1+b3
@@ -130,7 +132,7 @@ class SoftwareManagement(EnvironmentC8y):
             "c8y_SoftwareUpdate": json_content,
         }
 
-        req = requests.post(url, json=payload, headers=self.header)
+        req = requests.post(url, json=payload, headers=self.header, timeout=self.timeout_req)
 
         jresponse = json.loads(req.text)
 
@@ -179,7 +181,7 @@ class SoftwareManagement(EnvironmentC8y):
         }
 
         url = f"https://{self.tenant_url}/devicecontrol/operations"
-        req = requests.get(url, params=params, headers=self.header)
+        req = requests.get(url, params=params, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
@@ -218,7 +220,7 @@ class SoftwareManagement(EnvironmentC8y):
         """Check if the last operation is successfull"""
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
-        req = requests.get(url, headers=self.header)
+        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
@@ -275,7 +277,7 @@ class SoftwareManagement(EnvironmentC8y):
         """Check if a package is installed"""
 
         url = f"https://{self.tenant_url}/inventory/managedObjects/{self.project.deviceid}"
-        req = requests.get(url, headers=self.header)
+        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
