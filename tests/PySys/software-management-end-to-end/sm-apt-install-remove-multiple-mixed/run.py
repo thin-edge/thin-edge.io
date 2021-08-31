@@ -43,7 +43,28 @@ class PySysTest(SoftwareManagement):
                 "id": pkgid["asciijump"],
                 "name": "asciijump",
                 "url": " ",
-                "version": "::apt",
+                "version": "::apt", # apt manager
+            },
+            {
+                "action": act,
+                "id": pkgid["robotfindskitten"],
+                "name": "robotfindskitten",
+                "url": " ",
+                "version": " ", # default manager
+            },
+            {
+                "action": act,
+                "id": pkgid["squirrel3"],
+                "name": "squirrel3",
+                "url": " ",
+                "version": "3.1-8::apt", # verson and manager
+            },
+            {
+                "action": act,
+                "id": pkgid["rolldice"],
+                "name": "rolldice",
+                "url": " ",
+                "version": "1.16-1+b3", # only version
             },
         ]
 
@@ -60,7 +81,28 @@ class PySysTest(SoftwareManagement):
                 "id": pkgid["asciijump"],
                 "name": "asciijump",
                 "url": " ",
-                "version": "::apt",
+                "version": "::apt", # apt manager
+            },
+            {
+                "action": act,
+                "id": pkgid["robotfindskitten"],
+                "name": "robotfindskitten",
+                "url": " ",
+                "version": " ", # default manager
+            },
+            {
+                "action": act,
+                "id": pkgid["squirrel3"],
+                "name": "squirrel3",
+                "url": " ",
+                "version": "3.1-8::apt", # verson and manager
+            },
+            {
+                "action": act,
+                "id": pkgid["rolldice"],
+                "name": "rolldice",
+                "url": " ",
+                "version": "1.16-1+b3", # only version
             },
         ]
 
