@@ -32,11 +32,6 @@ class PySysTest(SmManagement):
     def execute(self):
 
         pkgid = {
-            # fruits
-            "apple": "5495053",
-            "banana": "5494888",
-            "cherry": "5495382",
-            "watermelon": "5494510",
             # apt
             "asciijump": "5475278",
             "robotfindskitten": "5473003",
@@ -44,36 +39,14 @@ class PySysTest(SmManagement):
             "rolldice": "5445239",
         }
 
-        mgt = "::fruits"
         act = "install"
         action = [
-            {
-                "action": act,
-                "id": pkgid["apple"],
-                "name": "apple",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["banana"],
-                "name": "banana",
-                "url": " ",
-                "version": mgt,
-            },
             {
                 "action": act,
                 "id": pkgid["asciijump"],
                 "name": "asciijump",
                 "url": " ",
                 "version": "::apt",
-            },
-            {
-                "action": act,
-                "id": pkgid["cherry"],
-                "name": "cherry",
-                "url": " ",
-                "version": mgt,
             },
         ]
 
@@ -88,27 +61,6 @@ class PySysTest(SmManagement):
 
         act = "delete"
         action = [
-            {
-                "action": act,
-                "id": pkgid["apple"],
-                "name": "apple",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["banana"],
-                "name": "banana",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["cherry"],
-                "name": "cherry",
-                "url": " ",
-                "version": mgt,
-            },
             {
                 "action": act,
                 "id": pkgid["asciijump"],
