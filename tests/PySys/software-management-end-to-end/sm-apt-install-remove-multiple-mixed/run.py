@@ -26,42 +26,42 @@ class PySysTest(SoftwareManagement):
         action = [
             {
                 "action": act,
-                "id": self.pkgid["asciijump"],
+                "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
                 "url": " ",
                 "version": "::apt", # apt manager
             },
             {
                 "action": act,
-                "id": self.pkgid["robotfindskitten"],
+                "id": self.get_pkgid("robotfindskitten"),
                 "name": "robotfindskitten",
                 "url": " ",
                 "version": " ", # default manager
             },
             {
                 "action": act,
-                "id": self.pkgid["squirrel3"],
+                "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
                 "url": " ",
                 "version": self.getpkgversion("squirrel3")+"::apt", # verson and manager
             },
             {
                 "action": act,
-                "id": self.pkgid["rolldice"],
+                "id": self.get_pkgid("rolldice"),
                 "name": "rolldice",
                 "url": " ",
                 "version": self.getpkgversion("rolldice"), # only version
             },
             {
                 "action": act,
-                "id": self.pkgid["moon-buggy"],
+                "id": self.get_pkgid("moon-buggy"),
                 "name": "moon-buggy",
                 "url": " ",
                 "version": self.getpkgversion("moon-buggy"), # nothing special
             },
             {
                 "action": act,
-                "id": self.pkgid["asciijump"],
+                "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
                 "url": " ",
                 "version": "::apt", # again same as above
