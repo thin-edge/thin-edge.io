@@ -26,6 +26,12 @@ pub struct ConnectCommand {
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
+pub enum DeviceStatus {
+    New,
+    AlreadyExists,
+    Unknown,
+}
+
 pub enum Cloud {
     Azure,
     C8y,
@@ -63,7 +69,7 @@ impl Command for ConnectCommand {
 
         if self.is_test_connection {
             return match self.check_connection(&config) {
-                Ok(()) => Ok(()),
+                Ok(_) => Ok(()),
                 Err(err) => Err(err.into()),
             };
         }
@@ -88,7 +94,8 @@ impl Command for ConnectCommand {
             &self.config_location,
         )?;
 
-        if self.check_connection(&config).is_err() {
+        let connection_check_result = self.check_connection(&config);
+        if connection_check_result.is_err() {
             println!(
                 "Warning: Bridge has been configured, but {} connection check failed.\n",
                 self.cloud.as_str()
@@ -96,13 +103,14 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
-            restart_mosquitto(
-                &bridge_config,
-                self.service_manager.as_ref(),
-                &self.config_location,
-            )?;
-
+            if let Ok(DeviceStatus::New) = connection_check_result {
+                println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
+                restart_mosquitto(
+                    &bridge_config,
+                    self.service_manager.as_ref(),
+                    &self.config_location,
+                )?;
+            }
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
 
@@ -142,7 +150,7 @@ impl ConnectCommand {
         }
     }
 
-    fn check_connection(&self, config: &TEdgeConfig) -> Result<(), ConnectError> {
+    fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
@@ -176,7 +184,40 @@ where
 // the check can finish in the second try as there is no error response in the first try.
 
 #[tokio::main]
-async fn check_connection_c8y(port: u16) -> Result<(), ConnectError> {
+async fn check_connection_c8y(port: u16) -> Result<DeviceStatus, ConnectError> {
+    for i in 0..2 {
+        print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
+
+        let create_device_result = create_device(port);
+        match create_device_result.await {
+            Ok(DeviceStatus::New) => {
+                return Ok(DeviceStatus::New);
+            }
+            Ok(DeviceStatus::AlreadyExists) => {
+                println!("Received expected response message, connection check is successful.\n",);
+                if i == 0 {
+                    return Ok(DeviceStatus::AlreadyExists);
+                } else {
+                    return Ok(DeviceStatus::New);
+                }
+            }
+            Ok(DeviceStatus::Unknown) => {
+                if i == 0 {
+                    println!("... No response. If the device is new, it's normal to get no response in the first try.");
+                } else {
+                    println!("... No response. ");
+                    return Ok(DeviceStatus::Unknown);
+                }
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+    }
+    return Ok(DeviceStatus::Unknown);
+}
+
+async fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
     const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -196,45 +237,32 @@ async fn check_connection_c8y(port: u16) -> Result<(), ConnectError> {
                 .unwrap_or("")
                 .contains("41,100,Device already existing")
             {
-                let _ = sender.send(true);
+                let _ = sender.send(());
                 break;
             }
         }
     });
 
-    for i in 0..2 {
-        print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
-
-        if timeout(
-            RESPONSE_TIMEOUT,
-            // 100: Device creation
-            mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
-        )
-        .await
-        .is_err()
-        {
-            println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
-            return Err(ConnectError::TimeoutElapsedError);
-        }
-
-        let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
-        match fut.await {
-            Ok(Ok(true)) => {
-                println!("Received expected response message, connection check is successful.\n",);
-                return Ok(());
-            }
-            _err => {
-                if i == 0 {
-                    println!("... No response. If the device is new, it's normal to get no response in the first try.");
-                } else {
-                    println!("... No response. ");
-                }
-            }
-        }
+    if timeout(
+        RESPONSE_TIMEOUT,
+        // 100: Device creation
+        mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
+    )
+    .await
+    .is_err()
+    {
+        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
+        return Err(ConnectError::TimeoutElapsedError);
     }
-    Err(ConnectError::NoPacketsReceived {
-        cloud: "Cumulocity".into(),
-    })
+
+    let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
+    match fut.await {
+        Ok(Ok(())) => {
+            println!("Received expected response message, connection check is successful.\n",);
+            return Ok(DeviceStatus::AlreadyExists);
+        }
+        _err => return Ok(DeviceStatus::Unknown),
+    }
 }
 
 // Here We check the az device twin properties over mqtt to check if connection has been open.
@@ -245,7 +273,7 @@ async fn check_connection_c8y(port: u16) -> Result<(), ConnectError> {
 // Here if the status is 200 then it's success.
 
 #[tokio::main]
-async fn check_connection_azure(port: u16) -> Result<(), ConnectError> {
+async fn check_connection_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
@@ -284,7 +312,7 @@ async fn check_connection_azure(port: u16) -> Result<(), ConnectError> {
     match fut.await {
         Ok(Ok(true)) => {
             println!("Received expected response message, connection check is successful.");
-            Ok(())
+            Ok(DeviceStatus::New)
         }
         _err => Err(ConnectError::NoPacketsReceived {
             cloud: "Azure".into(),
