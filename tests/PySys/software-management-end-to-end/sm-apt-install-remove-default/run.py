@@ -29,13 +29,13 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        self.trigger_action("rolldice", self.repo_id_rolldice, " ", "notanurl", "install")
+        self.trigger_action("rolldice", self.get_pkgid("rolldice"), " ", "notanurl", "install")
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        self.trigger_action("rolldice", self.repo_id_rolldice, " ", "notanurl", "delete")
+        self.trigger_action("rolldice", self.get_pkgid("rolldice"), " ", "notanurl", "delete")
 
         self.wait_until_succcess()
 

@@ -74,27 +74,6 @@ class SoftwareManagement(EnvironmentC8y):
 
         self.timeout_req = 20 # seconds, got timeout with 10s
 
-        # This is a mess and needs to be improved
-        # Also where we need management of versions
-        # e.g. with 1.16-1+b3
-        # Raspberry Pi OS:
-        self.version_rolldice = '1.16-1+b1::apt'
-        # debian bullseye
-        # self.version_rolldice = '1.16-1+b3::apt'
-
-        self.repo_id_rolldice = "5445239"
-
-        # Database with package IDs
-        # TODO use this everywhere
-        self.pkgid = {
-            # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
-            "moon-buggy": "5439204",
-        }
-
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
         # at the same time.
@@ -329,6 +308,26 @@ class SoftwareManagement(EnvironmentC8y):
 
         # Lets assume it is the package in the first line of the output
         return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
+
+    def get_pkgid(self, pkg):
+
+        # Database with package IDs
+        # TODO use this everywhere
+        pkgiddb = {
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
+            "moon-buggy": "5439204",
+        }
+
+        pkgid = pkgiddb.get(pkg)
+
+        if pkgid:
+            return pkgid
+        else:
+            raise SystemError("Package ID not in database")
 
 
     def mysmcleanup(self):
