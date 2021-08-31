@@ -2347,6 +2347,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
+dependencies = [
+ "lazy_static",
+ "parking_lot",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
+dependencies = [
+ "proc-macro2 1.0.28",
+ "quote 1.0.9",
+ "syn 1.0.74",
+]
+
+[[package]]
 name = "sha-1"
 version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2581,7 +2603,6 @@ dependencies = [
  "c8y_translator_lib",
  "chrono",
  "clock",
- "confy",
  "csv",
  "env_logger 0.8.4",
  "flockfile",
@@ -2590,12 +2611,15 @@ dependencies = [
  "log",
  "mockall",
  "mqtt_client",
+ "reqwest",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_config",
  "tedge_users",
  "tedge_utils",
+ "tempfile",
  "thin_edge_json",
  "thiserror",
  "tokio",
