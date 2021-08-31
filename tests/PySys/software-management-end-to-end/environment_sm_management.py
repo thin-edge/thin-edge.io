@@ -246,7 +246,7 @@ class SoftwareManagement(EnvironmentC8y):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 30
+        wait_time = 60
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
