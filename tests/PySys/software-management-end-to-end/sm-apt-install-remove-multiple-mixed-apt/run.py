@@ -17,17 +17,14 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
 
     def execute(self):
 
@@ -54,10 +51,7 @@ class PySysTest(SmManagement):
 
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("True == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("asciijump"))
 
         act = "delete"
         action = [
@@ -76,7 +70,4 @@ class PySysTest(SmManagement):
 
     def validate(self):
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
