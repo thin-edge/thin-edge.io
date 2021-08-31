@@ -71,7 +71,7 @@ class SoftwareManagement(EnvironmentC8y):
         user = self.project.username
         password = self.project.c8ypass
 
-        self.timeout_req = 10 # seconds
+        self.timeout_req = 20 # seconds, got timeout with 10s
 
         # This is a mess and needs to be improved
         # Also where we need management of versions
@@ -79,7 +79,7 @@ class SoftwareManagement(EnvironmentC8y):
         # Raspberry Pi OS:
         self.version_rolldice = '1.16-1+b1::apt'
         # debian bullseye
-        # self.version = '1.16-1+b3::apt'
+        # self.version_rolldice = '1.16-1+b3::apt'
 
         self.repo_id_rolldice = "5445239"
 
@@ -231,6 +231,9 @@ class SoftwareManagement(EnvironmentC8y):
             "State of operation %s : %s", self.operation_id, operation["status"]
         )
 
+        self.log.info ("Expected status: %s"%status)
+        self.log.info ("Got status: %s"%operation.get("status"))
+
         return operation.get("status") == status
 
     def wait_until_succcess(self):
@@ -248,11 +251,13 @@ class SoftwareManagement(EnvironmentC8y):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 60
+        wait_time = 90
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
         time.sleep(1)
+
+        # TODO this is a mess, we probably need a better dispatcher soon
 
         while True:
 
@@ -268,10 +273,11 @@ class SoftwareManagement(EnvironmentC8y):
                 self.operation_id = None
                 break
 
-            time.sleep(1)
+            time.sleep(5) # Observed timeouts with 2 seconds
+
             timeout += 1
             if timeout > wait_time:
-                raise SystemError("Timeout while waiting for a failure")
+                raise SystemError("Timeout while waiting for status %s or %s"%(status, status2))
 
     def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
