@@ -1,7 +1,6 @@
 //! Crate-private plain-old data-type used for serialization.
 
 use crate::*;
-use serde;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
