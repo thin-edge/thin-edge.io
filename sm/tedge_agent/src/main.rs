@@ -1,5 +1,4 @@
 use agent::SmAgentConfig;
-use tedge_users::UserManager;
 
 mod agent;
 mod error;
@@ -12,7 +11,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let agent = agent::SmAgent::new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
-        UserManager::new(),
     );
     agent.start().await?;
     Ok(())

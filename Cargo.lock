@@ -220,7 +220,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "tokio",
@@ -310,7 +310,7 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
 name = "c8y_translator_lib"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -349,7 +349,7 @@ checksum = "e70cc2f62c6ce1868963827bd677764c62d07c3d9a3e1fb1177ee1a9ab199eb2"
 
 [[package]]
 name = "certificate"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "mockall",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "assert_matches",
  "log",
@@ -1186,7 +1186,7 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "json-writer"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "json_sm"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "nanoid",
  "regex",
@@ -1383,7 +1383,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_client"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-log",
@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2499,7 +2499,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tedge"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_agent"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2552,7 +2552,6 @@ dependencies = [
  "serde_json",
  "structopt",
  "tedge_config",
- "tedge_users",
  "tedge_utils",
  "tempfile",
  "thiserror",
@@ -2564,7 +2563,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2572,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "assert_matches",
  "certificate",
@@ -2586,7 +2585,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2594,7 +2593,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mapper"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -2630,7 +2629,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_users"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "thiserror",
  "users",
@@ -2638,7 +2637,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2684,7 +2683,7 @@ dependencies = [
 
 [[package]]
 name = "thin_edge_json"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",

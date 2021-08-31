@@ -11,7 +11,6 @@ use log::{debug, error, info};
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
-use tedge_users::{UserManager, ROOT_USER};
 
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
@@ -113,18 +112,16 @@ impl SmAgentConfig {
 pub struct SmAgent {
     config: SmAgentConfig,
     name: String,
-    user_manager: UserManager,
     persistance_store: AgentStateRepository,
 }
 
 impl SmAgent {
-    pub fn new(name: &str, config: SmAgentConfig, user_manager: UserManager) -> Self {
+    pub fn new(name: &str, config: SmAgentConfig) -> Self {
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
 
         Self {
             config,
             name: name.into(),
-            user_manager,
             persistance_store,
         }
     }
@@ -302,10 +299,7 @@ impl SmAgent {
             .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
-        let response = {
-            let _user_guard = self.user_manager.become_user(ROOT_USER)?;
-            plugins.process(&request).await
-        };
+        let response = plugins.process(&request).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
