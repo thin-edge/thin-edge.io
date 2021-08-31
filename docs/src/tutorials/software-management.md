@@ -6,6 +6,8 @@ This document describes how to install and use the **Software management** featu
 > Note: As of now the software management only supports **debian** based distros(Ex: Ubuntu, Debian),
  which use the **apt**.
 
+
+
 ## Download and Install software management packages on the device
 
 As a prequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already. 
@@ -40,6 +42,8 @@ dpkg -i tedge_apt_plugin_<version>_<arch>.deb
 dpkg -i tedge_agent<version>_<arch>.deb
 ```
 
+
+
 ## Start and enable the software management services
 
 The `tedge connect` will automatically start and enable the software management services.
@@ -52,6 +56,8 @@ the list of softwares that are installed on the device will be visible as shown 
 
 
 > Note: Disconnecting thin-edge device from cloud will stop and disable the software management services.
+
+
 
 ## Managing the device software on Cumulocity
 
@@ -77,6 +83,8 @@ Follow above mentioned steps as shown in the diagram
 
 Find more information about how to delete the software or the specific software version [here](https://cumulocity.com/guides/users-guide/device-management/#deleting-softwares-or-software-versions)
 
+
+
 ## Managing software on a device
 
 Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
@@ -90,6 +98,7 @@ Find about how to [Update the software on a device](https://cumulocity.com/guide
 
 ### Remove software on a device
 Hover over the software entry which you want to remove and click the **Remove** software icon and click on `Apply changes` button.
+
 
 
 ## Starting and Stopping the Software management services manually
