@@ -1,9 +1,9 @@
 
 # Introduction
 
-This document describes how to install and use the **Software management** feature in thin-edge.
+This document describes how to install and use the **Software management** feature in thin-edge.io.
 
-> Note: As of now the software management supported only on the **debian** based distros(Ex: Ubuntu, Debian),
+> Note: As of now the software management only supports **debian** based distros(Ex: Ubuntu, Debian),
  which use the **apt**.
 
 ## Download and Install software management packages on the device
@@ -23,11 +23,11 @@ where:
 >
 > `arch` -> architecture type (amd64, armhf)
 
-Download `tedg_apt_plugin` and `tedge_agent`
+Download `tedge_apt_plugin` and `tedge_agent`
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.1/tedge_apt_plugin_0.1.1_amd64.deb
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.2.4/tedge_agent_0.2.4_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_apt_plugin_0.3.0_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_agent_0.3.0_amd64.deb
 ```
 
 Now the packages are downloaded, proceed to installation.
@@ -46,7 +46,7 @@ The `tedge connect` will automatically start and enable the software management 
 Find more about [how to connect thin-edge device to cloud](../howto-guides/004_connect.md)
 
 Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
-the list of softwares that are presently installed on the device will be visible as shown in the figure below.
+the list of softwares that are installed on the device will be visible as shown in the figure below.
 
 ![Add new software](./images/start-software-management.png)
 
@@ -66,8 +66,7 @@ More info about managing the device software can be found [here](https://cumuloc
    - to add a new version, select the software for which you want to add a new version from the dropdown list in the Software
      field and enter a version and plugin type as **version::apt** (In the picture below the version is empty and are optional)
 3. Optionally, you can define the device type filter when adding a new software.
-4. Either upload a binary from the file system or specify a URL from where the software can be downloaded. As of now thin-edge does not
-   support both the options. So, select the **Provide a file path file path** option and give an **empty space**.
+4. As of now thin-edge.io only supports software from apt repositories. So, select the **Provide a file path file path** option and give an **empty space**.
 5. Click Save.
 
 Follow above mentioned steps as shown in the diagram
@@ -86,10 +85,10 @@ Find more information about [how to manage the software](https://cumulocity.com/
 Find about how to [Install a specific software on a device](https://cumulocity.com/guides/users-guide/device-management/#to-install-software-on-a-device)
 > Note: Software profiles are not supported as of now on thin-edge.
 
-### Update the software on a device
+### Update software on a device
 Find about how to [Update the software on a device](https://cumulocity.com/guides/users-guide/device-management/#to-update-software-on-a-device)
 
-### Remove the software on a device
+### Remove software on a device
 Hover over the software entry which you want to remove and click the **Remove** software icon and click on `Apply changes` button.
 
 
