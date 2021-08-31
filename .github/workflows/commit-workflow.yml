@@ -179,7 +179,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: tarpaulin
-          args: --avoid-cfg-tarpaulin -v --out Xml --features integration-test
+          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml --features integration-test
 
   cargo-tarpaulin:
 
