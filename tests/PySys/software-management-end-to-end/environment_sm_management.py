@@ -72,7 +72,7 @@ class SoftwareManagement(EnvironmentC8y):
         user = self.project.username
         password = self.project.c8ypass
 
-        self.timeout_req = 20 # seconds, got timeout with 10s
+        self.timeout_req = 30 # seconds, got timeout with 20s
 
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
