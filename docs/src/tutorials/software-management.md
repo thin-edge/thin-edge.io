@@ -84,7 +84,7 @@ Find more information about [how to manage the software](https://cumulocity.com/
 
 ### Install software on a device
 Find about how to [Install a specific software on a device](https://cumulocity.com/guides/users-guide/device-management/#to-install-software-on-a-device)
-Note: Software profiles are not supported as of now on thin-edge.
+> Note: Software profiles are not supported as of now on thin-edge.
 
 ### Update the software on a device
 Find about how to [Update the software on a device](https://cumulocity.com/guides/users-guide/device-management/#to-update-software-on-a-device)
