@@ -4,3 +4,4 @@
 - [Connect my device to Azure IoT](./connect-azure.md)
 - [Send Thin Edge Json data](./send-thin-edge-data.md)
 - [Monitor my device](./device-monitoring.md)
+- [Manage my device software](./software-management.md)
