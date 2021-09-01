@@ -31,6 +31,7 @@ TODO: Add management for package creation and removal for c8y
 import base64
 import time
 import json
+import platform
 import requests
 import subprocess
 import sys
@@ -264,7 +265,12 @@ class SoftwareManagement(EnvironmentC8y):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 90
+        # Heuristic about how long to wait for a operation
+        if platform.machine()=='x86_64':
+            wait_time = 30
+        else:
+            wait_time = 90 # 90 on the Rpi
+
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
