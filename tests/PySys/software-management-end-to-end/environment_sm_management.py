@@ -20,17 +20,26 @@ To run the tests with another tenant url:
 
 
 
+TODO: Avoid hardcoded ids
+TODO: Get software package ids from c8y
+TODO: Add management for package creation and removal for c8y
+    -> Mabe as separte python module to access c8y
+
+
 """
 
 import base64
 import time
-
 import json
 import requests
+import subprocess
+import sys
 
 import pysys
 from pysys.basetest import BaseTest
 
+sys.path.append('./environments')
+from environment_c8y import EnvironmentC8y
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -39,7 +48,7 @@ def is_timezone_aware(stamp):
     return stamp.tzinfo is not None and stamp.tzinfo.utcoffset(stamp) is not None
 
 
-class SoftwareManagement(BaseTest):
+class SoftwareManagement(EnvironmentC8y):
     """Base class for software management tests"""
 
     # Static class member that can be overriden by a command line argument
@@ -56,9 +65,14 @@ class SoftwareManagement(BaseTest):
         if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
 
+        super().setup()
+        self.addCleanupFunction(self.mysmcleanup)
+
         tenant = self.project.tenant
         user = self.project.username
         password = self.project.c8ypass
+
+        self.timeout_req = 30 # seconds, got timeout with 20s
 
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
@@ -105,11 +119,11 @@ class SoftwareManagement(BaseTest):
 
         payload = {
             "deviceId": self.project.deviceid,
-            "description": "Apply software changes, triggered from PySys test",
+            "description": f"Apply software changes, triggered from PySys: {json_content}",
             "c8y_SoftwareUpdate": json_content,
         }
 
-        req = requests.post(url, json=payload, headers=self.header)
+        req = requests.post(url, json=payload, headers=self.header, timeout=self.timeout_req)
 
         jresponse = json.loads(req.text)
 
@@ -158,7 +172,7 @@ class SoftwareManagement(BaseTest):
         }
 
         url = f"https://{self.tenant_url}/devicecontrol/operations"
-        req = requests.get(url, params=params, headers=self.header)
+        req = requests.get(url, params=params, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
@@ -197,7 +211,7 @@ class SoftwareManagement(BaseTest):
         """Check if the last operation is successfull"""
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
-        req = requests.get(url, headers=self.header)
+        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
@@ -207,6 +221,9 @@ class SoftwareManagement(BaseTest):
         self.log.info(
             "State of operation %s : %s", self.operation_id, operation["status"]
         )
+
+        self.log.info ("Expected status: %s"%status)
+        self.log.info ("Got status: %s"%operation.get("status"))
 
         return operation.get("status") == status
 
@@ -225,11 +242,13 @@ class SoftwareManagement(BaseTest):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 300
+        wait_time = 90
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
         time.sleep(1)
+
+        # TODO this is a mess, we probably need a better dispatcher soon
 
         while True:
 
@@ -245,16 +264,17 @@ class SoftwareManagement(BaseTest):
                 self.operation_id = None
                 break
 
-            time.sleep(1)
+            time.sleep(5) # Observed timeouts with 2 seconds
+
             timeout += 1
             if timeout > wait_time:
-                raise SystemError("Timeout while waiting for a failure")
+                raise SystemError("Timeout while waiting for status %s or %s"%(status, status2))
 
     def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
 
         url = f"https://{self.tenant_url}/inventory/managedObjects/{self.project.deviceid}"
-        req = requests.get(url, headers=self.header)
+        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
 
         req.raise_for_status()
 
@@ -278,3 +298,38 @@ class SoftwareManagement(BaseTest):
                 ret = True
                 break
         return ret
+
+    def getpkgversion(self, pkg):
+        """"Use apt-cache madison to derive a package version from
+        the apt cache even when it is not installed.
+        Not very bulletproof yet!!!
+        """
+        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
+
+        # Lets assume it is the package in the first line of the output
+        return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
+
+    def get_pkgid(self, pkg):
+
+        # Database with package IDs
+        # TODO use this everywhere
+        pkgiddb = {
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
+            "moon-buggy": "5439204",
+        }
+
+        pkgid = pkgiddb.get(pkg)
+
+        if pkgid:
+            return pkgid
+        else:
+            raise SystemError("Package ID not in database")
+
+
+    def mysmcleanup(self):
+        # Experiment
+        time.sleep(5)
