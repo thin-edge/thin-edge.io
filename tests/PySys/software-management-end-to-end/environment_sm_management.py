@@ -145,13 +145,13 @@ class SoftwareManagement(EnvironmentC8y):
         """Check if the current status is a fail"""
         if self.operation_id:
             return self.check_status_of_operation("FAILED")
-        return self.check_last_status("FAILED")
+        return self.check_status_of_last_operation("FAILED")
 
     def is_status_success(self):
         """Check if the current status is a success"""
         if self.operation_id:
             return self.check_status_of_operation("SUCCESSFUL")
-        return self.check_last_status("SUCCESSFUL")
+        return self.check_status_of_last_operation("SUCCESSFUL")
 
 
     def get_status_of_last_operation(self):
@@ -207,7 +207,7 @@ class SoftwareManagement(EnvironmentC8y):
 
         return operation.get("status")
 
-    def check_last_status(self, status):
+    def check_status_of_last_operation(self, status):
         """Check if the last operation is successfull.
         Warning: an observation so far is, that installation failures
         seem to be at the beginning of the list independent of if we
@@ -285,7 +285,7 @@ class SoftwareManagement(EnvironmentC8y):
                     status
                 ) or self.check_status_of_operation(status2)
             else:
-                stat = self.check_last_status(status) or self.check_last_status(status2)
+                stat = self.check_status_of_last_operation(status) or self.check_status_of_last_operation(status2)
 
             if stat:
                 # Invalidate the old operation
