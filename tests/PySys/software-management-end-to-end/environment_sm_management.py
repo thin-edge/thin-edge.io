@@ -152,12 +152,8 @@ class SoftwareManagement(EnvironmentC8y):
             return self.check_status_of_operation("SUCCESSFUL")
         return self.check_last_status("SUCCESSFUL")
 
-    def check_last_status(self, status):
-        """Check if the last operation is successfull.
-        Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
-        revert it or not.
-        """
+
+    def get_status_of_last_operation(self):
 
         params = {
             "deviceId": self.project.deviceid,
@@ -205,10 +201,28 @@ class SoftwareManagement(EnvironmentC8y):
                 "State of current operation: %s", json.dumps(operation, indent=4)
             )
 
-        return operation.get("status") == status
+        if not operation.get("status"):
+            raise SystemError('No valid field status in response')
 
-    def check_status_of_operation(self, status):
-        """Check if the last operation is successfull"""
+        return operation.get("status")
+
+    def check_last_status(self, status):
+        """Check if the last operation is successfull.
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
+        """
+
+        current_status = self.get_status_of_last_operation()
+
+        return current_status == status
+
+    def get_status_of_operation(self):
+        """Get the last operation
+        """
+
+        if not self.operation_id:
+            raise SystemError('No valid operation ID available')
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header, timeout=self.timeout_req)
@@ -222,10 +236,18 @@ class SoftwareManagement(EnvironmentC8y):
             "State of operation %s : %s", self.operation_id, operation["status"]
         )
 
-        self.log.info ("Expected status: %s"%status)
-        self.log.info ("Got status: %s"%operation.get("status"))
+        if not operation.get("status"):
+            raise SystemError('No valid field status in response')
 
-        return operation.get("status") == status
+        return operation.get("status")
+
+
+    def check_status_of_operation(self, status):
+        """Check if the last operation is successfull
+        """
+        current_status = self.get_status_of_operation()
+        self.log.info ("Expected status: %s, got status %s"%(status,current_status))
+        return  current_status == status
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success"""
