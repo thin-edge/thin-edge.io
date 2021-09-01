@@ -1,16 +1,17 @@
 
 # Introduction
 
-This document describes how to install and use the **Software management** feature in thin-edge.io.
+This document describes how to manage the software modules that are installed on your thin-edge device from the 
+Cumulocity cloud using the **software management** feature of thin-edge.io.
 
-> Note: As of now the software management only supports **debian** based distros(Ex: Ubuntu, Debian),
- which use the **apt**.
+> Note: As of now the software management only supports **debian** based distributions(Ex: RaspberryPi OS , Ubuntu, Debian),
+ which use the **apt** package manager.
 
 
 
-## Download and Install software management packages on the device
+## Download and install software management packages on the device
 
-As a prequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already. 
+As a prerequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already. 
 
 The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
 
@@ -32,7 +33,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedg
 curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_agent_0.3.0_amd64.deb
 ```
 
-Now the packages are downloaded, proceed to installation.
+Once the packages are downloaded, proceed to installation.
 > Note: Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
 
 To install `tedge_apt_plugin` and `tedge_agent` on thin-edge device do:
@@ -44,9 +45,9 @@ dpkg -i tedge_agent<version>_<arch>.deb
 
 
 
-## Start and enable the software management services
+## Start and enable the software management feature
 
-The `tedge connect` will automatically start and enable the software management services.
+The `tedge connect` will automatically start and enable the software management feature.
 Find more about [how to connect thin-edge device to cloud](../howto-guides/004_connect.md)
 
 Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
@@ -55,11 +56,11 @@ the list of softwares that are installed on the device will be visible as shown 
 ![Add new software](./images/start-software-management.png)
 
 
-> Note: Disconnecting thin-edge device from cloud will stop and disable the software management services.
+> Note: Disconnecting thin-edge device from cloud with `tedge disconnect` command will stop and disable the software management feature.
 
 
 
-## Managing the device software on Cumulocity
+## Managing the device software on Cumulocity cloud
 
 More info about managing the device software can be found [here](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
 
@@ -70,9 +71,9 @@ More info about managing the device software can be found [here](https://cumuloc
    - to add a new software, enter a name for the software (and confirm it by clicking Create new in the resulting window),
      a description and its version.
    - to add a new version, select the software for which you want to add a new version from the dropdown list in the Software
-     field and enter a version and plugin type as **version::apt** (In the picture below the version is empty and are optional)
+     field and enter a version of the package. (The version is optional and can be left with a white space)
 3. Optionally, you can define the device type filter when adding a new software.
-4. As of now thin-edge.io only supports software from apt repositories. So, select the **Provide a file path file path** option and give an **empty space**.
+4. As of now thin-edge.io only supports software from apt repositories. So, select the **Provide a file path** option and give an **empty space**.
 5. Click Save.
 
 Follow above mentioned steps as shown in the diagram
@@ -103,7 +104,7 @@ Hover over the software entry which you want to remove and click the **Remove** 
 
 ## Starting and Stopping the Software management services manually
 
-For debugging purpose the services can be started/stopped manually as shown below.
+For debugging purpose or to disable/enable the software management services, one can start/stop manually as shown below.
 
 ### Starting the services manually
 
