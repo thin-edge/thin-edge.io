@@ -50,7 +50,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             use_agent: false,
             try_private: false,
             start_type: "automatic".into(),
-            clean_session: true,
+            clean_session: false,
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![
@@ -100,7 +100,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         ],
         try_private: false,
         start_type: "automatic".into(),
-        clean_session: true,
+        clean_session: false,
         notifications: false,
         bridge_attempt_unsubscribe: false,
     };
