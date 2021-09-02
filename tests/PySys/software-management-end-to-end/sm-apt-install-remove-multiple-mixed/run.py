@@ -18,6 +18,7 @@ import sys
 sys.path.append("software-management-end-to-end")
 from environment_sm_management import SoftwareManagement
 
+
 class PySysTest(SoftwareManagement):
 
     def getaction(self, act):
@@ -29,51 +30,54 @@ class PySysTest(SoftwareManagement):
                 "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
                 "url": " ",
-                "version": "::apt", # apt manager
+                "version": "::apt",  # apt manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("robotfindskitten"),
                 "name": "robotfindskitten",
                 "url": " ",
-                "version": " ", # default manager
+                "version": " ",  # default manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
                 "url": " ",
-                "version": self.getpkgversion("squirrel3")+"::apt", # verson and manager
+                "version": self.getpkgversion("squirrel3")
+                + "::apt",  # verson and manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("rolldice"),
                 "name": "rolldice",
                 "url": " ",
-                "version": self.getpkgversion("rolldice"), # only version
+                "version": self.getpkgversion("rolldice"),  # only version
             },
             {
                 "action": act,
                 "id": self.get_pkgid("moon-buggy"),
                 "name": "moon-buggy",
                 "url": " ",
-                "version": self.getpkgversion("moon-buggy"), # nothing special
+                "version": self.getpkgversion("moon-buggy"),  # nothing special
             },
             {
                 "action": act,
                 "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
                 "url": " ",
-                "version": "::apt", # again same as above
-            },        ]
+                "version": "::apt",  # again same as above
+            },
+        ]
         return action
-
 
     def setup(self):
         super().setup()
 
         self.assertThat("False == value", value=self.check_is_installed("asciijump"))
-        self.assertThat("False == value", value=self.check_is_installed("robotfindskitten"))
+        self.assertThat(
+            "False == value", value=self.check_is_installed("robotfindskitten")
+        )
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
         self.assertThat("False == value", value=self.check_is_installed("squirrel3"))
         self.assertThat("False == value", value=self.check_is_installed("moon-buggy"))
@@ -87,7 +91,9 @@ class PySysTest(SoftwareManagement):
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("asciijump"))
-        self.assertThat("True == value", value=self.check_is_installed("robotfindskitten"))
+        self.assertThat(
+            "True == value", value=self.check_is_installed("robotfindskitten")
+        )
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
         self.assertThat("True == value", value=self.check_is_installed("squirrel3"))
         self.assertThat("True == value", value=self.check_is_installed("moon-buggy"))
@@ -101,7 +107,9 @@ class PySysTest(SoftwareManagement):
     def validate(self):
 
         self.assertThat("False == value", value=self.check_is_installed("asciijump"))
-        self.assertThat("False == value", value=self.check_is_installed("robotfindskitten"))
+        self.assertThat(
+            "False == value", value=self.check_is_installed("robotfindskitten")
+        )
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
         self.assertThat("False == value", value=self.check_is_installed("squirrel3"))
         self.assertThat("False == value", value=self.check_is_installed("moon-buggy"))

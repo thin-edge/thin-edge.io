@@ -31,6 +31,7 @@ TODO: Add management for package creation and removal for c8y
 import base64
 import time
 import json
+import platform
 import requests
 import subprocess
 import sys
@@ -38,8 +39,9 @@ import sys
 import pysys
 from pysys.basetest import BaseTest
 
-sys.path.append('./environments')
+sys.path.append("./environments")
 from environment_c8y import EnvironmentC8y
+
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -57,6 +59,13 @@ class SoftwareManagement(EnvironmentC8y):
 
     myPlatform = None
 
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'sm-fake*' -Xfakeplugin='fakeplugin'
+    # Use it only when you have set up the dummy_plugin to install fruits
+
+    fakeplugin = None
+
     tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
@@ -72,7 +81,8 @@ class SoftwareManagement(EnvironmentC8y):
         user = self.project.username
         password = self.project.c8ypass
 
-        self.timeout_req = 30 # seconds, got timeout with 20s
+        # TODO are we doing something wrong while requesting?
+        self.timeout_req = 80  # seconds, got timeout with 60s
 
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
@@ -123,7 +133,9 @@ class SoftwareManagement(EnvironmentC8y):
             "c8y_SoftwareUpdate": json_content,
         }
 
-        req = requests.post(url, json=payload, headers=self.header, timeout=self.timeout_req)
+        req = requests.post(
+            url, json=payload, headers=self.header, timeout=self.timeout_req
+        )
 
         jresponse = json.loads(req.text)
 
@@ -144,20 +156,15 @@ class SoftwareManagement(EnvironmentC8y):
         """Check if the current status is a fail"""
         if self.operation_id:
             return self.check_status_of_operation("FAILED")
-        return self.check_last_status("FAILED")
+        return self.check_status_of_last_operation("FAILED")
 
     def is_status_success(self):
         """Check if the current status is a success"""
         if self.operation_id:
             return self.check_status_of_operation("SUCCESSFUL")
-        return self.check_last_status("SUCCESSFUL")
+        return self.check_status_of_last_operation("SUCCESSFUL")
 
-    def check_last_status(self, status):
-        """Check if the last operation is successfull.
-        Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
-        revert it or not.
-        """
+    def get_status_of_last_operation(self):
 
         params = {
             "deviceId": self.project.deviceid,
@@ -172,7 +179,9 @@ class SoftwareManagement(EnvironmentC8y):
         }
 
         url = f"https://{self.tenant_url}/devicecontrol/operations"
-        req = requests.get(url, params=params, headers=self.header, timeout=self.timeout_req)
+        req = requests.get(
+            url, params=params, headers=self.header, timeout=self.timeout_req
+        )
 
         req.raise_for_status()
 
@@ -205,10 +214,27 @@ class SoftwareManagement(EnvironmentC8y):
                 "State of current operation: %s", json.dumps(operation, indent=4)
             )
 
-        return operation.get("status") == status
+        if not operation.get("status"):
+            raise SystemError("No valid field status in response")
 
-    def check_status_of_operation(self, status):
-        """Check if the last operation is successfull"""
+        return operation.get("status")
+
+    def check_status_of_last_operation(self, status):
+        """Check if the last operation is successfull.
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
+        """
+
+        current_status = self.get_status_of_last_operation()
+
+        return current_status == status
+
+    def get_status_of_operation(self):
+        """Get the last operation"""
+
+        if not self.operation_id:
+            raise SystemError("No valid operation ID available")
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header, timeout=self.timeout_req)
@@ -222,10 +248,16 @@ class SoftwareManagement(EnvironmentC8y):
             "State of operation %s : %s", self.operation_id, operation["status"]
         )
 
-        self.log.info ("Expected status: %s"%status)
-        self.log.info ("Got status: %s"%operation.get("status"))
+        if not operation.get("status"):
+            raise SystemError("No valid field status in response")
 
-        return operation.get("status") == status
+        return operation.get("status")
+
+    def check_status_of_operation(self, status):
+        """Check if the last operation is successfull"""
+        current_status = self.get_status_of_operation()
+        self.log.info("Expected status: %s, got status %s" % (status, current_status))
+        return current_status == status
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success"""
@@ -242,33 +274,44 @@ class SoftwareManagement(EnvironmentC8y):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        wait_time = 90
+        poll_period = 2  # seconds
+
+        # Heuristic about how long to wait for a operation
+        if platform.machine() == "x86_64":
+            wait_time = int(40 / poll_period)
+        else:
+            wait_time = int(90 / poll_period)  # 90s on the Rpi
+
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
-        time.sleep(1)
-
-        # TODO this is a mess, we probably need a better dispatcher soon
+        time.sleep(poll_period)
 
         while True:
 
             if self.operation_id:
-                stat = self.check_status_of_operation(
-                    status
-                ) or self.check_status_of_operation(status2)
+
+                current_status = self.get_status_of_operation()
+                if current_status == status or current_status == status2:
+                    # Invalidate the old operation
+                    self.operation_id = None
+                    break
+
             else:
-                stat = self.check_last_status(status) or self.check_last_status(status2)
 
-            if stat:
-                # Invalidate the old operation
-                self.operation_id = None
-                break
+                current_status = self.get_status_of_last_operation()
+                if current_status == status or current_status == status2:
+                    # Invalidate the old operation
+                    self.operation_id = None
+                    break
 
-            time.sleep(5) # Observed timeouts with 2 seconds
+            time.sleep(poll_period)
 
             timeout += 1
             if timeout > wait_time:
-                raise SystemError("Timeout while waiting for status %s or %s"%(status, status2))
+                raise SystemError(
+                    "Timeout while waiting for status %s or %s" % (status, status2)
+                )
 
     def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
@@ -300,19 +343,19 @@ class SoftwareManagement(EnvironmentC8y):
         return ret
 
     def getpkgversion(self, pkg):
-        """"Use apt-cache madison to derive a package version from
+        """ "Use apt-cache madison to derive a package version from
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
         """
         output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
 
         # Lets assume it is the package in the first line of the output
-        return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
+        return output.split()[2].decode("ascii")  # E.g. "1.16-1+b3"
 
     def get_pkgid(self, pkg):
 
-        # Database with package IDs
-        # TODO use this everywhere
+        # Database with package IDs taken from the thin-edge.io
+        # TODO make this somehow not hard-coded
         pkgiddb = {
             # apt
             "asciijump": "5475278",
@@ -320,6 +363,11 @@ class SoftwareManagement(EnvironmentC8y):
             "squirrel3": "5474871",
             "rolldice": "5445239",
             "moon-buggy": "5439204",
+            # fake plugin
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
         }
 
         pkgid = pkgiddb.get(pkg)
@@ -328,7 +376,6 @@ class SoftwareManagement(EnvironmentC8y):
             return pkgid
         else:
             raise SystemError("Package ID not in database")
-
 
     def mysmcleanup(self):
         # Experiment

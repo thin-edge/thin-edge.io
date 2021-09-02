@@ -3,12 +3,19 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the apt plugin for multiple packages
+Validate end to end behaviour for the fruits plugin for multiple packages
 
 When we install a bunch of packages
 Then they are installed
 When we deinstall them again
 Then they are not installed
+
+This test is currently skipped as it needs a specialized setup with the
+dummy-plugin set up to install fruits.
+
+To run it do this:
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=specialcontainer
+
 """
 
 import json
@@ -17,94 +24,71 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
-    def setup(self):
-        super().setup()
+class PySysTest(SoftwareManagement):
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-
-    def execute(self):
-
-        pkgid = {
-            "apple": "5495053",
-            "banana": "5494888",
-            "cherry": "5495382",
-            "watermelon": "5494510",
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-        }
+    def getaction(self, act):
+        "create an action that we can use later"
 
         mgt = "::fruits"
         act = "install"
         action = [
             {
                 "action": act,
-                "id": pkgid["apple"],
+                "id": self.get_pkgid("apple"),
                 "name": "apple",
                 "url": " ",
                 "version": mgt,
             },
             {
                 "action": act,
-                "id": pkgid["banana"],
+                "id": self.get_pkgid("banana"),
                 "name": "banana",
                 "url": " ",
                 "version": mgt,
             },
             {
                 "action": act,
-                "id": pkgid["cherry"],
+                "id": self.get_pkgid("cherry"),
                 "name": "cherry",
                 "url": " ",
                 "version": mgt,
             },
         ]
+        return action
 
+    def setup(self):
+
+        if self.fakeplugin != "fakeplugin":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        super().setup()
+
+        # note: in the plugin response they are always there
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
+
+    def execute(self):
+
+        action = self.getaction("install")
         self.trigger_action_json(action)
-
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
+        # note: in the plugin response they are always there
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
 
-        act = "delete"
-        action = [
-            {
-                "action": act,
-                "id": pkgid["apple"],
-                "name": "apple",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["banana"],
-                "name": "banana",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["cherry"],
-                "name": "cherry",
-                "url": " ",
-                "version": mgt,
-            },
-        ]
-
+        action = self.getaction("delete")
         self.trigger_action_json(action)
-
         self.wait_until_succcess()
 
     def validate(self):
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
+        # note: in the plugin response they are always there
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
