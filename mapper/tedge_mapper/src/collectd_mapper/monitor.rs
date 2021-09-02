@@ -78,7 +78,7 @@ impl DeviceMonitor {
             .delivery_jitter(self.device_monitor_config.maximum_message_delay)
             .message_leap_limit(self.device_monitor_config.message_leap_limit)
             .build();
-        let (msg_send, mut msg_recv) = tokio::sync::mpsc::channel(100);
+        let (msg_send, msg_recv) = tokio::sync::mpsc::channel(100);
         let (batch_send, mut batch_recv) = tokio::sync::mpsc::channel(100);
         let driver = BatchDriver::new(Batcher::new(batch_config), msg_recv, batch_send);
         let driver_join_handle = tokio::task::spawn(async move {
