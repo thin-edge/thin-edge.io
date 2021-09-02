@@ -32,22 +32,32 @@ class PySysTest(SoftwareManagement):
     def execute(self):
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), self.getpkgversion("rolldice"), "notanurl", "install"
+            "rolldice",
+            self.get_pkgid("rolldice"),
+            self.getpkgversion("rolldice"),
+            "notanurl",
+            "install",
         )
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        fake_version = "88::apt" # does not exist in C8y
-        self.trigger_action("rolldice", self.get_pkgid("rolldice"), fake_version, "notanurl", "delete")
+        fake_version = "88::apt"  # does not exist in C8y
+        self.trigger_action(
+            "rolldice", self.get_pkgid("rolldice"), fake_version, "notanurl", "delete"
+        )
 
         self.wait_until_fail()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), self.getpkgversion("rolldice"), "notanurl", "delete"
+            "rolldice",
+            self.get_pkgid("rolldice"),
+            self.getpkgversion("rolldice"),
+            "notanurl",
+            "delete",
         )
 
         self.wait_until_succcess()

@@ -39,8 +39,9 @@ import sys
 import pysys
 from pysys.basetest import BaseTest
 
-sys.path.append('./environments')
+sys.path.append("./environments")
 from environment_c8y import EnvironmentC8y
+
 
 def is_timezone_aware(stamp):
     """determine if object is timezone aware or naive
@@ -73,7 +74,7 @@ class SoftwareManagement(EnvironmentC8y):
         user = self.project.username
         password = self.project.c8ypass
 
-        self.timeout_req = 30 # seconds, got timeout with 20s
+        self.timeout_req = 30  # seconds, got timeout with 20s
 
         # Place to save the id of the operation that we started.
         # This is suitable for one operation and not for multiple ones running
@@ -124,7 +125,9 @@ class SoftwareManagement(EnvironmentC8y):
             "c8y_SoftwareUpdate": json_content,
         }
 
-        req = requests.post(url, json=payload, headers=self.header, timeout=self.timeout_req)
+        req = requests.post(
+            url, json=payload, headers=self.header, timeout=self.timeout_req
+        )
 
         jresponse = json.loads(req.text)
 
@@ -153,7 +156,6 @@ class SoftwareManagement(EnvironmentC8y):
             return self.check_status_of_operation("SUCCESSFUL")
         return self.check_status_of_last_operation("SUCCESSFUL")
 
-
     def get_status_of_last_operation(self):
 
         params = {
@@ -169,7 +171,9 @@ class SoftwareManagement(EnvironmentC8y):
         }
 
         url = f"https://{self.tenant_url}/devicecontrol/operations"
-        req = requests.get(url, params=params, headers=self.header, timeout=self.timeout_req)
+        req = requests.get(
+            url, params=params, headers=self.header, timeout=self.timeout_req
+        )
 
         req.raise_for_status()
 
@@ -203,7 +207,7 @@ class SoftwareManagement(EnvironmentC8y):
             )
 
         if not operation.get("status"):
-            raise SystemError('No valid field status in response')
+            raise SystemError("No valid field status in response")
 
         return operation.get("status")
 
@@ -219,11 +223,10 @@ class SoftwareManagement(EnvironmentC8y):
         return current_status == status
 
     def get_status_of_operation(self):
-        """Get the last operation
-        """
+        """Get the last operation"""
 
         if not self.operation_id:
-            raise SystemError('No valid operation ID available')
+            raise SystemError("No valid operation ID available")
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header, timeout=self.timeout_req)
@@ -238,17 +241,15 @@ class SoftwareManagement(EnvironmentC8y):
         )
 
         if not operation.get("status"):
-            raise SystemError('No valid field status in response')
+            raise SystemError("No valid field status in response")
 
         return operation.get("status")
 
-
     def check_status_of_operation(self, status):
-        """Check if the last operation is successfull
-        """
+        """Check if the last operation is successfull"""
         current_status = self.get_status_of_operation()
-        self.log.info ("Expected status: %s, got status %s"%(status,current_status))
-        return  current_status == status
+        self.log.info("Expected status: %s, got status %s" % (status, current_status))
+        return current_status == status
 
     def wait_until_succcess(self):
         """Wait until c8y reports a success"""
@@ -267,12 +268,12 @@ class SoftwareManagement(EnvironmentC8y):
 
         # Heuristic about how long to wait for a operation
 
-        poll_period = 2 # seconds
+        poll_period = 2  # seconds
 
-        if platform.machine()=='x86_64':
-            wait_time = int(40/poll_period)
+        if platform.machine() == "x86_64":
+            wait_time = int(40 / poll_period)
         else:
-            wait_time = int(90/poll_period) # 90s on the Rpi
+            wait_time = int(90 / poll_period)  # 90s on the Rpi
 
         timeout = 0
 
@@ -297,12 +298,13 @@ class SoftwareManagement(EnvironmentC8y):
                     self.operation_id = None
                     break
 
-
             time.sleep(poll_period)
 
             timeout += 1
             if timeout > wait_time:
-                raise SystemError("Timeout while waiting for status %s or %s"%(status, status2))
+                raise SystemError(
+                    "Timeout while waiting for status %s or %s" % (status, status2)
+                )
 
     def check_is_installed(self, package_name, version=None):
         """Check if a package is installed"""
@@ -334,14 +336,14 @@ class SoftwareManagement(EnvironmentC8y):
         return ret
 
     def getpkgversion(self, pkg):
-        """"Use apt-cache madison to derive a package version from
+        """ "Use apt-cache madison to derive a package version from
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
         """
         output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
 
         # Lets assume it is the package in the first line of the output
-        return output.split()[2].decode('ascii')  # E.g. "1.16-1+b3"
+        return output.split()[2].decode("ascii")  # E.g. "1.16-1+b3"
 
     def get_pkgid(self, pkg):
 
@@ -362,7 +364,6 @@ class SoftwareManagement(EnvironmentC8y):
             return pkgid
         else:
             raise SystemError("Package ID not in database")
-
 
     def mysmcleanup(self):
         # Experiment
