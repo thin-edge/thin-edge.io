@@ -355,7 +355,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     def get_pkgid(self, pkg):
 
-        # Database with package IDs
+        # Database with package IDs taken from the thin-edge.io
         # TODO use this everywhere
         pkgiddb = {
             # apt
