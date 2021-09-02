@@ -18,15 +18,15 @@ echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 if [ -z "$VERSION" ]
 then
     echo "Please use this script with the version as argument."
-    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh 0.1.0${COLORRESET}"
+    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh 0.3.0${COLORRESET}"
     exit 0
 fi
 
-if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ]  || [ "$ARCH" = "amd64" ]
 then
     echo "${BLUE}Installing for architecture $ARCH ${COLORRESET}"
 else
-    echo "$ARCH is currently not supported. Currently supported are armhf and amd64."
+    echo "$ARCH is currently not supported. Currently supported are aarch64, armhf and amd64."
     exit 0
 fi
 
@@ -38,8 +38,20 @@ fi
 echo "${BLUE}Installing mosquitto as prerequirement for thin-edge.io${COLORRESET}"
 apt install mosquitto -y
 
+# Packages for `arm64` are zipped in files with `aarch64` in names.
+if [ "$ARCH" = "arm64" ]
+then
+    ARCH='aarch64'
+fi
+
 wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
 wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
+
+# Packages for `aarch64` contain *.deb files with `arm64` in names.
+if [ "$ARCH" = "aarch64" ]
+then
+    ARCH='arm64'
+fi
 
 dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
 dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
