@@ -11,7 +11,9 @@ use mqtt_client::{QoS, Topic, TopicFilter};
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_MQTT_CLIENT_ID: &str = "collectd-mapper";
-const DEFAULT_BATCHING_WINDOW: u64 = 200;
+const DEFAULT_BATCHING_WINDOW: u32 = 200;
+const DEFAULT_MAXIMUM_MESSAGE_DELAY: u32 = 50;
+const DEFAULT_MESSAGE_LEAP_LIMIT: u32 = 0;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 
@@ -22,7 +24,9 @@ pub struct DeviceMonitorConfig {
     mqtt_client_id: &'static str,
     mqtt_source_topic: &'static str,
     mqtt_target_topic: &'static str,
-    batching_window: u64,
+    batching_window: u32,
+    maximum_message_delay: u32,
+    message_leap_limit: u32,
 }
 
 impl Default for DeviceMonitorConfig {
@@ -34,6 +38,8 @@ impl Default for DeviceMonitorConfig {
             mqtt_source_topic: DEFAULT_MQTT_SOURCE_TOPIC,
             mqtt_target_topic: DEFAULT_MQTT_TARGET_TOPIC,
             batching_window: DEFAULT_BATCHING_WINDOW,
+            maximum_message_delay: DEFAULT_MAXIMUM_MESSAGE_DELAY,
+            message_leap_limit: DEFAULT_MESSAGE_LEAP_LIMIT,
         }
     }
 }
@@ -68,9 +74,9 @@ impl DeviceMonitor {
         );
 
         let batch_config = BatchConfigBuilder::new()
-            .event_jitter(50)
-            .delivery_jitter(20)
-            .message_leap_limit(0)
+            .event_jitter(self.device_monitor_config.batching_window)
+            .delivery_jitter(self.device_monitor_config.maximum_message_delay)
+            .message_leap_limit(self.device_monitor_config.message_leap_limit)
             .build();
         let (msg_send, msg_recv) = tokio::sync::mpsc::channel(100);
         let (batch_send, mut batch_recv) = tokio::sync::mpsc::channel(100);
