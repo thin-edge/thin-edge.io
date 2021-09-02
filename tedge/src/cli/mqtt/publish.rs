@@ -32,6 +32,7 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut mqtt = cmd
         .mqtt_config
         .clone()
+        .clean_session()
         .connect(cmd.client_id.as_str())
         .await?;
 
