@@ -9,6 +9,14 @@ When we install a bunch of packages
 Then they are installed
 When we deinstall them again
 Then they are not installed
+
+
+This test is currently skipped as it needs a specialized setup with the
+dummy-plugin set up to install fruits.
+
+To run it do this:
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=specialcontainer
+
 """
 
 import json
@@ -17,114 +25,78 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
 
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
+
+    def getaction(self, act):
+        "create an action that we can use later"
+
+        mgt = "::fruits"
+        action = [
+            {
+                "action": act,
+                "id": self.get_pkgid("apple"),
+                "name": "apple",
+                "url": " ",
+                "version": mgt,
+            },
+            {
+                "action": act,
+                "id": self.get_pkgid("banana"),
+                "name": "banana",
+                "url": " ",
+                "version": mgt,
+            },
+            {
+                "action": act,
+                "id": self.get_pkgid("asciijump"),
+                "name": "asciijump",
+                "url": " ",
+                "version": "::apt",
+            },
+            {
+                "action": act,
+                "id": self.get_pkgid("cherry"),
+                "name": "cherry",
+                "url": " ",
+                "version": mgt,
+            },
+        ]
+
+        return action
+
     def setup(self):
+
+        if self.fakeplugin != "fakeplugin":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
+
         super().setup()
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
 
     def execute(self):
 
-        pkgid = {
-            # fruits
-            "apple": "5495053",
-            "banana": "5494888",
-            "cherry": "5495382",
-            "watermelon": "5494510",
-            # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
-        }
-
-        mgt = "::fruits"
-        act = "install"
-        action = [
-            {
-                "action": act,
-                "id": pkgid["apple"],
-                "name": "apple",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["banana"],
-                "name": "banana",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["asciijump"],
-                "name": "asciijump",
-                "url": " ",
-                "version": "::apt",
-            },
-            {
-                "action": act,
-                "id": pkgid["cherry"],
-                "name": "cherry",
-                "url": " ",
-                "version": mgt,
-            },
-        ]
-
+        action = self.getaction("install")
         self.trigger_action_json(action)
-
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("True == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("True == value", value=self.check_is_installed("asciijump"))
 
-        act = "delete"
-        action = [
-            {
-                "action": act,
-                "id": pkgid["apple"],
-                "name": "apple",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["banana"],
-                "name": "banana",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["cherry"],
-                "name": "cherry",
-                "url": " ",
-                "version": mgt,
-            },
-            {
-                "action": act,
-                "id": pkgid["asciijump"],
-                "name": "asciijump",
-                "url": " ",
-                "version": "::apt",
-            },
-        ]
-
+        action = self.getaction("delete")
         self.trigger_action_json(action)
-
         self.wait_until_succcess()
 
     def validate(self):
 
-        self.assertThat("True == value", value=self.check_isinstalled("apple"))
-        self.assertThat("True == value", value=self.check_isinstalled("banana"))
-        self.assertThat("True == value", value=self.check_isinstalled("cherry"))
-        self.assertThat("False == value", value=self.check_isinstalled("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("banana"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
