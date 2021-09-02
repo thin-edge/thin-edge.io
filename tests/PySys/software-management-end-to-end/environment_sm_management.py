@@ -266,33 +266,39 @@ class SoftwareManagement(EnvironmentC8y):
         """Wait until c8y reports status or status2."""
 
         # Heuristic about how long to wait for a operation
+
+        poll_period = 2 # seconds
+
         if platform.machine()=='x86_64':
-            wait_time = 30
+            wait_time = int(40/poll_period)
         else:
-            wait_time = 90 # 90 on the Rpi
+            wait_time = int(90/poll_period) # 90s on the Rpi
 
         timeout = 0
 
         # wait for some time to let c8y process a request until we can poll for it
-        time.sleep(1)
-
-        # TODO this is a mess, we probably need a better dispatcher soon
+        time.sleep(poll_period)
 
         while True:
 
             if self.operation_id:
-                stat = self.check_status_of_operation(
-                    status
-                ) or self.check_status_of_operation(status2)
+
+                current_status = self.get_status_of_operation()
+                if current_status == status or current_status == status2:
+                    # Invalidate the old operation
+                    self.operation_id = None
+                    break
+
             else:
-                stat = self.check_status_of_last_operation(status) or self.check_status_of_last_operation(status2)
 
-            if stat:
-                # Invalidate the old operation
-                self.operation_id = None
-                break
+                current_status = self.get_status_of_last_operation()
+                if current_status == status or current_status == status2:
+                    # Invalidate the old operation
+                    self.operation_id = None
+                    break
 
-            time.sleep(5) # Observed timeouts with 2 seconds
+
+            time.sleep(poll_period)
 
             timeout += 1
             if timeout > wait_time:
