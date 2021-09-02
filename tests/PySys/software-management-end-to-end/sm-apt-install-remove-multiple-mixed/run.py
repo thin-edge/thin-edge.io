@@ -20,6 +20,7 @@ from environment_sm_management import SoftwareManagement
 
 
 class PySysTest(SoftwareManagement):
+
     def getaction(self, act):
         "create an action that we can use later"
 

@@ -59,6 +59,13 @@ class SoftwareManagement(EnvironmentC8y):
 
     myPlatform = None
 
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'sm-fake*' -Xfakeplugin='fakeplugin'
+    # Use it only when you have set up the dummy_plugin to install fruits
+
+    fakeplugin = None
+
     tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
@@ -357,6 +364,11 @@ class SoftwareManagement(EnvironmentC8y):
             "squirrel3": "5474871",
             "rolldice": "5445239",
             "moon-buggy": "5439204",
+            # fake plugin
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
         }
 
         pkgid = pkgiddb.get(pkg)
