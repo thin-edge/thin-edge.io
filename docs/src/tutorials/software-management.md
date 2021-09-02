@@ -1,68 +1,37 @@
+# Manage your device software
 
-# Introduction
+This document describes how to manage the software modules that are installed on a thin-edge device from the 
+cloud using the **software management** feature of thin-edge.io.
 
-This document describes how to manage the software modules that are installed on your thin-edge device from the 
-Cumulocity cloud using the **software management** feature of thin-edge.io.
+> Note: As of now its supported only from Cumulocity cloud. Also, only supports **debian** based
+ distributions(Ex: RaspberryPi OS , Ubuntu, Debian), which use the **apt** package manager.
+ 
+To enable software management feature on your device three components are required as mentioned below.
 
-> Note: As of now the software management only supports **debian** based distributions(Ex: RaspberryPi OS , Ubuntu, Debian),
- which use the **apt** package manager.
+1. Software management mapper for Cumulocity cloud
+   Sm-mapper acts  as a proxy between the cloud and the device.
+   This translates the cloud specific message type into device specific type and vice-versa.(Example: Cumulocity smart-rest to/from thin-edge json)
+   The messages from cloud will be translated and forwarded to the `tedge_agent` and messages from `tedge_agent` will be translated and sent to cumulocity cloud.
+   You can find this process with the name `tedge_mapper sm-c8y` in `ps` once it starts.
 
+2. Software management agent
+   The thin-edge software management agent is the one that calls the plugins.
+   You can find this process with the name `tedge_agent` in `ps` once it starts.
 
-
-## Download and install software management packages on the device
-
-As a prerequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already. 
-
-The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
-
-To download the package from github repository use the following command (use desired version):
-
-```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_<version>_<arch>.deb
-```
-
-where:
-> `version` -> thin-edge.io software management components version in x.x.x format
->
-> `arch` -> architecture type (amd64, armhf)
-
-Download `tedge_apt_plugin` and `tedge_agent`
-
-```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_apt_plugin_0.3.0_amd64.deb
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_agent_0.3.0_amd64.deb
-```
-
-Once the packages are downloaded, proceed to installation.
-> Note: Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
-
-To install `tedge_apt_plugin` and `tedge_agent` on thin-edge device do:
-
-```shell
-dpkg -i tedge_apt_plugin_<version>_<arch>.deb
-dpkg -i tedge_agent<version>_<arch>.deb
-```
+3. Software management plugin
+   Plugins are the interfaces that call the package manager (example: apt/apt-get) to do the software management operations (Install, Remove or update)
+   You can find them in /etc/tedge/sm-plugins.
+   As of now there is only one (apt) plugin is supported.
 
 
-
-## Start and enable the software management feature
-
-The `tedge connect` will automatically start and enable the software management feature.
-Find more about [how to connect thin-edge device to cloud](../howto-guides/004_connect.md)
-
-Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
-the list of softwares that are installed on the device will be visible as shown in the figure below.
-
-![Add new software](./images/start-software-management.png)
-
-
-> Note: Disconnecting thin-edge device from cloud with `tedge disconnect` command will stop and disable the software management feature.
-
-
-
+## Enable software management feature
+ 
+Find more information about [how to install and enable software management.](../../howto-guides/0012_install_and_enable_software_management.md)
+ 
 ## Managing the device software on Cumulocity cloud
 
-More info about managing the device software can be found [here](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
+Cumulocity cloud collects the references to the software for the thin-edge devices.
+Find more information about [managing the device software](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
 
 ### Adding new software into software repository
 
@@ -81,13 +50,13 @@ Follow above mentioned steps as shown in the diagram
  ![Add new software](./images/add-new-software-to-repo.png)
 
 ### Deleting software or software version
-
-Find more information about how to delete the software or the specific software version [here](https://cumulocity.com/guides/users-guide/device-management/#deleting-softwares-or-software-versions)
+One can remove a software module or a specific version of it from the software repository.
+Find more information about [how to delete the software or the specific software version](https://cumulocity.com/guides/users-guide/device-management/#deleting-softwares-or-software-versions)
 
 
 
 ## Managing software on a device
-
+From the Cumulocity cloud `Software` tab of a device, software can be installed, updated or removed.
 Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
 
 ### Install software on a device
@@ -96,6 +65,7 @@ Find about how to [Install a specific software on a device](https://cumulocity.c
 
 ### Update software on a device
 Find about how to [Update the software on a device](https://cumulocity.com/guides/users-guide/device-management/#to-update-software-on-a-device)
+> Note: Thin-edge treats install and update same.
 
 ### Remove software on a device
 Hover over the software entry which you want to remove and click the **Remove** software icon and click on `Apply changes` button.
