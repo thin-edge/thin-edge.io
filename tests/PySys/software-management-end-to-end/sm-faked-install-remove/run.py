@@ -28,8 +28,9 @@ from environment_sm_management import SmManagement
 
 class PySysTest(SmManagement):
     def setup(self):
-        # if self.myPlatform != "faked-plugin":
-        #    self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        if self.myPlatform != "faked-plugin":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
 
         super().setup()
         self.assertThat("False == value", value=self.check_isinstalled("tomatoooo"))
