@@ -78,7 +78,7 @@ impl DeviceMonitor {
             .delivery_jitter(self.device_monitor_config.maximum_message_delay)
             .message_leap_limit(self.device_monitor_config.message_leap_limit)
             .build();
-        let (msg_send, msg_recv) = tokio::sync::mpsc::channel(100);
+        let (msg_send, mut msg_recv) = tokio::sync::mpsc::channel(100);
         let (batch_send, mut batch_recv) = tokio::sync::mpsc::channel(100);
         let driver = BatchDriver::new(Batcher::new(batch_config), msg_recv, batch_send);
         let driver_join_handle = tokio::task::spawn(async move {
@@ -93,43 +93,50 @@ impl DeviceMonitor {
             TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce);
         let mut collectd_messages = input_mqtt_client.subscribe(input_topic).await?;
         let input_join_handle = tokio::task::spawn(async move {
-            loop {
-                match collectd_messages.next().await {
-                    Some(message) => match CollectdMessage::parse_from(&message) {
-                        Ok(collectd_message) => {
-                            let batch_input = BatchDriverInput::Event(collectd_message);
-                            if let Err(err) = msg_send.send(batch_input).await {
-                                error!("Error while processing a collectd message: {}", err);
-                            }
+            while let Some(message) = collectd_messages.next().await {
+                match CollectdMessage::parse_from(&message) {
+                    Ok(collectd_message) => {
+                        let batch_input = BatchDriverInput::Event(collectd_message);
+                        if let Err(err) = msg_send.send(batch_input).await {
+                            error!("Error while processing a collectd message: {}", err);
                         }
-                        Err(err) => {
-                            error!("Error while decoding a collectd message: {}", err);
-                        }
-                    },
-                    None => {
-                        //If the message batching loop returns, it means the MQTT connection has closed
-                        error!("MQTT connection closed. Retrying...");
+                    }
+                    Err(err) => {
+                        error!("Error while decoding a collectd message: {}", err);
                     }
                 }
             }
+            // The MQTT connection has been closed by the process itself.
+            log::info!("Stop batching");
+            let eof = BatchDriverInput::Flush;
+            msg_send.send(eof).await
         });
 
         let output_mqtt_client = mqtt_client.clone();
         let output_topic = Topic::new(self.device_monitor_config.mqtt_target_topic)?;
         let output_join_handle = tokio::task::spawn(async move {
-            while let Some(BatchDriverOutput::Batch(messages)) = batch_recv.recv().await {
-                match MessageBatch::thin_edge_json_bytes(messages) {
-                    Ok(payload) => {
-                        let tedge_message = Message::new(&output_topic, payload);
-                        if let Err(err) = output_mqtt_client.publish(tedge_message).await {
-                            error!("Error while sending a thin-edge json message: {}", err);
-                        }
+            loop {
+                match batch_recv.recv().await {
+                    None | Some(BatchDriverOutput::Flush) => {
+                        break;
                     }
-                    Err(err) => {
-                        error!("Error while encoding a thin-edge json message: {}", err);
+                    Some(BatchDriverOutput::Batch(messages)) => {
+                        match MessageBatch::thin_edge_json_bytes(messages) {
+                            Ok(payload) => {
+                                let tedge_message = Message::new(&output_topic, payload);
+                                if let Err(err) = output_mqtt_client.publish(tedge_message).await {
+                                    error!("Error while sending a thin-edge json message: {}", err);
+                                }
+                            }
+                            Err(err) => {
+                                error!("Error while encoding a thin-edge json message: {}", err);
+                            }
+                        }
                     }
                 }
             }
+            // All the messages forwarded for batching have been processed.
+            log::info!("Batching done");
         });
 
         let mut errors = mqtt_client.subscribe_errors();
