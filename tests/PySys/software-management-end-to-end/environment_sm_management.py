@@ -274,10 +274,9 @@ class SoftwareManagement(EnvironmentC8y):
     def wait_until_status(self, status, status2=False):
         """Wait until c8y reports status or status2."""
 
-        # Heuristic about how long to wait for a operation
-
         poll_period = 2  # seconds
 
+        # Heuristic about how long to wait for a operation
         if platform.machine() == "x86_64":
             wait_time = int(40 / poll_period)
         else:
@@ -356,7 +355,7 @@ class SoftwareManagement(EnvironmentC8y):
     def get_pkgid(self, pkg):
 
         # Database with package IDs taken from the thin-edge.io
-        # TODO use this everywhere
+        # TODO make this somehow not hard-coded
         pkgiddb = {
             # apt
             "asciijump": "5475278",
