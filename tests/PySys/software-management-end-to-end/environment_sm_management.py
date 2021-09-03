@@ -25,6 +25,22 @@ TODO: Get software package ids from c8y
 TODO: Add management for package creation and removal for c8y
     -> Mabe as separte python module to access c8y
 
+To override the hardcoded software id database you can use C8YSWREPO (format: JSON):
+
+    export C8YSWREPO='{
+        "asciijump": "5475278",
+        "robotfindskitten": "5473003",
+        "squirrel3": "5474871",
+        "rolldice": "5445239",
+        "moon-buggy": "5439204",
+        "apple": "5495053",
+        "banana": "5494888",
+        "cherry": "5495382",
+        "watermelon": "5494510" }'
+
+To remove
+
+    unset C8YSWREPO
 
 """
 
@@ -73,6 +89,26 @@ class SoftwareManagement(EnvironmentC8y):
 
         if self.myPlatform != "specialcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        # Database with package IDs taken from the thin-edge.io
+        # TODO make this somehow not hard-coded
+        self.pkgiddb = {
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
+            "moon-buggy": "5439204",
+            # fake plugin
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
+        }
+
+        if self.project.C8ySwRepo:
+            self.pkgiddb = json.loads(self.project.C8ySwRepo)
+        self.log.info("Using sw id database: %s"%self.pkgiddb)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -354,23 +390,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     def get_pkgid(self, pkg):
 
-        # Database with package IDs taken from the thin-edge.io
-        # TODO make this somehow not hard-coded
-        pkgiddb = {
-            # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
-            "moon-buggy": "5439204",
-            # fake plugin
-            "apple": "5495053",
-            "banana": "5494888",
-            "cherry": "5495382",
-            "watermelon": "5494510",
-        }
-
-        pkgid = pkgiddb.get(pkg)
+        pkgid = self.pkgiddb.get(pkg)
 
         if pkgid:
             return pkgid
