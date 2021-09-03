@@ -166,13 +166,14 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
+        let device_id = config.query(DeviceIdSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port),
-            Cloud::C8y => check_device_status_c8y(port),
+            Cloud::C8y => check_device_status_c8y(port, device_id),
         }
     }
 
@@ -206,11 +207,11 @@ where
 // If the device is already registered, it can finish in the first try.
 // If the device is new, the device is going to be registered here and
 // the check can finish in the second try as there is no error response in the first try.
-fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_c8y(port: u16, device_id: String) -> Result<DeviceStatus, ConnectError> {
     for i in 0..2 {
         println!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        match create_device(port) {
+        match create_device(port, device_id.as_str()) {
             Ok(DeviceStatus::MightBeNew) => return Ok(DeviceStatus::MightBeNew),
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Received expected response message, connection check is successful.\n",);
@@ -242,12 +243,14 @@ fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError> {
     return Ok(DeviceStatus::MightBeNew);
 }
 
-fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
     const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
     const CLIENT_ID: &str = "check_connection_c8y";
-    const REGISTRATION_PAYLOAD: &[u8] = b"100";
     const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
+    const DEVICE_TYPE: &str = "thin-edge.io";
+
+    let registration_payload = format!("100,{},{}", device_id, DEVICE_TYPE);
 
     let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
     options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
@@ -265,7 +268,7 @@ fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
                     C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM,
                     AtLeastOnce,
                     false,
-                    REGISTRATION_PAYLOAD,
+                    registration_payload.as_bytes(),
                 )?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {

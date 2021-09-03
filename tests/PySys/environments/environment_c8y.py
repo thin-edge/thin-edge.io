@@ -1,4 +1,5 @@
-import pysys
+import json
+import requests
 from pysys.basetest import BaseTest
 
 """
@@ -10,7 +11,63 @@ service mosquitto and service tedge-mapper.
 """
 
 
+class Cumulocity(object):
+
+    c8y_url = ""
+    tenant_id = ""
+    username = ""
+    password = ""
+    auth = ""
+
+    def __init__(self, c8y_url, tenant_id, username, password):
+        self.c8y_url = c8y_url
+        self.tenant_id = tenant_id
+        self.username = username
+        self.password = password
+
+        self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
+
+    def request(self, method, url_path, **kwargs) -> requests.Response:
+        return requests.request(method, self.c8y_url + url_path, auth=self.auth, **kwargs)
+
+    def getAllDevices(self) -> requests.Response:
+        params = {
+            "fragmentType": "c8y_IsDevice"
+        }
+        res = requests.get(
+            url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
+
+        return self.toJsonResponse(res)
+
+    def toJsonResponse(self, res: requests.Response):
+        if res.status_code != 200:
+            raise Exception(
+                "Received invalid response with exit code: {}, reason: {}".format(res.status_code, res.reason))
+        return json.loads(res.text)
+
+    def getAllDevicesByType(self, type: str) -> requests.Response:
+        params = {
+            "fragmentType": "c8y_IsDevice",
+            "type": type,
+        }
+        res = requests.get(
+            url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
+        return self.toJsonResponse(res)
+
+    def getAllThinEdgeDevices(self) -> requests.Response:
+        return self.getAllDevicesByType("thin-edge.io")
+
+    def getThinEdgeDeviceByName(self, device_id: str):
+        json_response = self.getAllDevicesByType("thin-edge.io")
+        for device in json_response['managedObjects']:
+            if device_id in device['name']:
+                return device
+        return None
+
+
 class EnvironmentC8y(BaseTest):
+    cumulocity: Cumulocity
+
     def setup(self):
         self.log.debug("EnvironmentC8y Setup")
 
@@ -26,7 +83,7 @@ class EnvironmentC8y(BaseTest):
             command=self.systemctl,
             arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper1",
-            expectedExitStatus="==3", # 3: disabled
+            expectedExitStatus="==3",  # 3: disabled
         )
 
         # Connect the bridge
@@ -56,6 +113,9 @@ class EnvironmentC8y(BaseTest):
             arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper3",
         )
+
+        self.cumulocity = Cumulocity(
+            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass)
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")

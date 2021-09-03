@@ -3,15 +3,18 @@
 	<requires-pysys>1.6.1</requires-pysys>
 	<requires-python>3.7.3</requires-python>
 	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true"/>
-	<property name="c8yswrepo" value="${env.C8YSWREPO}" default="" />
-    <property name="tebasedir" value="${env.TEBASEDIR}" />
-    <property name="exampledir" value="${env.EXAMPLEDIR}" />
-    <property name="username" value="${env.C8YUSERNAME}" />
-    <property name="c8ypass" value="${env.C8YPASS}" />
-    <property name="tenant" value="${env.C8YTENANT}" />
-    <property name="deviceid" value="${env.C8YDEVICEID}" />
-    <property name="device" value="${env.C8YDEVICE}" />
+	<property name="tebasedir" value="${env.TEBASEDIR}" default="${testRootDir}/../.."/>
+	<property name="exampledir" value="${env.EXAMPLEDIR}" default="${testRootDir}/../../ci"/>
+	<property name="c8yurl" value="${env.C8YURL}" default=""/>
+	<property name="username" value="${env.C8YUSERNAME}" default=""/>
+	<property name="c8ypass" value="${env.C8YPASS}" default=""/>
+	<property name="tenant" value="${env.C8YTENANT}" default=""/>
+	<property name="deviceid" value="${env.C8YDEVICEID}" default=""/>
+	<property name="device" value="${env.C8YDEVICE}" default=""/>
 	<property name="platform" default='None' />
+
+	<pythonpath value="${testRootDir}/environments" />
+
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
 			<property name="destDir" value="__pysys_output_archives/"/>
