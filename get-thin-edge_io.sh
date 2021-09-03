@@ -17,16 +17,31 @@ echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
 if [ -z "$VERSION" ]
 then
-    echo "Please use this script with the version as argument."
-    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh 0.3.0${COLORRESET}"
-    exit 0
+    VERSION=0.3.0
+
+    echo "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
+    echo "To install a particular version use this script with the version as an argument."
+    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
 fi
 
 if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ]  || [ "$ARCH" = "amd64" ]
 then
+    # Some OSes may read architecture type as `aarch64`, `aarch64` and `arm64` are the same architectures types.
+    if [ "$ARCH" = "aarch64" ]
+    then
+        ARCH='arm64'
+    fi
+
+    # For arm64 only version versions above 0.3.0 are available.
+    if [ "$ARCH" = "arm64" ] && ! dpkg --compare-versions "$VERSION" ge "0.3.0"
+    then
+        echo "aarch64/arm64 can only be installed with version 0.3.0 or above."
+        exit 1
+    fi
+
     echo "${BLUE}Installing for architecture $ARCH ${COLORRESET}"
 else
-    echo "$ARCH is currently not supported. Currently supported are aarch64, armhf and amd64."
+    echo "$ARCH is currently not supported. Currently supported are aarch64/arm64, armhf and amd64."
     exit 0
 fi
 
@@ -38,20 +53,8 @@ fi
 echo "${BLUE}Installing mosquitto as prerequirement for thin-edge.io${COLORRESET}"
 apt install mosquitto -y
 
-# Packages for `arm64` are zipped in files with `aarch64` in names.
-if [ "$ARCH" = "arm64" ]
-then
-    ARCH='aarch64'
-fi
-
 wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
 wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
-
-# Packages for `aarch64` contain *.deb files with `arm64` in names.
-if [ "$ARCH" = "aarch64" ]
-then
-    ARCH='arm64'
-fi
 
 dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
 dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
