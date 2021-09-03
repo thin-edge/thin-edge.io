@@ -17,7 +17,7 @@
 use async_trait::async_trait;
 use mockall::automock;
 pub use rumqttc::QoS;
-use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
+use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request};
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicIsize, Ordering},
@@ -313,11 +313,6 @@ impl Client {
                 Err(err) => {
                     let delay = match &err {
                         rumqttc::ConnectionError::Io(_) => true,
-                        rumqttc::ConnectionError::MqttState(state_error)
-                            if matches!(state_error, StateError::Io(_)) =>
-                        {
-                            true
-                        }
                         rumqttc::ConnectionError::MqttState(_) => true,
                         rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
                         _ => false,
