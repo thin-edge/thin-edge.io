@@ -27,8 +27,9 @@ pub struct ConnectCommand {
 }
 
 pub enum DeviceStatus {
-    AlreadyExists,
     MightBeNew,
+    AlreadyExists,
+    Unknown,
 }
 
 pub enum Cloud {
@@ -95,7 +96,7 @@ impl Command for ConnectCommand {
 
         match self.check_connection(&config) {
             Ok(DeviceStatus::AlreadyExists) => {}
-            Ok(DeviceStatus::MightBeNew) => {
+            Ok(DeviceStatus::MightBeNew) | Ok(DeviceStatus::Unknown) => {
                 if let Cloud::C8y = self.cloud {
                     println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
                     restart_mosquitto(
@@ -103,8 +104,6 @@ impl Command for ConnectCommand {
                         self.service_manager.as_ref(),
                         &self.config_location,
                     )?;
-
-                    enable_software_management(&bridge_config, self.service_manager.as_ref());
                 }
             }
             Err(_) => {
@@ -193,8 +192,8 @@ async fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError
     for i in 0..2 {
         print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        let create_device_result = create_device(port);
-        match create_device_result.await {
+        match create_device(port).await {
+            Ok(DeviceStatus::MightBeNew) => return Ok(DeviceStatus::MightBeNew),
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Received expected response message, connection check is successful.\n",);
                 if i == 0 {
@@ -209,12 +208,12 @@ async fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError
                     return Ok(DeviceStatus::MightBeNew);
                 }
             }
-            Ok(DeviceStatus::MightBeNew) => {
+            Ok(DeviceStatus::Unknown) => {
                 if i == 0 {
                     println!("... No response. If the device is new, it's normal to get no response in the first try.");
                 } else {
                     println!("... No response. ");
-                    return Ok(DeviceStatus::MightBeNew);
+                    return Ok(DeviceStatus::Unknown);
                 }
             }
             Err(err) => {
@@ -269,7 +268,7 @@ async fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
             println!("Received expected response message, connection check is successful.\n",);
             return Ok(DeviceStatus::AlreadyExists);
         }
-        _err => return Ok(DeviceStatus::MightBeNew),
+        _err => return Ok(DeviceStatus::Unknown),
     }
 }
 
