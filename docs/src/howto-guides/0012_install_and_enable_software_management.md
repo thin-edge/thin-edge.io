@@ -1,4 +1,4 @@
-# Install and enable software managment feature
+# Install and enable the software management feature
 Below steps show how to download, install and enable thin-edge software management feature.
 
 ## Download and install software management packages on the device
@@ -26,18 +26,18 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedg
 ```
 
 Once the packages are downloaded, proceed to installation.
-> Note: Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
 
 To install `tedge_apt_plugin` and `tedge_agent` on thin-edge device do:
 
 ```shell
-dpkg -i tedge_apt_plugin_<version>_<arch>.deb
-dpkg -i tedge_agent<version>_<arch>.deb
+sudo dpkg -i tedge_apt_plugin_<version>_<arch>.deb
+sudo dpkg -i tedge_agent<version>_<arch>.deb
 ```
 
 
-
 ## Start and enable the software management feature
+
+### Using `tedge connect c8y`
 
 The `tedge connect c8y` will automatically start and enable the software management feature.
 Find more about [how to connect thin-edge device to cloud](../howto-guides/004_connect.md)
@@ -47,6 +47,24 @@ the list of softwares that are installed on the device will be visible as shown 
 
 ![Add new software](./images/start-software-management.png)
 
-
 > Note: Disconnecting thin-edge device from cloud with `tedge disconnect c8y` command will stop and disable the software management feature.
+
+
+### Manually starting and stopping services
+
+For debugging purpose or to disable/enable the software management services, one can start/stop manually as shown below.
+
+### Starting the services
+
+```shell
+sudo systemctl start tedge-agent.service
+sudo systemctl start tedge-mapper-sm-c8y.service
+```
+
+### Stopping the services
+
+```shell
+sudo systemctl stop tedge-agent.service
+sudo systemctl stop tedge-mapper-sm-c8y.service
+```
 
