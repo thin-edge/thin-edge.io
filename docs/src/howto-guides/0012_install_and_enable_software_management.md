@@ -1,4 +1,8 @@
 # Install and enable the software management feature
+
+> Note: As of now its supported only from Cumulocity cloud. Also, only supports **debian** based
+ distributions(Ex: RaspberryPi OS , Ubuntu, Debian), which use the **apt** package manager.
+
 Below steps show how to download, install and enable thin-edge software management feature.
 
 ## Download and install software management packages on the device
@@ -21,8 +25,8 @@ where:
 Download `tedge_apt_plugin` and `tedge_agent`
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_apt_plugin_0.3.0_amd64.deb
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_agent_0.3.0_amd64.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_apt_plugin_0.3.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_agent_0.3.0_armhf.deb
 ```
 
 Once the packages are downloaded, proceed to installation.
@@ -34,6 +38,8 @@ sudo dpkg -i tedge_apt_plugin_<version>_<arch>.deb
 sudo dpkg -i tedge_agent<version>_<arch>.deb
 ```
 
+> Note: Software management feature will be enabled after installation if the device
+is connected to the Cumulocity cloud using `tedge connect c8y`.
 
 ## Start and enable the software management feature
 
@@ -50,7 +56,7 @@ the list of softwares that are installed on the device will be visible as shown 
 > Note: Disconnecting thin-edge device from cloud with `tedge disconnect c8y` command will stop and disable the software management feature.
 
 
-### Manually starting and stopping services
+### Manually starting and stopping software management services
 
 For debugging purpose or to disable/enable the software management services, one can start/stop manually as shown below.
 
