@@ -32,7 +32,7 @@ then
         ARCH='arm64'
     fi
 
-    # For arm64 only version versions above 0.3.0 are available.
+    # For arm64, only the versions above 0.3.0 are available.
     if [ "$ARCH" = "arm64" ] && ! dpkg --compare-versions "$VERSION" ge "0.3.0"
     then
         echo "aarch64/arm64 compatible packages are only available for version 0.3.0 or above."
