@@ -29,37 +29,41 @@ impl Command for MqttSubscribeCommand {
 #[tokio::main]
 async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     let config = cmd.mqtt_config.clone().clean_session();
-    let mqtt = Client::connect(cmd.client_id.as_str(), &config).await?;
     let filter = TopicFilter::new(cmd.topic.as_str())?.qos(cmd.qos);
 
-    let mut errors = mqtt.subscribe_errors();
-    let mut messages = mqtt.subscribe(filter).await?;
-
     loop {
-        select! {
-            error = errors.next().fuse() => {
-                if let Some(err) = error {
-                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
-                        return Err(MqttError::ServerError(err.to_string()));
+        let mqtt = Client::connect(cmd.client_id.as_str(), &config).await?;
+        let mut errors = mqtt.subscribe_errors();
+        let mut messages = mqtt.subscribe(filter.clone()).await?;
+
+        loop {
+            select! {
+                maybe_error = errors.next().fuse() => {
+                    if let Some(error) = maybe_error {
+                        if error.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
+                            return Err(MqttError::ServerError(error.to_string()));
+                        }
+                        async_println(&format!("ERROR: {:?}", error)).await?;
+                        mqtt.disconnect().await?;
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        break;
+                    }
+                }
+
+                _signal = signals::interrupt().fuse() => {
+                    println!("Received SIGINT.");
+                    return Ok(());
+                }
+
+                maybe_message = messages.next().fuse() => {
+                    match maybe_message {
+                        Some(message) =>  handle_message(message, cmd.hide_topic).await?,
+                        None => break
                     }
                 }
             }
-
-            _signal = signals::interrupt().fuse() => {
-                println!("Received SIGINT.");
-                break;
-            }
-
-            maybe_message = messages.next().fuse() => {
-                match maybe_message {
-                    Some(message) =>  handle_message(message, cmd.hide_topic).await?,
-                    None => break
-                 }
-            }
         }
     }
-
-    Ok(())
 }
 
 async fn async_println(s: &str) -> Result<(), MqttError> {
