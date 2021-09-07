@@ -17,16 +17,31 @@ echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
 if [ -z "$VERSION" ]
 then
-    echo "Please use this script with the version as argument."
-    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh 0.1.0${COLORRESET}"
-    exit 0
+    VERSION=0.3.0
+
+    echo "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
+    echo "To install a particular version use this script with the version as an argument."
+    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
 fi
 
-if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ]  || [ "$ARCH" = "amd64" ]
 then
+    # Some OSes may read architecture type as `aarch64`, `aarch64` and `arm64` are the same architectures types.
+    if [ "$ARCH" = "aarch64" ]
+    then
+        ARCH='arm64'
+    fi
+
+    # For arm64, only the versions above 0.3.0 are available.
+    if [ "$ARCH" = "arm64" ] && ! dpkg --compare-versions "$VERSION" ge "0.3.0"
+    then
+        echo "aarch64/arm64 compatible packages are only available for version 0.3.0 or above."
+        exit 1
+    fi
+
     echo "${BLUE}Installing for architecture $ARCH ${COLORRESET}"
 else
-    echo "$ARCH is currently not supported. Currently supported are armhf and amd64."
+    echo "$ARCH is currently not supported. Currently supported are aarch64/arm64, armhf and amd64."
     exit 0
 fi
 
