@@ -202,7 +202,9 @@ impl Client {
         if let Some(inflight) = config.inflight {
             mqtt_options.set_inflight(inflight);
         }
-
+        if let Some(keep_alive) = config.keep_alive {
+            mqtt_options.set_keep_alive(keep_alive.as_secs() as u16);
+        }
         if let Some(packet_size) = config.packet_size {
             mqtt_options.set_max_packet_size(packet_size, packet_size);
         }
@@ -394,10 +396,16 @@ impl MqttClient for Client {
 pub struct Config {
     pub host: String,
     pub port: u16,
+
     /// maximum number of outgoing inflight messages (pending acknowledgement).
     ///
     /// If `None` is provided, the default setting of `rumqttc` is used.
     pub inflight: Option<u16>,
+
+    /// Duration between heart beats.
+    ///
+    /// If `None` is provided, the default setting of `rumqttc` is used.
+    pub keep_alive: Option<std::time::Duration>,
 
     /// Max packet size limit for outgoing an incoming packets
     /// If `None` is provided, 10KB size limit is imposed
@@ -424,6 +432,7 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             inflight: None,
+            keep_alive: None,
             // 256MB by default
             packet_size: Some(268435455),
             queue_capacity: 10,
@@ -471,6 +480,14 @@ impl Config {
     pub fn with_packet_size(self, packet_size: usize) -> Self {
         Self {
             packet_size: Some(packet_size),
+            ..self
+        }
+    }
+
+    /// Set the heartbeat duration
+    pub fn with_keep_alive(self, duration: std::time::Duration) -> Self {
+        Self {
+            keep_alive: Some(duration),
             ..self
         }
     }

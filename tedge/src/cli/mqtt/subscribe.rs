@@ -28,7 +28,12 @@ impl Command for MqttSubscribeCommand {
 
 #[tokio::main]
 async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
-    let config = cmd.mqtt_config.clone().clean_session();
+    let heart_beat = std::time::Duration::from_secs(5);
+    let config = cmd
+        .mqtt_config
+        .clone()
+        .clean_session()
+        .with_keep_alive(heart_beat);
     let filter = TopicFilter::new(cmd.topic.as_str())?.qos(cmd.qos);
 
     loop {
@@ -44,8 +49,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                             return Err(MqttError::ServerError(error.to_string()));
                         }
                         async_println(&format!("ERROR: {:?}", error)).await?;
-                        mqtt.disconnect().await?;
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        let _ = tokio::time::timeout(heart_beat * 2, mqtt.disconnect()).await;
                         break;
                     }
                 }
