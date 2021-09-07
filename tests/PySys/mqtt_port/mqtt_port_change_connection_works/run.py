@@ -1,6 +1,7 @@
 import sys
 import time
 import subprocess
+from pathlib import Path
 
 from pysys.basetest import BaseTest
 
@@ -86,8 +87,11 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="mqtt_pub",
         )
 
+        # check if the file exists
+        self.check_if_sub_logged()
+
         # wait for a while to write the log to filesystem
-        time.sleep(6)
+        # time.sleep(6)
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
@@ -97,6 +101,18 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.assertGrep(
             "mqtt_sub.out", "{ \"temperature\": 25 }", contains=True)
 
+    def check_if_sub_logged(self):
+        fout = Path(self.output + '/mqtt_sub.out')
+        ferr = Path(self.output + '/mqtt_sub.err')
+        n = 0
+        while n < 10:
+            if fout.is_file() or ferr.is_file():
+                return;
+            else:
+                time.sleep(1)
+                n += 1
+        self.assertFalse(True, abortOnError=True, assertMessage=None)        
+        
     # Starting subscriber takes sometime, so instead of sleeping before moving
     # to next operation, its better to query active connections
     def start_subscriber(self):
