@@ -1,9 +1,9 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
-use futures::future::FutureExt;
-use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic};
+use mqtt_client::{QoS, Topic};
+use rumqttc::QoS::{AtLeastOnce, AtMostOnce, ExactlyOnce};
+use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use std::time::Duration;
-use tokio::{pin, select};
 
 pub struct MqttPublishCommand {
     pub topic: Topic,
@@ -27,51 +27,61 @@ impl Command for MqttPublishCommand {
     }
 }
 
-#[tokio::main]
-async fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
-    let mut mqtt = cmd
-        .mqtt_config
-        .clone()
-        .connect(cmd.client_id.as_str())
-        .await?;
+fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
+    let mut options = MqttOptions::new(
+        cmd.client_id.as_str(),
+        &cmd.mqtt_config.host,
+        cmd.mqtt_config.port,
+    );
+    options.set_clean_session(true);
+    let retain_flag = false;
+    let payload = cmd.message.as_bytes();
 
-    let message = Message::new(&cmd.topic, cmd.message.as_str()).qos(cmd.qos);
-    let res = try_publish(&mut mqtt, message).await;
+    let (mut client, mut connection) =
+        rumqttc::Client::new(options, cmd.mqtt_config.queue_capacity);
+    let mut published = false;
+    let mut acknowledged = false;
 
-    // In case we don't have a connection, disconnect might block until there is a connection,
-    // therefore timeout.
-    let _ = tokio::time::timeout(cmd.disconnect_timeout, mqtt.disconnect()).await;
-    res
-}
+    client.publish(&cmd.topic.name, cmd.qos, retain_flag, payload)?;
 
-async fn try_publish(mqtt: &mut Client, msg: Message) -> Result<(), MqttError> {
-    let mut errors = mqtt.subscribe_errors();
-
-    let fut = async move {
-        match mqtt.publish(msg).await {
-            Ok(()) => {
-                // Wait until all messages have been published.
-                let () = mqtt.all_completed().await;
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
-    };
-    pin!(fut);
-
-    loop {
-        select! {
-            error = errors.next().fuse() => {
-                if let Some(err) = error {
-                    if let MqttClientError::ConnectionError(..) = *err {
-                        return Err(MqttError::ServerError(err.to_string()));
-                    }
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Publish(_))) => {
+                published = true;
+                if cmd.qos == AtMostOnce {
+                    acknowledged = true;
+                    break;
                 }
             }
-
-            result = &mut fut => {
-                return result.map_err(Into::into);
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                if cmd.qos == AtLeastOnce {
+                    acknowledged = true;
+                    break;
+                }
             }
+            Ok(Event::Incoming(Packet::PubComp(_))) => {
+                if cmd.qos == ExactlyOnce {
+                    acknowledged = true;
+                    break;
+                }
+            }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                break;
+            }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                break;
+            }
+            _ => {}
         }
     }
+
+    if !published {
+        eprintln!("ERROR: the message has not been published");
+    } else if !acknowledged {
+        eprintln!("ERROR: the message has not been acknowledged");
+    }
+
+    client.disconnect()?;
+    Ok(())
 }
