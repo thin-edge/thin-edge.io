@@ -1,9 +1,7 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
-use futures::future::FutureExt;
-use mqtt_client::{Client, Message, MqttClient, QoS, TopicFilter};
-use tedge_utils::signals;
-use tokio::{io::AsyncWriteExt, select};
+use mqtt_client::QoS;
+use rumqttc::{Client, Event, Incoming, MqttOptions, Packet};
 
 pub struct MqttSubscribeCommand {
     pub topic: String,
@@ -26,56 +24,51 @@ impl Command for MqttSubscribeCommand {
     }
 }
 
-#[tokio::main]
-async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
-    let config = cmd.mqtt_config.clone().clean_session();
-    let mqtt = Client::connect(cmd.client_id.as_str(), &config).await?;
-    let filter = TopicFilter::new(cmd.topic.as_str())?.qos(cmd.qos);
+fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
+    let mut options = MqttOptions::new(
+        cmd.client_id.as_str(),
+        &cmd.mqtt_config.host,
+        cmd.mqtt_config.port,
+    );
+    options.set_clean_session(true);
 
-    let mut errors = mqtt.subscribe_errors();
-    let mut messages = mqtt.subscribe(filter).await?;
+    let (mut client, mut connection) = Client::new(options, cmd.mqtt_config.queue_capacity);
 
-    loop {
-        select! {
-            error = errors.next().fuse() => {
-                if let Some(err) = error {
-                    if err.to_string().contains("MQTT connection error: I/O: Connection refused (os error 111)") {
-                        return Err(MqttError::ServerError(err.to_string()));
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Packet::Publish(message))) => {
+                // trims the trailing null char if one exists
+                let payload = message
+                    .payload
+                    .strip_suffix(&[0])
+                    .unwrap_or(&message.payload);
+                match std::str::from_utf8(&payload) {
+                    Ok(payload) => {
+                        if cmd.hide_topic {
+                            println!("{}", &payload);
+                        } else {
+                            println!("[{}] {}", &message.topic, payload);
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("ERROR: {}", err);
                     }
                 }
             }
-
-            _signal = signals::interrupt().fuse() => {
-                println!("Received SIGINT.");
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                eprintln!("INFO: Disconnected");
                 break;
             }
-
-            maybe_message = messages.next().fuse() => {
-                match maybe_message {
-                    Some(message) =>  handle_message(message, cmd.hide_topic).await?,
-                    None => break
-                 }
+            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                eprintln!("INFO: Connected");
+                client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
             }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            _ => {}
         }
-    }
-
-    Ok(())
-}
-
-async fn async_println(s: &str) -> Result<(), MqttError> {
-    let mut stdout = tokio::io::stdout();
-    stdout.write_all(s.as_bytes()).await?;
-    stdout.write_all(b"\n").await?;
-    Ok(())
-}
-
-async fn handle_message(message: Message, hide_topic: bool) -> Result<(), MqttError> {
-    let payload = message.payload_str()?;
-    if hide_topic {
-        async_println(&payload).await?;
-    } else {
-        let s = format!("[{}] {}", message.topic.name, payload);
-        async_println(&s).await?;
     }
 
     Ok(())
