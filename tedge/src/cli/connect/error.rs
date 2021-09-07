@@ -33,9 +33,6 @@ pub enum ConnectError {
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,
 
-    #[error("Couldn't receive packets from {cloud} within fixed time.")]
-    NoPacketsReceived { cloud: String },
-
     #[error(transparent)]
     PortSettingError(#[from] tedge_config::ConfigSettingError),
 
