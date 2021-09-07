@@ -1,5 +1,6 @@
 import sys
 import time
+import subprocess
 
 from pysys.basetest import BaseTest
 
@@ -50,11 +51,20 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="connect_c8y",
         )
 
+        time.sleep(0.1)
+        # check connection
+        connect_c8y = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y", "--test"],
+            stdouterr="check_con_c8y",
+        )
+
     def validate(self):
+        time.sleep(1)
         # validate tedge mqtt pub/sub
         self.validate_tedge_mqtt()
         # validate c8y connection
-        self.assertGrep("connect_c8y.out",
+        self.assertGrep("check_con_c8y.out",
                         "connection check is successful", contains=True)
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
@@ -66,13 +76,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.validate_tedge_agent()
 
     def validate_tedge_mqtt(self):
-        # subscribe for messages
-        mqtt_sub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
-            stdouterr="mqtt_sub",
-            background=True,
-        )
+        self.start_subscriber()
 
         # publish a message
         mqtt_pub = self.startProcess(
@@ -82,8 +86,8 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="mqtt_pub",
         )
 
-        # wait for a while
-        time.sleep(10)
+        # wait for a while to write the log to filesystem
+        time.sleep(6)
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
@@ -92,6 +96,22 @@ class MqttPortChangeConnectionWorks(BaseTest):
 
         self.assertGrep(
             "mqtt_sub.out", "{ \"temperature\": 25 }", contains=True)
+
+    # Starting subscriber takes sometime, so instead of sleeping before moving
+    # to next operation, its better to query active connections
+    def start_subscriber(self):
+        num_clients_b4 = subprocess.getoutput("mosquitto_sub -p 8889 -t '$SYS/broker/clients/active' -C 1")
+        # subscribe for messages
+        mqtt_sub = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
+            stdouterr="mqtt_sub",
+            background=True,
+        )
+        # mosquitto takes time to update the stats
+        time.sleep(10)
+        num_clients_after = subprocess.getoutput("mosquitto_sub -p 8889 -t '$SYS/broker/clients/active' -C 1")
+        self.assertTrue(int(num_clients_after) > int(num_clients_b4), abortOnError=True, assertMessage=None)
 
     def validate_tedge_mapper_c8y(self):
         # check the status of the c8y mapper
@@ -161,7 +181,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         # connect Bridge
-        c8y_disconnect = self.startProcess(
+        c8y_connect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y"],
             stdouterr="c8y_connect",
