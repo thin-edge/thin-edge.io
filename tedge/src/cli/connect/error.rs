@@ -16,6 +16,9 @@ pub enum ConnectError {
     MqttClient(#[from] mqtt_client::MqttClientError),
 
     #[error(transparent)]
+    RuMqttClient(#[from] rumqttc::ClientError),
+
+    #[error(transparent)]
     PathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
