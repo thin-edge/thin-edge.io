@@ -42,7 +42,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
         let mut errors = mqtt.subscribe_errors();
         let mut messages = mqtt.subscribe(filter.clone()).await?;
 
-        if ! first_connection {
+        if !first_connection {
             async_println("INFO: Reconnecting").await?;
         }
         loop {
