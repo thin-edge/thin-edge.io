@@ -1,15 +1,17 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
-use mqtt_client::{QoS, Topic};
 use rumqttc::QoS::{AtLeastOnce, AtMostOnce, ExactlyOnce};
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use std::time::Duration;
 
+const DEFAULT_QUEUE_CAPACITY: usize = 10;
+
 pub struct MqttPublishCommand {
-    pub topic: Topic,
+    pub host: String,
+    pub port: u16,
+    pub topic: String,
     pub message: String,
-    pub qos: QoS,
-    pub mqtt_config: mqtt_client::Config,
+    pub qos: rumqttc::QoS,
     pub client_id: String,
     pub disconnect_timeout: Duration,
 }
@@ -18,7 +20,7 @@ impl Command for MqttPublishCommand {
     fn description(&self) -> String {
         format!(
             "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",
-            self.message, self.topic.name, self.qos
+            self.message, self.topic, self.qos
         )
     }
 
@@ -28,21 +30,16 @@ impl Command for MqttPublishCommand {
 }
 
 fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
-    let mut options = MqttOptions::new(
-        cmd.client_id.as_str(),
-        &cmd.mqtt_config.host,
-        cmd.mqtt_config.port,
-    );
+    let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
     let retain_flag = false;
     let payload = cmd.message.as_bytes();
 
-    let (mut client, mut connection) =
-        rumqttc::Client::new(options, cmd.mqtt_config.queue_capacity);
+    let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let mut published = false;
     let mut acknowledged = false;
 
-    client.publish(&cmd.topic.name, cmd.qos, retain_flag, payload)?;
+    client.publish(&cmd.topic, cmd.qos, retain_flag, payload)?;
 
     for event in connection.iter() {
         match event {

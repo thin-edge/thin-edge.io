@@ -13,10 +13,7 @@ pub enum ConnectError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MqttClient(#[from] mqtt_client::MqttClientError),
-
-    #[error(transparent)]
-    RuMqttClient(#[from] rumqttc::ClientError),
+    MqttClient(#[from] rumqttc::ClientError),
 
     #[error(transparent)]
     PathsError(#[from] tedge_utils::paths::PathsError),

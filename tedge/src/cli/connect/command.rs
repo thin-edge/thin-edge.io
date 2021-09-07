@@ -9,6 +9,7 @@ use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
 use tempfile::NamedTempFile;
 use which::which;
 
+const DEFAULT_HOST: &str = "localhost";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
@@ -229,7 +230,7 @@ fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
     const REGISTRATION_PAYLOAD: &[u8] = b"100";
     const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
 
-    let mut options = MqttOptions::new(CLIENT_ID, &mqtt_client::Config::default().host, port);
+    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
     options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
@@ -299,7 +300,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
     const REGISTRATION_PAYLOAD: &[u8] = b"";
     const REGISTRATION_OK: &str = "200";
 
-    let mut options = MqttOptions::new(CLIENT_ID, &mqtt_client::Config::default().host, port);
+    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
     options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
