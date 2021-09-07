@@ -35,12 +35,16 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
         .clean_session()
         .with_keep_alive(heart_beat);
     let filter = TopicFilter::new(cmd.topic.as_str())?.qos(cmd.qos);
+    let mut first_connection = true;
 
     loop {
         let mqtt = Client::connect(cmd.client_id.as_str(), &config).await?;
         let mut errors = mqtt.subscribe_errors();
         let mut messages = mqtt.subscribe(filter.clone()).await?;
 
+        if ! first_connection {
+            async_println("INFO: Reconnecting").await?;
+        }
         loop {
             select! {
                 maybe_error = errors.next().fuse() => {
@@ -49,7 +53,9 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                             return Err(MqttError::ServerError(error.to_string()));
                         }
                         async_println(&format!("ERROR: {:?}", error)).await?;
+                        async_println("INFO: Disconnecting").await?;
                         let _ = tokio::time::timeout(heart_beat * 2, mqtt.disconnect()).await;
+                        first_connection = false;
                         break;
                     }
                 }
