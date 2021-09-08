@@ -92,7 +92,7 @@ class SoftwareManagement(EnvironmentC8y):
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
-        self.pkgiddb = {
+        self.pkg_id_db = {
             # apt
             "asciijump": "5475278",
             "robotfindskitten": "5473003",
@@ -107,8 +107,8 @@ class SoftwareManagement(EnvironmentC8y):
         }
 
         if self.project.C8ySwRepo:
-            self.pkgiddb = json.loads(self.project.C8ySwRepo)
-        self.log.info("Using sw id database: %s"%self.pkgiddb)
+            self.pkg_id_db = json.loads(self.project.C8ySwRepo)
+        self.log.info("Using sw id database: %s"%self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -378,7 +378,7 @@ class SoftwareManagement(EnvironmentC8y):
                 break
         return ret
 
-    def getpkgversion(self, pkg):
+    def get_pkg_version(self, pkg):
         """ "Use apt-cache madison to derive a package version from
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
@@ -390,7 +390,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     def get_pkgid(self, pkg):
 
-        pkgid = self.pkgiddb.get(pkg)
+        pkgid = self.pkg_id_db.get(pkg)
 
         if pkgid:
             return pkgid
@@ -398,5 +398,4 @@ class SoftwareManagement(EnvironmentC8y):
             raise SystemError("Package ID not in database")
 
     def mysmcleanup(self):
-        # Experiment
         time.sleep(5)

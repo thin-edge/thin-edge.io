@@ -44,7 +44,7 @@ class PySysTest(SoftwareManagement):
                 "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
                 "url": " ",
-                "version": self.getpkgversion("squirrel3")
+                "version": self.get_pkg_version("squirrel3")
                 + "::apt",  # verson and manager
             },
             {
@@ -52,14 +52,14 @@ class PySysTest(SoftwareManagement):
                 "id": self.get_pkgid("rolldice"),
                 "name": "rolldice",
                 "url": " ",
-                "version": self.getpkgversion("rolldice"),  # only version
+                "version": self.get_pkg_version("rolldice"),  # only version
             },
             {
                 "action": act,
                 "id": self.get_pkgid("moon-buggy"),
                 "name": "moon-buggy",
                 "url": " ",
-                "version": self.getpkgversion("moon-buggy"),  # nothing special
+                "version": self.get_pkg_version("moon-buggy"),  # nothing special
             },
             {
                 "action": act,
