@@ -398,4 +398,7 @@ class SoftwareManagement(EnvironmentC8y):
             raise SystemError("Package ID not in database")
 
     def mysmcleanup(self):
-        time.sleep(5)
+        # Slow down a bit to avoid restarting services too fast.
+        # Enable again, to experiment with C8y timeouts
+        # time.sleep(1)
+        pass
