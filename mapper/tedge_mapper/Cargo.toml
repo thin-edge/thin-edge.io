@@ -28,6 +28,7 @@ stop-on-upgrade = false
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+batcher = {path = "../../common/batcher" }
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
 chrono = "0.4"
 clock = {path = "../../common/clock" }

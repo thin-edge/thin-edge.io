@@ -2599,6 +2599,7 @@ dependencies = [
  "assert-json-diff",
  "assert_matches",
  "async-trait",
+ "batcher",
  "c8y_translator_lib",
  "chrono",
  "clock",
