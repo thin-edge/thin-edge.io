@@ -4,6 +4,7 @@ mod tests {
     use json_sm::{SoftwareError, SoftwareModule};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    #[cfg(feature = "skip-tarpaulin")]
     #[tokio::test]
     async fn plugin_get_command_prepare() {
         // Prepare dummy plugin.
@@ -16,6 +17,7 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[cfg(feature = "skip-tarpaulin")]
     #[tokio::test]
     async fn plugin_get_command_finalize() {
         // Prepare dummy plugin.
@@ -28,6 +30,7 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[cfg(feature = "skip-tarpaulin")]
     #[tokio::test]
     async fn plugin_get_command_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
@@ -63,6 +66,7 @@ mod tests {
         assert_eq!(res.unwrap(), expected_response);
     }
 
+    #[cfg(feature = "skip-tarpaulin")]
     #[tokio::test]
     async fn plugin_get_command_install() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
@@ -93,6 +97,7 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[cfg(feature = "skip-tarpaulin")]
     #[tokio::test]
     async fn plugin_get_command_remove() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
