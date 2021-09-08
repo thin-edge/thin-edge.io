@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the apt plugin for multiple packages
+Validate end to end behaviour for the apt plugin for multiple packages with mixed versions
 
 When we install a bunch of packages with versions, without and even one twice
 Then they are installed

@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the apt plugin for installation and remove
+Validate end to end behaviour for the apt plugin for installation and removal of packages
 
 For the default plugin with a space as version
 

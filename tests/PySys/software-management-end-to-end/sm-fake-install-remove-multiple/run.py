@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the fruits plugin for multiple packages
+Validate end to end behaviour for the dummy-plugin for multiple packages
 
 When we install a bunch of packages
 Then they are installed
