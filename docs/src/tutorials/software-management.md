@@ -3,8 +3,8 @@
 This document describes how to manage the software modules that are installed on a thin-edge device from the 
 cloud using the **software management** feature of thin-edge.io.
 
-> Note: As of now its supported only from Cumulocity cloud. Also, only supports **debian** based
- distributions(Ex: RaspberryPi OS , Ubuntu, Debian), which use the **apt** package manager.
+> Note: As of now, this feature is supported only on devices with **debian** based
+ distributions, which use the **apt** package manager(Ex: RaspberryPi OS , Ubuntu, Debian), from Cumulocity cloud.
 
 Three components are required on your devices to enable software management:
 
@@ -28,14 +28,14 @@ Three components are required on your devices to enable software management:
  
 Find more information about [how to install and enable software management.](../../howto-guides/0012_install_and_enable_software_management.md)
  
-## Managing the device software on Cumulocity cloud
+## Managing the device software **repository** on Cumulocity cloud
 Managing the software packages installed on the devices from your Cumulocity tenant is a two steps operation.
 * Populate the software repository with all the software packages and versions you plan to install.
 * Trigger software update operations on the devices, to install specific packages from the repository.
 
 Find more information about [managing the device software](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
 
-### Adding new software into software repository
+### Adding new software into the software repository of your tenant
 
 1. In the Software repository page, click Add software at the right of the top menu bar.
 2. In the resulting dialog box,
