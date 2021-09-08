@@ -90,8 +90,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         # check if the file exists
         self.check_if_sub_logged()
 
-        # wait for a while to write the log to filesystem
-        # time.sleep(6)
+        # Stop the subscriber
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
