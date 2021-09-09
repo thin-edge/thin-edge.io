@@ -45,7 +45,7 @@ class PySysTest(SoftwareManagement):
                 "name": "squirrel3",
                 "url": " ",
                 "version": self.get_pkg_version("squirrel3")
-                + "::apt",  # verson and manager
+                + "::apt",  # version and manager
             },
             {
                 "action": act,
