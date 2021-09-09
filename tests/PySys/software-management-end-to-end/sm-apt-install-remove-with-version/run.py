@@ -34,7 +34,7 @@ class PySysTest(SoftwareManagement):
         self.trigger_action(
             "rolldice",
             self.get_pkgid("rolldice"),
-            self.getpkgversion("rolldice"),
+            self.get_pkg_version("rolldice"),
             "notanurl",
             "install",
         )
@@ -55,7 +55,7 @@ class PySysTest(SoftwareManagement):
         self.trigger_action(
             "rolldice",
             self.get_pkgid("rolldice"),
-            self.getpkgversion("rolldice"),
+            self.get_pkg_version("rolldice"),
             "notanurl",
             "delete",
         )
@@ -66,5 +66,5 @@ class PySysTest(SoftwareManagement):
 
         self.assertThat(
             "False == value",
-            value=self.check_is_installed("rolldice", "1.16-1+b1::apt"),
+            value=self.check_is_installed("rolldice", self.get_pkg_version("rolldice")),
         )

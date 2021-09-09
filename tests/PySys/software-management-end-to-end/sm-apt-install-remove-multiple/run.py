@@ -22,7 +22,7 @@ from environment_sm_management import SoftwareManagement
 
 class PySysTest(SoftwareManagement):
 
-    def getaction(self, act):
+    def get_packages_with_action(self, act):
         "create an action that we can use later"
 
         action = [
@@ -63,7 +63,7 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        action = self.getaction("install")
+        action = self.get_packages_with_action("install")
         self.trigger_action_json(action)
         self.wait_until_succcess()
 
@@ -75,7 +75,7 @@ class PySysTest(SoftwareManagement):
             "True == value", value=self.check_is_installed("robotfindskitten")
         )
 
-        action = self.getaction("delete")
+        action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
         self.wait_until_succcess()
 

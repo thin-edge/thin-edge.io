@@ -12,19 +12,35 @@ Better run them in a VM or a container.
 
 To run the tests:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
 
 To run the tests with another tenant url:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
+    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
 
 
 
 TODO: Avoid hardcoded ids
 TODO: Get software package ids from c8y
 TODO: Add management for package creation and removal for c8y
-    -> Mabe as separte python module to access c8y
+    -> Mabe as separate python module to access c8y
 
+To override the hardcoded software id database you can use C8YSWREPO (format: JSON):
+
+    export C8YSWREPO='{
+        "asciijump": "5475278",
+        "robotfindskitten": "5473003",
+        "squirrel3": "5474871",
+        "rolldice": "5445239",
+        "moon-buggy": "5439204",
+        "apple": "5495053",
+        "banana": "5494888",
+        "cherry": "5495382",
+        "watermelon": "5494510" }'
+
+To remove
+
+    unset C8YSWREPO
 
 """
 
@@ -55,7 +71,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     # Static class member that can be overriden by a command line argument
     # E.g.:
-    # pysys.py run 'sm-apt*' -XmyPlatform='specialcontainer'
+    # pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
 
     myPlatform = None
 
@@ -71,8 +87,28 @@ class SoftwareManagement(EnvironmentC8y):
     def setup(self):
         """Setup Environment"""
 
-        if self.myPlatform != "specialcontainer":
+        if self.myPlatform != "smcontainer":
             self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        # Database with package IDs taken from the thin-edge.io
+        # TODO make this somehow not hard-coded
+        self.pkg_id_db = {
+            # apt
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5445239",
+            "moon-buggy": "5439204",
+            # fake plugin
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
+        }
+
+        if self.project.c8yswrepo:
+            self.pkg_id_db = json.loads(self.project.c8yswrepo)
+        self.log.info("Using sw id database: %s"%self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -342,7 +378,7 @@ class SoftwareManagement(EnvironmentC8y):
                 break
         return ret
 
-    def getpkgversion(self, pkg):
+    def get_pkg_version(self, pkg):
         """ "Use apt-cache madison to derive a package version from
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
@@ -354,23 +390,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     def get_pkgid(self, pkg):
 
-        # Database with package IDs taken from the thin-edge.io
-        # TODO make this somehow not hard-coded
-        pkgiddb = {
-            # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
-            "moon-buggy": "5439204",
-            # fake plugin
-            "apple": "5495053",
-            "banana": "5494888",
-            "cherry": "5495382",
-            "watermelon": "5494510",
-        }
-
-        pkgid = pkgiddb.get(pkg)
+        pkgid = self.pkg_id_db.get(pkg)
 
         if pkgid:
             return pkgid
@@ -378,5 +398,7 @@ class SoftwareManagement(EnvironmentC8y):
             raise SystemError("Package ID not in database")
 
     def mysmcleanup(self):
-        # Experiment
-        time.sleep(5)
+        # Slow down a bit to avoid restarting services too fast.
+        # Enable again, to experiment with C8y timeouts
+        # time.sleep(1)
+        pass

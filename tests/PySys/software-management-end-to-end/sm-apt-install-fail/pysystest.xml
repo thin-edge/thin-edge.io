@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate end to end behaviour for failing installation</title>
+	<title>Validate end to end behaviour for a failing installation</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>

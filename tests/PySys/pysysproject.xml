@@ -3,6 +3,7 @@
 	<requires-pysys>1.6.1</requires-pysys>
 	<requires-python>3.7.3</requires-python>
 	<property name="appHome" value="${env.PYSYS_APP_HOME}" default="${testRootDir}/.." pathMustExist="true"/>
+	<property name="c8yswrepo" value="${env.C8YSWREPO}" default="" />
     <property name="tebasedir" value="${env.TEBASEDIR}" />
     <property name="exampledir" value="${env.EXAMPLEDIR}" />
     <property name="username" value="${env.C8YUSERNAME}" />

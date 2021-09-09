@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the apt plugin for multiple packages
+Validate end to end behaviour for the apt plugin for multiple packages with mixed versions
 
 When we install a bunch of packages with versions, without and even one twice
 Then they are installed
@@ -21,7 +21,7 @@ from environment_sm_management import SoftwareManagement
 
 class PySysTest(SoftwareManagement):
 
-    def getaction(self, act):
+    def get_packages_with_action(self, act):
         "create an action that we can use later"
 
         action = [
@@ -44,22 +44,22 @@ class PySysTest(SoftwareManagement):
                 "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
                 "url": " ",
-                "version": self.getpkgversion("squirrel3")
-                + "::apt",  # verson and manager
+                "version": self.get_pkg_version("squirrel3")
+                + "::apt",  # version and manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("rolldice"),
                 "name": "rolldice",
                 "url": " ",
-                "version": self.getpkgversion("rolldice"),  # only version
+                "version": self.get_pkg_version("rolldice"),  # only version
             },
             {
                 "action": act,
                 "id": self.get_pkgid("moon-buggy"),
                 "name": "moon-buggy",
                 "url": " ",
-                "version": self.getpkgversion("moon-buggy"),  # nothing special
+                "version": self.get_pkg_version("moon-buggy"),  # nothing special
             },
             {
                 "action": act,
@@ -84,7 +84,7 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        action = self.getaction("install")
+        action = self.get_packages_with_action("install")
 
         self.trigger_action_json(action)
 
@@ -98,7 +98,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("squirrel3"))
         self.assertThat("True == value", value=self.check_is_installed("moon-buggy"))
 
-        action = self.getaction("delete")
+        action = self.get_packages_with_action("delete")
 
         self.trigger_action_json(action)
 

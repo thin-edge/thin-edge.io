@@ -2,12 +2,11 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate end to end behaviour for the apt plugin for multiple packages</title>
+	<title>Validate end to end behaviour for the dummy-plugin for multiple packages with mixed versions</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
   </description>
-  <skipped reason="not for now"/>
   <classification>
 	<groups inherit="true">
 	  <group></group>

@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the dummy plugin for installation and remove
+Validate end to end behaviour for the dummy plugin for installation and removal of packages
 
 When we install a package
 Then it is installed
@@ -14,7 +14,7 @@ This test is currently skipped as it needs a specialized setup with the
 dummy-plugin set up to install fruits.
 
 To run it do this:
-    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=specialcontainer
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
 
 """
 

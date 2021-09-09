@@ -3,7 +3,7 @@ from pysys.basetest import BaseTest
 import time
 
 """
-Validate end to end behaviour for the fruits plugin for multiple packages
+Validate end to end behaviour for the dummy-plugin for multiple packages
 
 When we install a bunch of packages
 Then they are installed
@@ -14,7 +14,7 @@ This test is currently skipped as it needs a specialized setup with the
 dummy-plugin set up to install fruits.
 
 To run it do this:
-    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=specialcontainer
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
 
 """
 
@@ -29,7 +29,7 @@ from environment_sm_management import SoftwareManagement
 
 class PySysTest(SoftwareManagement):
 
-    def getaction(self, act):
+    def get_packages_with_action(self, act):
         "create an action that we can use later"
 
         mgt = "::fruits"
@@ -73,7 +73,7 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        action = self.getaction("install")
+        action = self.get_packages_with_action("install")
         self.trigger_action_json(action)
         self.wait_until_succcess()
 
@@ -82,7 +82,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
 
-        action = self.getaction("delete")
+        action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
         self.wait_until_succcess()
 
