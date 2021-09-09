@@ -32,19 +32,16 @@ class MqttPortChangeConnectionWorks(BaseTest):
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="disconnect_c8y",
         )
-        self.addCleanupFunction(self.mqtt_cleanup)
 
-    def execute(self):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "config", "set", "mqtt.port", "8889"],
             stdouterr="mqtt_port",
         )
+        self.addCleanupFunction(self.mqtt_cleanup)
 
-        # wait for a while
-        time.sleep(0.1)
-
+    def execute(self):
         # connect to c8y cloud
         connect_c8y = self.startProcess(
             command=self.sudo,
@@ -52,12 +49,19 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="connect_c8y",
         )
 
-        time.sleep(0.1)
         # check connection
         connect_c8y = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y", "--test"],
             stdouterr="check_con_c8y",
+        )
+
+        # subscribe for messages
+        mqtt_sub = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
+            stdouterr="mqtt_sub",
+            background=True,
         )
 
     def validate(self):
@@ -77,8 +81,6 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.validate_tedge_agent()
 
     def validate_tedge_mqtt(self):
-        self.start_subscriber()
-
         # publish a message
         mqtt_pub = self.startProcess(
             command=self.sudo,
@@ -106,28 +108,12 @@ class MqttPortChangeConnectionWorks(BaseTest):
         n = 0
         while n < 10:
             if fout.is_file() or ferr.is_file():
-                return;
+                return
             else:
                 time.sleep(1)
                 n += 1
         self.assertFalse(True, abortOnError=True, assertMessage=None)        
         
-    # Starting subscriber takes sometime, so instead of sleeping before moving
-    # to next operation, its better to query active connections
-    def start_subscriber(self):
-        num_clients_b4 = subprocess.getoutput("mosquitto_sub -p 8889 -t '$SYS/broker/clients/active' -C 1")
-        # subscribe for messages
-        mqtt_sub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
-            stdouterr="mqtt_sub",
-            background=True,
-        )
-        # mosquitto takes time to update the stats
-        time.sleep(10)
-        num_clients_after = subprocess.getoutput("mosquitto_sub -p 8889 -t '$SYS/broker/clients/active' -C 1")
-        self.assertTrue(int(num_clients_after) > int(num_clients_b4), abortOnError=True, assertMessage=None)
-
     def validate_tedge_mapper_c8y(self):
         # check the status of the c8y mapper
         c8y_mapper_status = self.startProcess(
