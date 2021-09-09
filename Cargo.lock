@@ -2698,6 +2698,7 @@ dependencies = [
  "mockall",
  "mqtt_client",
  "reqwest",
+ "rumqttc 0.8.0",
  "serde",
  "serde_json",
  "serial_test",

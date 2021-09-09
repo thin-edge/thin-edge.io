@@ -109,3 +109,113 @@ impl Mapper {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_utils::test_mqtt_server::start_broker_local;
+    use rumqttc::{MqttOptions, AsyncClient, Event, Packet, Outgoing, Incoming};
+    use rumqttc::QoS::AtLeastOnce;
+
+    #[tokio::test]
+    async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
+
+        // Given an MQTT broker
+        let mqtt_port: u16 = 55555;
+        let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
+
+        // Given a mapper
+        let name = "mapper_under_test";
+        let mapper_config = MapperConfig {
+            in_topic: Topic::new("in_topic")?,
+            out_topic: Topic::new("out_topic")?,
+            errors_topic: Topic::new("err_topic")?,
+        };
+
+        let flock = check_another_instance_is_not_running(name).unwrap(); // ISSUE this depends on the file system
+
+        let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
+        let mqtt_client = Client::connect(name, &mqtt_config).await?;
+
+        let mapper = Mapper {
+            client: mqtt_client,
+            config: mapper_config,
+            converter: Box::new(UppercaseConverter),
+            _flock: flock,
+        };
+
+        // Let's run the mapper in the background
+        tokio::spawn(async move {
+            let _ = mapper.run().await;
+        });
+
+        // One can know send requests
+        // Happy path
+        let input = "abcde";
+        let expected = "ABCDE".to_string();
+        let actual = received_on_published(mqtt_port, "in_topic", input, "out_topic", 5).await;
+        assert_eq!(expected, actual?);
+
+        // Ill-formed input
+        let input = "éèê";
+        let outcome = received_on_published(mqtt_port, "in_topic", input, "err_topic", 5).await;
+        assert!(outcome.is_ok());
+
+        Ok(())
+    }
+
+    struct UppercaseConverter;
+
+    impl Converter for UppercaseConverter {
+        type Error = ConversionError;                     // ISSUE this is enforced by the mapper, why not std::error::Error ?
+
+        fn convert(&self, input: &str) -> Result<String, Self::Error> {
+            if input.is_ascii() {
+                Ok(input.to_uppercase())
+            } else {
+                Err(ConversionError::MapperError(MapperError::HomeDirNotFound))    // ISSUE The conversion error type needs to be extended for each kind of mapper
+            }
+        }
+    }
+
+    async fn received_on_published(mqtt_port: u16, pub_topic: &str, pub_message: &str, sub_topic: &str, timeout_sec: u16) -> Result<String, anyhow::Error> {
+        let mut options = MqttOptions::new("test", "localhost", mqtt_port);
+        options.set_keep_alive(timeout_sec);
+        options.set_clean_session(true);
+
+        let (client, mut eventloop) = AsyncClient::new(options, 10);
+        client.subscribe(sub_topic, AtLeastOnce).await?;
+
+        loop {
+            match eventloop.poll().await {
+                Ok(Event::Incoming(Packet::SubAck(_))) => {
+                    // We are ready to get the response, hence send the request
+                    client.publish(
+                        pub_topic,
+                        AtLeastOnce,
+                        false,
+                        pub_message,
+                    ).await?;
+                }
+                Ok(Event::Incoming(Packet::Publish(response))) => {
+                    // We got a response
+                    client.disconnect().await?;
+                    return Ok(std::str::from_utf8(&response.payload)?.to_string());
+                }
+                Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                    client.disconnect().await?;
+                    return Err(anyhow::anyhow!("Timeout"));
+                }
+                Ok(Event::Incoming(Incoming::Disconnect)) => {
+                    client.disconnect().await?;
+                    return Err(anyhow::anyhow!("Disconnected"));
+                }
+                Err(err) => {
+                    client.disconnect().await?;
+                    return Err(err.into());
+                }
+                _ => {}
+            }
+        }
+    }
+}
