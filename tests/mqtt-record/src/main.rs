@@ -1,8 +1,7 @@
-use std::fs::File;
 use daemonize::Daemonize;
 use rumqttc::{Client, Event, Incoming, MqttOptions, Packet, QoS};
+use std::fs::File;
 use structopt::StructOpt;
-
 
 /// Record all the messages of a topic
 ///
@@ -73,8 +72,7 @@ fn record(topic: &str, output: &str) {
 }
 
 fn run_background(output: File) {
-    let daemonize = Daemonize::new()
-        .stdout(output);
+    let daemonize = Daemonize::new().stdout(output);
 
     match daemonize.start() {
         Ok(_) => eprintln!("Success, daemonized"),
