@@ -11,7 +11,6 @@ When we install a package
 Then it is installed
 When we deinstall it again
 Then it is not installed
-
 """
 
 import json
