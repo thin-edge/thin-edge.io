@@ -26,26 +26,38 @@ from environment_sm_management import SoftwareManagement
 class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
+
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
     def execute(self):
 
         self.trigger_action(
-            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "install"
+            "rolldice",
+            self.get_pkgid("rolldice"),
+            self.get_pkg_version("rolldice"),
+            "notanurl",
+            "install",
         )
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        self.trigger_action("rolldice", "5445239", "88::apt", "notanurl", "delete")
+        fake_version = "88::apt"  # does not exist in C8y
+        self.trigger_action(
+            "rolldice", self.get_pkgid("rolldice"), fake_version, "notanurl", "delete"
+        )
 
         self.wait_until_fail()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
-            "rolldice", "5445239", "1.16-1+b1::apt", "notanurl", "delete"
+            "rolldice",
+            self.get_pkgid("rolldice"),
+            self.get_pkg_version("rolldice"),
+            "notanurl",
+            "delete",
         )
 
         self.wait_until_succcess()
@@ -54,5 +66,5 @@ class PySysTest(SoftwareManagement):
 
         self.assertThat(
             "False == value",
-            value=self.check_is_installed("rolldice", "1.16-1+b1::apt"),
+            value=self.check_is_installed("rolldice", self.get_pkg_version("rolldice")),
         )
