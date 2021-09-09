@@ -106,8 +106,8 @@ class SoftwareManagement(EnvironmentC8y):
             "watermelon": "5494510",
         }
 
-        if self.project.C8ySwRepo:
-            self.pkg_id_db = json.loads(self.project.C8ySwRepo)
+        if self.project.c8yswrepo:
+            self.pkg_id_db = json.loads(self.project.c8yswrepo)
         self.log.info("Using sw id database: %s"%self.pkg_id_db)
 
         super().setup()
