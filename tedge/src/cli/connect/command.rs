@@ -261,7 +261,7 @@ fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                println!("\nLocal MQTT publish has timed out.");
+                println!("Local MQTT publish has timed out.");
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
@@ -332,7 +332,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                println!("\nLocal MQTT publish has timed out.");
+                println!("Local MQTT publish has timed out.");
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
@@ -352,7 +352,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
         Ok(DeviceStatus::Unknown)
     } else {
         // The request has not even been sent
-        println!("\nMake sure mosquitto is running.");
+        println!("Make sure mosquitto is running.");
         Err(ConnectError::TimeoutElapsedError)
     }
 }
