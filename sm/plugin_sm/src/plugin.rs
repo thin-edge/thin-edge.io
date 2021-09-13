@@ -54,25 +54,10 @@ pub struct ExternalPluginCommand {
 
 impl ExternalPluginCommand {
     pub fn new(name: impl Into<SoftwareType>, path: impl Into<PathBuf>) -> ExternalPluginCommand {
-        let sw_type = &name.into().clone() as &str;
-        match sw_type {
-            "test" => {
-                return ExternalPluginCommand {
-                    name: "test".into(),
-                    path: path.into(),
-                    sudo: None,
-                }
-            }
-
-            _ => {
-                return {
-                    ExternalPluginCommand {
-                        name: sw_type.into(),
-                        path: path.into(),
-                        sudo: Some("sudo".into()),
-                    }
-                }
-            }
+        ExternalPluginCommand {
+            name: name.into(),
+            path: path.into(),
+            sudo: Some("sudo".into()),
         }
     }
 
