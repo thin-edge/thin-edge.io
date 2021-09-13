@@ -62,7 +62,7 @@ impl DeviceMonitor {
         }
     }
 
-    #[instrument(name = "monitor")]
+    #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
         let mqtt_config = mqtt_client::Config::new(
             self.device_monitor_config.host,

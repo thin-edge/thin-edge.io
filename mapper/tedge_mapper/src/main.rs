@@ -58,6 +58,7 @@ fn initialise_logging() {
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
             TIME_FORMAT.into(),
         ))
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 }
 

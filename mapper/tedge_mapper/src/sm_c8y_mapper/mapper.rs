@@ -13,7 +13,7 @@ use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{instrument, debug, error};
 
 pub struct CumulocitySoftwareManagementMapper {}
 
@@ -25,6 +25,7 @@ impl CumulocitySoftwareManagementMapper {
 
 #[async_trait]
 impl TEdgeComponent for CumulocitySoftwareManagementMapper {
+    #[instrument(skip(self), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let mqtt_config = mqtt_config(&tedge_config)?;
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
@@ -114,6 +115,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
+    #[instrument(skip(self), name = "software-list")]
     async fn ask_software_list(&self) -> Result<(), SMCumulocityMapperError> {
         let request = SoftwareListRequest::new();
         let topic = OutgoingTopic::SoftwareListRequest.to_topic()?;
@@ -123,6 +125,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
+    #[instrument(skip(self), name = "software-update")]
     async fn validate_and_publish_software_list(
         &self,
         json_response: &str,

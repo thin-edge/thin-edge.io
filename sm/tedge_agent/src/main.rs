@@ -21,5 +21,6 @@ fn initialise_logging() {
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
             "%Y-%m-%dT%H:%M:%S%.3f%:z".into(),
         ))
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 }
