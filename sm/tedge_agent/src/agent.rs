@@ -7,7 +7,7 @@ use json_sm::{
     SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};

@@ -1,4 +1,4 @@
-use log::{debug, warn};
+use tracing::{debug, warn};
 use nix::fcntl::{flock, FlockArg};
 use std::{
     fs::{self, File, OpenOptions},
@@ -43,6 +43,7 @@ impl Flockfile {
 
         let () = flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
 
+        debug!(r#"Lockfile created "{:?}""#, &path);
         Ok(Flockfile {
             handle: Some(file),
             path,

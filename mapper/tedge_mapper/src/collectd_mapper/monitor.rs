@@ -1,6 +1,6 @@
 use mqtt_client::{Client, Message, MqttClient};
 use std::sync::Arc;
-use tracing::{instrument, log::error};
+use tracing::{instrument, info, error};
 
 use crate::collectd_mapper::batcher::MessageBatch;
 use crate::collectd_mapper::collectd::CollectdMessage;
@@ -107,7 +107,7 @@ impl DeviceMonitor {
                 }
             }
             // The MQTT connection has been closed by the process itself.
-            log::info!("Stop batching");
+            info!("Stop batching");
             let eof = BatchDriverInput::Flush;
             msg_send.send(eof).await
         });
@@ -136,7 +136,7 @@ impl DeviceMonitor {
                 }
             }
             // All the messages forwarded for batching have been processed.
-            log::info!("Batching done");
+            info!("Batching done");
         });
 
         let mut errors = mqtt_client.subscribe_errors();

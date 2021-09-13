@@ -684,19 +684,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "atty",
- "humantime 2.1.0",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
@@ -737,10 +724,10 @@ name = "flockfile"
 version = "0.3.1"
 dependencies = [
  "assert_matches",
- "log",
  "nix",
  "tempfile",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -1396,8 +1383,6 @@ dependencies = [
  "mockall",
  "rand 0.8.4",
  "rumqttc",
- "rumqttd",
- "rumqttlog",
  "serde",
  "tedge_utils",
  "thiserror",
@@ -1676,9 +1661,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "env_logger 0.9.0",
  "json_sm",
- "log",
  "serde",
  "serde_json",
  "structopt",
@@ -1686,6 +1669,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
  "url",
 ]
 
@@ -2536,11 +2520,9 @@ dependencies = [
  "async-trait",
  "chrono",
  "clock",
- "env_logger 0.9.0",
  "flockfile",
  "futures",
  "json_sm",
- "log",
  "mockall",
  "mqtt_client",
  "once_cell",
@@ -2603,11 +2585,9 @@ dependencies = [
  "chrono",
  "clock",
  "csv",
- "env_logger 0.8.4",
  "flockfile",
  "futures",
  "json_sm",
- "log",
  "mockall",
  "mqtt_client",
  "reqwest",

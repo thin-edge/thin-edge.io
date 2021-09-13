@@ -1,6 +1,6 @@
 use crate::plugin::*;
 use json_sm::*;
-use log::error;
+use tracing::error;
 use std::{
     collections::HashMap,
     fs,
