@@ -49,13 +49,30 @@ pub trait Plugin {
 pub struct ExternalPluginCommand {
     pub name: SoftwareType,
     pub path: PathBuf,
+    pub sudo: Option<PathBuf>,
 }
 
 impl ExternalPluginCommand {
     pub fn new(name: impl Into<SoftwareType>, path: impl Into<PathBuf>) -> ExternalPluginCommand {
-        ExternalPluginCommand {
-            name: name.into(),
-            path: path.into(),
+        let sw_type = &name.into().clone() as &str;
+        match sw_type {
+            "test" => {
+                return ExternalPluginCommand {
+                    name: "test".into(),
+                    path: path.into(),
+                    sudo: None,
+                }
+            }
+
+            _ => {
+                return {
+                    ExternalPluginCommand {
+                        name: sw_type.into(),
+                        path: path.into(),
+                        sudo: Some("sudo".into()),
+                    }
+                }
+            }
         }
     }
 
@@ -64,8 +81,13 @@ impl ExternalPluginCommand {
         action: &str,
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<Command, SoftwareError> {
-        let mut command = Command::new("sudo");
-        command.arg(&self.path);
+        let mut command = if let Some(sudo) = &self.sudo {
+            let mut command = Command::new(&sudo);
+            command.arg(&self.path);
+            command
+        } else {
+            Command::new(&self.path)
+        };
         command.arg(action);
 
         if let Some(module) = maybe_module {
