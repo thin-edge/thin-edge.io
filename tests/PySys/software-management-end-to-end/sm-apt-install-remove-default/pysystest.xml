@@ -2,8 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate end to end behaviour for the apt plugin for installation and removal of packages
-</title>
+	<title>Validate end to end behaviour for the default plugin for installation and removal of packages</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>

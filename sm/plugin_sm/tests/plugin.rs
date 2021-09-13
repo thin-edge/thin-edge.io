@@ -214,7 +214,11 @@ mod tests {
 
     fn get_dummy_plugin(name: &str) -> (ExternalPluginCommand, PathBuf) {
         let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand::new(name, &dummy_plugin_path);
+        let plugin = ExternalPluginCommand {
+            name: name.into(),
+            path: dummy_plugin_path.clone().into(),
+            sudo: None,
+        };
         (plugin, dummy_plugin_path)
     }
 
