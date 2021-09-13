@@ -213,7 +213,7 @@ async fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError
                     println!("... No response. If the device is new, it's normal to get no response in the first try.");
                 } else {
                     println!("... No response. ");
-                    return Ok(DeviceStatus::Unknown);
+                    return Err(ConnectError::ConnectionCheckError);
                 }
             }
             Err(err) => {

@@ -38,4 +38,7 @@ pub enum ConnectError {
 
     #[error(transparent)]
     ConfigLoadError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error("Connection check failed")]
+    ConnectionCheckError,
 }
