@@ -295,8 +295,7 @@ fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
 fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
-    const CLIENT_ID: &str = "c\
-    heck_connection_az";
+    const CLIENT_ID: &str = "check_connection_az";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
     const REGISTRATION_OK: &str = "200";
 
