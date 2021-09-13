@@ -32,6 +32,7 @@ pub enum DeviceStatus {
     Unknown,
 }
 
+#[derive(Debug)]
 pub enum Cloud {
     Azure,
     C8y,
@@ -68,10 +69,18 @@ impl Command for ConnectCommand {
         let mut config = self.config_repository.load()?;
 
         if self.is_test_connection {
-            return match self.check_connection(&config) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(err.into()),
-            };
+            let br_config = self.bridge_config(&config)?;
+            if self.check_if_bridge_exists(br_config) {
+                return match self.check_connection(&config) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err.into()),
+                };
+            } else {
+                return Err((ConnectError::BridgeFileDoesNotExist {
+                    cloud: self.cloud.as_str().into(),
+                })
+                .into());
+            }
         }
 
         // XXX: Do we really need to persist the defaults?
@@ -163,6 +172,22 @@ impl ConnectCommand {
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port),
             Cloud::C8y => check_device_status_c8y(port),
+        }
+    }
+
+    fn check_if_bridge_exists(&self, br_config: BridgeConfig) -> bool {
+        // Check if bridge exists and stop with code 0 if it doesn't.
+        let bridge_conf_path = self
+            .config_location
+            .tedge_config_root_path
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+            .join(br_config.config_file);
+
+        match Path::new(&bridge_conf_path).exists() {
+            // If we find the bridge config file we remove it
+            // and carry on to see if we need to restart mosquitto.
+            true => true,
+            false => false,
         }
     }
 }
