@@ -13,7 +13,7 @@ pub enum ConnectError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MqttClient(#[from] mqtt_client::MqttClientError),
+    MqttClient(#[from] rumqttc::ClientError),
 
     #[error(transparent)]
     PathsError(#[from] tedge_utils::paths::PathsError),
@@ -29,9 +29,6 @@ pub enum ConnectError {
 
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,
-
-    #[error("Couldn't receive packets from {cloud} within fixed time.")]
-    NoPacketsReceived { cloud: String },
 
     #[error(transparent)]
     PortSettingError(#[from] tedge_config::ConfigSettingError),
