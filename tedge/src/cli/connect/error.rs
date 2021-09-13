@@ -43,5 +43,5 @@ pub enum ConnectError {
     ConnectionCheckError,
 
     #[error("Device is not connected to {cloud} cloud")]
-    BridgeFileDoesNotExist { cloud: String },
+    DeviceNotConnected { cloud: String },
 }
