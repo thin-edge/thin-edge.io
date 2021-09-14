@@ -36,7 +36,20 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     version = clap::crate_version!(),
     about = clap::crate_description!()
 )]
-enum MapperName {
+pub struct MapperOpt {
+    #[structopt(subcommand)]
+    pub name: MapperName,
+
+    /// Turn-on the debug log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO
+    /// If on also reports DEBUG and TRACE
+    #[structopt(long)]
+    pub debug: bool,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum MapperName {
     Az,
     C8y,
     Collectd,
@@ -45,20 +58,27 @@ enum MapperName {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    initialise_logging();
+    let mapper = MapperOpt::from_args();
+    initialise_logging(mapper.debug);
 
-    let component = lookup_component(&MapperName::from_args());
+    let component = lookup_component(&mapper.name);
 
     let config = tedge_config()?;
     component.start(config).await
 }
 
-fn initialise_logging() {
+fn initialise_logging(debug: bool) {
+    let log_level = if debug {
+        tracing::Level::TRACE
+    } else {
+        tracing::Level::INFO
+    };
+
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
             TIME_FORMAT.into(),
         ))
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_max_level(log_level)
         .init();
 }
 
