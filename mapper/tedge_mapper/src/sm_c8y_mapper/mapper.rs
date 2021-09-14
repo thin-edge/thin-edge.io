@@ -13,7 +13,7 @@ use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
-use tracing::{instrument, debug, error};
+use tracing::{debug, error, instrument};
 
 pub struct CumulocitySoftwareManagementMapper {}
 

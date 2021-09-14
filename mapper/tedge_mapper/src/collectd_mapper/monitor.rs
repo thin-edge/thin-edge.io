@@ -1,6 +1,6 @@
 use mqtt_client::{Client, Message, MqttClient};
 use std::sync::Arc;
-use tracing::{instrument, info, error};
+use tracing::{error, info, instrument};
 
 use crate::collectd_mapper::batcher::MessageBatch;
 use crate::collectd_mapper::collectd::CollectdMessage;

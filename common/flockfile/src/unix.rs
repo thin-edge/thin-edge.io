@@ -1,4 +1,3 @@
-use tracing::{debug, warn};
 use nix::fcntl::{flock, FlockArg};
 use std::{
     fs::{self, File, OpenOptions},
@@ -6,6 +5,7 @@ use std::{
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
 };
+use tracing::{debug, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {

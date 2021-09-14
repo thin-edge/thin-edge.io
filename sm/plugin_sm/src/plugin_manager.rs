@@ -1,6 +1,5 @@
 use crate::plugin::*;
 use json_sm::*;
-use tracing::error;
 use std::{
     collections::HashMap,
     fs,
@@ -9,6 +8,7 @@ use std::{
     process::Command,
 };
 use tedge_utils::paths::pathbuf_to_string;
+use tracing::error;
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
