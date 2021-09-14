@@ -2,7 +2,8 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			mqtt port change connection works
+			mqtt port change connection works for all the thin-edge services
+			that use the mosquitto broker.
 		</title>
 		<purpose>
 			<![CDATA[ ]]>

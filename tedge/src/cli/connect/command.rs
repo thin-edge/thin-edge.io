@@ -1,14 +1,15 @@
 use crate::{cli::connect::*, command::Command, system_services::*, ConfigError};
-use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+use rumqttc::QoS::AtLeastOnce;
+use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
 use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
 use tempfile::NamedTempFile;
-use tokio::time::timeout;
 use which::which;
 
+const DEFAULT_HOST: &str = "localhost";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
@@ -186,13 +187,11 @@ where
 // If the device is already registered, it can finish in the first try.
 // If the device is new, the device is going to be registered here and
 // the check can finish in the second try as there is no error response in the first try.
-
-#[tokio::main]
-async fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError> {
     for i in 0..2 {
-        print!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
+        println!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        match create_device(port).await {
+        match create_device(port) {
             Ok(DeviceStatus::MightBeNew) => return Ok(DeviceStatus::MightBeNew),
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Received expected response message, connection check is successful.\n",);
@@ -224,51 +223,66 @@ async fn check_device_status_c8y(port: u16) -> Result<DeviceStatus, ConnectError
     return Ok(DeviceStatus::MightBeNew);
 }
 
-async fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
     const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
     const CLIENT_ID: &str = "check_connection_c8y";
+    const REGISTRATION_PAYLOAD: &[u8] = b"100";
+    const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
 
-    let c8y_msg_pub_topic = Topic::new(C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM)?;
-    let c8y_error_sub_topic = Topic::new(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM)?;
+    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
+    options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
-    let mut error_response = mqtt.subscribe(c8y_error_sub_topic.filter()).await?;
+    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let mut acknowledged = false;
 
-    let (sender, mut receiver) = tokio::sync::oneshot::channel();
+    client.subscribe(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM, AtLeastOnce)?;
 
-    let _task_handle = tokio::spawn(async move {
-        while let Some(message) = error_response.next().await {
-            if message
-                .payload_str()
-                .unwrap_or("")
-                .contains("41,100,Device already existing")
-            {
-                let _ = sender.send(());
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Packet::SubAck(_))) => {
+                // We are ready to get the response, hence send the request
+                client.publish(
+                    C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM,
+                    AtLeastOnce,
+                    false,
+                    REGISTRATION_PAYLOAD,
+                )?;
+            }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                // The request has been sent
+                acknowledged = true;
+            }
+            Ok(Event::Incoming(Packet::Publish(response))) => {
+                // We got a response
+                if &response.payload == REGISTRATION_ERROR {
+                    return Ok(DeviceStatus::AlreadyExists);
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No messages have been received for a while
+                println!("Local MQTT publish has timed out.");
                 break;
             }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                eprintln!("ERROR: Disconnected");
+                break;
+            }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                break;
+            }
+            _ => {}
         }
-    });
-
-    if timeout(
-        RESPONSE_TIMEOUT,
-        // 100: Device creation
-        mqtt.publish(Message::new(&c8y_msg_pub_topic, "100")),
-    )
-    .await
-    .is_err()
-    {
-        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
-        return Err(ConnectError::TimeoutElapsedError);
     }
 
-    let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
-    match fut.await {
-        Ok(Ok(())) => {
-            println!("Received expected response message, connection check is successful.\n",);
-            return Ok(DeviceStatus::AlreadyExists);
-        }
-        _err => return Ok(DeviceStatus::Unknown),
+    if acknowledged {
+        // The request has been sent but without a response
+        Ok(DeviceStatus::Unknown)
+    } else {
+        // The request has not even been sent
+        println!("\nMake sure mosquitto is running.");
+        Err(ConnectError::TimeoutElapsedError)
     }
 }
 
@@ -278,52 +292,68 @@ async fn create_device(port: u16) -> Result<DeviceStatus, ConnectError> {
 // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
 // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
 // Here if the status is 200 then it's success.
-
-#[tokio::main]
-async fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
+    const REGISTRATION_PAYLOAD: &[u8] = b"";
+    const REGISTRATION_OK: &str = "200";
 
-    let device_twin_pub_topic = Topic::new(AZURE_TOPIC_DEVICE_TWIN_UPSTREAM)?;
-    let device_twin_sub_filter = TopicFilter::new(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM)?;
+    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
+    options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
-    let mqtt = Client::connect(CLIENT_ID, &mqtt_client::Config::default().with_port(port)).await?;
-    let mut device_twin_response = mqtt.subscribe(device_twin_sub_filter).await?;
+    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let mut acknowledged = false;
 
-    let (sender, mut receiver) = tokio::sync::oneshot::channel();
+    client.subscribe(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM, AtLeastOnce)?;
 
-    let _task_handle = tokio::spawn(async move {
-        if let Some(message) = device_twin_response.next().await {
-            //status should be 200 for successful connection
-            if message.topic.name.contains("200") {
-                let _ = sender.send(true);
-            } else {
-                let _ = sender.send(false);
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Packet::SubAck(_))) => {
+                // We are ready to get the response, hence send the request
+                client.publish(
+                    AZURE_TOPIC_DEVICE_TWIN_UPSTREAM,
+                    AtLeastOnce,
+                    false,
+                    REGISTRATION_PAYLOAD,
+                )?;
             }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                // The request has been sent
+                acknowledged = true;
+            }
+            Ok(Event::Incoming(Packet::Publish(response))) => {
+                // We got a response
+                if response.topic.contains(REGISTRATION_OK) {
+                    return Ok(DeviceStatus::AlreadyExists);
+                } else {
+                    break;
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No messages have been received for a while
+                println!("Local MQTT publish has timed out.");
+                break;
+            }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                eprintln!("ERROR: Disconnected");
+                break;
+            }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                break;
+            }
+            _ => {}
         }
-    });
-
-    if timeout(
-        RESPONSE_TIMEOUT,
-        mqtt.publish(Message::new(&device_twin_pub_topic, "".to_string())),
-    )
-    .await
-    .is_err()
-    {
-        println!("\nLocal MQTT publish has timed out. Make sure mosquitto is running.");
-        return Err(ConnectError::TimeoutElapsedError);
     }
 
-    let fut = timeout(RESPONSE_TIMEOUT, &mut receiver);
-    match fut.await {
-        Ok(Ok(true)) => {
-            println!("Received expected response message, connection check is successful.");
-            Ok(DeviceStatus::AlreadyExists)
-        }
-        _err => Err(ConnectError::NoPacketsReceived {
-            cloud: "Azure".into(),
-        }),
+    if acknowledged {
+        // The request has been sent but without a response
+        Ok(DeviceStatus::Unknown)
+    } else {
+        // The request has not even been sent
+        println!("Make sure mosquitto is running.");
+        Err(ConnectError::TimeoutElapsedError)
     }
 }
 
