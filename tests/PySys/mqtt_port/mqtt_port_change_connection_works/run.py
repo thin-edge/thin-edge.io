@@ -1,5 +1,7 @@
 import sys
 import time
+import subprocess
+from pathlib import Path
 
 from pysys.basetest import BaseTest
 
@@ -30,19 +32,16 @@ class MqttPortChangeConnectionWorks(BaseTest):
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="disconnect_c8y",
         )
-        self.addCleanupFunction(self.mqtt_cleanup)
 
-    def execute(self):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "config", "set", "mqtt.port", "8889"],
             stdouterr="mqtt_port",
         )
+        self.addCleanupFunction(self.mqtt_cleanup)
 
-        # wait for a while
-        time.sleep(0.1)
-
+    def execute(self):
         # connect to c8y cloud
         connect_c8y = self.startProcess(
             command=self.sudo,
@@ -50,11 +49,27 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="connect_c8y",
         )
 
+        # check connection
+        connect_c8y = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y", "--test"],
+            stdouterr="check_con_c8y",
+        )
+
+        # subscribe for messages
+        mqtt_sub = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
+            stdouterr="mqtt_sub",
+            background=True,
+        )
+
     def validate(self):
+        time.sleep(1)
         # validate tedge mqtt pub/sub
         self.validate_tedge_mqtt()
         # validate c8y connection
-        self.assertGrep("connect_c8y.out",
+        self.assertGrep("check_con_c8y.out",
                         "connection check is successful", contains=True)
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
@@ -66,14 +81,6 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.validate_tedge_agent()
 
     def validate_tedge_mqtt(self):
-        # subscribe for messages
-        mqtt_sub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/measurements"],
-            stdouterr="mqtt_sub",
-            background=True,
-        )
-
         # publish a message
         mqtt_pub = self.startProcess(
             command=self.sudo,
@@ -82,8 +89,10 @@ class MqttPortChangeConnectionWorks(BaseTest):
             stdouterr="mqtt_pub",
         )
 
-        # wait for a while
-        time.sleep(3)
+        # check if the file exists
+        self.check_if_sub_logged()
+
+        # Stop the subscriber
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
@@ -93,6 +102,18 @@ class MqttPortChangeConnectionWorks(BaseTest):
         self.assertGrep(
             "mqtt_sub.out", "{ \"temperature\": 25 }", contains=True)
 
+    def check_if_sub_logged(self):
+        fout = Path(self.output + '/mqtt_sub.out')
+        ferr = Path(self.output + '/mqtt_sub.err')
+        n = 0
+        while n < 10:
+            if fout.is_file() or ferr.is_file():
+                return
+            else:
+                time.sleep(1)
+                n += 1
+        self.assertFalse(True, abortOnError=True, assertMessage=None)        
+        
     def validate_tedge_mapper_c8y(self):
         # check the status of the c8y mapper
         c8y_mapper_status = self.startProcess(
@@ -161,7 +182,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         # connect Bridge
-        c8y_disconnect = self.startProcess(
+        c8y_connect = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y"],
             stdouterr="c8y_connect",
