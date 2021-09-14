@@ -10,7 +10,7 @@ use json_sm::{
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, instrument};
 
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
@@ -126,6 +126,7 @@ impl SmAgent {
         }
     }
 
+    #[instrument(skip(self), name = "sm-agent")]
     pub async fn start(&self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 

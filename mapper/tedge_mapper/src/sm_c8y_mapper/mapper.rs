@@ -13,7 +13,7 @@ use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument};
 
 pub struct CumulocitySoftwareManagementMapper {}
 
@@ -25,7 +25,7 @@ impl CumulocitySoftwareManagementMapper {
 
 #[async_trait]
 impl TEdgeComponent for CumulocitySoftwareManagementMapper {
-    #[instrument(skip(self), name = "sm-c8y-mapper")]
+    #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let mqtt_config = mqtt_config(&tedge_config)?;
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
@@ -54,7 +54,9 @@ impl CumulocitySoftwareManagement {
         }
     }
 
+    #[instrument(skip(self), name = "init")]
     async fn init(&mut self) -> Result<(), anyhow::Error> {
+        info!("Initialisation");
         while self.c8y_internal_id.is_empty() {
             if let Err(error) = self.try_get_and_set_internal_id().await {
                 error!("{:?}", error);
@@ -68,6 +70,7 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn run(&self) -> Result<(), anyhow::Error> {
+        info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
@@ -79,6 +82,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
+    #[instrument(skip(self), name = "main-loop")]
     async fn subscribe_messages_runtime(&self) -> Result<(), SMCumulocityMapperError> {
         let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;

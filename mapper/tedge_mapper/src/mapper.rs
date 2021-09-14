@@ -59,6 +59,7 @@ pub struct Mapper {
 
 impl Mapper {
     pub(crate) async fn run(&self) -> Result<(), MqttClientError> {
+        info!("Running");
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
