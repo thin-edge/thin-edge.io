@@ -1,4 +1,5 @@
 import json
+from pysys.constants import FAILED
 import requests
 from pysys.basetest import BaseTest
 
@@ -30,35 +31,35 @@ class Cumulocity(object):
     def request(self, method, url_path, **kwargs) -> requests.Response:
         return requests.request(method, self.c8y_url + url_path, auth=self.auth, **kwargs)
 
-    def getAllDevices(self) -> requests.Response:
+    def get_all_devices(self) -> requests.Response:
         params = {
             "fragmentType": "c8y_IsDevice"
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
 
-        return self.toJsonResponse(res)
+        return self.to_json_response(res)
 
-    def toJsonResponse(self, res: requests.Response):
+    def to_json_response(self, res: requests.Response):
         if res.status_code != 200:
             raise Exception(
                 "Received invalid response with exit code: {}, reason: {}".format(res.status_code, res.reason))
         return json.loads(res.text)
 
-    def getAllDevicesByType(self, type: str) -> requests.Response:
+    def get_all_devices_by_type(self, type: str) -> requests.Response:
         params = {
             "fragmentType": "c8y_IsDevice",
             "type": type,
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
-        return self.toJsonResponse(res)
+        return self.to_json_response(res)
 
-    def getAllThinEdgeDevices(self) -> requests.Response:
-        return self.getAllDevicesByType("thin-edge.io")
+    def get_all_thin_edge_devices(self) -> requests.Response:
+        return self.get_all_devices_by_type("thin-edge.io")
 
-    def getThinEdgeDeviceByName(self, device_id: str):
-        json_response = self.getAllDevicesByType("thin-edge.io")
+    def get_thin_edge_device_by_name(self, device_id: str):
+        json_response = self.get_all_devices_by_type("thin-edge.io")
         for device in json_response['managedObjects']:
             if device_id in device['name']:
                 return device
@@ -113,6 +114,15 @@ class EnvironmentC8y(BaseTest):
             arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper3",
         )
+
+        if self.project.c8yurl == "":
+            self.abort(FAILED, "Cumulocity tenant URL is not set")
+        if self.project.tenant == "":
+            self.abort(FAILED, "Cumulocity tenant ID is not set")
+        if self.project.username == "":
+            self.abort(FAILED, "Cumulocity tenant username is not set")
+        if self.project.c8ypass == "":
+            self.abort(FAILED, "Cumulocity tenant password is not set")
 
         self.cumulocity = Cumulocity(
             self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass)

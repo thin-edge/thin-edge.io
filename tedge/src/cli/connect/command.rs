@@ -166,14 +166,14 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
-        let device_id = config.query(DeviceIdSetting)?.into();
+        let device_id: String = config.query(DeviceIdSetting)?.into();
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port),
-            Cloud::C8y => check_device_status_c8y(port, device_id),
+            Cloud::C8y => check_device_status_c8y(port, device_id.as_str()),
         }
     }
 
@@ -207,11 +207,11 @@ where
 // If the device is already registered, it can finish in the first try.
 // If the device is new, the device is going to be registered here and
 // the check can finish in the second try as there is no error response in the first try.
-fn check_device_status_c8y(port: u16, device_id: String) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_c8y(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
     for i in 0..2 {
         println!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
 
-        match create_device(port, device_id.as_str()) {
+        match create_device(port, device_id) {
             Ok(DeviceStatus::MightBeNew) => return Ok(DeviceStatus::MightBeNew),
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Received expected response message, connection check is successful.\n",);
