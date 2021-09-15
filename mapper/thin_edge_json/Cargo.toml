@@ -1,6 +1,6 @@
 [package]
 name = "thin_edge_json"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Software AG <thin-edge-team@softwareag.com>"]
 edition = "2018"
 
