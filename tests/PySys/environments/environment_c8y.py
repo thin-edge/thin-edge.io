@@ -72,6 +72,22 @@ class EnvironmentC8y(BaseTest):
     def setup(self):
         self.log.debug("EnvironmentC8y Setup")
 
+        if self.project.c8yurl == "":
+            self.abort(
+                FAILED, "Cumulocity tenant URL is not set. Set with the env variable C8YURL")
+        if self.project.tenant == "":
+            self.abort(
+                FAILED, "Cumulocity tenant ID is not set. Set with the env variable C8YTENANT")
+        if self.project.username == "":
+            self.abort(
+                FAILED, "Cumulocity tenant username is not set. Set with the env variable C8YUSERNAME")
+        if self.project.c8ypass == "":
+            self.abort(
+                FAILED, "Cumulocity tenant password is not set. Set with the env variable C8YPASS")
+        if self.project.deviceid == "":
+            self.abort(
+                FAILED, "Device ID is not set. Set with the env variable C8YDEVICEID")
+
         self.tedge = "/usr/bin/tedge"
         self.tedge_mapper_c8y = "tedge-mapper-c8y"
         self.sudo = "/usr/bin/sudo"
@@ -114,15 +130,6 @@ class EnvironmentC8y(BaseTest):
             arguments=["status", self.tedge_mapper_c8y],
             stdouterr="serv_mapper3",
         )
-
-        if self.project.c8yurl == "":
-            self.abort(FAILED, "Cumulocity tenant URL is not set")
-        if self.project.tenant == "":
-            self.abort(FAILED, "Cumulocity tenant ID is not set")
-        if self.project.username == "":
-            self.abort(FAILED, "Cumulocity tenant username is not set")
-        if self.project.c8ypass == "":
-            self.abort(FAILED, "Cumulocity tenant password is not set")
 
         self.cumulocity = Cumulocity(
             self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass)
