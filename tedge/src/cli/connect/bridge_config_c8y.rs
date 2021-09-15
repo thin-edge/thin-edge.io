@@ -40,7 +40,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             use_agent: true,
             try_private: false,
             start_type: "automatic".into(),
-            clean_session: true,
+            clean_session: false,
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![
@@ -133,7 +133,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         ],
         try_private: false,
         start_type: "automatic".into(),
-        clean_session: true,
+        clean_session: false,
         notifications: false,
         bridge_attempt_unsubscribe: false,
     };

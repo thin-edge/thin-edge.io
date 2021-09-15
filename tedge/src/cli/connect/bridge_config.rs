@@ -348,26 +348,27 @@ bridge_attempt_unsubscribe false
 
         Ok(())
     }
-}
-fn default_bridge_config() -> BridgeConfig {
-    BridgeConfig {
-        cloud_name: "az/c8y".into(),
-        config_file: "cfg".to_string(),
-        connection: "edge_to_az/c8y".into(),
-        address: "".into(),
-        remote_username: None,
-        bridge_root_cert_path: "".into(),
-        bridge_certfile: "".into(),
-        bridge_keyfile: "".into(),
-        remote_clientid: "".into(),
-        local_clientid: "".into(),
-        use_mapper: true,
-        use_agent: true,
-        try_private: false,
-        start_type: "automatic".into(),
-        clean_session: true,
-        notifications: false,
-        bridge_attempt_unsubscribe: false,
-        topics: vec![],
+
+    fn default_bridge_config() -> BridgeConfig {
+        BridgeConfig {
+            cloud_name: "az/c8y".into(),
+            config_file: "cfg".to_string(),
+            connection: "edge_to_az/c8y".into(),
+            address: "".into(),
+            remote_username: None,
+            bridge_root_cert_path: "".into(),
+            bridge_certfile: "".into(),
+            bridge_keyfile: "".into(),
+            remote_clientid: "".into(),
+            local_clientid: "".into(),
+            use_mapper: true,
+            use_agent: true,
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            notifications: false,
+            bridge_attempt_unsubscribe: false,
+            topics: vec![],
+        }
     }
 }
