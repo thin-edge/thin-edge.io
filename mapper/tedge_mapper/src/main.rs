@@ -19,8 +19,6 @@ mod mapper;
 mod size_threshold;
 mod sm_c8y_mapper;
 
-const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
-
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
@@ -59,27 +57,12 @@ pub enum MapperName {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mapper = MapperOpt::from_args();
-    initialise_logging(mapper.debug);
+    tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
     let component = lookup_component(&mapper.name);
 
     let config = tedge_config()?;
     component.start(config).await
-}
-
-fn initialise_logging(debug: bool) {
-    let log_level = if debug {
-        tracing::Level::TRACE
-    } else {
-        tracing::Level::INFO
-    };
-
-    tracing_subscriber::fmt()
-        .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
-            TIME_FORMAT.into(),
-        ))
-        .with_max_level(log_level)
-        .init();
 }
 
 fn tedge_config() -> anyhow::Result<TEdgeConfig> {
