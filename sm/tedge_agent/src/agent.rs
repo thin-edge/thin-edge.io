@@ -20,7 +20,6 @@ use tedge_config::{
 #[derive(Debug)]
 pub struct SmAgentConfig {
     pub default_plugin_type: Option<String>,
-    pub download_path: PathBuf,
     pub errors_topic: Topic,
     pub mqtt_client_config: mqtt_client::Config,
     pub request_topic_list: Topic,
@@ -34,8 +33,6 @@ pub struct SmAgentConfig {
 impl Default for SmAgentConfig {
     fn default() -> Self {
         let default_plugin_type = None;
-
-        let download_path = PathBuf::from("/tmp/.tedge/");
 
         let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
 
@@ -59,7 +56,6 @@ impl Default for SmAgentConfig {
 
         Self {
             default_plugin_type,
-            download_path,
             errors_topic,
             mqtt_client_config,
             request_topic_list,
