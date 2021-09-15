@@ -42,7 +42,7 @@ impl SoftwareModule {
 
     pub fn normalize(&mut self) {
         match &self.module_type {
-            Some(module_type) if SoftwareModule::is_default_type(&module_type) => {
+            Some(module_type) if SoftwareModule::is_default_type(module_type) => {
                 self.module_type = None
             }
             _ => {}

@@ -35,11 +35,11 @@ pub enum AgentError {
 #[derive(Debug, thiserror::Error)]
 pub enum StateError {
     #[error(transparent)]
-    TOMLParseError(#[from] toml::de::Error),
+    TOMLParse(#[from] toml::de::Error),
 
     #[error(transparent)]
-    InvalidTOMLError(#[from] toml::ser::Error),
+    InvalidTOML(#[from] toml::ser::Error),
 
     #[error(transparent)]
-    IOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
 }

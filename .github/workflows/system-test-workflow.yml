@@ -31,7 +31,7 @@ jobs:
             C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: thin-edge-io.eu-latest.cumulocity.com
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/

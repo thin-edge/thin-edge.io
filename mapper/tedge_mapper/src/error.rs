@@ -24,17 +24,17 @@ pub enum MapperError {
 #[derive(Debug, thiserror::Error)]
 pub enum ConversionError {
     #[error(transparent)]
-    MapperError(#[from] MapperError),
+    Mapper(#[from] MapperError),
 
     #[error(transparent)]
-    ThinEdgeJsonError(#[from] c8y_translator_lib::json::CumulocityJsonError),
+    ThinEdgeJson(#[from] c8y_translator_lib::json::CumulocityJsonError),
 
     #[error(transparent)]
-    ThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
+    ThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    ThinEdgeJsonParserError(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
+    ThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]
-    MessageSizeExceededError(#[from] SizeThresholdExceeded),
+    MessageSizeExceeded(#[from] SizeThresholdExceeded),
 }

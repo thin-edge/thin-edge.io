@@ -148,7 +148,7 @@ mod tests {
         let event2 = TestBatchEvent::new(1, 40);
 
         let mut batch = Batch::new(batch_start, batch_end, event1.clone());
-        assert!(matches!(batch.add(event2.clone()), BatchAdd::Duplicate));
+        assert!(matches!(batch.add(event2), BatchAdd::Duplicate));
 
         let result = batch.into_vec();
         assert_eq!(result.len(), 1);

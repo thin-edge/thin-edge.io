@@ -27,7 +27,7 @@ impl StateRepository<State> for AgentStateRepository {
         match fs::read(&self.state_repo_path).await {
             Ok(bytes) => Ok(toml::from_slice::<State>(bytes.as_slice())?),
 
-            Err(err) => Err(StateError::IOError(err)),
+            Err(err) => Err(StateError::IO(err)),
         }
     }
 
@@ -61,7 +61,7 @@ impl StateRepository<State> for AgentStateRepository {
 
 impl AgentStateRepository {
     pub fn new(tedge_root: PathBuf) -> Self {
-        let mut state_repo_root = tedge_root.clone();
+        let mut state_repo_root = tedge_root;
         state_repo_root.push(PathBuf::from_str(".agent").expect("infallible"));
 
         let mut state_repo_path = state_repo_root.clone();

@@ -41,7 +41,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                     .payload
                     .strip_suffix(&[0])
                     .unwrap_or(&message.payload);
-                match std::str::from_utf8(&payload) {
+                match std::str::from_utf8(payload) {
                     Ok(payload) => {
                         if cmd.hide_topic {
                             println!("{}", &payload);

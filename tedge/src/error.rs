@@ -1,23 +1,23 @@
 #[derive(thiserror::Error, Debug)]
 pub enum TEdgeError {
     #[error("TOML parse error")]
-    TomlParseError(#[from] toml::de::Error),
+    TomlParse(#[from] toml::de::Error),
 
     #[error("TOML serialization error")]
-    InvalidTomlError(#[from] toml::ser::Error),
+    InvalidToml(#[from] toml::ser::Error),
 
     #[error("I/O error")]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 
     #[error(transparent)]
-    PathsError(#[from] tedge_utils::paths::PathsError),
+    Paths(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
-    TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
+    TEdgeConfig(#[from] tedge_config::TEdgeConfigError),
 
     #[error(transparent)]
-    TEdgeConfigSettingError(#[from] tedge_config::ConfigSettingError),
+    TEdgeConfigSetting(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    MqttClientError(#[from] rumqttc::ClientError),
+    MqttClient(#[from] rumqttc::ClientError),
 }

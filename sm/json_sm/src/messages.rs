@@ -90,7 +90,7 @@ impl SoftwareUpdateRequest {
             .module()
             .module_type
             .clone()
-            .unwrap_or(SoftwareModule::default_type());
+            .unwrap_or_else(SoftwareModule::default_type);
 
         if let Some(list) = self
             .update_list
@@ -366,7 +366,7 @@ impl SoftwareRequestResponse {
         }
     }
 
-    pub fn set_reason_errors(&mut self, errors: &Vec<SoftwareError>) {
+    pub fn set_reason_errors(&mut self, errors: &[SoftwareError]) {
         let mut count = 0;
         let mut failed_package = String::new();
         let mut failed_install = String::new();
@@ -376,26 +376,26 @@ impl SoftwareRequestResponse {
             count += 1;
             match error {
                 SoftwareError::Install { module, .. } => {
-                    failed_install.push_str(" ");
+                    failed_install.push(' ');
                     failed_install.push_str(&module.name);
                 }
                 SoftwareError::Remove { module, .. } => {
-                    failed_remove.push_str(" ");
+                    failed_remove.push(' ');
                     failed_remove.push_str(&module.name);
                 }
                 SoftwareError::Prepare { software_type, .. } => {
-                    failed_package.push_str(" ");
-                    failed_package.push_str(&software_type);
+                    failed_package.push(' ');
+                    failed_package.push_str(software_type);
                 }
                 SoftwareError::Finalize { software_type, .. } => {
-                    failed_package.push_str(" ");
-                    failed_package.push_str(&software_type);
+                    failed_package.push(' ');
+                    failed_package.push_str(software_type);
                 }
                 _ => {}
             }
         }
 
-        let mut reason = String::from(format!("{} errors:", count));
+        let mut reason = format!("{} errors:", count);
 
         if !failed_package.is_empty() {
             reason.push_str(" fail to update [");

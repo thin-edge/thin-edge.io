@@ -35,7 +35,7 @@ fn translate_2_measurements(c: &mut Criterion) {
             "temperature": 12.34,
             "pressure": 56.78
         }"#;
-    sanity_check(&message);
+    sanity_check(message);
 
     c.bench_function(id, |b| b.iter(|| json::from_thin_edge_json(message)));
 }

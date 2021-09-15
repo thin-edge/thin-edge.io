@@ -325,7 +325,7 @@ mod tests {
         assert!(cert_path.contains(".tedge"));
 
         for key in get_tedge_config_keys() {
-            assert_eq!(true, output_str.contains(key));
+            assert!(output_str.contains(key));
         }
     }
 
@@ -341,9 +341,9 @@ mod tests {
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
         for key in get_tedge_config_keys() {
-            assert_eq!(true, output_str.contains(key));
+            assert!(output_str.contains(key));
         }
-        assert_eq!(true, output_str.contains("Example"));
+        assert!(output_str.contains("Example"));
     }
 
     fn tedge_command_with_test_home<I, S>(
