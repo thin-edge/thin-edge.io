@@ -35,7 +35,7 @@ impl MessageBatch {
             let payload = tedge_json_serializer.bytes()?;
             Ok(payload)
         } else {
-            Err(DeviceMonitorError::InvalidThinEdgeJson(
+            Err(DeviceMonitorError::FromInvalidThinEdgeJson(
                 MeasurementGrouperError::UnexpectedEnd,
             ))
         }

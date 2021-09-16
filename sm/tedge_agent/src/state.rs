@@ -27,7 +27,7 @@ impl StateRepository<State> for AgentStateRepository {
         match fs::read(&self.state_repo_path).await {
             Ok(bytes) => Ok(toml::from_slice::<State>(bytes.as_slice())?),
 
-            Err(err) => Err(StateError::IO(err)),
+            Err(err) => Err(StateError::FromIo(err)),
         }
     }
 

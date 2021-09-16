@@ -10,10 +10,10 @@ use std::{
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
     #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    FromIo(#[from] std::io::Error),
 
     #[error("Couldn't acquire file lock.")]
-    NixError(#[from] nix::Error),
+    FromNix(#[from] nix::Error),
 }
 
 /// flockfile creates a lockfile in the filesystem under `/run/lock` and then creates a filelock using system fcntl with flock.
@@ -129,7 +129,7 @@ mod tests {
 
         assert_matches!(
             Flockfile::new_lock(&path).unwrap_err(),
-            FlockfileError::NixError(_)
+            FlockfileError::FromNix(_)
         );
     }
 }
