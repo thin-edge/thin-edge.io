@@ -1,4 +1,3 @@
-use log::{debug, warn};
 use nix::fcntl::{flock, FlockArg};
 use std::{
     fs::{self, File, OpenOptions},
@@ -6,6 +5,7 @@ use std::{
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
 };
+use tracing::{debug, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
@@ -43,6 +43,7 @@ impl Flockfile {
 
         let () = flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
 
+        debug!(r#"Lockfile created "{:?}""#, &path);
         Ok(Flockfile {
             handle: Some(file),
             path,
