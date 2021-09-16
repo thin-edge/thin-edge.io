@@ -12,10 +12,10 @@ pub enum JsonWriterError {
     InvalidUtf8Conversion(#[from] std::string::FromUtf8Error),
 
     #[error("IoError")]
-    IoError(#[from] std::io::Error),
+    FromIo(#[from] std::io::Error),
 
     #[error("Serde Json error")]
-    SerdeJsonError(#[from] serde_json::Error),
+    FromSerdeJson(#[from] serde_json::Error),
 
     #[error("Invalid f64 value {value:?}")]
     InvalidF64Value { value: f64 },

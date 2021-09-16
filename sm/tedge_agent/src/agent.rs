@@ -19,19 +19,25 @@ use tedge_config::{
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
-    pub request_topics: TopicFilter,
-    pub request_topic_list: Topic,
-    pub request_topic_update: Topic,
-    pub response_topic_list: Topic,
-    pub response_topic_update: Topic,
+    pub default_plugin_type: Option<String>,
     pub errors_topic: Topic,
     pub mqtt_client_config: mqtt_client::Config,
+    pub request_topic_list: Topic,
+    pub request_topic_update: Topic,
+    pub request_topics: TopicFilter,
+    pub response_topic_list: Topic,
+    pub response_topic_update: Topic,
     pub sm_home: PathBuf,
-    pub default_plugin_type: Option<String>,
 }
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
+        let default_plugin_type = None;
+
+        let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
+
+        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
+
         let request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
 
         let request_topic_list =
@@ -46,24 +52,18 @@ impl Default for SmAgentConfig {
         let response_topic_update =
             Topic::new(SoftwareUpdateResponse::topic_name()).expect("Invalid topic");
 
-        let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
-
-        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
-
         let sm_home = PathBuf::from("/etc/tedge");
 
-        let default_plugin_type = None;
-
         Self {
-            request_topics,
-            request_topic_list,
-            request_topic_update,
-            response_topic_list,
-            response_topic_update,
+            default_plugin_type,
             errors_topic,
             mqtt_client_config,
+            request_topic_list,
+            request_topic_update,
+            request_topics,
+            response_topic_list,
+            response_topic_update,
             sm_home,
-            default_plugin_type,
         }
     }
 }
@@ -335,7 +335,7 @@ impl SmAgent {
 
             let response = SoftwareRequestResponse::new(&id, SoftwareOperationStatus::Failed);
 
-            let _ = mqtt
+            let () = mqtt
                 .publish(Message::new(topic, response.to_bytes()?))
                 .await?;
         }

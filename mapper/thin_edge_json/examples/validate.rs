@@ -6,7 +6,7 @@ use thin_edge_json::measurement::MeasurementVisitor;
 static GLOBAL: &stats_alloc::StatsAlloc<std::alloc::System> = &stats_alloc::INSTRUMENTED_SYSTEM;
 
 fn main() -> anyhow::Result<()> {
-    let region = stats_alloc::Region::new(&GLOBAL);
+    let region = stats_alloc::Region::new(GLOBAL);
 
     let mut args = env::args();
     let _ = args.next();

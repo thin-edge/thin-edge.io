@@ -75,8 +75,5 @@ fn fixtures(subdir: &str) -> anyhow::Result<Vec<DirEntry>> {
 }
 
 fn is_fixture(e: &DirEntry) -> bool {
-    match (e.file_type().is_file(), e.path().extension()) {
-        (true, Some(ext)) if ext == "json" => true,
-        _ => false,
-    }
+    matches!((e.file_type().is_file(), e.path().extension()), (true, Some(ext)) if ext == "json")
 }

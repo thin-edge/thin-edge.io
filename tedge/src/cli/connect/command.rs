@@ -166,7 +166,7 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
-        let device_id: String = config.query(DeviceIdSetting)?.into();
+        let device_id = config.query(DeviceIdSetting)?;
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
@@ -240,7 +240,7 @@ fn check_device_status_c8y(port: u16, device_id: &str) -> Result<DeviceStatus, C
             }
         }
     }
-    return Ok(DeviceStatus::MightBeNew);
+    Ok(DeviceStatus::MightBeNew)
 }
 
 fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
@@ -277,7 +277,7 @@ fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectErro
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
-                if &response.payload == REGISTRATION_ERROR {
+                if response.payload == REGISTRATION_ERROR {
                     return Ok(DeviceStatus::AlreadyExists);
                 }
             }

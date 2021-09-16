@@ -174,7 +174,7 @@ mod tests {
 
         assert_matches!(
             result,
-            Err(ConversionError::MessageSizeExceededError(
+            Err(ConversionError::SizeThresholdExceeded(
                 SizeThresholdExceeded {
                     actual_size: 3,
                     threshold: 1
