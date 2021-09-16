@@ -1,6 +1,6 @@
 [package]
 name = "flockfile"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Software AG <thin-edge-team@softwareag.com>"]
 edition = "2018"
 
@@ -8,7 +8,7 @@ edition = "2018"
 thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-log = "0.4"
+tracing = { version = "0.1", features = ["log"] }
 nix = "0.21"
 
 [dev-dependencies]
