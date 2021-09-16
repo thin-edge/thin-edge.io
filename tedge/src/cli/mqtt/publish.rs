@@ -81,7 +81,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
         eprintln!("ERROR: the message has not been acknowledged");
     }
 
-   client.disconnect()?;
+    client.disconnect()?;
     if let Some(err) = any_error {
         Err(err)
     } else {

@@ -64,8 +64,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
             }
             Err(err) => {
                 let err_msg = err.to_string();
-                if err_msg.contains("I/O: Connection refused (os error 111)")
-                {
+                if err_msg.contains("I/O: Connection refused (os error 111)") {
                     return Err(MqttError::ServerError(err_msg));
                 }
 
