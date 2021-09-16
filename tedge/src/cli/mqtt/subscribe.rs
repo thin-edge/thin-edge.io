@@ -63,13 +63,13 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                 client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
             }
             Err(err) => {
-                eprintln!("ERROR: {:?}", err);
-                if err
-                    .to_string()
-                    .contains("I/O: Connection refused (os error 111)")
+                let err_msg = err.to_string();
+                if err_msg.contains("I/O: Connection refused (os error 111)")
                 {
-                    return Err(MqttError::ServerError(err.to_string()));
+                    return Err(MqttError::ServerError(err_msg));
                 }
+
+                eprintln!("ERROR: {}", err_msg);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             _ => {}

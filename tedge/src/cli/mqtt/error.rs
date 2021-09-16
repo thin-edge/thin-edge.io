@@ -12,6 +12,6 @@ pub enum MqttError {
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoSError,
 
-    #[error("{0}\n\nHint: Is MQTT server running?")]
+    #[error("MQTT connection error: {0}\n\nHint: Is MQTT server running?")]
     ServerError(String),
 }
