@@ -19,8 +19,6 @@ mod mapper;
 mod size_threshold;
 mod sm_c8y_mapper;
 
-const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
-
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
@@ -36,7 +34,20 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     version = clap::crate_version!(),
     about = clap::crate_description!()
 )]
-enum MapperName {
+pub struct MapperOpt {
+    #[structopt(subcommand)]
+    pub name: MapperName,
+
+    /// Turn-on the debug log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO
+    /// If on also reports DEBUG and TRACE
+    #[structopt(long)]
+    pub debug: bool,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum MapperName {
     Az,
     C8y,
     Collectd,
@@ -45,20 +56,13 @@ enum MapperName {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    initialise_logging();
+    let mapper = MapperOpt::from_args();
+    tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
-    let component = lookup_component(&MapperName::from_args());
+    let component = lookup_component(&mapper.name);
 
     let config = tedge_config()?;
     component.start(config).await
-}
-
-fn initialise_logging() {
-    tracing_subscriber::fmt()
-        .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
-            TIME_FORMAT.into(),
-        ))
-        .init();
 }
 
 fn tedge_config() -> anyhow::Result<TEdgeConfig> {
