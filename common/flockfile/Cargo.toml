@@ -8,7 +8,7 @@ edition = "2018"
 thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-log = "0.4"
+tracing = { version = "0.1", features = ["log"] }
 nix = "0.21"
 
 [dev-dependencies]

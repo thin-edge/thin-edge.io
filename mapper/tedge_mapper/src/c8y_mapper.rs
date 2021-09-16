@@ -4,7 +4,7 @@ use crate::mapper::*;
 use crate::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use tedge_config::TEdgeConfig;
-use tracing::{debug_span, Instrument};
+use tracing::{info_span, Instrument};
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 
@@ -39,7 +39,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         mapper
             .run()
-            .instrument(debug_span!(CUMULOCITY_MAPPER_NAME))
+            .instrument(info_span!(CUMULOCITY_MAPPER_NAME))
             .await?;
 
         Ok(())

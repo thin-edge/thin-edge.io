@@ -29,7 +29,7 @@ class PySysTest(BaseTest):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "--qos", "2", "mqtt", "pub", "atopic", "amessage"],
+            arguments=[self.tedge, "mqtt", "pub", "--qos", "2", "atopic", "amessage"],
             stdouterr="tedge_pub_fail",
             expectedExitStatus="==1",
         )
