@@ -5,7 +5,6 @@ use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 use flockfile::{Flockfile, FlockfileError};
 use log::error;
 
-
 /// Check /run/lock/ for a lock file of a given `app_name`
 pub fn check_another_instance_is_not_running(app_name: &str) -> Result<Flockfile, FlockfileError> {
     match Flockfile::new_lock(format!("{}.lock", app_name)) {
