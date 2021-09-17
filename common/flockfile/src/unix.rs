@@ -165,7 +165,7 @@ mod tests {
 
         assert_matches!(
             Flockfile::new_lock(&path).unwrap_err(),
-            FlockfileError::FromNix(_)
+            FlockfileError::FromNix { .. }
         );
     }
 }
