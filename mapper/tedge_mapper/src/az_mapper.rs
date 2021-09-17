@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::{AzureMapperTimestamp, TEdgeConfig};
-use tracing::{debug_span, Instrument};
+use tracing::{info_span, Instrument};
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -42,7 +42,7 @@ impl TEdgeComponent for AzureMapper {
 
         mapper
             .run()
-            .instrument(debug_span!(AZURE_MAPPER_NAME))
+            .instrument(info_span!(AZURE_MAPPER_NAME))
             .await?;
 
         Ok(())

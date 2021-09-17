@@ -38,6 +38,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let mut published = false;
     let mut acknowledged = false;
+    let mut any_error = None;
 
     client.publish(&cmd.topic, cmd.qos, retain_flag, payload)?;
 
@@ -63,10 +64,11 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
+                any_error = Some(MqttError::ServerError("Disconnected".to_string()));
                 break;
             }
             Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+                any_error = Some(MqttError::ServerError(err.to_string()));
                 break;
             }
             _ => {}
@@ -80,5 +82,9 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     }
 
     client.disconnect()?;
-    Ok(())
+    if let Some(err) = any_error {
+        Err(err)
+    } else {
+        Ok(())
+    }
 }
