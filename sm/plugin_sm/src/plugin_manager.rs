@@ -5,7 +5,7 @@ use std::{
     fs,
     io::{self, ErrorKind},
     path::PathBuf,
-    process::Command,
+    process::{Command, Stdio},
 };
 use tedge_utils::paths::pathbuf_to_string;
 use tracing::error;
@@ -104,7 +104,12 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match Command::new(&path).arg("list").status() {
+                match Command::new(&path)
+                    .arg("list")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                {
                     Ok(code) if code.success() => {}
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
