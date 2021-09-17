@@ -1,7 +1,9 @@
 use crate::converter::*;
 use crate::error::*;
 
-use flockfile::{Flockfile, FlockfileError};
+use flockfile::Flockfile;
+use tedge_utils::fs::{check_another_instance_is_not_running};
+
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
@@ -38,16 +40,6 @@ pub(crate) fn mqtt_config(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_client::Config, anyhow::Error> {
     Ok(mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
-}
-
-fn check_another_instance_is_not_running(app_name: &str) -> Result<Flockfile, FlockfileError> {
-    match flockfile::Flockfile::new_lock(format!("{}.lock", app_name)) {
-        Ok(file) => Ok(file),
-        Err(err) => {
-            error!("Another instance of {} is running.", app_name);
-            Err(err)
-        }
-    }
 }
 
 pub struct Mapper {

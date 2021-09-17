@@ -2,6 +2,9 @@ use crate::{
     error::AgentError,
     state::{AgentStateRepository, State, StateRepository},
 };
+
+use flockfile::Flockfile;
+
 use json_sm::{
     software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
@@ -16,28 +19,23 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
+use tedge_utils::fs::check_another_instance_is_not_running;
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
-    pub default_plugin_type: Option<String>,
-    pub errors_topic: Topic,
-    pub mqtt_client_config: mqtt_client::Config,
+    pub request_topics: TopicFilter,
     pub request_topic_list: Topic,
     pub request_topic_update: Topic,
-    pub request_topics: TopicFilter,
     pub response_topic_list: Topic,
     pub response_topic_update: Topic,
+    pub errors_topic: Topic,
+    pub mqtt_client_config: mqtt_client::Config,
     pub sm_home: PathBuf,
+    pub default_plugin_type: Option<String>,
 }
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
-        let default_plugin_type = None;
-
-        let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
-
-        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
-
         let request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
 
         let request_topic_list =
@@ -52,18 +50,24 @@ impl Default for SmAgentConfig {
         let response_topic_update =
             Topic::new(SoftwareUpdateResponse::topic_name()).expect("Invalid topic");
 
+        let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
+
+        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
+
         let sm_home = PathBuf::from("/etc/tedge");
 
+        let default_plugin_type = None;
+
         Self {
-            default_plugin_type,
-            errors_topic,
-            mqtt_client_config,
+            request_topics,
             request_topic_list,
             request_topic_update,
-            request_topics,
             response_topic_list,
             response_topic_update,
+            errors_topic,
+            mqtt_client_config,
             sm_home,
+            default_plugin_type,
         }
     }
 }
@@ -113,15 +117,28 @@ pub struct SmAgent {
     config: SmAgentConfig,
     name: String,
     persistance_store: AgentStateRepository,
+    _flock: Flockfile,
+}
+
+pub async fn create_sm_agent<'a>(
+    app_name: &'a str,
+    sm_agent_config: SmAgentConfig,
+) -> Result<SmAgent, anyhow::Error> {
+    let _flock = check_another_instance_is_not_running(app_name)?;
+
+    info!("{} starting", app_name);
+
+    Ok(SmAgent::new(app_name, sm_agent_config, _flock))
 }
 
 impl SmAgent {
-    pub fn new(name: &str, config: SmAgentConfig) -> Self {
+    pub fn new(name: &str, config: SmAgentConfig, flock: Flockfile) -> Self {
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
 
         Self {
             config,
             name: name.into(),
+            _flock: flock,
             persistance_store,
         }
     }
@@ -335,7 +352,7 @@ impl SmAgent {
 
             let response = SoftwareRequestResponse::new(&id, SoftwareOperationStatus::Failed);
 
-            let () = mqtt
+            let _ = mqtt
                 .publish(Message::new(topic, response.to_bytes()?))
                 .await?;
         }

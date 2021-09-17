@@ -2,6 +2,21 @@ use std::{fs as std_fs, io::Write, path::Path};
 
 use tokio::{fs as tokio_fs, io::AsyncWriteExt};
 
+use flockfile::{Flockfile, FlockfileError};
+use log::error;
+
+
+/// Check /run/lock/ for a lock file of a given `app_name`
+pub fn check_another_instance_is_not_running(app_name: &str) -> Result<Flockfile, FlockfileError> {
+    match Flockfile::new_lock(format!("{}.lock", app_name)) {
+        Ok(file) => Ok(file),
+        Err(err) => {
+            error!("Another instance of {} is running.", app_name);
+            Err(err)
+        }
+    }
+}
+
 /// Write file to filesystem atomically using std::fs synchronously.
 pub fn atomically_write_file_sync(
     tempfile: impl AsRef<Path>,
@@ -65,7 +80,7 @@ mod tests {
 
         let content = "test_data";
 
-        let () = atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
+        let () = atomically_write_file_async(&temp_path, &destination_path, &content.as_bytes())
             .await
             .unwrap();
 
@@ -86,7 +101,7 @@ mod tests {
         let content = "test_data";
 
         let () =
-            atomically_write_file_sync(&temp_path, &destination_path, content.as_bytes()).unwrap();
+            atomically_write_file_sync(&temp_path, &destination_path, &content.as_bytes()).unwrap();
 
         std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {
