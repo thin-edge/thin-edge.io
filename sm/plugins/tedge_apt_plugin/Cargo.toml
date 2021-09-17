@@ -16,6 +16,8 @@ assets = [
 [dependencies]
 structopt = "0.3"
 thiserror = "1.0"
+csv = "1.1"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 anyhow = "1.0"

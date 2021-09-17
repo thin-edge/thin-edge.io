@@ -2642,8 +2642,10 @@ name = "tedge_apt_plugin"
 version = "0.3.2"
 dependencies = [
  "anyhow",
+ "csv",
  "hamcrest2",
  "reqwest",
+ "serde",
  "serial_test",
  "structopt",
  "tedge_utils",

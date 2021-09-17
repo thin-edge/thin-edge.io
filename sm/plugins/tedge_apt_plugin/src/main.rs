@@ -3,6 +3,9 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
+use serde::Deserialize;
+use std::io;
+use std::os::unix::prelude::ExitStatusExt;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -33,11 +36,30 @@ pub enum PluginOp {
         version: Option<String>,
     },
 
+    /// Install or remove multiple modules at once
+    UpdateList,
+
     /// Prepare a sequences of install/remove commands
     Prepare,
 
     /// Finalize a sequences of install/remove commands
     Finalize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum UpdateAction {
+    Install,
+    Remove,
+}
+#[derive(Debug, Deserialize)]
+struct SoftwareModuleUpdate {
+    pub action: UpdateAction,
+    pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
@@ -118,6 +140,31 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             } else {
                 run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
             }
+        }
+
+        PluginOp::UpdateList => {
+            let mut updates: Vec<SoftwareModuleUpdate> = Vec::new();
+            let mut status: ExitStatus = ExitStatus::from_raw(0);
+            let mut rdr = csv::ReaderBuilder::new()
+                .has_headers(false)
+                .delimiter(b' ')
+                .flexible(true)
+                .from_reader(io::stdin());
+            for result in rdr.deserialize() {
+                updates.push(result?);
+            }
+
+            print!("{:?}", updates);
+            for update_module in updates {
+                status = match update_module.action {
+                    UpdateAction::Install => install(update_module.name, update_module.version)?,
+                    UpdateAction::Remove => remove(update_module.name, update_module.version)?,
+                };
+                if !status.success() {
+                    break;
+                }
+            }
+            return Ok(status);
         }
 
         PluginOp::Prepare => run_cmd("apt-get", "update --quiet --yes")?,

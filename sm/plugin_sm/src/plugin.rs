@@ -4,7 +4,7 @@ use download::Downloader;
 use json_sm::*;
 use std::{iter::Iterator, path::PathBuf, process::Output};
 use tokio::io::BufWriter;
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 
 #[async_trait]
 pub trait Plugin {
@@ -19,6 +19,7 @@ pub trait Plugin {
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
+    async fn update_list(&self, modules: &Vec<SoftwareModuleUpdate>) -> Result<(), SoftwareError>;
     async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
     async fn list(
         &self,
@@ -61,10 +62,12 @@ pub trait Plugin {
             return failed_updates;
         }
 
-        for update in updates.iter() {
-            if let Err(error) = self.apply(update, logger).await {
-                failed_updates.push(error);
-            };
+        if let Err(SoftwareError::UpdateListNotSupported(_)) = self.update_list(&updates).await {
+            for update in updates.iter() {
+                if let Err(error) = self.apply(update).await {
+                    failed_updates.push(error);
+                };
+            }
         }
 
         if let Err(finalize_error) = self.finalize(logger).await {
@@ -215,6 +218,7 @@ impl ExternalPluginCommand {
 const PREPARE: &str = "prepare";
 const INSTALL: &str = "install";
 const REMOVE: &str = "remove";
+const UPDATE_LIST: &str = "update-list";
 const FINALIZE: &str = "finalize";
 pub const LIST: &str = "list";
 const VERSION: &str = "version";
@@ -269,6 +273,57 @@ impl Plugin for ExternalPluginCommand {
                 reason: self.content(output.stderr)?,
             })
         }
+    }
+
+    async fn update_list(&self, updates: &Vec<SoftwareModuleUpdate>) -> Result<(), SoftwareError> {
+        let mut command = if let Some(sudo) = &self.sudo {
+            let mut command = Command::new(&sudo);
+            command.arg(&self.path);
+            command
+        } else {
+            Command::new(&self.path)
+        };
+        command
+            .arg(UPDATE_LIST)
+            .current_dir("/tmp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = command.spawn()?;
+        let child_stdin = child.stdin.as_mut().ok_or_else(|| SoftwareError::IoError {
+            reason: "Plugin stdin unavailable".into(),
+        })?;
+
+        for update in updates {
+            let action = match update {
+                SoftwareModuleUpdate::Install { module } => {
+                    format!(
+                        "install {} {} {}\n",
+                        module.name,
+                        module.version.clone().map_or("".into(), |v| v),
+                        module.url.clone().map_or("".into(), |v| v)
+                    )
+                }
+
+                SoftwareModuleUpdate::Remove { module } => {
+                    format!(
+                        "remove {} {} {}\n",
+                        module.name,
+                        module.version.clone().map_or("".into(), |v| v),
+                        module.url.clone().map_or("".into(), |v| v)
+                    )
+                }
+            };
+
+            child_stdin.write_all(action.as_bytes()).await?
+        }
+
+        let output = child.wait_with_output().await?;
+        if let Some(1) = output.status.code() {
+            return Err(SoftwareError::UpdateListNotSupported(self.name.clone()));
+        }
+        Ok(())
     }
 
     async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
