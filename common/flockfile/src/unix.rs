@@ -5,15 +5,23 @@ use std::{
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
 };
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
+    #[error("")]
+    FromIo {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("Couldn't acquire file lock.")]
-    FromNix(#[from] nix::Error),
+    FromNix {
+        path: PathBuf,
+        #[source]
+        source: nix::Error,
+    },
 }
 
 /// flockfile creates a lockfile in the filesystem under `/run/lock` and then creates a filelock using system fcntl with flock.
@@ -35,13 +43,24 @@ impl Flockfile {
     pub fn new_lock(lock_name: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
         let path = Path::new("/run/lock").join(lock_name);
 
-        let file = OpenOptions::new()
+        let file = match OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
-            .open(&path)?;
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) => {
+                return Err(FlockfileError::FromIo { path, source: err });
+            }
+        };
 
-        let () = flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
+        let () = match flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
+            Ok(()) => (),
+            Err(err) => {
+                return Err(FlockfileError::FromNix { path, source: err });
+            }
+        };
 
         debug!(r#"Lockfile created "{:?}""#, &path);
         Ok(Flockfile {
@@ -82,6 +101,22 @@ impl Drop for Flockfile {
 impl AsRef<Path> for Flockfile {
     fn as_ref(&self) -> &Path {
         self.path.as_ref()
+    }
+}
+
+/// Check /run/lock/ for a lock file of a given `app_name`
+pub fn check_another_instance_is_not_running(app_name: &str) -> Result<Flockfile, FlockfileError> {
+    match Flockfile::new_lock(format!("{}.lock", app_name)) {
+        Ok(file) => Ok(file),
+        Err(err) => {
+            return match &err {
+                FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
+                    error!("Another instance of {} is running.", app_name);
+                    error!("Lock file path: {}", path.as_path().to_str().unwrap());
+                    Err(err)
+                }
+            }
+        }
     }
 }
 

@@ -1,8 +1,7 @@
 use crate::converter::*;
 use crate::error::*;
 
-use flockfile::Flockfile;
-use tedge_utils::fs::check_another_instance_is_not_running;
+use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
