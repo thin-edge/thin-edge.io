@@ -1,4 +1,4 @@
-use agent::{create_sm_agent, SmAgentConfig};
+use agent::SmAgentConfig;
 use structopt::*;
 
 mod agent;
@@ -25,11 +25,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let agent = AgentOpt::from_args();
     tedge_utils::logging::initialise_tracing_subscriber(agent.debug);
     let tedge_config_location = tedge_config::TEdgeConfigLocation::from_default_system_location();
-    let agent = create_sm_agent(
+    let agent = agent::SmAgent::new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
-    )
-    .await?;
+    );
     agent.start().await?;
     Ok(())
 }

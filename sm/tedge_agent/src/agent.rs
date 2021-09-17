@@ -119,20 +119,11 @@ pub struct SmAgent {
     _flock: Flockfile,
 }
 
-pub async fn create_sm_agent(
-    app_name: &str,
-    sm_agent_config: SmAgentConfig,
-) -> Result<SmAgent, anyhow::Error> {
-    let _flock = check_another_instance_is_not_running(app_name)?;
-
-    info!("{} starting", app_name);
-
-    Ok(SmAgent::new(app_name, sm_agent_config, _flock))
-}
-
 impl SmAgent {
-    pub fn new(name: &str, config: SmAgentConfig, flock: Flockfile) -> Self {
+    pub fn new(name: &str, config: SmAgentConfig) -> Self {
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let flock = check_another_instance_is_not_running(&name).unwrap();
+        info!("{} starting", &name);
 
         Self {
             config,
