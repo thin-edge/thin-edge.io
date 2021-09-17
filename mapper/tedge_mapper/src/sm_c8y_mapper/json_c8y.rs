@@ -115,6 +115,7 @@ mod tests {
             name: "b".into(),
             version: Some("c".into()),
             url: Some("".into()),
+            file_path: None,
         };
 
         let expected_c8y_item = C8ySoftwareModuleItem {

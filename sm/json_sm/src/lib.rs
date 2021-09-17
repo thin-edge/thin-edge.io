@@ -77,24 +77,28 @@ mod tests {
                     name: "a".to_string(),
                     version: None,
                     url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
                     url: Some("https://foobar.io/c.deb".to_string()),
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
                     url: Some("https://foobar.io/d.deb".to_string()),
+                    file_path: None,
                 },
             ],
         );
@@ -106,6 +110,7 @@ mod tests {
                 name: "m".to_string(),
                 version: None,
                 url: Some("https://foobar.io/m.epl".to_string()),
+                file_path: None,
             }],
         );
 
@@ -159,31 +164,36 @@ mod tests {
                     module_type: Some("debian".to_string()),
                     name: "a".to_string(),
                     version: None,
-                    url: None
+                    url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "b".to_string(),
                     version: Some("1.0".to_string()),
-                    url: None
+                    url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
-                    url: Some("https://foobar.io/c.deb".to_string())
+                    url: Some("https://foobar.io/c.deb".to_string()),
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
-                    url: Some("https://foobar.io/d.deb".to_string())
+                    url: Some("https://foobar.io/d.deb".to_string()),
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("apama".to_string()),
                     name: "m".to_string(),
                     version: None,
-                    url: Some("https://foobar.io/m.epl".to_string())
+                    url: Some("https://foobar.io/m.epl".to_string()),
+                    file_path: None,
                 },
             ]
         );
@@ -234,6 +244,7 @@ mod tests {
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
+                    file_path: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
                     module_type: Some("debian".to_string()),
@@ -243,6 +254,7 @@ mod tests {
                         "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
                             .to_string(),
                     ),
+                    file_path: None,
                 }),
             ],
         );
@@ -255,12 +267,14 @@ mod tests {
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
+                    file_path: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
+                    file_path: None,
                 }),
             ],
         );
@@ -314,12 +328,14 @@ mod tests {
             name: "nodered".to_string(),
             version: Some("1.0.0".to_string()),
             url: None,
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("docker".to_string()),
             name: "nginx".to_string(),
             version: Some("1.21.0".to_string()),
             url: None,
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
@@ -329,12 +345,14 @@ mod tests {
                 "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
                     .to_string(),
             ),
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("docker".to_string()),
             name: "mongodb".to_string(),
             version: Some("4.4.6".to_string()),
             url: None,
+            file_path: None,
         }));
 
         let expected_json = r#"{
@@ -386,24 +404,28 @@ mod tests {
             name: "nodered".to_string(),
             version: Some("1.0.0".to_string()),
             url: None,
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("".to_string()), // I.e. default
             name: "nginx".to_string(),
             version: Some("1.21.0".to_string()),
             url: None,
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("default".to_string()), // I.e. default
             name: "collectd".to_string(),
             version: Some("5.7".to_string()),
             url: None,
+            file_path: None,
         }));
         request.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("debian".to_string()), // Unless specified otherwise, this is not the default
             name: "mongodb".to_string(),
             version: Some("4.4.6".to_string()),
             url: None,
+            file_path: None,
         }));
 
         let expected_json = r#"{
@@ -511,6 +533,7 @@ mod tests {
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
+                    file_path: None,
                 }),
                 SoftwareModuleUpdate::install(SoftwareModule {
                     module_type: Some("debian".to_string()),
@@ -520,6 +543,7 @@ mod tests {
                         "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
                             .to_string(),
                     ),
+                    file_path: None,
                 }),
             ]
         );
@@ -532,12 +556,14 @@ mod tests {
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
+                    file_path: None,
                 }),
                 SoftwareModuleUpdate::remove(SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
+                    file_path: None,
                 }),
             ]
         );
@@ -585,12 +611,14 @@ mod tests {
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
+                    file_path: None,
                 },
             ],
         );
@@ -603,12 +631,14 @@ mod tests {
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
+                    file_path: None,
                 },
             ],
         );
@@ -663,6 +693,7 @@ mod tests {
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 reason: "Network timeout".to_string(),
             }],
@@ -676,6 +707,7 @@ mod tests {
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 reason: "Other components dependent on it".to_string(),
             }],
@@ -688,6 +720,7 @@ mod tests {
                 name: "nodered".to_string(),
                 version: Some("1.0.0".to_string()),
                 url: None,
+                file_path: None,
             }],
         );
 
@@ -699,12 +732,14 @@ mod tests {
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
                     url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
+                    file_path: None,
                 },
             ],
         );
@@ -846,19 +881,22 @@ mod tests {
                     module_type: Some("debian".to_string()),
                     name: "nodered".to_string(),
                     version: Some("1.0.0".to_string()),
-                    url: None
+                    url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "nginx".to_string(),
                     version: Some("1.21.0".to_string()),
-                    url: None
+                    url: None,
+                    file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
-                    url: None
+                    url: None,
+                    file_path: None,
                 },
             ]
         );

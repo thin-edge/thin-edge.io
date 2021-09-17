@@ -10,11 +10,20 @@ pub enum SoftwareError {
         reason: String,
     },
 
+    #[error(transparent)]
+    FromDownload(#[from] download_manager::error::DownloadError),
+
     #[error("Failed to install {module:?}")]
     Install {
         module: SoftwareModule,
         reason: String,
     },
+
+    #[error("The configured default plugin: {0} not found")]
+    InvalidDefaultPlugin(String),
+
+    #[error("I/O error: {reason:?}")]
+    IoError { reason: String },
 
     #[error("Failed to list modules for {software_type:?}")]
     ListError {
@@ -52,12 +61,6 @@ pub enum SoftwareError {
     #[error("Unknown software type: {software_type:?}")]
     UnknownSoftwareType { software_type: SoftwareType },
 
-    #[error("Unexpected module type: {actual:?}, should be: {expected:?}")]
-    WrongModuleType {
-        actual: SoftwareType,
-        expected: SoftwareType,
-    },
-
     #[error("Unknown {software_type:?} version: {name:?} - {version:?}")]
     UnknownVersion {
         software_type: SoftwareType,
@@ -65,11 +68,11 @@ pub enum SoftwareError {
         version: SoftwareVersion,
     },
 
-    #[error("The configured default plugin: {0} not found")]
-    InvalidDefaultPlugin(String),
-
-    #[error("I/O error: {reason:?}")]
-    IoError { reason: String },
+    #[error("Unexpected module type: {actual:?}, should be: {expected:?}")]
+    WrongModuleType {
+        actual: SoftwareType,
+        expected: SoftwareType,
+    },
 }
 
 impl From<serde_json::Error> for SoftwareError {

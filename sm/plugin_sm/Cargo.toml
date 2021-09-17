@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 async-trait = "0.1"
+download_manager = { path = "../download_manager" }
 json_sm = { path = "../json_sm" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

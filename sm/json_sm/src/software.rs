@@ -1,4 +1,6 @@
+use download_manager::download::Download;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub type SoftwareType = String;
 pub type SoftwareName = String;
@@ -13,6 +15,7 @@ pub struct SoftwareModule {
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
     pub url: Option<String>,
+    pub file_path: Option<PathBuf>,
 }
 
 impl SoftwareModule {
@@ -29,12 +32,14 @@ impl SoftwareModule {
         name: SoftwareName,
         version: Option<SoftwareVersion>,
         url: Option<String>,
+        file_path: Option<PathBuf>,
     ) -> SoftwareModule {
         let mut module = SoftwareModule {
             module_type,
             name,
             version,
             url,
+            file_path,
         };
         module.normalize();
         module
@@ -52,6 +57,12 @@ impl SoftwareModule {
             Some(version) if version.is_empty() => self.version = None,
             _ => {}
         };
+    }
+}
+
+impl Download for SoftwareModule {
+    fn download(&self) {
+        todo!()
     }
 }
 

@@ -52,6 +52,7 @@ mod tests {
             name: "abc".into(),
             version: Some("1.0".into()),
             url: None,
+            file_path: None,
         };
         let expected_response = vec![module];
 
@@ -84,6 +85,7 @@ mod tests {
             name: "test".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
         // Call plugin install via API.
@@ -114,6 +116,7 @@ mod tests {
             name: "test".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
         // Call plugin remove API .
@@ -140,6 +143,7 @@ mod tests {
             name: "test".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
         // Call plugin check_module_type API to validate if plugin exists.
@@ -163,6 +167,7 @@ mod tests {
             name: "test2".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
         // Call plugin API to check if the plugin with name `test2` is registered.
@@ -191,6 +196,7 @@ mod tests {
             name: "test".into(),
             version: None,
             url: None,
+            file_path: None,
         };
         let res = plugin.check_module_type(&module);
 

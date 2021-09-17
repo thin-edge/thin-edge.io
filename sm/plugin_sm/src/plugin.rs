@@ -1,9 +1,11 @@
 use async_trait::async_trait;
+use download_manager::download::download;
 use json_sm::*;
 use std::{
     iter::Iterator,
     path::PathBuf,
     process::{Output, Stdio},
+    str::FromStr,
 };
 use tokio::process::Command;
 
@@ -16,10 +18,17 @@ pub trait Plugin {
     async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
     async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
 
+    async fn download(&self, module: &mut SoftwareModule) -> Result<(), SoftwareError>;
+
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
-        match update {
-            SoftwareModuleUpdate::Install { module } => self.install(module).await,
-            SoftwareModuleUpdate::Remove { module } => self.remove(module).await,
+        match update.clone() {
+            SoftwareModuleUpdate::Install { mut module } => {
+                if module.file_path.is_some() {
+                    self.download(&mut module).await?;
+                }
+                self.install(&module).await
+            }
+            SoftwareModuleUpdate::Remove { module } => self.remove(&module).await,
         }
     }
 
@@ -236,5 +245,19 @@ impl Plugin for ExternalPluginCommand {
                 reason: self.content(output.stderr)?,
             })
         }
+    }
+
+    async fn download(&self, module: &mut SoftwareModule) -> Result<(), SoftwareError> {
+        let mut filename = String::new();
+        filename.push_str(module.name.as_str());
+        if let Some(version) = &module.version {
+            filename.push('_');
+            filename.push_str(version.as_str());
+        }
+
+        download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename).await?;
+
+        module.file_path = Some(PathBuf::from_str(filename.as_str()).unwrap());
+        Ok(())
     }
 }

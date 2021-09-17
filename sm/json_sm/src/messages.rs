@@ -140,6 +140,7 @@ impl SoftwareUpdateRequest {
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
+                    file_path: None,
                 };
                 match item.action {
                     None => {}
@@ -155,6 +156,33 @@ impl SoftwareUpdateRequest {
 
         updates
     }
+
+    // pub fn updates_for_downloadable(&mut self) -> Vec<SoftwareModuleUpdate> {
+    //     let mut updates = vec![];
+
+    //     if let Some(items) = self
+    //         .update_list
+    //         .iter()
+    //         .find(|&items| items.plugin_type == module_type)
+    //     {
+    //         for item in items.modules.iter() {
+    //             let module = SoftwareModule {
+    //                 module_type: Some(module_type.to_string()),
+    //                 name: item.name.clone(),
+    //                 version: item.version.clone(),
+    //                 url: item.url.clone(),
+    //             };
+    //             match item.action {
+    //                 None => {}
+    //                 Some(SoftwareModuleAction::Install) => {
+    //                     updates.push(SoftwareModuleUpdate::install(module));
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     updates
+    // }
 }
 
 /// Sub list of modules grouped by plugin type.
@@ -438,6 +466,7 @@ impl SoftwareRequestResponse {
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
+                        file_path: None,
                     });
                 }
             }

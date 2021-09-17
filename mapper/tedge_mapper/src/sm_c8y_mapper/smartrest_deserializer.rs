@@ -100,6 +100,7 @@ impl SmartRestUpdateSoftware {
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
                             url: module.url.clone(),
+                            file_path: None,
                         },
                     });
                 }
@@ -110,6 +111,7 @@ impl SmartRestUpdateSoftware {
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
                             url: None,
+                            file_path: None,
                         },
                     });
                 }
@@ -358,12 +360,14 @@ mod tests {
                 name: "software1".to_string(),
                 version: Some("version1".to_string()),
                 url: Some("url1".to_string()),
+                file_path: None,
             }));
         let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
             version: None,
             url: None,
+            file_path: None,
         }));
 
         assert_eq!(thin_edge_json, expected_thin_edge_json);
