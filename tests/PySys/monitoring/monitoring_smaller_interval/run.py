@@ -58,17 +58,19 @@ class MonitoringSmallInterval(BaseTest):
 
         for _ in range(10):
 
+            timestamp = time.time()
             pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "collectd/host/temperature/temp", "123435445:25.5"],
+                           "collectd/host/temperature/temp", f"{timestamp}:25.5"],
                 stdouterr="tedge_temp",
             )
 
+            timestamp = time.time()
             pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "collectd/host/pressure/pres", "12345678:500.5"],
+                           "collectd/host/pressure/pres", f"{timestamp}:500.5"],
                 stdouterr="tedge_pres",
             )
 
