@@ -5,8 +5,6 @@ use std::{
     path::PathBuf,
     process::{Output, Stdio},
 };
-use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::process::Command;
 
 #[async_trait]
@@ -101,50 +99,6 @@ impl ExternalPluginCommand {
             .await
             .map_err(|err| self.plugin_error(err))?;
         Ok(output)
-    }
-
-    pub async fn execute_and_log(
-        &self,
-        command: Command,
-        logger: &mut BufWriter<File>,
-    ) -> Result<Output, SoftwareError> {
-        let command_args = format!("{:?}", &command);
-        let outcome = self.execute(command).await;
-
-        ExternalPluginCommand::log_command_result(&command_args, &outcome, logger).await?;
-
-        outcome
-    }
-
-    pub async fn log_command_result(
-        command_args: &str,
-        result: &Result<Output, SoftwareError>,
-        logger: &mut BufWriter<File>,
-    ) -> Result<(), std::io::Error> {
-        logger
-            .write_all(format!("----- $ {:?}\n", command_args).as_bytes())
-            .await?;
-
-        match result.as_ref() {
-            Ok(output) => {
-                logger
-                    .write_all(format!("{}\n\n", &output.status).as_bytes())
-                    .await?;
-                logger.write_all(b"stdout <<EOF\n").await?;
-                logger.write_all(&output.stdout).await?;
-                logger.write_all(b"EOF\n\n").await?;
-                logger.write_all(b"stderr <<EOF\n").await?;
-                logger.write_all(&output.stderr).await?;
-                logger.write_all(b"EOF\n").await?;
-            }
-            Err(err) => {
-                logger
-                    .write_all(format!("error: {}\n", &err).as_bytes())
-                    .await?;
-            }
-        }
-        logger.flush().await?;
-        Ok(())
     }
 
     pub fn content(&self, bytes: Vec<u8>) -> Result<String, SoftwareError> {
@@ -282,47 +236,5 @@ impl Plugin for ExternalPluginCommand {
                 reason: self.content(output.stderr)?,
             })
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::*;
-    use tokio::fs::File;
-
-    #[tokio::test]
-    async fn log_command_status_stdout_and_stderr() -> Result<(), anyhow::Error> {
-        let tmp_dir = TempDir::new()?;
-        let file_path = tmp_dir.path().join("operation.log");
-
-        let mut command = Command::new("echo");
-        command
-            .arg("Hello")
-            .arg("World!")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let output = Ok(command.output().await?);
-
-        let file = File::create(file_path.clone()).await?;
-        let mut logger = BufWriter::new(file);
-        ExternalPluginCommand::log_command_result("echo Hello World!", &output, &mut logger)
-            .await?;
-
-        let content = String::from_utf8(std::fs::read(&file_path)?)?;
-        assert_eq!(
-            content,
-            r#"----- $ "echo Hello World!"
-exit code: 0
-
-stdout <<EOF
-Hello World!
-EOF
-
-stderr <<EOF
-EOF
-"#
-        );
-        Ok(())
     }
 }
