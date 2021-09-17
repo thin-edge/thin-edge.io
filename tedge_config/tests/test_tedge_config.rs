@@ -521,7 +521,7 @@ hello="tedge"
 
     assert_matches!(
         result,
-        Err(TEdgeConfigError::TOMLParseError(_)),
+        Err(TEdgeConfigError::FromTOMLParse(_)),
         "Expected the parsing to fail with TOMLParseError"
     );
     Ok(())
@@ -541,7 +541,7 @@ port = "1883"
         "invalid type: string \"1883\", expected u16 for key `mqtt.port` at line 3 column 8";
 
     match result {
-        Err(TEdgeConfigError::TOMLParseError(err)) => assert_eq!(err.to_string(), expected_err),
+        Err(TEdgeConfigError::FromTOMLParse(err)) => assert_eq!(err.to_string(), expected_err),
 
         _ => assert!(false, "Expected the parsing to fail with TOMLParseError"),
     }
@@ -560,7 +560,7 @@ fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
 
     assert_matches!(
         result,
-        Err(TEdgeConfigError::TOMLParseError(_)),
+        Err(TEdgeConfigError::FromTOMLParse(_)),
         "Expected the parsing to fail with TOMLParseError"
     );
     Ok(())

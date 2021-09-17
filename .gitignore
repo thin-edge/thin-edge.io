@@ -21,4 +21,4 @@ tests/PySys/**/*.out
 tests/PySys/**/*.err
 **/__pycache__
 tests/PySys/**/Output/
-**/*venv
+**/*venv*

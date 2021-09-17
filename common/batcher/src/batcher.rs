@@ -485,12 +485,7 @@ mod tests {
                 match action {
                     EventOrTimer::Event(event) => {
                         let outputs = self.batcher.event(t, event);
-                        self.handle_outputs(
-                            t,
-                            outputs,
-                            &mut actual_batches,
-                            self.flush_time.clone(),
-                        );
+                        self.handle_outputs(t, outputs, &mut actual_batches, self.flush_time);
                     }
                     EventOrTimer::Timer() => {
                         actual_batches.insert(t, self.batcher.time(t));
@@ -586,7 +581,7 @@ mod tests {
         }
     }
 
-    fn match_batches(batch1: &Vec<TestBatchEvent>, batch2: &Vec<TestBatchEvent>) -> bool {
+    fn match_batches(batch1: &[TestBatchEvent], batch2: &[TestBatchEvent]) -> bool {
         if batch1.len() != batch2.len() {
             return false;
         }

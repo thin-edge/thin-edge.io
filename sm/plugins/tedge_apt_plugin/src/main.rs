@@ -96,9 +96,9 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             }
         }
 
-        PluginOp::Prepare => run_cmd("apt-get", &format!("update --quiet --yes"))?,
+        PluginOp::Prepare => run_cmd("apt-get", "update --quiet --yes")?,
 
-        PluginOp::Finalize => run_cmd("apt-get", &format!("auto-remove --quiet --yes"))?,
+        PluginOp::Finalize => run_cmd("apt-get", "auto-remove --quiet --yes")?,
     };
 
     Ok(status)
@@ -124,7 +124,7 @@ fn main() {
         }
 
         Ok(status) => {
-            if let Some(_) = status.code() {
+            if status.code().is_some() {
                 std::process::exit(2);
             } else {
                 eprintln!("Interrupted by a signal!");

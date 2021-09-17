@@ -18,8 +18,8 @@ pub trait Plugin {
 
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update {
-            SoftwareModuleUpdate::Install { module } => self.install(&module).await,
-            SoftwareModuleUpdate::Remove { module } => self.remove(&module).await,
+            SoftwareModuleUpdate::Install { module } => self.install(module).await,
+            SoftwareModuleUpdate::Remove { module } => self.remove(module).await,
         }
     }
 
