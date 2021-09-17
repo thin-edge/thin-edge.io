@@ -1,3 +1,5 @@
+#[cfg(test)]
+#[cfg(feature = "mosquitto-available")]
 mod tests {
     use std::process::{Command, Stdio};
     use std::{thread, time};
