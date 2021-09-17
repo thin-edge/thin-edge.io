@@ -9,6 +9,8 @@ use std::{
 };
 use tedge_utils::paths::pathbuf_to_string;
 use tracing::error;
+use tokio::fs::File;
+use tokio::io::BufWriter;
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -152,10 +154,13 @@ impl ExternalPlugins {
 
     pub async fn list(&self, request: &SoftwareListRequest) -> SoftwareListResponse {
         let mut response = SoftwareListResponse::new(request);
+        let log_file_path = "/tmp/software-list.log";
+        let log_file = File::create(log_file_path).await.unwrap();
+        let mut logger = BufWriter::new(log_file);
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list().await {
-                Ok(software_list) => response.add_modules(software_type, software_list),
+            match plugin.list(&mut logger).await {
+                Ok(software_list) => response.add_modules(&software_type, software_list),
                 Err(err) => {
                     // TODO fix the response format to handle an error per module type
                     let reason = format!("{}", err);
@@ -169,11 +174,14 @@ impl ExternalPlugins {
 
     pub async fn process(&self, request: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
+        let log_file_path = "/tmp/software-update.log";
+        let log_file = File::create(log_file_path).await.unwrap();
+        let mut logger = BufWriter::new(log_file);
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates).await
+                plugin.apply_all(updates, &mut logger).await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
@@ -186,7 +194,7 @@ impl ExternalPlugins {
         }
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list().await {
+            match plugin.list(&mut logger).await {
                 Ok(software_list) => response.add_modules(software_type, software_list),
                 Err(err) => response.add_errors(software_type, vec![err]),
             }
