@@ -47,7 +47,7 @@ impl LoggedCommand {
         let outcome = self.command.output().await;
 
         if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
-            log::error!("Fail to log the command execution: {}", err);
+            tracing::log::error!("Fail to log the command execution: {}", err);
         }
 
         outcome

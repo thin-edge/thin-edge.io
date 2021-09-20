@@ -177,10 +177,9 @@ impl ExternalPlugins {
         response
     }
 
-    pub async fn process(&self, request: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
+    pub async fn process(&self, request: &SoftwareUpdateRequest, log_file: File) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
-        let log_file_path = "/tmp/software-update.log";
-        let log_file = File::create(log_file_path).await.unwrap();
+
         let mut logger = BufWriter::new(log_file);
 
         for software_type in request.modules_types() {
