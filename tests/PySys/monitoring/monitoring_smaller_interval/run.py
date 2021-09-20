@@ -96,6 +96,7 @@ class MonitoringSmallInterval(BaseTest):
         f = open(self.output + '/tedge_sub.out', 'r')
         lines = f.readlines()
         for line in lines:
+            self.log.info(line)
             self.js_msg = json.loads(line)
             if not self.validate_time():
                 reason = "time validation failed in message: " + str(line)
