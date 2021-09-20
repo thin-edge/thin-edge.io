@@ -1,4 +1,3 @@
-use download_manager::download::Download;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -57,12 +56,6 @@ impl SoftwareModule {
             Some(version) if version.is_empty() => self.version = None,
             _ => {}
         };
-    }
-}
-
-impl Download for SoftwareModule {
-    fn download(&self) {
-        todo!()
     }
 }
 

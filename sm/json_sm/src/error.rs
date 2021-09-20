@@ -10,9 +10,6 @@ pub enum SoftwareError {
         reason: String,
     },
 
-    #[error(transparent)]
-    FromDownload(#[from] download_manager::error::DownloadError),
-
     #[error("Failed to install {module:?}")]
     Install {
         module: SoftwareModule,

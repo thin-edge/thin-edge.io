@@ -5,7 +5,6 @@ use std::{
     iter::Iterator,
     path::PathBuf,
     process::{Output, Stdio},
-    str::FromStr,
 };
 use tokio::process::Command;
 
@@ -18,13 +17,14 @@ pub trait Plugin {
     async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
     async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
 
-    async fn download(&self, module: &mut SoftwareModule) -> Result<(), SoftwareError>;
+    async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError>;
 
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
-                if module.file_path.is_some() {
-                    self.download(&mut module).await?;
+                if module.url.is_some() {
+                    // TODO: This may require stricter check, eg we sometimes use ' ' as indicator for c8y, but this most likely has to be handled in the mapper
+                    module.file_path = Some(self.download(&module).await?);
                 }
                 self.install(&module).await
             }
@@ -247,17 +247,18 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn download(&self, module: &mut SoftwareModule) -> Result<(), SoftwareError> {
-        let mut filename = String::new();
-        filename.push_str(module.name.as_str());
+    async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError> {
+        let mut filename = PathBuf::new().join(module.name.as_str());
         if let Some(version) = &module.version {
-            filename.push('_');
-            filename.push_str(version.as_str());
+            filename.push("_");
+            filename.push(version.as_str());
         }
 
-        download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename).await?;
+        download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename)
+            .await
+            .unwrap();
 
-        module.file_path = Some(PathBuf::from_str(filename.as_str()).unwrap());
-        Ok(())
+        // module.file_path = Some(PathBuf::from_str(filename.as_str()).unwrap());
+        Ok(filename)
     }
 }
