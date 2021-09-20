@@ -10,6 +10,7 @@ members = [
     "common/tedge_users",
     "common/tedge_utils",
     "mapper/cumulocity/c8y_translator_lib",
+    "mapper/cumulocity/c8y_smartrest",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
     "sm/download_manager",
