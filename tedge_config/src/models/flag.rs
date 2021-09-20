@@ -57,14 +57,14 @@ mod tests {
     fn convert_string_true_to_bool_true() {
         let input = "true".to_string();
         let output: bool = Flag::try_from(input).unwrap().into();
-        assert_eq!(output, true);
+        assert!(output);
     }
 
     #[test]
     fn convert_string_false_to_bool_false() {
         let input = "false".to_string();
         let output: bool = Flag::try_from(input).unwrap().into();
-        assert_eq!(output, false);
+        assert!(!output);
     }
 
     #[test]

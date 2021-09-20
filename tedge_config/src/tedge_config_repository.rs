@@ -79,7 +79,7 @@ impl TEdgeConfigRepository {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 Err(TEdgeConfigError::ConfigFileNotFound(path))
             }
-            Err(err) => Err(TEdgeConfigError::IOError(err)),
+            Err(err) => Err(TEdgeConfigError::FromIo(err)),
         }
     }
 

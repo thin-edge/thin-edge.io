@@ -41,7 +41,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                     .payload
                     .strip_suffix(&[0])
                     .unwrap_or(&message.payload);
-                match std::str::from_utf8(&payload) {
+                match std::str::from_utf8(payload) {
                     Ok(payload) => {
                         if cmd.hide_topic {
                             println!("{}", &payload);
@@ -65,7 +65,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
             Err(err) => {
                 let err_msg = err.to_string();
                 if err_msg.contains("I/O: Connection refused (os error 111)") {
-                    return Err(MqttError::ServerError(err_msg));
+                    return Err(MqttError::ServerConnection(err_msg));
                 }
 
                 eprintln!("ERROR: {}", err_msg);

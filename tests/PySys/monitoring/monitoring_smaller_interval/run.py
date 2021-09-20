@@ -58,17 +58,19 @@ class MonitoringSmallInterval(BaseTest):
 
         for _ in range(10):
 
+            timestamp = time.time()
             pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "collectd/host/temperature/temp", "123435445:25.5"],
+                           "collectd/host/temperature/temp", f"{timestamp}:25.5"],
                 stdouterr="tedge_temp",
             )
 
+            timestamp = time.time()
             pub = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "collectd/host/pressure/pres", "12345678:500.5"],
+                           "collectd/host/pressure/pres", f"{timestamp}:500.5"],
                 stdouterr="tedge_pres",
             )
 
@@ -94,6 +96,7 @@ class MonitoringSmallInterval(BaseTest):
         f = open(self.output + '/tedge_sub.out', 'r')
         lines = f.readlines()
         for line in lines:
+            self.log.info(line)
             self.js_msg = json.loads(line)
             if not self.validate_time():
                 reason = "time validation failed in message: " + str(line)

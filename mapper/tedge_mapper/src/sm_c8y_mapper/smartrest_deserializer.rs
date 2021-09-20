@@ -48,7 +48,7 @@ impl SmartRestUpdateSoftware {
 
     pub(crate) fn from_smartrest(
         &self,
-        smartrest: String,
+        smartrest: &str,
     ) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
@@ -134,12 +134,10 @@ impl SmartRestUpdateSoftwareModule {
                     Some((v, t)) => {
                         if v.is_empty() {
                             (None, Some(t.into())) // ::debian
+                        } else if !t.is_empty() {
+                            (Some(v.into()), Some(t.into())) // 1.0::debian
                         } else {
-                            if !t.is_empty() {
-                                (Some(v.into()), Some(t.into())) // 1.0::debian
-                            } else {
-                                (Some(v.into()), None)
-                            }
+                            (Some(v.into()), None)
                         }
                     }
                     None => {
@@ -287,7 +285,7 @@ mod tests {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
         let update_software = SmartRestUpdateSoftware::new()
-            .from_smartrest(smartrest)
+            .from_smartrest(&smartrest)
             .unwrap();
 
         let expected_update_software = SmartRestUpdateSoftware {
@@ -316,7 +314,7 @@ mod tests {
     fn deserialize_incorrect_smartrest_message_id() {
         let smartrest = String::from("516,external_id");
         assert!(SmartRestUpdateSoftware::new()
-            .from_smartrest(smartrest)
+            .from_smartrest(&smartrest)
             .is_err());
     }
 
@@ -325,7 +323,7 @@ mod tests {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
         assert!(SmartRestUpdateSoftware::new()
-            .from_smartrest(smartrest)
+            .from_smartrest(&smartrest)
             .unwrap()
             .to_thin_edge_json()
             .is_err());
@@ -379,7 +377,7 @@ mod tests {
             nginx,1.21.0::docker,,install,mongodb,4.4.6::docker,,delete");
         let update_software = SmartRestUpdateSoftware::new();
         let software_update_request = update_software
-            .from_smartrest(smartrest)
+            .from_smartrest(&smartrest)
             .unwrap()
             .to_thin_edge_json_with_id("123");
         let output_json = software_update_request.unwrap().to_json().unwrap();
@@ -431,7 +429,10 @@ mod tests {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
         let update_software = SmartRestUpdateSoftware::new();
-        let vec = update_software.from_smartrest(smartrest).unwrap().modules();
+        let vec = update_software
+            .from_smartrest(&smartrest)
+            .unwrap()
+            .modules();
 
         let expected_vec = vec![
             SmartRestUpdateSoftwareModule {
