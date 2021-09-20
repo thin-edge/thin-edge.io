@@ -77,12 +77,12 @@ impl BuildCommand for TEdgeMqttCli {
 }
 
 fn parse_qos(src: &str) -> Result<QoS, MqttError> {
-    let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoSError)?;
+    let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoS)?;
     match int_val {
         0 => Ok(QoS::AtMostOnce),
         1 => Ok(QoS::AtLeastOnce),
         2 => Ok(QoS::ExactlyOnce),
-        _ => Err(MqttError::InvalidQoSError),
+        _ => Err(MqttError::InvalidQoS),
     }
 }
 

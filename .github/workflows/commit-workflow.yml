@@ -94,93 +94,6 @@ jobs:
           command: build
           args: --release
 
-  cargo-run-rust-integration-tests:
-
-    name: Run cargo run for integration tests
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-    continue-on-error: true # WTF
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Compile cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          #args: --verbose --no-run --features integration-test
-          args: --verbose --features integration-test
-
-#  cargo-build-integration-tests-single-thread:
-#
-#    name: Run cargo build for integration tests in one thread
-#    runs-on: Ubuntu-20.04
-#    needs: [cargo-fmt, cargo-clippy]
-#
-#    steps:
-#
-#      - name: Checkout
-#        uses: actions/checkout@v2
-#
-#      - name: Enable cache
-#        # https://github.com/marketplace/actions/rust-cache
-#        uses: Swatinem/rust-cache@v1
-#
-#      - name: Compile cargo test features
-#        uses: actions-rs/cargo@v1
-#        # https://github.com/marketplace/actions/rust-cargo
-#        with:
-#          command: test
-#          args: --verbose -- --test-threads=1 --features integration-test
-
-  cargo-tarpaulin-avoid-cfg-tarpaulin:
-
-    name: Run cargo tarpaulin --avoid-cfg-tarpaulin
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-    continue-on-error: true # WTF
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install rust v1.54.0
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: "1.54.0"
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: install libssl
-        run: sudo apt install libssl-dev
-
-      - name: Cargo install tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        # Workaround see here: https://github.com/xd009642/tarpaulin/issues/756
-        with:
-          command: install
-          args: cargo-tarpaulin
-          # args: cargo-tarpaulin --version 0.18.0-alpha3
-
-      - name: Cargo tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: tarpaulin
-          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml --features integration-test
-
   cargo-tarpaulin:
 
     name: Run cargo tarpaulin
@@ -209,13 +122,9 @@ jobs:
       - name: Cargo install tarpaulin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
-        # Workaround see here: https://github.com/xd009642/tarpaulin/issues/756
         with:
           command: install
-
-          # args: cargo-tarpaulin
-          # Otherwise: Error: "Failed to compile tests! Error: bitvec: cannot find attribute `skip` in this scope"
-          args: cargo-tarpaulin --version 0.18.0-alpha3
+          args: cargo-tarpaulin
 
       - name: Cargo tarpaulin
         continue-on-error: true # Only temporarily !!!
@@ -223,7 +132,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: tarpaulin
-          args: -v --out Xml --features integration-test
+          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1

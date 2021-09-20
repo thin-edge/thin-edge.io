@@ -65,7 +65,7 @@ mod tests {
 
         let content = "test_data";
 
-        let () = atomically_write_file_async(&temp_path, &destination_path, &content.as_bytes())
+        let () = atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
             .await
             .unwrap();
 
@@ -86,7 +86,7 @@ mod tests {
         let content = "test_data";
 
         let () =
-            atomically_write_file_sync(&temp_path, &destination_path, &content.as_bytes()).unwrap();
+            atomically_write_file_sync(&temp_path, &destination_path, content.as_bytes()).unwrap();
 
         std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {

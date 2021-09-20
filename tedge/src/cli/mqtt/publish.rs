@@ -64,11 +64,11 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                any_error = Some(MqttError::ServerError("Disconnected".to_string()));
+                any_error = Some(MqttError::ServerConnection("Disconnected".to_string()));
                 break;
             }
             Err(err) => {
-                any_error = Some(MqttError::ServerError(err.to_string()));
+                any_error = Some(MqttError::ServerConnection(err.to_string()));
                 break;
             }
             _ => {}
@@ -81,7 +81,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
         eprintln!("ERROR: the message has not been acknowledged");
     }
 
-   client.disconnect()?;
+    client.disconnect()?;
     if let Some(err) = any_error {
         Err(err)
     } else {

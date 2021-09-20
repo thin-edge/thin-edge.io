@@ -44,7 +44,7 @@ impl CreateCertCmd {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
-        let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
+        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id)?;
 
         // Creating files with permission 644
         let mut cert_file = create_new_file(&self.cert_path)

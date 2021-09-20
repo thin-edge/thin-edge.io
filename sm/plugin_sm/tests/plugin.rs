@@ -221,7 +221,7 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
         let plugin = ExternalPluginCommand {
             name: name.into(),
-            path: dummy_plugin_path.clone().into(),
+            path: dummy_plugin_path.clone(),
             sudo: None,
         };
         (plugin, dummy_plugin_path)

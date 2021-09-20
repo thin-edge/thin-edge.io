@@ -25,7 +25,7 @@ class TedgeConnectTestPositive(EnvironmentC8y):
             stdouterr="tedge_connect_c8y_test_positive",
         )
         self.device_fragment = self.cumulocity.get_thin_edge_device_by_name(
-            self.project.deviceid)
+            self.project.device)
 
     def validate(self):
         super().validate()

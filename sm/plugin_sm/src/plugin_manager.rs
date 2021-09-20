@@ -47,12 +47,10 @@ impl Plugins for ExternalPlugins {
     fn default(&self) -> Option<&Self::Plugin> {
         if let Some(default_plugin_type) = &self.default_plugin_type {
             self.by_software_type(default_plugin_type.as_str())
+        } else if self.plugin_map.len() == 1 {
+            Some(self.plugin_map.iter().next().unwrap().1) //Unwrap is safe here as one entry is guaranteed
         } else {
-            if self.plugin_map.len() == 1 {
-                Some(self.plugin_map.iter().next().unwrap().1) //Unwrap is safe here as one entry is guaranteed
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -157,7 +155,7 @@ impl ExternalPlugins {
 
         for (software_type, plugin) in self.plugin_map.iter() {
             match plugin.list().await {
-                Ok(software_list) => response.add_modules(&software_type, software_list),
+                Ok(software_list) => response.add_modules(software_type, software_list),
                 Err(err) => {
                     // TODO fix the response format to handle an error per module type
                     let reason = format!("{}", err);
@@ -189,8 +187,8 @@ impl ExternalPlugins {
 
         for (software_type, plugin) in self.plugin_map.iter() {
             match plugin.list().await {
-                Ok(software_list) => response.add_modules(&software_type, software_list),
-                Err(err) => response.add_errors(&software_type, vec![err]),
+                Ok(software_list) => response.add_modules(software_type, software_list),
+                Err(err) => response.add_errors(software_type, vec![err]),
             }
         }
 
