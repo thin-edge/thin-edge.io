@@ -8,11 +8,16 @@ description = "download_manager"
 
 
 [dependencies]
+c8y_smartrest = { path = "../../mapper/cumulocity/c8y_smartrest" }
+mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = "0.11"
 serde = "1.0"
+tedge_config = { path = "../../tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"
+tokio = "1.9"
+url = "2.2"
 
 [dev-dependencies]
 regex = "1.5"
