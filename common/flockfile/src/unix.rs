@@ -9,7 +9,7 @@ use tracing::{debug, error, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
-    #[error("")]
+    #[error("Couldn't acquire file lock.")]
     FromIo {
         path: PathBuf,
         #[source]
