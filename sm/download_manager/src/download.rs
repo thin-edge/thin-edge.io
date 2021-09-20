@@ -64,6 +64,8 @@ pub async fn download(
 
     let temp = PathBuf::new().join("/tmp").join("dl.tmp");
     let target_path = PathBuf::new().join(target_dir_path).join(target_file_path);
+
+    // Cleanup after `disc full` will happen inside atomic write function.
     let () = tedge_utils::fs::atomically_write_file_async(
         temp.as_path(),
         target_path.as_path(),

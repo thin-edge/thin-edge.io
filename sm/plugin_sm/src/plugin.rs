@@ -3,8 +3,9 @@ use download_manager::download::download;
 use json_sm::*;
 use std::{
     iter::Iterator,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Output, Stdio},
+    sync::Arc,
 };
 use tokio::process::Command;
 
@@ -19,6 +20,8 @@ pub trait Plugin {
 
     async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError>;
 
+    async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError>;
+
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
@@ -26,7 +29,14 @@ pub trait Plugin {
                     // TODO: This may require stricter check, eg we sometimes use ' ' as indicator for c8y, but this most likely has to be handled in the mapper
                     module.file_path = Some(self.download(&module).await?);
                 }
-                self.install(&module).await
+                self.install(&module).await?;
+
+                if let Some(path) = module.file_path {
+                    self.cleanup_downloaded(path.into()).await?;
+                    module.file_path = None;
+                }
+
+                Ok(())
             }
             SoftwareModuleUpdate::Remove { module } => self.remove(&module).await,
         }
@@ -258,7 +268,10 @@ impl Plugin for ExternalPluginCommand {
             .await
             .unwrap();
 
-        // module.file_path = Some(PathBuf::from_str(filename.as_str()).unwrap());
         Ok(filename)
+    }
+
+    async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError> {
+        Ok(tokio::fs::remove_file(path).await?)
     }
 }
