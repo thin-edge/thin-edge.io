@@ -1,10 +1,15 @@
+use chrono::{SecondsFormat, Utc};
+use plugin_sm::log_file::LogFile;
 use std::path::PathBuf;
-use tokio::fs::File;
-use chrono::{Utc, SecondsFormat};
 
 #[derive(Debug)]
 pub struct OperationLogs {
-    pub log_dir: PathBuf,
+    log_dir: PathBuf,
+}
+
+pub enum LogKind {
+    SoftwareUpdate,
+    SoftwareList,
 }
 
 impl OperationLogs {
@@ -13,15 +18,21 @@ impl OperationLogs {
         Ok(OperationLogs { log_dir })
     }
 
-    pub async fn new_log_file(&self) -> Result<File, std::io::Error> {
+    pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, std::io::Error> {
         let now = Utc::now();
-        let file_name = format!("software-update-{}.log", now.to_rfc3339_opts(SecondsFormat::Secs, true));
+        let file_prefix = match kind {
+            LogKind::SoftwareUpdate => "software-update",
+            LogKind::SoftwareList => "software-list",
+        };
+        let file_name = format!(
+            "{}-{}.log",
+            file_prefix,
+            now.to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
 
         let mut log_file_path = self.log_dir.clone();
         log_file_path.push(file_name);
 
-        let log_file = File::create(log_file_path).await?;
-
-        Ok(log_file)
+        LogFile::try_new(log_file_path).await
     }
 }

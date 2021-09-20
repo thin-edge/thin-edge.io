@@ -4,8 +4,8 @@ mod tests {
     use json_sm::{SoftwareError, SoftwareModule};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
-    use tokio::io::BufWriter;
     use tokio::fs::File;
+    use tokio::io::BufWriter;
 
     #[tokio::test]
     async fn plugin_get_command_prepare() {
@@ -238,7 +238,7 @@ mod tests {
         path
     }
 
-    async fn dev_null() -> BufWriter<File>{
+    async fn dev_null() -> BufWriter<File> {
         let log_file = File::create("/dev/null").await.unwrap();
         BufWriter::new(log_file)
     }

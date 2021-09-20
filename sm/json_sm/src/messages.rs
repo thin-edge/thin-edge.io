@@ -274,6 +274,11 @@ impl SoftwareUpdateResponse {
         );
     }
 
+    pub fn set_error(&mut self, reason: &str) {
+        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.reason = Some(reason.into());
+    }
+
     pub fn id(&self) -> &str {
         &self.response.id
     }

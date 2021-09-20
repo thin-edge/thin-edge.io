@@ -15,11 +15,11 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, error, info, instrument};
 
+use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
-use crate::operation_logs::OperationLogs;
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
@@ -264,7 +264,11 @@ impl SmAgent {
             ))
             .await?;
 
-        let response = plugins.list(&request).await;
+        let log_file = self
+            .operation_logs
+            .new_log_file(LogKind::SoftwareList)
+            .await?;
+        let response = plugins.list(&request, log_file).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -316,7 +320,10 @@ impl SmAgent {
             .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
-        let log_file = self.operation_logs.new_log_file().await?;
+        let log_file = self
+            .operation_logs
+            .new_log_file(LogKind::SoftwareUpdate)
+            .await?;
         let response = plugins.process(&request, log_file).await;
 
         let _ = mqtt

@@ -1,3 +1,4 @@
+use crate::log_file::LogFile;
 use crate::plugin::*;
 use json_sm::*;
 use std::{
@@ -9,8 +10,6 @@ use std::{
 };
 use tedge_utils::paths::pathbuf_to_string;
 use tracing::error;
-use tokio::fs::File;
-use tokio::io::BufWriter;
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -157,30 +156,39 @@ impl ExternalPlugins {
         self.plugin_map.is_empty()
     }
 
-    pub async fn list(&self, request: &SoftwareListRequest) -> SoftwareListResponse {
+    pub async fn list(
+        &self,
+        request: &SoftwareListRequest,
+        mut log_file: LogFile,
+    ) -> SoftwareListResponse {
         let mut response = SoftwareListResponse::new(request);
-        let log_file_path = "/tmp/software-list.log";
-        let log_file = File::create(log_file_path).await.unwrap();
-        let mut logger = BufWriter::new(log_file);
+        let mut logger = log_file.buffer();
+        let mut error_count = 0;
 
         for (software_type, plugin) in self.plugin_map.iter() {
             match plugin.list(&mut logger).await {
                 Ok(software_list) => response.add_modules(&software_type, software_list),
-                Err(err) => {
-                    // TODO fix the response format to handle an error per module type
-                    let reason = format!("{}", err);
-                    response.set_error(&reason);
-                    return response;
+                Err(_) => {
+                    error_count += 1;
                 }
             }
         }
+
+        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+            response.set_error(&reason);
+        }
+
         response
     }
 
-    pub async fn process(&self, request: &SoftwareUpdateRequest, log_file: File) -> SoftwareUpdateResponse {
+    pub async fn process(
+        &self,
+        request: &SoftwareUpdateRequest,
+        mut log_file: LogFile,
+    ) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
-
-        let mut logger = BufWriter::new(log_file);
+        let mut logger = log_file.buffer();
+        let mut error_count = 0;
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
@@ -193,6 +201,7 @@ impl ExternalPlugins {
             };
 
             if !errors.is_empty() {
+                error_count += 1;
                 response.add_errors(&software_type, errors);
             }
         }
@@ -200,10 +209,30 @@ impl ExternalPlugins {
         for (software_type, plugin) in self.plugin_map.iter() {
             match plugin.list(&mut logger).await {
                 Ok(software_list) => response.add_modules(software_type, software_list),
-                Err(err) => response.add_errors(software_type, vec![err]),
+                Err(err) => {
+                    error_count += 1;
+                    response.add_errors(software_type, vec![err])
+                }
             }
         }
 
+        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+            response.set_error(&reason);
+        }
+
         response
+    }
+
+    fn error_message(log_file: &str, error_count: i32) -> Option<String> {
+        if error_count > 0 {
+            let reason = if error_count == 1 {
+                format!("1 error, see device log file {}", log_file)
+            } else {
+                format!("{} errors, see device log file {}", error_count, log_file)
+            };
+            Some(reason)
+        } else {
+            None
+        }
     }
 }
