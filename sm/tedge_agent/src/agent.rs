@@ -378,4 +378,3 @@ impl From<String> for SoftwareOperation {
         }
     }
 }
-
