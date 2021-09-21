@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+	<description>
+		<title>
+			Validate the tedge dm agent messages that are produced
+			from the simulated collectd messages.
+		</title>
+		<purpose>
+			<![CDATA[ ]]>
+		</purpose>
+	</description>
+	<classification>
+		<groups inherit="true">
+			<group>
+			</group>
+		</groups>
+		<modes inherit="true">
+		</modes>
+	</classification>
+	<data>
+		<class name="MonitoringWithSimulatedMessages" module="run" />
+	</data>
+	<traceability>
+		<requirements>
+			<requirement id="" />
+		</requirements>
+	</traceability>
+</pysystest>
