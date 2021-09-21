@@ -1,6 +1,7 @@
 import sys
 import time
 import subprocess
+from pathlib import Path
 
 from pysys.basetest import BaseTest
 
@@ -27,7 +28,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
     tedge = "/usr/bin/tedge"
     sudo = "/usr/bin/sudo"
     apt = "/usr/bin/apt-get"
-   
+    mqtt_sub = "/usr/bin/mosquitto_sub"
     def setup(self):
         self.startProcess(
             command=self.sudo,
@@ -39,6 +40,13 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "sub", "c8y/s/us"],
             stdouterr="tedge_sub",
+            background=True,
+        )
+
+        self.startProcess(
+            command=self.mqtt_sub,
+            arguments=["-t", "tedge/commands/res/software/update"],
+            stdouterr="tedge_sub_agent",
             background=True,
         )
 
@@ -67,8 +75,8 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             stdouterr="sm_mapper_stop",
         )
 
-        # wait for the operation to complete
-        time.sleep(15)
+        # check if the agent has completed the operation
+        self.check_if_agent_updated_op_status()
 
         self.startProcess(
             command=self.sudo,
@@ -83,9 +91,21 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         # Stop the subscriber
         kill = self.startProcess(
             command=self.sudo,
-            arguments=["killall", "tedge"],
+            arguments=["killall", "tedge", "mosquitto_sub"],
             stdouterr="kill_out",
         )
+
+    def check_if_agent_updated_op_status(self):
+        fout = Path(self.output + '/tedge_sub_agent.out')
+        ferr = Path(self.output + '/tedge_sub_agent.err')
+        n = 0
+        while n < 20:
+            if fout.is_file() or ferr.is_file():
+                return
+            else:
+                time.sleep(1)
+                n += 1
+        self.assertFalse(True, abortOnError=True, assertMessage=None)
 
     def validate(self):
         self.log.info("Validate")
