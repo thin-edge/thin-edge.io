@@ -37,6 +37,8 @@ cd tests/PySys/
 #pysys.py run --record -c 20 c8y_restart_bridge
 #pysys.py run --record -c 100 smoketest_json
 
-pysys.py run -c 20 'monitoring_*'
+#pysys.py run -c 20 'monitoring_*'
+
+pysys.py run -c 10 monitoring_with_simulated_messages
 
 deactivate
