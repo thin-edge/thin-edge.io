@@ -1,5 +1,5 @@
 [package]
-name = "download_manager"
+name = "download"
 version = "0.3.1"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
@@ -8,6 +8,7 @@ description = "download_manager"
 
 
 [dependencies]
+async-trait = "0.1"
 c8y_smartrest = { path = "../../mapper/cumulocity/c8y_smartrest" }
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = "0.11"

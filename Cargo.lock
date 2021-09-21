@@ -684,9 +684,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
-name = "download_manager"
+name = "download"
 version = "0.3.1"
 dependencies = [
+ "async-trait",
  "c8y_smartrest",
  "mqtt_client",
  "regex",
@@ -1793,7 +1794,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "download_manager",
+ "download",
  "json_sm",
  "serde",
  "serde_json",

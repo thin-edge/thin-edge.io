@@ -1,7 +1,12 @@
 use async_trait::async_trait;
-use download_manager::download::download;
+use download::download::download;
 use json_sm::*;
-use std::{iter::Iterator, path::{Path, PathBuf}, process::{Output, Stdio}, str::FromStr, sync::Arc};
+use std::{
+    iter::Iterator,
+    path::{Path, PathBuf},
+    process::{Output, Stdio},
+    sync::Arc,
+};
 use tokio::process::Command;
 
 #[async_trait]
@@ -80,7 +85,6 @@ impl ExternalPluginCommand {
         action: &str,
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<Command, SoftwareError> {
-        dbg!("");
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = Command::new(&sudo);
             command.arg(&self.path);
@@ -101,7 +105,6 @@ impl ExternalPluginCommand {
             if let Some(ref path) = module.file_path {
                 command.arg("--file");
                 command.arg(path);
-                dbg!(&command);
             }
         }
 
@@ -260,28 +263,33 @@ impl Plugin for ExternalPluginCommand {
     }
 
     async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError> {
-        let mut filename = PathBuf::new().join(module.name.as_str());
+        let mut filename = module.name.to_string();
         if let Some(version) = &module.version {
-            filename.push("_");
-            filename.push(version.as_str());
+            filename.push('_');
+            filename.push_str(version.as_str());
         }
-        dbg!(&module);
-        match download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename)
-            .await
-            {
-                Ok(_) => dbg!(),
-                Err(err) => {
-                    dbg!(&err);
-                    return Err(SoftwareError::DownloadError{reason: "because".into()});
-                }
-            }
+        // ? This doesn't seem like the correct place to add file extension, maybe this should be left out and plugin should handle it?
+        filename.push_str(".deb");
 
-        let mut path = PathBuf::from_str("/tmp").unwrap().join(filename);
-        path.set_extension("deb");
-        Ok(path)
+        dbg!(&module);
+
+        let target_dir = Path::new("/tmp");
+        let downloaded_path =
+            match download(module.url.as_ref().unwrap().as_str(), target_dir, &filename).await {
+                Ok(path) => path,
+                Err(err) => {
+                    // TODO: Add correct error handling
+                    return Err(SoftwareError::DownloadError {
+                        reason: "because".into(),
+                    });
+                }
+            };
+
+        Ok(downloaded_path)
     }
 
     async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError> {
-        Ok(tokio::fs::remove_file(path).await?)
+        let _res = tokio::fs::remove_file(path).await;
+        Ok(())
     }
 }
