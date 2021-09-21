@@ -1,3 +1,22 @@
+"""
+Environment to manage automated roundtrip tests for Cumulocity.
+
+Tests that derive from this class use automated connect and
+disconnect to Cumulocity (derived from EnvironmentC8y).
+In addition, they run a Roundtirp test that can be easily
+configured in derived test cases.
+
+Here is a complete example for a run.py:
+
+    class SmoketestJson400Samples10ms(Environment_roundtrip_c8y):
+
+        def setup(self):
+            super().setup()
+            self.samples = "400"
+            self.delay = "10"
+            self.timeslot = "15"
+            self.style = "JSON"
+"""
 
 import os
 import pysys

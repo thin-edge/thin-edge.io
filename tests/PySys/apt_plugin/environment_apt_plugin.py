@@ -1,3 +1,18 @@
+"""
+This environment provides a basis for tests of the apt plugin.
+Handle with care, these tests will install and remove packages.
+
+The tests are disabled by default as they will install, deinstall
+packages, run apt update and more.
+
+Better run them in a VM or a container.
+
+To run the tests:
+
+    pysys.py run 'apt_*' -XmyPlatform='container'
+
+"""
+
 import pysys
 from pysys.basetest import BaseTest
 
@@ -37,7 +52,7 @@ class AptPlugin(BaseTest):
         if extra:
             # Does not happen in normal cases, just for testing
             args.append(extra)
-            
+
         process = self.startProcess(
             command=self.sudo,
             arguments=args,
