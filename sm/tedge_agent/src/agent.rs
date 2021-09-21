@@ -303,7 +303,7 @@ impl SmAgent {
         let response = plugins.process(&request).await;
 
         let _ = mqtt
-            .publish(Message::new(response_topic, response.to_bytes()?))
+            .publish(Message::new(response_topic, response.to_bytes()?).retain())
             .await?;
 
         let _state = self.persistance_store.clear().await?;
