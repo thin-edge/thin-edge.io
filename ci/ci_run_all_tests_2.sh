@@ -39,6 +39,8 @@ cd tests/PySys/
 
 #pysys.py run -c 20 'monitoring_*'
 
-pysys.py run -c 10 monitoring_with_simulated_messages
+pysys.py run -c 50 monitoring_with_simulated_messages
+
+pysys.py run -c 20 'monitoring_*'
 
 deactivate
