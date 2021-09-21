@@ -13,24 +13,43 @@ mod tests {
     /// expecting the first one to work and the second to fail.
     fn tedge_agent_check_no_multiple_instances_running() -> Result<(), Box<dyn std::error::Error>> {
         let _ignore_errors = std::fs::remove_file("/run/lock/tedge_agent.lock");
-        // running first `tedge_agent` binary
-        let mut agent = Command::cargo_bin(env!("CARGO_PKG_NAME"))?.spawn()?;
 
-        // A sleep is required here to be sure that the lock is acquired by the first agent and not the second.
-        let ten_millis = time::Duration::from_millis(10);
-        thread::sleep(ten_millis);
+        // running first `tedge_agent` binary
+        let mut agent = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
         // running second `tedge_agent` binary
-        let mut agent_2 = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+        let mut agent_2 = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
-        // test
-        agent_2.assert().failure().stdout(predicate::str::contains(
-            "Another instance of tedge_agent is running.",
-        ));
-
-        // cleanup
-        agent.kill()?;
-        std::fs::remove_file("/run/lock/tedge_agent.lock")?;
-        Ok(())
+        // trying up to 10 times before breaking out.
+        for _ in 0..10 {
+            if let Ok(Some(code)) = agent.try_wait() {
+                agent.wait_with_output().unwrap().assert().failure().stdout(
+                    predicate::str::contains("Another instance of tedge_agent is running."),
+                );
+                agent_2.kill();
+                let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
+                return Ok(());
+            } else if let Ok(Some(code)) = agent_2.try_wait() {
+                agent_2
+                    .wait_with_output()
+                    .unwrap()
+                    .assert()
+                    .failure()
+                    .stdout(predicate::str::contains(
+                        "Another instance of tedge_agent is running.",
+                    ));
+                agent.kill();
+                let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
+                return Ok(());
+            }
+            thread::sleep(time::Duration::from_millis(200));
+        }
+        panic!("Agent failed to stop.")
     }
 }
