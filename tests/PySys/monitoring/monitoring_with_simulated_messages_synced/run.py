@@ -42,6 +42,10 @@ class MonitoringWithSimulatedMessages(BaseTest):
         self.addCleanupFunction(self.monitoring_cleanup)
 
     def execute(self):
+
+        # Wait some time until services are running well (?)
+        time.sleep(0.5)
+
         sub = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "sub", "--no-topic", "tedge/#"],
