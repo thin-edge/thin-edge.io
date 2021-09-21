@@ -83,6 +83,13 @@ class MonitoringWithSimulatedMessages(BaseTest):
         )
 
     def validate(self):
+        # sync the filesystem
+        sync = self.startProcess(
+            command=self.sudo,
+            arguments=["sync"],
+            stdouterr="sync_out",
+        )
+
         self.assertThat('collectd_msg_validation_result == expected_result',
                         collectd_msg_validation_result=self.validate_json(), expected_result=True)
 
