@@ -9,6 +9,7 @@ description = "download_manager"
 
 [dependencies]
 async-trait = "0.1"
+backoff = { version = "0.3", features = ["tokio"] }
 c8y_smartrest = { path = "../../mapper/cumulocity/c8y_smartrest" }
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = "0.11"

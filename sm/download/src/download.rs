@@ -1,5 +1,6 @@
 use crate::error::DownloadError;
 use async_trait::async_trait;
+use backoff::{future::retry, ExponentialBackoff};
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_client::{Client, MqttClient, Topic};
 use reqwest::{self, Url};
@@ -24,8 +25,10 @@ pub async fn download(
     // TODO: Validate the url belongs to the tenant and we can use jwt token such that we don't leak credentials
     let parsed_url = UrlType::try_new(url)?;
 
-    // TODO: Add retry logic
-    let response = parsed_url.get_from_url().await?;
+    let response = retry(ExponentialBackoff::default(), || async {
+        Ok(parsed_url.clone().get_from_url().await?)
+    })
+    .await?;
 
     dbg!(&response);
     let content = response.bytes().await?;
@@ -47,7 +50,7 @@ pub async fn download(
     Ok(target_path)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum UrlType {
     C8y(Url),
     NonC8y(Url),
