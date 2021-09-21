@@ -29,7 +29,7 @@ pub async fn download(
             let mqtt_config = mqtt_client::Config::new("127.0.0.1", 1883);
             let mqtt_client = mqtt_client::Client::connect("downloader", &mqtt_config).await?;
             let token = get_jwt_token(&mqtt_client).await?;
-
+            dbg!(&token);
             let client = reqwest::Client::new();
             let response = match client
                 .get(url)

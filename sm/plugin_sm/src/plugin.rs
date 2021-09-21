@@ -1,12 +1,7 @@
 use async_trait::async_trait;
 use download_manager::download::download;
 use json_sm::*;
-use std::{
-    iter::Iterator,
-    path::{Path, PathBuf},
-    process::{Output, Stdio},
-    sync::Arc,
-};
+use std::{iter::Iterator, path::{Path, PathBuf}, process::{Output, Stdio}, str::FromStr, sync::Arc};
 use tokio::process::Command;
 
 #[async_trait]
@@ -85,6 +80,7 @@ impl ExternalPluginCommand {
         action: &str,
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<Command, SoftwareError> {
+        dbg!("");
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = Command::new(&sudo);
             command.arg(&self.path);
@@ -100,6 +96,12 @@ impl ExternalPluginCommand {
             if let Some(ref version) = module.version {
                 command.arg("--module-version");
                 command.arg(version);
+            }
+
+            if let Some(ref path) = module.file_path {
+                command.arg("--file");
+                command.arg(path);
+                dbg!(&command);
             }
         }
 
@@ -263,12 +265,20 @@ impl Plugin for ExternalPluginCommand {
             filename.push("_");
             filename.push(version.as_str());
         }
-
-        download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename)
+        dbg!(&module);
+        match download(module.url.as_ref().unwrap().as_str(), "/tmp", &filename)
             .await
-            .unwrap();
+            {
+                Ok(_) => dbg!(),
+                Err(err) => {
+                    dbg!(&err);
+                    return Err(SoftwareError::DownloadError{reason: "because".into()});
+                }
+            }
 
-        Ok(filename)
+        let mut path = PathBuf::from_str("/tmp").unwrap().join(filename);
+        path.set_extension("deb");
+        Ok(path)
     }
 
     async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError> {
