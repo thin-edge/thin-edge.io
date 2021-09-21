@@ -50,6 +50,11 @@ mod tests {
             }
             thread::sleep(time::Duration::from_millis(200));
         }
+
+        // cleanup before panic
+        agent.kill();
+        agent_2.kill();
+        let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
         panic!("Agent failed to stop.")
     }
 }
