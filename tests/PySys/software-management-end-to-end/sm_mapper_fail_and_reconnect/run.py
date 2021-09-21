@@ -10,7 +10,7 @@ Validate the tedge-mapper-sm-c8y does not loose last message from tedge-agent wh
 
 Given a configured system
 When `rolldice` package is installed
-when a subscriber is started to `sudo tedge mqtt sub 'c8y/s/us'`
+when a subscriber is started as `sudo tedge mqtt sub 'c8y/s/us'`
 When tedge_agent is started as `sudo systemctl start tedge-agent.service`
 When sm mapper is started as `sudo systemctl start tedge-mapper-sm-c8y.service`
 When send a delete operation `sudo tedge mqtt pub "c8y/s/ds" "528,tedge,rolldice,,,delete"`
@@ -68,6 +68,8 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             stdouterr="tedge_pub",           
         )
 
+        self.addCleanupFunction(self.smcleanup)
+
     def execute(self):
         self.startProcess(
             command=self.sudo,
@@ -95,6 +97,25 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             stdouterr="kill_out",
         )
 
+    def validate(self):
+        self.log.info("Validate")
+        self.assertGrep("tedge_sub.out", "501,c8y_SoftwareUpdate", contains=True)
+        self.assertGrep("tedge_sub.out", "503,c8y_SoftwareUpdate", contains=True)
+    
+    def smcleanup(self):
+        self.log.info("Stop sm-mapper and agent")
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "tedge-agent.service"],
+            stdouterr="tedge_agent_stop",
+        )
+        
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "tedge-mapper-sm-c8y.service"],
+            stdouterr="sm_mapper_stop",
+        )
+
     def check_if_agent_updated_op_status(self):
         fout = Path(self.output + '/tedge_sub_agent.out')
         ferr = Path(self.output + '/tedge_sub_agent.err')
@@ -106,9 +127,3 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
                 time.sleep(1)
                 n += 1
         self.assertFalse(True, abortOnError=True, assertMessage=None)
-
-    def validate(self):
-        self.log.info("Validate")
-        self.assertGrep("tedge_sub.out", "501,c8y_SoftwareUpdate", contains=True)
-        self.assertGrep("tedge_sub.out", "503,c8y_SoftwareUpdate", contains=True)
-    
