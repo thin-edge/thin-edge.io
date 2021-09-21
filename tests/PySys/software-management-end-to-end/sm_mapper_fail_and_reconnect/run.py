@@ -29,7 +29,18 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
     sudo = "/usr/bin/sudo"
     apt = "/usr/bin/apt-get"
     mqtt_sub = "/usr/bin/mosquitto_sub"
+    rm = "/usr/bin/rm"
     def setup(self):
+
+        # setup mosquitto
+        self.setup_mosquitto()
+
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "connect", "c8y"],
+            stdouterr="connect_c8y",
+        )
+
         self.startProcess(
             command=self.sudo,
             arguments=[self.apt, "install", "rolldice"],
@@ -44,25 +55,6 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         )
 
         self.startProcess(
-            command=self.mqtt_sub,
-            arguments=["-t", "tedge/commands/res/software/update"],
-            stdouterr="tedge_sub_agent",
-            background=True,
-        )
-
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.systemctl, "start", "tedge-agent.service"],
-            stdouterr="tedge_agent_start",
-        )
-        
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.systemctl, "start", "tedge-mapper-sm-c8y.service"],
-            stdouterr="sm_mapper_start",
-        )
-
-        self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub", "c8y/s/ds", "528,tedge,rolldice,,,delete"],
             stdouterr="tedge_pub",           
@@ -71,15 +63,24 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         self.addCleanupFunction(self.smcleanup)
 
     def execute(self):
+        time.sleep(2)
         self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "stop", "tedge-mapper-sm-c8y.service"],
             stdouterr="sm_mapper_stop",
         )
 
-        # check if the agent has completed the operation
-        self.check_if_agent_updated_op_status()
+        self.startProcess(
+            command=self.mqtt_sub,
+            arguments=["-v", "-t", "tedge/commands/res/software/update"],
+            stdouterr="tedge_sub_agent",
+            background=True,
+        )
 
+        # check if the agent has completed the operation
+        # self.check_if_agent_updated_op_status()
+        time.sleep(20)
+       
         self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "restart", "tedge-mapper-sm-c8y.service"],
@@ -106,16 +107,28 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         self.log.info("Stop sm-mapper and agent")
         self.startProcess(
             command=self.sudo,
-            arguments=[self.systemctl, "stop", "tedge-agent.service"],
-            stdouterr="tedge_agent_stop",
-        )
-        
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.systemctl, "stop", "tedge-mapper-sm-c8y.service"],
-            stdouterr="sm_mapper_stop",
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="connect_c8y",
         )
 
+    def setup_mosquitto(self):
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "mosquitto.service"],
+            stdouterr="mosquitto_stop",
+        )
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.rm, "/var/lib/mosquitto/mosquitto.db"],
+            stdouterr="remove_db",
+        )
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "restart", "mosquitto.service"],
+            stdouterr="restart_mosquitto",
+        )
+
+       
     def check_if_agent_updated_op_status(self):
         fout = Path(self.output + '/tedge_sub_agent.out')
         ferr = Path(self.output + '/tedge_sub_agent.err')
