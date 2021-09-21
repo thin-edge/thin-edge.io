@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -17,6 +18,8 @@ pub enum PluginOp {
         module: String,
         #[structopt(short = "v", long = "--module-version")]
         version: Option<String>,
+        #[structopt(long = "--file")]
+        file_path: Option<String>,
     },
 
     /// Uninstall a module
@@ -73,12 +76,18 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             status
         }
 
-        PluginOp::Install { module, version } => {
+        PluginOp::Install {
+            module,
+            version,
+            file_path,
+        } => {
             if let Some(version) = version {
                 run_cmd(
                     "apt-get",
                     &format!("install --quiet --yes {}={}", module, version),
                 )?
+            } else if let Some(file_path) = file_path {
+                run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
             } else {
                 run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
             }
