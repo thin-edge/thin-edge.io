@@ -31,7 +31,6 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
-        let () = sm_mapper.init().await?;
         let () = sm_mapper.run().await?;
 
         Ok(())
@@ -54,22 +53,7 @@ impl CumulocitySoftwareManagement {
         }
     }
 
-    #[instrument(skip(self), name = "init")]
-    async fn init(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initialisation");
-        while self.c8y_internal_id.is_empty() {
-            if let Err(error) = self.try_get_and_set_internal_id().await {
-                error!("{:?}", error);
-
-                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
-                continue;
-            };
-        }
-
-        Ok(())
-    }
-
-    async fn run(&self) -> Result<(), anyhow::Error> {
+    async fn run(&mut self) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
@@ -83,7 +67,7 @@ impl CumulocitySoftwareManagement {
     }
 
     #[instrument(skip(self), name = "main-loop")]
-    async fn subscribe_messages_runtime(&self) -> Result<(), SMCumulocityMapperError> {
+    async fn subscribe_messages_runtime(&mut self) -> Result<(), SMCumulocityMapperError> {
         let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
         topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
@@ -131,7 +115,7 @@ impl CumulocitySoftwareManagement {
 
     #[instrument(skip(self), name = "software-update")]
     async fn validate_and_publish_software_list(
-        &self,
+        &mut self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareListResponse::from_json(json_response)?;
@@ -168,7 +152,7 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn publish_operation_status(
-        &self,
+        &mut self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
@@ -225,9 +209,17 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn send_software_list_http(
-        &self,
+        &mut self,
         json_response: &SoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
+        while self.c8y_internal_id.is_empty() {
+            if let Err(error) = self.try_get_and_set_internal_id().await {
+                error!("{:?}", error);
+
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
+                continue;
+            };
+        }
         let token = get_jwt_token(&self.client).await?;
 
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
