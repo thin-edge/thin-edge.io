@@ -319,6 +319,123 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
     assert!(received_software_list);
 }
 
+#[tokio::test]
+#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+#[serial]
+async fn mapper_fails_during_sw_update_recovers_and_process_response() {
+    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
+    // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
+    // SM Mapper fails before receiving the rsponse for the request.
+    // Meanwhile the opeartion response was published on `tedge/commands/req/software/update`.
+    // Now the SM Mapper recovers and receives the response message and publishes it on `c8y/s/us`
+    // The subscriber that was waiting for the response on `c8/s/us` receives the response and validates it.
+
+    // Create a subscriber to receive messages on `tedge/commands/req/software/update` topic.
+    let mut sw_update_req_sub = get_subscriber(
+        "tedge/commands/req/software/update",
+        "mapper_publishes_software_update_request",
+    )
+    .await;
+
+    // Create a subscriber to receive messages on `"c8y/s/us` topic.
+    let mut sw_update_res_sub = get_subscriber(
+        "c8y/s/us",
+        "mapper_publishes_software_update_response_to_c8y_cloud",
+    )
+    .await;
+
+    // Start SM Mapper
+    let config = create_tedge_config();
+    let sm_mapper = tokio::spawn(async {
+        crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper::new()
+            .start(config)
+            .await
+    });
+
+    // Prepare and publish a software update smartrest request on `c8y/s/ds`.
+    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
+    let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
+
+    let expected_update_list = r#"
+         "updateList": [
+            {
+                "type": "debian",
+                "modules": [
+                    {
+                        "name": "nodered",
+                        "version": "1.0.0",
+                        "action": "install"
+                    }
+                ]
+            }"#;
+
+    // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
+    match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_req_sub.next()).await {
+        Ok(Some(msg)) => {
+            dbg!(&msg.payload_str().unwrap());
+            if msg
+                .payload_str()
+                .unwrap()
+                .contains(&remove_whitespace(expected_update_list))
+            {
+                // Stop the SM Mapper
+                sm_mapper.abort();
+
+                // Prepare and publish a software update response `successful`.
+                let json_response = r#"{
+                            "id":"123",
+                            "status":"successful",
+                            "currentSoftwareList":[
+                                {"type":"apt","modules":[
+                                    {"name":"m","url":"https://foobar.io/m.epl"}
+                                ]}
+                        ]}"#;
+
+                // Publish the response
+                let _ = publish(
+                    &Topic::new("tedge/commands/res/software/update").unwrap(),
+                    json_response.to_string(),
+                )
+                .await;
+            }
+
+            // Restart the SM Mapper
+            let config = create_tedge_config();
+            let __sm_mapper = tokio::spawn(async {
+                crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper::new()
+                    .start(config)
+                    .await
+            });
+        }
+        _ => {
+            panic!("No message received after a second.");
+        }
+    }
+
+    let mut received_status_successful = false;
+
+    // Validate the response that is received on 'c8y/s/us'
+    for _ in 0..10 {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_res_sub.next()).await {
+            Ok(Some(msg)) => {
+                dbg!(&msg.payload_str().unwrap());
+                match msg.payload_str().unwrap() {
+                    "503,c8y_SoftwareUpdate\n" => {
+                        received_status_successful = true;
+                        break;
+                    }
+
+                    _ => {}
+                }
+                continue;
+            }
+            _ => panic!("No message received after a second."),
+        }
+    }
+
+    assert!(received_status_successful);
+}
+
 fn create_tedge_config() -> TEdgeConfig {
     // Create a config file in a temporary directory.
     let temp_dir = tempfile::tempdir().unwrap();
