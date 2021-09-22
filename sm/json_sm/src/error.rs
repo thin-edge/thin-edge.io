@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareError {
-    #[error("DownloadError error: {reason:?}")]
-    DownloadError { reason: String },
+    #[error("DownloadError error: {reason:?} for {url:?}")]
+    DownloadError { reason: String, url: String },
 
     #[error("Failed to finalize updates for {software_type:?}")]
     Finalize {

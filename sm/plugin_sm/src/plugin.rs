@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use download::download::download;
+use download::download::{download, UrlType};
 use json_sm::*;
 use std::{
     iter::Iterator,
@@ -273,17 +273,33 @@ impl Plugin for ExternalPluginCommand {
 
         dbg!(&module);
 
-        let target_dir = Path::new("/tmp");
-        let downloaded_path =
-            match download(module.url.as_ref().unwrap().as_str(), target_dir, &filename).await {
-                Ok(path) => path,
-                Err(err) => {
-                    // TODO: Add correct error handling
-                    return Err(SoftwareError::DownloadError {
-                        reason: "because".into(),
-                    });
-                }
-            };
+        let url = match UrlType::try_new(module.url.as_ref().unwrap().as_str()) {
+            Ok(UrlType::Unsupported(url)) => {
+                return Err(SoftwareError::DownloadError {
+                    reason: "Unsupported download protocol type".into(),
+                    url,
+                });
+            }
+            Ok(url_type) => url_type,
+            Err(err) => {
+                return Err(SoftwareError::DownloadError {
+                    reason: err.to_string(),
+                    url: module.url.as_ref().unwrap().to_string(),
+                })
+            }
+        };
+
+        let downloaded_path = match download(&url, Path::new("/tmp"), &filename).await {
+            Ok(path) => dbg!(path),
+            Err(err) => {
+                // TODO: Add correct error handling
+                dbg!(&err);
+                return Err(SoftwareError::DownloadError {
+                    reason: err.to_string(),
+                    url: module.url.as_ref().unwrap().to_string(),
+                });
+            }
+        };
 
         Ok(downloaded_path)
     }

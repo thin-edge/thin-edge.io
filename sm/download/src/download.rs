@@ -18,15 +18,15 @@ pub trait Downloader {
 }
 
 pub async fn download(
-    url: &str,
+    url: &UrlType,
     target_dir_path: impl AsRef<Path>,
     target_file_name: impl AsRef<Path>,
 ) -> Result<PathBuf, DownloadError> {
     // TODO: Validate the url belongs to the tenant and we can use jwt token such that we don't leak credentials
-    let parsed_url = UrlType::try_new(url)?;
 
+    // Default retry is an exponential retry with a limit of 15 minutes total
     let response = retry(ExponentialBackoff::default(), || async {
-        Ok(parsed_url.clone().get_from_url().await?)
+        Ok(url.clone().get_from_url().await?)
     })
     .await?;
 
@@ -50,15 +50,15 @@ pub async fn download(
     Ok(target_path)
 }
 
-#[derive(Debug, Clone)]
-enum UrlType {
+#[derive(Debug, Clone, PartialEq)]
+pub enum UrlType {
     C8y(Url),
     NonC8y(Url),
     Unsupported(String),
 }
 
 impl UrlType {
-    fn try_new(url: &str) -> Result<UrlType, DownloadError> {
+    pub fn try_new(url: &str) -> Result<UrlType, DownloadError> {
         let parsed_url = reqwest::Url::parse(url)?;
         match parsed_url.scheme() {
             // TODO: validate if c8y url from config
