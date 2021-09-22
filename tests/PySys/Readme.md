@@ -5,16 +5,10 @@ the PySys system test framework.
 
 See also:
 
-    https://pysys-test.github.io/pysys-test/
+* [https://pysys-test.github.io/pysys-test/](https://pysys-test.github.io/pysys-test/)
+* [https://github.com/pysys-test/](https://github.com/pysys-test/)
 
-    https://github.com/pysys-test/
-
-
-### How to run the System-Tests
-
-There is also similar Documentation at Archbee:
-
-    https://app.archbee.io/docs/9iGX1hbDjwAeMfyO9A3YE/2vkDj1wJ6LTct1_LnKBCm#m7-122-running-system-tests-manually-on-your-device-linux-pc
+There is also similar [Documentation at Archbee](https://app.archbee.io/docs/9iGX1hbDjwAeMfyO9A3YE/2vkDj1wJ6LTct1_LnKBCm#m7-122-running-system-tests-manually-on-your-device-linux-pc)
 
 
 #### Running System tests manually on your device / Linux PC
@@ -58,7 +52,7 @@ With debugging enabled:
     pysys.py run -v DEBUG c8y_restart_bridge
 
 Also with some wildcards:
-
+tests/PySys/Readme.md
     pysys.py run 'monitoring_*'
 
 
@@ -77,10 +71,10 @@ available environments are:
 Environment to manage automated roundtrip tests for Cumulocity.
 
 
-
+tests/PySys/Readme.md
 ### Software Management End To End
 
-See folder software-management-end-to-end
+See folder [software-management-end-to-end](/software-management-end-to-end/).
 
 These tests are disabled by default as they will install and deinstall packages.
 Better run them in a VM or a container.
@@ -95,7 +89,7 @@ To run the tests with another tenant url:
 
 ### Apt Plugin Tests
 
-See folder apt_plugin
+See folder [apt_plugin](/apt_plugin/).
 
 These tests are disabled by default as they will install and deinstall packages.
 Better run them in a VM or a container.
