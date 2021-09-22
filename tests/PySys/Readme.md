@@ -1,15 +1,27 @@
 ## Overview System Tests
 
+System tests for thin-edge in this folder are written in Python with
+the PySys system test framework.
+
+See also:
+
+    https://pysys-test.github.io/pysys-test/
+
+    https://github.com/pysys-test/
+
+
 ### How to run the System-Tests
 
 There is also similar Documentation at Archbee:
 
-https://app.archbee.io/docs/9iGX1hbDjwAeMfyO9A3YE/2vkDj1wJ6LTct1_LnKBCm#m7-122-running-system-tests-manually-on-your-device-linux-pc
+    https://app.archbee.io/docs/9iGX1hbDjwAeMfyO9A3YE/2vkDj1wJ6LTct1_LnKBCm#m7-122-running-system-tests-manually-on-your-device-linux-pc
 
 
 #### Running System tests manually on your device / Linux PC
 
-The system tests can be executed manually when you set some environment variables in advance. Also compile the sawtooth_publisher in advance.
+The system tests can be executed manually when you set some environment variables in advance. Also compile the sawtooth_publisher in advance, as it is used by some tests.
+
+    cargo build --example sawtooth_publisher
 
 These enviroment variables need to be exported on your shell:
 
@@ -22,12 +34,18 @@ These enviroment variables need to be exported on your shell:
     export C8YDEVICEID= <c8y dev id
     export C8YURL=<your url> e.g. : https://thin-edge-io.eu-latest.cumulocity.com
 
-
+Quickstart to run the tests:
 
     ci/ci_run_all_tests.sh
 
+Run the tests in your own Python environment:
 
+    python3 -m venv ~/env-pysys
+    source ~/env-pysys/bin/activate
+    pip3 install -r tests/requirements.txt
+    cd tests/PySys/
     pysys.py run
+    deactivate
 
 You can selectively run tests based on their folder names:
 
