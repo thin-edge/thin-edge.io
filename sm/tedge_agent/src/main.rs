@@ -29,6 +29,6 @@ async fn main() -> Result<(), anyhow::Error> {
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     );
-    agent.start().await?;
+    agent?.start().await?;
     Ok(())
 }

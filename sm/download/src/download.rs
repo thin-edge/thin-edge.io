@@ -1,6 +1,6 @@
 use crate::error::DownloadError;
 use async_trait::async_trait;
-use backoff::{future::retry, ExponentialBackoff};
+use backoff::{backoff::Backoff, future::retry, ExponentialBackoff};
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_client::{Client, MqttClient, Topic};
 use reqwest::{self, Url};

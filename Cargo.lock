@@ -2702,14 +2702,17 @@ name = "tedge_agent"
 version = "0.3.1"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "async-trait",
  "chrono",
+ "flockfile",
  "futures",
  "json_sm",
  "mockall",
  "mqtt_client",
  "once_cell",
  "plugin_sm",
+ "predicates 2.0.2",
  "rumqttd",
  "rumqttlog",
  "serde",
