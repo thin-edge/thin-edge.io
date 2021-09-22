@@ -81,23 +81,21 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             version,
             file_path,
         } => {
+            // NOTE: I don't like this logic, i think it can be improved.
             if let Some(version) = version {
                 // check if we also have file_path
                 if let Some(file_path) = file_path {
                     dbg!("fp and version provided");
 
                     dbg!(module_check::module_has_extension(&file_path));
-                    dbg!(module_check::module_has_version(&version, &file_path));
-                    let version = module_check::metadata_contains(
-                        &file_path,
-                        &format!("Version: {}", &version),
-                    );
-                    let module_name = module_check::metadata_contains(
-                        &file_path,
-                        &format!("Package: {}", &module),
-                    );
-                    dbg!(version);
-                    dbg!(module_name);
+
+                    let pm = module_check::PackageMetadata::new()
+                        .try_new(&file_path.as_str())
+                        .unwrap();
+
+                    dbg!(pm.metadata_contains(&format!("Version: {}", &version)));
+                    dbg!(pm.metadata_contains(&format!("Package: {}", &module)));
+
                     run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
                 } else {
                     // only module version provided
