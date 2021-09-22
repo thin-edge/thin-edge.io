@@ -1,3 +1,4 @@
+mod module_check;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -81,10 +82,30 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             if let Some(version) = version {
-                run_cmd(
-                    "apt-get",
-                    &format!("install --quiet --yes {}={}", module, version),
-                )?
+                // check if we also have file_path
+                if let Some(file_path) = file_path {
+                    dbg!("fp and version provided");
+
+                    dbg!(module_check::module_has_extension(&file_path));
+                    dbg!(module_check::module_has_version(&version, &file_path));
+                    let version = module_check::metadata_contains(
+                        &file_path,
+                        &format!("Version: {}", &version),
+                    );
+                    let module_name = module_check::metadata_contains(
+                        &file_path,
+                        &format!("Package: {}", &module),
+                    );
+                    dbg!(version);
+                    dbg!(module_name);
+                    run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
+                } else {
+                    // only module version provided
+                    run_cmd(
+                        "apt-get",
+                        &format!("install --quiet --yes {}={}", module, version),
+                    )?
+                }
             } else if let Some(file_path) = file_path {
                 run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
             } else {
