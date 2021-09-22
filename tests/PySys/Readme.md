@@ -19,7 +19,9 @@ There is also similar Documentation at Archbee:
 
 #### Running System tests manually on your device / Linux PC
 
-The system tests can be executed manually when you set some environment variables in advance. Also compile the sawtooth_publisher in advance, as it is used by some tests.
+The system tests can be executed manually when you set some environment
+variables in advance. Also compile the sawtooth_publisher in advance,
+as it is used by some tests.
 
     cargo build --example sawtooth_publisher
 
@@ -62,13 +64,17 @@ Also with some wildcards:
 
 ### Environments to derive tests from
 
-Tests can be simplified by moving common parts to environments. Current environments are:
+Tests can be simplified by moving common parts to environments. Currently
+available environments are:
 
-* `environment_az.py` : Environment to manage automated connect and disconnect to Microsoft Azure.
+* `environment_az.py`:
+    Environment to manage automated connect and disconnect to Microsoft Azure.
 
-* `environment_c8y.py` : Environment to manage automated connect and disconnect to Cumulocity.
+* `environment_c8y.py`:
+    Environment to manage automated connect and disconnect to Cumulocity.
 
-* `environment_roundtrip_c8y.py` : Environment to manage automated roundtrip tests for Cumulocity.
+* `environment_roundtrip_c8y.py`:
+Environment to manage automated roundtrip tests for Cumulocity.
 
 
 
