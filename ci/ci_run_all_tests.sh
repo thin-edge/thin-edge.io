@@ -41,7 +41,7 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run
+pysys.py -v DEBUG run
 
 # Run the tests for the apt plugin
 # These are skipped by default, as the modify the operating system
