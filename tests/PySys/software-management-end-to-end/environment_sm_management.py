@@ -7,7 +7,7 @@ They are rather slow as they use the complete chain from end to end.
 WARNING: Handle with care!!!
 The C8YDEVICEID will handle on which device this test will install and remove packages.
 
-These tests are disabled by default as they will install and deinstall packages.
+These tests are disabled by default as they will install and de-install packages.
 Better run them in a VM or a container.
 
 To run the tests:

@@ -13,21 +13,25 @@ There is also similar [Documentation at Archbee](https://app.archbee.io/docs/9iG
 
 #### Running System tests manually on your device / Linux PC
 
-The system tests can be executed manually when you set some environment
-variables in advance. Also compile the sawtooth_publisher in advance,
-as it is used by some tests.
+The system tests can be executed manually. In advance, you need a tenant in
+Cumulocity as well as a previously generated device certificate. The device
+needs to be able to connect to Cumulocity successfully.
+
+The test configuration is located in environment variables, which need to be
+set in in advance. Also compile the sawtooth_publisher, as it is used by some
+tests.
 
     cargo build --example sawtooth_publisher
 
-These enviroment variables need to be exported on your shell:
+These environment variables need to be exported in your shell:
 
     export TEBASEDIR=~/thin-edge.io/
     export EXAMPLEDIR=$HOME/thin-edge.io/target/debug/examples
     export C8YUSERNAME= <your tenant>
     export C8YPASS= <your password>
-    export C8YDEVICE= <dev id>
+    export C8YDEVICE= <dev name>
     export C8YTENANT= <tenant id>
-    export C8YDEVICEID= <c8y dev id
+    export C8YDEVICEID= <numeric c8y device id>
     export C8YURL=<your url> e.g. : https://thin-edge-io.eu-latest.cumulocity.com
 
 Quickstart to run the tests:
@@ -52,13 +56,13 @@ With debugging enabled:
     pysys.py run -v DEBUG c8y_restart_bridge
 
 Also with some wildcards:
-tests/PySys/Readme.md
+
     pysys.py run 'monitoring_*'
 
 
 ### Environments to derive tests from
 
-Tests can be simplified by moving common parts to environments. Currently
+Tests can be simplified by moving common parts to environments. Currently,
 available environments are:
 
 * `environment_az.py`:
@@ -68,15 +72,14 @@ available environments are:
     Environment to manage automated connect and disconnect to Cumulocity.
 
 * `environment_roundtrip_c8y.py`:
-Environment to manage automated roundtrip tests for Cumulocity.
+    Environment to manage automated roundtrip tests for Cumulocity.
 
 
-tests/PySys/Readme.md
 ### Software Management End To End
 
 See folder [software-management-end-to-end](/software-management-end-to-end/).
 
-These tests are disabled by default as they will install and deinstall packages.
+These tests are disabled by default as they will install and de-install packages.
 Better run them in a VM or a container.
 
 To run the tests:
@@ -87,16 +90,15 @@ To run the tests with another tenant url:
 
     pysys.py run 'sm-apt*' -XmyPlatform='smcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
 
+
 ### Apt Plugin Tests
 
 See folder [apt_plugin](/apt_plugin/).
 
-These tests are disabled by default as they will install and deinstall packages.
+These tests are disabled by default as they will install and de-install packages.
 Better run them in a VM or a container.
 
 To run the tests:
 
     pysys.py run 'apt_*' -XmyPlatform='container'
-
-
 

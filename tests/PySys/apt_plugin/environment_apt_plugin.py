@@ -2,7 +2,7 @@
 This environment provides a basis for tests of the apt plugin.
 Handle with care, these tests will install and remove packages.
 
-The tests are disabled by default as they will install, deinstall
+The tests are disabled by default as they will install, de-install
 packages, run apt update and more.
 
 Better run them in a VM or a container.
@@ -19,7 +19,7 @@ from pysys.basetest import BaseTest
 
 class AptPlugin(BaseTest):
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform=None
