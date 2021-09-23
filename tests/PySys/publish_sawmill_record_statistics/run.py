@@ -1,5 +1,6 @@
 import os
 import sys
+import rrdtool
 
 sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
@@ -29,6 +30,13 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
     def execute(self):
         super().execute()
         self.log.info("Execute")
+
+        collectd = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "start", "collectd"],
+            stdouterr="collectd_out",
+        )
+
 
         sub = self.startProcess(
             command="/usr/bin/mosquitto_sub",
@@ -92,7 +100,6 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             stdouterr="statm_mapper_stdout",
             background=True,
         )
-
         statm_mosquitto = self.startProcess(
             command="/bin/sh",
             arguments=[
@@ -115,7 +122,6 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             stdouterr="stdout_sawmill",
         )
 
-    def validate(self):
         super().validate()
 
         # These are mostly placeholder validations to make sure
@@ -136,4 +142,35 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
 
     def mycleanup(self):
+
+        collectd = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "collectd"],
+            stdouterr="collectd_out",
+        )
+
         self.log.info("My Cleanup")
+
+        from pathlib import Path
+
+        p = Path('/var/lib/collectd/rrd/isonoe.local/exec/')
+        for x in p.iterdir():
+            print(x.resolve(), x.name)
+
+
+
+        filename = "/var/lib/collectd/rrd/isonoe.local/exec/gauge-mosquitto-utime.rrd"
+        result = rrdtool.fetch(filename, "LAST")
+        start, end, step = result[0]
+        ds = result[1]
+        rows = result[2]
+        values=rows[-60:]
+        assert step==1
+        counter = start
+        for i in values:
+            print(counter, i[0])
+            counter += step
+        print(counter, end)
+        assert counter == end -1
+
+
