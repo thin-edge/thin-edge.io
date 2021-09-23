@@ -215,7 +215,6 @@ impl CumulocitySoftwareManagement {
         let mut software_update_request = update_software
             .from_smartrest(smartrest)?
             .to_thin_edge_json()?;
-        dbg!(&software_update_request);
 
         let token = get_jwt_token(&self.client).await?;
         software_update_request
@@ -234,7 +233,6 @@ impl CumulocitySoftwareManagement {
                 });
             });
 
-        dbg!(&software_update_request);
         let () = self
             .publish(&topic, software_update_request.to_json()?)
             .await?;

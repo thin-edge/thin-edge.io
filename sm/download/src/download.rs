@@ -57,13 +57,11 @@ pub async fn download(
     })
     .await?;
 
-    dbg!(&response);
     let content = response.bytes().await?;
 
     let temp_path = PathBuf::new().join(&target_dir_path).join("dl.tmp");
     let target_path = PathBuf::new().join(target_dir_path).join(target_file_name);
 
-    dbg!(&target_path);
     // Cleanup after `disc full` will happen inside atomic write function.
     // TODO: Add cleanup on file exists
     let () = tedge_utils::fs::atomically_write_file_async(
@@ -73,6 +71,5 @@ pub async fn download(
     )
     .await?;
 
-    dbg!();
     Ok(target_path)
 }

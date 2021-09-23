@@ -271,14 +271,11 @@ impl Plugin for ExternalPluginCommand {
         // ? This doesn't seem like the correct place to add file extension, maybe this should be left out and plugin should handle it?
         filename.push_str(".deb");
 
-        dbg!(&module);
-
         let downloaded_path =
             match download(module.url.as_ref().unwrap(), Path::new("/tmp"), &filename).await {
-                Ok(path) => dbg!(path),
+                Ok(path) => path,
                 Err(err) => {
                     // TODO: Add correct error handling
-                    dbg!(&err);
                     return Err(SoftwareError::DownloadError {
                         reason: err.to_string(),
                         url: module.url.as_ref().unwrap().url().to_string(),
