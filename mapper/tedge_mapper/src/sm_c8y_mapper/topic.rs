@@ -7,6 +7,7 @@ pub(crate) enum IncomingTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
     SmartRestRequest,
+    JwtTokenResponse,
 }
 
 impl IncomingTopic {
@@ -15,6 +16,7 @@ impl IncomingTopic {
             Self::SoftwareListResponse => r#"tedge/commands/res/software/list"#,
             Self::SoftwareUpdateResponse => r#"tedge/commands/res/software/update"#,
             Self::SmartRestRequest => r#"c8y/s/ds"#,
+            Self::JwtTokenResponse => r#"c8y/s/uat"#,
         }
     }
 }
