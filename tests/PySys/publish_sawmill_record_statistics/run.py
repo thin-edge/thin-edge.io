@@ -155,22 +155,25 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
         p = Path('/var/lib/collectd/rrd/isonoe.local/exec/')
         for x in p.iterdir():
-            print(x.resolve(), x.name)
+            #print(x.resolve(), x.name)
 
+            filename = str(x.resolve())
+            self.log.info("Analysing %s"%filename)
+            result = rrdtool.fetch(filename, "LAST")
+            start, end, step = result[0]
+            #self.log.info("Start %s, End %s, Step %s"%(start, end, step))
 
+            ds = result[1]
+            rows = result[2]
+            values=rows[-60:]
+            assert step==1
+            counter = end-60
 
-        filename = "/var/lib/collectd/rrd/isonoe.local/exec/gauge-mosquitto-utime.rrd"
-        result = rrdtool.fetch(filename, "LAST")
-        start, end, step = result[0]
-        ds = result[1]
-        rows = result[2]
-        values=rows[-60:]
-        assert step==1
-        counter = start
-        for i in values:
-            print(counter, i[0])
-            counter += step
-        print(counter, end)
-        assert counter == end -1
+            with open("publish_sawmill_record_statistics/Output/linux/"+x.name+".txt","w") as myfile:
+                for i in values:
+                    #print(counter, i[0])
+                    counter += step
+                    myfile.write( f"{counter} {i[0]}\n")
 
-
+            #self.log.info("counter %s end %s"%(counter, end))
+            assert counter == end
