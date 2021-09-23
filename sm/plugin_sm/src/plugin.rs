@@ -268,8 +268,6 @@ impl Plugin for ExternalPluginCommand {
             filename.push('_');
             filename.push_str(version.as_str());
         }
-        // ? This doesn't seem like the correct place to add file extension, maybe this should be left out and plugin should handle it?
-        filename.push_str(".deb");
 
         let downloaded_path =
             match download(module.url.as_ref().unwrap(), Path::new("/tmp"), &filename).await {

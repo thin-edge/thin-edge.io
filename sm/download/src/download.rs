@@ -26,7 +26,12 @@ pub async fn download(
     // TODO: Validate the url belongs to the tenant and we can use jwt token such that we don't leak credentials
 
     // Default retry is an exponential retry with a limit of 15 minutes total
-    let response = retry(ExponentialBackoff::default(), || async {
+    let backoff = ExponentialBackoff {
+        initial_interval: Duration::from_secs(30),
+        max_elapsed_time: Some(Duration::from_secs(300)),
+        ..Default::default()
+    };
+    let response = retry(backoff, || async {
         let client = reqwest::Client::new();
         match &url.auth {
             Some(json_sm::Auth::Bearer(token)) => {
@@ -39,7 +44,6 @@ pub async fn download(
                     .error_for_status()
                 {
                     Ok(response) => Ok(response),
-                    // Err(err) => Err(backoff::Error::Transient(err)),
                     Err(err) => {
                         error!("Request returned an error: {:?}", &err);
                         Err(err.into())

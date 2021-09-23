@@ -66,7 +66,7 @@ impl CumulocitySoftwareManagement {
             if let Err(error) = self.try_get_and_set_internal_id().await {
                 error!("{:?}", error);
 
-                tokio::time::sleep_until(Instant::now() + Duration::from_secs(10)).await;
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
                 continue;
             };
         }
