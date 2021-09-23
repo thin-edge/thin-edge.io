@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::process::{Output, Stdio};
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -15,8 +16,12 @@ impl std::fmt::Display for LoggedCommand {
 }
 
 impl LoggedCommand {
-    pub fn new(program: &str) -> LoggedCommand {
-        let command_line = program.to_string();
+    pub fn new(program: impl AsRef<OsStr>) -> LoggedCommand {
+        let command_line = match program.as_ref().to_str() {
+            None => format!("{:?}", program.as_ref()),
+            Some(cmd) => cmd.to_string(),
+        };
+
         let mut command = Command::new(program);
         command
             .current_dir("/tmp")
@@ -30,8 +35,9 @@ impl LoggedCommand {
         }
     }
 
-    pub fn arg(&mut self, arg: &str) -> &mut LoggedCommand {
-        self.command_line.push_str(&format!(" {:?}", arg));
+    pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
+        // The arguments are displayed as debug, to be properly quoted and distinguished from each other.
+        self.command_line.push_str(&format!(" {:?}", arg.as_ref()));
         self.command.arg(arg);
         self
     }

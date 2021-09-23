@@ -30,6 +30,8 @@ impl OperationLogs {
         };
 
         if let Err(err) = operation_logs.remove_outdated_logs() {
+            // In no case a log-cleaning error should prevent the agent to run.
+            // Hence the error is logged but not returned.
             log::warn!("Fail to remove the out-dated log files: {}", err);
         }
 
@@ -38,6 +40,8 @@ impl OperationLogs {
 
     pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, std::io::Error> {
         if let Err(err) = self.remove_outdated_logs() {
+            // In no case a log-cleaning error should prevent the agent to run.
+            // Hence the error is logged but not returned.
             log::warn!("Fail to remove the out-dated log files: {}", err);
         }
 

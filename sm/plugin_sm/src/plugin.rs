@@ -88,11 +88,11 @@ impl ExternalPluginCommand {
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<LoggedCommand, SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
-            let mut command = LoggedCommand::new(sudo.to_str().unwrap());
-            command.arg(&self.path.to_str().unwrap());
+            let mut command = LoggedCommand::new(sudo);
+            command.arg(&self.path);
             command
         } else {
-            LoggedCommand::new(&self.path.to_str().unwrap())
+            LoggedCommand::new(&self.path)
         };
         command.arg(action);
 
