@@ -47,68 +47,71 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
         # record /proc/pid/status
 
-        status_mosquitto = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do date; cat /proc/$(pgrep -x mosquitto)/status; sleep 1; done",
-            ],
-            stdouterr="status_mosquitto_stdout",
-            background=True,
-        )
+        #status_mosquitto = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do date; cat /proc/$(pgrep -x mosquitto)/status; sleep 1; done",
+        #    ],
+        #    stdouterr="status_mosquitto_stdout",
+        #    background=True,
+        #)
 
-        status_mapper = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do date; cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/status; sleep 1; done",
-            ],
-            stdouterr="status_mapper_stdout",
-            background=True,
-        )
+        #status_mapper = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do date; cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/status; sleep 1; done",
+        #    ],
+        #    stdouterr="status_mapper_stdout",
+        #    background=True,
+        #)
 
         # record /proc/pid/stat
 
-        stats_mapper = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/stat; sleep 1; done",
-            ],
-            stdouterr="stat_mapper_stdout",
-            background=True,
-        )
+        #stats_mapper = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/stat; sleep 1; done",
+        #    ],
+        #    stdouterr="stat_mapper_stdout",
+        #    background=True,
+        #)
 
-        stats_mosquitto = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do cat /proc/$(pgrep -x mosquitto)/stat; sleep 1; done",
-            ],
-            stdouterr="stat_mosquitto_stdout",
-            background=True,
-        )
+        #stats_mosquitto = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do cat /proc/$(pgrep -x mosquitto)/stat; sleep 1; done",
+        #    ],
+        #    stdouterr="stat_mosquitto_stdout",
+        #    background=True,
+        #)
 
         # record /proc/pid/statm
 
-        statm_mapper = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/statm; sleep 1; done",
-            ],
-            stdouterr="statm_mapper_stdout",
-            background=True,
-        )
-        statm_mosquitto = self.startProcess(
-            command="/bin/sh",
-            arguments=[
-                "-c",
-                "while true; do cat /proc/$(pgrep -x mosquitto)/statm; sleep 1; done",
-            ],
-            stdouterr="statm_mosquitto_stdout",
-            background=True,
-        )
+        #statm_mapper = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",statm_mapper = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do cat /proc/$(pgrep -f -x \"/usr/bin/tedge_mapper c8y\")/statm; sleep 1; done",
+        #    ],
+        #    stdouterr="statm_mapper_stdout",
+        #    background=True,
+        #)
+        #statm_mosquitto = self.startProcess(
+        #    command="/bin/sh",
+        #    arguments=[
+        #        "-c",
+        #        "while true; do cat /proc/$(pgrep -x mosquitto)/statm; sleep 1; done",
+        #    ],
+        #    stdouterr="statm_mosquitto_stdout",
+        #    background=True,
+        #)
 
         # start the publisher
 
@@ -128,15 +131,15 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
         # that the file is there and is at least not empty
         self.assertGrep('mosquitto_sub_stdout.out', 'mosquitto', contains=True)
 
-        self.assertGrep('status_mapper_stdout.out', 'tedge_mapper', contains=True)
-        self.assertGrep('status_mosquitto_stdout.out', 'mosquitto', contains=True)
+        #self.assertGrep('status_mapper_stdout.out', 'tedge_mapper', contains=True)
+        #self.assertGrep('status_mosquitto_stdout.out', 'mosquitto', contains=True)
 
-        self.assertGrep('stat_mapper_stdout.out', 'tedge_mapper', contains=True)
-        self.assertGrep('stat_mosquitto_stdout.out', 'mosquitto', contains=True)
+        #self.assertGrep('stat_mapper_stdout.out', 'tedge_mapper', contains=True)
+        #self.assertGrep('stat_mosquitto_stdout.out', 'mosquitto', contains=True)
 
         # Match 7 numbers separated by space
-        self.assertGrep('statm_mapper_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
-        self.assertGrep('statm_mosquitto_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
+        #self.assertGrep('statm_mapper_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
+        #self.assertGrep('statm_mosquitto_stdout.out', expr=r'(\d+ ){6}\d+', contains=True)
 
 
 
