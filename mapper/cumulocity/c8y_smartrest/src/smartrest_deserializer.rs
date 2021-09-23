@@ -1,6 +1,6 @@
 use crate::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
-use json_sm::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -89,12 +89,17 @@ impl SmartRestUpdateSoftware {
         for module in &self.modules() {
             match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
+                    let url = module
+                        .url
+                        .as_ref()
+                        .map(|url| DownloadInfo::new(url.as_str()));
+
                     request.add_update(SoftwareModuleUpdate::Install {
                         module: SoftwareModule {
                             module_type: module.get_module_version_and_type().1,
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
-                            url: module.url.clone(),
+                            url,
                             file_path: None,
                         },
                     });

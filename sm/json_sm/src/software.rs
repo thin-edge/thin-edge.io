@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::messages::DownloadInfo;
+
 pub type SoftwareType = String;
 pub type SoftwareName = String;
 pub type SoftwareVersion = String;
@@ -13,7 +15,7 @@ pub struct SoftwareModule {
     pub module_type: Option<SoftwareType>,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
-    pub url: Option<String>,
+    pub url: Option<DownloadInfo>,
     pub file_path: Option<PathBuf>,
 }
 
@@ -30,7 +32,7 @@ impl SoftwareModule {
         module_type: Option<SoftwareType>,
         name: SoftwareName,
         version: Option<SoftwareVersion>,
-        url: Option<String>,
+        url: Option<DownloadInfo>,
         file_path: Option<PathBuf>,
     ) -> SoftwareModule {
         let mut module = SoftwareModule {

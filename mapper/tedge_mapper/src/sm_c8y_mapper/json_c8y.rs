@@ -1,4 +1,6 @@
-use json_sm::{Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion};
+use json_sm::{
+    DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
+};
 use serde::{Deserialize, Serialize};
 
 const EMPTY_STRING: &str = "";
@@ -26,7 +28,7 @@ impl InternalIdResponse {
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     pub version: Option<String>,
-    pub url: Option<String>,
+    pub url: Option<DownloadInfo>,
 }
 
 impl<'a> Jsonify<'a> for C8ySoftwareModuleItem {}

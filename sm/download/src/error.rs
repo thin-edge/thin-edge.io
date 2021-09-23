@@ -36,6 +36,9 @@ pub enum DownloadError {
 
     #[error("Scheme {0} is not supported")]
     UnsupportedScheme(String),
+
+    #[error(transparent)]
+    FromBackoff(#[from] backoff::Error<reqwest::Error>),
 }
 
 impl From<reqwest::Error> for DownloadError {

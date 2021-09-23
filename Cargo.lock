@@ -704,6 +704,8 @@ dependencies = [
  "async-trait",
  "backoff",
  "c8y_smartrest",
+ "json_sm",
+ "log",
  "mqtt_client",
  "regex",
  "reqwest",

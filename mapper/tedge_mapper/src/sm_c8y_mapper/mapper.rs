@@ -11,8 +11,8 @@ use c8y_smartrest::{
     },
 };
 use json_sm::{
-    Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
-    SoftwareUpdateResponse,
+    Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
+    SoftwareOperationStatus, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
@@ -66,7 +66,7 @@ impl CumulocitySoftwareManagement {
             if let Err(error) = self.try_get_and_set_internal_id().await {
                 error!("{:?}", error);
 
-                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(10)).await;
                 continue;
             };
         }
@@ -212,11 +212,32 @@ impl CumulocitySoftwareManagement {
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = OutgoingTopic::SoftwareUpdateRequest.to_topic()?;
         let update_software = SmartRestUpdateSoftware::new();
-        let json_update_request = update_software
+        let mut software_update_request = update_software
             .from_smartrest(smartrest)?
-            .to_thin_edge_json()?
-            .to_json()?;
-        let () = self.publish(&topic, json_update_request).await?;
+            .to_thin_edge_json()?;
+        dbg!(&software_update_request);
+
+        let token = get_jwt_token(&self.client).await?;
+        software_update_request
+            .update_list
+            .iter_mut()
+            .for_each(|modules| {
+                modules.modules.iter_mut().for_each(|module| {
+                    if let Some(url) = &module.url {
+                        if url_is_my_tenant(url.url()) {
+                            module.url = module.url.as_ref().map(|s| {
+                                DownloadInfo::new(&s.url)
+                                    .with_auth(Auth::new_bearer(&token.token()))
+                            });
+                        }
+                    }
+                });
+            });
+
+        dbg!(&software_update_request);
+        let () = self
+            .publish(&topic, software_update_request.to_json()?)
+            .await?;
 
         Ok(())
     }
@@ -265,6 +286,10 @@ impl CumulocitySoftwareManagement {
     }
 }
 
+fn url_is_my_tenant(url: &str) -> bool {
+    true
+}
+
 async fn publish_software_list_http(
     client: &reqwest::Client,
     url: &str,
@@ -289,7 +314,6 @@ async fn try_get_internal_id(
     token: &str,
 ) -> Result<String, SMCumulocityMapperError> {
     let internal_id = client.get(url_get_id).bearer_auth(token).send().await?;
-
     let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
     let internal_id = internal_id_response.id();
