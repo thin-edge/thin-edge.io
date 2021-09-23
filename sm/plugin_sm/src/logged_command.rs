@@ -70,9 +70,14 @@ impl LoggedCommand {
 
         match result.as_ref() {
             Ok(output) => {
-                logger
-                    .write_all(format!("{}\n\n", &output.status).as_bytes())
-                    .await?;
+                match &output.status.code() {
+                    None => logger.write_all(b"exit status: unknown\n\n").await?,
+                    Some(code) => {
+                        logger
+                            .write_all(format!("exit status: {}\n\n", code).as_bytes())
+                            .await?
+                    }
+                };
                 logger.write_all(b"stdout <<EOF\n").await?;
                 logger.write_all(&output.stdout).await?;
                 logger.write_all(b"EOF\n\n").await?;
@@ -118,7 +123,7 @@ mod tests {
         assert_eq!(
             log_content,
             r#"----- $ echo "Hello" "World!"
-exit code: 0
+exit status: 0
 
 stdout <<EOF
 Hello World!
@@ -151,7 +156,7 @@ EOF
         assert_eq!(
             log_content,
             r#"----- $ ls "dummy-file"
-exit code: 2
+exit status: 2
 
 stdout <<EOF
 EOF
