@@ -2,6 +2,9 @@ use crate::{
     error::AgentError,
     state::{AgentStateRepository, State, StateRepository},
 };
+
+use flockfile::{check_another_instance_is_not_running, Flockfile, FlockfileError};
+
 use json_sm::{
     software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
@@ -113,17 +116,21 @@ pub struct SmAgent {
     config: SmAgentConfig,
     name: String,
     persistance_store: AgentStateRepository,
+    _flock: Flockfile,
 }
 
 impl SmAgent {
-    pub fn new(name: &str, config: SmAgentConfig) -> Self {
+    pub fn new(name: &str, config: SmAgentConfig) -> Result<Self, FlockfileError> {
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let flock = check_another_instance_is_not_running(&name)?;
+        info!("{} starting", &name);
 
-        Self {
+        Ok(Self {
             config,
             name: name.into(),
+            _flock: flock,
             persistance_store,
-        }
+        })
     }
 
     #[instrument(skip(self), name = "sm-agent")]
