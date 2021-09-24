@@ -38,9 +38,6 @@ pub(crate) enum MapperTopicError {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum SMCumulocityMapperError {
-    #[error("Invalid MQTT Message.")]
-    InvalidMqttMessage,
-
     #[error(transparent)]
     InvalidTopicError(#[from] MapperTopicError),
 
