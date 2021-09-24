@@ -18,16 +18,22 @@ pub trait Plugin {
     async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
     async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
 
-    async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError>;
+    async fn download(
+        &self,
+        name: &str,
+        version: &Option<String>,
+        url: &DownloadInfo,
+    ) -> Result<PathBuf, SoftwareError>;
 
     async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError>;
 
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
-                if module.url.is_some() {
+                if let Some(url) = &module.url {
                     // TODO: This may require stricter check, eg we sometimes use ' ' as indicator for c8y, but this most likely has to be handled in the mapper
-                    module.file_path = Some(self.download(&module).await?);
+                    module.file_path =
+                        Some(self.download(&module.name, &module.version, url).await?);
                 }
                 self.install(&module).await?;
 
@@ -262,24 +268,27 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn download(&self, module: &SoftwareModule) -> Result<PathBuf, SoftwareError> {
-        let mut filename = module.name.to_string();
-        if let Some(version) = &module.version {
+    async fn download(
+        &self,
+        name: &str,
+        version: &Option<String>,
+        url: &DownloadInfo,
+    ) -> Result<PathBuf, SoftwareError> {
+        let mut filename = name.to_string();
+        if let Some(version) = version {
             filename.push('_');
             filename.push_str(version.as_str());
         }
 
-        let downloaded_path =
-            match download(module.url.as_ref().unwrap(), Path::new("/tmp"), &filename).await {
-                Ok(path) => path,
-                Err(err) => {
-                    // TODO: Add correct error handling
-                    return Err(SoftwareError::DownloadError {
-                        reason: err.to_string(),
-                        url: module.url.as_ref().unwrap().url().to_string(),
-                    });
-                }
-            };
+        let downloaded_path = match download(url, Path::new("/tmp"), &filename).await {
+            Ok(path) => path,
+            Err(err) => {
+                return Err(SoftwareError::DownloadError {
+                    reason: err.to_string(),
+                    url: url.url().to_string(),
+                });
+            }
+        };
 
         Ok(downloaded_path)
     }

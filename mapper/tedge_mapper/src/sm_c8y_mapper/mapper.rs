@@ -16,7 +16,7 @@ use json_sm::{
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
 use reqwest::Url;
-use std::{convert::TryInto, str::FromStr, time::Duration};
+use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
