@@ -15,7 +15,8 @@ use json_sm::{
     SoftwareOperationStatus, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
-use std::{convert::TryInto, time::Duration};
+use reqwest::Url;
+use std::{convert::TryInto, str::FromStr, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
@@ -223,11 +224,19 @@ impl CumulocitySoftwareManagement {
             .for_each(|modules| {
                 modules.modules.iter_mut().for_each(|module| {
                     if let Some(url) = &module.url {
-                        if url_is_my_tenant(url.url()) {
+                        if url_is_my_tenant(
+                            url.url(),
+                            self.config
+                                .query_string(C8yUrlSetting)
+                                .unwrap_or_default()
+                                .as_str(),
+                        ) {
                             module.url = module.url.as_ref().map(|s| {
                                 DownloadInfo::new(&s.url)
                                     .with_auth(Auth::new_bearer(&token.token()))
                             });
+                        } else {
+                            module.url = module.url.as_ref().map(|s| DownloadInfo::new(&s.url));
                         }
                     }
                 });
@@ -284,8 +293,19 @@ impl CumulocitySoftwareManagement {
     }
 }
 
-fn url_is_my_tenant(url: &str) -> bool {
-    true
+fn url_is_my_tenant(url: &str, tenant_uri: &str) -> bool {
+    // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
+    // * <tenant_name>.<domain> eg: sample.c8y.io
+    // * <tenant_id>.<domain> eg: t12345.c8y.io
+    // These URLs may be both equivalent and point to the same tenant.
+    // We are going to remove that and only check if the domain is the same.
+    let url_host = Url::parse(url).unwrap().host().unwrap().to_string();
+    let url_domain = url_host.splitn(2, '.').collect::<Vec<&str>>();
+    let tenant_domain = tenant_uri.splitn(2, '.').collect::<Vec<&str>>();
+    if url_domain.get(1) == tenant_domain.get(1) {
+        return true;
+    }
+    false
 }
 
 async fn publish_software_list_http(

@@ -1,10 +1,8 @@
 use crate::error::DownloadError;
 use async_trait::async_trait;
 use backoff::{future::retry, ExponentialBackoff};
-use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use log::error;
-use mqtt_client::{Client, MqttClient, Topic};
-use reqwest::{self, Url};
+use reqwest;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -23,9 +21,8 @@ pub async fn download(
     target_dir_path: impl AsRef<Path>,
     target_file_name: impl AsRef<Path>,
 ) -> Result<PathBuf, DownloadError> {
-    // TODO: Validate the url belongs to the tenant and we can use jwt token such that we don't leak credentials
-
-    // Default retry is an exponential retry with a limit of 15 minutes total
+    // Default retry is an exponential retry with a limit of 15 minutes total.
+    // Let's set some more reasonable retry policy so we don't block the downloads for too long.
     let backoff = ExponentialBackoff {
         initial_interval: Duration::from_secs(30),
         max_elapsed_time: Some(Duration::from_secs(300)),
