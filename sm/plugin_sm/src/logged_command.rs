@@ -4,6 +4,14 @@ use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::process::Command;
 
+/// A command which execution is logged.
+///
+/// This struct wraps the main command with a nice representation of that command.
+/// This `command_line` field is only required because the
+/// [`Command::get_program()`](https://doc.rust-lang.org/std/process/struct.Command.html#method.get_program)
+/// and
+/// [`Command::get_args()`](https://doc.rust-lang.org/std/process/struct.Command.html#method.get_args)
+/// are nightly-only experimental APIs.
 pub struct LoggedCommand {
     command_line: String,
     command: Command,
