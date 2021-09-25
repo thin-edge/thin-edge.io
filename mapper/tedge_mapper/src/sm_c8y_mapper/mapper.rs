@@ -299,7 +299,16 @@ fn url_is_my_tenant(url: &str, tenant_uri: &str) -> bool {
     // * <tenant_id>.<domain> eg: t12345.c8y.io
     // These URLs may be both equivalent and point to the same tenant.
     // We are going to remove that and only check if the domain is the same.
-    let url_host = Url::parse(url).unwrap().host().unwrap().to_string();
+    let url_host = match Url::parse(url) {
+        Ok(url) => match url.host() {
+            Some(host) => host.to_string(),
+            None => return false,
+        },
+        Err(_err) => {
+            return false;
+        }
+    };
+
     let url_domain = url_host.splitn(2, '.').collect::<Vec<&str>>();
     let tenant_domain = tenant_uri.splitn(2, '.').collect::<Vec<&str>>();
     if url_domain.get(1) == tenant_domain.get(1) {
