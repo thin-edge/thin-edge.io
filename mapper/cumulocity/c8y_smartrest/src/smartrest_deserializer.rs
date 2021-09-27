@@ -89,14 +89,12 @@ impl SmartRestUpdateSoftware {
         for module in &self.modules() {
             match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
-                    let url = module.get_url().map(|url| DownloadInfo::new(url.as_str()));
-
                     request.add_update(SoftwareModuleUpdate::Install {
                         module: SoftwareModule {
                             module_type: module.get_module_version_and_type().1,
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
-                            url,
+                            url: module.get_url(),
                             file_path: None,
                         },
                     });
@@ -153,10 +151,10 @@ impl SmartRestUpdateSoftwareModule {
         }
     }
 
-    fn get_url(&self) -> Option<String> {
+    fn get_url(&self) -> Option<DownloadInfo> {
         match &self.url {
             Some(url) if url.trim().is_empty() => None,
-            Some(url) => Some(url.to_string()),
+            Some(url) => Some(DownloadInfo::new(url.as_str())),
             None => None,
         }
     }
