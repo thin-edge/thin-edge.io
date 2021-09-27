@@ -1,3 +1,8 @@
+mod error;
+mod module_check;
+
+use error::InternalError;
+use module_check::validate_package;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -17,6 +22,8 @@ pub enum PluginOp {
         module: String,
         #[structopt(short = "v", long = "--module-version")]
         version: Option<String>,
+        #[structopt(long = "--file")]
+        file_path: Option<String>,
     },
 
     /// Uninstall a module
@@ -31,21 +38,6 @@ pub enum PluginOp {
 
     /// Finalize a sequences of install/remove commands
     Finalize,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum InternalError {
-    #[error("Fail to run `{cmd}`: {from}")]
-    ExecError { cmd: String, from: std::io::Error },
-}
-
-impl InternalError {
-    pub fn exec_error(cmd: impl Into<String>, from: std::io::Error) -> InternalError {
-        InternalError::ExecError {
-            cmd: cmd.into(),
-            from,
-        }
-    }
 }
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
@@ -73,14 +65,41 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             status
         }
 
-        PluginOp::Install { module, version } => {
-            if let Some(version) = version {
-                run_cmd(
+        PluginOp::Install {
+            module,
+            version,
+            file_path,
+        } => {
+            match (&version, &file_path) {
+                (Some(version), Some(file_path)) => {
+                    let file_path = validate_package(
+                        file_path,
+                        &[
+                            &format!("Version: {}", &version),
+                            &format!("Package: {}", &module),
+                            "Debian package",
+                        ],
+                    )?;
+                    run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
+                }
+
+                (Some(version), None) => run_cmd(
                     "apt-get",
                     &format!("install --quiet --yes {}={}", module, version),
-                )?
-            } else {
-                run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
+                )?,
+
+                (None, Some(file_path)) => {
+                    let file_path = validate_package(
+                        file_path,
+                        &[&format!("Package: {}", &module), "Debian package"],
+                    )?;
+                    run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
+                }
+
+                _ => {
+                    // normal install
+                    run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
+                }
             }
         }
 
