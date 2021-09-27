@@ -89,21 +89,6 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
-    - name: Run all Tests
-      run:  bash  ./ci/ci_run_all_tests.sh
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE }}
-            TIMEZONE: 01:00
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       env:
@@ -129,6 +114,20 @@ jobs:
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
