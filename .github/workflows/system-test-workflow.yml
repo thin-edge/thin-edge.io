@@ -36,32 +36,32 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
-            TIMEZONE: 01:00
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
-            TIMEZONE: 01:00
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
+#    - name: Run all plugin tests
+#      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+#            TIMEZONE: 01:00
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#
+#    - name: Run all sm tests
+#      run:  bash  ./ci/ci_run_all_sm_tests.sh
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+#            TIMEZONE: 01:00
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
