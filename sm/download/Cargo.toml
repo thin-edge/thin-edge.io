@@ -10,13 +10,10 @@ description = "download_manager"
 [dependencies]
 async-trait = "0.1"
 backoff = { version = "0.3", features = ["tokio"] }
-c8y_smartrest = { path = "../../mapper/cumulocity/c8y_smartrest" }
 json_sm = { path = "../json_sm" }
 log = "0.4"
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = "0.11"
-serde = "1.0"
-tedge_config = { path = "../../tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"

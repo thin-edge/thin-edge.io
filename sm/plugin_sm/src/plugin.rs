@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use download::download::download;
+use download::download;
 use json_sm::*;
 use std::{
     iter::Iterator,
