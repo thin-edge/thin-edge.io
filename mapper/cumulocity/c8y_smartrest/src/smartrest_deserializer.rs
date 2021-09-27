@@ -359,7 +359,7 @@ mod tests {
                 module_type: Some("debian".to_string()),
                 name: "software1".to_string(),
                 version: Some("version1".to_string()),
-                url: Some("url1".to_string()),
+                url: Some("url1".into()),
                 file_path: None,
             }));
         let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {

@@ -45,7 +45,7 @@ impl PackageMetadata {
     fn get_module_metadata(file_path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         Ok(Command::new("dpkg")
             .arg("-I")
-            .arg(&format!("{}", &file_path))
+            .arg(file_path)
             .stdout(Stdio::piped())
             .output()?
             .stdout)

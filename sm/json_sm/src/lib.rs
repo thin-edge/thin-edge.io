@@ -90,14 +90,14 @@ mod tests {
                     module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
-                    url: Some("https://foobar.io/c.deb".to_string()),
+                    url: Some("https://foobar.io/c.deb".into()),
                     file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
-                    url: Some("https://foobar.io/d.deb".to_string()),
+                    url: Some("https://foobar.io/d.deb".into()),
                     file_path: None,
                 },
             ],
@@ -109,7 +109,7 @@ mod tests {
                 module_type: Some("apama".to_string()),
                 name: "m".to_string(),
                 version: None,
-                url: Some("https://foobar.io/m.epl".to_string()),
+                url: Some("https://foobar.io/m.epl".into()),
                 file_path: None,
             }],
         );
@@ -178,21 +178,21 @@ mod tests {
                     module_type: Some("debian".to_string()),
                     name: "c".to_string(),
                     version: None,
-                    url: Some("https://foobar.io/c.deb".to_string()),
+                    url: Some("https://foobar.io/c.deb".into()),
                     file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "d".to_string(),
                     version: Some("beta".to_string()),
-                    url: Some("https://foobar.io/d.deb".to_string()),
+                    url: Some("https://foobar.io/d.deb".into()),
                     file_path: None,
                 },
                 SoftwareModule {
                     module_type: Some("apama".to_string()),
                     name: "m".to_string(),
                     version: None,
-                    url: Some("https://foobar.io/m.epl".to_string()),
+                    url: Some("https://foobar.io/m.epl".into()),
                     file_path: None,
                 },
             ]
@@ -252,7 +252,7 @@ mod tests {
                     version: Some("5.7".to_string()),
                     url: Some(
                         "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
-                            .to_string(),
+                            .into(),
                     ),
                     file_path: None,
                 }),
@@ -342,8 +342,7 @@ mod tests {
             name: "collectd".to_string(),
             version: Some("5.7".to_string()),
             url: Some(
-                "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
-                    .to_string(),
+                "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2".into(),
             ),
             file_path: None,
         }));
@@ -541,7 +540,7 @@ mod tests {
                     version: Some("5.7".to_string()),
                     url: Some(
                         "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
-                            .to_string(),
+                            .into(),
                     ),
                     file_path: None,
                 }),
