@@ -8,7 +8,6 @@ description = "download_manager"
 
 
 [dependencies]
-async-trait = "0.1"
 backoff = { version = "0.3", features = ["tokio"] }
 json_sm = { path = "../json_sm" }
 log = "0.4"

@@ -1,5 +1,5 @@
 mod download;
 mod error;
 
-pub use download::download;
+pub use download::Downloader;
 pub use error::DownloadError;

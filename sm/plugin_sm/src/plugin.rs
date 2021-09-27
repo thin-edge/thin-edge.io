@@ -1,11 +1,10 @@
 use async_trait::async_trait;
-use download::download;
+use download::Downloader;
 use json_sm::*;
 use std::{
     iter::Iterator,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Output, Stdio},
-    sync::Arc,
 };
 use tokio::process::Command;
 
@@ -18,27 +17,33 @@ pub trait Plugin {
     async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
     async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
 
-    async fn download(
-        &self,
-        name: &str,
-        version: &Option<String>,
-        url: &DownloadInfo,
-    ) -> Result<PathBuf, SoftwareError>;
-
-    async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError>;
-
     async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
-                if let Some(url) = &module.url {
-                    module.file_path =
-                        Some(self.download(&module.name, &module.version, url).await?);
-                }
-                self.install(&module).await?;
+                match &module.url {
+                    Some(url) => {
+                        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+                        let () = downloader.download(url).await.map_err(|err| {
+                            SoftwareError::DownloadError {
+                                reason: err.to_string(),
+                                url: url.url().to_string(),
+                            }
+                        })?;
 
-                if let Some(path) = module.file_path {
-                    self.cleanup_downloaded(path.into()).await?;
-                    module.file_path = None;
+                        module.file_path = Some(downloader.filename().to_owned());
+
+                        let result = self.install(&module).await;
+                        downloader
+                            .cleanup()
+                            .await
+                            .map_err(|err| SoftwareError::DownloadError {
+                                reason: err.to_string(),
+                                url: url.url().to_string(),
+                            })?;
+
+                        return result;
+                    }
+                    None => self.install(&module).await?,
                 }
 
                 Ok(())
@@ -265,35 +270,5 @@ impl Plugin for ExternalPluginCommand {
                 reason: self.content(output.stderr)?,
             })
         }
-    }
-
-    async fn download(
-        &self,
-        name: &str,
-        version: &Option<String>,
-        url: &DownloadInfo,
-    ) -> Result<PathBuf, SoftwareError> {
-        let mut filename = name.to_string();
-        if let Some(version) = version {
-            filename.push('_');
-            filename.push_str(version.as_str());
-        }
-
-        let downloaded_path = match download(url, Path::new("/tmp"), &filename).await {
-            Ok(path) => path,
-            Err(err) => {
-                return Err(SoftwareError::DownloadError {
-                    reason: err.to_string(),
-                    url: url.url().to_string(),
-                });
-            }
-        };
-
-        Ok(downloaded_path)
-    }
-
-    async fn cleanup_downloaded(&self, path: Arc<Path>) -> Result<(), SoftwareError> {
-        let _res = tokio::fs::remove_file(path).await;
-        Ok(())
     }
 }
