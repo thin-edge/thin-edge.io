@@ -32,3 +32,9 @@ jobs:
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
 
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_${{ github.run_number }}
+        path: tests/
