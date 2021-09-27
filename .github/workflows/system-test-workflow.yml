@@ -101,8 +101,7 @@ jobs:
             TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocpysys.py run -v DEBUG 'publish_sawmill_record_statisti*'
-ity.com
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
