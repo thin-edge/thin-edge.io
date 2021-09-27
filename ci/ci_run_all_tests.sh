@@ -32,6 +32,8 @@ cd $TEBASEDIR
 
 dpkg -s mosquitto-clients
 
+#sudo apt install librrd-dev
+
 ./ci/configure_bridge.sh
 
 # Run all PySys tests
@@ -41,7 +43,9 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run -v DEBUG
+#pysys.py run -v DEBUG
+pysys.py run -v DEBUG 'publish_sawmill_record_statisti*'
+
 
 # Run the tests for the apt plugin
 # These are skipped by default, as the modify the operating system
