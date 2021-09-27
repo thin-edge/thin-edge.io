@@ -51,6 +51,6 @@ cd tests/PySys/
 # Disabled them until the agent is integrated right
 #
 ## Run the tests for software management
-pysys.py run 'sm-apt-*' -XmyPlatform='specialcontainer'
+pysys.py run -v DEBUG 'sm-apt-*' -XmyPlatform='specialcontainer'
 
 deactivate

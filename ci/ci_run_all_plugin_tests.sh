@@ -46,7 +46,7 @@ cd tests/PySys/
 # Run the tests for the apt plugin
 # These are skipped by default, as the modify the operating system
 # TODO Ideally, as the keyword says we should run them in a container
-pysys.py run 'apt_*' -XmyPlatform='container'
+pysys.py run -v DEBUG 'apt_*' -XmyPlatform='container'
 
 # Disabled them until the agent is integrated right
 #
