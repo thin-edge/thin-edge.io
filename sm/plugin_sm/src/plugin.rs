@@ -31,7 +31,6 @@ pub trait Plugin {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
                 if let Some(url) = &module.url {
-                    // TODO: This may require stricter check, eg we sometimes use ' ' as indicator for c8y, but this most likely has to be handled in the mapper
                     module.file_path =
                         Some(self.download(&module.name, &module.version, url).await?);
                 }
