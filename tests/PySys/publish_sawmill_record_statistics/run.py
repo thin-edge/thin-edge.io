@@ -156,7 +156,9 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
         from pathlib import Path
 
-        p = Path('/var/lib/collectd/rrd/isonoe.local/exec/')
+        # ghraspberrypi.local
+        #p = Path('/var/lib/collectd/rrd/isonoe.local/exec/')
+        p = Path('/var/lib/collectd/rrd/ghraspberrypi.local/exec/')
         for x in p.iterdir():
             #print(x.resolve(), x.name)
 
