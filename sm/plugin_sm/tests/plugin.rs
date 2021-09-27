@@ -4,6 +4,9 @@ mod tests {
     use json_sm::{SoftwareError, SoftwareModule};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    use tokio::fs::File;
+    use tokio::io::BufWriter;
+
     #[tokio::test]
     #[cfg(feature = "integeration-test")]
     async fn plugin_get_command_prepare() {
@@ -11,7 +14,8 @@ mod tests {
         let (plugin, _plugin_path) = get_dummy_plugin("test");
 
         // Call dummy plugin via plugin api.
-        let res = plugin.prepare().await;
+        let mut logger = dev_null().await;
+        let res = plugin.prepare(&mut logger).await;
 
         // Expect to get Ok as plugin should exit with code 0.
         assert_eq!(res, Ok(()));
@@ -24,7 +28,8 @@ mod tests {
         let (plugin, _plugin_path) = get_dummy_plugin("test");
 
         // Call dummy plugin via plugin api.
-        let res = plugin.finalize().await;
+        let mut logger = dev_null().await;
+        let res = plugin.finalize(&mut logger).await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no more checks to be done.
         assert_eq!(res, Ok(()));
@@ -59,7 +64,8 @@ mod tests {
         let expected_response = vec![module];
 
         // Call plugin via API.
-        let res = plugin.list().await;
+        let mut logger = dev_null().await;
+        let res = plugin.list(&mut logger).await;
 
         // Expect Ok as plugin should exit with code 0.
         assert!(res.is_ok());
@@ -91,7 +97,8 @@ mod tests {
         };
 
         // Call plugin install via API.
-        let res = plugin.install(&module).await;
+        let mut logger = dev_null().await;
+        let res = plugin.install(&module, &mut logger).await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
         assert!(res.is_ok());
@@ -122,7 +129,8 @@ mod tests {
         };
 
         // Call plugin remove API .
-        let res = plugin.remove(&module).await;
+        let mut logger = dev_null().await;
+        let res = plugin.remove(&module, &mut logger).await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, no more output to be validated.
         assert!(res.is_ok());
@@ -233,5 +241,10 @@ mod tests {
             let () = fs::create_dir(&path).unwrap();
         }
         path
+    }
+
+    async fn dev_null() -> BufWriter<File> {
+        let log_file = File::create("/dev/null").await.unwrap();
+        BufWriter::new(log_file)
     }
 }
