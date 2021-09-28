@@ -3,11 +3,11 @@ name: system-test-workflow
 on:
   workflow_dispatch:
     branches: [ main, continuous_integration]
-  #workflow_run:
-  #  workflows: ["integration-test-workflow"]
-  #  branches: [main, continuous_integration]
-  #  types:
-  #    - completed
+  workflow_run:
+    workflows: ["integration-test-workflow"]
+    branches: [main, continuous_integration]
+    types:
+      - completed
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,7 +15,7 @@ env:
 jobs:
   system-test_onsite:
     runs-on: [self-hosted, Linux, ARM, onsite]
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
@@ -82,7 +82,7 @@ jobs:
 
   system-test_offsite:
     runs-on: [self-hosted, Linux, ARM, offsite]
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
