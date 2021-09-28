@@ -43,8 +43,8 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-#pysys.py run -v DEBUG
-pysys.py run -v DEBUG 'publish_sawmill_record_statisti*'
+pysys.py run -v DEBUG
+#pysys.py run -v DEBUG 'publish_sawmill_record_statisti*'
 
 
 # Run the tests for the apt plugin
