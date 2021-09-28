@@ -23,7 +23,7 @@ To run the tests with another tenant url:
 TODO: Avoid hardcoded ids
 TODO: Get software package ids from c8y
 TODO: Add management for package creation and removal for c8y
-    -> Mabe as separate python module to access c8y
+    -> Maybe as separate python module to access c8y
 
 To override the hardcoded software id database you can use C8YSWREPO (format: JSON):
 
@@ -69,7 +69,7 @@ def is_timezone_aware(stamp):
 class SoftwareManagement(EnvironmentC8y):
     """Base class for software management tests"""
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
 
@@ -136,7 +136,7 @@ class SoftwareManagement(EnvironmentC8y):
         self.wait_until_end()
 
     def trigger_action(self, package_name, package_id, version, url, action):
-        """Trigger a installation or deinstallation of a package.
+        """Trigger a installation or de-installation of a package.
         package_id is the id that is automatically assigned by C8y.
 
         TODO Improve repository ID management to avoid hardcoded IDs
@@ -236,7 +236,7 @@ class SoftwareManagement(EnvironmentC8y):
         operations = jresponse.get("operations")
 
         if not operations or len(operations) != 1:
-            raise SystemError("field operations is mising in response or to long")
+            raise SystemError("field operations is missing in response or to long")
 
         operation = operations[0]
 
