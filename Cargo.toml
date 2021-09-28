@@ -13,6 +13,7 @@ members = [
     "mapper/cumulocity/c8y_smartrest",
     "mapper/tedge_mapper",
     "mapper/thin_edge_json",
+    "sm/download",
     "sm/json_sm",
     "sm/plugin_sm",
     "sm/tedge_agent",

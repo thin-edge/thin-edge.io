@@ -298,6 +298,54 @@ pub enum SoftwareModuleAction {
     Remove,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct DownloadInfo {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<Auth>,
+}
+
+impl From<&str> for DownloadInfo {
+    fn from(url: &str) -> Self {
+        Self::new(url)
+    }
+}
+
+impl DownloadInfo {
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.into(),
+            auth: None,
+        }
+    }
+
+    pub fn with_auth(self, auth: Auth) -> Self {
+        Self {
+            auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn url(&self) -> &str {
+        self.url.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum Auth {
+    Bearer(String),
+}
+
+impl Auth {
+    pub fn new_bearer(token: &str) -> Self {
+        Self::Bearer(token.into())
+    }
+}
+
 /// Software module payload definition.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
