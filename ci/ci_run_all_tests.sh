@@ -32,7 +32,7 @@ cd $TEBASEDIR
 
 dpkg -s mosquitto-clients
 
-#sudo apt install librrd-dev python3-rrdtool rrdtool
+#sudo apt install librrd-dev python3-rrdtool rrdtool collectd
 
 ./ci/configure_bridge.sh
 

@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+import platform
 import sys
 import rrdtool
 
@@ -36,7 +38,6 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             arguments=[self.systemctl, "start", "collectd"],
             stdouterr="collectd_out",
         )
-
 
         sub = self.startProcess(
             command="/usr/bin/mosquitto_sub",
@@ -146,19 +147,17 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
     def mycleanup(self):
 
+        self.log.info("My Cleanup")
+
         collectd = self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "stop", "collectd"],
             stdouterr="collectd_out",
         )
 
-        self.log.info("My Cleanup")
+        node = platform.node()
+        p = Path(f'/var/lib/collectd/rrd/{node}.local/exec/')
 
-        from pathlib import Path
-
-        # ghraspberrypi.local
-        #p = Path('/var/lib/collectd/rrd/isonoe.local/exec/')
-        p = Path('/var/lib/collectd/rrd/ghraspberrypi.local/exec/')
         for x in p.iterdir():
             #print(x.resolve(), x.name)
 
