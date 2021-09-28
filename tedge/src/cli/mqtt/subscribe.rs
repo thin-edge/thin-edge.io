@@ -4,6 +4,7 @@ use rumqttc::QoS;
 use rumqttc::{Client, Event, Incoming, MqttOptions, Packet};
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
+const MAX_PACKET_SIZE: usize = 1048575;
 
 pub struct MqttSubscribeCommand {
     pub host: String,
@@ -30,6 +31,7 @@ impl Command for MqttSubscribeCommand {
 fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
+    options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
     let (mut client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
 

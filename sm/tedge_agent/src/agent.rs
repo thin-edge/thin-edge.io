@@ -3,7 +3,7 @@ use crate::{
     state::{AgentStateRepository, State, StateRepository},
 };
 
-use flockfile::{check_another_instance_is_not_running, Flockfile, FlockfileError};
+use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use json_sm::{
     software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
@@ -15,6 +15,7 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, error, info, instrument};
 
+use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
@@ -31,6 +32,7 @@ pub struct SmAgentConfig {
     pub response_topic_list: Topic,
     pub response_topic_update: Topic,
     pub sm_home: PathBuf,
+    pub log_dir: PathBuf,
 }
 
 impl Default for SmAgentConfig {
@@ -57,6 +59,8 @@ impl Default for SmAgentConfig {
 
         let sm_home = PathBuf::from("/etc/tedge");
 
+        let log_dir = PathBuf::from("/var/log/tedge/agent");
+
         Self {
             default_plugin_type,
             errors_topic,
@@ -67,6 +71,7 @@ impl Default for SmAgentConfig {
             response_topic_list,
             response_topic_update,
             sm_home,
+            log_dir,
         }
     }
 }
@@ -115,21 +120,25 @@ impl SmAgentConfig {
 pub struct SmAgent {
     config: SmAgentConfig,
     name: String,
+    operation_logs: OperationLogs,
     persistance_store: AgentStateRepository,
     _flock: Flockfile,
 }
 
 impl SmAgent {
-    pub fn new(name: &str, config: SmAgentConfig) -> Result<Self, FlockfileError> {
-        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+    pub fn try_new(name: &str, config: SmAgentConfig) -> Result<Self, AgentError> {
         let flock = check_another_instance_is_not_running(&name)?;
         info!("{} starting", &name);
+
+        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
         Ok(Self {
             config,
             name: name.into(),
-            _flock: flock,
+            operation_logs,
             persistance_store,
+            _flock: flock,
         })
     }
 
@@ -255,7 +264,11 @@ impl SmAgent {
             ))
             .await?;
 
-        let response = plugins.list(&request).await;
+        let log_file = self
+            .operation_logs
+            .new_log_file(LogKind::SoftwareList)
+            .await?;
+        let response = plugins.list(&request, log_file).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -307,7 +320,11 @@ impl SmAgent {
             .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
-        let response = plugins.process(&request).await;
+        let log_file = self
+            .operation_logs
+            .new_log_file(LogKind::SoftwareUpdate)
+            .await?;
+        let response = plugins.process(&request, log_file).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
