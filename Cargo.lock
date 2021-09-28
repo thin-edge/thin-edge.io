@@ -688,10 +688,11 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "download"
 version = "0.3.1"
 dependencies = [
+ "anyhow",
  "backoff",
  "json_sm",
  "log",
- "mqtt_client",
+ "mockito",
  "regex",
  "reqwest",
  "tedge_utils",

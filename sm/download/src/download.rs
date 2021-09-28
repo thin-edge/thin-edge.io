@@ -92,3 +92,50 @@ impl Downloader {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Downloader;
+    use json_sm::DownloadInfo;
+    use mockito::mock;
+    use std::path::{Path, PathBuf};
+    use tempfile::TempDir;
+
+    #[test]
+    fn construct_downloader_filename() {
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = PathBuf::from("/tmp");
+
+        let downloader = Downloader::new(name, &version, &target_dir_path);
+
+        let expected_path = Path::new("/tmp/test_download_test1");
+        assert_eq!(downloader.filename(), expected_path);
+    }
+
+    #[tokio::test]
+    async fn downloader_download_content_no_auth() -> anyhow::Result<()> {
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_status(200)
+            .with_body(b"hello")
+            .create();
+
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let () = downloader.download(&url).await?;
+
+        let log_content = std::fs::read(downloader.filename())?;
+
+        assert_eq!("hello".as_bytes(), log_content);
+
+        Ok(())
+    }
+}

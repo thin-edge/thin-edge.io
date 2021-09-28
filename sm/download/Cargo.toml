@@ -10,7 +10,6 @@ description = "download_manager"
 backoff = { version = "0.3", features = ["tokio"] }
 json_sm = { path = "../json_sm" }
 log = "0.4"
-mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = "0.11"
 tedge_utils = { path = "../../common/tedge_utils" }
 tempfile = "3.2"
@@ -19,6 +18,8 @@ tokio = "1.9"
 url = "2.2"
 
 [dev-dependencies]
+anyhow = "1.0"
+mockito = "0.30"
 regex = "1.5"
-tokio = "1.9"
+tempfile = "3.2"
 tokio-test = "0.4"
