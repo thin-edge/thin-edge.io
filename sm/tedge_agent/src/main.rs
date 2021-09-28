@@ -3,6 +3,7 @@ use structopt::*;
 
 mod agent;
 mod error;
+mod operation_logs;
 mod state;
 
 #[derive(Debug, StructOpt)]
@@ -25,10 +26,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let agent = AgentOpt::from_args();
     tedge_utils::logging::initialise_tracing_subscriber(agent.debug);
     let tedge_config_location = tedge_config::TEdgeConfigLocation::from_default_system_location();
-    let agent = agent::SmAgent::new(
+    let agent = agent::SmAgent::try_new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
-    );
-    agent?.start().await?;
+    )?;
+    agent.start().await?;
     Ok(())
 }

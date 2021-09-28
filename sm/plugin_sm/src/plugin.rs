@@ -1,23 +1,40 @@
+use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
 use download::Downloader;
 use json_sm::*;
-use std::{
-    iter::Iterator,
-    path::PathBuf,
-    process::{Output, Stdio},
-};
-use tokio::process::Command;
+use std::{iter::Iterator, path::PathBuf, process::Output};
+use tokio::fs::File;
+use tokio::io::BufWriter;
 
 #[async_trait]
 pub trait Plugin {
-    async fn prepare(&self) -> Result<(), SoftwareError>;
-    async fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
-    async fn remove(&self, module: &SoftwareModule) -> Result<(), SoftwareError>;
-    async fn finalize(&self) -> Result<(), SoftwareError>;
-    async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError>;
-    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError>;
+    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn install(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError>;
+    async fn remove(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError>;
+    async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn list(
+        &self,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Vec<SoftwareModule>, SoftwareError>;
+    async fn version(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Option<String>, SoftwareError>;
 
-    async fn apply(&self, update: &SoftwareModuleUpdate) -> Result<(), SoftwareError> {
+    async fn apply(
+        &self,
+        update: &SoftwareModuleUpdate,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
                 match &module.url {
@@ -32,7 +49,7 @@ pub trait Plugin {
 
                         module.file_path = Some(downloader.filename().to_owned());
 
-                        let result = self.install(&module).await;
+                        let result = self.install(&module, logger).await;
                         downloader
                             .cleanup()
                             .await
@@ -43,30 +60,33 @@ pub trait Plugin {
 
                         return result;
                     }
-                    None => self.install(&module).await?,
+                    None => self.install(&module, logger).await?,
                 }
 
                 Ok(())
             }
-            SoftwareModuleUpdate::Remove { module } => self.remove(&module).await,
+            SoftwareModuleUpdate::Remove { module } => self.remove(&module, logger).await,
         }
     }
-
-    async fn apply_all(&self, updates: Vec<SoftwareModuleUpdate>) -> Vec<SoftwareError> {
+    async fn apply_all(
+        &self,
+        updates: Vec<SoftwareModuleUpdate>,
+        logger: &mut BufWriter<File>,
+    ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
-        if let Err(prepare_error) = self.prepare().await {
+        if let Err(prepare_error) = self.prepare(logger).await {
             failed_updates.push(prepare_error);
             return failed_updates;
         }
 
         for update in updates.iter() {
-            if let Err(error) = self.apply(update).await {
+            if let Err(error) = self.apply(update, logger).await {
                 failed_updates.push(error);
             };
         }
 
-        if let Err(finalize_error) = self.finalize().await {
+        if let Err(finalize_error) = self.finalize(logger).await {
             failed_updates.push(finalize_error);
         }
 
@@ -94,13 +114,13 @@ impl ExternalPluginCommand {
         &self,
         action: &str,
         maybe_module: Option<&SoftwareModule>,
-    ) -> Result<Command, SoftwareError> {
+    ) -> Result<LoggedCommand, SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
-            let mut command = Command::new(&sudo);
+            let mut command = LoggedCommand::new(sudo);
             command.arg(&self.path);
             command
         } else {
-            Command::new(&self.path)
+            LoggedCommand::new(&self.path)
         };
         command.arg(action);
 
@@ -118,18 +138,16 @@ impl ExternalPluginCommand {
             }
         }
 
-        command
-            .current_dir("/tmp")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
         Ok(command)
     }
 
-    pub async fn execute(&self, mut command: Command) -> Result<Output, SoftwareError> {
+    pub async fn execute(
+        &self,
+        command: LoggedCommand,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Output, SoftwareError> {
         let output = command
-            .output()
+            .execute(logger)
             .await
             .map_err(|err| self.plugin_error(err))?;
         Ok(output)
@@ -169,9 +187,9 @@ const VERSION: &str = "version";
 
 #[async_trait]
 impl Plugin for ExternalPluginCommand {
-    async fn prepare(&self) -> Result<(), SoftwareError> {
+    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
         let command = self.command(PREPARE, None)?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             Ok(())
@@ -183,9 +201,13 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn install(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+    async fn install(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
         let command = self.command(INSTALL, Some(module))?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             Ok(())
@@ -197,9 +219,13 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn remove(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+    async fn remove(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
         let command = self.command(REMOVE, Some(module))?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             Ok(())
@@ -211,9 +237,9 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn finalize(&self) -> Result<(), SoftwareError> {
+    async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
         let command = self.command(FINALIZE, None)?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             Ok(())
@@ -225,9 +251,12 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn list(&self) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    async fn list(
+        &self,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Vec<SoftwareModule>, SoftwareError> {
         let command = self.command(LIST, None)?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             let mut software_list = Vec::new();
@@ -253,9 +282,13 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn version(&self, module: &SoftwareModule) -> Result<Option<String>, SoftwareError> {
+    async fn version(
+        &self,
+        module: &SoftwareModule,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Option<String>, SoftwareError> {
         let command = self.command(VERSION, Some(module))?;
-        let output = self.execute(command).await?;
+        let output = self.execute(command, logger).await?;
 
         if output.status.success() {
             let version = String::from(self.content(output.stdout)?.trim());

@@ -234,9 +234,6 @@ impl SoftwareListResponse {
 pub struct SoftwareUpdateResponse {
     #[serde(flatten)]
     response: SoftwareRequestResponse,
-
-    #[serde(skip)]
-    errors: Vec<SoftwareError>,
 }
 
 impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
@@ -245,7 +242,6 @@ impl SoftwareUpdateResponse {
     pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         SoftwareUpdateResponse {
             response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
-            errors: vec![],
         }
     }
 
@@ -264,8 +260,6 @@ impl SoftwareUpdateResponse {
     }
 
     pub fn add_errors(&mut self, plugin_type: &str, errors: Vec<SoftwareError>) {
-        self.errors.append(&mut errors.clone());
-        self.response.set_reason_errors(&self.errors);
         self.response.add_errors(
             plugin_type.to_string(),
             errors
@@ -273,6 +267,11 @@ impl SoftwareUpdateResponse {
                 .filter_map(|module| module.into())
                 .collect::<Vec<SoftwareModuleItem>>(),
         );
+    }
+
+    pub fn set_error(&mut self, reason: &str) {
+        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.reason = Some(reason.into());
     }
 
     pub fn id(&self) -> &str {
@@ -414,57 +413,6 @@ impl SoftwareRequestResponse {
                 modules,
             })
         }
-    }
-
-    pub fn set_reason_errors(&mut self, errors: &[SoftwareError]) {
-        let mut count = 0;
-        let mut failed_package = String::new();
-        let mut failed_install = String::new();
-        let mut failed_remove = String::new();
-
-        for error in errors.iter() {
-            count += 1;
-            match error {
-                SoftwareError::Install { module, .. } => {
-                    failed_install.push(' ');
-                    failed_install.push_str(&module.name);
-                }
-                SoftwareError::Remove { module, .. } => {
-                    failed_remove.push(' ');
-                    failed_remove.push_str(&module.name);
-                }
-                SoftwareError::Prepare { software_type, .. } => {
-                    failed_package.push(' ');
-                    failed_package.push_str(software_type);
-                }
-                SoftwareError::Finalize { software_type, .. } => {
-                    failed_package.push(' ');
-                    failed_package.push_str(software_type);
-                }
-                _ => {}
-            }
-        }
-
-        let mut reason = format!("{} errors:", count);
-
-        if !failed_package.is_empty() {
-            reason.push_str(" fail to update [");
-            reason.push_str(&failed_package);
-            reason.push_str(" ]");
-        }
-        if !failed_install.is_empty() {
-            reason.push_str(" fail to install [");
-            reason.push_str(&failed_install);
-            reason.push_str(" ]");
-        }
-        if !failed_remove.is_empty() {
-            reason.push_str(" fail to remove [");
-            reason.push_str(&failed_remove);
-            reason.push_str(" ]");
-        }
-
-        self.status = SoftwareOperationStatus::Failed;
-        self.reason = Some(reason);
     }
 
     pub fn add_errors(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {

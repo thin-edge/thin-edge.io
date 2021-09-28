@@ -684,6 +684,7 @@ mod tests {
         let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
+        response.set_error("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]");
         response.add_errors(
             "debian",
             vec![SoftwareError::Install {
