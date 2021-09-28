@@ -2,10 +2,11 @@ use crate::component::TEdgeComponent;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use serial_test::serial;
 use std::{io::Write, time::Duration};
+use std::{thread, time};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 
 const MQTT_TEST_PORT: u16 = 55555;
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(10000);
 
 #[tokio::test]
 #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
@@ -323,6 +324,12 @@ async fn mapper_publishes_software_update_status_and_software_list_onto_c8y_topi
 #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() {
+    // To run this test successfully follow below steps
+    // Step 1: Add ` self.c8y_internal_id = "test".into();` at the beginning of the init function in sm_mapper_c8y/mapper.rs
+    // Step 2: Connect to the c8y cloud, `sudo tedge connect c8y` and stop tedge-mapper-sm-c8y and tedge-agent services.
+
+    // Here the tedge-agent is mocked, all the requests are answered by local subscribers.
+
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
     // SM Mapper fails before receiving the rsponse for the request.
@@ -330,8 +337,10 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
     // Now the SM Mapper recovers and receives the response message and publishes it on `c8y/s/us`
     // The subscriber that was waiting for the response on `c8/s/us` receives the response and validates it.
 
-    // Create a subscriber to receive messages on `tedge/commands/req/software/update` topic.
-    let mut sw_list_req_sub = get_subscriber(
+    // Todo: Mock the c8y cloud to get internal_id.
+
+    // Create a subscriber to receive messages on `tedge/commands/req/software/list` topic.
+    let mut sw_list_req_sub1 = get_subscriber(
         "tedge/commands/req/software/list",
         "mapper_publishes_software_list_request",
     )
@@ -359,11 +368,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
             .await
     });
 
-    let smartrest = r#"71, 1st fake test token"#;
-    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), smartrest.to_string()).await;
-
     // Expect thin-edge json message on `tedge/commands/req/software/list` with expected payload.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, sw_list_req_sub.next()).await {
+    match tokio::time::timeout(TEST_TIMEOUT_MS, sw_list_req_sub1.next()).await {
         Ok(Some(msg)) => {
             dbg!(&msg.payload_str().unwrap());
             // Prepare and publish a software update response `successful`.
@@ -384,12 +390,9 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
             .await;
         }
         _ => {
-            panic!("List request not received");
+            panic!("Start list request not received");
         }
     }
-
-    let smartrest = r#"71, second fake test token"#;
-    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), smartrest.to_string()).await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528, external_id,nodered,1.0.0::debian,,install"#;
@@ -411,12 +414,13 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
     // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
     match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_req_sub.next()).await {
         Ok(Some(msg)) => {
-            // dbg!(&msg.payload_str().unwrap());
+            dbg!(&msg.payload_str().unwrap());
             if msg
                 .payload_str()
                 .unwrap()
                 .contains(&remove_whitespace(expected_update_list))
             {
+                // thread::sleep(time::Duration::from_secs(1));
                 // Stop the SM Mapper
                 sm_mapper.abort();
 
@@ -438,6 +442,12 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
                 .await;
             }
 
+            // Create a subscriber to receive messages on `tedge/commands/req/software/list` topic.
+            let mut sw_list_req_sub2 = get_subscriber(
+                "tedge/commands/req/software/list",
+                "mapper_publishes_software_list_request",
+            )
+            .await;
             dbg!("..........................Restart Mapper ...........................................................");
             // Restart the SM Mapper
             let config = create_tedge_config();
@@ -447,12 +457,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
                     .await
             });
 
-            // Prepare and publish a fake jwt token on `c8y/s/dat`.
-            let smartrest = r#"71, fake test token"#;
-            let _ = publish(&Topic::new("c8y/s/dat").unwrap(), smartrest.to_string()).await;
-
             // Expect thin-edge json message on `tedge/commands/req/software/list` with expected payload.
-            match tokio::time::timeout(TEST_TIMEOUT_MS, sw_list_req_sub.next()).await {
+            match tokio::time::timeout(TEST_TIMEOUT_MS, sw_list_req_sub2.next()).await {
                 Ok(Some(msg)) => {
                     dbg!(&msg.payload_str().unwrap());
                     // Prepare and publish a software update response `successful`.
@@ -476,9 +482,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
                     panic!("List request not received");
                 }
             }
-
-            let smartrest = r#"71, second fake test token"#;
-            let _ = publish(&Topic::new("c8y/s/dat").unwrap(), smartrest.to_string()).await;
         }
         _ => {
             panic!("No message received after a second.");

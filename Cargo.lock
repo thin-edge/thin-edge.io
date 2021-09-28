@@ -2578,7 +2578,6 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "async-channel",
  "async-trait",
  "batcher",
  "c8y_translator_lib",

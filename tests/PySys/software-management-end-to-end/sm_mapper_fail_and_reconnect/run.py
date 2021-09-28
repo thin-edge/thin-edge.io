@@ -15,9 +15,9 @@ When tedge_agent is started as `sudo systemctl start tedge-agent.service`
 When sm mapper is started as `sudo systemctl start tedge-mapper-sm-c8y.service`
 When send a delete operation `sudo tedge mqtt pub "c8y/s/ds" "528,tedge,rolldice,,,delete"`
 When sm mapper is stopped `sudo systemctl stop tedge-mapper-sm-c8y.service`
-Wait for sometime for operation to be completed
+Wait for sometime for operation to be completed and agent to push the operation result.
 When sm mapper is restarted `sudo systemctl restart tedge-mapper-sm-c8y.service`
-Now sm mapper receives the last update result message, process and forward it to the cloud on `c8y/s/us`
+Now sm mapper receives the last update result message, process and forwards it to the cloud on `c8y/s/us`
 Then validate subscriber output for `501,c8y_SoftwareUpdate`, for the status of operation
 Then validate subscriber output for `503,c8y_SoftwareUpdate` for final result of operation
 Then test has passed
@@ -31,9 +31,6 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
     mqtt_sub = "/usr/bin/mosquitto_sub"
     rm = "/usr/bin/rm"
     def setup(self):
-
-        # setup mosquitto
-        self.setup_mosquitto()
 
         self.startProcess(
             command=self.sudo,
@@ -78,8 +75,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         )
 
         # check if the agent has completed the operation
-        # self.check_if_agent_updated_op_status()
-        time.sleep(20)
+        time.sleep(15)
        
         self.startProcess(
             command=self.sudo,
@@ -126,17 +122,4 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             command=self.sudo,
             arguments=[self.systemctl, "restart", "mosquitto.service"],
             stdouterr="restart_mosquitto",
-        )
-
-       
-    def check_if_agent_updated_op_status(self):
-        fout = Path(self.output + '/tedge_sub_agent.out')
-        ferr = Path(self.output + '/tedge_sub_agent.err')
-        n = 0
-        while n < 20:
-            if fout.is_file() or ferr.is_file():
-                return
-            else:
-                time.sleep(1)
-                n += 1
-        self.assertFalse(True, abortOnError=True, assertMessage=None)
+        )       

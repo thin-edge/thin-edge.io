@@ -38,6 +38,9 @@ pub(crate) enum MapperTopicError {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum SMCumulocityMapperError {
+    #[error("Invalid MQTT Message.")]
+    InvalidMqttMessage,
+
     #[error(transparent)]
     InvalidTopicError(#[from] MapperTopicError),
 
@@ -61,10 +64,4 @@ pub(crate) enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
-
-    #[error(transparent)]
-    FromAsyncChannelSendError(#[from] async_channel::SendError<String>),
-
-    #[error(transparent)]
-    FromAsyncChannelRecvError(#[from] async_channel::RecvError),
 }

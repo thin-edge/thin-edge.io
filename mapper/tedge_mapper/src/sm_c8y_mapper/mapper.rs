@@ -4,13 +4,12 @@ use crate::sm_c8y_mapper::{
     smartrest_serializer::*, topic::*,
 };
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
-use async_channel;
 use async_trait::async_trait;
 use json_sm::{
     Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
     SoftwareUpdateResponse,
 };
-use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
+use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
@@ -32,7 +31,13 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
-        let () = sm_mapper.run().await?;
+        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        let messages = sm_mapper.client.subscribe(topic_filter).await?;
+
+        let () = sm_mapper.init().await?;
+        let () = sm_mapper.run(messages).await?;
 
         Ok(())
     }
@@ -43,44 +48,50 @@ struct CumulocitySoftwareManagement {
     client: Client,
     config: TEdgeConfig,
     c8y_internal_id: String,
-    jwt_token_sender: async_channel::Sender<String>,
-    jwt_token_receiver: async_channel::Receiver<String>,
 }
 
 impl CumulocitySoftwareManagement {
     pub fn new(client: Client, config: TEdgeConfig) -> Self {
-        let (sender, receiver) = async_channel::unbounded();
         Self {
             client,
             config,
             c8y_internal_id: "".into(),
-            jwt_token_sender: sender,
-            jwt_token_receiver: receiver,
         }
     }
 
-    async fn run(&mut self) -> Result<(), anyhow::Error> {
+    #[instrument(skip(self), name = "init")]
+    async fn init(&mut self) -> Result<(), anyhow::Error> {
+        info!("Initialisation");
+        while self.c8y_internal_id.is_empty() {
+            if let Err(error) = self.try_get_and_set_internal_id().await {
+                error!("{:?}", error);
+
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
+                continue;
+            };
+        }
+
+        Ok(())
+    }
+
+    async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
-        while let Err(err) = self.subscribe_messages_runtime().await {
+        while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
             error!("{}", err);
         }
 
         Ok(())
     }
 
-    #[instrument(skip(self), name = "main-loop")]
-    async fn subscribe_messages_runtime(&mut self) -> Result<(), SMCumulocityMapperError> {
-        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
-        topic_filter.add(IncomingTopic::JwtTokenResponse.as_str())?;
-
-        let mut messages = self.client.subscribe(topic_filter).await?;
-
+    #[instrument(skip(self, messages), name = "main-loop")]
+    async fn subscribe_messages_runtime(
+        &self,
+        messages: &mut Box<dyn MqttMessageStream>,
+    ) -> Result<(), SMCumulocityMapperError> {
         while let Some(message) = messages.next().await {
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
@@ -105,11 +116,6 @@ impl CumulocitySoftwareManagement {
                         .forward_software_request(message.payload_str()?)
                         .await?;
                 }
-                IncomingTopic::JwtTokenResponse => {
-                    debug!("JWT Token Response");
-                    let token_smartrest: String = message.payload_str()?.to_string();
-                    self.jwt_token_sender.send(token_smartrest).await?;
-                }
             }
         }
         Ok(())
@@ -127,7 +133,7 @@ impl CumulocitySoftwareManagement {
 
     #[instrument(skip(self), name = "software-update")]
     async fn validate_and_publish_software_list(
-        &mut self,
+        &self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareListResponse::from_json(json_response)?;
@@ -164,7 +170,7 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn publish_operation_status(
-        &mut self,
+        &self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
@@ -221,12 +227,10 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn send_software_list_http(
-        &mut self,
+        &self,
         json_response: &SoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
-        let _ = self.get_c8y_internal_id();
-
-        let token = self.get_jwt_token().await?;
+        let token = get_jwt_token(&self.client).await?;
 
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
@@ -242,20 +246,8 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn get_c8y_internal_id(&mut self) {
-        while self.c8y_internal_id.is_empty() {
-            if let Err(error) = self.try_get_and_set_internal_id().await {
-                error!("{:?}", error);
-
-                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
-                continue;
-            };
-        }
-    }
-
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
-
+        let token = get_jwt_token(&self.client).await?;
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
         let url_host = self.config.query_string(C8yUrlSetting)?;
@@ -267,24 +259,26 @@ impl CumulocitySoftwareManagement {
 
         Ok(())
     }
+}
 
-    async fn get_jwt_token(&self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        let () = self
-            .client
-            .publish(mqtt_client::Message::new(
-                &Topic::new("c8y/s/uat")?,
-                "".to_string(),
-            ))
-            .await?;
+async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+    let mut subscriber = client.subscribe(Topic::new("c8y/s/dat")?.filter()).await?;
 
-        match self.jwt_token_receiver.recv().await {
-            Ok(token_smartrest) => {
-                debug!("Received a JWT Token");
-                Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
-            }
-            Err(err) => return Err(SMCumulocityMapperError::FromAsyncChannelRecvError(err)),
-        }
-    }
+    let () = client
+        .publish(mqtt_client::Message::new(
+            &Topic::new("c8y/s/uat")?,
+            "".to_string(),
+        ))
+        .await?;
+
+    let token_smartrest =
+        match tokio::time::timeout(Duration::from_secs(10), subscriber.next()).await {
+            Ok(Some(msg)) => msg.payload_str()?.to_string(),
+            Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
+            Err(err) => return Err(SMCumulocityMapperError::FromElapsed(err)),
+        };
+
+    Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
 }
 
 async fn publish_software_list_http(
