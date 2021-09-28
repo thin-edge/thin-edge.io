@@ -1,3 +1,4 @@
+use flockfile::FlockfileError;
 use json_sm::SoftwareError;
 use mqtt_client::MqttClientError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
@@ -30,6 +31,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromConfigSetting(#[from] ConfigSettingError),
+
+    #[error(transparent)]
+    FromFlockfileError(#[from] FlockfileError),
 }
 
 #[derive(Debug, thiserror::Error)]

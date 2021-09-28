@@ -1,4 +1,4 @@
-use crate::sm_c8y_mapper::error::SmartRestSerializerError;
+use crate::error::SmartRestSerializerError;
 use csv::{QuoteStyle, WriterBuilder};
 use json_sm::{SoftwareOperationStatus, SoftwareUpdateResponse};
 use serde::{Deserialize, Serialize, Serializer};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize, Serializer};
 type SmartRest = String;
 
 #[derive(Debug)]
-pub(crate) enum CumulocitySupportedOperations {
+pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
 }
 
@@ -18,7 +18,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
     }
 }
 
-pub(crate) trait SmartRestSerializer<'a>
+pub trait SmartRestSerializer<'a>
 where
     Self: Serialize,
 {
@@ -28,7 +28,7 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSetSupportedOperations {
+pub struct SmartRestSetSupportedOperations {
     pub message_id: &'static str,
     pub supported_operations: Vec<&'static str>,
 }
@@ -45,14 +45,14 @@ impl Default for SmartRestSetSupportedOperations {
 impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSoftwareModuleItem {
+pub struct SmartRestSoftwareModuleItem {
     pub software: String,
     pub version: Option<String>,
     pub url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestGetPendingOperations {
+pub struct SmartRestGetPendingOperations {
     pub id: &'static str,
 }
 
@@ -65,20 +65,20 @@ impl Default for SmartRestGetPendingOperations {
 impl<'a> SmartRestSerializer<'a> for SmartRestGetPendingOperations {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSetOperationToExecuting {
+pub struct SmartRestSetOperationToExecuting {
     pub message_id: &'static str,
     pub operation: &'static str,
 }
 
 impl SmartRestSetOperationToExecuting {
-    pub(crate) fn new(operation: CumulocitySupportedOperations) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations) -> Self {
         Self {
             message_id: "501",
             operation: operation.into(),
         }
     }
 
-    pub(crate) fn from_thin_edge_json(
+    pub fn from_thin_edge_json(
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
@@ -93,7 +93,7 @@ impl SmartRestSetOperationToExecuting {
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSetOperationToSuccessful {
+pub struct SmartRestSetOperationToSuccessful {
     pub message_id: &'static str,
     pub operation: &'static str,
 }
@@ -106,7 +106,7 @@ impl SmartRestSetOperationToSuccessful {
         }
     }
 
-    pub(crate) fn from_thin_edge_json(
+    pub fn from_thin_edge_json(
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
@@ -121,7 +121,7 @@ impl SmartRestSetOperationToSuccessful {
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToSuccessful {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestSetOperationToFailed {
+pub struct SmartRestSetOperationToFailed {
     pub message_id: &'static str,
     pub operation: &'static str,
     #[serde(serialize_with = "reason_to_string_with_quotes")]
@@ -137,7 +137,7 @@ impl SmartRestSetOperationToFailed {
         }
     }
 
-    pub(crate) fn from_thin_edge_json(
+    pub fn from_thin_edge_json(
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match &response.status() {
