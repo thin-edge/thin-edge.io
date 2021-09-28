@@ -27,6 +27,7 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
+        self.log.info(self.output)
         self.addCleanupFunction(self.mycleanup)
 
     def execute(self):
@@ -76,28 +77,23 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
         )
 
         node = platform.node()
-        p = Path(f'/var/lib/collectd/rrd/{node}.local/exec/')
+        path = Path(f'/var/lib/collectd/rrd/{node}.local/exec/')
 
-        for x in p.iterdir():
-            #print(x.resolve(), x.name)
+        for a_file in path.iterdir():
 
-            filename = str(x.resolve())
+            filename = str(a_file.resolve())
             self.log.info("Exporting data from %s"%filename)
             result = rrdtool.fetch(filename, "LAST")
             start, end, step = result[0]
-            #self.log.info("Start %s, End %s, Step %s"%(start, end, step))
 
-            ds = result[1]
             rows = result[2]
             values=rows[-60:]
             assert step==1
             counter = end-60
 
-            with open("publish_sawmill_record_statistics/Output/linux/"+x.name+".txt","w") as myfile:
+            with open( os.path.join(self.output, a_file.name+".txt"),"w") as myfile:
                 for i in values:
-                    #print(counter, i[0])
-                    counter += step
                     myfile.write( f"{counter} {i[0]}\n")
+                    counter += step
 
-            #self.log.info("counter %s end %s"%(counter, end))
             assert counter == end
