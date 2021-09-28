@@ -20,4 +20,3 @@ class SmokeTestJson(Environment_roundtrip_c8y):
         self.delay = "100"
         self.timeslot = "10"
         self.style = "JSON"
-

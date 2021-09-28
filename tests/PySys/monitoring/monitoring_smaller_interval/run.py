@@ -11,10 +11,10 @@ Given a configured system
 When we start the tedge-mapper-collectd with sudo in the background
 When we start tedge sub with sudo in the background
 When we start two publishers to publish the simulated collectd messages
-Publish the messages in 200ms interval
+Publish the messages in 100ms interval
 Wait for couple of seconds to publish couple of batch of messages
 Then we kill tedge sub with sudo as it is running with a different user account
-Then we validate the messages in the output of tedge sub,
+Then we validate the  messages in the output of tedge sub,
 
 """
 
@@ -54,7 +54,7 @@ class MonitoringSmallInterval(BaseTest):
         # to initialize. This is a heuristic measure.
         # Without an additional wait we observe failures in 1% of the test
         # runs.
-        time.sleep(0.2)
+        time.sleep(0.1)
 
         for _ in range(10):
 
@@ -75,7 +75,7 @@ class MonitoringSmallInterval(BaseTest):
             )
 
             # publish every 100ms
-            time.sleep(0.2)
+            time.sleep(0.1)
 
         # wait for tedge-mapper-collectd to batch messages
         time.sleep(1)
