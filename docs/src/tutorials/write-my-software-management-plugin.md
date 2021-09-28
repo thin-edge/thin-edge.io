@@ -1,54 +1,36 @@
 # Write my software management plugin
 
-**thin-edge.io** provides Software Management plugins natively for APT (Debian).
+**thin-edge.io** Software Management natively supports APT (Debian) packages.
 However, there are many package management systems in the world,
 and you may want to have a plugin that is suitable for your device.
-For such a demand, we provide **Software Management Plugin API**
-to write a custom Software Management plugin in your preferred language.
+For such a demand, we provide the [**Package Manager Plugin API**](./../references/plugin-api.md)
+to write a custom Software Management plugin in your preferred programming language.
 
-In this tutorial, we will look into the **Software Management Plugin API**,
+In this tutorial, we will look into the **Package Manager Plugin API**,
 and learn how to write your own plugin with a docker plugin shell script example.
 
 ## Create a plugin
 
 Create a _docker_ file in the directory _/etc/tedge/sm-plugins/_. 
-A plugin must be an executable file and located in the directory.
+A plugin must be an executable file located in that directory.
 
 Filename: /etc/tedge/sm-plugins/docker
 
 ```shell
-#!/bin/bash
-
-set -e
+#!/bin/sh
 
 COMMAND="$1"
 IMAGE_NAME="$2"
-VERSION_FLAG="$3"
-IMAGE_TAG="$4"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}'
+        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
         ;;
     install)
-        if [ $# -eq 2 ]; then
-                docker pull $IMAGE_NAME
-        elif [ $# -eq 4 ] && [ $VERSION_FLAG = "--module-version" ]; then
-            docker pull $IMAGE_NAME:$IMAGE_TAG
-        else
-            echo "Invalid arguments"
-            exit 1
-        fi
+        docker pull $IMAGE_NAME || exit 2
         ;;
     remove)
-        if [ $# -eq 2 ]; then
-                docker rmi $IMAGE_NAME
-        elif [ $# -eq 4 ] && [ $VERSION_FLAG = "--module-version" ]; then
-            docker rmi $IMAGE_NAME:$IMAGE_TAG
-        else
-            echo "Invalid arguments"
-            exit 1
-        fi
+        docker rmi $IMAGE_NAME || exit 2
         ;;
     prepare)
         ;;
@@ -59,7 +41,6 @@ case "$COMMAND" in
         ;;
 esac
 exit 0
-
 ```
 
 > **Info**: the filename will be used as a plugin type to report the software list to a cloud.
@@ -76,10 +57,8 @@ If you execute `./docker list`, you will see this kind of output.
 The Software Management Agent runs executable plugins with a special argument, like `list`.
 Let's call the pre-defined argument such as `list`, `install`, and `remove` a **command** here. 
 As you can see from this example, a plugin should be an executable file 
-that accepts the commands and outputs to stdout and stderr in the defined JSON format. 
+that accepts the commands and outputs to stdout and stderr in the defined JSON Lines format. 
 Hence, you can implement a plugin in your preferred language.
-
-> **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
 
 Here is the table of the commands that you can use in a plugin.
 
@@ -134,13 +113,17 @@ Rules:
   - **version**: the version currently installed.
   This is a string that can only be interpreted in the context of the plugin.
   
-Given that your plugin is named `myplugin`, then the Software Management Agent calls
+Given that your plugin is named `docker`, then the Software Management Agent calls
 
 ```shell
-sudo /etc/tedge/sm-plugins/myplugin list
+sudo /etc/tedge/sm-plugins/docker list
 ```
 
-to report the list of software modules installed. `myplugin` should output in the JSON lines format like
+to report the list of software modules installed.
+
+> **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
+
+`docker` should output in the JSON lines format like
 
 ```json
 {"name":"alpine","version":"3.14"}
@@ -150,7 +133,7 @@ to report the list of software modules installed. `myplugin` should output in th
 
 with exit code `0` (successful).
 
-In most cases, the output of the `line` command is multi-lines.
+In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
 This requirement comes from the JSON Lines specifications.
 
@@ -176,7 +159,7 @@ For many plugins, this command has nothing specific to do, and can simply return
 In some plugin types, this `prepare` command can help you.
 For example, assume that you want to implement a plugin for APT,
 and want to run `apt-get update` always before calling the `install` command. 
-In this example, the `prepare` command is the right place to write `apt-get update`.
+In this example, the `prepare` command is the right place to invoke `apt-get update`.
 
 
 ## Finalize
@@ -227,8 +210,60 @@ An error must be reported if:
 
 At the API level, there is no command to distinguish install or upgrade.
 
-Back to the first _docker_ example,
-if the NAME is `mosquitto`, and the VERSION is `1.5.7-1+deb10u1`,
+Back to the first _docker_ example, it doesn't address the case with version. 
+Let's expand the example file as below.
+
+Filename: /etc/tedge/sm-plugins/docker
+
+```shell
+#!/bin/sh
+
+COMMAND="$1"
+IMAGE_NAME="$2"
+VERSION_FLAG="$3"
+IMAGE_TAG="$4"
+
+case "$COMMAND" in
+    list)
+        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        ;;
+    install)
+        if [ $# -eq 2 ]; then
+            docker pull $IMAGE_NAME || exit 2
+        elif [ $# -eq 4 ] && [ $VERSION_FLAG = "--module-version" ]; then
+            docker pull $IMAGE_NAME:$IMAGE_TAG || exit 2
+        else
+            echo "Invalid arguments"
+            exit 1
+        fi
+        ;;
+    remove)
+        if [ $# -eq 2 ]; then
+            docker rmi $IMAGE_NAME || exit 2
+        elif [ $# -eq 4 ] && [ $VERSION_FLAG = "--module-version" ]; then
+            docker rmi $IMAGE_NAME:$IMAGE_TAG || exit 2
+        else
+            echo "Invalid arguments"
+            exit 1
+        fi
+        ;;
+    prepare)
+        ;;
+    finalize)
+        ;;
+    update-list)
+        exit 1
+        ;;
+esac
+exit 0
+```
+
+Pay attention to the exit statuses.
+In case of invalid arguments, the plugin returns `1`.
+If a command is executed but fails, the plugin returns `2`.
+Each exit status is defined [here](#exit-status).
+
+If the given NAME is `mosquitto`, and the given VERSION is `1.5.7-1+deb10u1`,
 the Software Management Agent calls
 
 ```shell
@@ -301,7 +336,7 @@ First, learn what is the input of `update-list`.
 The Software Management Agent calls a plugin as below:
 
 ```shell
-$ sudo myplugin update-list <<EOF
+$ sudo /etc/tedge/sm-plugins/docker update-list <<EOF
 install name1 version1
 install name2 "" path2
 remove "name 3" version3
@@ -312,56 +347,60 @@ EOF
 The point is that it doesn't take any command-line argument, 
 but the software action list is sent through **stdin**.
 
-The behaviour of operations `install` and `remove` is same as for original commands `install` and `remove` as [above](#install).
-
-That is equivalent to the use of original commands (`install` and `remove`):
+The behaviour of operations `install` and `remove` is the same as for original commands `install` and `remove`. 
+The above input is equivalent to the use of original commands (`install` and `remove`):
 
 ```shell
-$ myplugin install name1 --module-version version1
-$ myplugin install name2 --file path2
-$ myplugin remove "name 3" --module-version version3
-$ myplugin remove name4
+$ /etc/tedge/sm-plugins/docker install name1 --module-version version1
+$ /etc/tedge/sm-plugins/docker install name2 --file path2
+$ /etc/tedge/sm-plugins/docker remove "name 3" --module-version version3
+$ /etc/tedge/sm-plugins/docker remove name4
 ```
 
 To make the _docker_ plugin accept a list of install and remove actions,
 let's change the file as below.
+Note that this example works only in bash.
 
 Filename: /etc/tedge/sm-plugins/docker
 
 ```shell
 #!/bin/bash
 
-# Command-line argument is the only command type
 COMMAND="$1"
 
 read_module() {
-    if [ $# -lt 2 ]
-    then
+    if [ $# -lt 2 ]; then
         echo "Missing version or path for sw-module '${1}'"
-    else
-        mOperation=${1}
-        shift
-        mName=${1}
-        shift
-        mVersion=${1}
-        shift
-        mPath=${1}
-        shift
-        echo "info: $mOperation, $mName, $mVersion, $mPath"
+        exit 1
+    elif [ $# -eq 2 ]; then
+        mOperation="$1"
+        mName="$2"
         case "$mOperation" in
-           install)
-            sudo docker pull $mName:$mVersion
-            ;;
-          remove)
-            sudo docker rmi $mName:$mVersion
-            ;;
+            install)
+                docker pull $mName || exit 2
+                ;;
+            remove)
+                docker rmi $mName || exit 2
+                ;;
+        esac
+    else
+        mOperation="$1"
+        mName="$2"
+        mVersion="$3"
+        case "$mOperation" in
+            install)
+                docker pull $mName:$mVersion || exit 2
+                ;;
+            remove)
+                docker rmi $mName:$mVersion || exit 2
+                ;;
         esac
     fi
 }
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}'
+        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
         ;;
     install)
         # We use update-list instead
@@ -374,7 +413,6 @@ case "$COMMAND" in
     finalize)
         ;;
     update-list)
-        echo "---+++ reading software list +++---"
         while read -r line; do
             eval "moduleArray=($line)";
             read_module "${moduleArray[@]}"
@@ -387,7 +425,13 @@ exit 0
 You can find that `install` and `remove` are replaced by `update-list`.
 `update-list` should define the behaviour to read line by line for the case `install` and `remove`.
 
+Also, `update-list` must be **fail-fast**.
+That example exists immediately if one of the commands fails.
+
 ## Project references
 
-**thin-edge.io** provides APT plugin written in Rust.
-You can check out the code from [here](https://github.com/thin-edge/thin-edge.io/tree/main/sm/plugins/tedge_apt_plugin).
+You can also refer to:
+
+- the specification of the [Package Manager Plugin API](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
+- [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/sm/plugins/tedge_apt_plugin) written in Rust. 
+
