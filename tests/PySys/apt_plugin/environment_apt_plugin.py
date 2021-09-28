@@ -21,7 +21,7 @@ class AptPlugin(BaseTest):
         self.list_calls_auto = 0
 
     def plugin_cmd(
-        self, command, outputfile, exit_code, argument=None, version=None, extra=None
+            self, command, outputfile, exit_code, argument=None, version=None, extra=None, file_path=None
     ):
         """Call a plugin with command and an optional argument,
         expect exit code and store output to outputfile
@@ -37,7 +37,11 @@ class AptPlugin(BaseTest):
         if extra:
             # Does not happen in normal cases, just for testing
             args.append(extra)
-            
+
+        if file_path:
+            args.append("--file")
+            args.append(file_path)
+
         process = self.startProcess(
             command=self.sudo,
             arguments=args,
