@@ -105,3 +105,5 @@ Some of the tests desire a configured fakeplugin to simulate fruits.
 To run the tests on a platform with fake plugin:
 
     pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
+
+See file environment_sm_management.py on how to setup and configure the fake plugin.
