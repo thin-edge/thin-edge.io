@@ -1,10 +1,15 @@
 use crate::mapper::mqtt_config;
-use crate::sm_c8y_mapper::{
-    error::*, json_c8y::C8yUpdateSoftwareListResponse, smartrest_deserializer::*,
-    smartrest_serializer::*, topic::*,
-};
+use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
+use c8y_smartrest::{
+    smartrest_deserializer::{SmartRestJwtResponse, SmartRestUpdateSoftware},
+    smartrest_serializer::{
+        SmartRestGetPendingOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
+        SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
+        SmartRestSetSupportedOperations,
+    },
+};
 use json_sm::{
     Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
     SoftwareUpdateResponse,
@@ -208,7 +213,7 @@ impl CumulocitySoftwareManagement {
         let topic = OutgoingTopic::SoftwareUpdateRequest.to_topic()?;
         let update_software = SmartRestUpdateSoftware::new();
         let json_update_request = update_software
-            .from_smartrest(smartrest.into())?
+            .from_smartrest(smartrest)?
             .to_thin_edge_json()?
             .to_json()?;
         let () = self.publish(&topic, json_update_request).await?;

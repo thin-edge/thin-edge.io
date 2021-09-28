@@ -4,7 +4,7 @@ mod software;
 
 pub use error::*;
 pub use messages::{
-    software_filter_topic, Jsonify, SoftwareListRequest, SoftwareListResponse,
+    software_filter_topic, Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
@@ -655,6 +655,7 @@ mod tests {
         let request = SoftwareUpdateRequest::new_with_id("123");
         let mut response = SoftwareUpdateResponse::new(&request);
 
+        response.set_error("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]");
         response.add_errors(
             "debian",
             vec![SoftwareError::Install {
