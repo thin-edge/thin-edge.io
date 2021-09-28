@@ -404,9 +404,11 @@ case "$COMMAND" in
         ;;
     install)
         # We use update-list instead
+        exit 1
         ;;
     remove)
         # We use update-list instead
+        exit 1
         ;;
     prepare)
         ;;
