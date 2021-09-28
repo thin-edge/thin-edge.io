@@ -8,8 +8,6 @@ See also:
 * [https://pysys-test.github.io/pysys-test/](https://pysys-test.github.io/pysys-test/)
 * [https://github.com/pysys-test/](https://github.com/pysys-test/)
 
-There is also similar [Documentation at Archbee](https://app.archbee.io/docs/9iGX1hbDjwAeMfyO9A3YE/2vkDj1wJ6LTct1_LnKBCm#m7-122-running-system-tests-manually-on-your-device-linux-pc)
-
 
 #### Running System tests manually on your device / Linux PC
 
@@ -102,3 +100,8 @@ To run the tests:
 
     pysys.py run 'apt_*' -XmyPlatform='container'
 
+
+Some of the tests desire a configured fakeplugin to simulate fruits.
+To run the tests on a platform with fake plugin:
+
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
