@@ -244,6 +244,163 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalPortSetting) -> ConfigSettingResult<Port> {
+        self.data
+            .mqtt
+            .external_port
+            .map(Port)
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalPortSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalPortSetting,
+        value: Port,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_port = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalPortSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_port = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttExternalBindAddressSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalBindAddressSetting) -> ConfigSettingResult<String> {
+        self.data
+            .mqtt
+            .external_bind_address
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalBindAddressSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalBindAddressSetting,
+        value: String,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_bind_address = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalBindAddressSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_bind_address = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttExternalBindInterfaceSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalBindInterfaceSetting) -> ConfigSettingResult<String> {
+        self.data
+            .mqtt
+            .external_bind_interface
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalBindInterfaceSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalBindInterfaceSetting,
+        value: String,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_bind_interface = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalBindInterfaceSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_bind_interface = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttExternalCAPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<FilePath> {
+        self.data
+            .mqtt
+            .external_capath
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalCAPathSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalCAPathSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_capath = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_capath = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttExternalCertfileSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<FilePath> {
+        self.data
+            .mqtt
+            .external_certfile
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalCertfileSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalCertfileSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_certfile = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_certfile = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttExternalKeyfileSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<FilePath> {
+        self.data
+            .mqtt
+            .external_keyfile
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: MqttExternalKeyfileSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttExternalKeyfileSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_keyfile = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.external_keyfile = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
     fn query(&self, _setting: SoftwarePluginDefaultSetting) -> ConfigSettingResult<String> {
         self.data
