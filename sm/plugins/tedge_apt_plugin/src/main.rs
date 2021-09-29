@@ -1,6 +1,8 @@
+mod error;
 mod module_check;
 
-use module_check::{filepath_has_extension, set_filepath_extension, PackageMetadata};
+use error::InternalError;
+use module_check::validate_package;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -36,40 +38,6 @@ pub enum PluginOp {
 
     /// Finalize a sequences of install/remove commands
     Finalize,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum InternalError {
-    #[error("Fail to run `{cmd}`: {from}")]
-    ExecError { cmd: String, from: std::io::Error },
-
-    #[error("Parsing Debian package failed for `{file}`")]
-    ParsingError { file: String },
-}
-
-impl InternalError {
-    pub fn exec_error(cmd: impl Into<String>, from: std::io::Error) -> InternalError {
-        InternalError::ExecError {
-            cmd: cmd.into(),
-            from,
-        }
-    }
-}
-
-fn validate_package(file_path: &str, contain_args: &[&str]) -> Result<String, InternalError> {
-    let package_metadata = PackageMetadata::try_new(file_path).unwrap();
-
-    if package_metadata.metadata_contains_all(contain_args) {
-        if !filepath_has_extension(file_path) {
-            let file_path = set_filepath_extension(file_path);
-            return Ok(file_path);
-        }
-        Ok(file_path.into())
-    } else {
-        Err(InternalError::ParsingError {
-            file: file_path.to_string(),
-        })
-    }
 }
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
