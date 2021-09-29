@@ -2,11 +2,10 @@ use crate::component::TEdgeComponent;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use serial_test::serial;
 use std::{io::Write, time::Duration};
-use std::{thread, time};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 
 const MQTT_TEST_PORT: u16 = 55555;
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(10000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
 #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
@@ -420,7 +419,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
                 .unwrap()
                 .contains(&remove_whitespace(expected_update_list))
             {
-                // thread::sleep(time::Duration::from_secs(1));
                 // Stop the SM Mapper
                 sm_mapper.abort();
 
@@ -448,7 +446,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() {
                 "mapper_publishes_software_list_request",
             )
             .await;
-            dbg!("..........................Restart Mapper ...........................................................");
             // Restart the SM Mapper
             let config = create_tedge_config();
             let __sm_mapper = tokio::spawn(async {
