@@ -34,7 +34,10 @@ extract_image_tag_from_args() {
 
 }
 
-set -e
+if [ -z $1 ]; then
+    echo "Provide at least one subcommand. Supported subcommands: list, prepare, install, remove, finalize"
+    exit 1
+fi
 
 COMMAND="$1"
 shift   # Pop the command from args list
@@ -46,40 +49,46 @@ case "$COMMAND" in
         ;;
     list)
         unsupported_args_check $@
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}'
+        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
         ;;
     install)
         # Extract the docker image tag into the IMAGE_TAG variable
         extract_image_tag_from_args $@
 
         # Stop all containers using the provided image name
-        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}')
-        for container in $containers
-        do
-            docker stop $container
-        done
-        # Spawn new containers with the provided image name and version to replace the stopped ones
-        docker run -d $IMAGE_TAG
+        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_NAME | awk '{print $1}') || exit 2
+        if [ -z $containers ]
+        then
+            echo "No containers to update. Spawning a new one."
+            docker run -d $IMAGE_TAG || exit 2
+        else
+            echo "Updating existing containers."
+            for container in $containers
+            do
+                docker rm $(docker stop $container) || exit 2
+
+                # Spawn new containers with the provided image name and version to replace the stopped one
+                docker run -d $IMAGE_TAG || exit 2
+            done
+        fi
         ;;
     remove)
         extract_image_tag_from_args $@
 
-        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}')
+        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}') || exit 2
         if [ -z $containers ]
         then
             echo "No containers found for the image: $IMAGE_TAG"
         fi
         for container in $containers
         do
-            docker stop $container
+            docker rm $(docker stop $container) || exit 2
         done
         ;;
     finalize)
         unsupported_args_check $@
-        # Prune all the unused containers. The --force command is used to avoid a [y/N] user prompt
-        docker container prune --force
-        # Prune all the unused images
-        docker image prune --all --force
+        # Prune all the unused images. The --force command is used to avoid a [y/N] user prompt
+        docker image prune --all --force || exit 2
         ;;
     *)
         echo "Unsupported command: $COMMAND"
