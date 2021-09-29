@@ -75,7 +75,13 @@ class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
         )
 
         node = platform.node()
+
         path = Path(f'/var/lib/collectd/rrd/{node}.local/exec/')
+        if not path.exists():
+            # the hosted rpis don't have the ".local" so we need a workaround here
+            path = Path(f'/var/lib/collectd/rrd/{node}/exec/')
+            if not path.exists():
+                raise SystemError("Cannot find derive place for collectd measurements")
 
         for a_file in path.iterdir():
 
