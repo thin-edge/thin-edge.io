@@ -106,4 +106,6 @@ To run the tests on a platform with fake plugin:
 
     pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
 
-See file environment_sm_management.py on how to setup and configure the fake plugin.
+See file software-management-end-to-end/dummy-plugin-configuration/Info.md
+on how to setup and configure the fake plugin.
+
