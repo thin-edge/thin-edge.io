@@ -1,4 +1,5 @@
 pysys == 1.6.1
 requests == 2.25.1
 toml == 0.10.2
+rrdtool == 0.1.15
 

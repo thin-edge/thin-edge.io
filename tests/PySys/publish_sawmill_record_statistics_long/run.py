@@ -4,11 +4,12 @@ import platform
 import sys
 import rrdtool
 
+
 sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
-Publish sawmill and record process statistics
+Publish sawmill and record process statistics long version
 
 Given a configured system with configured certificate
 When we derive from EnvironmentC8y
@@ -23,11 +24,10 @@ TODO : Add validation procedure
 """
 
 
-class PublishSawmillRecordStatistics(EnvironmentC8y):
+class PublishSawmillRecordStatisticsLong(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.log.info("Setup")
-        self.log.info(self.output)
         self.addCleanupFunction(self.mycleanup)
 
     def execute(self):
@@ -55,15 +55,13 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
         pub = self.startProcess(
             command=cmd,
             # run for one minute
-            arguments=["100", "100", "6", "sawmill"],
+            # 20ms wait time, height 100, 60 repetitions -> 120s
+            arguments=["20", "100", "60", "sawmill"],
             stdouterr="stdout_sawmill",
         )
 
     def validate(self):
         super().validate()
-
-        # These are mostly placeholder validations to make sure
-        # that the file is there and is at least not empty
         self.assertGrep('mosquitto_sub_stdout.out', 'mosquitto', contains=True)
 
     def mycleanup(self):
@@ -93,9 +91,9 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             start, end, step = result[0]
 
             rows = result[2]
-            values=rows[-60:]
+            values=rows[-120:]
             assert step==1
-            counter = end-60
+            counter = end-120
 
             with open( os.path.join(self.output, a_file.name+".txt"),"w") as myfile:
                 for i in values:
