@@ -234,7 +234,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "tokio",
@@ -324,7 +324,7 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "c8y_smartrest"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_translator_lib"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -376,7 +376,7 @@ checksum = "d26a6ce4b6a484fa3edb70f7efa6fc430fd2b87285fe8b84304fd0936faa0dc0"
 
 [[package]]
 name = "certificate"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "mockall",
@@ -699,7 +699,7 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
 name = "download"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "backoff",
@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1263,7 +1263,7 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "json-writer"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1272,7 +1272,7 @@ dependencies = [
 
 [[package]]
 name = "json_sm"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "nanoid",
  "regex",
@@ -1460,7 +1460,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_client"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-log",
@@ -1803,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2666,7 +2666,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tedge"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2697,7 +2697,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_agent"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2728,7 +2728,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2736,7 +2736,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_matches",
  "certificate",
@@ -2750,7 +2750,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2758,7 +2758,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mapper"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -2793,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_users"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "thiserror",
  "users",
@@ -2801,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2849,7 +2849,7 @@ dependencies = [
 
 [[package]]
 name = "thin_edge_json"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
