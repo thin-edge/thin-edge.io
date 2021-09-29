@@ -335,6 +335,7 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mqtt_client::MqttMessageStream;
     use std::sync::Arc;
     const MQTT_TEST_PORT: u16 = 55555;
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
