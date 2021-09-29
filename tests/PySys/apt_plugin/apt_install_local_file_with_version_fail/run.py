@@ -21,9 +21,9 @@ class AptPluginInstallFromLocalFileWithVersionFail(AptPlugin):
     def setup(self):
         super().setup()
         self._download_rolldice_binary(url=self._ROLLDICE_URL)          # downloading the binary
+        self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
-        self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
 
     def execute(self):
         """
