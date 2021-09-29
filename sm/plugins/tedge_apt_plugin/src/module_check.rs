@@ -7,34 +7,28 @@ use std::{
 
 pub struct PackageMetadata {
     file_path: PathBuf,
-    metadata: Option<String>,
+    metadata: String,
     remove_modified: bool,
 }
 
 impl PackageMetadata {
     pub fn try_new(file_path: &str) -> Result<Self, InternalError> {
         let metadata = String::from_utf8(Self::get_module_metadata(file_path)?)?;
+
         Ok(Self {
             file_path: PathBuf::from(file_path),
-            metadata: Some(metadata),
+            metadata,
             remove_modified: false,
         })
     }
 
     fn metadata_contains_all(&self, patterns: &[&str]) -> bool {
         for pattern in patterns {
-            if !self.metadata_contains(pattern) {
+            if !&self.metadata.contains(pattern) {
                 return false;
-            }
+            };
         }
         true
-    }
-
-    fn metadata_contains(&self, pattern: &str) -> bool {
-        if let Some(lines) = &self.metadata {
-            return lines.contains(pattern);
-        }
-        false
     }
 
     fn get_module_metadata(file_path: &str) -> Result<Vec<u8>, InternalError> {
