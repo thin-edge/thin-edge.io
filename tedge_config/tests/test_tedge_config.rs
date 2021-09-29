@@ -24,6 +24,12 @@ mapper_timestamp = true
 
 [mqtt]
 port = 1234
+external_port = 2345
+external_bind_address = "0.0.0.0"
+external_bind_interface = "wlan0"
+external_capath = "ca.pem"
+external_certfile = "cert.pem"
+external_keyfile = "key.pem"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -63,6 +69,33 @@ port = 1234
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1234));
 
+    assert_eq!(config.query(MqttExternalPortSetting)?, Port(2345));
+
+    assert_eq!(
+        config.query(MqttExternalBindAddressSetting)?.as_str(),
+        "0.0.0.0"
+    );
+
+    assert_eq!(
+        config.query(MqttExternalBindInterfaceSetting)?.as_str(),
+        "wlan0"
+    );
+
+    assert_eq!(
+        config.query(MqttExternalCAPathSetting)?,
+        FilePath::from("ca.pem")
+    );
+
+    assert_eq!(
+        config.query(MqttExternalCertfileSetting)?,
+        FilePath::from("cert.pem")
+    );
+
+    assert_eq!(
+        config.query(MqttExternalKeyfileSetting)?,
+        FilePath::from("key.pem")
+    );
+
     Ok(())
 }
 
@@ -98,6 +131,12 @@ port = 1883
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
     let updated_mqtt_port = Port(2345);
+    let updated_mqtt_external_port = Port(3456);
+    let updated_mqtt_external_bind_address = "localhost";
+    let updated_mqtt_external_bind_interface = "eth0";
+    let updated_mqtt_external_capath = "/some/path";
+    let updated_mqtt_external_certfile = "cert.pem";
+    let updated_mqtt_external_keyfile = "key.pem";
 
     {
         let mut config = config_repo.load()?;
@@ -138,6 +177,27 @@ port = 1883
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
         config.update(MqttPortSetting, updated_mqtt_port)?;
+        config.update(MqttExternalPortSetting, updated_mqtt_external_port)?;
+        config.update(
+            MqttExternalBindAddressSetting,
+            updated_mqtt_external_bind_address.to_string(),
+        )?;
+        config.update(
+            MqttExternalBindInterfaceSetting,
+            updated_mqtt_external_bind_interface.to_string(),
+        )?;
+        config.update(
+            MqttExternalCAPathSetting,
+            FilePath::from(updated_mqtt_external_capath),
+        )?;
+        config.update(
+            MqttExternalCertfileSetting,
+            FilePath::from(updated_mqtt_external_certfile),
+        )?;
+        config.update(
+            MqttExternalKeyfileSetting,
+            FilePath::from(updated_mqtt_external_keyfile),
+        )?;
         config_repo.store(&config)?;
     }
 
@@ -168,6 +228,30 @@ port = 1883
         assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
         assert_eq!(config.query(MqttPortSetting)?, updated_mqtt_port);
+        assert_eq!(
+            config.query(MqttExternalPortSetting)?,
+            updated_mqtt_external_port
+        );
+        assert_eq!(
+            config.query(MqttExternalBindAddressSetting)?.as_str(),
+            updated_mqtt_external_bind_address
+        );
+        assert_eq!(
+            config.query(MqttExternalBindInterfaceSetting)?.as_str(),
+            updated_mqtt_external_bind_interface
+        );
+        assert_eq!(
+            config.query(MqttExternalCAPathSetting)?,
+            FilePath::from(updated_mqtt_external_capath)
+        );
+        assert_eq!(
+            config.query(MqttExternalCertfileSetting)?,
+            FilePath::from(updated_mqtt_external_certfile)
+        );
+        assert_eq!(
+            config.query(MqttExternalKeyfileSetting)?,
+            FilePath::from(updated_mqtt_external_keyfile)
+        );
     }
 
     Ok(())
