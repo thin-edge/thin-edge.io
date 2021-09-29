@@ -83,7 +83,6 @@ impl SmAgentConfig {
 
         let default_plugin_type =
             tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
-
         let mqtt_config =
             mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
 

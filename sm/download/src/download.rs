@@ -2,13 +2,12 @@ use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
 use log::error;
-use reqwest;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use tedge_utils;
 
+#[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
     download_target: PathBuf,

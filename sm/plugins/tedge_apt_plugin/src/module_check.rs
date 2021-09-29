@@ -1,42 +1,34 @@
 use crate::error::InternalError;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-/// check that module_name is in file path
-pub fn filepath_has_extension(file_path: &str) -> bool {
-    let pb = PathBuf::from(file_path);
-    match pb.extension() {
-        Some(extension) => extension == "deb",
-        None => false,
-    }
-}
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 pub struct PackageMetadata {
-    metadata: Option<String>,
+    file_path: PathBuf,
+    metadata: String,
+    remove_modified: bool,
 }
 
 impl PackageMetadata {
     pub fn try_new(file_path: &str) -> Result<Self, InternalError> {
         let metadata = String::from_utf8(Self::get_module_metadata(file_path)?)?;
+
         Ok(Self {
-            metadata: Some(metadata),
+            file_path: PathBuf::from(file_path),
+            metadata,
+            remove_modified: false,
         })
     }
 
-    pub fn metadata_contains_all(&self, patterns: &[&str]) -> bool {
+    fn metadata_contains_all(&self, patterns: &[&str]) -> bool {
         for pattern in patterns {
-            if !self.metadata_contains(pattern) {
+            if !&self.metadata.contains(pattern) {
                 return false;
-            }
+            };
         }
         true
-    }
-
-    fn metadata_contains(&self, pattern: &str) -> bool {
-        if let Some(lines) = &self.metadata {
-            return lines.contains(pattern);
-        }
-        false
     }
 
     fn get_module_metadata(file_path: &str) -> Result<Vec<u8>, InternalError> {
@@ -47,26 +39,38 @@ impl PackageMetadata {
             .output()?
             .stdout)
     }
-}
 
-pub fn validate_package(file_path: &str, contain_args: &[&str]) -> Result<String, InternalError> {
-    let package_metadata = PackageMetadata::try_new(file_path).unwrap();
+    pub fn validate_package(&mut self, contain_args: &[&str]) -> Result<(), InternalError> {
+        if self.metadata_contains_all(contain_args) {
+            dbg!(&self.file_path);
+            if self.file_path.extension() != Some(OsStr::new("deb")) {
+                let new_path = PathBuf::from(format!(
+                    "{}.deb",
+                    self.file_path().to_string_lossy().to_string()
+                ));
 
-    if package_metadata.metadata_contains_all(contain_args) {
-        if !filepath_has_extension(file_path) {
-            let file_path = create_link_with_extension(file_path)?;
-            return Ok(file_path);
+                let _res = std::os::unix::fs::symlink(self.file_path(), &new_path);
+                self.file_path = new_path;
+                self.remove_modified = true;
+            }
+
+            Ok(())
+        } else {
+            Err(InternalError::ParsingError {
+                file: self.file_path().to_string_lossy().to_string(),
+            })
         }
-        Ok(file_path.into())
-    } else {
-        Err(InternalError::ParsingError {
-            file: file_path.to_string(),
-        })
+    }
+
+    pub fn file_path(&self) -> &Path {
+        &self.file_path
     }
 }
 
-fn create_link_with_extension(file_path: &str) -> Result<String, InternalError> {
-    let link_path = format!("{}.deb", &file_path);
-    std::os::unix::fs::symlink(file_path, &link_path)?;
-    Ok(link_path)
+impl Drop for PackageMetadata {
+    fn drop(&mut self) {
+        if self.remove_modified {
+            let _res = std::fs::remove_file(&self.file_path);
+        }
+    }
 }

@@ -1,4 +1,5 @@
-import pysys
+import os
+import requests
 from pysys.basetest import BaseTest
 
 
@@ -90,3 +91,15 @@ class AptPlugin(BaseTest):
             arguments=[self.apt_get, "install", "-y", package],
             abortOnError=False,
         )
+
+    def _download_rolldice_binary(self, url: str):
+        # https://stackoverflow.com/questions/53101597/how-to-download-binary-file-using-requests
+        local_filename = url.split('/')[-1]
+        current_working_directory = os.path.abspath(os.getcwd())
+        self._path_to_rolldice_binary = os.path.join(current_working_directory, local_filename)
+
+        r = requests.get(url, stream=True)
+        with open(self._path_to_rolldice_binary, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024): 
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)

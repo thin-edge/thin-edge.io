@@ -1,6 +1,5 @@
 import sys
 import os
-import requests
 sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 """
@@ -18,25 +17,13 @@ class AptPluginInstallFromLocalFileWithVersionFail(AptPlugin):
     _ROLLDICE_URL = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
     _path_to_rolldice_binary = None
     _module_version = "nonsense"
-    
-    def _download_rolldice_binary(self):
-        # https://stackoverflow.com/questions/53101597/how-to-download-binary-file-using-requests
-        local_filename = AptPluginInstallFromLocalFileWithVersionFail._ROLLDICE_URL.split('/')[-1]
-        current_working_directory = os.path.abspath(os.getcwd())
-        self._path_to_rolldice_binary = os.path.join(current_working_directory, local_filename)
-
-        r = requests.get(AptPluginInstallFromLocalFileWithVersionFail._ROLLDICE_URL, stream=True)
-        with open(self._path_to_rolldice_binary, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024): 
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
 
     def setup(self):
         super().setup()
-        self._download_rolldice_binary()                                # downloading the binary
+        self._download_rolldice_binary(url=self._ROLLDICE_URL)          # downloading the binary
+        self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
-        self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
 
     def execute(self):
         """

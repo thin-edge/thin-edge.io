@@ -1,8 +1,8 @@
 mod error;
 mod module_check;
 
-use error::InternalError;
-use module_check::validate_package;
+use crate::error::InternalError;
+use crate::module_check::PackageMetadata;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -71,16 +71,9 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             match (&version, &file_path) {
-                (Some(version), Some(file_path)) => {
-                    let file_path = validate_package(
-                        file_path,
-                        &[
-                            &format!("Version: {}", &version),
-                            &format!("Package: {}", &module),
-                            "Debian package",
-                        ],
-                    )?;
-                    run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
+                (None, None) => {
+                    // normal install
+                    run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
                 }
 
                 (Some(version), None) => run_cmd(
@@ -89,16 +82,28 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 )?,
 
                 (None, Some(file_path)) => {
-                    let file_path = validate_package(
-                        file_path,
-                        &[&format!("Package: {}", &module), "Debian package"],
-                    )?;
-                    run_cmd("apt-get", &format!("install --quiet --yes {}", file_path))?
+                    let mut package = PackageMetadata::try_new(file_path)?;
+                    let () = package
+                        .validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
+
+                    run_cmd(
+                        "apt-get",
+                        &format!("install --quiet --yes {}", package.file_path().display()),
+                    )?
                 }
 
-                _ => {
-                    // normal install
-                    run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
+                (Some(version), Some(file_path)) => {
+                    let mut package = PackageMetadata::try_new(file_path)?;
+                    let () = package.validate_package(&[
+                        &format!("Version: {}", &version),
+                        &format!("Package: {}", &module),
+                        "Debian package",
+                    ])?;
+
+                    run_cmd(
+                        "apt-get",
+                        &format!("install --quiet --yes {}", package.file_path().display()),
+                    )?
                 }
             }
         }

@@ -68,6 +68,7 @@ pub trait Plugin {
             SoftwareModuleUpdate::Remove { module } => self.remove(&module, logger).await,
         }
     }
+
     async fn apply_all(
         &self,
         updates: Vec<SoftwareModuleUpdate>,
