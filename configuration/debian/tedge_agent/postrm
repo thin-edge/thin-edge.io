@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+
+### Remove user tedge-agent
+if getent passwd tedge-agent >/dev/null; then
+    pkill -u tedge-agent || true
+    deluser --quiet --system tedge-agent
+fi
+
+### Remove file in /etc/sudoers.d directory
+if [ -f "/etc/sudoers.d/tedge-agent" ]; then
+    rm /etc/sudoers.d/tedge-agent
+fi
+
+if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+    rm /etc/sudoers.d/010_pi-nopasswd
+fi
+
+#DEBHELPER#

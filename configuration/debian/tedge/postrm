@@ -1,8 +1,36 @@
 #!/bin/sh
 set -e
 
-### Remove configs
 
-if [ "$1" = "purge" ]; then
+### Remove user tedge
+if getent passwd tedge >/dev/null; then
+    deluser --quiet --system tedge
+fi
+
+### Remove configs
+if [ -d "/etc/tedge" ]; then
     rm -rf /etc/tedge
 fi
+
+### Remove file in /etc/sudoers.d directory
+if [ -f "/etc/sudoers.d/tedge-users" ]; then
+    rm /etc/sudoers.d/tedge-users
+fi
+
+if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+    rm /etc/sudoers.d/tedge-users-nopasswd
+fi
+
+### Remove include from mosquitto.conf
+if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
+    sed -i '/include_dir \/etc\/tedge\/mosquitto-conf/d' ./etc/mosquitto/mosquitto.conf
+fi
+
+### Remove /var/log/tedge if purge
+if [ "$1" = "purge" ]; then
+    if [ -d "/var/log/tedge" ]; then
+        rm -rf /var/log/tedge
+    fi
+fi
+
+#DEBHELPER#
