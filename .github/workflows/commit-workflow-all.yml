@@ -231,7 +231,7 @@ jobs:
 
   install-and-use-rpi-offsite:
     needs: [build-matrix-arm]
-    runs-on: [self-hosted, Linux, ARM, offsite ]
+    runs-on: [self-hosted, Linux, ARM, offsiteall ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -300,7 +300,7 @@ jobs:
 
   system-test_offsite:
     needs: [install-and-use-rpi-offsite]
-    runs-on: [self-hosted, Linux, ARM, offsite]
+    runs-on: [self-hosted, Linux, ARM, offsiteall]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     #continue-on-error: true
 
