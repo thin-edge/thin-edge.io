@@ -75,7 +75,7 @@ jobs:
 # Build Workflow
 
   build-matrix-arm:
-    needs: [cargo-test]
+    needs: [cargo-fmt, cargo-clippy]
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
     strategy:
@@ -196,7 +196,7 @@ jobs:
 # Integration Test Workflow
 
   cargo-test-features:
-    needs: [build-matrix-arm]
+    needs: [cargo-fmt, cargo-clippy]
     name: Run cargo test features
     runs-on: Ubuntu-20.04
 
