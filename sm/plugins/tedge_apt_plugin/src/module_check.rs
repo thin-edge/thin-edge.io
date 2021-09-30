@@ -42,7 +42,7 @@ impl PackageMetadata {
 
     pub fn validate_package(&mut self, contain_args: &[&str]) -> Result<(), InternalError> {
         if self.metadata_contains_all(contain_args) {
-            dbg!(&self.file_path);
+            // In the current implementation using `apt-get` it is required that the file has '.deb' extension (if we use dpkg extension doesn't matter).
             if self.file_path.extension() != Some(OsStr::new("deb")) {
                 let new_path = PathBuf::from(format!(
                     "{}.deb",
