@@ -1,4 +1,4 @@
-name: commit-workflow
+name: commit-workflow-allinone
 
 on:
   push:
