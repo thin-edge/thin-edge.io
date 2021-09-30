@@ -93,7 +93,24 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = self
             .common_mosquitto_config
             .clone()
-            .with_port(config.query(MqttPortSetting)?.into());
+            .with_internal_opts(config.query(MqttPortSetting)?.into())
+            .with_external_opts(
+                config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
+                config.query(MqttExternalBindAddressSetting).ok(),
+                config.query(MqttExternalBindInterfaceSetting).ok(),
+                config
+                    .query(MqttExternalCAPathSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+                config
+                    .query(MqttExternalCertfileSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+                config
+                    .query(MqttExternalKeyfileSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+            );
         self.config_repository.store(&config)?;
 
         new_bridge(
