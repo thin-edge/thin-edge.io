@@ -78,7 +78,6 @@ jobs:
     needs: [cargo-test]
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
         target:
@@ -200,7 +199,6 @@ jobs:
     needs: [build-matrix-arm]
     name: Run cargo test features
     runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout
@@ -232,7 +230,6 @@ jobs:
   install-and-use-rpi-offsite:
     needs: [build-matrix-arm]
     runs-on: [self-hosted, Linux, ARM, offsiteall ]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: checkout
@@ -301,7 +298,6 @@ jobs:
   system-test_offsite:
     needs: [install-and-use-rpi-offsite]
     runs-on: [self-hosted, Linux, ARM, offsiteall]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     #continue-on-error: true
 
     steps:
