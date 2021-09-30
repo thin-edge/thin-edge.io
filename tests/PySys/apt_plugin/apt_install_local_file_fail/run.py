@@ -1,6 +1,5 @@
 import sys
 import os
-import requests
 sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 """
@@ -19,21 +18,10 @@ class AptPluginInstallFromLocalFileFail(AptPlugin):
     _path_to_rolldice_binary = None
     _fake_path_to_rolldice_binary = None
 
-    def _download_rolldice_binary(self):
-        # https://stackoverflow.com/questions/53101597/how-to-download-binary-file-using-requests
-        local_filename = AptPluginInstallFromLocalFileFail._ROLLDICE_URL.split('/')[-1]
-        current_working_directory = os.path.abspath(os.getcwd())
-        self._path_to_rolldice_binary = os.path.join(current_working_directory, local_filename)
-        self._fake_path_to_rolldice_binary = os.path.join(current_working_directory, "notafile.deb")
-
-        r = requests.get(AptPluginInstallFromLocalFileFail._ROLLDICE_URL, stream=True)
-        with open(self._path_to_rolldice_binary, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
-
     def setup(self):
         super().setup()
+        current_working_directory = os.path.abspath(os.getcwd())
+        self._fake_path_to_rolldice_binary = os.path.join(current_working_directory, "notafile.deb")
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
 

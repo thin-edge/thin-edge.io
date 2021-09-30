@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
     <description>
-        <title>Validate apt plugin prepare - dense version</title>
+        <title>Validate apt plugin install from local file AND with a version - SUCCESS case</title>
         <purpose><![CDATA[
 ]]>
         </purpose>
