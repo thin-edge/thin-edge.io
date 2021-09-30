@@ -1,7 +1,7 @@
 use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
-use tedge_utils::test_mqtt_server::start_broker_local;
+use mqtt_tests::test_mqtt_server::start_broker_local;
 use tokio::time::Duration;
 
 const MQTTTESTPORT1: u16 = 58584;
@@ -13,7 +13,6 @@ enum TestJoinError {
     ElapseTime,
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
@@ -38,7 +37,6 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     }
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {

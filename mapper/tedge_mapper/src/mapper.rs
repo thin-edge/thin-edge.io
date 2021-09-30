@@ -113,9 +113,8 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_utils::test_mqtt_server::start_broker_local;
-    use rumqttc::{MqttOptions, AsyncClient, Event, Packet, Outgoing, Incoming};
-    use rumqttc::QoS::AtLeastOnce;
+    use mqtt_tests::*;
+    use mqtt_tests::test_mqtt_server::start_broker_local;
 
     #[tokio::test]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
@@ -149,7 +148,7 @@ mod tests {
             let _ = mapper.run().await;
         });
 
-        // One can know send requests
+        // One can now send requests
         // Happy path
         let input = "abcde";
         let expected = "ABCDE".to_string();
@@ -167,54 +166,14 @@ mod tests {
     struct UppercaseConverter;
 
     impl Converter for UppercaseConverter {
-        type Error = ConversionError;                     // ISSUE this is enforced by the mapper, why not std::error::Error ?
+        type Error = ConversionError;
 
         fn convert(&self, input: &str) -> Result<String, Self::Error> {
             if input.is_ascii() {
                 Ok(input.to_uppercase())
             } else {
-                Err(ConversionError::MapperError(MapperError::HomeDirNotFound))    // ISSUE The conversion error type needs to be extended for each kind of mapper
-            }
-        }
-    }
-
-    async fn received_on_published(mqtt_port: u16, pub_topic: &str, pub_message: &str, sub_topic: &str, timeout_sec: u16) -> Result<String, anyhow::Error> {
-        let mut options = MqttOptions::new("test", "localhost", mqtt_port);
-        options.set_keep_alive(timeout_sec);
-        options.set_clean_session(true);
-
-        let (client, mut eventloop) = AsyncClient::new(options, 10);
-        client.subscribe(sub_topic, AtLeastOnce).await?;
-
-        loop {
-            match eventloop.poll().await {
-                Ok(Event::Incoming(Packet::SubAck(_))) => {
-                    // We are ready to get the response, hence send the request
-                    client.publish(
-                        pub_topic,
-                        AtLeastOnce,
-                        false,
-                        pub_message,
-                    ).await?;
-                }
-                Ok(Event::Incoming(Packet::Publish(response))) => {
-                    // We got a response
-                    client.disconnect().await?;
-                    return Ok(std::str::from_utf8(&response.payload)?.to_string());
-                }
-                Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                    client.disconnect().await?;
-                    return Err(anyhow::anyhow!("Timeout"));
-                }
-                Ok(Event::Incoming(Incoming::Disconnect)) => {
-                    client.disconnect().await?;
-                    return Err(anyhow::anyhow!("Disconnected"));
-                }
-                Err(err) => {
-                    client.disconnect().await?;
-                    return Err(err.into());
-                }
-                _ => {}
+                // Just a stupid error that matches the expectations of the mapper
+                Err(ConversionError::FromMapperError(MapperError::HomeDirNotFound))
             }
         }
     }

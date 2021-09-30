@@ -14,8 +14,6 @@ logging = ["tracing", "tracing-subscriber"]
 [dependencies]
 anyhow = "1.0"
 futures = "0.3"
-rumqttd = "0.7"
-rumqttlog = "0.7"
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }

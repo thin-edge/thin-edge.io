@@ -7,6 +7,7 @@ members = [
     "common/flockfile",
     "common/json_writer",
     "common/mqtt_client",
+    "common/mqtt_tests",
     "common/tedge_users",
     "common/tedge_utils",
     "mapper/cumulocity/c8y_translator_lib",

@@ -1,11 +1,10 @@
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::time::Duration;
-use tedge_utils::test_mqtt_server::start_broker_local;
+use mqtt_tests::test_mqtt_server::start_broker_local;
 use tokio::time::sleep;
 
 const MQTTTESTPORT: u16 = 58586;
 
-#[ignore = "CIT-515"]
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
@@ -24,7 +23,7 @@ fn sending_and_receiving_a_message() {
             &mqtt_client::Config::default().with_port(MQTTTESTPORT),
         )
         .await?;
-        let _pkid = publisher.publish(message).await?;
+        let () = publisher.publish(message).await?;
 
         tokio::select! {
             msg = received.next() => Ok(msg),
@@ -40,7 +39,6 @@ fn sending_and_receiving_a_message() {
     }
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker
