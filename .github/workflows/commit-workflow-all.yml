@@ -263,7 +263,7 @@ jobs:
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
       - name: delete publisher
-        run: rm /home/pi/examples/sawtooth_publisher
+        run: rm -f /home/pi/examples/sawtooth_publisher
 
       - name: move publisher
         run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher /home/pi/examples/
