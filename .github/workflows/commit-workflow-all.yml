@@ -268,10 +268,10 @@ jobs:
         run: sudo apt-get --assume-yes install collectd-core
 
       - name: install packages
-        run: sudo dpkg -i *.deb
+        run: ls -lah
 
-      - name: run tedge help
-        run: tedge --help
+      - name: install packages
+        run: sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
 
         # replace the default config file with tedge custom config file
       - name: configure collectd
