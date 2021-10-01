@@ -2,11 +2,11 @@ name: commit-workflow-allinone
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
   workflow_dispatch:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -285,6 +285,7 @@ jobs:
   system-test_offsite:
     needs: [install-and-use-rpi-offsite]
     runs-on: [self-hosted, Linux, ARM, offsiteall]
+    #continue-on-error: true
 
     steps:
 
