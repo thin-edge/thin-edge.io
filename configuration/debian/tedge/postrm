@@ -1,36 +1,69 @@
 #!/bin/sh
 set -e
 
+remove_user_tedge() {
+    if getent passwd tedge > /dev/null; then
+        deluser --quiet --system tedge
+    fi
+}
 
-### Remove user tedge
-if getent passwd tedge >/dev/null; then
-    deluser --quiet --system tedge
-fi
+remove_tedge_users_group() {
+    if getent group tedge-users > /dev/null; then
+        groupdel tedge-users
+    fi
+}
 
-### Remove configs
-if [ -d "/etc/tedge" ]; then
-    rm -rf /etc/tedge
-fi
+purge_configs() {
+    if [ -d "/etc/tedge" ]; then
+        rm -rf /etc/tedge
+    fi
+}
 
-### Remove file in /etc/sudoers.d directory
-if [ -f "/etc/sudoers.d/tedge-users" ]; then
-    rm /etc/sudoers.d/tedge-users
-fi
+purge_sudoers_file() {
+    if [ -f "/etc/sudoers.d/tedge-users" ]; then
+        rm /etc/sudoers.d/tedge-users
+    fi
 
-if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
-    rm /etc/sudoers.d/tedge-users-nopasswd
-fi
+    if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+        rm /etc/sudoers.d/tedge-users-nopasswd
+    fi
+}
 
-### Remove include from mosquitto.conf
-if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
-    sed -i '/include_dir \/etc\/tedge\/mosquitto-conf/d' ./etc/mosquitto/mosquitto.conf
-fi
+remove_mosquitto_edit() {
+    if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
+        sed -i '/include_dir \/etc\/tedge\/mosquitto-conf/d' /etc/mosquitto/mosquitto.conf
+    fi
+}
 
-### Remove /var/log/tedge if purge
-if [ "$1" = "purge" ]; then
+purge_var_log() {
     if [ -d "/var/log/tedge" ]; then
         rm -rf /var/log/tedge
     fi
-fi
+}
+
+case "$1" in
+    purge)
+        remove_user_tedge
+        remove_tedge_users_group
+        remove_mosquitto_edit
+        purge_sudoers_file
+        purge_configs
+        purge_var_log
+    ;;
+
+    remove)
+        remove_user_tedge
+        remove_tedge_users_group
+        remove_mosquitto_edit
+    ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+
+    *)
+        echo "tedge postrm called with unknown argument \`$1\`" >&2
+        exit 1
+    ;;
+esac
 
 #DEBHELPER#
