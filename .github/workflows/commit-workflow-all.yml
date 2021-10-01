@@ -216,25 +216,25 @@ jobs:
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_0.3.2_armhf.deb
-          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_apt_plugin_0.3.2_armhf.deb
-          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_agent_0.3.2_armhf.deb
-          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_mapper_0.3.2_armhf.deb
-          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
