@@ -242,17 +242,6 @@ jobs:
           name: sawtooth_publisher
           path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
 
-
-#      - name: Download artifact
-#        uses: dawidd6/action-download-artifact@v2
-#        # https://github.com/marketplace/actions/download-workflow-artifact
-#        with:
-#          github_token: ${{secrets.GITHUB_TOKEN}}
-#          workflow: commit-workflow-all.yml
-#          branch: continuous_integration
-#          name: debian-packages-armv7-unknown-linux-gnueabihf
-#          path: debian-package_unpack
-
       - name: purge
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
@@ -270,9 +259,11 @@ jobs:
       - name: ls-lah
         run: ls -lah
 
+      - name: ls-lah-debian
+        run: ls -lah target/armv7-unknown-linux-gnueabihf/debian/
+
       - name: install packages
-        #run: sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
-        run: sudo dpkg -i target/armv7-unknown-linux-gnueabihf/debian/*.deb
+        run: cd target/armv7-unknown-linux-gnueabihf/debian/; sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
 
         # replace the default config file with tedge custom config file
       - name: configure collectd
