@@ -1,0 +1,353 @@
+name: commit-workflow-allinone
+
+on:
+  push:
+    branches: [ main, continuous_integration ]
+  workflow_dispatch:
+    branches: [ main, continuous_integration ]
+  pull_request:
+    branches: [ main, continuous_integration ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  cargo-test:
+
+    name: Run cargo test
+    runs-on: Ubuntu-20.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose
+
+# Build Workflow
+
+  build-matrix-arm:
+    name: Build tedge and mapper Debian for armv7
+    runs-on: Ubuntu-20.04
+    strategy:
+      matrix:
+        target:
+          [
+            armv7-unknown-linux-gnueabihf,
+          ]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: install cargo-deb
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: install cargo-strip
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-strip
+
+      - name: build cross release for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
+
+      # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
+      # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
+      - name: Install binutils to add `strip` for striping arm binaries
+        run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
+
+      - name: Strip tedge
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge
+
+      - name: Strip tedge_mapper
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_mapper
+
+      - name: Strip tedge_agent
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_agent || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_agent
+
+      - name: Strip tedge_apt_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
+
+      - name: build tedge debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_mapper debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_agent debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_agent --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_apt_plugin debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build examples
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --examples --target=${{ matrix.target }}
+
+      - name: Strip workaround sawtooth_publisher
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_apt_plugin_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_agent_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_mapper_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: sawtooth_publisher
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+
+
+# Integration Test Workflow
+
+  cargo-test-features:
+    name: Run cargo test features
+    runs-on: Ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo test features (compile)
+        # If we do not compile in advance the timing in the test run
+        # will not work out as some parts are still compiling during the run
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose --no-run --features integration-test
+
+        # To run the test for features here is kind of experimental
+        # they could fail if GitHub blocks external connections.
+        # It seems like they rarely do.
+      - name: Cargo test features
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: test
+          args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
+
+  install-and-use-rpi-offsite:
+    needs: [build-matrix-arm]
+    runs-on: [self-hosted, Linux, ARM, offsiteall ]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_apt_plugin_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_agent_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_mapper_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: sawtooth_publisher
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/
+
+      - name: purge packages
+        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        continue-on-error: true
+
+      - name: install packages
+        run: sudo apt-get --assume-yes install mosquitto libmosquitto1 collectd-core
+
+      - name: ls-lah
+        run: ls -lah
+
+      - name: ls-lah-debian
+        run: ls -lah target/armv7-unknown-linux-gnueabihf/debian/
+
+      - name: install packages
+        run: cd target/armv7-unknown-linux-gnueabihf/debian/; sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
+
+        # replace the default config file with tedge custom config file
+      - name: configure collectd
+        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+
+      - name: delete publisher
+        run: rm -f /home/pi/examples/sawtooth_publisher
+
+      - name: move publisher
+        run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher /home/pi/examples/
+
+      - name: Run Smoke Test
+        run: ./ci/ci_smoke_test.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
+          EXAMPLEDIR: /home/pi/examples
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+
+
+# System Test Workflow
+
+  system-test_offsite:
+    needs: [install-and-use-rpi-offsite]
+    runs-on: [self-hosted, Linux, ARM, offsiteall]
+    #continue-on-error: true
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
+            TIMEZONE: 01:00
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_${{ github.run_number }}
+        path: tests/
+
+#    # Trigger repo dispatch here.
+#    # This is here a limitation of the amount of workflows
+#    # that trigger each other (GitHub Bug).
+#    # It would be nicer to use the postprocess trigger instead
+#    - name: Repository Dispatch
+#      uses: peter-evans/repository-dispatch@v1
+#      with:
+#          token: ${{ secrets.SECRET_THEGHTOKEN  }}
+#          event-type: postprocess
+#          repository: abelikt/thin-edge.io_analytics
+
+
