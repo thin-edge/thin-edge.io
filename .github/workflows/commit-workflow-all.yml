@@ -242,19 +242,12 @@ jobs:
           name: sawtooth_publisher
           path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
 
-      - name: purge
+      - name: purge packages
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install mosquitto client library
-        run:  sudo apt-get --assume-yes install libmosquitto1
-
-        # install collectd-core
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
+      - name: install packages
+        run: sudo apt-get --assume-yes install mosquitto libmosquitto1 collectd-core
 
       - name: ls-lah
         run: ls -lah
