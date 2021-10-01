@@ -141,27 +141,35 @@ jobs:
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher
 
       - uses: actions/upload-artifact@v2
-        with:
-          name: my-artifact
-          path:  target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
-
-      - uses: actions/download-artifact@v2
-        with:
-          name: my-artifact
-
-      - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
         with:
-          name: debian-packages-${{ matrix.target }}
-          path: target/${{ matrix.target }}/debian/*.deb
+          name: tedge_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
 
-      - name: upload examples as zip
+      - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
         with:
-          name: examples_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
+          name: tedge_apt_plugin_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_agent_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: tedge_mapper_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
+
+      - uses: actions/upload-artifact@v2
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        with:
+          name: sawtooth_publisher
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+
 
 # Integration Test Workflow
 
@@ -204,15 +212,46 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
-        # https://github.com/marketplace/actions/download-workflow-artifact
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: commit-workflow-all.yml
-          branch: continuous_integration
-          name: debian-packages-armv7-unknown-linux-gnueabihf
-          path: debian-package_unpack
+          name: tedge_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_apt_plugin_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_agent_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_mapper_0.3.2_armhf.deb
+          path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
+
+      - uses: actions/download-artifact@v2
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: sawtooth_publisher
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+
+
+#      - name: Download artifact
+#        uses: dawidd6/action-download-artifact@v2
+#        # https://github.com/marketplace/actions/download-workflow-artifact
+#        with:
+#          github_token: ${{secrets.GITHUB_TOKEN}}
+#          workflow: commit-workflow-all.yml
+#          branch: continuous_integration
+#          name: debian-packages-armv7-unknown-linux-gnueabihf
+#          path: debian-package_unpack
 
       - name: purge
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
@@ -229,7 +268,7 @@ jobs:
         run: sudo apt-get --assume-yes install collectd-core
 
       - name: install packages
-        run: sudo dpkg -i ./debian-package_unpack/*.deb
+        run: sudo dpkg -i *.deb
 
       - name: run tedge help
         run: tedge --help
@@ -238,21 +277,19 @@ jobs:
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-      - uses: actions/download-artifact@v2
-        with:
-          name: my-artifact
+#      - name: Download artifact
+#        uses: dawidd6/action-download-artifact@v2
+#        # https://github.com/marketplace/actions/download-workflow-artifact
+#        with:
+#          github_token: ${{secrets.GITHUB_TOKEN}}
+#          workflow: commit-workflow-all.yml
+#          workflow_conclusion: in_progress
+#          branch: continuous_integration
+#          name: examples_armv7-unknown-linux-gnueabihf
+#          path: /home/pi/examples
 
-
-      - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
-        # https://github.com/marketplace/actions/download-workflow-artifact
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: commit-workflow-all.yml
-          workflow_conclusion: in_progress
-          branch: continuous_integration
-          name: examples_armv7-unknown-linux-gnueabihf
-          path: /home/pi/examples
+      - name: move publisher
+        run: mv sawtooth_publisher /home/pi/examples/
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
