@@ -272,7 +272,7 @@ jobs:
 
       - name: install packages
         #run: sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
-        run: dpkg -i target/armv7-unknown-linux-gnueabihf/debian/*.deb
+        run: sudo dpkg -i target/armv7-unknown-linux-gnueabihf/debian/*.deb
 
         # replace the default config file with tedge custom config file
       - name: configure collectd
