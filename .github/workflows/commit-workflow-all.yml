@@ -13,43 +13,6 @@ env:
 
 jobs:
 
-  cargo-fmt:
-
-    name: Run cargo fmt
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo fmt
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: -- --check
-
-  cargo-clippy:
-
-    name: Run cargo clippy
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: clippy
-
   cargo-test:
 
     name: Run cargo test
@@ -194,7 +157,6 @@ jobs:
 # Integration Test Workflow
 
   cargo-test-features:
-    needs: [cargo-fmt, cargo-clippy]
     name: Run cargo test features
     runs-on: Ubuntu-20.04
 
