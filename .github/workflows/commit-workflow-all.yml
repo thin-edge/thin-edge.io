@@ -201,7 +201,6 @@ jobs:
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: commit-workflow-all.yml
-          workflow_status: in_progress
           branch: continuous_integration
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
