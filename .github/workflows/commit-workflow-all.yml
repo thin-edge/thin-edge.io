@@ -240,7 +240,7 @@ jobs:
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: sawtooth_publisher
-          path: target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher
+          path: target/armv7-unknown-linux-gnueabihf/release/examples/
 
       - name: purge packages
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
