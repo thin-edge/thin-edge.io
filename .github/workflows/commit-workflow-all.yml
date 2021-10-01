@@ -239,7 +239,7 @@ jobs:
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
       - uses: actions/download-artifact@v2
-          with:
+        with:
           name: my-artifact
 
 
