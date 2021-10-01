@@ -142,12 +142,12 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-        name: my-artifact
-        path:  target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
+          name: my-artifact
+          path:  target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
 
       - uses: actions/download-artifact@v2
         with:
-        name: my-artifact
+          name: my-artifact
 
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
