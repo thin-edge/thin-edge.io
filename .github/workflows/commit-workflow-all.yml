@@ -263,7 +263,7 @@ jobs:
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
       - name: move publisher
-        run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher sawtooth_publisher /home/pi/examples/
+        run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher /home/pi/examples/
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
