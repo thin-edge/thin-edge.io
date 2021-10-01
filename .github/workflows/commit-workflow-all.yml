@@ -267,29 +267,19 @@ jobs:
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
-      - name: install packages
+      - name: ls-lah
         run: ls -lah
 
       - name: install packages
-        run: sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
+        #run: sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
+        run: dpkg -i target/armv7-unknown-linux-gnueabihf/debian/*.deb
 
         # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-#      - name: Download artifact
-#        uses: dawidd6/action-download-artifact@v2
-#        # https://github.com/marketplace/actions/download-workflow-artifact
-#        with:
-#          github_token: ${{secrets.GITHUB_TOKEN}}
-#          workflow: commit-workflow-all.yml
-#          workflow_conclusion: in_progress
-#          branch: continuous_integration
-#          name: examples_armv7-unknown-linux-gnueabihf
-#          path: /home/pi/examples
-
       - name: move publisher
-        run: mv sawtooth_publisher /home/pi/examples/
+        run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher sawtooth_publisher /home/pi/examples/
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
