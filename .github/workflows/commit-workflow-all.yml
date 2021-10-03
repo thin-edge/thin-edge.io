@@ -13,6 +13,19 @@ env:
 
 jobs:
 
+  test-env:
+    # we will only see starts as gh filters this
+    name: test-env
+    runs-on: Ubuntu-20.04
+    steps:
+      - name: Whatever
+        run:  echo $HOME Oh mann; echo $C8YUSERNAME $C8YTENANT $C8YDEVICE $C8YDEVICEID
+        env:
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
+
   cargo-test:
 
     name: Run cargo test
