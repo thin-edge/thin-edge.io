@@ -19,7 +19,7 @@ jobs:
     runs-on: Ubuntu-20.04
     steps:
       - name: Whatever
-        run:  echo $HOME Oh mann; echo $C8YUSERNAME $C8YTENANT $C8YDEVICE $C8YDEVICEID
+        run:  echo $HOME Oh man; echo $C8YUSERNAME $C8YTENANT $C8YDEVICE $C8YDEVICEID
         env:
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
@@ -275,11 +275,14 @@ jobs:
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-      - name: delete publisher
+      - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
       - name: move publisher
         run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher /home/pi/examples/
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
