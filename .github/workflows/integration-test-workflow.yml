@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
@@ -47,7 +47,7 @@ jobs:
 
         # install collectd-core
       - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
+        run: sudo apt-get --assume-yes install collectd collectd-core
 
       - name: install packages
         run: sudo dpkg -i ./debian-package_unpack/*.deb
@@ -150,7 +150,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
@@ -161,7 +161,7 @@ jobs:
 
         # install collectd-core
       - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
+        run: sudo apt-get --assume-yes install collectd collectd-core
 
       - name: install packages
         run: sudo dpkg -i ./debian-package_unpack/*.deb
@@ -224,7 +224,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
@@ -235,7 +235,7 @@ jobs:
 
         # install collectd-core
       - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
+        run: sudo apt-get --assume-yes install collectd-core collectd
 
       - name: install packages
         run: sudo dpkg -i ./debian-package_unpack/*.deb
