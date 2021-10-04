@@ -218,19 +218,15 @@ impl CumulocitySoftwareManagement {
             .to_thin_edge_json()?;
 
         let token = get_jwt_token(&self.client).await?;
+        let tenant_uri = self.config.query_string(C8yUrlSetting)?;
+
         software_update_request
             .update_list
             .iter_mut()
             .for_each(|modules| {
                 modules.modules.iter_mut().for_each(|module| {
                     if let Some(url) = &module.url {
-                        if url_is_my_tenant(
-                            url.url(),
-                            self.config
-                                .query_string(C8yUrlSetting)
-                                .unwrap_or_default()
-                                .as_str(),
-                        ) {
+                        if url_is_my_tenant(url.url(), &tenant_uri) {
                             module.url = module.url.as_ref().map(|s| {
                                 DownloadInfo::new(&s.url)
                                     .with_auth(Auth::new_bearer(&token.token()))
