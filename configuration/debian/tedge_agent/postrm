@@ -8,7 +8,7 @@ remove_tedge_agent_user() {
     fi
 }
 
-purge_sudoers_file() {
+remove_sudoers_file() {
     if [ -f "/etc/sudoers.d/tedge-agent" ]; then
         rm /etc/sudoers.d/tedge-agent
     fi
@@ -27,12 +27,13 @@ purge_agent_directory() {
 case "$1" in
     purge)
         remove_tedge_agent_user
-        purge_sudoers_file
+        remove_sudoers_file
         purge_agent_directory
     ;;
 
     remove)
         remove_tedge_agent_user
+        remove_sudoers_file
     ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
