@@ -70,11 +70,15 @@ if [ -z $EXAMPLEDIR ]; then
     echo "Error: Please supply the path to the sawtooth_publisher as EXAMPLEDIR"
     exit 1
 else
-    echo "Your password: EXAMPLEDIR"
+    echo "Your exampledir: $EXAMPLEDIR"
 fi
 
-TEBASEDIR
-
+if [ -z $TEBASEDIR ]; then
+    echo "Error: Please supply the path to the sawtooth_publisher as TEBASEDIR"
+    exit 1
+else
+    echo "Your thin edge base dir: $TEBASEDIR"
+fi
 
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
