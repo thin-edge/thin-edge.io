@@ -2,50 +2,16 @@ name: commit-workflow-allinone
 
 on:
   push:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
   workflow_dispatch:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
-  test-env:
-    # we will only see starts as gh filters this
-    name: test-env
-    runs-on: Ubuntu-20.04
-    steps:
-      - name: Whatever
-        run:  echo $HOME Oh man; echo $C8YUSERNAME $C8YTENANT $C8YDEVICE $C8YDEVICEID
-        env:
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
-          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
-
-  cargo-test:
-
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose
 
 # Build Workflow
 
@@ -156,24 +122,28 @@ jobs:
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_apt_plugin_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_agent_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_mapper_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
 
@@ -215,6 +185,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
+          # TODO Update this arguments
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi-offsite:
@@ -228,24 +199,28 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_apt_plugin_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_agent_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_mapper_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
@@ -269,6 +244,7 @@ jobs:
         run: ls -lah target/armv7-unknown-linux-gnueabihf/debian/
 
       - name: install packages
+        # TODO : Avoid hardcoded versions
         run: cd target/armv7-unknown-linux-gnueabihf/debian/; sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
 
         # replace the default config file with tedge custom config file
@@ -354,16 +330,3 @@ jobs:
       with:
         name: results_${{ github.run_number }}
         path: tests/
-
-#    # Trigger repo dispatch here.
-#    # This is here a limitation of the amount of workflows
-#    # that trigger each other (GitHub Bug).
-#    # It would be nicer to use the postprocess trigger instead
-#    - name: Repository Dispatch
-#      uses: peter-evans/repository-dispatch@v1
-#      with:
-#          token: ${{ secrets.SECRET_THEGHTOKEN  }}
-#          event-type: postprocess
-#          repository: abelikt/thin-edge.io_analytics
-
-
