@@ -67,10 +67,10 @@ jobs:
           path: /home/runner/examples
 
       - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
+        run: chmod +x /home/runner/examples/sawtooth_publisher
 
       - name: lslah publisher
-        run: ls -lah /home/pi/examples/sawtooth_publisher
+        run: ls -lah /home/runner/examples/sawtooth_publisher
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
