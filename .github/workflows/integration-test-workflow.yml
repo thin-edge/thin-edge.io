@@ -169,6 +169,12 @@ jobs:
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
+      - name: move publisher
+        run: mv -u ./examples/sawtooth_publisher /home/pi/examples/sawtooth_publisher
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
+
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
         env:
@@ -234,6 +240,12 @@ jobs:
           branch: continuous_integration
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
+
+      - name: move publisher
+        run: mv -u ./examples/sawtooth_publisher /home/pi/examples/sawtooth_publisher
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
