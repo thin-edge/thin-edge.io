@@ -13,19 +13,19 @@ remove_tedge_users_group() {
     fi
 }
 
-purge_configs() {
-    if [ -d "/etc/tedge" ]; then
-        rm -rf /etc/tedge
-    fi
-}
-
-purge_sudoers_file() {
+remove_sudoers_file() {
     if [ -f "/etc/sudoers.d/tedge-users" ]; then
         rm /etc/sudoers.d/tedge-users
     fi
 
     if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
         rm /etc/sudoers.d/tedge-users-nopasswd
+    fi
+}
+
+purge_configs() {
+    if [ -d "/etc/tedge" ]; then
+        rm -rf /etc/tedge
     fi
 }
 
@@ -46,7 +46,7 @@ case "$1" in
         remove_user_tedge
         remove_tedge_users_group
         remove_mosquitto_edit
-        purge_sudoers_file
+        remove_sudoers_file
         purge_configs
         purge_var_log
     ;;
@@ -55,6 +55,7 @@ case "$1" in
         remove_user_tedge
         remove_tedge_users_group
         remove_mosquitto_edit
+        remove_sudoers_file
     ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
