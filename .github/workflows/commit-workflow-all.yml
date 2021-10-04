@@ -13,27 +13,6 @@ env:
 
 jobs:
 
-  cargo-test:
-
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose
-
 # Build Workflow
 
   build-matrix-arm:
@@ -143,24 +122,28 @@ jobs:
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_apt_plugin_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_apt_plugin_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_agent_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_agent_0.3.2_armhf.deb
 
       - uses: actions/upload-artifact@v2
         # https://github.com/marketplace/actions/upload-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_mapper_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/tedge_mapper_0.3.2_armhf.deb
 
@@ -202,6 +185,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
+          # TODO Update this arguments
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi-offsite:
@@ -215,24 +199,28 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_apt_plugin_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_agent_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
+          # TODO : Avoid hardcoded versions
           name: tedge_mapper_0.3.2_armhf.deb
           path: target/armv7-unknown-linux-gnueabihf/debian/
 
@@ -256,17 +244,21 @@ jobs:
         run: ls -lah target/armv7-unknown-linux-gnueabihf/debian/
 
       - name: install packages
+        # TODO : Avoid hardcoded versions
         run: cd target/armv7-unknown-linux-gnueabihf/debian/; sudo dpkg -i tedge_0.3.2_armhf.deb tedge_apt_plugin_0.3.2_armhf.deb tedge_agent_0.3.2_armhf.deb tedge_mapper_0.3.2_armhf.deb
 
         # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-      - name: delete publisher
+      - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
       - name: move publisher
         run: mv target/armv7-unknown-linux-gnueabihf/release/examples/sawtooth_publisher /home/pi/examples/
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
@@ -338,16 +330,4 @@ jobs:
       with:
         name: results_${{ github.run_number }}
         path: tests/
-
-#    # Trigger repo dispatch here.
-#    # This is here a limitation of the amount of workflows
-#    # that trigger each other (GitHub Bug).
-#    # It would be nicer to use the postprocess trigger instead
-#    - name: Repository Dispatch
-#      uses: peter-evans/repository-dispatch@v1
-#      with:
-#          token: ${{ secrets.SECRET_THEGHTOKEN  }}
-#          event-type: postprocess
-#          repository: abelikt/thin-edge.io_analytics
-
 

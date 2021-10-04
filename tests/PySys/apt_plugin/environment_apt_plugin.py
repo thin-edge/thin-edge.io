@@ -1,25 +1,11 @@
-"""
-This environment provides a basis for tests of the apt plugin.
-Handle with care, these tests will install and remove packages.
-
-The tests are disabled by default as they will install, de-install
-packages, run apt update and more.
-
-Better run them in a VM or a container.
-
-To run the tests:
-
-    pysys.py run 'apt_*' -XmyPlatform='container'
-
-"""
-
-import pysys
+import os
+import requests
 from pysys.basetest import BaseTest
 
 
 class AptPlugin(BaseTest):
 
-    # Static class member that can be overridden by a command line argument
+    # Static class member that can be overriden by a command line argument
     # E.g.:
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform=None
@@ -36,7 +22,7 @@ class AptPlugin(BaseTest):
         self.list_calls_auto = 0
 
     def plugin_cmd(
-        self, command, outputfile, exit_code, argument=None, version=None, extra=None
+            self, command, outputfile, exit_code, argument=None, version=None, extra=None, file_path=None
     ):
         """Call a plugin with command and an optional argument,
         expect exit code and store output to outputfile
@@ -52,6 +38,10 @@ class AptPlugin(BaseTest):
         if extra:
             # Does not happen in normal cases, just for testing
             args.append(extra)
+
+        if file_path:
+            args.append("--file")
+            args.append(file_path)
 
         process = self.startProcess(
             command=self.sudo,
@@ -101,3 +91,15 @@ class AptPlugin(BaseTest):
             arguments=[self.apt_get, "install", "-y", package],
             abortOnError=False,
         )
+
+    def _download_rolldice_binary(self, url: str):
+        # https://stackoverflow.com/questions/53101597/how-to-download-binary-file-using-requests
+        local_filename = url.split('/')[-1]
+        current_working_directory = os.path.abspath(os.getcwd())
+        self._path_to_rolldice_binary = os.path.join(current_working_directory, local_filename)
+
+        r = requests.get(url, stream=True)
+        with open(self._path_to_rolldice_binary, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024): 
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
