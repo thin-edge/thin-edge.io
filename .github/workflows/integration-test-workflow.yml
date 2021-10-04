@@ -33,9 +33,10 @@ jobs:
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
+        continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install mosquitto
@@ -146,9 +147,10 @@ jobs:
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
+        continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install mosquitto
@@ -219,9 +221,10 @@ jobs:
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
+        continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install mosquitto
