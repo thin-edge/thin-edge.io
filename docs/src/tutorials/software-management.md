@@ -46,25 +46,22 @@ Find more information about [managing the device software](https://cumulocity.co
      field and enter a version of the package. The version is optional and can be left with a white space, meaning the latest version.
    > Note: The version field format is `package_version::plugin_type_name`.The plugin type name that is provided here is used to pick
      the appropriate plugin among those installed in /etc/tedge/sm-plugins.
-   > Note 2: If the postfix `::plugin_type_name` is left empty a default plugin will be used if defined, otherwise `apt` will be used.
+
+   > Note 2: If the postfix `::plugin_type_name` is left empty, a `default` plugin will be used if defined or if only a single plugin is installed.
+
 3. Optionally, you can define the device type filter when adding a new software.
-4. thin-edge.io ships a default plugin supporting `debian` package from both `apt` repositories as well as remote location. Figure 1.
-   If you prefer to use package from `apt` repository, select the **Provide a file path** option and give an **empty space** (' ').
-   If you would like to use other sources eg file uploaded to your cloud or an external source provide full url to the file. Figure 2.
-   If you would like to use your cloud storage select `Upload a binary` option and upload the file to your cloud. Figure 3.
+4. thin-edge.io ships a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
+   If you prefer to use packages from an `apt` repository, select the **Provide a file path** option and give an **empty space** (' ').
+    ![Add new software](./images/add-new-software-to-repo.png)
 
-   > Note: Bear in mind that some external remotes may require additional authentication authentication which is not supported at the moment.
+   If you would like to use other sources (eg. file uploaded to your cloud or an external source), provide the full url to the file.
+    ![Add new software from uploaded binary](./images/add-new-software-to-repo-binary.png)
+
+   If you would like to upload your binaries, select `Upload a binary` option and upload the file to Cumulocity software repository.
+    ![Add new software from remote](./images/add-new-software-to-repo-remote.png)
+
+   > Note: Bear in mind that some external remotes may require additional authentication which is not supported at the moment.
 5. Press `Add Software` button.
-
-Follow above mentioned steps as shown in the diagram
-
- ![Add new software](./images/add-new-software-to-repo.png)
-
-Figure 2.
- ![Add new software from uploaded binary](./images/add-new-software-to-repo-binary.png)
-
-Figure 3.
- ![Add new software from remote](./images/add-new-software-to-repo-remote.png)
 
 ### Deleting software or software version
 
