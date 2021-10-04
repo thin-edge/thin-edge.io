@@ -49,8 +49,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
 }
 
 #[derive(Debug)]
-struct CumulocitySoftwareManagement {
-    client: Client,
+pub struct CumulocitySoftwareManagement {
+    pub client: Client,
     config: TEdgeConfig,
     c8y_internal_id: String,
 }
@@ -79,7 +79,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
+    pub async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
