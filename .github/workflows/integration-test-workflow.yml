@@ -31,6 +31,9 @@ jobs:
           name: debian-packages-amd64
           path: debian-package_unpack
 
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+
       - name: purge
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
@@ -141,6 +144,9 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+
       - name: purge
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
@@ -210,6 +216,9 @@ jobs:
           branch: continuous_integration
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
 
       - name: purge
         run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
