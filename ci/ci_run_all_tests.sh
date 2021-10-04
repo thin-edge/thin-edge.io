@@ -12,7 +12,6 @@
 # TIMEZONE : Your timezone (temporary)
 # TEBASEDIR : Base directory for the Thin-Edge repo
 # EXAMPLEDIR : The direcory of the sawtooth example
-# C8YURL : e.g. https://thin-edge-io.eu-latest.cumulocity.com
 
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin

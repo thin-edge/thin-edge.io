@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysystest type="auto">
+
+  <description>
+	<title>Validate the tedge-mapper-sm-c8y for receiving the last message on restart</title>
+	<purpose><![CDATA[
+]]>
+	</purpose>
+  </description>
+  <classification>
+	<groups inherit="true">
+	  <group></group>
+	</groups>
+	<modes inherit="true">
+	</modes>
+  </classification>
+  <data>
+	<class name="SmMapperC8yReceiveLastMessageOnRestart" module="run"/>
+  </data>
+  <traceability>
+	<requirements>
+	  <requirement id=""/>
+	</requirements>
+  </traceability>
+</pysystest>
