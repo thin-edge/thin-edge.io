@@ -27,5 +27,5 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run
+pysys.py run -v DEBUG 'apt_*' -XmyPlatform='container'
 deactivate
