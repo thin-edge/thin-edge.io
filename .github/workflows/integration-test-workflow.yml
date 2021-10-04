@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
@@ -150,7 +150,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
@@ -224,7 +224,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1 mosquitto
         continue-on-error: true
 
       - name: install mosquitto
