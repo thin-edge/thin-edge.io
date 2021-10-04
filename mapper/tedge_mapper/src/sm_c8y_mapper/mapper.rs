@@ -226,7 +226,7 @@ impl CumulocitySoftwareManagement {
             .for_each(|modules| {
                 modules.modules.iter_mut().for_each(|module| {
                     if let Some(url) = &module.url {
-                        if url_is_my_tenant(url.url(), &tenant_uri) {
+                        if url_is_in_my_tenant_domain(url.url(), &tenant_uri) {
                             module.url = module.url.as_ref().map(|s| {
                                 DownloadInfo::new(&s.url)
                                     .with_auth(Auth::new_bearer(&token.token()))
@@ -289,7 +289,7 @@ impl CumulocitySoftwareManagement {
     }
 }
 
-fn url_is_my_tenant(url: &str, tenant_uri: &str) -> bool {
+fn url_is_in_my_tenant_domain(url: &str, tenant_uri: &str) -> bool {
     // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
     // * <tenant_name>.<domain> eg: sample.c8y.io
     // * <tenant_id>.<domain> eg: t12345.c8y.io
@@ -387,6 +387,7 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 mod tests {
     use super::*;
     use mqtt_client::MqttMessageStream;
+    use rstest::rstest;
     use std::sync::Arc;
 
     const MQTT_TEST_PORT: u16 = 55555;
@@ -450,6 +451,34 @@ mod tests {
         let res = get_url_for_sw_list("test_host", "12345");
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
+    }
+
+    #[rstest]
+    #[case("http://aaa.test.com")]
+    #[case("https://aaa.test.com")]
+    #[case("ftp://aaa.test.com")]
+    #[case("mqtt://aaa.test.com")]
+    #[case("https://t1124124.test.com")]
+    #[case("https://t1124124.test.com:12345")]
+    #[case("https://t1124124.test.com/path")]
+    #[case("https://t1124124.test.com/path/to/file.test")]
+    #[case("https://t1124124.test.com/path/to/file")]
+    fn url_is_my_tenant_correct_urls(#[case] url: &str) {
+        let tenant_uri = "test.test.com";
+
+        assert!(url_is_in_my_tenant_domain(url, tenant_uri));
+    }
+
+    #[rstest]
+    #[case("test.com")]
+    #[case("http://test.co")]
+    #[case("http://test.co.te")]
+    #[case("http://test.com:123456")]
+    #[case("http://test.com::12345")]
+    fn url_is_my_tenant_incorrect_urls(#[case] url: &str) {
+        let tenant_uri = "test.test.com";
+
+        assert!(!url_is_in_my_tenant_domain(url, tenant_uri));
     }
 
     async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {

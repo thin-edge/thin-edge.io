@@ -39,7 +39,6 @@ pub trait Plugin {
             SoftwareModuleUpdate::Install { mut module } => {
                 let module_url = module.url.clone();
                 match module_url {
-                    // match &module.url {
                     Some(url) => self.install_from_url(&mut module, &url, logger).await?,
                     None => self.install(&module, logger).await?,
                 }

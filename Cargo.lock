@@ -2151,6 +2151,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rstest"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2288c66aeafe3b2ed227c981f364f9968fa952ef0b30e84ada4486e7ee24d00a"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro2 1.0.29",
+ "quote 1.0.9",
+ "rustc_version",
+ "syn 1.0.76",
+]
+
+[[package]]
 name = "rumqttc"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2639,6 +2652,7 @@ dependencies = [
  "mockall",
  "mqtt_client",
  "reqwest",
+ "rstest",
  "serde",
  "serde_json",
  "serial_test",
