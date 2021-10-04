@@ -317,14 +317,15 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await?;
 
-    let json_list_response = r#"{
-                            "id":"123",
-                            "status":"successful",
-                            "currentSoftwareList":[
-                                {"type":"apt","modules":[
-                                    {"name":"m","url":https://foobar.io/m.epl}
-                                ]}
-                        ]}"#;
+    // Prepare and publish a software update response `successful`.
+    let json_response = r#"{
+        "id":"123",
+        "status":"successful",
+        "currentSoftwareList":[
+            {"type":"apt","modules":[
+                {"name":"m","url":"https://foobar.io/m.epl"}
+            ]}
+        ]}"#;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528, external_id,nodered,1.0.0::debian,,install"#;
@@ -360,7 +361,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
                 // Publish the response
                 let _ = publish(
                     &Topic::new("tedge/commands/res/software/update").unwrap(),
-                    json_list_response.to_string(),
+                    json_response.to_string(),
                 )
                 .await;
             }
