@@ -40,7 +40,7 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
         output = subprocess.check_output(["/usr/bin/apt-cache", "madison", "rolldice"])
 
         # Lets assume it is the package in the first line of the output
-        self.version = output.split()[2]  # E.g. "1.16-1+b3"
+        self.version = output.split()[2].decode("utf8") # E.g. "1.16-1+b3"
 
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)

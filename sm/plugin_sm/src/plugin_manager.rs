@@ -1,3 +1,4 @@
+use crate::log_file::LogFile;
 use crate::plugin::*;
 use json_sm::*;
 use std::{
@@ -5,7 +6,7 @@ use std::{
     fs,
     io::{self, ErrorKind},
     path::PathBuf,
-    process::Command,
+    process::{Command, Stdio},
 };
 use tedge_utils::paths::pathbuf_to_string;
 use tracing::error;
@@ -102,7 +103,12 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match Command::new(&path).arg("list").status() {
+                match Command::new(&path)
+                    .arg("list")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                {
                     Ok(code) if code.success() => {}
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
@@ -150,30 +156,44 @@ impl ExternalPlugins {
         self.plugin_map.is_empty()
     }
 
-    pub async fn list(&self, request: &SoftwareListRequest) -> SoftwareListResponse {
+    pub async fn list(
+        &self,
+        request: &SoftwareListRequest,
+        mut log_file: LogFile,
+    ) -> SoftwareListResponse {
         let mut response = SoftwareListResponse::new(request);
+        let mut logger = log_file.buffer();
+        let mut error_count = 0;
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list().await {
-                Ok(software_list) => response.add_modules(software_type, software_list),
-                Err(err) => {
-                    // TODO fix the response format to handle an error per module type
-                    let reason = format!("{}", err);
-                    response.set_error(&reason);
-                    return response;
+            match plugin.list(&mut logger).await {
+                Ok(software_list) => response.add_modules(&software_type, software_list),
+                Err(_) => {
+                    error_count += 1;
                 }
             }
         }
+
+        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+            response.set_error(&reason);
+        }
+
         response
     }
 
-    pub async fn process(&self, request: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
+    pub async fn process(
+        &self,
+        request: &SoftwareUpdateRequest,
+        mut log_file: LogFile,
+    ) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
+        let mut logger = log_file.buffer();
+        let mut error_count = 0;
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates).await
+                plugin.apply_all(updates, &mut logger).await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
@@ -181,17 +201,38 @@ impl ExternalPlugins {
             };
 
             if !errors.is_empty() {
+                error_count += 1;
                 response.add_errors(&software_type, errors);
             }
         }
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list().await {
+            match plugin.list(&mut logger).await {
                 Ok(software_list) => response.add_modules(software_type, software_list),
-                Err(err) => response.add_errors(software_type, vec![err]),
+                Err(err) => {
+                    error_count += 1;
+                    response.add_errors(software_type, vec![err])
+                }
             }
         }
 
+        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+            response.set_error(&reason);
+        }
+
         response
+    }
+
+    fn error_message(log_file: &str, error_count: i32) -> Option<String> {
+        if error_count > 0 {
+            let reason = if error_count == 1 {
+                format!("1 error, see device log file {}", log_file)
+            } else {
+                format!("{} errors, see device log file {}", error_count, log_file)
+            };
+            Some(reason)
+        } else {
+            None
+        }
     }
 }

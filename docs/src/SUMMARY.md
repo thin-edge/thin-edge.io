@@ -10,6 +10,7 @@
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
+    - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)

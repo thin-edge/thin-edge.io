@@ -35,7 +35,7 @@ pub struct TEdgeConfigDefaults {
     /// Default mapper timestamp bool
     pub default_mapper_timestamp: Flag,
 
-    /// Default port for mqtt
+    /// Default port for mqtt internal listener
     pub default_mqtt_port: Port,
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -29,6 +29,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 batcher = {path = "../../common/batcher" }
 c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
+c8y_smartrest = { path = "../cumulocity/c8y_smartrest" }
 chrono = "0.4"
 clock = {path = "../../common/clock" }
 csv = "1.1"
