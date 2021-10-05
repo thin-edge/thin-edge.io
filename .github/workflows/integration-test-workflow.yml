@@ -107,7 +107,7 @@ jobs:
           path: debian-package_unpack
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
