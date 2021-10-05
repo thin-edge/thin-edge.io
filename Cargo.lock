@@ -2151,19 +2151,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rstest"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2288c66aeafe3b2ed227c981f364f9968fa952ef0b30e84ada4486e7ee24d00a"
-dependencies = [
- "cfg-if 1.0.0",
- "proc-macro2 1.0.29",
- "quote 1.0.9",
- "rustc_version",
- "syn 1.0.76",
-]
-
-[[package]]
 name = "rumqttc"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2652,7 +2639,6 @@ dependencies = [
  "mockall",
  "mqtt_client",
  "reqwest",
- "rstest",
  "serde",
  "serde_json",
  "serial_test",
@@ -2661,6 +2647,7 @@ dependencies = [
  "tedge_users",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thin_edge_json",
  "thiserror",
  "tokio",
@@ -2713,6 +2700,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-case"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b114ece25254e97bf48dd4bfc2a12bad0647adacfe4cae1247a9ca6ad302cec"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro2 1.0.29",
+ "quote 1.0.9",
+ "syn 1.0.76",
+ "version_check",
 ]
 
 [[package]]
