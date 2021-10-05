@@ -1,6 +1,6 @@
-use crate::sm_c8y_mapper::error::SmartRestDeserializerError;
+use crate::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
-use json_sm::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -23,14 +23,14 @@ impl TryFrom<String> for CumulocitySoftwareUpdateActions {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestUpdateSoftware {
+pub struct SmartRestUpdateSoftware {
     pub message_id: String,
     pub external_id: String,
     pub update_list: Vec<SmartRestUpdateSoftwareModule>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SmartRestUpdateSoftwareModule {
+pub struct SmartRestUpdateSoftwareModule {
     pub software: String,
     pub version: Option<String>,
     pub url: Option<String>,
@@ -38,7 +38,7 @@ pub(crate) struct SmartRestUpdateSoftwareModule {
 }
 
 impl SmartRestUpdateSoftware {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             message_id: "528".into(),
             external_id: "".into(),
@@ -46,10 +46,7 @@ impl SmartRestUpdateSoftware {
         }
     }
 
-    pub(crate) fn from_smartrest(
-        &self,
-        smartrest: &str,
-    ) -> Result<Self, SmartRestDeserializerError> {
+    pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
         if message_id != self.message_id {
@@ -67,14 +64,12 @@ impl SmartRestUpdateSoftware {
         Ok(record)
     }
 
-    pub(crate) fn to_thin_edge_json(
-        &self,
-    ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
+    pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
         let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
         Ok(request)
     }
 
-    pub(crate) fn modules(&self) -> Vec<SmartRestUpdateSoftwareModule> {
+    pub fn modules(&self) -> Vec<SmartRestUpdateSoftwareModule> {
         let mut modules = vec![];
         for module in &self.update_list {
             modules.push(SmartRestUpdateSoftwareModule {
@@ -99,7 +94,8 @@ impl SmartRestUpdateSoftware {
                             module_type: module.get_module_version_and_type().1,
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
-                            url: module.url.clone(),
+                            url: module.get_url(),
+                            file_path: None,
                         },
                     });
                 }
@@ -110,6 +106,7 @@ impl SmartRestUpdateSoftware {
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
                             url: None,
+                            file_path: None,
                         },
                     });
                 }
@@ -153,6 +150,14 @@ impl SmartRestUpdateSoftwareModule {
             None => (None, None), // (empty)
         }
     }
+
+    fn get_url(&self) -> Option<DownloadInfo> {
+        match &self.url {
+            Some(url) if url.trim().is_empty() => None,
+            Some(url) => Some(DownloadInfo::new(url.as_str())),
+            None => None,
+        }
+    }
 }
 
 type JwtToken = String;
@@ -171,7 +176,7 @@ impl SmartRestJwtResponse {
         }
     }
 
-    pub(crate) fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
+    pub fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut csv = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(to_parse.as_bytes());
@@ -357,13 +362,15 @@ mod tests {
                 module_type: Some("debian".to_string()),
                 name: "software1".to_string(),
                 version: Some("version1".to_string()),
-                url: Some("url1".to_string()),
+                url: Some("url1".into()),
+                file_path: None,
             }));
         let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
             version: None,
             url: None,
+            file_path: None,
         }));
 
         assert_eq!(thin_edge_json, expected_thin_edge_json);

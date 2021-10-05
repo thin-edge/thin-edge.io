@@ -19,6 +19,7 @@ fi
 ### Create folders
 install -g tedge -o tedge -m 755 -d /etc/tedge
 install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
+install -g tedge -o tedge -m 755 -d /var/log/tedge
 install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
 
 ### Add include to mosquitto.conf so tedge specific conf will be loaded
