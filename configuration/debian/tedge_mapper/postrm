@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+### Remove user tedge-mapper
+if getent passwd tedge-mapper >/dev/null; then
+    deluser --quiet --system tedge-mapper
+fi
+
+#DEBHELPER#

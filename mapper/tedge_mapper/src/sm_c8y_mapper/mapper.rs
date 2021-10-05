@@ -14,7 +14,7 @@ use json_sm::{
     Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareUpdateResponse,
 };
-use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
+use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use reqwest::Url;
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
@@ -37,8 +37,13 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
+        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        let messages = sm_mapper.client.subscribe(topic_filter).await?;
+
         let () = sm_mapper.init().await?;
-        let () = sm_mapper.run().await?;
+        let () = sm_mapper.run(messages).await?;
 
         Ok(())
     }
@@ -75,27 +80,24 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn run(&self) -> Result<(), anyhow::Error> {
+    async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
-        while let Err(err) = self.subscribe_messages_runtime().await {
+        while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
             error!("{}", err);
         }
 
         Ok(())
     }
 
-    #[instrument(skip(self), name = "main-loop")]
-    async fn subscribe_messages_runtime(&self) -> Result<(), SMCumulocityMapperError> {
-        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
-
-        let mut messages = self.client.subscribe(topic_filter).await?;
-
+    #[instrument(skip(self, messages), name = "main-loop")]
+    async fn subscribe_messages_runtime(
+        &self,
+        messages: &mut Box<dyn MqttMessageStream>,
+    ) -> Result<(), SMCumulocityMapperError> {
         while let Some(message) = messages.next().await {
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
@@ -275,7 +277,6 @@ impl CumulocitySoftwareManagement {
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
         let token = get_jwt_token(&self.client).await?;
-
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
         let url_host = self.config.query_string(C8yUrlSetting)?;
@@ -389,7 +390,6 @@ mod tests {
     use mqtt_client::MqttMessageStream;
     use rstest::rstest;
     use std::sync::Arc;
-
     const MQTT_TEST_PORT: u16 = 55555;
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
 
