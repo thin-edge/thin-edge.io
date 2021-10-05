@@ -11,10 +11,11 @@ use c8y_smartrest::{
     },
 };
 use json_sm::{
-    Jsonify, SoftwareListRequest, SoftwareListResponse, SoftwareOperationStatus,
-    SoftwareUpdateResponse,
+    Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
+    SoftwareOperationStatus, SoftwareUpdateResponse,
 };
-use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
+use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
+use reqwest::Url;
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
 use tokio::time::Instant;
@@ -36,8 +37,13 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
+        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        let messages = sm_mapper.client.subscribe(topic_filter).await?;
+
         let () = sm_mapper.init().await?;
-        let () = sm_mapper.run().await?;
+        let () = sm_mapper.run(messages).await?;
 
         Ok(())
     }
@@ -74,27 +80,24 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn run(&self) -> Result<(), anyhow::Error> {
+    async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
-        while let Err(err) = self.subscribe_messages_runtime().await {
+        while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
             error!("{}", err);
         }
 
         Ok(())
     }
 
-    #[instrument(skip(self), name = "main-loop")]
-    async fn subscribe_messages_runtime(&self) -> Result<(), SMCumulocityMapperError> {
-        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
-
-        let mut messages = self.client.subscribe(topic_filter).await?;
-
+    #[instrument(skip(self, messages), name = "main-loop")]
+    async fn subscribe_messages_runtime(
+        &self,
+        messages: &mut Box<dyn MqttMessageStream>,
+    ) -> Result<(), SMCumulocityMapperError> {
         while let Some(message) = messages.next().await {
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
@@ -212,11 +215,34 @@ impl CumulocitySoftwareManagement {
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = OutgoingTopic::SoftwareUpdateRequest.to_topic()?;
         let update_software = SmartRestUpdateSoftware::new();
-        let json_update_request = update_software
+        let mut software_update_request = update_software
             .from_smartrest(smartrest)?
-            .to_thin_edge_json()?
-            .to_json()?;
-        let () = self.publish(&topic, json_update_request).await?;
+            .to_thin_edge_json()?;
+
+        let token = get_jwt_token(&self.client).await?;
+        let tenant_uri = self.config.query_string(C8yUrlSetting)?;
+
+        software_update_request
+            .update_list
+            .iter_mut()
+            .for_each(|modules| {
+                modules.modules.iter_mut().for_each(|module| {
+                    if let Some(url) = &module.url {
+                        if url_is_in_my_tenant_domain(url.url(), &tenant_uri) {
+                            module.url = module.url.as_ref().map(|s| {
+                                DownloadInfo::new(&s.url)
+                                    .with_auth(Auth::new_bearer(&token.token()))
+                            });
+                        } else {
+                            module.url = module.url.as_ref().map(|s| DownloadInfo::new(&s.url));
+                        }
+                    }
+                });
+            });
+
+        let () = self
+            .publish(&topic, software_update_request.to_json()?)
+            .await?;
 
         Ok(())
     }
@@ -251,7 +277,6 @@ impl CumulocitySoftwareManagement {
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
         let token = get_jwt_token(&self.client).await?;
-
         let reqwest_client = reqwest::ClientBuilder::new().build()?;
 
         let url_host = self.config.query_string(C8yUrlSetting)?;
@@ -263,6 +288,30 @@ impl CumulocitySoftwareManagement {
 
         Ok(())
     }
+}
+
+fn url_is_in_my_tenant_domain(url: &str, tenant_uri: &str) -> bool {
+    // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
+    // * <tenant_name>.<domain> eg: sample.c8y.io
+    // * <tenant_id>.<domain> eg: t12345.c8y.io
+    // These URLs may be both equivalent and point to the same tenant.
+    // We are going to remove that and only check if the domain is the same.
+    let url_host = match Url::parse(url) {
+        Ok(url) => match url.host() {
+            Some(host) => host.to_string(),
+            None => return false,
+        },
+        Err(_err) => {
+            return false;
+        }
+    };
+
+    let url_domain = url_host.splitn(2, '.').collect::<Vec<&str>>();
+    let tenant_domain = tenant_uri.splitn(2, '.').collect::<Vec<&str>>();
+    if url_domain.get(1) == tenant_domain.get(1) {
+        return true;
+    }
+    false
 }
 
 async fn publish_software_list_http(
@@ -289,7 +338,6 @@ async fn try_get_internal_id(
     token: &str,
 ) -> Result<String, SMCumulocityMapperError> {
     let internal_id = client.get(url_get_id).bearer_auth(token).send().await?;
-
     let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
     let internal_id = internal_id_response.id();
@@ -341,6 +389,7 @@ mod tests {
     use super::*;
     use mqtt_client::MqttMessageStream;
     use std::sync::Arc;
+    use test_case::test_case;
 
     const MQTT_TEST_PORT: u16 = 55555;
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
@@ -403,6 +452,28 @@ mod tests {
         let res = get_url_for_sw_list("test_host", "12345");
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
+    }
+
+    #[test_case("http://aaa.test.com")]
+    #[test_case("https://aaa.test.com")]
+    #[test_case("ftp://aaa.test.com")]
+    #[test_case("mqtt://aaa.test.com")]
+    #[test_case("https://t1124124.test.com")]
+    #[test_case("https://t1124124.test.com:12345")]
+    #[test_case("https://t1124124.test.com/path")]
+    #[test_case("https://t1124124.test.com/path/to/file.test")]
+    #[test_case("https://t1124124.test.com/path/to/file")]
+    fn url_is_my_tenant_correct_urls(url: &str) {
+        assert!(url_is_in_my_tenant_domain(url, "test.test.com"));
+    }
+
+    #[test_case("test.com")]
+    #[test_case("http://test.co")]
+    #[test_case("http://test.co.te")]
+    #[test_case("http://test.com:123456")]
+    #[test_case("http://test.com::12345")]
+    fn url_is_my_tenant_incorrect_urls(url: &str) {
+        assert!(!url_is_in_my_tenant_domain(url, "test.test.com"));
     }
 
     async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
