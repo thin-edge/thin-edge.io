@@ -73,6 +73,9 @@ impl Plugins for ExternalPlugins {
     }
 }
 
+const SUDO: &str = "sudo";
+const PLUGIN_CMD: &str = "list";
+
 impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
@@ -103,8 +106,9 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match Command::new(&path)
-                    .arg("list")
+                match Command::new(SUDO)
+                    .arg(&path)
+                    .arg(PLUGIN_CMD)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
