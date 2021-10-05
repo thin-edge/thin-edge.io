@@ -1,4 +1,6 @@
-use json_sm::{Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion};
+use json_sm::{
+    DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
+};
 use serde::{Deserialize, Serialize};
 
 const EMPTY_STRING: &str = "";
@@ -26,7 +28,7 @@ impl InternalIdResponse {
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     pub version: Option<String>,
-    pub url: Option<String>,
+    pub url: Option<DownloadInfo>,
 }
 
 impl<'a> Jsonify<'a> for C8ySoftwareModuleItem {}
@@ -115,6 +117,7 @@ mod tests {
             name: "b".into(),
             version: Some("c".into()),
             url: Some("".into()),
+            file_path: None,
         };
 
         let expected_c8y_item = C8ySoftwareModuleItem {
@@ -179,7 +182,7 @@ mod tests {
             ]),
         };
 
-        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":""},{"name":"b","version":"1.0::debian","url":""},{"name":"c","version":"::debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta::debian","url":"https://foobar.io/d.deb"},{"name":"m","version":"::apama","url":"https://foobar.io/m.epl"}]}"#;
+        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":{"url":""}},{"name":"b","version":"1.0::debian","url":{"url":""}},{"name":"c","version":"::debian","url":{"url":"https://foobar.io/c.deb"}},{"name":"d","version":"beta::debian","url":{"url":"https://foobar.io/d.deb"}},{"name":"m","version":"::apama","url":{"url":"https://foobar.io/m.epl"}}]}"#;
 
         assert_eq!(c8y_software_list, expected_struct);
         assert_eq!(c8y_software_list.to_json().unwrap(), expected_json);

@@ -140,6 +140,7 @@ impl SoftwareUpdateRequest {
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
+                    file_path: None,
                 };
                 match item.action {
                     None => {}
@@ -357,7 +358,8 @@ pub struct SoftwareModuleItem {
     pub version: Option<SoftwareVersion>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    #[serde(flatten)]
+    pub url: Option<DownloadInfo>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<SoftwareModuleAction>,
@@ -434,6 +436,7 @@ impl SoftwareRequestResponse {
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
+                        file_path: None,
                     });
                 }
             }
