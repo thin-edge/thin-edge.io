@@ -82,7 +82,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     fakeplugin = None
 
-    tenant_url = "pradeep.basic.stage.c8y.io"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
@@ -94,18 +94,18 @@ class SoftwareManagement(EnvironmentC8y):
         # TODO make this somehow not hard-coded
         self.pkg_id_db = {
             # apt
-            #"asciijump": "5475278",
-            #"robotfindskitten": "5473003",
-            #"squirrel3": "5474871",
-            "rolldice": "1211",
-            #"moon-buggy": "5439204",
+            "asciijump": "5475278",
+            "robotfindskitten": "5473003",
+            "squirrel3": "5474871",
+            "rolldice": "5152439",
+            "moon-buggy": "5439204",
             # fake plugin
-            #"apple": "5495053",
-            "banana": "5222",
-            #"cherry": "5495382",
-            #"watermelon": "5494510",
+            "apple": "5495053",
+            "banana": "5494888",
+            "cherry": "5495382",
+            "watermelon": "5494510",
             # docker plugin
-            "registry: "6235",
+            "registry": "8018911",
         }
 
         if self.project.c8yswrepo:

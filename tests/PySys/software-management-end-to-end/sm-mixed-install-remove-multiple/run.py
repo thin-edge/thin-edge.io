@@ -35,13 +35,13 @@ class PySysTest(SoftwareManagement):
 
         mgt = "::fruits"
         action = [
-            # {
-            #     "action": act,
-            #     "id": self.get_pkgid("apple"),
-            #     "name": "apple",
-            #     "url": " ",
-            #     "version": mgt,
-            # },
+            {
+                "action": act,
+                "id": self.get_pkgid("apple"),
+                "name": "apple",
+                "url": " ",
+                "version": mgt,
+            },
             {
                 "action": act,
                 "id": self.get_pkgid("banana"),
@@ -56,15 +56,14 @@ class PySysTest(SoftwareManagement):
                 "url": " ",
                 "version": "::apt",
             },
-            # {
-            #     "action": act,
-            #     "id": self.get_pkgid("cherry"),
-            #     "name": "cherry",
-            #     "url": " ",
-            #     "version": mgt,
-            # },
-
-             {
+            {
+                "action": act,
+                "id": self.get_pkgid("cherry"),
+                "name": "cherry",
+                "url": " ",
+                "version": mgt,
+            },
+            {
                 "action": act,
                 "id": self.get_pkgid("registry"),
                 "name": "registry",
@@ -82,9 +81,9 @@ class PySysTest(SoftwareManagement):
 
         super().setup()
 
-        # self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
-        # self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
         self.assertThat("False == value", value=self.check_is_installed("registry"))
     def execute(self):
@@ -93,11 +92,11 @@ class PySysTest(SoftwareManagement):
         self.trigger_action_json(action)
         self.wait_until_succcess()
 
-        #self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
-        #self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
-          self.assertThat("True == value", value=self.check_is_installed("registry"))
+        self.assertThat("True == value", value=self.check_is_installed("registry"))
 
         action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
@@ -105,8 +104,8 @@ class PySysTest(SoftwareManagement):
 
     def validate(self):
 
-       # self.assertThat("True == value", value=self.check_is_installed("apple"))
+        self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
-        #self.assertThat("True == value", value=self.check_is_installed("cherry"))
+        self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
         self.assertThat("False == value", value=self.check_is_installed("registry"))
