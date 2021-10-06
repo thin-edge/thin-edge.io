@@ -62,9 +62,11 @@ pub trait Plugin {
             return failed_updates;
         }
 
+        //download all
+
         if let Err(SoftwareError::UpdateListNotSupported(_)) = self.update_list(&updates).await {
             for update in updates.iter() {
-                if let Err(error) = self.apply(update).await {
+                if let Err(error) = self.apply(update, logger).await {
                     failed_updates.push(error);
                 };
             }
@@ -73,6 +75,8 @@ pub trait Plugin {
         if let Err(finalize_error) = self.finalize(logger).await {
             failed_updates.push(finalize_error);
         }
+
+        //iterate downloaders downloader.cleanup()
 
         failed_updates
     }
@@ -83,7 +87,7 @@ pub trait Plugin {
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+        let downloader = Downloader::new(&module.name, &module.version, "/tmp/tedge");
 
         logger
             .write_all(
@@ -128,6 +132,46 @@ pub trait Plugin {
         }
 
         result
+    }
+
+    async fn download_from_url(
+        &self,
+        module: &mut SoftwareModule,
+        url: &DownloadInfo,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Downloader, SoftwareError> {
+        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+
+        logger
+            .write_all(
+                format!(
+                    "----- $ Downloading: {} to {} \n",
+                    &url.url(),
+                    &downloader.filename().to_string_lossy().to_string()
+                )
+                .as_bytes(),
+            )
+            .await?;
+
+        if let Err(err) =
+            downloader
+                .download(url)
+                .await
+                .map_err(|err| SoftwareError::DownloadError {
+                    reason: err.to_string(),
+                    url: url.url().to_string(),
+                })
+        {
+            logger
+                .write_all(format!("error: {}\n", &err).as_bytes())
+                .await?;
+
+            return Err(err);
+        }
+
+        module.file_path = Some(downloader.filename().to_owned());
+
+        downloader
     }
 }
 

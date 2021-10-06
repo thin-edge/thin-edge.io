@@ -5,7 +5,6 @@ use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
 use serde::Deserialize;
 use std::io;
-use std::os::unix::prelude::ExitStatusExt;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
@@ -144,7 +143,6 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
 
         PluginOp::UpdateList => {
             let mut updates: Vec<SoftwareModuleUpdate> = Vec::new();
-            let mut status: ExitStatus = ExitStatus::from_raw(0);
             let mut rdr = csv::ReaderBuilder::new()
                 .has_headers(false)
                 .delimiter(b' ')
@@ -154,16 +152,33 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 updates.push(result?);
             }
 
-            print!("{:?}", updates);
+            let mut args: Vec<String> = Vec::new();
+            args.push("install".into());
+            args.push("--yes".into());
             for update_module in updates {
-                status = match update_module.action {
-                    UpdateAction::Install => install(update_module.name, update_module.version)?,
-                    UpdateAction::Remove => remove(update_module.name, update_module.version)?,
+                match update_module.action {
+                    UpdateAction::Install => {
+                        if let Some(version) = update_module.version {
+                            args.push(format!("{}={}", update_module.name, version));
+                        } else {
+                            args.push(update_module.name)
+                        }
+                    }
+                    UpdateAction::Remove => {
+                        //TODO validate version in the remove request
+
+                        // Adding a '-' at the end of the package name like rolldice- means remove
+                        args.push(format!("{}-", update_module.name))
+                    }
                 };
-                if !status.success() {
-                    break;
-                }
             }
+
+            let status = Command::new("apt-get")
+                .args(args)
+                .stdin(Stdio::null())
+                .status()
+                .map_err(|err| InternalError::exec_error("apt-get", err))?;
+
             return Ok(status);
         }
 

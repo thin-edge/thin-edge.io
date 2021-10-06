@@ -11,6 +11,9 @@ pub enum InternalError {
 
     #[error("Parsing Debian package failed for `{file}`")]
     ParsingError { file: String },
+
+    #[error(transparent)]
+    FromCsv(#[from] csv::Error),
 }
 
 impl InternalError {
