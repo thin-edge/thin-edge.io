@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_run:
     workflows: ["build-workflow"]
-    branches: [main]
+    branches: [main, continuous_integration]
     types:
       - completed
 env:
