@@ -216,7 +216,7 @@ const PREPARE: &str = "prepare";
 const INSTALL: &str = "install";
 const REMOVE: &str = "remove";
 const FINALIZE: &str = "finalize";
-const LIST: &str = "list";
+pub const LIST: &str = "list";
 const VERSION: &str = "version";
 
 #[async_trait]
