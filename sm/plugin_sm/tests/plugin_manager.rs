@@ -16,7 +16,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Plugins registry should not register any plugin as no files in the directory are present.
@@ -33,7 +33,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Registry has registered no plugins.
@@ -51,7 +51,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Check if registry has loaded plugin of type `test`.
@@ -97,7 +97,7 @@ mod tests {
         dbg!(&plugin_dir);
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Plugin registry shall have registered plugin with name as the file in plugin directory.
@@ -130,7 +130,8 @@ mod tests {
         let (_, _path) = plugin3.keep().unwrap();
 
         let mut plugins =
-            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone())).unwrap();
+            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone()), None)
+                .unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -155,7 +156,7 @@ mod tests {
             .to_owned();
         let (_, _path) = plugin.keep().unwrap();
 
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None, None).unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -171,7 +172,7 @@ mod tests {
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
-        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()));
+        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()), None);
         assert_matches!(result.unwrap_err(), SoftwareError::InvalidDefaultPlugin(_));
     }
 

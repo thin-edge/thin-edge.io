@@ -1,3 +1,18 @@
+"""
+This environment provides a basis for tests of the apt plugin.
+Handle with care, these tests will install and remove packages.
+
+The tests are disabled by default as they will install, de-install
+packages, run apt update and more.
+
+Better run them in a VM or a container.
+
+To run the tests:
+
+    pysys.py run 'apt_*' -XmyPlatform='container'
+
+"""
+
 import os
 import requests
 from pysys.basetest import BaseTest
@@ -5,7 +20,7 @@ from pysys.basetest import BaseTest
 
 class AptPlugin(BaseTest):
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform=None
@@ -100,6 +115,6 @@ class AptPlugin(BaseTest):
 
         r = requests.get(url, stream=True)
         with open(self._path_to_rolldice_binary, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024): 
+            for chunk in r.iter_content(chunk_size=1024):
                 if chunk: # filter out keep-alive new chunks
                     f.write(chunk)

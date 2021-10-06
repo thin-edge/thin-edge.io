@@ -40,6 +40,7 @@ pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
+    sudo: Option<PathBuf>,
 }
 
 impl Plugins for ExternalPlugins {
@@ -77,11 +78,13 @@ impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
+        sudo: Option<PathBuf>,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
             default_plugin_type: default_plugin_type.clone(),
+            sudo,
         };
         let () = plugins.load()?;
 
@@ -103,8 +106,16 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match Command::new(&path)
-                    .arg("list")
+                let mut command = if let Some(sudo) = &self.sudo {
+                    let mut command = Command::new(sudo);
+                    command.arg(&path);
+                    command
+                } else {
+                    Command::new(&path)
+                };
+
+                match command
+                    .arg(LIST)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
