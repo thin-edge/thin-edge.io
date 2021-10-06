@@ -36,6 +36,7 @@ pub struct SmAgentConfig {
     pub response_topic_update: Topic,
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
+    config_location: TEdgeConfigLocation,
 }
 
 impl Default for SmAgentConfig {
@@ -64,6 +65,8 @@ impl Default for SmAgentConfig {
 
         let log_dir = PathBuf::from("/var/log/tedge/agent");
 
+        let config_location = TEdgeConfigLocation::from_default_system_location();
+
         Self {
             default_plugin_type,
             errors_topic,
@@ -75,13 +78,15 @@ impl Default for SmAgentConfig {
             response_topic_update,
             sm_home,
             log_dir,
+            config_location,
         }
     }
 }
 
 impl SmAgentConfig {
     pub fn try_new(tedge_config_location: TEdgeConfigLocation) -> Result<Self, anyhow::Error> {
-        let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
+        let config_repository =
+            tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
 
         let default_plugin_type =
@@ -97,7 +102,8 @@ impl SmAgentConfig {
         Ok(SmAgentConfig::default()
             .with_default_plugin_type(default_plugin_type)
             .with_sm_home(tedge_config_path)
-            .with_mqtt_client_config(mqtt_config))
+            .with_mqtt_client_config(mqtt_config)
+            .with_config_location(tedge_config_location))
     }
 
     pub fn with_default_plugin_type(self, default_plugin_type: Option<String>) -> Self {
@@ -116,6 +122,24 @@ impl SmAgentConfig {
             mqtt_client_config,
             ..self
         }
+    }
+
+    pub fn with_config_location(self, config_location: TEdgeConfigLocation) -> Self {
+        Self {
+            config_location,
+            ..self
+        }
+    }
+
+    pub fn update_default_plugin(&mut self) -> Result<(), AgentError> {
+        let config_repository =
+            tedge_config::TEdgeConfigRepository::new(self.config_location.clone());
+        let tedge_config = config_repository.load()?;
+
+        self.default_plugin_type =
+            tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
+
+        Ok(())
     }
 }
 
@@ -146,7 +170,7 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(&self) -> Result<(), AgentError> {
+    pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
         let default_plugin_type = self.config.default_plugin_type.clone();
@@ -157,6 +181,7 @@ impl SmAgent {
         )?));
 
         if plugins.lock().unwrap().empty() {
+            // `unwrap` should be safe here as we only access data.
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);
         }
@@ -180,7 +205,7 @@ impl SmAgent {
     }
 
     async fn subscribe_and_process(
-        &self,
+        &mut self,
         mqtt: &Client,
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
@@ -204,6 +229,9 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_update => {
+                    let () = self.config.update_default_plugin()?;
+                    let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
+
                     let _success = self
                         .handle_software_update_request(
                             mqtt,
@@ -272,7 +300,7 @@ impl SmAgent {
             .operation_logs
             .new_log_file(LogKind::SoftwareList)
             .await?;
-        let response = plugins.lock().unwrap().list(&request, log_file).await;
+        let response = plugins.lock().unwrap().list(&request, log_file).await; // `unwrap` should be safe here as we only access data.
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -329,8 +357,7 @@ impl SmAgent {
             .new_log_file(LogKind::SoftwareUpdate)
             .await?;
 
-        let () = plugins.lock().unwrap().load()?;
-        let response = plugins.lock().unwrap().process(&request, log_file).await;
+        let response = plugins.lock().unwrap().process(&request, log_file).await; // `unwrap` should be safe here as we only access data.
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
