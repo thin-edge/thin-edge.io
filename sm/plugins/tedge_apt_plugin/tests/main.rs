@@ -134,25 +134,25 @@ mod apt_plugin_integration_tests {
         &format!("install {} --file {}", ROLLDICE, "wrong_path"),                                               // input
         &format!("ERROR: Parsing Debian package failed"),                                                       // expected stderr
         5                                                                                                       // expected exit code
-        ; "wrong path"                                                                               // description
+        ; "wrong path"                                                                                          // description
     )]
     #[test_case(
         &format!("install {} --file {} --module-version {}", ROLLDICE, "notapackagepath", ROLLDICE_VERSION),    // input
         &format!("ERROR: Parsing Debian package failed"),                                                       // expected stderr
         5                                                                                                       // expected exit code
-        ; "wrong path with right version"                                              // description
+        ; "wrong path with right version"                                                                       // description
     )]
     #[test_case(
-        &format!("install {} --file {} --module-version {}", ROLLDICE, ROLLDICE_FILE_PATH, "someversion"),       // input
+        &format!("install {} --file {} --module-version {}", ROLLDICE, ROLLDICE_FILE_PATH, "someversion"),      // input
         &format!("ERROR: Parsing Debian package failed"),                                                       // expected stderr
         5                                                                                                       // expcted exit code
-        ; "right path with wrong version"                                               // description
+        ; "right path with wrong version"                                                                       // description
     )]
     #[test_case(
         &format!("install {} --file {} --module-version {}", ROLLDICE, "notapackagepath", "someversion"),       // input
         &format!("ERROR: Parsing Debian package failed"),                                                       // expected stderr
         5                                                                                                       // expcted exit code
-        ; "wrong path with wrong version"                                               // description
+        ; "wrong path with wrong version"                                                                       // description
     )]
     fn install_from_local_file_fail(
         input_command: &str,
@@ -172,22 +172,22 @@ mod apt_plugin_integration_tests {
     #[test_case(
         &format!("install {} --file {}", ROLLDICE, ROLLDICE_FILE_PATH),                                         // input
         &format!("The following NEW packages will be installed\n  {}", ROLLDICE),                               // expected stdout
-        0                                                                                                      // expected exit code
-        ; "path"                                                                             // description
+        0                                                                                                       // expected exit code
+        ; "path"                                                                                                // description
     )]
     #[serial]
     #[test_case(
         &format!("install {} --file {} --module-version {}", ROLLDICE, ROLLDICE_FILE_PATH, ROLLDICE_VERSION),   // input
         &format!("The following NEW packages will be installed\n  {}", ROLLDICE),                               // expected stdout 
-        0                                                                                                      // expected exit code
-        ; "path with version"                                                         // description
+        0                                                                                                       // expected exit code
+        ; "path with version"                                                                                   // description
     )]
     #[serial]
     #[test_case(
         &format!("install {} --module-version {} --file {}", ROLLDICE,  ROLLDICE_VERSION, ROLLDICE_FILE_PATH),  // input
         &format!("The following NEW packages will be installed\n  {}", ROLLDICE),                               // expected stdout 
-        0                                                                                                      // expected exit code
-        ; "version with path"                                           // description
+        0                                                                                                       // expected exit code
+        ; "version with path"                                                                                   // description
     )]
     #[serial]
     fn install_from_local_file_sucess(
@@ -197,12 +197,11 @@ mod apt_plugin_integration_tests {
     ) -> Result<()> {
         // fetching the debian package & removing rolldice in case it is already installed.
         // only executed once.
-        download_rolldice_binary_once(); // without 42.07s, with 39.80s
+        download_rolldice_binary_once();
         let _ = run_cmd(APT_COMMAND, &format!("remove {} -y", ROLLDICE))?;
 
         // execute command to install from local file
         let (stdout, stderr, exit_code) = run_cmd(TEDGE_APT_COMMAND, input_command)?;
-        //dbg!(&stdout, &stderr, &exit_code);
 
         // asserting sucesss
         assert_that!(stdout.unwrap(), match_regex(expected_stdout));
