@@ -12,7 +12,10 @@ use json_sm::{
 };
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::ExternalPlugins;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tracing::{debug, error, info, instrument};
 
 use crate::operation_logs::{LogKind, OperationLogs};
@@ -147,13 +150,13 @@ impl SmAgent {
         info!("Starting tedge agent");
 
         let default_plugin_type = self.config.default_plugin_type.clone();
-        let plugins = Arc::new(ExternalPlugins::open(
+        let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),
             default_plugin_type.clone(),
             Some("sudo".into()),
-        )?);
+        )?));
 
-        if plugins.empty() {
+        if plugins.lock().unwrap().empty() {
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);
         }
@@ -179,7 +182,7 @@ impl SmAgent {
     async fn subscribe_and_process(
         &self,
         mqtt: &Client,
-        plugins: &Arc<ExternalPlugins>,
+        plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
         let mut operations = mqtt.subscribe(self.config.request_topics.clone()).await?;
         while let Some(message) = operations.next().await {
@@ -224,7 +227,7 @@ impl SmAgent {
     async fn handle_software_list_request(
         &self,
         mqtt: &Client,
-        plugins: Arc<ExternalPlugins>,
+        plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
@@ -269,7 +272,7 @@ impl SmAgent {
             .operation_logs
             .new_log_file(LogKind::SoftwareList)
             .await?;
-        let response = plugins.list(&request, log_file).await;
+        let response = plugins.lock().unwrap().list(&request, log_file).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -283,7 +286,7 @@ impl SmAgent {
     async fn handle_software_update_request(
         &self,
         mqtt: &Client,
-        plugins: Arc<ExternalPlugins>,
+        plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
@@ -325,7 +328,9 @@ impl SmAgent {
             .operation_logs
             .new_log_file(LogKind::SoftwareUpdate)
             .await?;
-        let response = plugins.process(&request, log_file).await;
+
+        let () = plugins.lock().unwrap().load()?;
+        let response = plugins.lock().unwrap().process(&request, log_file).await;
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
