@@ -82,7 +82,14 @@ class SoftwareManagement(EnvironmentC8y):
 
     fakeplugin = None
 
-    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'sm-docker*' -Xdockerplugin='dockerplugin'
+    # Use it only when you have set up the docker_plugin
+
+    dockerplugin = None
+
+    tenant_url = "pradeep.basic.stage.c8y.io"
 
     def setup(self):
         """Setup Environment"""
@@ -94,10 +101,10 @@ class SoftwareManagement(EnvironmentC8y):
         # TODO make this somehow not hard-coded
         self.pkg_id_db = {
             # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5152439",
+            "asciijump": "5356",
+            "robotfindskitten": "4374",
+            "squirrel3": "5357",
+            "rolldice": "1211",
             "moon-buggy": "5439204",
             # fake plugin
             "apple": "5495053",
@@ -105,7 +112,9 @@ class SoftwareManagement(EnvironmentC8y):
             "cherry": "5495382",
             "watermelon": "5494510",
             # docker plugin
-            "registry": "8018911",
+            "registry": "6235",
+            "hello-world": "6243",
+            "docker/getting-started": "6245",
         }
 
         if self.project.c8yswrepo:
