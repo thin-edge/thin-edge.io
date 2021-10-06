@@ -23,7 +23,7 @@ fi
 install -g tedge-agent -o tedge-agent -m 754 -d /etc/tedge/.agent
 
 # create /var/log/tedge/agent directory
-install -g tedge-agent -o tedge-agent -m 754 -d /var/log/tedge/agent
+install -g tedge-agent -o tedge-agent -m 755 -d /var/log/tedge/agent
 
 ## Enable the sm services if the device is connected to c8y cloud
 if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then 

@@ -22,7 +22,6 @@ stop-on-upgrade = false
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
-clock = { path = "../../common/clock" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 json_sm = { path = "../json_sm" }

@@ -1,6 +1,6 @@
 use crate::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
-use json_sm::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -94,7 +94,8 @@ impl SmartRestUpdateSoftware {
                             module_type: module.get_module_version_and_type().1,
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
-                            url: module.url.clone(),
+                            url: module.get_url(),
+                            file_path: None,
                         },
                     });
                 }
@@ -105,6 +106,7 @@ impl SmartRestUpdateSoftware {
                             name: module.software.clone(),
                             version: module.get_module_version_and_type().0,
                             url: None,
+                            file_path: None,
                         },
                     });
                 }
@@ -146,6 +148,14 @@ impl SmartRestUpdateSoftwareModule {
             }
 
             None => (None, None), // (empty)
+        }
+    }
+
+    fn get_url(&self) -> Option<DownloadInfo> {
+        match &self.url {
+            Some(url) if url.trim().is_empty() => None,
+            Some(url) => Some(DownloadInfo::new(url.as_str())),
+            None => None,
         }
     }
 }
@@ -352,13 +362,15 @@ mod tests {
                 module_type: Some("debian".to_string()),
                 name: "software1".to_string(),
                 version: Some("version1".to_string()),
-                url: Some("url1".to_string()),
+                url: Some("url1".into()),
+                file_path: None,
             }));
         let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
             version: None,
             url: None,
+            file_path: None,
         }));
 
         assert_eq!(thin_edge_json, expected_thin_edge_json);

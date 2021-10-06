@@ -150,6 +150,7 @@ impl SmAgent {
         let plugins = Arc::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),
             default_plugin_type.clone(),
+            Some("sudo".into()),
         )?);
 
         if plugins.empty() {
