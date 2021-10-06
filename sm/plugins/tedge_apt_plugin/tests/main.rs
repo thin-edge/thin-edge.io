@@ -84,52 +84,6 @@ mod apt_plugin_integration_tests {
         Ok(path)
     }
 
-    #[test]
-    #[serial]
-    fn tedge_apt_install_command() -> Result<()> {
-        // setup
-        let _value = run_cmd(APT_COMMAND, &format!("remove {} -y", ROLLDICE))?;
-
-        // installing rolldice
-        let (stdout, stderr, exit_code) =
-            run_cmd(TEDGE_APT_COMMAND, &format!("install {}", ROLLDICE))?;
-
-        // asserting rolldice installation worked
-        assert_that!(
-            stdout.unwrap(),
-            match_regex(&format!(
-                "The following NEW packages will be installed\n  {}",
-                ROLLDICE
-            ))
-        );
-        assert_that!(stderr, is(none()));
-        assert_that!(exit_code, eq(0));
-        Ok(())
-    }
-
-    #[test]
-    #[serial]
-    fn tedge_remove_command() -> Result<()> {
-        // setup
-        let _ = run_cmd(APT_COMMAND, &format!("install {}", ROLLDICE))?;
-
-        // removing rolldice
-        let (stdout, stderr, exit_code) =
-            run_cmd(TEDGE_APT_COMMAND, &format!("remove {}", ROLLDICE))?;
-
-        // asserting rolldice removal worked
-        assert_that!(
-            stdout.unwrap(),
-            match_regex(&format!(
-                "The following packages will be REMOVED\n  {}",
-                ROLLDICE
-            ))
-        );
-        assert_that!(stderr, is(none()));
-        assert_that!(exit_code, eq(0));
-        Ok(())
-    }
-
     #[test_case(
         &format!("install {} --file {}", ROLLDICE, "wrong_path"),                                               // input
         &format!("ERROR: Parsing Debian package failed"),                                                       // expected stderr
