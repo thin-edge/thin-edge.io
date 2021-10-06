@@ -13,7 +13,7 @@ remove_sudoers_file() {
         rm /etc/sudoers.d/tedge-agent
     fi
 
-    if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+    if [ -f "/etc/sudoers.d/tedge-agent-nopasswd" ]; then
         rm /etc/sudoers.d/tedge-agent-nopasswd
     fi
 }
