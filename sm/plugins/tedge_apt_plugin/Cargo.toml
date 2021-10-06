@@ -16,3 +16,9 @@ assets = [
 [dependencies]
 structopt = "0.3"
 thiserror = "1.0"
+
+[dev-dependencies]
+hamcrest2 = "0.3.0"
+serial_test = "0.5.1"
+curl = "0.4.38"
+test-case = "1.2.0"
