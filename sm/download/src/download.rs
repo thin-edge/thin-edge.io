@@ -23,6 +23,7 @@ impl Downloader {
 
         let mut download_target = PathBuf::new().join(&target_dir_path).join(&filename);
         download_target.set_extension("tmp");
+
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
 
         Self {
