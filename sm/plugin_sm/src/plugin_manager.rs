@@ -9,7 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 use tedge_utils::paths::pathbuf_to_string;
-use tracing::error;
+use tracing::{error, info};
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -88,12 +88,18 @@ impl ExternalPlugins {
         };
         let () = plugins.load()?;
 
-        if let Some(default_plugin_type) = default_plugin_type {
-            if plugins
-                .by_software_type(default_plugin_type.as_str())
-                .is_none()
-            {
-                return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+        match default_plugin_type {
+            Some(default_plugin_type) => {
+                if plugins
+                    .by_software_type(default_plugin_type.as_str())
+                    .is_none()
+                {
+                    return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+                }
+                info!("Default plugin type: {}", default_plugin_type)
+            }
+            None => {
+                info!("Default plugin type: Not configured")
             }
         }
 
@@ -120,7 +126,12 @@ impl ExternalPlugins {
                     .stderr(Stdio::null())
                     .status()
                 {
-                    Ok(code) if code.success() => {}
+                    Ok(code) if code.success() => {
+                        info!(
+                            "Plugin activated: {}",
+                            pathbuf_to_string(path.clone()).unwrap()
+                        );
+                    }
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
                     Ok(_) => {
