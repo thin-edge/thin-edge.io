@@ -153,6 +153,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
 
             let mut args: Vec<String> = Vec::new();
             args.push("install".into());
+            args.push("--quiet".into());
             args.push("--yes".into());
             for update_module in updates {
                 match update_module.action {
@@ -165,31 +166,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                     }
                     UpdateAction::Remove => {
                         if let Some(version) = update_module.version {
-                            // Get the current installed version of the provided package
-                            let output = Command::new("apt")
-                                .arg("list")
-                                .arg("--installed")
-                                .arg(update_module.name.as_str())
-                                .output()
-                                .map_err(|err| InternalError::exec_error("apt-get", err))?;
-
-                            let stdout = String::from_utf8(output.stdout)?;
-
-                            // Check if the installed version and the provided version match
-                            let second_line = stdout.lines().nth(1); //Ignore line 0 which is always 'Listing...'
-                            if let Some(package_info) = second_line {
-                                if let Some(installed_version) =
-                                    package_info.split_whitespace().nth(1)
-                                // Value at index 0 is the package name
-                                {
-                                    if installed_version != version {
-                                        return Err(InternalError::VersionMismatch {
-                                            installed: installed_version.into(),
-                                            requested: version,
-                                        });
-                                    }
-                                }
-                            }
+                            validate_version(update_module.name.as_str(), version.as_str())?
                         }
 
                         // Adding a '-' at the end of the package name like 'rolldice-' instructs apt to treat it as removal
@@ -213,6 +190,36 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     };
 
     Ok(status)
+}
+
+fn validate_version(module_name: &str, module_version: &str) -> Result<(), InternalError> {
+    // Get the current installed version of the provided package
+    let output = Command::new("apt")
+        .arg("list")
+        .arg("--installed")
+        .arg(module_name)
+        .output()
+        .map_err(|err| InternalError::exec_error("apt-get", err))?;
+
+    let stdout = String::from_utf8(output.stdout)?;
+
+    // Check if the installed version and the provided version match
+    let second_line = stdout.lines().nth(1); //Ignore line 0 which is always 'Listing...'
+    if let Some(package_info) = second_line {
+        if let Some(installed_version) = package_info.split_whitespace().nth(1)
+        // Value at index 0 is the package name
+        {
+            if installed_version != module_name {
+                return Err(InternalError::VersionMismatch {
+                    package: module_name.into(),
+                    installed: installed_version.into(),
+                    requested: module_version.into(),
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {

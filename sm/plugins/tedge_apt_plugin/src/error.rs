@@ -15,8 +15,9 @@ pub enum InternalError {
     #[error(transparent)]
     FromCsv(#[from] csv::Error),
 
-    #[error("Removal failed with version mismatch. Installed version: {installed}, Requested version: {requested}")]
+    #[error("Removal of {} failed with version mismatch. Installed version: {installed}, Requested version: {requested}")]
     VersionMismatch {
+        package: String,
         installed: String,
         requested: String,
     },
