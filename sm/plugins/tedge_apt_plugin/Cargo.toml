@@ -22,3 +22,4 @@ hamcrest2 = "0.3.0"
 serial_test = "0.5.1"
 curl = "0.4.38"
 test-case = "1.2.0"
+tedge_utils = { path = "../../../common/tedge_utils" }

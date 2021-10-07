@@ -2742,6 +2742,7 @@ dependencies = [
  "hamcrest2",
  "serial_test",
  "structopt",
+ "tedge_utils",
  "test-case",
  "thiserror",
 ]
