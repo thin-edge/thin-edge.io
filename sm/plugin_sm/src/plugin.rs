@@ -380,6 +380,7 @@ impl Plugin for ExternalPluginCommand {
         updates: &Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
+        // let command = self.command(UPDATE_LIST, None)?;
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = Command::new(&sudo);
             command.arg(&self.path);

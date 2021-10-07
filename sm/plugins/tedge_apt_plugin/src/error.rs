@@ -14,6 +14,12 @@ pub enum InternalError {
 
     #[error(transparent)]
     FromCsv(#[from] csv::Error),
+
+    #[error("Removal failed with version mismatch. Installed version: {installed}, Requested version: {requested}")]
+    VersionMismatch {
+        installed: String,
+        requested: String,
+    },
 }
 
 impl InternalError {

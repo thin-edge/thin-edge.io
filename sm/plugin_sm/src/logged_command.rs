@@ -33,7 +33,7 @@ impl LoggedCommand {
         let mut command = Command::new(program);
         command
             .current_dir("/tmp")
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 

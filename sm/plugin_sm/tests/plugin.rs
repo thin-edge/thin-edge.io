@@ -224,20 +224,26 @@ mod tests {
             name: "test1".into(),
             version: None,
             url: None,
+            file_path: None,
         };
         let module2 = SoftwareModule {
             module_type: Some("test".into()),
             name: "test2".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
-        // Call plugin install via API.
+        let mut logger = dev_null().await;
+        // Call plugin update-list via API.
         let res = plugin
-            .update_list(&vec![
-                SoftwareModuleUpdate::Install { module: module1 },
-                SoftwareModuleUpdate::Remove { module: module2 },
-            ])
+            .update_list(
+                &vec![
+                    SoftwareModuleUpdate::Install { module: module1 },
+                    SoftwareModuleUpdate::Remove { module: module2 },
+                ],
+                &mut logger,
+            )
             .await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
@@ -256,20 +262,26 @@ mod tests {
             name: "test1".into(),
             version: None,
             url: None,
+            file_path: None,
         };
         let module2 = SoftwareModule {
             module_type: Some("test".into()),
             name: "test2".into(),
             version: None,
             url: None,
+            file_path: None,
         };
 
-        // Call plugin install via API.
+        let mut logger = dev_null().await;
+        // Call plugin update-list via API.
         let errors = plugin
-            .apply_all(vec![
-                SoftwareModuleUpdate::Install { module: module1 },
-                SoftwareModuleUpdate::Remove { module: module2 },
-            ])
+            .apply_all(
+                vec![
+                    SoftwareModuleUpdate::Install { module: module1 },
+                    SoftwareModuleUpdate::Remove { module: module2 },
+                ],
+                &mut logger,
+            )
             .await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
