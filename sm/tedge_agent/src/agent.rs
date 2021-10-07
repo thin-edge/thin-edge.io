@@ -11,7 +11,7 @@ use json_sm::{
     SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
-use plugin_sm::plugin_manager::ExternalPlugins;
+use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -154,7 +154,7 @@ pub struct SmAgent {
 
 impl SmAgent {
     pub fn try_new(name: &str, config: SmAgentConfig) -> Result<Self, AgentError> {
-        let flock = check_another_instance_is_not_running(&name)?;
+        let flock = check_another_instance_is_not_running(name)?;
         info!("{} starting", &name);
 
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
@@ -229,8 +229,7 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_update => {
-                    let () = self.config.update_default_plugin()?;
-                    let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
+                    let () = self.update_plugins(plugins.clone())?;
 
                     let _success = self
                         .handle_software_update_request(
@@ -396,6 +395,19 @@ impl SmAgent {
                 .publish(Message::new(topic, response.to_bytes()?))
                 .await?;
         }
+
+        Ok(())
+    }
+
+    fn update_plugins(&mut self, plugins: Arc<Mutex<ExternalPlugins>>) -> Result<(), AgentError> {
+        let () = self.config.update_default_plugin()?;
+        let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
+        let () = plugins
+            .lock()
+            .unwrap() // `unwrap` should be safe here as we only access data for write.
+            .update_default(&self.config.default_plugin_type)?;
+
+        dbg!(&plugins);
 
         Ok(())
     }
