@@ -395,7 +395,7 @@ impl Plugin for ExternalPluginCommand {
             let action = match update {
                 SoftwareModuleUpdate::Install { module } => {
                     format!(
-                        "install {} {} {}\n",
+                        "install\t{}\t{}\t{}\n",
                         module.name,
                         module.version.clone().map_or("".into(), |v| v),
                         module.file_path.clone().map_or("".into(), |v| v
@@ -406,12 +406,9 @@ impl Plugin for ExternalPluginCommand {
 
                 SoftwareModuleUpdate::Remove { module } => {
                     format!(
-                        "remove {} {} {}\n",
+                        "remove\t{}\t{}\t\n",
                         module.name,
                         module.version.clone().map_or("".into(), |v| v),
-                        module.file_path.clone().map_or("".into(), |v| v
-                            .to_str()
-                            .map_or("".into(), |u| u.to_string()))
                     )
                 }
             };

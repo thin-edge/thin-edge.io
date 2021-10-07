@@ -145,8 +145,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             let mut updates: Vec<SoftwareModuleUpdate> = Vec::new();
             let mut rdr = csv::ReaderBuilder::new()
                 .has_headers(false)
-                .delimiter(b' ')
-                .flexible(true)
+                .delimiter(b'\t')
                 .from_reader(io::stdin());
             for result in rdr.deserialize() {
                 updates.push(result?);
