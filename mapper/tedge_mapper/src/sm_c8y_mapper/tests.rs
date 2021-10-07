@@ -25,12 +25,19 @@ async fn mapper_publishes_a_software_list_request() {
     let _mapper = start_sm_mapper().await;
 
     // Expect message that arrives on `tedge/commands/req/software/list` is software list request.
-    loop {
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    for _ in 0..5 {
+        // Loop 5 times, because it needs time to receive the messages
         match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
-                assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
-                break;
+                if msg.payload_str().unwrap().contains("{\"id\":\"") {
+                    assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
+                    break;
+                } else {
+                    continue;
+                }
             }
             _ => panic!("No message received after a second."),
         }
@@ -56,7 +63,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     // Expect both 114 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let mut received_supported_operation = false;
     let mut received_pending_operation_request = false;
-    loop {
+    for _ in 0..2 {
         match tokio::time::timeout(TEST_TIMEOUT_MS, c8y_subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
@@ -193,8 +200,6 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
             match msg.payload_str().unwrap() {
                 "503,c8y_SoftwareUpdate\n" => {
                     received_status_successful = true;
-                    // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), "71,1111".to_string()).await;
                 }
                 _ => {}
             }
@@ -202,8 +207,22 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
         _ => panic!("No update operation result message received after a second."),
     }
     assert!(received_status_successful);
+}
 
+#[tokio::test]
+#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+#[serial]
+async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // Publish a software update response `failed`.
+    let mut subscriber = get_subscriber(
+        "c8y/s/us",
+        "mapper_publishes_software_update_failed_status_onto_c8y_topic",
+    )
+    .await;
+
+    // Start SM Mapper
+    let _sm_mapper = start_sm_mapper().await;
+
     let json_response = r#"
         {
             "id": "123",
@@ -232,7 +251,8 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let mut received_status_failed = false;
 
-    for _ in 0..2 {
+    for _ in 0..10 {
+        // Loop 10 times, because it needs time to receive the messages
         match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
@@ -282,7 +302,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let sm_mapper = start_sm_mapper().await?;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
-    let smartrest = r#"528, external_id,nodered,1.0.0::debian,,install"#;
+    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
 
     let expected_update_list = r#"
@@ -345,7 +365,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Validate the response that is received on 'c8y/s/us'
     // Wait till the mapper starts and receives the messages
-    for _ in 0..8 {
+    for _ in 0..10 {
+        // Loop 10 times, because it needs time to receive the messages
         match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_res_sub.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
