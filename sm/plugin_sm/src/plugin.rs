@@ -1,7 +1,10 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
 use download::Downloader;
-use json_sm::*;
+use json_sm::{
+    DownloadInfo, SoftwareError, SoftwareModule, SoftwareModuleUpdate, SoftwareType, DEFAULT,
+};
+use std::process::Stdio;
 use std::{iter::Iterator, path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
@@ -9,22 +12,32 @@ use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 #[async_trait]
 pub trait Plugin {
     async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+
     async fn install(
         &self,
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
+
     async fn remove(
         &self,
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
-    async fn update_list(&self, modules: &Vec<SoftwareModuleUpdate>) -> Result<(), SoftwareError>;
+
+    async fn update_list(
+        &self,
+        modules: &Vec<SoftwareModuleUpdate>,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError>;
+
     async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+
     async fn list(
         &self,
         logger: &mut BufWriter<File>,
     ) -> Result<Vec<SoftwareModule>, SoftwareError>;
+
     async fn version(
         &self,
         module: &SoftwareModule,
@@ -62,9 +75,28 @@ pub trait Plugin {
             return failed_updates;
         }
 
-        //download all
+        // Download all modules for which a download URL is provided
+        let mut downloaders = Vec::new();
+        for update in updates.iter() {
+            let mut module = match update.clone() {
+                SoftwareModuleUpdate::Remove { module } => module,
+                SoftwareModuleUpdate::Install { module } => module,
+            };
+            let module_url = module.url.clone();
+            if let Some(url) = module_url {
+                match self.download_from_url(&mut module, &url, logger).await {
+                    Err(prepare_error) => {
+                        failed_updates.push(prepare_error);
+                        return failed_updates;
+                    }
+                    Ok(downloader) => downloaders.push(downloader),
+                }
+            }
+        }
 
-        if let Err(SoftwareError::UpdateListNotSupported(_)) = self.update_list(&updates).await {
+        if let Err(SoftwareError::UpdateListNotSupported(_)) =
+            self.update_list(&updates, logger).await
+        {
             for update in updates.iter() {
                 if let Err(error) = self.apply(update, logger).await {
                     failed_updates.push(error);
@@ -76,7 +108,12 @@ pub trait Plugin {
             failed_updates.push(finalize_error);
         }
 
-        //iterate downloaders downloader.cleanup()
+        for downloader in downloaders {
+            if let Err(cleanup_error) = self.cleanup_downloaded_artefacts(downloader, logger).await
+            {
+                failed_updates.push(cleanup_error);
+            }
+        }
 
         failed_updates
     }
@@ -171,7 +208,26 @@ pub trait Plugin {
 
         module.file_path = Some(downloader.filename().to_owned());
 
-        downloader
+        Ok(downloader)
+    }
+
+    async fn cleanup_downloaded_artefacts(
+        &self,
+        downloader: Downloader,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
+        if let Err(err) = downloader
+            .cleanup()
+            .await
+            .map_err(|err| SoftwareError::IoError {
+                reason: err.to_string(),
+            })
+        {
+            logger
+                .write_all(format!("warn: {}\n", &err).as_bytes())
+                .await?;
+        }
+        Ok(())
     }
 }
 
@@ -319,7 +375,11 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn update_list(&self, updates: &Vec<SoftwareModuleUpdate>) -> Result<(), SoftwareError> {
+    async fn update_list(
+        &self,
+        updates: &Vec<SoftwareModuleUpdate>,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = Command::new(&sudo);
             command.arg(&self.path);
@@ -346,7 +406,9 @@ impl Plugin for ExternalPluginCommand {
                         "install {} {} {}\n",
                         module.name,
                         module.version.clone().map_or("".into(), |v| v),
-                        module.url.clone().map_or("".into(), |v| v)
+                        module.file_path.clone().map_or("".into(), |v| v
+                            .to_str()
+                            .map_or("".into(), |u| u.to_string()))
                     )
                 }
 
@@ -355,7 +417,9 @@ impl Plugin for ExternalPluginCommand {
                         "remove {} {} {}\n",
                         module.name,
                         module.version.clone().map_or("".into(), |v| v),
-                        module.url.clone().map_or("".into(), |v| v)
+                        module.file_path.clone().map_or("".into(), |v| v
+                            .to_str()
+                            .map_or("".into(), |u| u.to_string()))
                     )
                 }
             };
