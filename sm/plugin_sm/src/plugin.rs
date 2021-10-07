@@ -4,10 +4,9 @@ use download::Downloader;
 use json_sm::{
     DownloadInfo, SoftwareError, SoftwareModule, SoftwareModuleUpdate, SoftwareType, DEFAULT,
 };
-use std::process::Stdio;
 use std::{iter::Iterator, path::PathBuf, process::Output};
 use tokio::io::BufWriter;
-use tokio::{fs::File, io::AsyncWriteExt, process::Command};
+use tokio::{fs::File, io::AsyncWriteExt};
 
 #[async_trait]
 pub trait Plugin {
@@ -380,25 +379,17 @@ impl Plugin for ExternalPluginCommand {
         updates: &Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        // let command = self.command(UPDATE_LIST, None)?;
-        let mut command = if let Some(sudo) = &self.sudo {
-            let mut command = Command::new(&sudo);
-            command.arg(&self.path);
-            command
-        } else {
-            Command::new(&self.path)
-        };
-        command
-            .arg(UPDATE_LIST)
-            .current_dir("/tmp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        let mut command = self.command(UPDATE_LIST, None)?;
 
         let mut child = command.spawn()?;
-        let child_stdin = child.stdin.as_mut().ok_or_else(|| SoftwareError::IoError {
-            reason: "Plugin stdin unavailable".into(),
-        })?;
+        let child_stdin =
+            child
+                .inner_child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| SoftwareError::IoError {
+                    reason: "Plugin stdin unavailable".into(),
+                })?;
 
         for update in updates {
             let action = match update {
@@ -428,7 +419,7 @@ impl Plugin for ExternalPluginCommand {
             child_stdin.write_all(action.as_bytes()).await?
         }
 
-        let output = child.wait_with_output().await?;
+        let output = child.wait_with_output(logger).await?;
         if let Some(1) = output.status.code() {
             return Err(SoftwareError::UpdateListNotSupported(self.name.clone()));
         }

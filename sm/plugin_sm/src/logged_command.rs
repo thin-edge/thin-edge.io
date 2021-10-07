@@ -2,7 +2,26 @@ use std::ffi::OsStr;
 use std::process::{Output, Stdio};
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
+
+pub struct LoggingChild {
+    command_line: String,
+    pub inner_child: Child,
+}
+
+impl LoggingChild {
+    pub async fn wait_with_output(
+        self,
+        logger: &mut BufWriter<File>,
+    ) -> Result<Output, std::io::Error> {
+        let outcome = self.inner_child.wait_with_output().await;
+        if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
+            tracing::log::error!("Fail to log the command execution: {}", err);
+        }
+
+        outcome
+    }
+}
 
 /// A command which execution is logged.
 ///
@@ -65,6 +84,14 @@ impl LoggedCommand {
         }
 
         outcome
+    }
+
+    pub fn spawn(&mut self) -> Result<LoggingChild, std::io::Error> {
+        let child = self.command.spawn()?;
+        Ok(LoggingChild {
+            command_line: self.command_line.clone(),
+            inner_child: child,
+        })
     }
 
     async fn log_outcome(
