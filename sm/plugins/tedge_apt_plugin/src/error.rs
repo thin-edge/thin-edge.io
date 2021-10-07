@@ -15,11 +15,11 @@ pub enum InternalError {
     #[error(transparent)]
     FromCsv(#[from] csv::Error),
 
-    #[error("Removal of {} failed with version mismatch. Installed version: {installed}, Requested version: {requested}")]
+    #[error("Validation of {package} failed with version mismatch. Installed version: {installed}, Expected version: {expected}")]
     VersionMismatch {
         package: String,
         installed: String,
-        requested: String,
+        expected: String,
     },
 }
 

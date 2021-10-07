@@ -192,6 +192,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     Ok(status)
 }
 
+/// Validate if the provided module version matches the currently installed version
 fn validate_version(module_name: &str, module_version: &str) -> Result<(), InternalError> {
     // Get the current installed version of the provided package
     let output = Command::new("apt")
@@ -209,11 +210,11 @@ fn validate_version(module_name: &str, module_version: &str) -> Result<(), Inter
         if let Some(installed_version) = package_info.split_whitespace().nth(1)
         // Value at index 0 is the package name
         {
-            if installed_version != module_name {
+            if installed_version != module_version {
                 return Err(InternalError::VersionMismatch {
                     package: module_name.into(),
                     installed: installed_version.into(),
-                    requested: module_version.into(),
+                    expected: module_version.into(),
                 });
             }
         }

@@ -93,14 +93,15 @@ pub trait Plugin {
             }
         }
 
-        if let Err(SoftwareError::UpdateListNotSupported(_)) =
-            self.update_list(&updates, logger).await
-        {
+        let outcome = self.update_list(&updates, logger).await;
+        if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
             for update in updates.iter() {
                 if let Err(error) = self.apply(update, logger).await {
                     failed_updates.push(error);
                 };
             }
+        } else if let Err(update_list_error) = outcome {
+            failed_updates.push(update_list_error);
         }
 
         if let Err(finalize_error) = self.finalize(logger).await {
