@@ -201,13 +201,14 @@ mod tests {
     fn multi_event_batch_with_long_delivery_jitter_and_delayed_message() {
         let mut test = BatcherTest::new(50, 50, 0);
 
-        let event1 = test.create_event(10, "a", 1);
-        let event2 = test.create_event(5, "b", 2);
+        let event1 = test.create_event(5, "b", 2);
+        let event2 = test.create_event(10, "a", 1);
 
-        test.event(11, &event1);
-        test.event(25, &event2); // late, but not too late
-        test.expect_batch(110, vec![event1]);
-        test.expect_batch(60, vec![event2]);
+        test.event(11, &event2);
+        test.event(25, &event1); // late, but not too late
+
+        test.expect_batch(60, vec![event1]);
+        test.expect_batch(110, vec![event2]);
 
         test.run();
     }
