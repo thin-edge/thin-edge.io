@@ -25,12 +25,15 @@ async fn mapper_publishes_a_software_list_request() {
     let _mapper = start_sm_mapper().await;
 
     // Expect message that arrives on `tedge/commands/req/software/list` is software list request.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-        Ok(Some(msg)) => {
-            dbg!(&msg.payload_str().unwrap());
-            assert!(&msg.payload_str().unwrap().contains("{\"id\":\""))
+    loop {
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
+            Ok(Some(msg)) => {
+                dbg!(&msg.payload_str().unwrap());
+                assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
+                break;
+            }
+            _ => panic!("No message received after a second."),
         }
-        _ => panic!("No message received after a second."),
     }
 }
 
@@ -181,27 +184,22 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     )
     .await;
 
-    // Expect `116` and `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
+    // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let mut received_status_successful = false;
 
-    for _ in 0..2 {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                    "503,c8y_SoftwareUpdate\n" => {
-                        received_status_successful = true;
-                        // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                        let _ =
-                            publish(&Topic::new("c8y/s/dat").unwrap(), "71,1111".to_string()).await;
-                        break;
-                    }
-                    _ => {}
+    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
+        Ok(Some(msg)) => {
+            dbg!(&msg.payload_str().unwrap());
+            match msg.payload_str().unwrap() {
+                "503,c8y_SoftwareUpdate\n" => {
+                    received_status_successful = true;
+                    // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
+                    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), "71,1111".to_string()).await;
                 }
-                continue;
+                _ => {}
             }
-            _ => panic!("No update operation result message received after a second."),
         }
+        _ => panic!("No update operation result message received after a second."),
     }
     assert!(received_status_successful);
 
@@ -234,7 +232,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let mut received_status_failed = false;
 
-    for _ in 0..4 {
+    for _ in 0..2 {
         match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
             Ok(Some(msg)) => {
                 dbg!(&msg.payload_str().unwrap());
@@ -255,17 +253,21 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
-    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
-    // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-    // SM Mapper fails before receiving the rsponse for the request.
-    // Meanwhile the opeartion response was published on `tedge/commands/res/software/update`.
-    // Now the SM Mapper recovers and receives the response message and publishes it on `c8y/s/us`
+    // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
+
+    // The test does the following steps
+
+    // When a software update request message is received on `c8y/s/ds` by the sm mapper,
+    // converts it to thin-edge json message, publishes a request message on `tedge/commands/req/software/update`.
+    // SM Mapper fails before receiving the response message for the request.
+    // Meanwhile the operation response message was published on `tedge/commands/res/software/update`.
+    // Now the SM Mapper recovers and receives the response message and publishes the status on `c8y/s/us`.
     // The subscriber that was waiting for the response on `c8/s/us` receives the response and validates it.
 
     // Create a subscriber to receive messages on `tedge/commands/req/software/update` topic.
     let mut sw_update_req_sub = get_subscriber(
         "tedge/commands/req/software/update",
-        "mapper_publishes_software_update_request",
+        "software_update_request",
     )
     .await;
 
@@ -278,16 +280,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await?;
-
-    // Prepare and publish a software update response `successful`.
-    let json_response = r#"{
-        "id":"123",
-        "status":"successful",
-        "currentSoftwareList":[
-            {"type":"apt","modules":[
-                {"name":"m","url":"https://foobar.io/m.epl"}
-            ]}
-        ]}"#;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528, external_id,nodered,1.0.0::debian,,install"#;
@@ -317,10 +309,23 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
             {
                 // Stop the SM Mapper
                 sm_mapper.abort();
-                //let _ = sm_mapper.await;
                 assert!(sm_mapper.await.unwrap_err().is_cancelled());
 
-                // Publish the response
+                // Prepare and publish the response `successful`.
+                let json_response = r#"{
+                     "id":"123",
+                     "status":"successful",
+                     "currentSoftwareList":[
+                        {
+                            "type":"apt",
+                            "modules": [
+                                {
+                                    "name":"m",
+                                    "url":"https://foobar.io/m.epl"
+                                }
+                            ]
+                        }
+                    ]}"#;
                 let _ = publish(
                     &Topic::new("tedge/commands/res/software/update").unwrap(),
                     json_response.to_string(),
@@ -339,6 +344,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let mut received_status_successful = false;
 
     // Validate the response that is received on 'c8y/s/us'
+    // Wait till the mapper starts and receives the messages
     for _ in 0..8 {
         match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_res_sub.next()).await {
             Ok(Some(msg)) => {
@@ -410,7 +416,9 @@ async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessage
     let topic_filter = TopicFilter::new(pattern).unwrap();
     let subscriber = Client::connect(
         client_name,
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+        &mqtt_client::Config::default()
+            .with_port(MQTT_TEST_PORT)
+            .clean_session(),
     )
     .await
     .unwrap();
@@ -422,7 +430,7 @@ async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessage
 async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
     let tedge_config = create_tedge_config();
     let mqtt_config = mqtt_client::Config::default().with_port(MQTT_TEST_PORT);
-    let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
+    let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
     let sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
 
     let mut topic_filter = TopicFilter::new(r#"tedge/commands/res/software/list"#)?;
