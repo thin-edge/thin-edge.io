@@ -46,6 +46,12 @@ pub enum SoftwareError {
         reason: String,
     },
 
+    #[error("Failed to execute update-list for {software_type:?}")]
+    UpdateList {
+        software_type: SoftwareType,
+        reason: String,
+    },
+
     #[error("Unknown {software_type:?} module: {name:?}")]
     UnknownModule {
         software_type: SoftwareType,

@@ -418,10 +418,18 @@ impl Plugin for ExternalPluginCommand {
         }
 
         let output = child.wait_with_output(logger).await?;
-        if let Some(1) = output.status.code() {
-            return Err(SoftwareError::UpdateListNotSupported(self.name.clone()));
+        match output.status.code() {
+            Some(0) => Ok(()),
+            Some(1) => Err(SoftwareError::UpdateListNotSupported(self.name.clone())),
+            Some(_) => Err(SoftwareError::UpdateList {
+                software_type: self.name.clone(),
+                reason: self.content(output.stderr)?,
+            }),
+            None => Err(SoftwareError::UpdateList {
+                software_type: self.name.clone(),
+                reason: "Interrupted".into(),
+            }),
         }
-        Ok(())
     }
 
     async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
