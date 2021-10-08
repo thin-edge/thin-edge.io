@@ -16,3 +16,11 @@ assets = [
 [dependencies]
 structopt = "0.3"
 thiserror = "1.0"
+
+[dev-dependencies]
+hamcrest2 = "0.3.0"
+serial_test = "0.5.1"
+test-case = "1.2.0"
+reqwest = { version = "0.11.4", features = [ "blocking" ] }
+tedge_utils = { path = "../../../common/tedge_utils" }
+anyhow = "1.0.44"
