@@ -46,7 +46,7 @@ pub enum SoftwareError {
         reason: String,
     },
 
-    #[error("Failed to execute update-list for {software_type:?}")]
+    #[error("Failed to execute updates for {software_type:?}")]
     UpdateList {
         software_type: SoftwareType,
         reason: String,

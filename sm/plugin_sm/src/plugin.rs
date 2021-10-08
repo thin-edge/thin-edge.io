@@ -69,6 +69,7 @@ pub trait Plugin {
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
+        // Prepare the updates
         if let Err(prepare_error) = self.prepare(logger).await {
             failed_updates.push(prepare_error);
             return failed_updates;
@@ -83,33 +84,38 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match self.download_from_url(&mut module, &url, logger).await {
+                match Self::download_from_url(&mut module, &url, logger).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
-                        return failed_updates;
+                        break;
                     }
                     Ok(downloader) => downloaders.push(downloader),
                 }
             }
         }
 
-        let outcome = self.update_list(&updates, logger).await;
-        if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
-            for update in updates.iter() {
-                if let Err(error) = self.apply(update, logger).await {
-                    failed_updates.push(error);
-                };
+        // Execute the updates
+        if !failed_updates.is_empty() {
+            let outcome = self.update_list(&updates, logger).await;
+            if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
+                for update in updates.iter() {
+                    if let Err(error) = self.apply(update, logger).await {
+                        failed_updates.push(error);
+                    };
+                }
+            } else if let Err(update_list_error) = outcome {
+                failed_updates.push(update_list_error);
             }
-        } else if let Err(update_list_error) = outcome {
-            failed_updates.push(update_list_error);
         }
 
+        // Finalize the updates
         if let Err(finalize_error) = self.finalize(logger).await {
             failed_updates.push(finalize_error);
         }
 
+        // Cleanup all the downloaded modules
         for downloader in downloaders {
-            if let Err(cleanup_error) = self.cleanup_downloaded_artefacts(downloader, logger).await
+            if let Err(cleanup_error) = Self::cleanup_downloaded_artefacts(downloader, logger).await
             {
                 failed_updates.push(cleanup_error);
             }
@@ -124,55 +130,14 @@ pub trait Plugin {
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        let downloader = Downloader::new(&module.name, &module.version, "/tmp/tedge");
-
-        logger
-            .write_all(
-                format!(
-                    "----- $ Downloading: {} to {} \n",
-                    &url.url(),
-                    &downloader.filename().to_string_lossy().to_string()
-                )
-                .as_bytes(),
-            )
-            .await?;
-
-        if let Err(err) =
-            downloader
-                .download(url)
-                .await
-                .map_err(|err| SoftwareError::DownloadError {
-                    reason: err.to_string(),
-                    url: url.url().to_string(),
-                })
-        {
-            logger
-                .write_all(format!("error: {}\n", &err).as_bytes())
-                .await?;
-
-            return Err(err);
-        }
-
-        module.file_path = Some(downloader.filename().to_owned());
+        let downloader = Self::download_from_url(module, url, logger).await?;
         let result = self.install(module, logger).await;
-        if let Err(err) = downloader
-            .cleanup()
-            .await
-            .map_err(|err| SoftwareError::DownloadError {
-                reason: err.to_string(),
-                url: url.url().to_string(),
-            })
-        {
-            logger
-                .write_all(format!("warn: {}\n", &err).as_bytes())
-                .await?;
-        }
+        Self::cleanup_downloaded_artefacts(downloader, logger).await?;
 
         result
     }
 
     async fn download_from_url(
-        &self,
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
@@ -212,7 +177,6 @@ pub trait Plugin {
     }
 
     async fn cleanup_downloaded_artefacts(
-        &self,
         downloader: Downloader,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {

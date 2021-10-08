@@ -11,12 +11,6 @@ Validate apt plugin update-list command use case
 
 When we install/remove multiple packages at once with update-list command
 Then these packages are installed/removed together
-
-Issue:
-whenever there is a parameter --version the output will be "apt-install 0.1.0"
-
-sudo /etc/tedge/sm-plugins/apt install rolldice 1.16-1+b3 --version
-apt-install 0.1.0
 """
 
 
@@ -24,30 +18,44 @@ class AptPluginUpdateList(AptPlugin):
 
     update_list = 'update-list'
 
+    package1_name = "rolldice"
+    package1_version = "1.16-1build1"
+    package2_name = "asciijump"
+    package3_name = "moon-buggy"
+
     def setup(self):
         super().setup()
 
-        self.package1 = "rolldice"
-        self.package2 = "asciijump"
-        self.package3 = "moon-buggy"
+        # Prepare the system under test with rolldice and moon-buggy not installed and asciijump installed,
+        # so that the test can install rolldice and moon-buggy and remove asciijump
+        self.apt_remove(self.package1_name)
+        self.apt_install(self.package2_name)
+        self.apt_remove(self.package3_name)
 
-        self.apt_remove(self.package1)
-        self.apt_install(self.package2)
-        self.apt_remove(self.package3)
+        # Validate that the system under test is in the expected state
+        self.assert_isinstalled(self.package1_name, False)
+        self.assert_isinstalled(self.package2_name, True)
+        self.assert_isinstalled(self.package3_name, False)
 
-        self.assert_isinstalled(self.package1, False)
+        # Register cleanup function to remove all test packages after the test
         self.addCleanupFunction(self.cleanup_prepare)
 
     def execute(self):
-        os.system('{} {} {} < {}'.format(self.sudo,
-                  self.apt_plugin, self.update_list, self.input + "/update_list_input"))
+
+        # The 'update_list_input' file from the 'Input' directory contains the update instructions
+        # This file has instructions to install rolldice and moon-buggy and remove asciijump
+        input_list_path = f'{self.input}/update_list_input'
+
+        # Execute the update-list command with the update instructions passed to its stdin from a file
+        os.system(
+            f'{self.sudo} {self.apt_plugin} {self.update_list} < {input_list_path }')
 
     def validate(self):
-        self.assert_isinstalled(self.package1, True)
-        self.assert_isinstalled(self.package2, False)
-        self.assert_isinstalled(self.package3, True)
+        self.assert_isinstalled(self.package1_name, True)
+        self.assert_isinstalled(self.package2_name, False)
+        self.assert_isinstalled(self.package3_name, True)
 
     def cleanup_prepare(self):
-        self.apt_remove(self.package1)
-        self.apt_remove(self.package2)
-        self.apt_remove(self.package3)
+        self.apt_remove(self.package1_name)
+        self.apt_remove(self.package2_name)
+        self.apt_remove(self.package3_name)
