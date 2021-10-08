@@ -78,6 +78,7 @@ class PySysTest(BaseTest):
     def set_config_key(self, key, value):
 
         if value == None:
+            self.unset_config_key(key)
             return
 
         proc = self.startProcess(
