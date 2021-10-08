@@ -80,7 +80,7 @@ case "$COMMAND" in
             echo "Updating existing containers."
             for container in $containers
             do
-                docker rm $(docker stop $container) || exit 2
+                docker rm $(docker stop "$container") || exit 2
 
                 # Spawn new containers with the provided image name and version to replace the stopped one
                 docker run -d $IMAGE_TAG || exit 2
@@ -97,7 +97,7 @@ case "$COMMAND" in
         fi
         for container in $containers
         do
-            docker rm $(docker stop $container) || exit 2
+            docker rm $(docker stop "$container") || exit 2
         done
         ;;
     finalize)
