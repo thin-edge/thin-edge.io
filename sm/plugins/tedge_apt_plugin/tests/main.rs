@@ -19,10 +19,17 @@ const PACKAGE_FILE_PATH: &str = "/tmp/rolldice_1.16-1+b3_amd64.deb";
 
 #[cfg(target_arch = "aarch64")]
 const PACKAGE_URL: &str =
-    "	http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_arm64.deb";
+    "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_arm64.deb";
 
 #[cfg(target_arch = "aarch64")]
 const PACKAGE_FILE_PATH: &str = "/tmp/rolldice_1.16-1+b3_arm64.deb";
+
+#[cfg(target_arch = "arm")]
+const PACKAGE_URL: &str =
+    "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_armhf.deb";
+
+#[cfg(target_arch = "arm")]
+const PACKAGE_FILE_PATH: &str = "/tmp/rolldice_1.16-1+b3_armhf.deb";
 
 static DOWNLOAD_PACKAGE_BINARY: Once = Once::new();
 
