@@ -2798,6 +2798,7 @@ dependencies = [
 name = "tedge_apt_plugin"
 version = "0.3.2"
 dependencies = [
+ "anyhow",
  "hamcrest2",
  "reqwest",
  "serial_test",
