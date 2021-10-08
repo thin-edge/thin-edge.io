@@ -1,9 +1,10 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
+use download::Downloader;
 use json_sm::*;
 use std::{iter::Iterator, path::PathBuf, process::Output};
-use tokio::fs::File;
 use tokio::io::BufWriter;
+use tokio::{fs::File, io::AsyncWriteExt};
 
 #[async_trait]
 pub trait Plugin {
@@ -34,9 +35,17 @@ pub trait Plugin {
         update: &SoftwareModuleUpdate,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        match update {
-            SoftwareModuleUpdate::Install { module } => self.install(module, logger).await,
-            SoftwareModuleUpdate::Remove { module } => self.remove(module, logger).await,
+        match update.clone() {
+            SoftwareModuleUpdate::Install { mut module } => {
+                let module_url = module.url.clone();
+                match module_url {
+                    Some(url) => self.install_from_url(&mut module, &url, logger).await?,
+                    None => self.install(&module, logger).await?,
+                }
+
+                Ok(())
+            }
+            SoftwareModuleUpdate::Remove { module } => self.remove(&module, logger).await,
         }
     }
 
@@ -63,6 +72,59 @@ pub trait Plugin {
         }
 
         failed_updates
+    }
+
+    async fn install_from_url(
+        &self,
+        module: &mut SoftwareModule,
+        url: &DownloadInfo,
+        logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
+        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+
+        logger
+            .write_all(
+                format!(
+                    "----- $ Downloading: {} to {} \n",
+                    &url.url(),
+                    &downloader.filename().to_string_lossy().to_string()
+                )
+                .as_bytes(),
+            )
+            .await?;
+
+        if let Err(err) =
+            downloader
+                .download(url)
+                .await
+                .map_err(|err| SoftwareError::DownloadError {
+                    reason: err.to_string(),
+                    url: url.url().to_string(),
+                })
+        {
+            logger
+                .write_all(format!("error: {}\n", &err).as_bytes())
+                .await?;
+
+            return Err(err);
+        }
+
+        module.file_path = Some(downloader.filename().to_owned());
+        let result = self.install(module, logger).await;
+        if let Err(err) = downloader
+            .cleanup()
+            .await
+            .map_err(|err| SoftwareError::DownloadError {
+                reason: err.to_string(),
+                url: url.url().to_string(),
+            })
+        {
+            logger
+                .write_all(format!("warn: {}\n", &err).as_bytes())
+                .await?;
+        }
+
+        result
     }
 }
 
@@ -102,6 +164,11 @@ impl ExternalPluginCommand {
             if let Some(ref version) = module.version {
                 command.arg("--module-version");
                 command.arg(version);
+            }
+
+            if let Some(ref path) = module.file_path {
+                command.arg("--file");
+                command.arg(path);
             }
         }
 
@@ -149,7 +216,7 @@ const PREPARE: &str = "prepare";
 const INSTALL: &str = "install";
 const REMOVE: &str = "remove";
 const FINALIZE: &str = "finalize";
-const LIST: &str = "list";
+pub const LIST: &str = "list";
 const VERSION: &str = "version";
 
 #[async_trait]

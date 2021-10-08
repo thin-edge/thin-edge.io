@@ -32,16 +32,15 @@ jobs:
           path: debian-package_unpack
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-      - name: install mosquitto client library
+      - name: install libmosquitto1
         run:  sudo apt-get --assume-yes install libmosquitto1
 
-        # install collectd-core
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
@@ -106,17 +105,21 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
+      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-      - name: install mosquitto client library
+      - name: install libmosquitto1
         run:  sudo apt-get --assume-yes install libmosquitto1
 
-        # install collectd-core
+      - name: install mosquitto-clients
+        run: sudo apt-get --assume-yes install mosquitto-clients
+
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 

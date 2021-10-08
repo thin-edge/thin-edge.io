@@ -9,7 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 use tedge_utils::paths::pathbuf_to_string;
-use tracing::error;
+use tracing::{error, info};
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -40,6 +40,7 @@ pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
+    sudo: Option<PathBuf>,
 }
 
 impl Plugins for ExternalPlugins {
@@ -77,20 +78,32 @@ impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
+        sudo: Option<PathBuf>,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
             default_plugin_type: default_plugin_type.clone(),
+            sudo,
         };
         let () = plugins.load()?;
 
-        if let Some(default_plugin_type) = default_plugin_type {
-            if plugins
-                .by_software_type(default_plugin_type.as_str())
-                .is_none()
-            {
-                return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+        match default_plugin_type {
+            Some(default_plugin_type) => {
+                if plugins
+                    .by_software_type(default_plugin_type.as_str())
+                    .is_none()
+                {
+                    error!(
+                        "The configured default plugin: {} not found",
+                        default_plugin_type
+                    );
+                    return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
+                }
+                info!("Default plugin type: {}", default_plugin_type)
+            }
+            None => {
+                info!("Default plugin type: Not configured")
             }
         }
 
@@ -103,13 +116,26 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match Command::new(&path)
-                    .arg("list")
+                let mut command = if let Some(sudo) = &self.sudo {
+                    let mut command = Command::new(sudo);
+                    command.arg(&path);
+                    command
+                } else {
+                    Command::new(&path)
+                };
+
+                match command
+                    .arg(LIST)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
                 {
-                    Ok(code) if code.success() => {}
+                    Ok(code) if code.success() => {
+                        info!(
+                            "Plugin activated: {}",
+                            pathbuf_to_string(path.clone()).unwrap()
+                        );
+                    }
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
                     Ok(_) => {

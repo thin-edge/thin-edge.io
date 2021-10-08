@@ -18,7 +18,7 @@ remove_sudoers_file() {
         rm /etc/sudoers.d/tedge-users
     fi
 
-    if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+    if [ -f "/etc/sudoers.d/tedge-users-nopasswd" ]; then
         rm /etc/sudoers.d/tedge-users-nopasswd
     fi
 }

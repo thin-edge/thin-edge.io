@@ -44,7 +44,7 @@ impl<B: Batchable> Batcher<B> {
 
         match self.find_target_batch(event_time) {
             None => {
-                let new_batch = self.make_new_batch(processing_time, event);
+                let new_batch = self.make_new_batch(event);
                 let new_batch_end = new_batch.batch_end();
                 self.batches.push(new_batch);
                 self.output_for_batch_end(processing_time, new_batch_end)
@@ -116,11 +116,11 @@ impl<B: Batchable> Batcher<B> {
         None
     }
 
-    fn make_new_batch(&self, processing_time: DateTime<Utc>, event: B) -> Batch<B> {
-        let mut batch_start = processing_time - self.config.delivery_jitter();
+    fn make_new_batch(&self, event: B) -> Batch<B> {
+        let event_time = event.event_time();
+        let mut batch_start = event_time;
         let mut batch_end = batch_start + self.config.event_jitter();
 
-        let event_time = event.event_time();
         if let Some(previous_batch) = self.previous_batch(event_time) {
             batch_start = batch_start.max(previous_batch.batch_end())
         }
@@ -162,7 +162,7 @@ mod tests {
         let event1 = test.create_event(0, "a", 1);
 
         test.event(1, &event1);
-        test.expect_batch(51, vec![event1]);
+        test.expect_batch(70, vec![event1]);
 
         test.run();
     }
@@ -176,7 +176,39 @@ mod tests {
 
         test.event(1, &event1);
         test.event(11, &event2);
-        test.expect_batch(51, vec![event1, event2]);
+        test.expect_batch(70, vec![event1, event2]);
+
+        test.run();
+    }
+
+    #[test]
+    // The same behavior as for `multi_event_batch` is expected
+    // Since we just change how long we wait for an event
+    fn multi_event_batch_with_long_delivery_jitter() {
+        let mut test = BatcherTest::new(50, 50, 0);
+
+        let event1 = test.create_event(0, "a", 1);
+        let event2 = test.create_event(10, "b", 2);
+
+        test.event(1, &event1);
+        test.event(11, &event2);
+        test.expect_batch(100, vec![event1, event2]);
+
+        test.run();
+    }
+
+    #[test]
+    fn multi_event_batch_with_long_delivery_jitter_and_delayed_message() {
+        let mut test = BatcherTest::new(50, 50, 0);
+
+        let event1 = test.create_event(5, "a", 2);
+        let event2 = test.create_event(10, "b", 1);
+
+        test.event(11, &event2);
+        test.event(25, &event1); // late, but not too late
+
+        test.expect_batch(60, vec![event1]);
+        test.expect_batch(110, vec![event2]);
 
         test.run();
     }
@@ -190,8 +222,8 @@ mod tests {
 
         test.event(1, &event1);
         test.event(11, &event2);
-        test.expect_batch(25, vec![event1]);
-        test.expect_batch(51, vec![event2]);
+        test.expect_batch(25, vec![event1]); // why 25?
+        test.expect_batch(70, vec![event2]);
 
         test.run();
     }
@@ -208,7 +240,7 @@ mod tests {
         test.event(11, &event2);
         test.event(12, &event3);
         test.expect_batch(25, vec![event1, event3]);
-        test.expect_batch(51, vec![event2]);
+        test.expect_batch(70, vec![event2]);
 
         test.run();
     }
@@ -225,7 +257,7 @@ mod tests {
         test.event(11, &event2);
         test.event(12, &event3);
         test.expect_batch(25, vec![event1]);
-        test.expect_batch(51, vec![event2, event3]);
+        test.expect_batch(70, vec![event2, event3]);
 
         test.run();
     }
@@ -286,15 +318,16 @@ mod tests {
         let g = test.create_event(240, "g", 7);
 
         test.event(125, &b);
-        test.event(135, &a);
+        test.event(135, &a); // order inversion
         test.event(150, &c);
         test.event(165, &d);
-        test.event(190, &e);
+        test.event(189, &e);
         test.event(250, &g);
-        test.event(260, &f);
-        test.expect_batch(175, vec![a, b, c]);
-        test.expect_batch(215, vec![d, e]);
-        test.expect_batch(300, vec![g]);
+        test.event(260, &f); // too late
+        test.expect_batch(140, vec![a]);
+        test.expect_batch(190, vec![b, c, d]);
+        test.expect_batch(245, vec![e]);
+        test.expect_batch(310, vec![g]);
 
         test.run();
     }
@@ -312,10 +345,10 @@ mod tests {
         test.event(130, &a);
         test.event(140, &b);
         test.event(150, &c);
-        test.event(190, &d);
+        test.event(189, &d);
         test.event(210, &e);
-        test.expect_batch(180, vec![a, b, c]);
-        test.expect_batch(240, vec![d, e]);
+        test.expect_batch(190, vec![a, b, c]);
+        test.expect_batch(250, vec![d, e]);
 
         test.run();
     }
@@ -336,8 +369,8 @@ mod tests {
         test.event(170, &c1);
         test.event(180, &a3);
         test.expect_batch(150, vec![a1, b1]);
-        test.expect_batch(175, vec![a2, c1]);
-        test.expect_batch(230, vec![a3]);
+        test.expect_batch(180, vec![a2, c1]);
+        test.expect_batch(190, vec![a3]);
 
         test.run();
     }
@@ -360,7 +393,7 @@ mod tests {
         test.event(210, &d);
         test.event(220, &c);
         test.event(230, &e);
-        test.expect_batch(180, vec![a, b, c]);
+        test.expect_batch(190, vec![a, b, c]);
         test.expect_batch(260, vec![d, e]);
 
         test.run();
@@ -380,11 +413,11 @@ mod tests {
         test.event(130, &a1);
         test.event(140, &b1);
         test.event(150, &c1);
-        test.event(190, &a2);
+        test.event(189, &a2);
         test.event(205, &b2);
         test.event(215, &d1);
-        test.expect_batch(180, vec![a1, b1, c1]);
-        test.expect_batch(240, vec![a2, b2]);
+        test.expect_batch(190, vec![a1, b1, c1]);
+        test.expect_batch(250, vec![a2, b2]);
 
         test.run();
     }

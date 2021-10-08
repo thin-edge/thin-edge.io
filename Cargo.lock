@@ -1707,6 +1707,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
+ "download",
  "json_sm",
  "serde",
  "serde_json",
@@ -2566,7 +2567,6 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "chrono",
- "clock",
  "flockfile",
  "futures",
  "json_sm",
@@ -2647,6 +2647,7 @@ dependencies = [
  "tedge_users",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thin_edge_json",
  "thiserror",
  "tokio",
@@ -2699,6 +2700,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-case"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b114ece25254e97bf48dd4bfc2a12bad0647adacfe4cae1247a9ca6ad302cec"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro2 1.0.29",
+ "quote 1.0.9",
+ "syn 1.0.76",
+ "version_check",
 ]
 
 [[package]]
@@ -2795,9 +2809,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.12.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2c2416fdedca8443ae44b4527de1ea633af61d8f7169ffa6e72c5b53d24efcc"
+checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
 dependencies = [
  "autocfg",
  "bytes",
