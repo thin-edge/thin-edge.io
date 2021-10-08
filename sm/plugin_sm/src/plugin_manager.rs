@@ -94,7 +94,10 @@ impl ExternalPlugins {
                     .by_software_type(default_plugin_type.as_str())
                     .is_none()
                 {
-                    error!("The configured default plugin: {} not found", default_plugin_type);
+                    error!(
+                        "The configured default plugin: {} not found",
+                        default_plugin_type
+                    );
                     return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
                 }
                 info!("Default plugin type: {}", default_plugin_type)
