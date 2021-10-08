@@ -11,6 +11,16 @@ pub enum InternalError {
 
     #[error("Parsing Debian package failed for `{file}`")]
     ParsingError { file: String },
+
+    #[error(transparent)]
+    FromCsv(#[from] csv::Error),
+
+    #[error("Validation of {package} failed with version mismatch. Installed version: {installed}, Expected version: {expected}")]
+    VersionMismatch {
+        package: String,
+        installed: String,
+        expected: String,
+    },
 }
 
 impl InternalError {

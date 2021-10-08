@@ -16,30 +16,29 @@ anyhow = "1.0"
 certificate = { path = "../common/certificate" }
 chrono = "0.4"
 futures = "0.3"
-rumqttc = "0.8.0"
+hyper = { version = "0.14", default-features = false }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
-hyper = { version = "0.14", default-features = false }
+rumqttc = "0.8"
 rustls = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
+tedge_config = { path = "../tedge_config" }
+tedge_users = { path = "../common/tedge_users" }
 tedge_utils = { path = "../common/tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"
 toml = "0.5"
 url = "2.2"
 webpki = "0.21"
-which = "4.1"
-tedge_config = { path = "../tedge_config" }
-tedge_users = { path = "../common/tedge_users" }
+which = "4.2"
 
 [dev-dependencies]
-assert_cmd = "2.0.0"
-assert_matches = "1.4"
+assert_cmd = "2.0"
+assert_matches = "1.5"
 mockito = "0.30"
-pem = "0.8"
+pem = "1.0"
 predicates = "2.0"
-which = "4.0"
 
 [features]
 integration-test = []

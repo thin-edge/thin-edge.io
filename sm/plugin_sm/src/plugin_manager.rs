@@ -1,6 +1,9 @@
-use crate::log_file::LogFile;
-use crate::plugin::*;
-use json_sm::*;
+use crate::plugin::{Plugin, LIST};
+use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
+use json_sm::{
+    SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
+    SoftwareUpdateResponse, DEFAULT,
+};
 use std::{
     collections::HashMap,
     fs,
