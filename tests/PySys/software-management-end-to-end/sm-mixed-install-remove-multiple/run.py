@@ -51,8 +51,8 @@ class PySysTest(SoftwareManagement):
             },
             {
                 "action": act,
-                "id": self.get_pkgid("rolldice"),
-                "name": "rolldice",
+                "id": self.get_pkgid("asciijump"),
+                "name": "asciijump",
                 "url": " ",
                 "version": "::apt",
             },
@@ -84,7 +84,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
-        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
         self.assertThat("False == value", value=self.check_is_installed("registry"))
     def execute(self):
 
@@ -95,7 +95,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
-        self.assertThat("True == value", value=self.check_is_installed("rolldice"))
+        self.assertThat("True == value", value=self.check_is_installed("asciijump"))
         self.assertThat("True == value", value=self.check_is_installed("registry"))
 
         action = self.get_packages_with_action("delete")
@@ -107,5 +107,5 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
-        self.assertThat("False == value", value=self.check_is_installed("rolldice"))
+        self.assertThat("False == value", value=self.check_is_installed("asciijump"))
         self.assertThat("False == value", value=self.check_is_installed("registry"))

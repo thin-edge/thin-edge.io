@@ -44,6 +44,7 @@ To remove
 
 """
 
+from environment_c8y import EnvironmentC8y
 import base64
 import time
 import json
@@ -56,7 +57,6 @@ import pysys
 from pysys.basetest import BaseTest
 
 sys.path.append("./environments")
-from environment_c8y import EnvironmentC8y
 
 
 def is_timezone_aware(stamp):
@@ -89,22 +89,23 @@ class SoftwareManagement(EnvironmentC8y):
 
     dockerplugin = None
 
-    tenant_url = "pradeep.basic.stage.c8y.io"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "smcontainer":
-            self.skipTest("Testing the apt plugin is not supported on this platform")
+            self.skipTest(
+                "Testing the apt plugin is not supported on this platform")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
         self.pkg_id_db = {
             # apt
-            "asciijump": "5356",
-            "robotfindskitten": "4374",
-            "squirrel3": "5357",
-            "rolldice": "1211",
+            "asciijump": "5475369",
+            "robotfindskitten": "5474869",
+            "squirrel3": "5475279",
+            "rolldice": "5152439",
             "moon-buggy": "5439204",
             # fake plugin
             "apple": "5495053",
@@ -112,14 +113,14 @@ class SoftwareManagement(EnvironmentC8y):
             "cherry": "5495382",
             "watermelon": "5494510",
             # docker plugin
-            "registry": "6235",
-            "hello-world": "6243",
-            "docker/getting-started": "6245",
+            "registry": "8018911",
+            "hello-world": "8021526",
+            "docker/getting-started": "8021973",                    
         }
 
         if self.project.c8yswrepo:
             self.pkg_id_db = json.loads(self.project.c8yswrepo)
-        self.log.info("Using sw id database: %s"%self.pkg_id_db)
+        self.log.info("Using sw id database: %s" % self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -187,7 +188,8 @@ class SoftwareManagement(EnvironmentC8y):
         jresponse = json.loads(req.text)
 
         self.log.info("Response status: %s", req.status_code)
-        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
+        self.log.info("Response to action: %s",
+                      json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
         self.operation_id = jresponse.get("id")
@@ -247,18 +249,21 @@ class SoftwareManagement(EnvironmentC8y):
         operations = jresponse.get("operations")
 
         if not operations or len(operations) != 1:
-            raise SystemError("field operations is missing in response or to long")
+            raise SystemError(
+                "field operations is missing in response or to long")
 
         operation = operations[0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info("State of current operation: %s", operation.get("status"))
+        self.log.info("State of current operation: %s",
+                      operation.get("status"))
 
         # In this case we just jump everything to see what is goin on
         if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
             self.log.debug(
-                "State of current operation: %s", json.dumps(operation, indent=4)
+                "State of current operation: %s", json.dumps(
+                    operation, indent=4)
             )
 
         if not operation.get("status"):
@@ -303,7 +308,8 @@ class SoftwareManagement(EnvironmentC8y):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
         current_status = self.get_status_of_operation()
-        self.log.info("Expected status: %s, got status %s" % (status, current_status))
+        self.log.info("Expected status: %s, got status %s" %
+                      (status, current_status))
         return current_status == status
 
     def wait_until_succcess(self):
@@ -325,9 +331,9 @@ class SoftwareManagement(EnvironmentC8y):
 
         # Heuristic about how long to wait for a operation
         if platform.machine() == "x86_64":
-            wait_time = int(40 / poll_period)
+            wait_time = int(90 / poll_period)
         else:
-            wait_time = int(90 / poll_period)  # 90s on the Rpi
+            wait_time = int(120 / poll_period)  # 90s on the Rpi
 
         timeout = 0
 
@@ -357,7 +363,8 @@ class SoftwareManagement(EnvironmentC8y):
             timeout += 1
             if timeout > wait_time:
                 raise SystemError(
-                    "Timeout while waiting for status %s or %s" % (status, status2)
+                    "Timeout while waiting for status %s or %s" % (
+                        status, status2)
                 )
 
     def check_is_installed(self, package_name, version=None):
@@ -394,7 +401,8 @@ class SoftwareManagement(EnvironmentC8y):
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
         """
-        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
+        output = subprocess.check_output(
+            ["/usr/bin/apt-cache", "madison", pkg])
 
         # Lets assume it is the package in the first line of the output
         return output.split()[2].decode("ascii")  # E.g. "1.16-1+b3"
