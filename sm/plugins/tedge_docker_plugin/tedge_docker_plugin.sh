@@ -6,13 +6,11 @@ USAGE:
     docker <SUBCOMMAND>
 
 SUBCOMMANDS:
-    finalize       Finalize a sequences of install/remove commands
-    help           Prints this message or the help of the given subcommand(s)
-    install        Install a module
     list           List all the installed modules
     prepare        Prepare a sequences of install/remove commands
+    install        Install a module
     remove         Uninstall a module
-    update-list    Install or remove multiple modules at once
+    finalize       Finalize a sequences of install/remove commands
 EOF
 }
 
