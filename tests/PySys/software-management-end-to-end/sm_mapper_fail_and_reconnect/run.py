@@ -85,7 +85,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
 
         # wait for the sm mapper to process and publish result to cloud
         # and subscriber to capture the output and log it.
-        time.sleep(20)
+        time.sleep(30)
 
         # Stop the subscriber
         kill = self.startProcess(
