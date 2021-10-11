@@ -9,7 +9,7 @@ thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 tracing = { version = "0.1", features = ["log"] }
-nix = "0.21"
+nix = "0.23"
 
 [dev-dependencies]
 assert_matches = "1.5"
