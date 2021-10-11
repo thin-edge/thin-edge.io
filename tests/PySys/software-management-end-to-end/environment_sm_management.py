@@ -120,7 +120,7 @@ class SoftwareManagement(EnvironmentC8y):
 
         if self.project.c8yswrepo:
             self.pkg_id_db = json.loads(self.project.c8yswrepo)
-        self.log.info("Using sw id database: %s" % self.pkg_id_db)
+        self.log.info("Using sw id database: %s"% self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -188,8 +188,7 @@ class SoftwareManagement(EnvironmentC8y):
         jresponse = json.loads(req.text)
 
         self.log.info("Response status: %s", req.status_code)
-        self.log.info("Response to action: %s",
-                      json.dumps(jresponse, indent=4))
+        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
         self.operation_id = jresponse.get("id")
@@ -249,21 +248,18 @@ class SoftwareManagement(EnvironmentC8y):
         operations = jresponse.get("operations")
 
         if not operations or len(operations) != 1:
-            raise SystemError(
-                "field operations is missing in response or to long")
+            raise SystemError("field operations is missing in response or to long")
 
         operation = operations[0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info("State of current operation: %s",
-                      operation.get("status"))
+        self.log.info("State of current operation: %s", operation.get("status"))
 
         # In this case we just jump everything to see what is goin on
         if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
             self.log.debug(
-                "State of current operation: %s", json.dumps(
-                    operation, indent=4)
+                "State of current operation: %s", json.dumps(operation, indent=4)
             )
 
         if not operation.get("status"):
