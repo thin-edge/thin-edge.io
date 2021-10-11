@@ -17,7 +17,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 url = "2.2"
 
 [dev-dependencies]
-assert_matches = "1.5.0"
 anyhow = "1.0"
+assert_matches = "1.5"
 structopt = "0.3"
 tempfile = "3.2"
