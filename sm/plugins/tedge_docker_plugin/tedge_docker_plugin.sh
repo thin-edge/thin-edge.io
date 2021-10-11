@@ -1,5 +1,19 @@
 #!/bin/sh
 
+usage() {
+    cat << EOF
+USAGE:
+    docker <SUBCOMMAND>
+
+SUBCOMMANDS:
+    list           List all the installed modules
+    prepare        Prepare a sequences of install/remove commands
+    install        Install a module
+    remove         Uninstall a module
+    finalize       Finalize a sequences of install/remove commands
+EOF
+}
+
 unsupported_args_check() {
     if ! [ -z $1 ]; then
         echo "Unsupported arguments: $@"
@@ -35,7 +49,8 @@ extract_image_tag_from_args() {
 }
 
 if [ -z $1 ]; then
-    echo "Provide at least one subcommand. Supported subcommands: list, prepare, install, remove, finalize"
+    echo "Provide at least one subcommand\n"
+    usage
     exit 1
 fi
 
@@ -56,8 +71,8 @@ case "$COMMAND" in
         extract_image_tag_from_args $@
 
         # Stop all containers using the provided image name
-        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_NAME | awk '{print $1}') || exit 2
-        if [ -z $containers ]
+        containers=$(docker ps -a --format "{{.ID}} {{.Image}}" | grep $IMAGE_NAME | awk '{print $1}') || exit 2
+        if [ -z "$containers" ]
         then
             echo "No containers to update. Spawning a new one."
             docker run -d $IMAGE_TAG || exit 2
@@ -65,7 +80,7 @@ case "$COMMAND" in
             echo "Updating existing containers."
             for container in $containers
             do
-                docker rm $(docker stop $container) || exit 2
+                docker rm $(docker stop "$container") || exit 2
 
                 # Spawn new containers with the provided image name and version to replace the stopped one
                 docker run -d $IMAGE_TAG || exit 2
@@ -75,14 +90,14 @@ case "$COMMAND" in
     remove)
         extract_image_tag_from_args $@
 
-        containers=$(docker ps --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}') || exit 2
-        if [ -z $containers ]
+        containers=$(docker ps -a --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}') || exit 2
+        if [ -z "$containers" ]
         then
             echo "No containers found for the image: $IMAGE_TAG"
         fi
         for container in $containers
         do
-            docker rm $(docker stop $container) || exit 2
+            docker rm $(docker stop "$container") || exit 2
         done
         ;;
     finalize)
