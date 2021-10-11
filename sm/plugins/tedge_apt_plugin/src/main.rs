@@ -91,42 +91,8 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             version,
             file_path,
         } => {
-            match (&version, &file_path) {
-                (None, None) => {
-                    // normal install
-                    run_cmd("apt-get", &format!("install --quiet --yes {}", module))?
-                }
-
-                (Some(version), None) => run_cmd(
-                    "apt-get",
-                    &format!("install --quiet --yes {}={}", module, version),
-                )?,
-
-                (None, Some(file_path)) => {
-                    let mut package = PackageMetadata::try_new(file_path)?;
-                    let () = package
-                        .validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
-
-                    run_cmd(
-                        "apt-get",
-                        &format!("install --quiet --yes {}", package.file_path().display()),
-                    )?
-                }
-
-                (Some(version), Some(file_path)) => {
-                    let mut package = PackageMetadata::try_new(file_path)?;
-                    let () = package.validate_package(&[
-                        &format!("Version: {}", &version),
-                        &format!("Package: {}", &module),
-                        "Debian package",
-                    ])?;
-
-                    run_cmd(
-                        "apt-get",
-                        &format!("install --quiet --yes {}", package.file_path().display()),
-                    )?
-                }
-            }
+            let installer = get_installer(module, version, file_path)?;
+            run_cmd("apt-get", &format!("install --quiet --yes {}", installer))?
         }
 
         PluginOp::Remove { module, version } => {
@@ -158,11 +124,12 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             for update_module in updates {
                 match update_module.action {
                     UpdateAction::Install => {
-                        if let Some(version) = update_module.version {
-                            args.push(format!("{}={}", update_module.name, version));
-                        } else {
-                            args.push(update_module.name)
-                        }
+                        let installer = get_installer(
+                            update_module.name,
+                            update_module.version,
+                            update_module.path,
+                        )?;
+                        args.push(installer);
                     }
                     UpdateAction::Remove => {
                         if let Some(version) = update_module.version {
@@ -190,6 +157,37 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     };
 
     Ok(status)
+}
+
+fn get_installer(
+    module: String,
+    version: Option<String>,
+    file_path: Option<String>,
+) -> Result<String, InternalError> {
+    match (&version, &file_path) {
+        (None, None) => Ok(module),
+
+        (Some(version), None) => Ok(format!("{}={}", module, version)),
+
+        (None, Some(file_path)) => {
+            let mut package = PackageMetadata::try_new(file_path)?;
+            let () =
+                package.validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
+
+            Ok(format!("{}", package.file_path().display()))
+        }
+
+        (Some(version), Some(file_path)) => {
+            let mut package = PackageMetadata::try_new(file_path)?;
+            let () = package.validate_package(&[
+                &format!("Version: {}", &version),
+                &format!("Package: {}", &module),
+                "Debian package",
+            ])?;
+
+            Ok(format!("{}", package.file_path().display()))
+        }
+    }
 }
 
 /// Validate if the provided module version matches the currently installed version

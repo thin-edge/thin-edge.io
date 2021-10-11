@@ -95,7 +95,7 @@ pub trait Plugin {
         }
 
         // Execute the updates
-        if !failed_updates.is_empty() {
+        if failed_updates.is_empty() {
             let outcome = self.update_list(&updates, logger).await;
             if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
                 for update in updates.iter() {
