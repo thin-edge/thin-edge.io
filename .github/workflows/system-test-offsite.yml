@@ -96,11 +96,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
-            TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -110,11 +108,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
-            TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
@@ -123,11 +119,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
-            TIMEZONE: 01:00
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
