@@ -14,7 +14,7 @@ env:
 
 jobs:
 
-  install-and-use-rpi-offsite:
+  install-and-use-rpi-all-offsite:
     runs-on: [self-hosted, Linux, ARM, offsiteall ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -84,8 +84,8 @@ jobs:
 
 # System Test Workflow
 
-  system-test_offsite:
-    needs: [install-and-use-rpi-offsite]
+  system-test-all-offsite:
+    needs: [install-and-use-rpi-all-offsite]
     runs-on: [self-hosted, Linux, ARM, offsiteall]
     #continue-on-error: true
 
