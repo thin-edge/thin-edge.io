@@ -146,6 +146,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 };
             }
 
+            println!("apt-get install args: {:?}", args);
             let status = Command::new("apt-get")
                 .args(args)
                 .stdin(Stdio::null())
