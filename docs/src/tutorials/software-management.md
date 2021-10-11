@@ -85,3 +85,24 @@ From the Cumulocity cloud `Software` tab of a device, software can be
 * [removed](https://cumulocity.com/guides/users-guide/device-management/#to-delete-software-from-a-device)
 
 > Note: Once the above mentioned operation is selected, one should click on **Apply changes** to confirm operation.
+
+## Default plugin
+
+When there are multiple plugins installed on the device, one can set one of them as a default plugin.
+If there is only one plugin installed on the device, then implicitly this will be the default plugin.
+
+### Configuring the default plugin
+
+Default plugin can be configured using the thin-edge cli command `tedge`.
+
+For example set `apt` plugin as a `default plugin`
+
+```
+$ sudo tedge config set software.plugin.default apt
+```
+
+### Usage of `default plugin`
+
+The default plugin will be used when an "update request" doesn't come with an explicit type annotation in the `version` field.
+
+If there are multiple plugins, and if a default is not set, update requests will fail if a module doesn't have a type defined in the `version` filed.
