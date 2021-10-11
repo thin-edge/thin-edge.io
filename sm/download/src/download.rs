@@ -53,14 +53,14 @@ impl Downloader {
                         .error_for_status()
                     {
                         Ok(response) => Ok(response),
-                        Err(err) =>  {
-                        error!("Request returned an error: {:?}", &err);
+                        Err(err) => {
+                            error!("Request returned an error: {:?}", &err);
                             match &err.status() {
-                            Some(status_error) if status_error.is_client_error() => {
-                                Err(backoff::Error::Permanent(err))
+                                Some(status_error) if status_error.is_client_error() => {
+                                    Err(backoff::Error::Permanent(err))
+                                }
+                                _ => Err(err.into()),
                             }
-                            _ => Err(err.into()),
-                        }
                         }
                     }
                 }
