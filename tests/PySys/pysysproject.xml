@@ -15,6 +15,7 @@
 	<property name="platform" default='None' />
 
 	<pythonpath value="${testRootDir}/environments" />
+	<pythonpath value="${testRootDir}/apt_plugin" />
 	<pythonpath value="${testRootDir}/docker_plugin" />
 
 	<writers>

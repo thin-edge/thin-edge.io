@@ -9,18 +9,18 @@ edition = "2018"
 [dependencies]
 chrono = "0.4"
 json-writer = { path = "../../common/json_writer" }
-thiserror = "1.0"
 serde = "1"
 serde_json = "1"
+thiserror = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
 clock = { path = "../../common/clock" }
+criterion = "0.3"
 mockall = "0.10"
 proptest = "1.0"
-criterion = "0.3"
+stats_alloc = "0.1"
 walkdir = "2"
-stats_alloc = "0.1.8"
 
 [[bench]]
 name = "parsing"
