@@ -1,4 +1,5 @@
 import sys
+import time
 
 """
 Validate end to end behaviour for the docker plugin for multiple docker images.
@@ -50,7 +51,9 @@ class SMDockerInstallRemove(SoftwareManagement):
 
         self.trigger_action_json(setup_action)
         self.wait_until_succcess()
-
+        # Wait for the operation result to appear on c8y cloud
+        self.wait_a_while_for_c8y_to_get_refresh()
+        
         self.assertThat("True == value",
                         value=self.check_is_installed(self.image1_name))
         self.assertThat("True == value",
@@ -81,7 +84,9 @@ class SMDockerInstallRemove(SoftwareManagement):
 
         self.trigger_action_json(execute_action)
         self.wait_until_succcess()
-
+        # Wait for the operation result to appear on c8y cloud
+        self.wait_a_while_for_c8y_to_get_refresh()
+        
     def validate(self):
         self.assertThat("True == value",
                         value=self.check_is_installed(self.image1_name))
@@ -117,10 +122,22 @@ class SMDockerInstallRemove(SoftwareManagement):
 
         self.trigger_action_json(cleanup_action)
         self.wait_until_succcess()
-
+        # Wait for the operation result to appear on c8y cloud
+        self.wait_a_while_for_c8y_to_get_refresh()
+        
         self.assertThat("False == value",
                         value=self.check_is_installed(self.image1_name))
         self.assertThat("False == value",
                         value=self.check_is_installed(self.image2_name))
         self.assertThat("False == value",
                         value=self.check_is_installed(self.image3_name))
+
+    def wait_a_while_for_c8y_to_get_refresh(self):
+        for i in range(1,10):
+            time.sleep(1)
+            if self.check_is_installed(self.image1_name):
+                break
+            else:
+                continue
+        return False        
+        
