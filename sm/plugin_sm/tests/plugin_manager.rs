@@ -1,12 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    use std::fs::File;
-
-    use assert_matches::assert_matches;
-    use json_sm::SoftwareError;
     use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
-    use std::{path::PathBuf, str::FromStr};
+    use std::{fs::File, path::PathBuf, str::FromStr};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -167,13 +163,16 @@ mod tests {
     }
 
     #[test]
-    fn invalid_default_plugin() {
+    fn invalid_default_plugin_pass_through() -> anyhow::Result<()> {
         let plugin_dir = tempfile::tempdir().unwrap();
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
-        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()), None);
-        assert_matches!(result.unwrap_err(), SoftwareError::InvalidDefaultPlugin(_));
+        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()), None)?;
+        assert!(result.empty());
+        assert!(result.default().is_none());
+
+        Ok(())
     }
 
     fn create_some_plugin_in(dir: &tempfile::TempDir) -> NamedTempFile {
