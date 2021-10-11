@@ -64,7 +64,7 @@ pub trait Plugin {
 
     async fn apply_all(
         &self,
-        updates: Vec<SoftwareModuleUpdate>,
+        mut updates: Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
@@ -77,14 +77,14 @@ pub trait Plugin {
 
         // Download all modules for which a download URL is provided
         let mut downloaders = Vec::new();
-        for update in updates.iter() {
-            let mut module = match update.clone() {
+        for update in updates.iter_mut() {
+            let module = match update {
                 SoftwareModuleUpdate::Remove { module } => module,
                 SoftwareModuleUpdate::Install { module } => module,
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(&mut module, &url, logger).await {
+                match Self::download_from_url(module, &url, logger).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;

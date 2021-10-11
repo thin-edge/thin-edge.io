@@ -91,7 +91,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             version,
             file_path,
         } => {
-            let installer = get_installer(module, version, file_path)?;
+            let (installer, _metadata) = get_installer(module, version, file_path)?;
             run_cmd("apt-get", &format!("install --quiet --yes {}", installer))?
         }
 
@@ -117,6 +117,9 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 updates.push(result?);
             }
 
+            // Maintaining this metadata list to keep the debian package symlinks until the installation is complete,
+            // which will get cleaned up once it goes out of scope after this block
+            let mut metadata_vec = Vec::new();
             let mut args: Vec<String> = Vec::new();
             args.push("install".into());
             args.push("--quiet".into());
@@ -124,12 +127,13 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             for update_module in updates {
                 match update_module.action {
                     UpdateAction::Install => {
-                        let installer = get_installer(
+                        let (installer, metadata) = get_installer(
                             update_module.name,
                             update_module.version,
                             update_module.path,
                         )?;
                         args.push(installer);
+                        metadata_vec.push(metadata);
                     }
                     UpdateAction::Remove => {
                         if let Some(version) = update_module.version {
@@ -163,18 +167,18 @@ fn get_installer(
     module: String,
     version: Option<String>,
     file_path: Option<String>,
-) -> Result<String, InternalError> {
+) -> Result<(String, Option<PackageMetadata>), InternalError> {
     match (&version, &file_path) {
-        (None, None) => Ok(module),
+        (None, None) => Ok((module, None)),
 
-        (Some(version), None) => Ok(format!("{}={}", module, version)),
+        (Some(version), None) => Ok((format!("{}={}", module, version), None)),
 
         (None, Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
             let () =
                 package.validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
 
-            Ok(format!("{}", package.file_path().display()))
+            Ok((format!("{}", package.file_path().display()), Some(package)))
         }
 
         (Some(version), Some(file_path)) => {
@@ -185,7 +189,7 @@ fn get_installer(
                 "Debian package",
             ])?;
 
-            Ok(format!("{}", package.file_path().display()))
+            Ok((format!("{}", package.file_path().display()), Some(package)))
         }
     }
 }
