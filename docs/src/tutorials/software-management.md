@@ -103,6 +103,6 @@ $ sudo tedge config set software.plugin.default apt
 
 ### Usage of `default plugin`
 
-The default plugin will be used when an "update request" doesn't come with an explicit type annotation in the `version` field.
-
-If there are multiple plugins, and if a default is not set, update requests will fail if a module doesn't have a type defined in the `version` filed.
+When the `default plugin` is set, then the software operation does not need to have an exlplicit type of the software,
+then the default will be used.
+In Cumulocity one can then simply provide the package to update without having to annotate the `version` field in its type.
