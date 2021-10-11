@@ -79,21 +79,13 @@ class PySysTest(BaseTest):
 
         if value == None:
             self.unset_config_key(key)
-            return
-#            self.log.info("Unsetting key " + key)
-#            proc = self.startProcess(
-#                command=self.sudo,
-#                arguments=[self.tedge, "config", "unset", key],
-#                stdouterr="tedge_unset_config_key_"+key,
-#                expectedExitStatus="==0",
-#            )
-#        else:
-#            proc = self.startProcess(
-#                command=self.sudo,
-#                arguments=[self.tedge, "config", "set", key, value],
-#                stdouterr="tedge_set_config_key_"+key,
-#                expectedExitStatus="==0",
-#            )
+        else:
+            proc = self.startProcess(
+                command=self.sudo,
+                arguments=[self.tedge, "config", "set", key, value],
+                stdouterr="tedge_set_config_key_"+key,
+                expectedExitStatus="==0",
+            )
 
     def execute(self):
         self.tedge = "/usr/bin/tedge"
