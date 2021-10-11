@@ -22,7 +22,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - name: Download artifact
+      - name: Download artifact debian packages
         uses: dawidd6/action-download-artifact@v2
         # https://github.com/marketplace/actions/download-workflow-artifact
         with:
@@ -30,13 +30,13 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: continuous_integration
-          name: examples_armv7-unknown-linux-gnueabihf
+          name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
-      - name: Download artifact
+      - name: Download artifact examples
         uses: dawidd6/action-download-artifact@v2
         # https://github.com/marketplace/actions/download-workflow-artifact
         with:
