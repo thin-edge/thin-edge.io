@@ -22,7 +22,6 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YTENNANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
