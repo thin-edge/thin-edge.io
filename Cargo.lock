@@ -687,6 +687,7 @@ version = "0.3.2"
 dependencies = [
  "anyhow",
  "backoff",
+ "hamcrest2",
  "json_sm",
  "log",
  "mockito",
