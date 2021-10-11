@@ -79,6 +79,7 @@ class PySysTest(BaseTest):
 
         if value == None:
             self.unset_config_key(key)
+            return
 #            self.log.info("Unsetting key " + key)
 #            proc = self.startProcess(
 #                command=self.sudo,
