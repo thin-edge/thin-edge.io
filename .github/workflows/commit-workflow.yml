@@ -99,7 +99,7 @@ jobs:
     name: Run cargo tarpaulin
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
-    continue-on-error: true # Only temporarily !!!
+    #continue-on-error: true # Only temporarily !!!
 
     steps:
 
@@ -144,7 +144,7 @@ jobs:
     name: Run cargo audit
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
-
+    continue-on-error: true # Only temporarily !!!
 
     steps:
 
