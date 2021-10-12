@@ -115,6 +115,7 @@ jobs:
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all sm tests
       continue-on-error: true
@@ -127,6 +128,7 @@ jobs:
             C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
