@@ -14,7 +14,7 @@ env:
 
 jobs:
 
-  install-and-use-rpi-offsite:
+  install-and-use-rpi-all-offsite:
     runs-on: [self-hosted, Linux, ARM, offsiteall ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -22,7 +22,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - name: Download artifact
+      - name: Download artifact debian packages
         uses: dawidd6/action-download-artifact@v2
         # https://github.com/marketplace/actions/download-workflow-artifact
         with:
@@ -36,7 +36,7 @@ jobs:
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
-      - name: Download artifact
+      - name: Download artifact examples
         uses: dawidd6/action-download-artifact@v2
         # https://github.com/marketplace/actions/download-workflow-artifact
         with:
@@ -81,8 +81,8 @@ jobs:
 
 # System Test Workflow
 
-  system-test_offsite:
-    needs: [install-and-use-rpi-offsite]
+  system-test-all-offsite:
+    needs: [install-and-use-rpi-all-offsite]
     runs-on: [self-hosted, Linux, ARM, offsiteall]
     #continue-on-error: true
 
