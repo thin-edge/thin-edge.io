@@ -7,7 +7,7 @@ use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use json_sm::{
     software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
-    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
+    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
@@ -26,7 +26,6 @@ use tedge_config::{
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
-    pub default_plugin_type: Option<String>,
     pub errors_topic: Topic,
     pub mqtt_client_config: mqtt_client::Config,
     pub request_topic_list: Topic,
@@ -41,8 +40,6 @@ pub struct SmAgentConfig {
 
 impl Default for SmAgentConfig {
     fn default() -> Self {
-        let default_plugin_type = None;
-
         let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
 
         let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
@@ -68,7 +65,6 @@ impl Default for SmAgentConfig {
         let config_location = TEdgeConfigLocation::from_default_system_location();
 
         Self {
-            default_plugin_type,
             errors_topic,
             mqtt_client_config,
             request_topic_list,
@@ -89,8 +85,6 @@ impl SmAgentConfig {
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
 
-        let default_plugin_type =
-            tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
         let mqtt_config =
             mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
 
@@ -100,17 +94,9 @@ impl SmAgentConfig {
             .to_path_buf();
 
         Ok(SmAgentConfig::default()
-            .with_default_plugin_type(default_plugin_type)
             .with_sm_home(tedge_config_path)
             .with_mqtt_client_config(mqtt_config)
             .with_config_location(tedge_config_location))
-    }
-
-    pub fn with_default_plugin_type(self, default_plugin_type: Option<String>) -> Self {
-        Self {
-            default_plugin_type,
-            ..self
-        }
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -129,17 +115,6 @@ impl SmAgentConfig {
             config_location,
             ..self
         }
-    }
-
-    pub fn update_default_plugin(&mut self) -> Result<(), AgentError> {
-        let config_repository =
-            tedge_config::TEdgeConfigRepository::new(self.config_location.clone());
-        let tedge_config = config_repository.load()?;
-
-        self.default_plugin_type =
-            tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
-
-        Ok(())
     }
 }
 
@@ -173,10 +148,9 @@ impl SmAgent {
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
-        let default_plugin_type = self.config.default_plugin_type.clone();
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),
-            default_plugin_type.clone(),
+            get_default_plugin(&self.config.config_location)?,
             Some("sudo".into()),
         )?));
 
@@ -229,7 +203,11 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_update => {
-                    let () = self.update_plugins(plugins.clone())?;
+                    let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
+                    let () = plugins
+                        .lock()
+                        .unwrap() // `unwrap` should be safe here as we only access data for write.
+                        .update_default(&get_default_plugin(&self.config.config_location)?)?;
 
                     let _success = self
                         .handle_software_update_request(
@@ -398,19 +376,15 @@ impl SmAgent {
 
         Ok(())
     }
+}
 
-    fn update_plugins(&mut self, plugins: Arc<Mutex<ExternalPlugins>>) -> Result<(), AgentError> {
-        let () = self.config.update_default_plugin()?;
-        let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
-        let () = plugins
-            .lock()
-            .unwrap() // `unwrap` should be safe here as we only access data for write.
-            .update_default(&self.config.default_plugin_type)?;
+fn get_default_plugin(
+    config_location: &TEdgeConfigLocation,
+) -> Result<Option<SoftwareType>, AgentError> {
+    let config_repository = tedge_config::TEdgeConfigRepository::new(config_location.clone());
+    let tedge_config = config_repository.load()?;
 
-        dbg!(&plugins);
-
-        Ok(())
-    }
+    Ok(tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?)
 }
 
 async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
