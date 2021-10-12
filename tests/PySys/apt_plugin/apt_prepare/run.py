@@ -34,7 +34,8 @@ class AptPluginPrepare(AptPlugin):
         # N=100 : Took 91s to update at mythic beasts
         # N=150 : Took 123s to update at mythic beasts (Why???)
         # N=200 : Took 160s to update at mythic beasts in august(Why???)
-        self.assertThat("(new +200) >= now", new=self.mtime_new, now=self.now)
+        # N=300 : Took 250s to update at mythic beasts in october(Why???)
+        self.assertThat("(new +300) >= now", new=self.mtime_new, now=self.now)
 
     def cleanup_prepare(self):
         pass
