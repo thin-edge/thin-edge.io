@@ -123,9 +123,6 @@ jobs:
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
-      - name: ls -l packages
-        run: ls -lah ./debian-package_unpack/
-
       - name: install packages
         run: sudo dpkg -i ./debian-package_unpack/*.deb
 
