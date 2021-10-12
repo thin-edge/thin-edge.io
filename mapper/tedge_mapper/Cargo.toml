@@ -27,22 +27,22 @@ stop-on-upgrade = false
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-batcher = {path = "../../common/batcher" }
-c8y_translator_lib = {path = "../cumulocity/c8y_translator_lib" }
+batcher = { path = "../../common/batcher" }
 c8y_smartrest = { path = "../cumulocity/c8y_smartrest" }
+c8y_translator_lib = { path = "../cumulocity/c8y_translator_lib" }
 chrono = "0.4"
-clock = {path = "../../common/clock" }
+clock = { path = "../../common/clock" }
 csv = "1.1"
-flockfile = {path = "../../common/flockfile" }
+flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-json_sm = {path = "../../sm/json_sm"}
+json_sm = { path = "../../sm/json_sm"}
 mockall = "0.10"
-mqtt_client = {path = "../../common/mqtt_client" }
+mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
-tedge_config = {path = "../../tedge_config" }
+tedge_config = { path = "../../tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = {path = "../thin_edge_json" }
@@ -53,10 +53,11 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 [dev-dependencies]
 assert_matches = "1.5"
 assert-json-diff = "2.0"
-serde = "1.0.126"
+serde = "1.0"
 serde_json = "1.0"
-serial_test = "0.5.1"
-tempfile = "3.2.0"
+serial_test = "0.5"
+tempfile = "3.2"
+test-case = "1.2"
 tokio-test = "0.4"
 
 [features]

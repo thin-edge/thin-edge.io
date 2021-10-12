@@ -23,6 +23,7 @@ impl Downloader {
 
         let mut download_target = PathBuf::new().join(&target_dir_path).join(&filename);
         download_target.set_extension("tmp");
+
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
 
         Self {
@@ -48,22 +49,32 @@ impl Downloader {
                         .get(url.url())
                         .bearer_auth(token)
                         .send()
-                        .await
-                        .unwrap()
+                        .await?
                         .error_for_status()
                     {
                         Ok(response) => Ok(response),
                         Err(err) => {
                             error!("Request returned an error: {:?}", &err);
-                            Err(err.into())
+                            match &err.status() {
+                                Some(status_error) if status_error.is_client_error() => {
+                                    Err(backoff::Error::Permanent(err))
+                                }
+                                _ => Err(err.into()),
+                            }
                         }
                     }
                 }
                 None => match client.get(url.url()).send().await?.error_for_status() {
                     Ok(response) => Ok(response),
+
                     Err(err) => {
                         error!("Request returned an error: {:?}", &err);
-                        Err(err.into())
+                        match err.status() {
+                            Some(status_error) if status_error.is_client_error() => {
+                                Err(backoff::Error::Permanent(err))
+                            }
+                            _ => Err(err.into()),
+                        }
                     }
                 },
             }
@@ -96,7 +107,7 @@ impl Downloader {
 #[cfg(test)]
 mod tests {
     use super::Downloader;
-    use json_sm::DownloadInfo;
+    use json_sm::{Auth, DownloadInfo};
     use mockito::mock;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
@@ -135,6 +146,57 @@ mod tests {
         let log_content = std::fs::read(downloader.filename())?;
 
         assert_eq!("hello".as_bytes(), log_content);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn downloader_download_client_error_no_auth() -> anyhow::Result<()> {
+        let _mock1 = mock("GET", "/some_file.txt").with_status(404).create();
+
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        match downloader.download(&url).await {
+            Ok(_success) => anyhow::bail!("Expected client error."),
+            Err(err) => {
+                assert!(err.to_string().contains("404 Not Found"));
+            }
+        };
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn downloader_download_client_error_auth() -> anyhow::Result<()> {
+        let _mock1 = mock("GET", "/some_file.txt")
+            .match_header("authorization", "Bearer token")
+            .with_status(404)
+            .create();
+
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url).with_auth(Auth::Bearer(String::from("token")));
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        match downloader.download(&url).await {
+            Ok(_success) => anyhow::bail!("Expected client error."),
+            Err(err) => {
+                assert!(err.to_string().contains("404 Not Found"));
+            }
+        };
 
         Ok(())
     }
