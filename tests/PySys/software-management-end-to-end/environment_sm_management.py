@@ -89,7 +89,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     dockerplugin = None
 
-    tenant_url = "pradeep.latest.stage.c8y.io"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
@@ -113,13 +113,9 @@ class SoftwareManagement(EnvironmentC8y):
             "cherry": "5495382",
             "watermelon": "5494510",
             # # docker plugin
-            # "registry": "8018911",
-            # "hello-world": "8021526",
-            # "docker/getting-started": "8021973",
-            # docker plugin
-            "registry": "70400",
-            "hello-world": "69400",
-            "docker/getting-started": "69403",                       
+            "registry": "8018911",
+            "hello-world": "8021526",
+            "docker/getting-started": "8021973",
         }
 
         if self.project.c8yswrepo:
