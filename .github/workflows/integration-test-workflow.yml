@@ -152,3 +152,6 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
