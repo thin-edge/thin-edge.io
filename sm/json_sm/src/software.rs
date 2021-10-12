@@ -21,9 +21,7 @@ pub struct SoftwareModule {
     pub module_type: Option<SoftwareType>,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
-    #[serde(default)]
     pub url: Option<DownloadInfo>,
-    #[serde(default)]
     pub file_path: Option<PathBuf>,
 }
 

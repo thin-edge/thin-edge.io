@@ -46,7 +46,6 @@ mod tests {
 
         // Add content of the expected stdout to the dummy plugin.
         let content = format!("abc\t1.0");
-        dbg!("contents {}", &content);
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
@@ -62,7 +61,7 @@ mod tests {
         // Call plugin via API.
         let mut logger = dev_null().await;
         let res = plugin.list(&mut logger).await;
-        dbg!(&res);
+
         // Expect Ok as plugin should exit with code 0.
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), expected_response);
