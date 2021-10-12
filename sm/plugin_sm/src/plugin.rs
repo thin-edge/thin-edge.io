@@ -3,8 +3,7 @@ use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
-use serde::Deserialize;
-use std::{iter::Iterator, path::PathBuf, process::Output};
+use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
 
@@ -301,12 +300,10 @@ impl Plugin for ExternalPluginCommand {
                 .delimiter(b'\t')
                 .from_reader(output.stdout.as_slice());
 
-            //dbg!(rdr);
-            //let mut record: SoftwareModule = SoftwareModule::new();
             for module in rdr.deserialize() {
                 dbg!(&module);
-                let record: SoftwareModuleList = module.unwrap();
-                dbg!(&record);
+                let record: SoftwareModuleList = module?;
+
                 software_list.push(SoftwareModule {
                     name: record.name,
                     version: record.version,
@@ -315,17 +312,6 @@ impl Plugin for ExternalPluginCommand {
                     url: None,
                 });
             }
-            // let modinfo: Vec<&str> = module.split('\t').collect();
-            // if modinfo.len() >= 2 {
-            //     let software_module = SoftwareModule {
-            //         name: modinfo[0].into(),
-            //         version: Some(modinfo[1].into()),
-            //         module_type: Some(self.name.clone()),
-            //         file_path: None,
-            //         url: None,
-            //     };
-
-            // }
 
             Ok(software_list)
         } else {
