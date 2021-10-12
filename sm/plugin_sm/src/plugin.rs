@@ -301,7 +301,6 @@ impl Plugin for ExternalPluginCommand {
                 .from_reader(output.stdout.as_slice());
 
             for module in rdr.deserialize() {
-                dbg!(&module);
                 let record: SoftwareModuleList = module?;
 
                 software_list.push(SoftwareModule {
