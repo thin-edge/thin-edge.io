@@ -14,7 +14,7 @@ reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"
 tedge_utils = { path = "../../common/tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = "1.9"
+tokio = "1.12"
 url = "2.2"
 
 [dev-dependencies]
