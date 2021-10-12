@@ -30,7 +30,7 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: continuous_integration
-          name: examples_armv7-unknown-linux-gnueabihf
+          name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
       - name: delete old publisher
@@ -48,7 +48,7 @@ jobs:
           path: /home/pi/examples
 
       - name: purge packages
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
         continue-on-error: true
 
       - name: install packages
