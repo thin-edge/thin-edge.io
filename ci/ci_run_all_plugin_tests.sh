@@ -52,6 +52,6 @@ pysys.py run -v DEBUG 'apt_*' -XmyPlatform='container'
 # Disabled them until the agent is integrated right
 #
 ## Run the tests for software management
-# pysys.py run 'sm-apt-*' -XmyPlatform='specialcontainer'
+# pysys.py run 'sm-apt-*' -XmyPlatform='smcontainer'
 
 deactivate
