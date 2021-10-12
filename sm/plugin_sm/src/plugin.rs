@@ -296,13 +296,11 @@ impl Plugin for ExternalPluginCommand {
             let mut software_list = Vec::new();
             let mut rdr = ReaderBuilder::new()
                 .has_headers(false)
-                .flexible(true)
                 .delimiter(b'\t')
                 .from_reader(output.stdout.as_slice());
 
             for module in rdr.deserialize() {
                 let record: SoftwareModuleList = module?;
-
                 software_list.push(SoftwareModule {
                     name: record.name,
                     version: record.version,
