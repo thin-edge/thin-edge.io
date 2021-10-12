@@ -37,10 +37,7 @@ mod tests {
     async fn plugin_get_command_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = PathBuf::from_str("/tmp/.tedge_dummy_plugin").unwrap();
-        if !&path.exists() {
-            let () = fs::create_dir(&path).unwrap();
-        }
+        let path = get_dummy_plugin_tmp_path();
 
         let mut file = tempfile::Builder::new()
             .suffix(".0")
@@ -48,7 +45,8 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = r#"{"name":"abc","version":"1.0"}"#;
+        let content = format!("abc\t1.0");
+        dbg!("contents {}", &content);
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
@@ -64,7 +62,7 @@ mod tests {
         // Call plugin via API.
         let mut logger = dev_null().await;
         let res = plugin.list(&mut logger).await;
-
+        dbg!(&res);
         // Expect Ok as plugin should exit with code 0.
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), expected_response);

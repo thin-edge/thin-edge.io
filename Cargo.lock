@@ -1240,6 +1240,7 @@ dependencies = [
 name = "json_sm"
 version = "0.3.2"
 dependencies = [
+ "csv",
  "nanoid",
  "regex",
  "serde",
@@ -1775,6 +1776,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
+ "csv",
  "download",
  "json_sm",
  "serde",

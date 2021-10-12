@@ -1,7 +1,9 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
+use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
+use serde::Deserialize;
 use std::{iter::Iterator, path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -291,43 +293,39 @@ impl Plugin for ExternalPluginCommand {
     ) -> Result<Vec<SoftwareModule>, SoftwareError> {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
-        println!("received list");
         if output.status.success() {
             let mut software_list = Vec::new();
-            let mystr = output.stdout;
-            let software_json_line = std::str::from_utf8(&mystr).unwrap();
-           // println!("mystr {:?}", software_json_line);
-            let modules =  software_json_line.lines();
+            let mut rdr = ReaderBuilder::new()
+                .has_headers(false)
+                .flexible(true)
+                .delimiter(b'\t')
+                .from_reader(output.stdout.as_slice());
 
-            for module in modules {
-                // println!("mystr {:?}", module);
-                let mymod:Vec<&str> = module.split("\t").collect();
-                println!("name: {} version: {}", mymod[0], mymod[1]);
-                // let mut software_module = 
-                //         serde_json::from_str::<SoftwareModule>(module).unwrap();
-                let software_module = SoftwareModule {
-                    name: mymod[0].into(),
-                    version: Some(mymod[1].into()),
+            //dbg!(rdr);
+            //let mut record: SoftwareModule = SoftwareModule::new();
+            for module in rdr.deserialize() {
+                dbg!(&module);
+                let record: SoftwareModuleList = module.unwrap();
+                dbg!(&record);
+                software_list.push(SoftwareModule {
+                    name: record.name,
+                    version: record.version,
                     module_type: Some(self.name.clone()),
                     file_path: None,
                     url: None,
-                };
-                    
-                    software_list.push(software_module);
+                });
             }
+            // let modinfo: Vec<&str> = module.split('\t').collect();
+            // if modinfo.len() >= 2 {
+            //     let software_module = SoftwareModule {
+            //         name: modinfo[0].into(),
+            //         version: Some(modinfo[1].into()),
+            //         module_type: Some(self.name.clone()),
+            //         file_path: None,
+            //         url: None,
+            //     };
 
-            // mystr
-            //     .split(|n: &u8| n.is_ascii_whitespace())
-            //     .filter(|split| !split.is_empty())
-            //     .for_each(|split: &[u8]| {
-            //         let software_json_line = std::str::from_utf8(split).unwrap();
-            //         println!("mystr {:?}", software_json_line);
-
-            //         let mut software_module = 
-                      //  serde_json::from_str::<SoftwareModule>(software_json_line).unwrap();
-            //         software_module.module_type = Some(self.name.clone());
-            //         software_list.push(software_module);
-            //     });
+            // }
 
             Ok(software_list)
         } else {

@@ -10,12 +10,20 @@ pub type SoftwareVersion = String;
 pub const DEFAULT: &str = "default";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct SoftwareModuleList {
+    pub name: SoftwareName,
+    pub version: Option<SoftwareVersion>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SoftwareModule {
     #[serde(default)]
     pub module_type: Option<SoftwareType>,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
+    #[serde(default)]
     pub url: Option<DownloadInfo>,
+    #[serde(default)]
     pub file_path: Option<PathBuf>,
 }
 
