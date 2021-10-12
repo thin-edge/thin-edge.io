@@ -213,6 +213,14 @@ class SoftwareManagement(EnvironmentC8y):
         return self.check_status_of_last_operation("SUCCESSFUL")
 
     def get_status_of_last_operation(self):
+        """Returns the status of the last operation:
+        "FAILED" or "SUCCESSFUL".
+        When there is now last operation listened in C8Y return "NOOPFOUND".
+
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
+        """
 
         params = {
             "deviceId": self.project.deviceid,
@@ -240,7 +248,7 @@ class SoftwareManagement(EnvironmentC8y):
         if not jresponse["operations"]:
             # This can happen e.g. after a weekend when C8y deleted the operations
             self.log.error("No operations found, assuming it passed")
-            return True
+            return "NOOPFOUND"
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
@@ -269,12 +277,12 @@ class SoftwareManagement(EnvironmentC8y):
 
     def check_status_of_last_operation(self, status):
         """Check if the last operation is successfull.
-        Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
-        revert it or not.
         """
 
         current_status = self.get_status_of_last_operation()
+
+        if current_status == "NOOPFOUND":
+            return True
 
         return current_status == status
 
