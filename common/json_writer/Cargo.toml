@@ -4,8 +4,8 @@ version = "0.3.2"
 edition = "2018"
 
 [dependencies]
-thiserror = "1.0"
 serde_json = "1"
+thiserror = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
