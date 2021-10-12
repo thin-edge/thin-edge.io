@@ -63,6 +63,13 @@ class PySysTest(SoftwareManagement):
                 "url": " ",
                 "version": mgt,
             },
+            {
+                "action": act,
+                "id": self.get_pkgid("registry"),
+                "name": "registry",
+                "url": " ",
+                "version": "::docker",
+            },
         ]
 
         return action
@@ -78,7 +85,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("False == value", value=self.check_is_installed("asciijump"))
-
+        self.assertThat("False == value", value=self.check_is_installed("registry"))
     def execute(self):
 
         action = self.get_packages_with_action("install")
@@ -89,6 +96,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("True == value", value=self.check_is_installed("asciijump"))
+        self.assertThat("True == value", value=self.check_is_installed("registry"))
 
         action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
@@ -100,3 +108,4 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("banana"))
         self.assertThat("True == value", value=self.check_is_installed("cherry"))
         self.assertThat("False == value", value=self.check_is_installed("asciijump"))
+        self.assertThat("False == value", value=self.check_is_installed("registry"))
