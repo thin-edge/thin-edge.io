@@ -2,10 +2,10 @@ name: system-test-offsite
 
 on:
   workflow_dispatch:
-    branches: [ main, continuous_integration]
+    branches: [ main]
   workflow_run:
     workflows: ["integration-test-workflow"]
-    branches: [main, continuous_integration]
+    branches: [main]
     types:
       - completed
 
@@ -29,7 +29,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: continuous_integration
+          branch: main
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
@@ -43,16 +43,16 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: continuous_integration
+          branch: main
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: purge packages
-        run: sudo dpkg -P mosquitto tedge tedge_agent tedge_mapper tedge_apt_plugin collectd-core libmosquitto1
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install packages
-        run: sudo apt-get --assume-yes install mosquitto libmosquitto1 collectd-core
+        run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core
 
       - name: install packages
         run: sudo dpkg -i ./debian-package_unpack/*.deb
