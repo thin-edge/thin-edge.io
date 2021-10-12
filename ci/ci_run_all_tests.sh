@@ -27,9 +27,7 @@ set -e
 
 cd $TEBASEDIR
 
-# Check if clients are installed. If not, run:
-# sudo apt-get install mosquitto-clients
-
+# Check if clients are installed
 dpkg -s mosquitto-clients
 
 #sudo apt install librrd-dev python3-rrdtool rrdtool collectd
@@ -42,19 +40,5 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-
 pysys.py run -v DEBUG
-#pysys.py run -v DEBUG 'publish_sawmill_record_statisti*'
-
-
-# Run the tests for the apt plugin
-# These are skipped by default, as the modify the operating system
-# TODO Ideally, as the keyword says we should run them in a container
-# pysys.py run 'apt_*' -XmyPlatform='container'
-
-# Disabled them until the agent is integrated right
-#
-## Run the tests for software management
-# pysys.py run 'sm-apt-*' -XmyPlatform='smcontainer'
-
 deactivate
