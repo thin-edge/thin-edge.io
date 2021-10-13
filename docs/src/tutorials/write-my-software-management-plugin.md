@@ -225,7 +225,7 @@ IMAGE_TAG="$4"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         if [ $# -eq 2 ]; then
@@ -400,7 +400,7 @@ read_module() {
 
 case "$COMMAND" in
     list)
-    docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         # We use update-list instead

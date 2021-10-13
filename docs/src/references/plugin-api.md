@@ -65,15 +65,15 @@ When called with the `list` command, a plugin returns the list of software modul
 ```shell
 $ debian-plugin list
 ...
-{"name":"collectd-core","version":"5.8.1-1.3"}
-{"name":"mosquitto","version":"1.5.7-1+deb10u1"}
+collectd-core  5.8.1-1.3
+mosquitto   1.5.7-1+deb10u1
 ...
 ```
 
 Contract:
 * This command take no arguments.
 * If an error status is returned, the executable is removed from the list of plugins.
-* The list is returned using the [jsonlines](https://jsonlines.org/) format.
+* The list is returned using the [the CSV Lines](https://en.wikipedia.org/wiki/Tab-separated_values) format.
   * __`name`__: the name of the module. This name is the name that has been used to install it and that need to be used to remove it.
   * __`version`__: the version currently installed. This is a string that can only been interpreted in the context of the plugin.
 
