@@ -3,8 +3,11 @@
 This document describes how to manage the software modules that are installed on a thin-edge device from the
 cloud using the **software management** feature of thin-edge.io.
 
-> Note: As of now, this feature is supported only on devices with **debian** based
- distributions, which use the **apt** package manager(Ex: RaspberryPi OS , Ubuntu, Debian), from Cumulocity cloud.
+> Note: This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
+> Other package managers can be supported by adding a plugin.
+> About writing a plugin, see [here](./write-my-software-management-plugin.md).
+
+> Important: As of now, this feature supports only Cumulocity cloud.
 
 Three components are required on your devices to enable software management:
 
@@ -93,8 +96,8 @@ If there is only one plugin installed on the device, then implicitly this will b
 
 ### Usage of `default plugin`
 
-When the default plugin is set, then the software operation does not need to provide an explicit type of the software, then the default will be used.
-In Cumulocity, one can then simply provide the package to update without having to annotate the version field with its type.
+When the default plugin is set, then the software operation does not need to provide an explicit type of the software, then the default will be used.
+In Cumulocity, one can then simply provide the package to update without having to annotate the version field with its type.
 
 ### Configuring the default plugin
 
