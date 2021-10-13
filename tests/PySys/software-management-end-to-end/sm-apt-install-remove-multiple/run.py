@@ -30,21 +30,21 @@ class PySysTest(SoftwareManagement):
                 "action": act,
                 "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
-                "url": " ",
+                #"url": " ",
                 "version": "::apt",  # apt manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("robotfindskitten"),
                 "name": "robotfindskitten",
-                "url": " ",
+                #"url": " ",
                 "version": "::apt",  # apt manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
-                "url": " ",
+                #"url": " ",
                 "version": "::apt",  # apt manager
             },
         ]

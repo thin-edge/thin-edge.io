@@ -161,7 +161,7 @@ class SoftwareManagement(EnvironmentC8y):
                     "name": package_name,
                     "id": package_id,
                     "version": version,
-                    "url": url,
+                    #"url": url,
                     "action": action,
                 }
             ]

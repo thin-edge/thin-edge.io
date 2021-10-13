@@ -29,21 +29,21 @@ class PySysTest(SoftwareManagement):
                 "action": act,
                 "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
-                "url": " ",
+                #"url": " ",
                 "version": "::apt",  # apt manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("robotfindskitten"),
                 "name": "robotfindskitten",
-                "url": " ",
+                #"url": " ",
                 "version": " ",  # default manager
             },
             {
                 "action": act,
                 "id": self.get_pkgid("squirrel3"),
                 "name": "squirrel3",
-                "url": " ",
+                #"url": " ",
                 "version": self.get_pkg_version("squirrel3")
                 + "::apt",  # version and manager
             },
@@ -51,21 +51,21 @@ class PySysTest(SoftwareManagement):
                 "action": act,
                 "id": self.get_pkgid("rolldice"),
                 "name": "rolldice",
-                "url": " ",
+                #"url": " ",
                 "version": self.get_pkg_version("rolldice"),  # only version
             },
             {
                 "action": act,
                 "id": self.get_pkgid("moon-buggy"),
                 "name": "moon-buggy",
-                "url": " ",
+                #"url": " ",
                 "version": self.get_pkg_version("moon-buggy"),  # nothing special
             },
             {
                 "action": act,
                 "id": self.get_pkgid("asciijump"),
                 "name": "asciijump",
-                "url": " ",
+                #"url": " ",
                 "version": "::apt",  # again same as above
             },
         ]
