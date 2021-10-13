@@ -142,7 +142,7 @@ jobs:
           workflow_conclusion: success
           branch: continuous_integration
           name: examples_armv7-unknown-linux-gnueabihf
-          path: examples
+          path: /home/pi/examples
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
@@ -216,7 +216,7 @@ jobs:
           workflow_conclusion: success
           branch: continuous_integration
           name: examples_armv7-unknown-linux-gnueabihf
-          path: examples
+          path: /home/pi/examples
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
