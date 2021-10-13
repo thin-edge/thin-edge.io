@@ -44,6 +44,7 @@ To remove
 
 """
 
+from environment_c8y import EnvironmentC8y
 import base64
 import time
 import json
@@ -56,7 +57,6 @@ import pysys
 from pysys.basetest import BaseTest
 
 sys.path.append("./environments")
-from environment_c8y import EnvironmentC8y
 
 
 def is_timezone_aware(stamp):
@@ -82,33 +82,46 @@ class SoftwareManagement(EnvironmentC8y):
 
     fakeplugin = None
 
+    # Static class member that can be overriden by a command line argument
+    # E.g.:
+    # pysys.py run 'sm-docker*' -Xdockerplugin='dockerplugin'
+    # Use it only when you have set up the docker_plugin
+
+    dockerplugin = None
+
     tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "smcontainer":
-            self.skipTest("Testing the apt plugin is not supported on this platform")
+            self.skipTest(
+                "Testing the apt plugin is not supported on this platform."+\
+                    "Use parameter -XmyPlatform='smcontainer' to enable it")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
         self.pkg_id_db = {
             # apt
-            "asciijump": "5475278",
-            "robotfindskitten": "5473003",
-            "squirrel3": "5474871",
-            "rolldice": "5445239",
+            "asciijump": "5475369",
+            "robotfindskitten": "5474869",
+            "squirrel3": "5475279",
+            "rolldice": "5152439",
             "moon-buggy": "5439204",
             # fake plugin
             "apple": "5495053",
             "banana": "5494888",
             "cherry": "5495382",
             "watermelon": "5494510",
+            # # docker plugin
+            "registry": "8018911",
+            "hello-world": "8021526",
+            "docker/getting-started": "8021973",
         }
 
         if self.project.c8yswrepo:
             self.pkg_id_db = json.loads(self.project.c8yswrepo)
-        self.log.info("Using sw id database: %s"%self.pkg_id_db)
+        self.log.info("Using sw id database: %s"% self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -201,6 +214,14 @@ class SoftwareManagement(EnvironmentC8y):
         return self.check_status_of_last_operation("SUCCESSFUL")
 
     def get_status_of_last_operation(self):
+        """Returns the status of the last operation:
+        "FAILED" or "SUCCESSFUL".
+        When there is now last operation listened in C8Y return "NOOPFOUND".
+
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
+        """
 
         params = {
             "deviceId": self.project.deviceid,
@@ -228,7 +249,7 @@ class SoftwareManagement(EnvironmentC8y):
         if not jresponse["operations"]:
             # This can happen e.g. after a weekend when C8y deleted the operations
             self.log.error("No operations found, assuming it passed")
-            return True
+            return "NOOPFOUND"
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
@@ -256,13 +277,14 @@ class SoftwareManagement(EnvironmentC8y):
         return operation.get("status")
 
     def check_status_of_last_operation(self, status):
-        """Check if the last operation is successfull.
-        Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
-        revert it or not.
+        """Check if the last operation is equal to status.
+        If none was found, return true
         """
 
         current_status = self.get_status_of_last_operation()
+
+        if current_status == "NOOPFOUND":
+            return True
 
         return current_status == status
 
@@ -292,7 +314,8 @@ class SoftwareManagement(EnvironmentC8y):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
         current_status = self.get_status_of_operation()
-        self.log.info("Expected status: %s, got status %s" % (status, current_status))
+        self.log.info("Expected status: %s, got status %s" %
+                      (status, current_status))
         return current_status == status
 
     def wait_until_succcess(self):
@@ -314,9 +337,9 @@ class SoftwareManagement(EnvironmentC8y):
 
         # Heuristic about how long to wait for a operation
         if platform.machine() == "x86_64":
-            wait_time = int(40 / poll_period)
+            wait_time = int(90 / poll_period)
         else:
-            wait_time = int(90 / poll_period)  # 90s on the Rpi
+            wait_time = int(120 / poll_period)  # 90s on the Rpi
 
         timeout = 0
 
@@ -336,7 +359,8 @@ class SoftwareManagement(EnvironmentC8y):
             else:
 
                 current_status = self.get_status_of_last_operation()
-                if current_status == status or current_status == status2:
+
+                if current_status == status or current_status == status2 or current_status == "NOOPFOUND":
                     # Invalidate the old operation
                     self.operation_id = None
                     break
@@ -346,7 +370,8 @@ class SoftwareManagement(EnvironmentC8y):
             timeout += 1
             if timeout > wait_time:
                 raise SystemError(
-                    "Timeout while waiting for status %s or %s" % (status, status2)
+                    "Timeout while waiting for status %s or %s" % (
+                        status, status2)
                 )
 
     def check_is_installed(self, package_name, version=None):
@@ -383,7 +408,8 @@ class SoftwareManagement(EnvironmentC8y):
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
         """
-        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
+        output = subprocess.check_output(
+            ["/usr/bin/apt-cache", "madison", pkg])
 
         # Lets assume it is the package in the first line of the output
         return output.split()[2].decode("ascii")  # E.g. "1.16-1+b3"
