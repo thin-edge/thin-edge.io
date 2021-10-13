@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    use json_sm::{SoftwareError, SoftwareModule};
+    use assert_matches::assert_matches;
+    use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
     use tokio::fs::File;
@@ -207,6 +208,81 @@ mod tests {
 
         // A software module without an explicit type can be handled by any plugin, which in practice is the default plugin.
         assert_eq!(res, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn plugin_get_command_update_list() {
+        // Prepare dummy plugin with .0 which will give specific exit code ==0.
+        let (plugin, _plugin_path) = get_dummy_plugin("test");
+
+        // Create list of modules to perform plugin update-list API call containing valid input.
+        let module1 = SoftwareModule {
+            module_type: Some("test".into()),
+            name: "test1".into(),
+            version: None,
+            url: None,
+            file_path: None,
+        };
+        let module2 = SoftwareModule {
+            module_type: Some("test".into()),
+            name: "test2".into(),
+            version: None,
+            url: None,
+            file_path: None,
+        };
+
+        let mut logger = dev_null().await;
+        // Call plugin update-list via API.
+        let res = plugin
+            .update_list(
+                &vec![
+                    SoftwareModuleUpdate::Install { module: module1 },
+                    SoftwareModuleUpdate::Remove { module: module2 },
+                ],
+                &mut logger,
+            )
+            .await;
+
+        // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
+        assert_matches!(res, Err(SoftwareError::UpdateListNotSupported(_)));
+    }
+
+    // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
+    #[tokio::test]
+    async fn plugin_command_update_list_fallback() {
+        // Prepare dummy plugin with .0 which will give specific exit code ==0.
+        let (plugin, _plugin_path) = get_dummy_plugin("test");
+
+        // Create list of modules to perform plugin update-list API call containing valid input.
+        let module1 = SoftwareModule {
+            module_type: Some("test".into()),
+            name: "test1".into(),
+            version: None,
+            url: None,
+            file_path: None,
+        };
+        let module2 = SoftwareModule {
+            module_type: Some("test".into()),
+            name: "test2".into(),
+            version: None,
+            url: None,
+            file_path: None,
+        };
+
+        let mut logger = dev_null().await;
+        // Call plugin update-list via API.
+        let errors = plugin
+            .apply_all(
+                vec![
+                    SoftwareModuleUpdate::Install { module: module1 },
+                    SoftwareModuleUpdate::Remove { module: module2 },
+                ],
+                &mut logger,
+            )
+            .await;
+
+        // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
+        assert!(errors.is_empty());
     }
 
     fn get_dummy_plugin_path() -> PathBuf {

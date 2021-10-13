@@ -1,14 +1,13 @@
 #!/usr/bin/sh
 
-# This script is intended to be executed by a GitHub self-hosted runner
-# on a Raspberry Pi.
-# TODO: Introduce certificate management
-
-# Smoke test
+# Smoke test for Cumulocity
 # - Rebuild bridge
 # - Publish some values with tedge cli
 # - Run a smoke test for c8y smartREST
 # - Run a smoke test for c8y Thin Edge JSON
+
+# This script is intended to be executed by a GitHub self-hosted runner
+# on a Raspberry Pi.
 
 # Command line parameters:
 # ci_smoke_test.sh  <timezone>
@@ -18,6 +17,7 @@
 #    C8YTENANT
 #    C8YPASS
 #    C8YDEVICEID
+#    EXAMPLEDIR
 
 # a simple function to append lines to files if not already there
 appendtofile() {
@@ -64,6 +64,20 @@ if [ -z $C8YPASS ]; then
     exit 1
 else
     echo "Your password: HIDDEN"
+fi
+
+if [ -z $EXAMPLEDIR ]; then
+    echo "Error: Please supply the path to the sawtooth_publisher as EXAMPLEDIR"
+    exit 1
+else
+    echo "Your exampledir: $EXAMPLEDIR"
+fi
+
+if [ -z $TEBASEDIR ]; then
+    echo "Error: Please supply the path to the sawtooth_publisher as TEBASEDIR"
+    exit 1
+else
+    echo "Your thin edge base dir: $TEBASEDIR"
 fi
 
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
@@ -113,20 +127,13 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m REST -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
 
-# Set executable bit as it was just downloaded
-chmod +x ./examples/sawtooth_publisher
-
-# Make a backup so that we can use it later, github will clean up after running
-# TODO: Find a better solution for binary management
-cp ./examples/sawtooth_publisher ~/
-
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub ./examples/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m JSON -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
 echo "Disonnect again"
 sudo tedge disconnect c8y

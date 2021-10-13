@@ -47,6 +47,12 @@ pub enum SoftwareError {
         reason: String,
     },
 
+    #[error("Failed to execute updates for {software_type:?}")]
+    UpdateList {
+        software_type: SoftwareType,
+        reason: String,
+    },
+
     #[error("Unknown {software_type:?} module: {name:?}")]
     UnknownModule {
         software_type: SoftwareType,
@@ -71,6 +77,9 @@ pub enum SoftwareError {
 
     #[error("The configured default plugin: {0} not found")]
     InvalidDefaultPlugin(String),
+
+    #[error("The update-list command is not supported by this: {0} plugin")]
+    UpdateListNotSupported(String),
 
     #[error("I/O error: {reason:?}")]
     IoError { reason: String },

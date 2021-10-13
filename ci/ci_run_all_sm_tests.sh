@@ -12,6 +12,9 @@
 # TIMEZONE : Your timezone (temporary)
 # TEBASEDIR : Base directory for the Thin-Edge repo
 # EXAMPLEDIR : The direcory of the sawtooth example
+# C8YURL : e.g. https://thin-edge-io.eu-latest.cumulocity.com
+
+
 
 set -e
 
@@ -26,5 +29,5 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run -v DEBUG
+pysys.py run -v DEBUG 'sm-apt-*' -XmyPlatform='smcontainer'
 deactivate
