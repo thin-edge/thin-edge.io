@@ -1,8 +1,8 @@
 [package]
 name = "tedge_mapper"
 version = "0.4.0"
-edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
 license = "Apache-2.0"
 description = "tedge_mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
 
