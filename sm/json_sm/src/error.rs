@@ -1,4 +1,5 @@
 use crate::software::{SoftwareModule, SoftwareName, SoftwareType, SoftwareVersion};
+use csv;
 
 use serde::{Deserialize, Serialize};
 
@@ -83,8 +84,8 @@ pub enum SoftwareError {
     #[error("I/O error: {reason:?}")]
     IoError { reason: String },
 
-    #[error("Plugin output contains invalid UTF-8 characters")]
-    NonUtf8Output,
+    #[error("CSV error: {reason:?}")]
+    FromCSV { reason: String },
 }
 
 impl From<serde_json::Error> for SoftwareError {
@@ -98,6 +99,14 @@ impl From<serde_json::Error> for SoftwareError {
 impl From<std::io::Error> for SoftwareError {
     fn from(err: std::io::Error) -> Self {
         SoftwareError::IoError {
+            reason: format!("{}", err),
+        }
+    }
+}
+
+impl From<csv::Error> for SoftwareError {
+    fn from(err: csv::Error) -> Self {
+        SoftwareError::FromCSV {
             reason: format!("{}", err),
         }
     }
