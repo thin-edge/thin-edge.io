@@ -436,4 +436,5 @@ You can also refer to:
 
 - the specification of the [Package Manager Plugin API](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
 - [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/sm/plugins/tedge_apt_plugin) written in Rust. 
-
+- [the example Docker plugin](https://github.com/thin-edge/thin-edge.io/blob/main/sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh) written in POSIX standard shell script.
+  This plugin can install/remove docker containers using docker image tags. This plugin is **not** to be used in production without necessary enhancements. It is to be used only as a reference to write your own plugin.
