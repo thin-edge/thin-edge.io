@@ -147,6 +147,20 @@ jobs:
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
 
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
         env:
@@ -223,6 +237,20 @@ jobs:
 
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh

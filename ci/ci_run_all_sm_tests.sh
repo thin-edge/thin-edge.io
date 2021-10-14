@@ -24,7 +24,7 @@ dpkg -s mosquitto-clients
 
 sudo cp sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
 
-sudo cp /home/micha/thin-edge.io/target/debug/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
 
 sudo tedge config set software.plugin.default apt
 
