@@ -5,9 +5,9 @@ cloud using the **software management** feature of thin-edge.io.
 
 > Note: This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
 > Other package managers can be supported by adding a plugin.
-> About writing a plugin, see [here](./write-my-software-management-plugin.md).
+> Refer to [this](./write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
 
-> Important: As of now, this feature supports only Cumulocity cloud.
+> Important: As of now, software management feature is supported only from Cumulocity cloud.
 
 Three components are required on your devices to enable software management:
 
