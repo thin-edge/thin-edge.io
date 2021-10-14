@@ -5,7 +5,7 @@ from environment_apt_plugin import AptPlugin
 """
 Validate apt plugin install from local file AND with a version - SUCCESS case
 
-Using `rolldice` package from `_ROLLDICE_URL` bellow
+Using `rolldice` package from `rolldice_url` bellow
 """
 
 
@@ -23,7 +23,7 @@ class AptPluginInstallFromLocalFileWithVersion(AptPlugin):
 
     def setup(self):
         super().setup()
-        self._download_rolldice_binary(url=self._ROLLDICE_URL)          # downloading the binary
+        self._download_rolldice_binary(url=self.get_rolldice_package_url()) # downloading the binary
         self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked

@@ -14,6 +14,7 @@ To run the tests:
 """
 
 import os
+import platform
 import requests
 from pysys.basetest import BaseTest
 
@@ -27,7 +28,8 @@ class AptPlugin(BaseTest):
 
     def setup(self):
         if self.myPlatform != 'container':
-            self.skipTest('Testing the apt plugin is not supported on this platform')
+            self.skipTest("Testing the apt plugin is not supported on this platform." +\
+                "To run the tests call PySys with -XmyPlatform='container'")
 
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"
@@ -118,3 +120,19 @@ class AptPlugin(BaseTest):
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk: # filter out keep-alive new chunks
                     f.write(chunk)
+
+    def get_rolldice_package_url(self):
+        """Return OS version and arch dependent version of the rolldice url
+        TODO Make this function always find the right url even in the case of version updates
+        """
+
+        if platform.machine() == "x86_64":
+            rolldice_url = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
+        elif platform.machine() == 'armv7l':
+            # Raspberry Pi OS
+            rolldice_url = "http://raspbian.raspberrypi.org/raspbian/pool/main/r/rolldice/rolldice_1.16-1+b2_armhf.deb"
+            #Mythic Beasts (from /etc/apt/sources.list)
+            #rolldice_url = "http://archive.raspbian.org/raspbian/pool/main/r/rolldice/rolldice_1.16-1%2Bb2_armhf.deb"
+
+        return rolldice_url
+
