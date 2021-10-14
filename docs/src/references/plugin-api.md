@@ -61,7 +61,7 @@ On start-up and sighup, the sm-agent registers the plugins as follow:
 ### The `list` command
 
 When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin,
-in CSV with tabulations separated format.
+using tab separated values.
 
 ```shell
 $ debian-plugin list
@@ -75,7 +75,7 @@ Contract:
 * This command take no arguments.
 * If an error status is returned, the executable is removed from the list of plugins.
 * The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values).
-  The first value in the tab separated values must be name of the module and the second value must be the version of the module.
+  Each line has two values separated by a tab: the name of the module then the version of that module.
 ### The `prepare` command
 
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands

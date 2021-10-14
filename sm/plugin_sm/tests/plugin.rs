@@ -46,7 +46,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = format!("abc\t1.0");
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
@@ -80,7 +80,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = format!("abc\t1.0");
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
@@ -112,7 +112,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = format!("abc\t1.0");
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
