@@ -60,23 +60,22 @@ On start-up and sighup, the sm-agent registers the plugins as follow:
 
 ### The `list` command
 
-When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin.
+When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin,
+using tab separated values.
 
 ```shell
 $ debian-plugin list
 ...
-{"name":"collectd-core","version":"5.8.1-1.3"}
-{"name":"mosquitto","version":"1.5.7-1+deb10u1"}
+collectd-core  5.8.1-1.3
+mosquitto   1.5.7-1+deb10u1
 ...
 ```
 
 Contract:
 * This command take no arguments.
 * If an error status is returned, the executable is removed from the list of plugins.
-* The list is returned using the [jsonlines](https://jsonlines.org/) format.
-  * __`name`__: the name of the module. This name is the name that has been used to install it and that need to be used to remove it.
-  * __`version`__: the version currently installed. This is a string that can only been interpreted in the context of the plugin.
-
+* The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values).
+  Each line has two values separated by a tab: the name of the module then the version of that module.
 ### The `prepare` command
 
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands
@@ -197,12 +196,13 @@ This can be needed when order of processing software modules is relevant - e.g. 
 ```shell
 # building list of software modules and operations, 
 # and passing to plugin's stdin via pipe:
+# NOTE that each argument is tab separated:
 
 $ echo '\
-install "name1" "version1" "path1"
-install "name2" "version2" ""
-remove  "name3" "version3"
-remove  "some name with spaces" ""' \
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3
+  remove	name4'\
  | plugin update-list
 ```
 
@@ -212,8 +212,7 @@ Contract:
     package-by-package using original commands `install` and `remove`.
   * If a plugin implements this command sm-agent uses it instead of original commands `install` and `remove`.
 * This command takes no commandline arguments, but expects a software list sent from sm-agent to plugin's `stdin`.
-* In the software list each software module is represented by exactly one line. That line is formatted as a usual shell commandline argument list.
-* Each of a software module's commandline argument list is treated as shell does, i.E. quotes and escapes can be used.
+* In the software list each software module is represented by exactly one line, using tab separated values.
 * The position of each argument in the argument list has it's defined meaning:
   * 1st argument: Is the operation and can be `install` or `remove`
   * 2nd argument: Is the software module's name.
@@ -224,14 +223,14 @@ Contract:
   * For details about `exitstatus` see accoring specification of original command `install` or `remove`.
 * An overall error must be reported (via process's exit status) when at least one software module operation has failed.
 
-Example how to invoke that plugin command `update-list`:
+Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:
 
 ```shell
 $ plugin update-list <<EOF
-install name1 version1
-install name2 "" path2
-remove "name 3" version3
-remove name4
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3
+  remove	name4
 EOF
 ```
 
@@ -246,32 +245,14 @@ $ plugin remove name4
 
 Exemplary implementation of a shell script for parsing software list from `stdin`:
 
+Note that this example works only in bash.
 ```shell
-#!/bin/sh
-
-read_module() {
-    if [ $# -lt 3 ]
-    then
-      echo "Missing version or path for sw-module '${1}'"
-    else
-      mOperation=${1}
-      shift
-      mName=${1}
-      shift
-      mVersion=${1}
-      shift
-      mPath=${1}
-      shift
-      echo "$mOperation, $mName, $mVersion, $mPath"
-    fi
-}
+#!/bin/bash
 
 echo ""
 echo "---+++ reading software list +++---"
-while read -r line;
+while IFS=$'\t' read -r ACTION MODULE VERSION FILE
 do
-  # convert line to command-line argument array
-  eval "moduleArray=($line)";
-  read_module "${moduleArray[@]}"
+    echo "$0 $ACTION $MODULE $VERSION"
 done
 ```
