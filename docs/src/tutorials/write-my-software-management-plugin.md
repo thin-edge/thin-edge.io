@@ -24,7 +24,7 @@ IMAGE_NAME="$2"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         docker pull $IMAGE_NAME || exit 2
@@ -48,23 +48,23 @@ exit 0
 
 If you execute `./docker list`, you will see this kind of output.
 
-```json
-{"name":"alpine","version":"3.14"}
-{"name":"eclipse-mosquitto","version":"2.0-openssl"}
+```csv
+alpine  3.14
+eclipse-mosquitto   2.0-openssl
 ...
 ```
 
 The Software Management Agent runs executable plugins with a special argument, like `list`.
 Let's call the pre-defined argument such as `list`, `install`, and `remove` a **command** here. 
 As you can see from this example, a plugin should be an executable file 
-that accepts the commands and outputs to stdout and stderr in the defined JSON Lines format. 
+that accepts the commands and outputs to stdout and stderr.
 Hence, you can implement a plugin in your preferred language.
 
 Here is the table of the commands that you can use in a plugin.
 
 |Command|Input arguments|Expected output|Description|
 |---|---|---|---|
-|list| - | JSON Lines |Returns the list of software modules that have been installed with this plugin.|
+|list| - | lines with tab separated values |Returns the list of software modules that have been installed with this plugin.|
 |prepare| - | - |Executes the provided actions before a sequence of install and remove commands.|
 |finalize| - | - |Executes the provided actions after a sequence of install and remove commands.|
 |install| NAME [--version VERSION] [--file FILE] | - |Executes the action of installation.|
@@ -107,7 +107,8 @@ The `list` command is responsible to return the list of the installed software m
 Rules:
 
 - This command takes no arguments.
-- The output must be in [the JSON Lines format](https://jsonlines.org/) including:
+- The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values),
+  including:
   - **name**: the name of the software module, e.g. `mosquitto`.
   This name is the name that has been used to install it and that needs to be used to remove it.
   - **version**: the version currently installed.
@@ -123,25 +124,24 @@ to report the list of software modules installed.
 
 > **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
 
-`docker` should output in the JSON lines format like
+`docker` should output in the CSV with tabulations as separators like
 
-```json
-{"name":"alpine","version":"3.14"}
-{"name":"eclipse-mosquitto","version":"2.0-openssl"}
-{"name":"rust","version":"1.51-alpine"}
+```csv
+alpine  3.14
+eclipse-mosquitto   2.0-openssl
+rust    1.51-alpine
 ```
 
 with exit code `0` (successful).
 
 In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
-This requirement comes from the JSON Lines specifications.
 
-A plugin must return this JSON structure per software module.
-In the _docker_ file example, the following command outputs such JSON structures.
+A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
+In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
 ```shell
-docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}'
+docker image list --format '{{.Repository}}\t{{.Tag}}'
 ```
 
 ## Prepare
@@ -225,7 +225,7 @@ IMAGE_TAG="$4"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         if [ $# -eq 2 ]; then
@@ -370,7 +370,7 @@ COMMAND="$1"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         echo docker pull "$2:$3"
