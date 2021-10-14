@@ -197,12 +197,13 @@ This can be needed when order of processing software modules is relevant - e.g. 
 ```shell
 # building list of software modules and operations, 
 # and passing to plugin's stdin via pipe:
+# NOTE that each argument is tab separated:
 
 $ echo '\
   install	name1	version1
   install	name2		path2
-  remove	name3	version3	
-  remove	name4			' \
+  remove	name3	version3
+  remove	name4'\
  | plugin update-list
 ```
 
@@ -224,14 +225,14 @@ Contract:
   * For details about `exitstatus` see accoring specification of original command `install` or `remove`.
 * An overall error must be reported (via process's exit status) when at least one software module operation has failed.
 
-Example how to invoke that plugin command `update-list`:
+Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:
 
 ```shell
 $ plugin update-list <<EOF
   install	name1	version1
   install	name2		path2
-  remove	name3	version3	
-  remove	name4			
+  remove	name3	version3
+  remove	name4
 EOF
 ```
 
@@ -246,12 +247,13 @@ $ plugin remove name4
 
 Exemplary implementation of a shell script for parsing software list from `stdin`:
 
+Note that this example works only in bash.
 ```shell
-#!/bin/sh
+#!/bin/bash
 
 echo ""
 echo "---+++ reading software list +++---"
-while IFS=$'	' read -r ACTION MODULE VERSION FILE
+while IFS=$'\t' read -r ACTION MODULE VERSION FILE
 do
     echo "$0 $ACTION $MODULE $VERSION"
 done

@@ -339,8 +339,8 @@ The Software Management Agent calls a plugin as below. Note that each argument i
 $ sudo /etc/tedge/sm-plugins/docker update-list <<EOF
   install	name1	version1
   install	name2		path2
-  remove	name3	version3	
-  remove	name4			
+  remove	name3	version3
+  remove	name4
 EOF
 ```
 
@@ -368,36 +368,6 @@ Filename: /etc/tedge/sm-plugins/docker
 
 COMMAND="$1"
 
-read_module() {
-    if [ $# -lt 2 ]; then
-        echo "Missing version or path for sw-module '${1}'"
-        exit 1
-    elif [ $# -eq 2 ]; then
-        mOperation="$1"
-        mName="$2"
-        case "$mOperation" in
-            install)
-                docker pull $mName || exit 2
-                ;;
-            remove)
-                docker rmi $mName || exit 2
-                ;;
-        esac
-    else
-        mOperation="$1"
-        mName="$2"
-        mVersion="$3"
-        case "$mOperation" in
-            install)
-                docker pull $mName:$mVersion || exit 2
-                ;;
-            remove)
-                docker rmi $mName:$mVersion || exit 2
-                ;;
-        esac
-    fi
-}
-
 case "$COMMAND" in
     list)
         docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
@@ -415,9 +385,9 @@ case "$COMMAND" in
     finalize)
         ;;
     update-list)
-        while IFS=$'	' read -r ACTION MODULE VERSION FILE
+        while IFS=$'\t' read -r ACTION MODULE VERSION FILE
         do
-            sh -c "$0 $ACTION $MODULE $VERSION"
+            bash -c "$0 $ACTION $MODULE $VERSION"
         done
         ;;
 esac
