@@ -423,10 +423,10 @@ impl Plugin for ExternalPluginCommand {
                 .from_reader(output.stdout.as_slice());
 
             for module in rdr.deserialize() {
-                let record: SoftwareModuleList = module?;
+                let (name, version): (String, Option<String>) = module?;
                 software_list.push(SoftwareModule {
-                    name: record.name,
-                    version: record.version,
+                    name,
+                    version,
                     module_type: Some(self.name.clone()),
                     file_path: None,
                     url: None,

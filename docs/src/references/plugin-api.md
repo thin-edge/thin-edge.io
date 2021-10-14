@@ -73,7 +73,7 @@ mosquitto   1.5.7-1+deb10u1
 Contract:
 * This command take no arguments.
 * If an error status is returned, the executable is removed from the list of plugins.
-* The list is returned using the [the CSV Lines](https://en.wikipedia.org/wiki/Tab-separated_values) format.
+* The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values).
   * __`name`__: the name of the module. This name is the name that has been used to install it and that need to be used to remove it.
   * __`version`__: the version currently installed. This is a string that can only been interpreted in the context of the plugin.
 

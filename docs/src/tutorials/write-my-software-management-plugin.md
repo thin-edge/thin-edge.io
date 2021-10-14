@@ -57,14 +57,14 @@ eclipse-mosquitto   2.0-openssl
 The Software Management Agent runs executable plugins with a special argument, like `list`.
 Let's call the pre-defined argument such as `list`, `install`, and `remove` a **command** here. 
 As you can see from this example, a plugin should be an executable file 
-that accepts the commands and outputs to stdout and stderr in the defined CSV Lines format. 
+that accepts the commands and outputs to stdout and stderr in the defined CSV with tabulations as separators format. 
 Hence, you can implement a plugin in your preferred language.
 
 Here is the table of the commands that you can use in a plugin.
 
 |Command|Input arguments|Expected output|Description|
 |---|---|---|---|
-|list| - | CSV Lines |Returns the list of software modules that have been installed with this plugin.|
+|list| - | tab separated values |Returns the list of software modules that have been installed with this plugin.|
 |prepare| - | - |Executes the provided actions before a sequence of install and remove commands.|
 |finalize| - | - |Executes the provided actions after a sequence of install and remove commands.|
 |install| NAME [--version VERSION] [--file FILE] | - |Executes the action of installation.|
@@ -107,7 +107,8 @@ The `list` command is responsible to return the list of the installed software m
 Rules:
 
 - This command takes no arguments.
-- The output must be in [the CSV Lines format](https://en.wikipedia.org/wiki/Tab-separated_values) including:
+- The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values),
+  including:
   - **name**: the name of the software module, e.g. `mosquitto`.
   This name is the name that has been used to install it and that needs to be used to remove it.
   - **version**: the version currently installed.
@@ -123,7 +124,7 @@ to report the list of software modules installed.
 
 > **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
 
-`docker` should output in the CSV lines format like
+`docker` should output in the CSV with tabulations as separators like
 
 ```csv
 alpine  3.14
@@ -135,9 +136,8 @@ with exit code `0` (successful).
 
 In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
-This requirement comes from the CSV Lines specifications.
 
-A plugin must return this CSV structure per software module.
+A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
 In the _docker_ file example, the following command outputs such CSV structures.
 
 ```shell
