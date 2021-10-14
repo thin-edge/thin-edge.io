@@ -373,11 +373,9 @@ case "$COMMAND" in
         docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
         ;;
     install)
-        # We use update-list instead
         echo docker pull "$2:$3"
         ;;
     remove)
-        # We use update-list instead
         echo docker rmi "$2:$3"
         ;;
     prepare)
