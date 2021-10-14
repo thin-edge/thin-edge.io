@@ -12,7 +12,7 @@ use std::{
     process::{Command, Stdio},
 };
 use tedge_utils::paths::pathbuf_to_string;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {
@@ -36,6 +36,8 @@ pub trait Plugins {
 
         Ok(module_plugin)
     }
+
+    fn update_default(&mut self, new_default: &Option<SoftwareType>) -> Result<(), SoftwareError>;
 }
 
 #[derive(Debug)]
@@ -57,6 +59,11 @@ impl Plugins for ExternalPlugins {
         } else {
             None
         }
+    }
+
+    fn update_default(&mut self, new_default: &Option<SoftwareType>) -> Result<(), SoftwareError> {
+        self.default_plugin_type = new_default.to_owned();
+        Ok(())
     }
 
     fn by_software_type(&self, software_type: &str) -> Option<&Self::Plugin> {
@@ -97,11 +104,10 @@ impl ExternalPlugins {
                     .by_software_type(default_plugin_type.as_str())
                     .is_none()
                 {
-                    error!(
+                    warn!(
                         "The configured default plugin: {} not found",
                         default_plugin_type
                     );
-                    return Err(SoftwareError::InvalidDefaultPlugin(default_plugin_type));
                 }
                 info!("Default plugin type: {}", default_plugin_type)
             }
