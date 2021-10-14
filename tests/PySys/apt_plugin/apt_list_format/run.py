@@ -1,7 +1,6 @@
 import re
 import pysys
 from pysys.basetest import BaseTest
-import difflib
 
 """
 Validate apt plugin output format
