@@ -333,15 +333,14 @@ esac
 Let's expand the first _docker_ plugin example to use `update-list`.
 First, learn what is the input of `update-list`.
 
-The Software Management Agent calls a plugin as below:
+The Software Management Agent calls a plugin as below. Note that each argument is tab separated:
 
 ```shell
-$ sudo /etc/tedge/sm-plugins/docker update-list 
-<<EOF
-install&emsp;name1&emsp;version1
-install&emsp;name2&emsp;&emsp;path2
-remove&emsp;name3&emsp;version3&emsp;
-remove&emsp;name4
+$ sudo /etc/tedge/sm-plugins/docker update-list <<EOF
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3	
+  remove	name4			
 EOF
 ```
 
@@ -405,11 +404,11 @@ case "$COMMAND" in
         ;;
     install)
         # We use update-list instead
-        exit 1
+        echo docker pull "$2:$3"
         ;;
     remove)
         # We use update-list instead
-        exit 1
+        echo docker rmi "$2:$3"
         ;;
     prepare)
         ;;
@@ -418,7 +417,7 @@ case "$COMMAND" in
     update-list)
         while IFS=$'	' read -r ACTION MODULE VERSION FILE
         do
-            sh -c action=$ACTION module=$MODULE version=$VERSION file=$FILE
+            sh -c "$0 $ACTION $MODULE $VERSION"
         done
         ;;
 esac

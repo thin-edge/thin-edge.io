@@ -199,10 +199,10 @@ This can be needed when order of processing software modules is relevant - e.g. 
 # and passing to plugin's stdin via pipe:
 
 $ echo '\
-install "name1" "version1" "path1"
-install "name2" "version2" ""
-remove  "name3" "version3"
-remove  "some name with spaces" ""' \
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3	
+  remove	name4			' \
  | plugin update-list
 ```
 
@@ -228,10 +228,10 @@ Example how to invoke that plugin command `update-list`:
 
 ```shell
 $ plugin update-list <<EOF
-install name1 version1
-install name2 "" path2
-remove "name 3" version3
-remove name4
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3	
+  remove	name4			
 EOF
 ```
 
@@ -249,29 +249,10 @@ Exemplary implementation of a shell script for parsing software list from `stdin
 ```shell
 #!/bin/sh
 
-read_module() {
-    if [ $# -lt 3 ]
-    then
-      echo "Missing version or path for sw-module '${1}'"
-    else
-      mOperation=${1}
-      shift
-      mName=${1}
-      shift
-      mVersion=${1}
-      shift
-      mPath=${1}
-      shift
-      echo "$mOperation, $mName, $mVersion, $mPath"
-    fi
-}
-
 echo ""
 echo "---+++ reading software list +++---"
-while read -r line;
+while IFS=$'	' read -r ACTION MODULE VERSION FILE
 do
-  # convert line to command-line argument array
-  eval "moduleArray=($line)";
-  read_module "${moduleArray[@]}"
+    echo "$0 $ACTION $MODULE $VERSION"
 done
 ```
