@@ -64,7 +64,7 @@ case "$COMMAND" in
         ;;
     list)
         unsupported_args_check $@
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         # Extract the docker image tag into the IMAGE_TAG variable

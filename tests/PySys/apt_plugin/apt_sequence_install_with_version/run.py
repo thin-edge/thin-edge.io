@@ -60,7 +60,7 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
         # On some systems there is an optional plus sign and b instead of build
         self.assertGrep(
             "outp_check_1.out",
-            '{"name":"rolldice","version":"1.16-1(\+b|build)(1|3)"}',
+            'rolldice\t1.16-1(\+b|build)(1|3)',
             contains=True,
         )
 

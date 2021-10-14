@@ -38,10 +38,7 @@ mod tests {
     async fn plugin_get_command_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = PathBuf::from_str("/tmp/.tedge_dummy_plugin").unwrap();
-        if !&path.exists() {
-            let () = fs::create_dir(&path).unwrap();
-        }
+        let path = get_dummy_plugin_tmp_path();
 
         let mut file = tempfile::Builder::new()
             .suffix(".0")
@@ -49,7 +46,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = r#"{"name":"abc","version":"1.0"}"#;
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
@@ -83,7 +80,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = r#"{"name":"abc","version":"1.0"}"#;
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
@@ -115,7 +112,7 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = r#"{"name":"abc","version":"1.0"}"#;
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
