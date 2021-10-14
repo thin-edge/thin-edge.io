@@ -57,14 +57,14 @@ eclipse-mosquitto   2.0-openssl
 The Software Management Agent runs executable plugins with a special argument, like `list`.
 Let's call the pre-defined argument such as `list`, `install`, and `remove` a **command** here. 
 As you can see from this example, a plugin should be an executable file 
-that accepts the commands and outputs to stdout and stderr in the defined CSV with tabulations as separators format. 
+that accepts the commands and outputs to stdout and stderr.
 Hence, you can implement a plugin in your preferred language.
 
 Here is the table of the commands that you can use in a plugin.
 
 |Command|Input arguments|Expected output|Description|
 |---|---|---|---|
-|list| - | tab separated values |Returns the list of software modules that have been installed with this plugin.|
+|list| - | lines with tab separated values |Returns the list of software modules that have been installed with this plugin.|
 |prepare| - | - |Executes the provided actions before a sequence of install and remove commands.|
 |finalize| - | - |Executes the provided actions after a sequence of install and remove commands.|
 |install| NAME [--version VERSION] [--file FILE] | - |Executes the action of installation.|
@@ -138,7 +138,7 @@ In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
 
 A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
-In the _docker_ file example, the following command outputs such CSV structures.
+In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
 ```shell
 docker image list --format '{{.Repository}}\t{{.Tag}}'
