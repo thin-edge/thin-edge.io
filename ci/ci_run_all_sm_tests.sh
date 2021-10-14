@@ -37,7 +37,7 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run -v DEBUG 'sm-apt-*' -XmyPlatform='smcontainer'
+pysys.py run -v DEBUG 'sm-*' -XmyPlatform='smcontainer'
 deactivate
 
 rm -f /etc/tedge/sm-plugins/docker
