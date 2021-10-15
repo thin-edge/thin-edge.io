@@ -28,7 +28,7 @@ Three components are required on your devices to enable software management:
 
 ## Enable software management feature
 
-Find more information about [how to install and enable software management.](../../howto-guides/0012_install_and_enable_software_management.md)
+Find more information about [how to install and enable software management.](../howto-guides/0012_install_and_enable_software_management.md)
 
 ## Managing the device software **repository** on Cumulocity cloud
 
