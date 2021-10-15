@@ -363,6 +363,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
+                    println!("Received expected response message, connection check is successful.");
                     return Ok(DeviceStatus::AlreadyExists);
                 } else {
                     break;
