@@ -97,7 +97,7 @@ jobs:
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
   system-test-offsite:
-    needs: [install-and-use-rpi]
+    needs: [install-and-use-rpi-offsite]
 #    runs-on: [self-hosted, Linux, ARM, offsite_B]
     runs-on: [self-hosted, Linux, ARM, offsite]
     continue-on-error: true
