@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
-use tempfile::NamedTempFile;
+use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
 const DEFAULT_HOST: &str = "localhost";
@@ -520,16 +519,16 @@ fn write_bridge_config_to_file(
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     let _ = create_directories(&dir_path)?;
 
-    let mut common_temp_file = NamedTempFile::new()?;
-    common_mosquitto_config.serialize(&mut common_temp_file)?;
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let () = persist_tempfile(common_temp_file, &common_config_path)?;
+    let mut common_draft = DraftFile::new(&common_config_path)?;
+    common_mosquitto_config.serialize(&mut common_draft)?;
+    let () = common_draft.persist()?;
 
-    let mut temp_file = NamedTempFile::new()?;
-    bridge_config.serialize(&mut temp_file)?;
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
-    let () = persist_tempfile(temp_file, &config_path)?;
+    let mut config_draft = DraftFile::new(config_path)?;
+    bridge_config.serialize(&mut config_draft)?;
+    let () = config_draft.persist()?;
 
     Ok(())
 }
