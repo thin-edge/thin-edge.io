@@ -18,21 +18,16 @@ import time
 import sys
 
 sys.path.append("software-management-end-to-end")
-from environment_sm_management import SmManagement
+from environment_sm_management import SoftwareManagement
 
-# apple 5495053
-# banana 5494888
-# cherry 5495382
-# "watermelon", "5494510"
-
-
-class PySysTest(SmManagement):
+class PySysTest(SoftwareManagement):
     def setup(self):
-        # if self.myPlatform != "faked-plugin":
-        #    self.skipTest("Testing the apt plugin is not supported on this platform")
+
+        if self.fakeplugin != "fakeplugin":
+            self.skipTest("Testing the apt plugin is not supported on this platform")
 
         super().setup()
-        self.assertThat("False == value", value=self.check_isinstalled("tomatoooo"))
+        self.assertThat("False == value", value=self.check_is_installed("tomatoooo"))
 
     def execute(self):
 
@@ -40,7 +35,7 @@ class PySysTest(SmManagement):
 
         self.wait_until_succcess()
 
-        self.assertThat("True == value", value=self.check_isinstalled("vanilla"))
+        self.assertThat("True == value", value=self.check_is_installed("vanilla"))
 
         self.trigger_action("watermelon", "5494510", "::fruits", "notanurl", "delete")
 
@@ -48,4 +43,4 @@ class PySysTest(SmManagement):
 
     def validate(self):
 
-        self.assertThat("False == value", value=self.check_isinstalled("tomatoooo"))
+        self.assertThat("False == value", value=self.check_is_installed("tomatoooo"))
