@@ -62,12 +62,7 @@ impl BridgeConfig {
         for topic in &self.topics {
             writeln!(writer, "topic {}", topic)?;
         }
-        match &self.remote_username {
-            Some(name) => {
-                writeln!(writer, "remote_username {}", name)?;
-            }
-            None => {}
-        }
+
         Ok(())
     }
 
