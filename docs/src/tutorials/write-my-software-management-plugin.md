@@ -24,7 +24,7 @@ IMAGE_NAME="$2"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         docker pull $IMAGE_NAME || exit 2
@@ -48,23 +48,23 @@ exit 0
 
 If you execute `./docker list`, you will see this kind of output.
 
-```json
-{"name":"alpine","version":"3.14"}
-{"name":"eclipse-mosquitto","version":"2.0-openssl"}
+```csv
+alpine  3.14
+eclipse-mosquitto   2.0-openssl
 ...
 ```
 
 The Software Management Agent runs executable plugins with a special argument, like `list`.
 Let's call the pre-defined argument such as `list`, `install`, and `remove` a **command** here. 
 As you can see from this example, a plugin should be an executable file 
-that accepts the commands and outputs to stdout and stderr in the defined JSON Lines format. 
+that accepts the commands and outputs to stdout and stderr.
 Hence, you can implement a plugin in your preferred language.
 
 Here is the table of the commands that you can use in a plugin.
 
 |Command|Input arguments|Expected output|Description|
 |---|---|---|---|
-|list| - | JSON Lines |Returns the list of software modules that have been installed with this plugin.|
+|list| - | lines with tab separated values |Returns the list of software modules that have been installed with this plugin.|
 |prepare| - | - |Executes the provided actions before a sequence of install and remove commands.|
 |finalize| - | - |Executes the provided actions after a sequence of install and remove commands.|
 |install| NAME [--version VERSION] [--file FILE] | - |Executes the action of installation.|
@@ -107,7 +107,8 @@ The `list` command is responsible to return the list of the installed software m
 Rules:
 
 - This command takes no arguments.
-- The output must be in [the JSON Lines format](https://jsonlines.org/) including:
+- The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values),
+  including:
   - **name**: the name of the software module, e.g. `mosquitto`.
   This name is the name that has been used to install it and that needs to be used to remove it.
   - **version**: the version currently installed.
@@ -123,25 +124,24 @@ to report the list of software modules installed.
 
 > **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
 
-`docker` should output in the JSON lines format like
+`docker` should output in the CSV with tabulations as separators like
 
-```json
-{"name":"alpine","version":"3.14"}
-{"name":"eclipse-mosquitto","version":"2.0-openssl"}
-{"name":"rust","version":"1.51-alpine"}
+```csv
+alpine  3.14
+eclipse-mosquitto   2.0-openssl
+rust    1.51-alpine
 ```
 
 with exit code `0` (successful).
 
 In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
-This requirement comes from the JSON Lines specifications.
 
-A plugin must return this JSON structure per software module.
-In the _docker_ file example, the following command outputs such JSON structures.
+A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
+In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
 ```shell
-docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}'
+docker image list --format '{{.Repository}}\t{{.Tag}}'
 ```
 
 ## Prepare
@@ -225,7 +225,7 @@ IMAGE_TAG="$4"
 
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         if [ $# -eq 2 ]; then
@@ -333,14 +333,14 @@ esac
 Let's expand the first _docker_ plugin example to use `update-list`.
 First, learn what is the input of `update-list`.
 
-The Software Management Agent calls a plugin as below:
+The Software Management Agent calls a plugin as below. Note that each argument is tab separated:
 
 ```shell
 $ sudo /etc/tedge/sm-plugins/docker update-list <<EOF
-install name1 version1
-install name2 "" path2
-remove "name 3" version3
-remove name4
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3
+  remove	name4
 EOF
 ```
 
@@ -368,56 +368,24 @@ Filename: /etc/tedge/sm-plugins/docker
 
 COMMAND="$1"
 
-read_module() {
-    if [ $# -lt 2 ]; then
-        echo "Missing version or path for sw-module '${1}'"
-        exit 1
-    elif [ $# -eq 2 ]; then
-        mOperation="$1"
-        mName="$2"
-        case "$mOperation" in
-            install)
-                docker pull $mName || exit 2
-                ;;
-            remove)
-                docker rmi $mName || exit 2
-                ;;
-        esac
-    else
-        mOperation="$1"
-        mName="$2"
-        mVersion="$3"
-        case "$mOperation" in
-            install)
-                docker pull $mName:$mVersion || exit 2
-                ;;
-            remove)
-                docker rmi $mName:$mVersion || exit 2
-                ;;
-        esac
-    fi
-}
-
 case "$COMMAND" in
     list)
-        docker image list --format '{"name":"{{.Repository}}","version":"{{.Tag}}"}' || exit 2
+        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
-        # We use update-list instead
-        exit 1
+        echo docker pull "$2:$3"
         ;;
     remove)
-        # We use update-list instead
-        exit 1
+        echo docker rmi "$2:$3"
         ;;
     prepare)
         ;;
     finalize)
         ;;
     update-list)
-        while read -r line; do
-            eval "moduleArray=($line)";
-            read_module "${moduleArray[@]}"
+        while IFS=$'\t' read -r ACTION MODULE VERSION FILE
+        do
+            bash -c "$0 $ACTION $MODULE $VERSION"
         done
         ;;
 esac
@@ -436,4 +404,5 @@ You can also refer to:
 
 - the specification of the [Package Manager Plugin API](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
 - [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/sm/plugins/tedge_apt_plugin) written in Rust. 
-
+- [the example Docker plugin](https://github.com/thin-edge/thin-edge.io/blob/main/sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh) written in POSIX standard shell script.
+  This plugin can install/remove docker containers using docker image tags. This plugin is **not** to be used in production without necessary enhancements. It is to be used only as a reference to write your own plugin.

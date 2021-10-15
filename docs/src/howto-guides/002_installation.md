@@ -51,13 +51,13 @@ where:
 Eg:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_0.3.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.4.0/tedge_0.4.0_armhf.deb
 ```
 
 and for `mapper`:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.3.0/tedge_mapper_0.3.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.4.0/tedge_mapper_0.4.0_armhf.deb
 ```
 
 ### Package installation
@@ -75,7 +75,7 @@ dpkg -i tedge_<version>_<arch>.deb
 Eg:
 
 ```shell
-dpkg -i tedge_0.3.0_armhf.deb
+dpkg -i tedge_0.4.0_armhf.deb
 ```
 
 To install mapper for thin-edge.io do:
@@ -87,7 +87,7 @@ dpkg -i tedge_mapper_<version>_<arch>.deb
 Eg:
 
 ```shell
-dpkg -i tedge_mapper_0.3.0_armhf.deb
+dpkg -i tedge_mapper_0.4.0_armhf.deb
 ```
 
 ### Add your user to `tedge-users` group

@@ -3,8 +3,11 @@
 This document describes how to manage the software modules that are installed on a thin-edge device from the
 cloud using the **software management** feature of thin-edge.io.
 
-> Note: As of now, this feature is supported only on devices with **debian** based
- distributions, which use the **apt** package manager(Ex: RaspberryPi OS , Ubuntu, Debian), from Cumulocity cloud.
+> Note: This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
+> Other package managers can be supported by adding a plugin.
+> Refer to [this](./write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
+
+> Important: As of now, software management feature is supported only from Cumulocity cloud.
 
 Three components are required on your devices to enable software management:
 
@@ -25,7 +28,7 @@ Three components are required on your devices to enable software management:
 
 ## Enable software management feature
 
-Find more information about [how to install and enable software management.](../../howto-guides/0012_install_and_enable_software_management.md)
+Find more information about [how to install and enable software management.](../howto-guides/0012_install_and_enable_software_management.md)
 
 ## Managing the device software **repository** on Cumulocity cloud
 
@@ -93,8 +96,8 @@ If there is only one plugin installed on the device, then implicitly this will b
 
 ### Usage of `default plugin`
 
-When the default plugin is set, then the software operation does not need to provide an explicit type of the software, then the default will be used.
-In Cumulocity, one can then simply provide the package to update without having to annotate the version field with its type.
+When the default plugin is set, then the software operation does not need to provide an explicit type of the software, then the default will be used.
+In Cumulocity, one can then simply provide the package to update without having to annotate the version field with its type.
 
 ### Configuring the default plugin
 
