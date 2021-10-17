@@ -210,7 +210,8 @@ impl ConfigSetting for MqttExternalCAPathSetting {
     const DESCRIPTION: &'static str = concat!(
         "Path to a file containing the PEM encoded CA certificates ",
         "that are trusted when checking incoming client certificates. ",
-        "Example: /etc/ssl/certs"
+        "Example: /etc/ssl/certs",
+        "Note: This setting not set implies `require_certificate = false` for external connections."
     );
 
     type Value = FilePath;
@@ -224,7 +225,8 @@ impl ConfigSetting for MqttExternalCertfileSetting {
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the certificate file, which is used by external MQTT listener",
-        "Example: /etc/tedge/device-certs/tedge-certificate.pem"
+        "Example: /etc/tedge/device-certs/tedge-certificate.pem",
+        "Note: This setting shall be used together with `mqtt.external.keyfile` for external connections."
     );
 
     type Value = FilePath;
@@ -238,7 +240,8 @@ impl ConfigSetting for MqttExternalKeyfileSetting {
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the private key file, which is used by external MQTT listener",
-        "Example: /etc/tedge/device-certs/tedge-private-key.pem"
+        "Example: /etc/tedge/device-certs/tedge-private-key.pem",
+        "Note: This setting shall be used together with `mqtt.external.certfile` for external connections."
     );
 
     type Value = FilePath;

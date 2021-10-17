@@ -1,3 +1,5 @@
+use crate::cli::connect::ConnectError;
+
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,7 +49,7 @@ impl ListenerConfig {
         writeln!(writer, "{} {}", key, value)
     }
     pub fn write(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
-        let bind_address = self.bind_address.clone().unwrap_or("".to_string());
+        let bind_address = self.bind_address.clone().unwrap_or_else(|| "".to_string());
         let maybe_listener = self
             .port
             .as_ref()
@@ -122,6 +124,15 @@ impl CommonMosquittoConfig {
         Ok(())
     }
 
+    pub fn serialize_external_listener<W: std::io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
+        self.external_listener.write(writer)?;
+
+        Ok(())
+    }
+
     pub fn with_internal_opts(self, port: u16) -> Self {
         let internal_listener = ListenerConfig {
             port: Some(port),
@@ -142,15 +153,27 @@ impl CommonMosquittoConfig {
         certfile: Option<String>,
         keyfile: Option<String>,
     ) -> Self {
-        let external_listener = ListenerConfig {
+        let mut external_listener = ListenerConfig {
             port,
             bind_address,
             bind_interface,
-            capath: capath,
-            certfile: certfile,
-            keyfile: keyfile,
+            capath,
+            certfile,
+            keyfile,
             ..self.external_listener
         };
+
+        if external_listener.capath.is_none() {
+            external_listener.require_certificate = false;
+        }
+
+        if external_listener.capath.is_none()
+            && external_listener.certfile.is_none()
+            && external_listener.keyfile.is_none()
+        {
+            external_listener.allow_anonymous = true;
+        }
+
         Self {
             external_listener,
             ..self
