@@ -18,9 +18,6 @@ pub enum ConnectError {
     #[error(transparent)]
     PathsError(#[from] tedge_utils::paths::PathsError),
 
-    #[error(transparent)]
-    PersistError(#[from] tempfile::PersistError),
-
     #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
 
