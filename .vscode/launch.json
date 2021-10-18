@@ -94,6 +94,31 @@
                 "C8YDEVICEID": "798",
                 "EXAMPLEDIR": "${workspaceFolder}/target/debug/examples",
             }
+        },
+        {
+
+                "name": "Python: Module 2",
+                "type": "python",
+                "request": "launch",
+                "module": "pysys",
+                "args": [
+                    "run",
+                    "docker_plugin_remove",
+                    "-XmyPlatform=container",
+                    "-Xdockerplugin=dockerplugin",
+                    "-Xfakeplugin=fakeplugin"
+                ],
+                "cwd": "${workspaceFolder}/tests/PySys/",
+                "env": {
+                    "PYSYS_APP_HOME": "${workspaceFolder}/tests/PySys",
+                    "TEBASEDIR": "~/thin-edge.io/",
+                    "C8YUSERNAME": "octocat",
+                    "C8YPASS": "9GKZCTa5oNkbZk65",
+                    "C8YDEVICE": "eulatestisonoe",
+                    "C8YTENANT": "t493319102",
+                    "C8YDEVICEID": "798",
+                    "EXAMPLEDIR": "${workspaceFolder}/target/debug/examples",
+                }
         }
     ]
 }
