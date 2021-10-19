@@ -42,6 +42,6 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run -v DEBUG --exclude 'publish_sawmill_record_statistics*'
+pysys.py run -v DEBUG --exclude publish_sawmill_record_statistics --exclude publish_sawmill_record_statistics_long
 
 deactivate
