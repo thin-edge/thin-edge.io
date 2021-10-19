@@ -130,7 +130,7 @@ class AptPlugin(BaseTest):
             rolldice_url = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
         elif platform.machine() == 'armv7l':
             # Raspberry Pi OS
-            rolldice_url = "http://raspbian.raspberrypi.org/raspbian/pool/main/r/rolldice/rolldice_1.16-1+b2_armhf.deb"
+            rolldice_url = "http://raspbian.raspberrypi.org/raspbian/pool/main/r/rolldice/rolldice_1.16-1+b1_armhf.deb"
             #Mythic Beasts (from /etc/apt/sources.list)
             #rolldice_url = "http://archive.raspbian.org/raspbian/pool/main/r/rolldice/rolldice_1.16-1%2Bb2_armhf.deb"
 
