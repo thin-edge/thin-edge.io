@@ -58,6 +58,18 @@ jobs:
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
