@@ -7,6 +7,7 @@ use json_sm::{
 use std::{iter::Iterator, path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
+use tracing::error;
 
 #[async_trait]
 pub trait Plugin {
@@ -164,10 +165,10 @@ pub trait Plugin {
                     url: url.url().to_string(),
                 })
         {
+            error!("Download error: {}", &err);
             logger
                 .write_all(format!("error: {}\n", &err).as_bytes())
                 .await?;
-
             return Err(err);
         }
 
