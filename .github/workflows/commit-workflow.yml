@@ -140,14 +140,12 @@ jobs:
           token: ${{secrets.CODECOV_TOKEN}}
 
   cargo-audit:
-
     name: Run cargo audit
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
-
+    continue-on-error: true
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
