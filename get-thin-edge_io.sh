@@ -17,12 +17,31 @@ OPTIONS:
 EOF
 }
 
+install_basic_components() {
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
+
+    dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
+    dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
+
+}
+
+install_tedge_agent() {
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_agent_${VERSION}_${ARCH}.deb -P /tmp/tedge
+
+    dpkg -i /tmp/tedge/tedge_agent_${VERSION}_${ARCH}.deb
+}
+
+install_tedge_plugins() {
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb
+}
+
 if [ $# -lt 3 ]; then
     while :; do
         case $1 in
         --minimal)
             TYPE="minimal"
-            echo here
             shift
             ;;
         *) break ;;
@@ -54,10 +73,6 @@ if [ -z "$VERSION" ]; then
     echo "To install a particular version use this script with the version as an argument."
     echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
 fi
-
-echo type: "$TYPE"
-echo version: "$VERSION"
-exit 1
 
 if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]; then
     # Some OSes may read architecture type as `aarch64`, `aarch64` and `arm64` are the same architectures types.
@@ -98,26 +113,6 @@ full)
     exit 1
     ;;
 esac
-
-install_basic_components() {
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
-
-    dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
-    dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
-
-}
-
-install_tedge_agent() {
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_agent${VERSION}_${ARCH}.deb -P /tmp/tedge
-
-    dpkg -i /tmp/tedge/tedge_agent${VERSION}_${ARCH}.deb
-}
-
-install_tedge_plugins() {
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb
-}
 
 rm -R /tmp/tedge
 
