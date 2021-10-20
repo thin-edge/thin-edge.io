@@ -675,6 +675,7 @@ dependencies = [
  "reqwest",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
  "tokio-test",
