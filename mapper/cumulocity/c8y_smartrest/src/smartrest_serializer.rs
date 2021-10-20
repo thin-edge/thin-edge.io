@@ -8,12 +8,14 @@ type SmartRest = String;
 #[derive(Debug)]
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
+    C8yLogFileRequest,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
     fn from(op: CumulocitySupportedOperations) -> Self {
         match op {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
+            CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
         }
     }
 }
@@ -37,7 +39,7 @@ impl Default for SmartRestSetSupportedOperations {
     fn default() -> Self {
         Self {
             message_id: "114",
-            supported_operations: vec![CumulocitySupportedOperations::C8ySoftwareUpdate.into()],
+            supported_operations: vec![CumulocitySupportedOperations::C8ySoftwareUpdate.into(), CumulocitySupportedOperations::C8yLogFileRequest.into()],
         }
     }
 }
