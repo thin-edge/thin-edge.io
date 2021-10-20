@@ -5,7 +5,7 @@ from environment_apt_plugin import AptPlugin
 """
 Validate apt plugin install from local file - SUCCESS case
 
-Using `rolldice` package from `_ROLLDICE_URL` bellow
+Using `rolldice` package from `rolldice_url` bellow
 """
 
 
@@ -17,13 +17,12 @@ class AptPluginInstallFromLocalFile(AptPlugin):
         /etc/tedge/sm-plugins/apt install rolldice --file /path/to/file
     """
 
-    _ROLLDICE_URL = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
     _path_to_rolldice_binary = None
 
 
     def setup(self):
         super().setup()
-        self._download_rolldice_binary(url=self._ROLLDICE_URL)                                # downloading the binary
+        self._download_rolldice_binary(url=self.get_rolldice_package_url()) # downloading the binary
         self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked

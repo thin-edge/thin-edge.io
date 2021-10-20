@@ -19,7 +19,16 @@ class AptPluginUpdateList(AptPlugin):
     update_list = 'update-list'
 
     package1_name = "rolldice"
-    package1_version = "1.16-1build1"
+
+    # TODO This version will be different on different OS
+    # Ubuntu ?
+    #package1_version = "1.16-1build1"
+    # Debian Bullseye:
+    # package1_version = '1.16-1+b3'
+    # Rpi Buster
+    package1_version = '1.16-1+b1'
+
+
     package2_name = "asciijump"
     package3_name = "moon-buggy"
 
@@ -44,6 +53,12 @@ class AptPluginUpdateList(AptPlugin):
 
         # The 'update_list_input' file from the 'Input' directory contains the update instructions
         # This file has instructions to install rolldice and moon-buggy and remove asciijump
+
+        # TODO The file contains OS specific content
+        # TODO The version field is not accepted
+        # ERROR: CSV error: record 1 (line: 2, byte: 27): found record with 2 fields, but the previous record has 3 fields
+        # TODO Trailing tabs added
+        #install	rolldice	1.16-1+b3
         input_list_path = f'{self.input}/update_list_input'
 
         # Execute the update-list command with the update instructions passed to its stdin from a file
