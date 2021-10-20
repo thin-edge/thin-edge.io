@@ -393,8 +393,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // Then the SM Mapper finds out that wrong action as part of the update request.
-    // Then SM Mapper publishes a opeartion status `501,c8y_SoftwareUpdate' and
-    // a response message `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
+    // Then SM Mapper publishes an operation status message as executing `501,c8y_SoftwareUpdate'
+    // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
@@ -419,7 +419,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
                     "501,c8y_SoftwareUpdate" => {
                        received_status_failed = true;
                     },
-                    "502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete." => {
+                    "502,c8y_SoftwareUpdate,\"Action remove is not recognized. It must be install or delete.\"" => {
                         received_response_failed = true;
                     },
                     _ => {}

@@ -90,15 +90,15 @@ impl CumulocitySoftwareManagement {
             match err {
                 SMCumulocityMapperError::FromSmartRestDeserializer(_) => {
                     let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-                    // publish the operation status
+                    // publish the operation status as `executing`
                     let () = self
                         .publish(&topic, "501,c8y_SoftwareUpdate".into())
                         .await?;
-                    // publish the opeartion response
+                    // publish the operation status as `failed`
                     let () = self
                         .publish(
                             &topic,
-                            format!("502,c8y_SoftwareUpdate,{}", err.to_string()),
+                            format!("502,c8y_SoftwareUpdate,\"{}\"", err.to_string()),
                         )
                         .await?;
                 }
