@@ -22,7 +22,7 @@ class DockerPluginRemoveWithVersionTest(DockerPlugin):
             self.image_name, negate=True, abortOnError=True)
 
         # Run a container with the test image that is to be removed during the test
-        self.docker_run(self.image_name, self.image_version)
+        self.docker_run_with_cleanup(self.image_name, self.image_version)
         self.assert_container_running(self.image_name, self.image_version)
 
     def execute(self):
