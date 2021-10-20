@@ -89,6 +89,20 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
+      - name: Build tedge_dummy_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: --release -p tedge_dummy_plugin
+
+      - name: upload dummy-plugin
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tedge_dummy_plugin_amd64
+          path: target/release/tedge_dummy_plugin
+
   build_matrix_arm:
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
