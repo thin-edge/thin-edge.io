@@ -211,7 +211,7 @@ impl ConfigSetting for MqttExternalCAPathSetting {
         "Path to a file containing the PEM encoded CA certificates ",
         "that are trusted when checking incoming client certificates. ",
         "Example: /etc/ssl/certs",
-        "Note: This setting not set implies `require_certificate = false` for external connections."
+        "Note: If the capath is not set, then no certificates are required for the external connections."
     );
 
     type Value = FilePath;

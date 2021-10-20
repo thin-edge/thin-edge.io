@@ -12,9 +12,6 @@ pub enum ConnectError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
-    #[error("mosquitto configuration forbidden: {0}")]
-    MosquittoConfigurationForbidden(String),
-
     #[error(transparent)]
     MqttClient(#[from] rumqttc::ClientError),
 

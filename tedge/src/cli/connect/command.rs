@@ -525,11 +525,6 @@ fn write_bridge_config_to_file(
     common_mosquitto_config.serialize(&mut common_draft)?;
     let () = common_draft.persist()?;
 
-    // let external_config_path = get_external_listener_mosquitto_config_file_path(config_location);
-    // let mut external_draft = DraftFile::new(&external_config_path)?;
-    // common_mosquitto_config.serialize_external_listener(&mut external_draft)?;
-    // let () = external_draft.persist()?;
-
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
     let mut config_draft = DraftFile::new(config_path)?;
     bridge_config.serialize(&mut config_draft)?;
@@ -556,13 +551,4 @@ fn get_common_mosquitto_config_file_path(
         .tedge_config_root_path
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&common_mosquitto_config.config_file)
-}
-
-fn get_external_listener_mosquitto_config_file_path(
-    config_location: &TEdgeConfigLocation,
-) -> PathBuf {
-    config_location
-        .tedge_config_root_path
-        .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-        .join("external_listener.conf")
 }
