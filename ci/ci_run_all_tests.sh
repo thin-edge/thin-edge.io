@@ -26,6 +26,7 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
+
 cd $TEBASEDIR
 
 # Check if clients are installed
@@ -42,6 +43,6 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
-pysys.py run -v DEBUG --exclude publish_sawmill_record_statistics --exclude publish_sawmill_record_statistics_long
+pysys.py run -v DEBUG --exclude analytics
 
 deactivate
