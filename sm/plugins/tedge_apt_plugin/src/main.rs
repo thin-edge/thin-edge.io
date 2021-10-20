@@ -77,7 +77,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 .args(vec![
                     "-F",
                     "[/ ]",
-                    r#"{if ($1 != "Listing...") { print "{\"name\":\""$1"\",\"version\":\""$3"\"}"}}"#,
+                    r#"{if ($1 != "Listing...") { print $1"\t"$3}}"#,
                 ])
                 .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()

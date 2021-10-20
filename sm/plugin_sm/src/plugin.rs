@@ -1,10 +1,9 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
+use csv::ReaderBuilder;
 use download::Downloader;
-use json_sm::{
-    DownloadInfo, SoftwareError, SoftwareModule, SoftwareModuleUpdate, SoftwareType, DEFAULT,
-};
-use std::{iter::Iterator, path::PathBuf, process::Output};
+use json_sm::*;
+use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::error;
@@ -417,21 +416,23 @@ impl Plugin for ExternalPluginCommand {
     ) -> Result<Vec<SoftwareModule>, SoftwareError> {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
-
         if output.status.success() {
             let mut software_list = Vec::new();
-            let mystr = output.stdout;
+            let mut rdr = ReaderBuilder::new()
+                .has_headers(false)
+                .delimiter(b'\t')
+                .from_reader(output.stdout.as_slice());
 
-            mystr
-                .split(|n: &u8| n.is_ascii_whitespace())
-                .filter(|split| !split.is_empty())
-                .for_each(|split: &[u8]| {
-                    let software_json_line = std::str::from_utf8(split).unwrap();
-                    let mut software_module =
-                        serde_json::from_str::<SoftwareModule>(software_json_line).unwrap();
-                    software_module.module_type = Some(self.name.clone());
-                    software_list.push(software_module);
+            for module in rdr.deserialize() {
+                let (name, version): (String, Option<String>) = module?;
+                software_list.push(SoftwareModule {
+                    name,
+                    version,
+                    module_type: Some(self.name.clone()),
+                    file_path: None,
+                    url: None,
                 });
+            }
 
             Ok(software_list)
         } else {

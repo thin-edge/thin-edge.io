@@ -96,7 +96,8 @@ class SoftwareManagement(EnvironmentC8y):
 
         if self.myPlatform != "smcontainer":
             self.skipTest(
-                "Testing the apt plugin is not supported on this platform")
+                "Testing the apt plugin is not supported on this platform."+\
+                    "Use parameter -XmyPlatform='smcontainer' to enable it")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
@@ -213,6 +214,14 @@ class SoftwareManagement(EnvironmentC8y):
         return self.check_status_of_last_operation("SUCCESSFUL")
 
     def get_status_of_last_operation(self):
+        """Returns the status of the last operation:
+        "FAILED" or "SUCCESSFUL".
+        When there is now last operation listened in C8Y return "NOOPFOUND".
+
+        Warning: an observation so far is, that installation failures
+        seem to be at the beginning of the list independent of if we
+        revert it or not.
+        """
 
         params = {
             "deviceId": self.project.deviceid,
@@ -240,7 +249,7 @@ class SoftwareManagement(EnvironmentC8y):
         if not jresponse["operations"]:
             # This can happen e.g. after a weekend when C8y deleted the operations
             self.log.error("No operations found, assuming it passed")
-            return True
+            return "NOOPFOUND"
 
         # Get the last operation, when we set "revert": "true" we can read it
         # from the beginning of the list
@@ -268,13 +277,14 @@ class SoftwareManagement(EnvironmentC8y):
         return operation.get("status")
 
     def check_status_of_last_operation(self, status):
-        """Check if the last operation is successfull.
-        Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
-        revert it or not.
+        """Check if the last operation is equal to status.
+        If none was found, return true
         """
 
         current_status = self.get_status_of_last_operation()
+
+        if current_status == "NOOPFOUND":
+            return True
 
         return current_status == status
 
@@ -349,7 +359,8 @@ class SoftwareManagement(EnvironmentC8y):
             else:
 
                 current_status = self.get_status_of_last_operation()
-                if current_status == status or current_status == status2:
+
+                if current_status == status or current_status == status2 or current_status == "NOOPFOUND":
                     # Invalidate the old operation
                     self.operation_id = None
                     break
