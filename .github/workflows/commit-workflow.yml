@@ -2,11 +2,11 @@ name: commit-workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
   workflow_dispatch:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, continuous_integration ]
 
 env:
   CARGO_TERM_COLOR: always
