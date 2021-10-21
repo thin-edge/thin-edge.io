@@ -7,7 +7,7 @@ use c8y_smartrest::{
     smartrest_serializer::{
         SmartRestGetPendingOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
         SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-        SmartRestSetSupportedOperations,
+        SmartRestSetSupportedLogType, SmartRestSetSupportedOperations,
     },
 };
 use json_sm::{
@@ -83,6 +83,7 @@ impl CumulocitySoftwareManagement {
     pub async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
+        let () = self.publish_supported_operations_logs().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
@@ -156,6 +157,15 @@ impl CumulocitySoftwareManagement {
             SoftwareOperationStatus::Executing => {} // C8Y doesn't expect any message to be published
         }
 
+        Ok(())
+    }
+
+    async fn publish_supported_operations_logs(&self) -> Result<(), SMCumulocityMapperError> {
+        let data = SmartRestSetSupportedLogType::default();
+        let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+        let payload = data.to_smartrest()?;
+        dbg!(&payload);
+        let () = self.publish(&topic, payload).await?;
         Ok(())
     }
 

@@ -49,9 +49,9 @@ impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
-        if message_id != self.message_id {
-            return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
-        }
+        //if message_id != self.message_id {
+        //    return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
+        //}
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)

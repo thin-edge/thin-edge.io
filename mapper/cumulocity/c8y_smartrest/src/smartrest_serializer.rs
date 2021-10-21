@@ -30,6 +30,23 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestSetSupportedLogType {
+    pub message_id: &'static str,
+    pub supported_operations: Vec<&'static str>,
+}
+
+impl Default for SmartRestSetSupportedLogType {
+    fn default() -> Self {
+        Self {
+            message_id: "118",
+            supported_operations: vec!["software-management".into()],
+        }
+    }
+}
+
+impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedLogType {}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestSetSupportedOperations {
     pub message_id: &'static str,
     pub supported_operations: Vec<&'static str>,
@@ -39,7 +56,10 @@ impl Default for SmartRestSetSupportedOperations {
     fn default() -> Self {
         Self {
             message_id: "114",
-            supported_operations: vec![CumulocitySupportedOperations::C8ySoftwareUpdate.into(), CumulocitySupportedOperations::C8yLogFileRequest.into()],
+            supported_operations: vec![
+                CumulocitySupportedOperations::C8ySoftwareUpdate.into(),
+                CumulocitySupportedOperations::C8yLogFileRequest.into(),
+            ],
         }
     }
 }
