@@ -387,6 +387,57 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     Ok(assert!(received_status_successful))
 }
 
+#[tokio::test]
+#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+#[serial]
+async fn mapper_publishes_software_update_request_with_wrong_action() {
+    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
+    // Then the SM Mapper finds out that wrong action as part of the update request.
+    // Then SM Mapper publishes an operation status message as executing `501,c8y_SoftwareUpdate'
+    // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
+    // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
+
+    // Create a subscriber to receive messages on `c8y/s/us` topic.
+    let mut subscriber =
+        get_subscriber("c8y/s/us", "mapper_publishes_software_update_failure").await;
+
+    let _sm_mapper = start_sm_mapper().await;
+
+    // Prepare and publish a c8_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
+    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
+    let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
+
+    let mut received_status_failed = false;
+    let mut received_response_failed = false;
+
+    for _ in 0..2 {
+        // Expect thin-edge json message on `c8y/s/us` with expected payload.
+        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
+            Ok(Some(msg)) => {
+                dbg!(&msg.payload_str().unwrap());
+                match msg.payload_str().unwrap() {
+                    "501,c8y_SoftwareUpdate" => {
+                       received_status_failed = true;
+                    },
+                    "502,c8y_SoftwareUpdate,\"Action remove is not recognized. It must be install or delete.\"" => {
+                        received_response_failed = true;
+                    },
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        if received_status_failed && received_response_failed {
+            break;
+        } else {
+            continue;
+        }
+    }
+
+    assert!(received_status_failed);
+    assert!(received_response_failed);
+}
+
 fn create_tedge_config() -> TEdgeConfig {
     // Create a config file in a temporary directory.
     let temp_dir = tempfile::tempdir().unwrap();

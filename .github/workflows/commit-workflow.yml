@@ -2,11 +2,11 @@ name: commit-workflow
 
 on:
   push:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
   workflow_dispatch:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, continuous_integration ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -93,70 +93,6 @@ jobs:
         with:
           command: build
           args: --release
-
-  cargo-tarpaulin:
-
-    name: Run cargo tarpaulin
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-    continue-on-error: true # Only temporarily !!!
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install rust v1.54.0
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: "1.54.0"
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: install libssl
-        run: sudo apt install libssl-dev
-
-      - name: Cargo install tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-tarpaulin
-
-      - name: Cargo tarpaulin
-        continue-on-error: true # Only temporarily !!!
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: tarpaulin
-          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-
-  cargo-audit:
-
-    name: Run cargo audit
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-    continue-on-error: true # Only temporarily !!!
-
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo audit
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: audit
 
   cargo-outdated:
 
