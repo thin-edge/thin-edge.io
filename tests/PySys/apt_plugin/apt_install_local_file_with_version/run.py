@@ -17,9 +17,11 @@ class AptPluginInstallFromLocalFileWithVersion(AptPlugin):
         /etc/tedge/sm-plugins/apt install rolldice --file /path/to/file --module-version some_version
     """
 
-    _ROLLDICE_URL = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
     _path_to_rolldice_binary = None
-    _module_version = "1.16-1+b3"  # NOTE: version here is given as a default arg because `_ROLLDICE_URL` is static
+    # Works for debian bullseye
+    #_module_version = "1.16-1+b3"  # NOTE: version here is given as a default arg because `_ROLLDICE_URL` is static
+    # Should work for an Rpi:
+    _module_version = "1.16-1+b1"  # NOTE: version here is given as a default arg because `_ROLLDICE_URL` is static
 
     def setup(self):
         super().setup()
