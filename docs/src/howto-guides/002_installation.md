@@ -29,6 +29,13 @@ apt install mosquitto
 sudo apt install mosquitto
 ```
 
+> Note: Using the Raspberry Pi OS Buster release you may get the error "Unable to locate package mosquitto".
+If this is the case, edit the /etc/apt/sources.list and remove the # from the last line. Then perform an apt-get update.
+
+```shell
+sudo nano /etc/apt/sources.list
+```
+
 ## `thin-edge.io` installation
 
 When all dependencies are in place you can proceed with installation of `thin-edge.io cli` and `thin-edge.io mapper` service.
