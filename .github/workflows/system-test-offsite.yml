@@ -80,7 +80,7 @@ jobs:
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
-      - name: chmod publisher
+      - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
@@ -94,6 +94,8 @@ jobs:
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+# System Test Workflow
 
   system-test-all-offsite:
     needs: [install-and-use-rpi-all-offsite]

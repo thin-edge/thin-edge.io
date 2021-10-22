@@ -3,11 +3,11 @@ name: build-workflow
 on:
   workflow_run:
     workflows: ["commit-workflow"]
-    branches: [main, continuous_integration]
+    branches: [main]
     types:
       - completed
   workflow_dispatch:
-    branches: [ main, continuous_integration ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -89,7 +89,7 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin debian package
+      - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
@@ -227,7 +227,7 @@ jobs:
           name: examples_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin debian package
+      - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
@@ -237,7 +237,7 @@ jobs:
       - name: Strip workaround for tedge_dummy_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_dummy_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_dummy_plugin
 
-      - name: upload dummy-plugin
+      - name: Upload dummy-plugin
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
