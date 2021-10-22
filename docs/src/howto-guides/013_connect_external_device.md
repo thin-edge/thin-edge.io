@@ -1,12 +1,12 @@
-# Connecting and external device to `thin-edge.io`
+# Connecting an external device to `thin-edge.io`
 
 With `thin-edge.io` you can enable connection for external devices to your `thin-edge.io` enabled device with the use of a few commands.
 
-> Note: Currently only single additional listener can be set.
+> Note: Currently, only one additional listener can be defined.
 
 ## Configuration
 
-External devices connection can be setup by using `tedge cli` tool and making some changes to configuration.
+External devices connection can be setup by using the `tedge` cli tool making some changes to the configuration.
 
 The following configurations option are available for you if you want to add an external listener to thin-edge.io:
 
@@ -17,6 +17,9 @@ The following configurations option are available for you if you want to add an 
 `mqtt.external.capath`           Path to a file containing the PEM encoded CA certificates that are trusted when checking incoming client certificates. Example: /etc/ssl/certs
 `mqtt.external.certfile`         Path to the certificate file, which is used by external MQTT listener. Example: /etc/tedge/server-certs/tedge-certificate.pem
 `mqtt.external.keyfile`          Path to the private key file, which is used by external MQTT listener. Example: /etc/tedge/server-certs/tedge-private-key.pem
+
+> If none of these options is set, then no external listener is set.
+> If one of these options is set, then default values are inferred by the MQTT server (Mosquitto). For instance, the port defaults to 1883 for a non-TLS listener, and to 8883 for a TLS listener.
 
 These settings can be considered in 2 groups, listener configuration and TLS configuration.
 
@@ -41,14 +44,14 @@ tedge config set mqtt.external.bind_address 0.0.0.0
 
 To configure the external listener with TLS additional settings are available: `mqtt.external.capath` `mqtt.external.certfile` `mqtt.external.keyfile`
 
-To enable server side certificates the following 2 settings should be set:
+To enable MQTT over TLS, a server side certificate must be configured using the 2 following settings:
 
 ```shell
 tedge config set mqtt.external.certfile /etc/tedge/server-certs/tedge-certificate.pem
 tedge config set mqtt.external.keyfile /etc/tedge/server-certs/tedge-private-key.pem
 ```
 
-To fully enable TLS authentication client side certificate validation can be enabled:
+To fully enable TLS authentication clients, client side certificate validation can be enabled:
 
 ```shell
 tedge config set mqtt.external.capath /etc/ssl/certs
