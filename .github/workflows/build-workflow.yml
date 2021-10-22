@@ -89,7 +89,7 @@ jobs:
           name: examples_amd64
           path: target/release/examples/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin debian package
+      - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
@@ -227,7 +227,7 @@ jobs:
           name: examples_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin debian package
+      - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
