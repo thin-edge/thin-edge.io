@@ -210,6 +210,9 @@ jobs:
           command: build
           args: --release --examples --target=${{ matrix.target }}
 
+      - name: Strip workaround sawtooth_publisher
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher
+
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
@@ -223,3 +226,21 @@ jobs:
         with:
           name: examples_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
+
+      - name: Build tedge_dummy_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: --release -p tedge_dummy_plugin
+
+      - name: Strip workaround for tedge_dummy_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_dummy_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_dummy_plugin
+
+      - name: Upload dummy-plugin
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: tedge_dummy_plugin_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/tedge_dummy_plugin
+
