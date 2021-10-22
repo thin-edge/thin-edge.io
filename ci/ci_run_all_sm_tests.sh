@@ -46,5 +46,5 @@ pysys.py run -v DEBUG 'SoftwareManagement.*' -XmyPlatform='smcontainer' -Xdocker
 deactivate
 
 sudo tedge config unset software.plugin.default
-rm -f /etc/tedge/sm-plugins/docker
-rm -f /etc/tedge/sm-plugins/fruits
+sudo rm -f /etc/tedge/sm-plugins/docker
+sudo rm -f /etc/tedge/sm-plugins/fruits
