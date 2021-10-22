@@ -368,7 +368,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     }
 
     // Restart SM Mapper
-    let _sm_mapper = start_sm_mapper().await?;
+    let sm_mapper = start_sm_mapper().await?;
     let _ = publish_a_fake_jwt_token().await;
 
     let mut received_status_successful = false;
@@ -393,7 +393,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
             _ => panic!("No software update message received after a second."),
         }
     }
-
+    sm_mapper.abort();
     Ok(assert!(received_status_successful))
 }
 
