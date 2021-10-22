@@ -18,17 +18,16 @@ class AptPluginInstallFromLocalFileWithVersion(AptPlugin):
     """
 
     _path_to_rolldice_binary = None
-    # Works for debian bullseye
-    #_module_version = "1.16-1+b3"  # NOTE: version here is given as a default arg because `_ROLLDICE_URL` is static
-    # Should work for an Rpi:
-    _module_version = "1.16-1+b1"  # NOTE: version here is given as a default arg because `_ROLLDICE_URL` is static
+    _module_version = None
 
     def setup(self):
         super().setup()
+        self._delete_old_rolldice_binary()
         self._download_rolldice_binary(url=self.get_rolldice_package_url()) # downloading the binary
         self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
+        self._path_to_rolldice_binary=os.path.abspath(self._rolldice_filename)
 
     def execute(self):
         """
