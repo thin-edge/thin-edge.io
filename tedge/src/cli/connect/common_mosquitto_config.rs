@@ -47,7 +47,7 @@ impl ListenerConfig {
         writeln!(writer, "{} {}", key, value)
     }
     pub fn write(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
-        let bind_address = self.bind_address.clone().unwrap_or("".to_string());
+        let bind_address = self.bind_address.clone().unwrap_or_else(|| "".to_string());
         let maybe_listener = self
             .port
             .as_ref()
@@ -142,15 +142,22 @@ impl CommonMosquittoConfig {
         certfile: Option<String>,
         keyfile: Option<String>,
     ) -> Self {
-        let external_listener = ListenerConfig {
+        let mut external_listener = ListenerConfig {
             port,
             bind_address,
             bind_interface,
-            capath: capath,
-            certfile: certfile,
-            keyfile: keyfile,
-            ..self.external_listener
+            capath,
+            certfile,
+            keyfile,
+            allow_anonymous: true,
+            require_certificate: false,
         };
+
+        if external_listener.capath.is_some() {
+            external_listener.allow_anonymous = false;
+            external_listener.require_certificate = true;
+        }
+
         Self {
             external_listener,
             ..self
