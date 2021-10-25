@@ -404,7 +404,7 @@ fn create_tedge_config() -> TEdgeConfig {
         [mqtt]
         port=55555
         [c8y]
-        url='test.basic.stage.c8y.io'
+        url='test.c8y.com'
         "#;
     let mut file = tempfile::NamedTempFile::new_in(&temp_dir).unwrap();
     let _write_file = file.write_all(content.as_bytes()).unwrap();
