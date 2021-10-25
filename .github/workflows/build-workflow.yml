@@ -3,7 +3,7 @@ name: build-workflow
 on:
   workflow_run:
     workflows: ["commit-workflow"]
-    branches: [main]
+    branches: [ main, continuous_integration ]
     types:
       - completed
   workflow_dispatch:
