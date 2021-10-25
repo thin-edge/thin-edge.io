@@ -310,6 +310,7 @@ version = "0.4.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
+ "chrono",
  "csv",
  "json_sm",
  "serde",

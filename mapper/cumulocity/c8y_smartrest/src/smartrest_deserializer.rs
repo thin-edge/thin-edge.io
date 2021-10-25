@@ -52,15 +52,26 @@ impl SmartRestUpdateSoftware {
         //if message_id != self.message_id {
         //    return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
         //}
+        // 528,deviceSerial,software_a,4.0.0,http://example.com/software_a,install
+        dbg!(&smartrest);
+        //let smartrest = "522,tornado,software-management,2021-09-21T11:40:27+0200,2021-09-22T11:40:27+0200,five";
+        //let smartrest = "528,deviceSerial,software_a,4.0.0,http://example.com/software_a,install";
+        // 522,tornado,software-management,2021-09-21T11:40:27+0200,2021-09-22T11:40:27+0200,,1000
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
             .flexible(true)
             .from_reader(smartrest.as_bytes());
+        dbg!(&rdr);
         let mut record: Self = Self::new();
+
         for result in rdr.deserialize() {
+            dbg!(&result);
             record = result?;
         }
+
+        dbg!(&record);
+
         Ok(record)
     }
 
@@ -158,6 +169,60 @@ impl SmartRestUpdateSoftwareModule {
             None => None,
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestLogModule {
+    pub message_id: String,
+    pub device: String,
+    pub log_type: String,
+    pub date_from: String,
+    pub date_to: String,
+    pub error: Option<String>,
+    pub lines: usize,
+}
+
+impl SmartRestLogModule {
+    pub fn new() -> Self {
+        Self {
+            message_id: "522".to_string(),
+            device: "".to_string(),
+            log_type: "".to_string(),
+            date_from: "".to_string(),
+            date_to: "".to_string(),
+            error: None,
+            lines: 0,
+        }
+    }
+
+    pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        let mut record: Self = Self::new();
+
+        for result in rdr.deserialize() {
+            dbg!(&result);
+            record = result?;
+        }
+
+        dbg!(&record);
+
+        Ok(record)
+    }
+
+    //pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
+    //    let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
+    //    Ok(request)
+    //}
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartRestLogEvent {
+    pub id: String,
 }
 
 type JwtToken = String;

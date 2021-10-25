@@ -118,6 +118,7 @@ impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 pub struct SmartRestSetOperationToSuccessful {
     pub message_id: &'static str,
     pub operation: &'static str,
+    pub url: Option<String>,
 }
 
 impl SmartRestSetOperationToSuccessful {
@@ -125,6 +126,15 @@ impl SmartRestSetOperationToSuccessful {
         Self {
             message_id: "503",
             operation: operation.into(),
+            url: None,
+        }
+    }
+
+    pub fn new_with_file(operation: CumulocitySupportedOperations, url: &str) -> Self {
+        Self {
+            message_id: "503",
+            operation: operation.into(),
+            url: Some(url.into()),
         }
     }
 
