@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_utils::paths::{create_directories, ok_if_not_found, persist_tempfile};
-use tempfile::NamedTempFile;
+use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
 const DEFAULT_HOST: &str = "localhost";
@@ -93,7 +92,24 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = self
             .common_mosquitto_config
             .clone()
-            .with_port(config.query(MqttPortSetting)?.into());
+            .with_internal_opts(config.query(MqttPortSetting)?.into())
+            .with_external_opts(
+                config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
+                config.query(MqttExternalBindAddressSetting).ok(),
+                config.query(MqttExternalBindInterfaceSetting).ok(),
+                config
+                    .query(MqttExternalCAPathSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+                config
+                    .query(MqttExternalCertfileSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+                config
+                    .query(MqttExternalKeyfileSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
+            );
         self.config_repository.store(&config)?;
 
         new_bridge(
@@ -166,7 +182,7 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
-        let device_id: String = config.query(DeviceIdSetting)?.into();
+        let device_id = config.query(DeviceIdSetting)?;
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
@@ -240,7 +256,7 @@ fn check_device_status_c8y(port: u16, device_id: &str) -> Result<DeviceStatus, C
             }
         }
     }
-    return Ok(DeviceStatus::MightBeNew);
+    Ok(DeviceStatus::MightBeNew)
 }
 
 fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
@@ -277,7 +293,7 @@ fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectErro
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
-                if &response.payload == REGISTRATION_ERROR {
+                if response.payload == REGISTRATION_ERROR {
                     return Ok(DeviceStatus::AlreadyExists);
                 }
             }
@@ -347,6 +363,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
+                    println!("Received expected response message, connection check is successful.");
                     return Ok(DeviceStatus::AlreadyExists);
                 } else {
                     break;
@@ -503,16 +520,16 @@ fn write_bridge_config_to_file(
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     let _ = create_directories(&dir_path)?;
 
-    let mut common_temp_file = NamedTempFile::new()?;
-    common_mosquitto_config.serialize(&mut common_temp_file)?;
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let () = persist_tempfile(common_temp_file, &common_config_path)?;
+    let mut common_draft = DraftFile::new(&common_config_path)?;
+    common_mosquitto_config.serialize(&mut common_draft)?;
+    let () = common_draft.persist()?;
 
-    let mut temp_file = NamedTempFile::new()?;
-    bridge_config.serialize(&mut temp_file)?;
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
-    let () = persist_tempfile(temp_file, &config_path)?;
+    let mut config_draft = DraftFile::new(config_path)?;
+    bridge_config.serialize(&mut config_draft)?;
+    let () = config_draft.persist()?;
 
     Ok(())
 }

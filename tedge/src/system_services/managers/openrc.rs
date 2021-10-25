@@ -1,5 +1,7 @@
-use crate::system_services::*;
-use std::process::*;
+use crate::system_services::{
+    CommandBuilder, OpenRcServiceError, SystemService, SystemServiceError, SystemServiceManager,
+};
+use std::process::ExitStatus;
 use tedge_users::{UserManager, ROOT_USER};
 
 /// Service manager that uses [OpenRC][1] to control system services.

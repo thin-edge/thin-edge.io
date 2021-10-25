@@ -1,15 +1,15 @@
 [package]
 name = "flockfile"
-version = "0.3.1"
-authors = ["Software AG <thin-edge-team@softwareag.com>"]
+version = "0.4.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
 thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
+nix = "0.23"
 tracing = { version = "0.1", features = ["log"] }
-nix = "0.21"
 
 [dev-dependencies]
 assert_matches = "1.5"

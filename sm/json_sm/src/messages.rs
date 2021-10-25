@@ -90,7 +90,7 @@ impl SoftwareUpdateRequest {
             .module()
             .module_type
             .clone()
-            .unwrap_or(SoftwareModule::default_type());
+            .unwrap_or_else(SoftwareModule::default_type);
 
         if let Some(list) = self
             .update_list
@@ -140,6 +140,7 @@ impl SoftwareUpdateRequest {
                     name: item.name.clone(),
                     version: item.version.clone(),
                     url: item.url.clone(),
+                    file_path: None,
                 };
                 match item.action {
                     None => {}
@@ -233,9 +234,6 @@ impl SoftwareListResponse {
 pub struct SoftwareUpdateResponse {
     #[serde(flatten)]
     response: SoftwareRequestResponse,
-
-    #[serde(skip)]
-    errors: Vec<SoftwareError>,
 }
 
 impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
@@ -244,7 +242,6 @@ impl SoftwareUpdateResponse {
     pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         SoftwareUpdateResponse {
             response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
-            errors: vec![],
         }
     }
 
@@ -263,8 +260,6 @@ impl SoftwareUpdateResponse {
     }
 
     pub fn add_errors(&mut self, plugin_type: &str, errors: Vec<SoftwareError>) {
-        self.errors.append(&mut errors.clone());
-        self.response.set_reason_errors(&self.errors);
         self.response.add_errors(
             plugin_type.to_string(),
             errors
@@ -272,6 +267,11 @@ impl SoftwareUpdateResponse {
                 .filter_map(|module| module.into())
                 .collect::<Vec<SoftwareModuleItem>>(),
         );
+    }
+
+    pub fn set_error(&mut self, reason: &str) {
+        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.reason = Some(reason.into());
     }
 
     pub fn id(&self) -> &str {
@@ -299,6 +299,54 @@ pub enum SoftwareModuleAction {
     Remove,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct DownloadInfo {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<Auth>,
+}
+
+impl From<&str> for DownloadInfo {
+    fn from(url: &str) -> Self {
+        Self::new(url)
+    }
+}
+
+impl DownloadInfo {
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.into(),
+            auth: None,
+        }
+    }
+
+    pub fn with_auth(self, auth: Auth) -> Self {
+        Self {
+            auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn url(&self) -> &str {
+        self.url.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum Auth {
+    Bearer(String),
+}
+
+impl Auth {
+    pub fn new_bearer(token: &str) -> Self {
+        Self::Bearer(token.into())
+    }
+}
+
 /// Software module payload definition.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -310,7 +358,8 @@ pub struct SoftwareModuleItem {
     pub version: Option<SoftwareVersion>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    #[serde(flatten)]
+    pub url: Option<DownloadInfo>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<SoftwareModuleAction>,
@@ -366,57 +415,6 @@ impl SoftwareRequestResponse {
         }
     }
 
-    pub fn set_reason_errors(&mut self, errors: &Vec<SoftwareError>) {
-        let mut count = 0;
-        let mut failed_package = String::new();
-        let mut failed_install = String::new();
-        let mut failed_remove = String::new();
-
-        for error in errors.iter() {
-            count += 1;
-            match error {
-                SoftwareError::Install { module, .. } => {
-                    failed_install.push_str(" ");
-                    failed_install.push_str(&module.name);
-                }
-                SoftwareError::Remove { module, .. } => {
-                    failed_remove.push_str(" ");
-                    failed_remove.push_str(&module.name);
-                }
-                SoftwareError::Prepare { software_type, .. } => {
-                    failed_package.push_str(" ");
-                    failed_package.push_str(&software_type);
-                }
-                SoftwareError::Finalize { software_type, .. } => {
-                    failed_package.push_str(" ");
-                    failed_package.push_str(&software_type);
-                }
-                _ => {}
-            }
-        }
-
-        let mut reason = String::from(format!("{} errors:", count));
-
-        if !failed_package.is_empty() {
-            reason.push_str(" fail to update [");
-            reason.push_str(&failed_package);
-            reason.push_str(" ]");
-        }
-        if !failed_install.is_empty() {
-            reason.push_str(" fail to install [");
-            reason.push_str(&failed_install);
-            reason.push_str(" ]");
-        }
-        if !failed_remove.is_empty() {
-            reason.push_str(" fail to remove [");
-            reason.push_str(&failed_remove);
-            reason.push_str(" ]");
-        }
-
-        self.status = SoftwareOperationStatus::Failed;
-        self.reason = Some(reason);
-    }
-
     pub fn add_errors(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
         self.status = SoftwareOperationStatus::Failed;
 
@@ -438,6 +436,7 @@ impl SoftwareRequestResponse {
                         name: module.name.clone(),
                         version: module.version.clone(),
                         url: module.url.clone(),
+                        file_path: None,
                     });
                 }
             }

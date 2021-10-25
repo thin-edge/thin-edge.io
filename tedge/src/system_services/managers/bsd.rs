@@ -1,6 +1,5 @@
-use crate::system_services::SystemService::*;
 use crate::system_services::*;
-use std::process::*;
+use std::process::ExitStatus;
 use tedge_users::{UserManager, ROOT_USER};
 
 /// Service manager that uses `service(8)` as found on FreeBSD to control system services.

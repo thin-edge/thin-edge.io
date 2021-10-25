@@ -184,17 +184,17 @@ mod tests {
         let pem_string = keypair
             .certificate_pem_string()
             .expect("Fail to read the certificate PEM");
-        let pem = PemCertificate::from_pem_string(&pem_string)
-            .expect("Fail to decode the certificate PEM");
-        pem
+        PemCertificate::from_pem_string(&pem_string).expect("Fail to decode the certificate PEM")
     }
 
     #[test]
     fn self_signed_cert_subject_is_the_device() {
         // Create a certificate with a given subject
-        let mut config = NewCertificateConfig::default();
-        config.organization_name = "Acme".to_owned();
-        config.organizational_unit_name = "IoT".to_owned();
+        let config = NewCertificateConfig {
+            organization_name: "Acme".to_owned(),
+            organizational_unit_name: "IoT".to_owned(),
+            ..Default::default()
+        };
         let id = "device-serial-number";
 
         let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
@@ -209,9 +209,11 @@ mod tests {
     #[test]
     fn self_signed_cert_common_name_is_the_device_id() {
         // Create a certificate with a given subject
-        let mut config = NewCertificateConfig::default();
-        config.organization_name = "Acme".to_owned();
-        config.organizational_unit_name = "IoT".to_owned();
+        let config = NewCertificateConfig {
+            organization_name: "Acme".to_owned(),
+            organizational_unit_name: "IoT".to_owned(),
+            ..Default::default()
+        };
         let device_id = "device-identifier";
 
         let keypair = KeyCertPair::new_selfsigned_certificate(&config, device_id)
@@ -228,9 +230,11 @@ mod tests {
     #[test]
     fn self_signed_cert_issuer_is_the_device() {
         // Create a certificate with a given subject
-        let mut config = NewCertificateConfig::default();
-        config.organization_name = "Acme".to_owned();
-        config.organizational_unit_name = "IoT".to_owned();
+        let config = NewCertificateConfig {
+            organization_name: "Acme".to_owned(),
+            organizational_unit_name: "IoT".to_owned(),
+            ..Default::default()
+        };
         let id = "device-serial-number";
 
         let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
@@ -265,8 +269,10 @@ mod tests {
     #[test]
     fn self_signed_cert_no_after_is_related_to_birthdate() {
         // Create a certificate with a given birthdate.
-        let mut config = NewCertificateConfig::default();
-        config.validity_period_days = 10;
+        let config = NewCertificateConfig {
+            validity_period_days: 10,
+            ..Default::default()
+        };
         let id = "some-id";
         let birthdate = DateTime::parse_from_rfc3339("2021-03-31T16:39:57+01:00")
             .unwrap()

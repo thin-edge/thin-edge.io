@@ -1,26 +1,26 @@
 [package]
 name = "thin_edge_json"
-version = "0.3.1"
-authors = ["Software AG <thin-edge-team@softwareag.com>"]
+version = "0.4.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 chrono = "0.4"
-clock = { path = "../../common/clock" }
 json-writer = { path = "../../common/json_writer" }
-thiserror = "1.0"
 serde = "1"
 serde_json = "1"
+thiserror = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
+clock = { path = "../../common/clock" }
+criterion = "0.3"
 mockall = "0.10"
 proptest = "1.0"
-criterion = "0.3"
+stats_alloc = "0.1"
 walkdir = "2"
-stats_alloc = "0.1.8"
 
 [[bench]]
 name = "parsing"

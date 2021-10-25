@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+use crate::messages::DownloadInfo;
 
 pub type SoftwareType = String;
 pub type SoftwareName = String;
@@ -12,7 +15,8 @@ pub struct SoftwareModule {
     pub module_type: Option<SoftwareType>,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
-    pub url: Option<String>,
+    pub url: Option<DownloadInfo>,
+    pub file_path: Option<PathBuf>,
 }
 
 impl SoftwareModule {
@@ -28,13 +32,15 @@ impl SoftwareModule {
         module_type: Option<SoftwareType>,
         name: SoftwareName,
         version: Option<SoftwareVersion>,
-        url: Option<String>,
+        url: Option<DownloadInfo>,
+        file_path: Option<PathBuf>,
     ) -> SoftwareModule {
         let mut module = SoftwareModule {
             module_type,
             name,
             version,
             url,
+            file_path,
         };
         module.normalize();
         module
@@ -42,7 +48,7 @@ impl SoftwareModule {
 
     pub fn normalize(&mut self) {
         match &self.module_type {
-            Some(module_type) if SoftwareModule::is_default_type(&module_type) => {
+            Some(module_type) if SoftwareModule::is_default_type(module_type) => {
                 self.module_type = None
             }
             _ => {}

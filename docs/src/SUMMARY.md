@@ -10,6 +10,7 @@
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
+    - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
@@ -21,6 +22,10 @@
     - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
     - [How to trouble shoot device monitoring](./howto-guides/009_touble_shooting_monitoring.md)
     - [How to add self-signed certificate root to trusted certificates list?](./howto-guides/010_add_self_signed_trusted.md)
+    - [How to retrieve JWT token from Cumulocity?](./howto-guides/011_retrieve_jwt_token_from_cumulocity.md)
+    - [How to install and enable software management?](./howto-guides/012_install_and_enable_software_management.md)
+    - [How to connect an external device?](./howto-guides/013_connect_external_device.md)
+
 
 ## Reference guides
 - [Reference Guides](references/README.md)

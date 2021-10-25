@@ -539,7 +539,8 @@ impl TopicFilter {
     pub fn add(&mut self, pattern: &str) -> Result<(), MqttClientError> {
         let pattern = String::from(pattern);
         if rumqttc::valid_filter(&pattern) {
-            Ok(self.patterns.push(pattern))
+            self.patterns.push(pattern);
+            Ok(())
         } else {
             Err(MqttClientError::InvalidFilter { pattern })
         }
@@ -549,7 +550,7 @@ impl TopicFilter {
     fn accept(&self, topic: &Topic) -> bool {
         self.patterns
             .iter()
-            .any(|pattern| rumqttc::matches(&topic.name, &pattern))
+            .any(|pattern| rumqttc::matches(&topic.name, pattern))
     }
 
     pub fn qos(self, qos: QoS) -> Self {
@@ -601,7 +602,7 @@ impl Message {
     pub fn payload_trimmed(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
-            .unwrap_or(self.payload.as_slice())
+            .unwrap_or_else(|| self.payload.as_slice())
     }
 
     // This function trims the null character at the end of the payload before converting into UTF8

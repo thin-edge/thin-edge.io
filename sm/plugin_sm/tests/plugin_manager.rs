@@ -1,12 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    use std::fs::File;
-
-    use assert_matches::assert_matches;
-    use json_sm::SoftwareError;
     use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
-    use std::{path::PathBuf, str::FromStr};
+    use std::{fs::File, path::PathBuf, str::FromStr};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -16,7 +12,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Plugins registry should not register any plugin as no files in the directory are present.
@@ -33,7 +29,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Registry has registered no plugins.
@@ -51,7 +47,7 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Check if registry has loaded plugin of type `test`.
@@ -97,7 +93,7 @@ mod tests {
         dbg!(&plugin_dir);
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
         let _ = plugins.load();
 
         // Plugin registry shall have registered plugin with name as the file in plugin directory.
@@ -130,7 +126,8 @@ mod tests {
         let (_, _path) = plugin3.keep().unwrap();
 
         let mut plugins =
-            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone())).unwrap();
+            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone()), None)
+                .unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -155,7 +152,7 @@ mod tests {
             .to_owned();
         let (_, _path) = plugin.keep().unwrap();
 
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None).unwrap();
+        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None, None).unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -166,13 +163,16 @@ mod tests {
     }
 
     #[test]
-    fn invalid_default_plugin() {
+    fn invalid_default_plugin_pass_through() -> anyhow::Result<()> {
         let plugin_dir = tempfile::tempdir().unwrap();
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
-        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()));
-        assert_matches!(result.unwrap_err(), SoftwareError::InvalidDefaultPlugin(_));
+        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()), None)?;
+        assert!(result.empty());
+        assert!(result.default().is_none());
+
+        Ok(())
     }
 
     fn create_some_plugin_in(dir: &tempfile::TempDir) -> NamedTempFile {

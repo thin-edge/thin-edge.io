@@ -44,7 +44,7 @@ async fn publish_temperature(mqtt: Client, c8y_msg: Topic) -> Result<(), MqttCli
     info!("Publishing temperature measurements");
     for _ in 1..10 {
         let delta = random_in_range(-1, 2);
-        temperature = temperature + delta;
+        temperature += delta;
 
         let payload = format!("{},{}", C8Y_TEMPLATE_TEMPERATURE, temperature);
         debug!("{}", payload);

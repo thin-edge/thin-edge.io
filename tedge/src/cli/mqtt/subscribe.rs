@@ -4,6 +4,7 @@ use rumqttc::QoS;
 use rumqttc::{Client, Event, Incoming, MqttOptions, Packet};
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
+const MAX_PACKET_SIZE: usize = 1048575;
 
 pub struct MqttSubscribeCommand {
     pub host: String,
@@ -30,6 +31,7 @@ impl Command for MqttSubscribeCommand {
 fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
+    options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
     let (mut client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
 
@@ -41,7 +43,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                     .payload
                     .strip_suffix(&[0])
                     .unwrap_or(&message.payload);
-                match std::str::from_utf8(&payload) {
+                match std::str::from_utf8(payload) {
                     Ok(payload) => {
                         if cmd.hide_topic {
                             println!("{}", &payload);
@@ -63,7 +65,12 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                 client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
             }
             Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+                let err_msg = err.to_string();
+                if err_msg.contains("I/O: Connection refused (os error 111)") {
+                    return Err(MqttError::ServerConnection(err_msg));
+                }
+
+                eprintln!("ERROR: {}", err_msg);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             _ => {}

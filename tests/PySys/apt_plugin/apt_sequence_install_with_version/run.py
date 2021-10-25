@@ -40,7 +40,7 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
         output = subprocess.check_output(["/usr/bin/apt-cache", "madison", "rolldice"])
 
         # Lets assume it is the package in the first line of the output
-        self.version = output.split()[2]  # E.g. "1.16-1+b3"
+        self.version = output.split()[2].decode("utf8") # E.g. "1.16-1+b3"
 
         self.apt_remove(self.package)
         self.assert_isinstalled(self.package, False)
@@ -60,7 +60,7 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
         # On some systems there is an optional plus sign and b instead of build
         self.assertGrep(
             "outp_check_1.out",
-            '{"name":"rolldice","version":"1.16-1(\+b|build)(1|3)"}',
+            'rolldice\t1.16-1(\+b|build)(1|3)',
             contains=True,
         )
 

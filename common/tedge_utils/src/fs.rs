@@ -39,12 +39,12 @@ pub async fn atomically_write_file_async(
         .await?;
 
     if let Err(err) = file.write_all(content).await {
-        let _ = tokio_fs::remove_file(tempfile);
+        let () = tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
 
     if let Err(err) = tokio_fs::rename(tempfile.as_ref(), dest).await {
-        let _ = tokio_fs::remove_file(tempfile);
+        let () = tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
 
@@ -65,7 +65,7 @@ mod tests {
 
         let content = "test_data";
 
-        let () = atomically_write_file_async(&temp_path, &destination_path, &content.as_bytes())
+        let () = atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
             .await
             .unwrap();
 
@@ -86,7 +86,7 @@ mod tests {
         let content = "test_data";
 
         let () =
-            atomically_write_file_sync(&temp_path, &destination_path, &content.as_bytes()).unwrap();
+            atomically_write_file_sync(&temp_path, &destination_path, content.as_bytes()).unwrap();
 
         std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {

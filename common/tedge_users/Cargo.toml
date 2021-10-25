@@ -1,12 +1,11 @@
 [package]
 name = "tedge_users"
-version = "0.3.1"
+version = "0.4.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-users = "0.11.0"
+users = "0.11"
