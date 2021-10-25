@@ -22,7 +22,7 @@ async fn mapper_publishes_a_software_list_request() {
     .await;
 
     // Start SM Mapper
-    let _mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper().await;
 
     // Expect message that arrives on `tedge/commands/req/software/list` is software list request.
 
@@ -42,6 +42,7 @@ async fn mapper_publishes_a_software_list_request() {
             _ => panic!("No message received after a second."),
         }
     }
+    sm_mapper.unwrap().abort();
 }
 
 #[tokio::test]
@@ -58,7 +59,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     .await;
 
     // Start SM Mapper
-    let _mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper().await;
 
     // Expect both 114 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let mut received_supported_operation = false;
@@ -80,6 +81,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
             _ => panic!("No message received after a second."),
         }
     }
+    sm_mapper.unwrap().abort();
     assert!(received_supported_operation);
     assert!(received_pending_operation_request);
 }
@@ -98,7 +100,8 @@ async fn mapper_publishes_software_update_request() {
     )
     .await;
 
-    let _sm_mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper().await;
+    let _ = publish_a_fake_jwt_token().await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
@@ -131,6 +134,7 @@ async fn mapper_publishes_software_update_request() {
             panic!("No message received after a second.");
         }
     }
+    sm_mapper.unwrap().abort();
 }
 
 #[tokio::test]
@@ -147,7 +151,8 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     .await;
 
     // Start SM Mapper
-    let _sm_mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper().await;
+    let _ = publish_a_fake_jwt_token().await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -206,6 +211,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
         }
         _ => panic!("No update operation result message received after a second."),
     }
+    sm_mapper.unwrap().abort();
     assert!(received_status_successful);
 }
 
@@ -221,7 +227,8 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     .await;
 
     // Start SM Mapper
-    let _sm_mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper().await;
+    let _ = publish_a_fake_jwt_token().await;
 
     let json_response = r#"
         {
@@ -265,6 +272,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
             _ => panic!("No failed status message received after a second."),
         }
     }
+    sm_mapper.unwrap().abort();
     assert!(received_status_failed);
 }
 
@@ -300,6 +308,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await?;
+    let _ = publish_a_fake_jwt_token().await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
@@ -359,7 +368,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     }
 
     // Restart SM Mapper
-    let _sm_mapper = start_sm_mapper().await?;
+    let sm_mapper = start_sm_mapper().await?;
+    let _ = publish_a_fake_jwt_token().await;
 
     let mut received_status_successful = false;
 
@@ -383,7 +393,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
             _ => panic!("No software update message received after a second."),
         }
     }
-
+    sm_mapper.abort();
     Ok(assert!(received_status_successful))
 }
 
@@ -444,6 +454,8 @@ fn create_tedge_config() -> TEdgeConfig {
     let content = r#"
         [mqtt]
         port=55555
+        [c8y]
+        url='test.c8y.com'
         "#;
     let mut file = tempfile::NamedTempFile::new_in(&temp_dir).unwrap();
     let _write_file = file.write_all(content.as_bytes()).unwrap();
@@ -513,4 +525,8 @@ async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
         let _ = sm_mapper.run(messages).await;
     });
     Ok(mapper_task)
+}
+
+async fn publish_a_fake_jwt_token() {
+    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), "71,1111".into()).await;
 }
