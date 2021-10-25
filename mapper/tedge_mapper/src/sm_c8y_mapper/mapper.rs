@@ -87,6 +87,23 @@ impl CumulocitySoftwareManagement {
         let () = self.ask_software_list().await?;
 
         while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
+            match err {
+                SMCumulocityMapperError::FromSmartRestDeserializer(_) => {
+                    let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+                    // publish the operation status as `executing`
+                    let () = self
+                        .publish(&topic, "501,c8y_SoftwareUpdate".into())
+                        .await?;
+                    // publish the operation status as `failed`
+                    let () = self
+                        .publish(
+                            &topic,
+                            format!("502,c8y_SoftwareUpdate,\"{}\"", err.to_string()),
+                        )
+                        .await?;
+                }
+                _ => {}
+            }
             error!("{}", err);
         }
 
