@@ -19,16 +19,6 @@ class AptPluginUpdateList(AptPlugin):
     update_list = 'update-list'
 
     package1_name = "rolldice"
-
-    # TODO This version will be different on different OS
-    # Ubuntu ?
-    #package1_version = "1.16-1build1"
-    # Debian Bullseye:
-    # package1_version = '1.16-1+b3'
-    # Rpi Buster
-    package1_version = '1.16-1+b1'
-
-
     package2_name = "asciijump"
     package3_name = "moon-buggy"
 
