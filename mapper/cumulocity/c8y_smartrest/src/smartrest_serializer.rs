@@ -274,6 +274,7 @@ mod tests {
         let expected_smartrest_obj = SmartRestSetOperationToSuccessful {
             message_id: "503",
             operation: "c8y_SoftwareUpdate",
+            url: None
         };
         assert_eq!(smartrest_obj, expected_smartrest_obj);
     }

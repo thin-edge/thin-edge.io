@@ -3,6 +3,7 @@ use crate::sm_c8y_mapper::json_c8y::{C8yCreateEvent, C8yManagedObject};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
+use c8y_smartrest::error::SmartRestSerializerError;
 use c8y_smartrest::smartrest_deserializer::{SmartRestLogEvent, SmartRestLogModule};
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
@@ -13,13 +14,13 @@ use c8y_smartrest::{
         SmartRestSetSupportedLogType, SmartRestSetSupportedOperations,
     },
 };
-use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone, Utc};
 use json_sm::{
     Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
-use reqwest::{Body, Url};
+use reqwest::{Body, Response, Url};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{convert::TryInto, time::Duration};
@@ -109,81 +110,32 @@ impl CumulocitySoftwareManagement {
                 let () = self.forward_software_request(payload).await?;
             }
             "522" => {
-                // SETTING TO EXECUTTING
-                let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-                let smartrest_set_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                )
-                .to_smartrest()?;
+                // 1. set log file request to executing
+                // 2. read_logs(SmartRestLogModule) -> Ok() TODO rename smartrest_obj
+                // 3. create event
+                // 4. upload log file
+                // 5. set log file request to done
 
-                let () = self.publish(&topic, smartrest_set_operation_status).await?;
-                // SETTING TO EXECUTTING - DONE
+                let () = self.set_log_file_request_executing().await?;
+                let log_output = read_tedge_agent_system_logs(&payload)?;
 
-                let mut log_quests = SmartRestLogModule::new();
-                log_quests = log_quests.from_smartrest(payload)?;
-                dbg!(&log_quests);
-                let log_from = convert_string_to_dt(&log_quests.date_from)?;
-                let log_to = convert_string_to_dt(&log_quests.date_to)?;
-                let log_output = read_logs(log_from, log_to)?;
+                // create event log event
 
-                // forward log request?
                 let token = get_jwt_token(&self.client).await?;
 
-                let client = reqwest::ClientBuilder::new().build()?;
+                let event_response_id = self.create_log_event_and_retrieve_id(&token).await?;
 
-                let url_host = self.config.query_string(C8yUrlSetting)?;
-                let create_event_url = get_url_for_create_event(&url_host);
-
-                // TODO: undo pub
-                let c8y_managed_object = C8yManagedObject {
-                    id: self.c8y_internal_id.clone(),
-                };
-                let c8y_log_event = C8yCreateEvent::new(
-                    c8y_managed_object,
-                    "c8y_Logfile",
-                    "2021-09-15T15:57:41.311Z",
-                    "syslog log file",
-                );
-
-                dbg!(&c8y_log_event, &create_event_url);
-
-                let request = client
-                    .post(create_event_url)
-                    .json(&c8y_log_event)
-                    .bearer_auth(token.token())
-                    .header("Accept", "application/json")
-                    .timeout(Duration::from_millis(10000))
-                    .build()?;
-
-                let _response = client.execute(request).await?;
-                let event_response_body = _response.json::<SmartRestLogEvent>().await?;
-
-                let binary_upload_event_url =
-                    get_url_for_event_binary_upload(&url_host, &event_response_body.id);
-
-                // NOTE: do i need the token again?
-                // let token = get_jwt_token(&self.client).await?;
-                let request = client
-                    .post(&binary_upload_event_url)
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "text/plain")
-                    .body(log_output)
-                    .bearer_auth(token.token())
-                    .timeout(Duration::from_millis(10000))
-                    .build()?;
-
-                let _response = client.execute(request).await?;
-
-                // SET TO DONE
-                let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-                let smartrest_set_operation_status =
-                    SmartRestSetOperationToSuccessful::new_with_file(
-                        CumulocitySupportedOperations::C8yLogFileRequest,
-                        &binary_upload_event_url,
+                let () = self
+                    .upload_log_binary_and_return_event_url(
+                        &token,
+                        &event_response_id,
+                        &log_output.as_str(),
                     )
-                    .to_smartrest()?;
+                    .await?;
 
-                let () = self.publish(&topic, smartrest_set_operation_status).await?;
+                let () = self
+                    .set_log_file_request_done(&binary_upload_event_url)
+                    .await?;
             }
 
             _ => {
@@ -315,6 +267,100 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
+    async fn set_log_file_request_executing(&self) -> Result<(), SMCumulocityMapperError> {
+        let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+        let smartrest_set_operation_status =
+            SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
+                .to_smartrest()?;
+
+        let () = self.publish(&topic, smartrest_set_operation_status).await?;
+        Ok(())
+    }
+
+    async fn set_log_file_request_done(
+        &self,
+        binary_upload_event_url: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
+        // SET TO DONE
+        let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+        let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new_with_file(
+            CumulocitySupportedOperations::C8yLogFileRequest,
+            binary_upload_event_url,
+        )
+        .to_smartrest()?;
+
+        let () = self.publish(&topic, smartrest_set_operation_status).await?;
+        Ok(())
+    }
+
+    ///
+    async fn forward_log_retrieve_request(
+        &self,
+        smartrest: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
+        Ok(())
+    }
+
+    async fn create_log_event_and_retrieve_id(
+        &self,
+        token: &SmartRestJwtResponse,
+    ) -> Result<String, SMCumulocityMapperError> {
+        let client = reqwest::ClientBuilder::new().build()?;
+
+        let url_host = self.config.query_string(C8yUrlSetting)?;
+        let create_event_url = get_url_for_create_event(&url_host);
+
+        let c8y_managed_object = C8yManagedObject {
+            id: self.c8y_internal_id.clone(),
+        };
+
+        let local: DateTime<Local> = Local::now();
+        dbg!(&local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),);
+
+        let c8y_log_event = C8yCreateEvent::new(
+            c8y_managed_object,
+            "c8y_Logfile",
+            &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "syslog log file",
+        );
+
+        let request = client
+            .post(create_event_url)
+            .json(&c8y_log_event)
+            .bearer_auth(token.token())
+            .header("Accept", "application/json")
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+
+        let response = client.execute(request).await?;
+
+        let event_response_body = response.json::<SmartRestLogEvent>().await?;
+        Ok(event_response_body.id)
+    }
+
+    async fn upload_log_binary_and_return_event_url(
+        &self,
+        token: &SmartRestJwtResponse,
+        event_id: &str,
+        log_content: &str,
+    ) -> Result<String, SMCumulocityMapperError> {
+        let client = reqwest::ClientBuilder::new().build()?;
+        let url_host = self.config.query_string(C8yUrlSetting)?;
+        let binary_upload_event_url = get_url_for_event_binary_upload(&url_host, &event_id);
+
+        let request = client
+            .post(&binary_upload_event_url)
+            .header("Accept", "application/json")
+            .header("Content-Type", "text/plain")
+            .body(log_content)
+            .bearer_auth(token.token())
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+
+        let _response = client.execute(request).await?;
+        Ok(binary_upload_event_url)
+    }
+
     async fn forward_software_request(
         &self,
         smartrest: &str,
@@ -423,27 +469,35 @@ fn get_date_from_log_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumuloc
     ))
 }
 
-fn read_logs(
-    date_from: NaiveDateTime,
-    date_to: NaiveDateTime,
-) -> Result<String, SMCumulocityMapperError> {
-    let r = std::fs::read_dir("/var/log/tedge/agent/")?;
-    dbg!(&date_from, &date_to);
-
+/// Reads logs from `/var/log/tedge/`.
+///
+/// # Arguments
+///
+/// * `payload` (`&str`) - log request payload
+///
+/// * return (`String`) - concatenated logs if file date time >= date_from and <= date_to
+fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMapperError> {
     let mut output = String::new();
-    for i in r {
-        let log_path = i?.path();
-        let dt = get_date_from_log_path(&log_path)?;
+    // make smartrest object from payload
+
+    let mut smartrest_obj = SmartRestLogModule::new();
+    smartrest_obj = smartrest_obj.from_smartrest(payload)?;
+
+    // convert `.date_from` & `.date_to` from String to date time object
+    let date_from = convert_string_to_dt(&smartrest_obj.date_from)?;
+    let date_to = convert_string_to_dt(&smartrest_obj.date_to)?;
+
+    let read_iterator = std::fs::read_dir("/var/log/tedge/agent/")?;
+
+    for entry in read_iterator {
+        let file_path = entry?.path();
+        let dt = get_date_from_log_path(&file_path)?;
+
         if dt >= date_from && dt <= date_to {
-            let file_content = std::fs::read_to_string(log_path)?;
+            let file_content = std::fs::read_to_string(file_path)?;
             output.push_str(&file_content);
         }
     }
-
-    //let some_file_here =
-    //    std::fs::read_to_string("/var/log/tedge/agent/software-list-2021-10-24T23:54:34Z.log");
-    //dbg!(some_file_here);
-
     Ok(output)
 }
 
@@ -590,7 +644,8 @@ mod tests {
                 "get_jwt_token_full_run",
                 &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
             )
-            .await?,
+            .await
+            .unwrap(),
         );
 
         let publisher2 = publisher.clone();
@@ -600,11 +655,12 @@ mod tests {
             match tokio::time::timeout(TEST_TIMEOUT_MS, publish_messages_stream.next()).await {
                 Ok(Some(msg)) => {
                     // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
-                    assert_eq!(msg.topic, Topic::new("c8y/s/uat")?);
-                    assert_eq!(msg.payload_str()?, "");
+                    assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
+                    assert_eq!(msg.payload_str().unwrap(), "");
 
                     // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                    let message = mqtt_client::Message::new(&Topic::new("c8y/s/dat")?, "71,1111");
+                    let message =
+                        mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
                     let _ = publisher2.publish(message).await;
                 }
                 _ => panic!("No message received after a second."),
@@ -616,7 +672,7 @@ mod tests {
 
         // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
         assert!(jwt_token.is_ok());
-        assert_eq!(jwt_token?.token(), "1111");
+        assert_eq!(jwt_token.unwrap().token(), "1111");
     }
 
     #[test]
@@ -659,14 +715,15 @@ mod tests {
     }
 
     async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
-        let topic_filter = TopicFilter::new(pattern)?;
+        let topic_filter = TopicFilter::new(pattern).unwrap();
         let subscriber = Client::connect(
             client_name,
             &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
         )
-        .await?;
+        .await
+        .unwrap();
 
         // Obtain subscribe stream
-        subscriber.subscribe(topic_filter).await?
+        subscriber.subscribe(topic_filter).await.unwrap()
     }
 }
