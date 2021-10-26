@@ -1,6 +1,6 @@
 use crate::cli::mqtt::{publish::MqttPublishCommand, subscribe::MqttSubscribeCommand, MqttError};
 use crate::command::{BuildCommand, BuildContext, Command};
-use mqtt_client::{QoS, Topic};
+use rumqttc::QoS;
 use std::time::Duration;
 use structopt::StructOpt;
 use tedge_config::*;
@@ -25,7 +25,7 @@ pub enum TEdgeMqttCli {
 
     /// Subscribe a MQTT topic.
     Sub {
-        /// Topic to publish
+        /// Topic to subscribe to
         topic: String,
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
@@ -40,8 +40,6 @@ impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let port = context.config_repository.load()?.query(MqttPortSetting)?;
 
-        let mqtt_config = mqtt_client::Config::new(DEFAULT_HOST, port.into());
-
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {
@@ -49,10 +47,11 @@ impl BuildCommand for TEdgeMqttCli {
                     message,
                     qos,
                 } => MqttPublishCommand {
-                    topic: Topic::new(topic.as_str())?,
+                    host: DEFAULT_HOST.to_string(),
+                    port: port.into(),
+                    topic,
                     message,
                     qos,
-                    mqtt_config,
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
                     disconnect_timeout: DISCONNECT_TIMEOUT,
                 }
@@ -62,10 +61,11 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     hide_topic,
                 } => MqttSubscribeCommand {
+                    host: DEFAULT_HOST.to_string(),
+                    port: port.into(),
                     topic,
                     qos,
                     hide_topic,
-                    mqtt_config,
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                 }
                 .into_boxed(),
@@ -77,19 +77,19 @@ impl BuildCommand for TEdgeMqttCli {
 }
 
 fn parse_qos(src: &str) -> Result<QoS, MqttError> {
-    let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoSError)?;
+    let int_val: u8 = src.parse().map_err(|_| MqttError::InvalidQoS)?;
     match int_val {
         0 => Ok(QoS::AtMostOnce),
         1 => Ok(QoS::AtLeastOnce),
         2 => Ok(QoS::ExactlyOnce),
-        _ => Err(MqttError::InvalidQoSError),
+        _ => Err(MqttError::InvalidQoS),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::parse_qos;
-    use mqtt_client::QoS;
+    use rumqttc::QoS;
 
     #[test]
     fn test_parse_qos_at_most_once() {

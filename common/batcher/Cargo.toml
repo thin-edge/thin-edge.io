@@ -1,0 +1,14 @@
+[package]
+name = "batcher"
+version = "0.4.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4"
+tokio = { version = "1.12", features = ["sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1.12", features = ["rt", "macros"] }

@@ -4,7 +4,7 @@
 
 There are two possibilities to install thin-edge.io, the easiest way is to use the installation script with this command:
 ```
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s 0.2.0
+curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
 You can execute that command on your device and it will do all required steps for an initial setup.
 
@@ -46,18 +46,18 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_
 where:
 > `version` -> thin-edge.io version in x.x.x format
 >
-> `arch` -> architecture type (amd64, armhf)
+> `arch` -> architecture type (amd64, armhf, arm64)
 
 Eg:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_0.1.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.4.0/tedge_0.4.0_armhf.deb
 ```
 
 and for `mapper`:
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.1.0/tedge_mapper_0.1.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.4.0/tedge_mapper_0.4.0_armhf.deb
 ```
 
 ### Package installation
@@ -75,7 +75,7 @@ dpkg -i tedge_<version>_<arch>.deb
 Eg:
 
 ```shell
-dpkg -i tedge_0.1.0_armhf.deb
+dpkg -i tedge_0.4.0_armhf.deb
 ```
 
 To install mapper for thin-edge.io do:
@@ -87,7 +87,7 @@ dpkg -i tedge_mapper_<version>_<arch>.deb
 Eg:
 
 ```shell
-dpkg -i tedge_mapper_0.1.0_armhf.deb
+dpkg -i tedge_mapper_0.4.0_armhf.deb
 ```
 
 ### Add your user to `tedge-users` group
@@ -101,7 +101,7 @@ Run this command to add a user to the group.
 
 ```shell
 sudo adduser <user> tedge-users
-``` 
+```
 
 ## Next steps
 

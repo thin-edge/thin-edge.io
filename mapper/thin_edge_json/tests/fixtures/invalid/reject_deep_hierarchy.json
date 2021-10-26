@@ -1,0 +1,12 @@
+{
+  "location": {
+    "latitude": 32.54,
+    "longitude": -117.67,
+    "altitude": 98.6,
+    "area": {
+      "breadth": 32.54,
+      "depth": 117.67
+    }
+  },
+  "pressure": 98
+}

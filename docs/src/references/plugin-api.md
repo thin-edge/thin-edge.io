@@ -1,25 +1,31 @@
 # Package Manager Plugin API
 
-__Note__ This API is not released yet. The Software Management feature will be released for version `0.3`.
-
 Thin-edge uses plugins to delegate to the appropriate package managers and installers
 all the software management operations: installation of packages, uninstallations and queries.
 
 * A package manager plugin acts as a facade for a specific package manager.
 * A plugin is an executable that follows the [plugin API](./#plugin-api).
 * On a device, several plugins can be installed to deal with different kinds of software modules.
-* Each plugin is given a name that is used by thin-edge to determine the appropriate plugin for a software module.
-* All the actions on a software module are directed to the plugin which name is the module type name.
-* Among all the plugin, one can be distinguished as the default plugin.
-* The default plugin is invoked when no software module type can be determined by the system.
-* Several plugins can co-exist for a given package manager as long as they are given different name.
+* The filename of a plugin is used by thin-edge to determine the appropriate plugin for a software module.
+* All the actions on a software module are directed to the plugin bearing the name that matches the module type name.
+* The plugins are loaded and invoked by the sm-agent in a systematic order (in practice the alphanumerical order of their names in the file system).
+* The software modules to be installed/removed are also passed to the plugins in a consistent order.
+* Among all the plugins, one can be marked as the default plugin using `tedge config` cli.
+* The default plugin is invoked when an incoming software module in the cloud request doesn't contain any explicit type annotation.
+* Several plugins can co-exist for a given package manager as long as they are given different names.
   Each can implement a specific software management policy.
+  For instance, for a debian package manager, several plugins can concurrently be installed, say one named `apt` to handle regular packages from the public apt repository and another named `company-apt` to install packages from a company's private package repository.
 
 ## Plugin repository
 
 * To be used by thin-edge, a plugin has to stored in the directory `/etc/tedge/sm-plugins`.
+* A plugin must be named after the software module type as specified in the cloud request.
+  That is, a plugin named `apt` handles software modules that are defined with type `apt` in the cloud request.
+  Consequently a plugin to handle software module defined for `docker` must be named `docker`.
 * The same plugin can be given different names, using virtual links.
-* One of the plugin can be given the name `default`. This plugin is then used as the default plugin.
+* When there are multiple plugins on a device, one can be marked as the default plugin using the command
+  `tedge config set software.plugin.default <plugin-name>`
+* If there's one and only one plugin available on a device, that's treated as the default, even without an explicit configuration.
 
 On start-up and sighup, the sm-agent registers the plugins as follow:
 1. Iterate over the executable file of the directory `/etc/tedge/sm-plugins`.
@@ -37,45 +43,44 @@ On start-up and sighup, the sm-agent registers the plugins as follow:
 ### Input, Output and Errors
 
 * The plugins are called by the sm-agent using a child process for each action.
-* For the current list of commands there is no input beyond the command arguments,
-  and a plugin can close its `stdin`.
+* Beside command `update-list` there is no input beyond the command arguments, and a plugin that does not
+  implement `update-list` can close its `stdin`.
 * The `stdout` and `stderr` of the process running a plugin command are captured by the sm-agent.
   * These streams don't have to be the streams returned by the underlying package manager.
     It can be a one sentence summary of the error, redirecting the administrator to the package manager logs.
 * A plugin must return the appropriate exit status after each command.
-    * In no cases, the error status of the underlying package manager should be reported.
+  * In no cases, the error status of the underlying package manager should be reported.
 * The exit status are interpreted by sm-agent as follows:
-    * __`0`__: success.
-    * __`1`__: usage. The command arguments cannot be interpreted, and the command has not been launched.
-    * __`2`__: failure. The command failed and there is no point to retry.
-    * __`3`__: retry. The command failed but might be successful later (for instance, when the network will be back).
+  * __`0`__: success.
+  * __`1`__: usage. The command arguments cannot be interpreted, and the command has not been launched.
+  * __`2`__: failure. The command failed and there is no point to retry.
+  * __`3`__: retry. The command failed but might be successful later (for instance, when the network will be back).
 * If the command fails to return within 5 minutes, the sm-agent reports a timeout error:
-    * __`4`__: timeout.
+  * __`4`__: timeout.
 
 ### The `list` command
 
-When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin.
+When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin,
+using tab separated values.
 
 ```shell
 $ debian-plugin list
 ...
-{"name":"collectd-core","version":"5.8.1-1.3"}
-{"name":"mosquitto","version":"1.5.7-1+deb10u1"}
+collectd-core  5.8.1-1.3
+mosquitto   1.5.7-1+deb10u1
 ...
 ```
 
 Contract:
 * This command take no arguments.
 * If an error status is returned, the executable is removed from the list of plugins.
-* The list is returned using the [jsonlines](https://jsonlines.org/) format.
-    * __`name`__: the name of the module. This name is the name that has been used to install it and that need to be used to remove it.
-    * __`version`__: the version currently installed. This is a string that can only been interpreted in the context of the plugin.
-
+* The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values).
+  Each line has two values separated by a tab: the name of the module then the version of that module.
 ### The `prepare` command
 
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands
 
-```
+```shell
 $ /etc/tedge/sm-plugins/debian prepare
 $ /etc/tedge/sm-plugins/debian install x
 $ /etc/tedge/sm-plugins/debian install y
@@ -85,13 +90,13 @@ $ /etc/tedge/sm-plugins/debian finalize
 
 For many plugins this command will do nothing. However, It gives an opportunity to the plugin to:
 * Update the dependencies before an operation, *i.e. a sequence of actions.
-   Notably, a debian plugin can update the `apt` cache issuing an `apt-get update`.
+  Notably, a debian plugin can update the `apt` cache issuing an `apt-get update`.
 * Start a transaction, in case the plugin is able to manage rollbacks.
 
 Contract:
 * This command take no arguments.
 * No output is expected.
-* If the `prepare` command fails, then the planned sequences of actions (.i.e the whole sm operation) is cancelled. 
+* If the `prepare` command fails, then the planned sequences of actions (.i.e the whole sm operation) is cancelled.
 
 ### The `finalize` command
 
@@ -114,8 +119,8 @@ Contract:
 
 The `install` command installs a software module, possibly of some expected version.
 
-```
-$ plugin install NAME [--version VERSION] [--file FILE]
+```shell
+$ plugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
 Contract:
@@ -136,21 +141,21 @@ Contract:
 * The command installs the requested software module and any dependencies that might be required.
   * It is up to the plugin to define if this command triggers an installation or an upgrade.
     It depends on the presence of a previous version on the device and
-    of the ability of the package manager to deal with concurrent versions for a module. 
+    of the ability of the package manager to deal with concurrent versions for a module.
   * A plugin might not be able to install dependencies.
     In that case, the device administrator will have to request explicitly the dependencies to be installed first.
-  * After a successful sequence `prepare; install foo; finalize` the module `foo` must be reported by the `list` command. 
-  * After a successful sequence `prepare; install foo --version v; finalize` the module `foo` must be reported by the `list` command with the version `v`.
+  * After a successful sequence `prepare; install foo; finalize` the module `foo` must be reported by the `list` command.
+  * After a successful sequence `prepare; install foo --module-version v; finalize` the module `foo` must be reported by the `list` command with the version `v`.
     If the plugin manage concurrent versions, the module `foo` might also be reported with versions already installed before the operation.
   * A plugin is not required to detect inconsistent actions as `prepare; install a; remove a-dependency; finalize`.
-  * This is not an error to run this command twice or when the module is already installed.  
+  * This is not an error to run this command twice or when the module is already installed.
 * An error must be reported if:
   * The module name is unknown.
   * There is no version for the module that matches the constraint provided by the `--version` option.
   * The file content provided by `--file` option:
-     * is not in the expected format,
-     * doesn't correspond to the software module name,
-     * has a version that doesn't match the constraint provided by the `--version` option (if any).
+    * is not in the expected format,
+    * doesn't correspond to the software module name,
+    * has a version that doesn't match the constraint provided by the `--module-version` option (if any).
   * The module cannot be downloaded.
   * The module cannot be installed.
 
@@ -158,8 +163,8 @@ Contract:
 
 The `remove` command uninstalls a software module, and possibly its dependencies if no other modules are dependent on those.
 
-```
-$ plugin remove NAME [--version VERSION]
+```shell
+$ plugin remove NAME [--module-version VERSION]
 ```
 
 Contract:
@@ -172,11 +177,82 @@ Contract:
 * The command uninstall the requested module and possibly any dependencies that are no more required.
   * If a version is provided, only the module of that version is removed.
     This is in-practice useful only for a package manager that is able to install concurrent versions of a module.
-  * After a successful sequence `prepare; remove foo; finalize` the module `foo` must no more be reported by the `list` command. 
-  * After a successful sequence `prepare; remove foo --version v; finalize` the module `foo` no more be reported by the `list` command with the version `v`.
+  * After a successful sequence `prepare; remove foo; finalize` the module `foo` must no more be reported by the `list` command.
+  * After a successful sequence `prepare; remove foo --module-version v; finalize` the module `foo` no more be reported by the `list` command with the version `v`.
     If the plugin manage concurrent versions, the module `foo` might still be reported with versions already installed before the operation.
   * A plugin is not required to detect inconsistent actions as `prepare; remove a; install a-reverse-dependency; finalize`.
-  * This is not an error to run this command twice or when the module is not installed.  
+  * This is not an error to run this command twice or when the module is not installed.
 * An error must be reported if:
   * The module name is unknown.
   * The module cannot be uninstalled.
+
+### The `update-list` command
+
+The `update-list` command accepts a list of software modules and associated operations as `install` or `remove`.
+
+This basically achieves same purpose as original commands `install` and `remove`, but gets passed all software modules to be processed in one command.
+This can be needed when order of processing software modules is relevant - e.g. when dependencies between packages inside the software list do occur.
+
+```shell
+# building list of software modules and operations, 
+# and passing to plugin's stdin via pipe:
+# NOTE that each argument is tab separated:
+
+$ echo '\
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3
+  remove	name4'\
+ | plugin update-list
+```
+
+Contract:
+* This command is optional for a plugin. It can be implemented alternatively to original commands `install` and `remove` as both are specified above.
+  * If a plugin does not implement this command it must return exit status `1`. In that case sm-agent will call the plugin again
+    package-by-package using original commands `install` and `remove`.
+  * If a plugin implements this command sm-agent uses it instead of original commands `install` and `remove`.
+* This command takes no commandline arguments, but expects a software list sent from sm-agent to plugin's `stdin`.
+* In the software list each software module is represented by exactly one line, using tab separated values.
+* The position of each argument in the argument list has it's defined meaning:
+  * 1st argument: Is the operation and can be `install` or `remove`
+  * 2nd argument: Is the software module's name.
+  * 3rd argument: Is the software module's version. That argument is optional and can be empty (then empty string "" is used).
+  * 4th argument: Is the software module's path. That argument is optional and can be empty (then empty string "" is used). For operation `remove` that argument does not exist.
+* Behaviour of operations `install` and `remove` is same as for original commands `install` and `remove` as specified above.
+  * For details about operations' arguments "name", "version" and "path", see specification of original command `install` or `remove`.
+  * For details about `exitstatus` see accoring specification of original command `install` or `remove`.
+* An overall error must be reported (via process's exit status) when at least one software module operation has failed.
+
+Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:
+
+```shell
+$ plugin update-list <<EOF
+  install	name1	version1
+  install	name2		path2
+  remove	name3	version3
+  remove	name4
+EOF
+```
+
+That is equivalent to use of original commands (`install` and `remove`):
+
+```shell
+$ plugin install name1 --module-version version1
+$ plugin install name2 --module-path path2
+$ plugin remove "name 3" --module-version version3
+$ plugin remove name4
+```
+
+Exemplary implementation of a shell script for parsing software list from `stdin`:
+
+Note that this example works only in bash.
+```shell
+#!/bin/bash
+
+echo ""
+echo "---+++ reading software list +++---"
+while IFS=$'\t' read -r ACTION MODULE VERSION FILE
+do
+    echo "$0 $ACTION $MODULE $VERSION"
+done
+```

@@ -1,5 +1,5 @@
-use crate::command::{Command, ExecutionContext};
-use crate::utils::paths;
+use super::error::CertError;
+use crate::command::Command;
 use certificate::{KeyCertPair, NewCertificateConfig};
 use std::{
     fs::{File, OpenOptions},
@@ -7,9 +7,8 @@ use std::{
     path::Path,
 };
 use tedge_config::*;
-use tedge_users;
-
-use super::error::CertError;
+use tedge_users::UserManager;
+use tedge_utils::paths::{set_permission, validate_parent_dir_exists};
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -21,6 +20,9 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: FilePath,
+
+    /// The UserManager required to change effective user id
+    pub user_manager: UserManager,
 }
 
 impl Command for CreateCertCmd {
@@ -28,25 +30,21 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self, context: &ExecutionContext) -> Result<(), anyhow::Error> {
+    fn execute(&self) -> anyhow::Result<()> {
         let config = NewCertificateConfig::default();
-        let () = self.create_test_certificate(&config, &context.user_manager)?;
+        let () = self.create_test_certificate(&config)?;
         Ok(())
     }
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(
-        &self,
-        config: &NewCertificateConfig,
-        user_manager: &tedge_users::UserManager,
-    ) -> Result<(), CertError> {
-        let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
+    fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+        let _user_guard = self.user_manager.become_user(tedge_users::BROKER_USER)?;
 
-        paths::validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
-        paths::validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
+        validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
+        validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
-        let cert = KeyCertPair::new_selfsigned_certificate(&config, &self.id)?;
+        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id)?;
 
         // Creating files with permission 644
         let mut cert_file = create_new_file(&self.cert_path)
@@ -59,11 +57,11 @@ impl CreateCertCmd {
         cert_file.sync_all()?;
 
         // Prevent the certificate to be overwritten
-        paths::set_permission(&cert_file, 0o444)?;
+        set_permission(&cert_file, 0o444)?;
 
         {
             // Make sure the key is secret, before write
-            paths::set_permission(&key_file, 0o600)?;
+            set_permission(&key_file, 0o600)?;
 
             // Zero the private key on drop
             let cert_key = cert.private_key_pem_string()?;
@@ -71,7 +69,7 @@ impl CreateCertCmd {
             key_file.sync_all()?;
 
             // Prevent the key to be overwritten
-            paths::set_permission(&key_file, 0o400)?;
+            set_permission(&key_file, 0o400)?;
         }
 
         Ok(())
@@ -101,10 +99,11 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            user_manager: UserManager::new(),
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default(), &UserManager::new()),
+            cmd.create_test_certificate(&NewCertificateConfig::default()),
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
@@ -128,10 +127,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            user_manager: UserManager::new(),
         };
 
         assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default())
             .ok()
             .is_none());
 
@@ -149,10 +149,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            user_manager: UserManager::new(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
@@ -167,10 +168,11 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            user_manager: UserManager::new(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default(), &UserManager::new())
+            .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }

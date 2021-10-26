@@ -152,9 +152,111 @@ impl ConfigSetting for MqttPortSetting {
     const KEY: &'static str = "mqtt.port";
 
     const DESCRIPTION: &'static str = concat!(
-        "Mqtt broker port, which is used by the mqtt clients to publish or subscribe. ",
-        "Example: listener 1883"
+        "Mqtt broker port, which is used by the local mqtt clients to publish or subscribe. ",
+        "Example: 1883"
     );
 
     type Value = Port;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalPortSetting;
+
+impl ConfigSetting for MqttExternalPortSetting {
+    const KEY: &'static str = "mqtt.external.port";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Mqtt broker port, which is used by the external mqtt clients to publish or subscribe. ",
+        "Example: 8883"
+    );
+
+    type Value = Port;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalBindAddressSetting;
+
+impl ConfigSetting for MqttExternalBindAddressSetting {
+    const KEY: &'static str = "mqtt.external.bind_address";
+
+    const DESCRIPTION: &'static str = concat!(
+        "IP address / hostname, which the mqtt broker limits incoming connections on. ",
+        "Example: 0.0.0.0"
+    );
+
+    type Value = String;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalBindInterfaceSetting;
+
+impl ConfigSetting for MqttExternalBindInterfaceSetting {
+    const KEY: &'static str = "mqtt.external.bind_interface";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Name of network interface, which the mqtt broker limits incoming connections on. ",
+        "Example: wlan0"
+    );
+
+    type Value = String;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalCAPathSetting;
+
+impl ConfigSetting for MqttExternalCAPathSetting {
+    const KEY: &'static str = "mqtt.external.capath";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to a file containing the PEM encoded CA certificates ",
+        "that are trusted when checking incoming client certificates. ",
+        "Example: /etc/ssl/certs",
+        "Note: If the capath is not set, then no certificates are required for the external connections."
+    );
+
+    type Value = FilePath;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalCertfileSetting;
+
+impl ConfigSetting for MqttExternalCertfileSetting {
+    const KEY: &'static str = "mqtt.external.certfile";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the certificate file, which is used by external MQTT listener",
+        "Example: /etc/tedge/device-certs/tedge-certificate.pem",
+        "Note: This setting shall be used together with `mqtt.external.keyfile` for external connections."
+    );
+
+    type Value = FilePath;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttExternalKeyfileSetting;
+
+impl ConfigSetting for MqttExternalKeyfileSetting {
+    const KEY: &'static str = "mqtt.external.keyfile";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the private key file, which is used by external MQTT listener",
+        "Example: /etc/tedge/device-certs/tedge-private-key.pem",
+        "Note: This setting shall be used together with `mqtt.external.certfile` for external connections."
+    );
+
+    type Value = FilePath;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct SoftwarePluginDefaultSetting;
+
+impl ConfigSetting for SoftwarePluginDefaultSetting {
+    const KEY: &'static str = "software.plugin.default";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default software plugin to be used for software management on the device",
+        "Example: apt"
+    );
+
+    type Value = String;
 }

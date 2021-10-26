@@ -19,7 +19,8 @@ impl Converter for AzureConverter {
 
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
 
-        let () = thin_edge_json::json::parse_str(input, &mut serializer)?;
+        let () = thin_edge_json::parser::parse_str(input, &mut serializer)?;
+
         Ok(serializer.into_string()?)
     }
 }
@@ -173,7 +174,7 @@ mod tests {
 
         assert_matches!(
             result,
-            Err(ConversionError::MessageSizeExceededError(
+            Err(ConversionError::SizeThresholdExceeded(
                 SizeThresholdExceeded {
                     actual_size: 3,
                     threshold: 1

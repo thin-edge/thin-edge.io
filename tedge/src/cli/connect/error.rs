@@ -13,29 +13,29 @@ pub enum ConnectError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    MqttClient(#[from] mqtt_client::MqttClientError),
+    MqttClient(#[from] rumqttc::ClientError),
 
     #[error(transparent)]
-    PathsError(#[from] crate::utils::paths::PathsError),
-
-    #[error(transparent)]
-    PersistError(#[from] tempfile::PersistError),
+    PathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error("Provided endpoint url is not valid, provide valid url.\n{0}")]
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
-    ServicesError(#[from] crate::services::ServicesError),
+    SystemServiceError(#[from] crate::system_services::SystemServiceError),
 
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,
-
-    #[error("Couldn't receive packets from {cloud} within fixed time.")]
-    NoPacketsReceived { cloud: String },
 
     #[error(transparent)]
     PortSettingError(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
     ConfigLoadError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error("Connection check failed")]
+    ConnectionCheckError,
+
+    #[error("Device is not connected to {cloud} cloud")]
+    DeviceNotConnected { cloud: String },
 }

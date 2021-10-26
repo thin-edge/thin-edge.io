@@ -1,10 +1,11 @@
+use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
     component::TEdgeComponent, error::*,
 };
-use std::path::PathBuf;
 use structopt::*;
 use tedge_config::*;
+use tedge_utils::paths::home_dir;
 
 mod az_converter;
 mod az_mapper;
@@ -16,14 +17,14 @@ mod converter;
 mod error;
 mod mapper;
 mod size_threshold;
-
-const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
+mod sm_c8y_mapper;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
+        MapperName::SmC8y => Box::new(CumulocitySoftwareManagementMapper::new()),
     }
 }
 
@@ -33,31 +34,38 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     version = clap::crate_version!(),
     about = clap::crate_description!()
 )]
-enum MapperName {
+pub struct MapperOpt {
+    #[structopt(subcommand)]
+    pub name: MapperName,
+
+    /// Turn-on the debug log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO
+    /// If on also reports DEBUG and TRACE
+    #[structopt(long)]
+    pub debug: bool,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum MapperName {
     Az,
     C8y,
     Collectd,
+    SmC8y,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    initialise_logging();
+    let mapper = MapperOpt::from_args();
+    tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
-    let component = lookup_component(&MapperName::from_args());
+    let component = lookup_component(&mapper.name);
 
     let config = tedge_config()?;
     component.start(config).await
 }
 
-fn initialise_logging() {
-    tracing_subscriber::fmt()
-        .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
-            TIME_FORMAT.into(),
-        ))
-        .init();
-}
-
-fn tedge_config() -> Result<TEdgeConfig, anyhow::Error> {
+fn tedge_config() -> anyhow::Result<TEdgeConfig> {
     let config_repository = config_repository()?;
     Ok(config_repository.load()?)
 }
@@ -74,11 +82,4 @@ fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
     };
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     Ok(config_repository)
-}
-
-// Copied from tedge/src/utils/paths.rs. In the future, it would be good to separate it from tedge crate.
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .and_then(|home| if home.is_empty() { None } else { Some(home) })
-        .map(PathBuf::from)
 }

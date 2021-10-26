@@ -1,13 +1,12 @@
 [package]
 name = "tedge_apt_plugin"
-version = "0.1.0"
+version = "0.4.0"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "Thin.edge.io plugin for software management using apt"
 
 [package.metadata.deb]
-depends = "tedge"
 assets = [
     ["target/release/tedge_apt_plugin", "/etc/tedge/sm-plugins/apt", "755"],
 ]
@@ -17,3 +16,13 @@ assets = [
 [dependencies]
 structopt = "0.3"
 thiserror = "1.0"
+csv = "1.1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+anyhow = "1.0"
+hamcrest2 = "0.3"
+reqwest = { version = "0.11", default-features = false, features = [ "blocking", "rustls-tls" ] }
+serial_test = "0.5"
+tedge_utils = { path = "../../../common/tedge_utils" }
+test-case = "1.2"

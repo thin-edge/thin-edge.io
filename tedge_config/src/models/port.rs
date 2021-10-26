@@ -29,9 +29,9 @@ impl TryInto<String> for Port {
     }
 }
 
-impl Into<u16> for Port {
-    fn into(self) -> u16 {
-        self.0
+impl From<Port> for u16 {
+    fn from(val: Port) -> Self {
+        val.0
     }
 }
 

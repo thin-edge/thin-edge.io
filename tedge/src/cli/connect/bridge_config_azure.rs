@@ -47,9 +47,10 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_certfile,
             bridge_keyfile,
             use_mapper: true,
+            use_agent: false,
             try_private: false,
             start_type: "automatic".into(),
-            clean_session: true,
+            clean_session: false,
             notifications: false,
             bridge_attempt_unsubscribe: false,
             topics: vec![
@@ -90,6 +91,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         use_mapper: true,
+        use_agent: false,
         topics: vec![
             r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
@@ -98,7 +100,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         ],
         try_private: false,
         start_type: "automatic".into(),
-        clean_session: true,
+        clean_session: false,
         notifications: false,
         bridge_attempt_unsubscribe: false,
     };

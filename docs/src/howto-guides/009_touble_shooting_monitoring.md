@@ -23,16 +23,16 @@ tedge mqtt sub 'collectd/#'
 
 If no metrics are collected, please check the [MQTT configuration](../tutorials/device-monitoring.md#collectdconf)
 
-## Is the thin-edge `collectd-mapper` running?
+## Is the `tedge-mapper-collectd.service` running?
 
 ```
-sudo systemctl status collectd-mapper
+sudo systemctl status tedge-mapper-collectd.service
 ```
 
-If not, launch collected
+If not, launch tedge-mapper-collectd.service as below
 
 ```
-sudo systemctl start collectd-mapper
+sudo systemctl start tedge-mapper-collectd.service
 ```
 
 ## Are the collectd metrics published in Thin Edge JSON format?

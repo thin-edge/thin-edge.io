@@ -32,13 +32,15 @@ jobs:
           path: debian-package_unpack
 
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-        #install collectd-core
+      - name: install libmosquitto1
+        run:  sudo apt-get --assume-yes install libmosquitto1
+
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
@@ -48,7 +50,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        #replace the default config file with tedge custom config file
+        # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -103,14 +105,21 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
+      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
-        run: sudo dpkg -P mosquitto tedge tedge_mapper tedge_apt_plugin collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
-        #install collectd-core
+      - name: install libmosquitto1
+        run:  sudo apt-get --assume-yes install libmosquitto1
+
+      - name: install mosquitto-clients
+        run: sudo apt-get --assume-yes install mosquitto-clients
+
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
 
@@ -120,7 +129,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        #replace the default config file with tedge custom config file
+        # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -133,7 +142,10 @@ jobs:
           workflow_conclusion: success
           branch: main
           name: examples_armv7-unknown-linux-gnueabihf
-          path: examples
+          path: /home/pi/examples
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
@@ -143,3 +155,6 @@ jobs:
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com

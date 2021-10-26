@@ -1,10 +1,11 @@
 use crate::*;
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use tedge_utils::fs::atomically_write_file_sync;
 
 /// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
 ///
+#[derive(Debug)]
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
     config_defaults: TEdgeConfigDefaults,
@@ -34,33 +35,13 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
             let () = fs::create_dir(self.config_location.tedge_config_root_path())?;
         }
 
-        let () = atomically_write_file(
+        let () = atomically_write_file_sync(
             self.config_location.temporary_tedge_config_file_path(),
             self.config_location.tedge_config_file_path(),
             toml.as_bytes(),
         )?;
         Ok(())
     }
-}
-
-fn atomically_write_file(
-    tempfile: impl AsRef<Path>,
-    dest: impl AsRef<Path>,
-    content: &[u8],
-) -> std::io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(tempfile.as_ref())?;
-    if let Err(err) = file.write_all(content) {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-    if let Err(err) = fs::rename(tempfile.as_ref(), dest) {
-        let _ = fs::remove_file(tempfile);
-        return Err(err);
-    }
-    Ok(())
 }
 
 impl TEdgeConfigRepository {
@@ -79,6 +60,10 @@ impl TEdgeConfigRepository {
         }
     }
 
+    pub fn get_config_location(&self) -> &TEdgeConfigLocation {
+        &self.config_location
+    }
+
     /// Parse the configuration file at the provided `path` and create a `TEdgeConfig` out of it
     ///
     /// #Arguments
@@ -94,7 +79,7 @@ impl TEdgeConfigRepository {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 Err(TEdgeConfigError::ConfigFileNotFound(path))
             }
-            Err(err) => Err(TEdgeConfigError::IOError(err)),
+            Err(err) => Err(TEdgeConfigError::FromIo(err)),
         }
     }
 

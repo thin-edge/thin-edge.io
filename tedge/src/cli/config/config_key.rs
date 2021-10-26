@@ -48,6 +48,13 @@ impl ConfigKey {
             config_key!(AzureRootCertPathSetting),
             config_key!(AzureMapperTimestamp),
             config_key!(MqttPortSetting),
+            config_key!(MqttExternalPortSetting),
+            config_key!(MqttExternalBindAddressSetting),
+            config_key!(MqttExternalBindInterfaceSetting),
+            config_key!(MqttExternalCAPathSetting),
+            config_key!(MqttExternalCertfileSetting),
+            config_key!(MqttExternalKeyfileSetting),
+            config_key!(SoftwarePluginDefaultSetting),
         ]
     }
 }

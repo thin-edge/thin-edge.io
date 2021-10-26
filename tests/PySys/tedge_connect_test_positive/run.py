@@ -1,6 +1,3 @@
-import sys
-
-sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
 
 """
@@ -20,12 +17,15 @@ Then the test has passed
 class TedgeConnectTestPositive(EnvironmentC8y):
     def execute(self):
         super().execute()
+        self.systemctl = "/usr/bin/systemctl"
         self.log.info("Execute `tedge connect c8y --test`")
         self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y", "--test"],
             stdouterr="tedge_connect_c8y_test_positive",
         )
+        self.device_fragment = self.cumulocity.get_thin_edge_device_by_name(
+            self.project.device)
 
     def validate(self):
         super().validate()
@@ -33,3 +33,5 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         self.assertGrep(
             "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
         )
+        self.assertTrue(
+            self.device_fragment['id'] != None, "thin-edge.io device with the given name exists")
