@@ -116,7 +116,8 @@ class SoftwareManagement(EnvironmentC8y):
             # # docker plugin
             "registry": "8018911",
             "hello-world": "8021526",
-            "docker/getting-started": "8021973",
+            "docker/getting-started": "8021973", # warning not available for arm
+            "alpine" : "7991792",
         }
 
         if self.project.c8yswrepo:
