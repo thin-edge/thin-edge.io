@@ -1,0 +1,151 @@
+name: system-test-workflow-C
+
+on:
+  workflow_dispatch:
+    branches: [ main, continuous_integration]
+  workflow_run:
+    workflows: ["integration-test-workflow"]
+    branches: [main, continuous_integration]
+    types:
+      - completed
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  install-and-use-rpi-offsite:
+    runs-on: [self-hosted, Linux, ARM, offsitec]
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: Download artifact debian packages
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: debian-packages-armv7-unknown-linux-gnueabihf
+          path: debian-package_unpack
+
+      - name: delete old publisher
+        run: rm -f /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact examples
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: examples_armv7-unknown-linux-gnueabihf
+          path: /home/pi/examples
+
+      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
+      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
+      - name: purge packages
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
+        continue-on-error: true
+
+      - name: install packages
+        run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core
+
+      - name: install packages
+        run: sudo dpkg -i ./debian-package_unpack/*.deb
+
+      - name: run tedge help
+        run: tedge --help
+
+        # replace the default config file with tedge custom config file
+      - name: configure collectd
+        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
+      - name: Run Smoke Test
+        run: ./ci/ci_smoke_test.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+  system-test-offsite:
+    needs: [install-and-use-rpi-offsite]
+    runs-on: [self-hosted, Linux, ARM, offsitec]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all plugin tests
+      continue-on-error: true
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      continue-on-error: true
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: offsite_results_${{ github.run_number }}
+        path: tests/
+
