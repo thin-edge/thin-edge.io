@@ -8,6 +8,9 @@ pub(crate) enum MapperTopicError {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum SMCumulocityMapperError {
+    #[error("Invalid date in file name: {0}")]
+    InvalidDateInFileName(String),
+
     #[error("Invalid MQTT Message.")]
     InvalidMqttMessage,
 
@@ -18,7 +21,13 @@ pub(crate) enum SMCumulocityMapperError {
     InvalidThinEdgeJson(#[from] json_sm::SoftwareError),
 
     #[error(transparent)]
+    FromChronoParse(#[from] chrono::ParseError),
+
+    #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
 
     #[error(transparent)]
     FromMqttClient(#[from] mqtt_client::MqttClientError),

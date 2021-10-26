@@ -99,7 +99,7 @@ impl SmartRestUpdateSoftware {
     ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
         for module in &self.modules() {
             match module.action.clone().try_into()? {
-                CumulocitySoftwareUpdateActions::Install => {
+ 307,807               CumulocitySoftwareUpdateActions::Install => {
                     request.add_update(SoftwareModuleUpdate::Install {
                         module: SoftwareModule {
                             module_type: module.get_module_version_and_type().1,

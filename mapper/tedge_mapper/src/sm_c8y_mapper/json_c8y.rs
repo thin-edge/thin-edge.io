@@ -86,12 +86,12 @@ impl From<&SoftwareListResponse> for C8yUpdateSoftwareListResponse {
 }
 
 impl C8yCreateEvent {
-    pub fn new(source: C8yManagedObject, event_type: String, time: String, text: String) -> Self {
+    pub fn new(source: C8yManagedObject, event_type: &str, time: &str, text: &str) -> Self {
         Self {
             source,
-            event_type,
-            time,
-            text,
+            event_type: event_type.into(),
+            time: time.into(),
+            text: text.into(),
         }
     }
 }

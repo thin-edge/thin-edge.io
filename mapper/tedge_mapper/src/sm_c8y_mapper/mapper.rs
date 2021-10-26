@@ -89,7 +89,7 @@ impl CumulocitySoftwareManagement {
     pub async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
         let () = self.publish_supported_operations().await?;
-        let () = self.publish_supported_operations_logs().await?;
+        let () = self.publish_supported_log_types().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
@@ -114,8 +114,7 @@ impl CumulocitySoftwareManagement {
                 let smartrest_set_operation_status = SmartRestSetOperationToExecuting::new(
                     CumulocitySupportedOperations::C8yLogFileRequest,
                 )
-                .to_smartrest()
-                .unwrap();
+                .to_smartrest()?;
 
                 let () = self.publish(&topic, smartrest_set_operation_status).await?;
                 // SETTING TO EXECUTTING - DONE
@@ -123,9 +122,9 @@ impl CumulocitySoftwareManagement {
                 let mut log_quests = SmartRestLogModule::new();
                 log_quests = log_quests.from_smartrest(payload)?;
                 dbg!(&log_quests);
-                let log_from = convert_string_to_dt(&log_quests.date_from).unwrap();
-                let log_to = convert_string_to_dt(&log_quests.date_to).unwrap();
-                let log_output = read_logs(log_from, log_to).unwrap();
+                let log_from = convert_string_to_dt(&log_quests.date_from)?;
+                let log_to = convert_string_to_dt(&log_quests.date_to)?;
+                let log_output = read_logs(log_from, log_to)?;
 
                 // forward log request?
                 let token = get_jwt_token(&self.client).await?;
@@ -133,8 +132,7 @@ impl CumulocitySoftwareManagement {
                 let client = reqwest::ClientBuilder::new().build()?;
 
                 let url_host = self.config.query_string(C8yUrlSetting)?;
-                //let url = get_url_for_sw_list(&url_host, &self.c8y_internal_id);
-                let url = "https://solo.basic.stage.c8y.io/event/events/";
+                let create_event_url = get_url_for_create_event(&url_host);
 
                 // TODO: undo pub
                 let c8y_managed_object = C8yManagedObject {
@@ -142,15 +140,15 @@ impl CumulocitySoftwareManagement {
                 };
                 let c8y_log_event = C8yCreateEvent::new(
                     c8y_managed_object,
-                    String::from("c8y_Logfile"),
-                    String::from("2021-09-15T15:57:41.311Z"),
-                    String::from("syslog log file"),
+                    "c8y_Logfile",
+                    "2021-09-15T15:57:41.311Z",
+                    "syslog log file",
                 );
 
-                dbg!(&c8y_log_event, &url);
+                dbg!(&c8y_log_event, &create_event_url);
 
                 let request = client
-                    .post(url)
+                    .post(create_event_url)
                     .json(&c8y_log_event)
                     .bearer_auth(token.token())
                     .header("Accept", "application/json")
@@ -160,17 +158,13 @@ impl CumulocitySoftwareManagement {
                 let _response = client.execute(request).await?;
                 let event_response_body = _response.json::<SmartRestLogEvent>().await?;
 
-                // UPLOAD FILE TO EVENT
-                //format!("{value}", value=4);
-                let url = format!(
-                    "https://solo.basic.stage.c8y.io/event/events/{event_id}/binaries",
-                    event_id = event_response_body.id
-                );
+                let binary_upload_event_url =
+                    get_url_for_event_binary_upload(&url_host, &event_response_body.id);
 
                 // NOTE: do i need the token again?
                 // let token = get_jwt_token(&self.client).await?;
                 let request = client
-                    .post(&url)
+                    .post(&binary_upload_event_url)
                     .header("Accept", "application/json")
                     .header("Content-Type", "text/plain")
                     .body(log_output)
@@ -185,10 +179,9 @@ impl CumulocitySoftwareManagement {
                 let smartrest_set_operation_status =
                     SmartRestSetOperationToSuccessful::new_with_file(
                         CumulocitySupportedOperations::C8yLogFileRequest,
-                        &url,
+                        &binary_upload_event_url,
                     )
-                    .to_smartrest()
-                    .unwrap();
+                    .to_smartrest()?;
 
                 let () = self.publish(&topic, smartrest_set_operation_status).await?;
             }
@@ -265,11 +258,9 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn publish_supported_operations_logs(&self) -> Result<(), SMCumulocityMapperError> {
-        let data = SmartRestSetSupportedLogType::default();
+    async fn publish_supported_log_types(&self) -> Result<(), SMCumulocityMapperError> {
+        let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-        let payload = data.to_smartrest()?;
-        dbg!(&payload);
         let () = self.publish(&topic, payload).await?;
         Ok(())
     }
@@ -405,39 +396,46 @@ impl CumulocitySoftwareManagement {
     }
 }
 
-fn get_date_from_log_path(log_path: &PathBuf) -> Result<NaiveDateTime, anyhow::Error> {
+fn get_date_from_log_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
     //"software-list-2021-10-24T21:46:32Z.log"
     dbg!(&log_path);
-    let date_string = log_path.to_str().unwrap();
 
-    // TODO: make this better
-    let date_string = {
-        if date_string.contains("software-list-") {
-            date_string.split("software-list-").nth(1).unwrap()
-        } else if date_string.contains("software-update-") {
-            date_string.split("software-update-").nth(1).unwrap()
-        } else {
-            date_string
-        }
+    if let Some(stem_string) = log_path.file_stem().unwrap().to_str() {
+        let date_string = {
+            if stem_string.contains("software-list-") {
+                stem_string.split("software-list-").nth(1).ok_or(
+                    SMCumulocityMapperError::InvalidDateInFileName(stem_string.to_string()),
+                )?
+            } else if stem_string.contains("software-update-") {
+                stem_string.split("software-update-").nth(1).ok_or(
+                    SMCumulocityMapperError::InvalidDateInFileName(stem_string.to_string()),
+                )?
+            } else {
+                stem_string
+            }
+        };
+        dbg!(&date_string);
+        let dt = chrono::NaiveDateTime::parse_from_str(date_string, "%Y-%m-%dT%H:%M:%SZ")?;
+        return Ok(dt);
     };
-
-    let date_string = date_string.split(".log").nth(0).unwrap();
-
-    dbg!(&date_string);
-    let dt = chrono::NaiveDateTime::parse_from_str(date_string, "%Y-%m-%dT%H:%M:%SZ").unwrap();
-    Ok(dt)
+    Err(SMCumulocityMapperError::InvalidDateInFileName(
+        log_path.to_str().unwrap().to_string(),
+    ))
 }
 
-fn read_logs(date_from: NaiveDateTime, date_to: NaiveDateTime) -> Result<String, anyhow::Error> {
-    let r = std::fs::read_dir("/var/log/tedge/agent/").unwrap();
+fn read_logs(
+    date_from: NaiveDateTime,
+    date_to: NaiveDateTime,
+) -> Result<String, SMCumulocityMapperError> {
+    let r = std::fs::read_dir("/var/log/tedge/agent/")?;
     dbg!(&date_from, &date_to);
 
     let mut output = String::new();
     for i in r {
-        let log_path = i.unwrap().path();
-        let dt = get_date_from_log_path(&log_path).unwrap();
+        let log_path = i?.path();
+        let dt = get_date_from_log_path(&log_path)?;
         if dt >= date_from && dt <= date_to {
-            let file_content = std::fs::read_to_string(log_path).unwrap();
+            let file_content = std::fs::read_to_string(log_path)?;
             output.push_str(&file_content);
         }
     }
@@ -449,13 +447,13 @@ fn read_logs(date_from: NaiveDateTime, date_to: NaiveDateTime) -> Result<String,
     Ok(output)
 }
 
-fn convert_string_to_dt(date: &String) -> Result<NaiveDateTime, anyhow::Error> {
+fn convert_string_to_dt(date: &String) -> Result<NaiveDateTime, SMCumulocityMapperError> {
     // TODO: fix date string with ":" in Tz part.
-    // let date = date.split("00").nth(0).unwrap().to_string() + ":00";
-    // let dt = DateTime::parse_from_rfc3339(&date).unwrap();
+    // let date = date.split("00").nth(0)?.to_string() + ":00";
+    // let dt = DateTime::parse_from_rfc3339(&date)?;
     // 2021-10-23T19:03:26+0100
     dbg!(&date);
-    let dt = NaiveDateTime::parse_from_str(&date, "%Y-%m-%dT%H:%M:%S%z").unwrap();
+    let dt = NaiveDateTime::parse_from_str(&date, "%Y-%m-%dT%H:%M:%S%z")?;
     Ok(dt)
 }
 
@@ -533,6 +531,23 @@ fn get_url_for_get_id(url_host: &str, device_id: &str) -> String {
     url_get_id
 }
 
+fn get_url_for_create_event(url_host: &str) -> String {
+    let mut url_create_event = String::new();
+    url_create_event.push_str("https://");
+    url_create_event.push_str(url_host);
+    url_create_event.push_str("/event/events/");
+
+    url_create_event
+}
+
+fn get_url_for_event_binary_upload(url_host: &str, event_id: &str) -> String {
+    let mut url_event_binary = get_url_for_create_event(url_host);
+    url_event_binary.push_str(event_id);
+    url_event_binary.push_str("/binaries");
+
+    url_event_binary
+}
+
 async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
     let mut subscriber = client.subscribe(Topic::new("c8y/s/dat")?.filter()).await?;
 
@@ -575,8 +590,7 @@ mod tests {
                 "get_jwt_token_full_run",
                 &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
             )
-            .await
-            .unwrap(),
+            .await?,
         );
 
         let publisher2 = publisher.clone();
@@ -586,12 +600,11 @@ mod tests {
             match tokio::time::timeout(TEST_TIMEOUT_MS, publish_messages_stream.next()).await {
                 Ok(Some(msg)) => {
                     // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
-                    assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
-                    assert_eq!(msg.payload_str().unwrap(), "");
+                    assert_eq!(msg.topic, Topic::new("c8y/s/uat")?);
+                    assert_eq!(msg.payload_str()?, "");
 
                     // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                    let message =
-                        mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
+                    let message = mqtt_client::Message::new(&Topic::new("c8y/s/dat")?, "71,1111");
                     let _ = publisher2.publish(message).await;
                 }
                 _ => panic!("No message received after a second."),
@@ -603,7 +616,7 @@ mod tests {
 
         // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
         assert!(jwt_token.is_ok());
-        assert_eq!(jwt_token.unwrap().token(), "1111");
+        assert_eq!(jwt_token?.token(), "1111");
     }
 
     #[test]
@@ -646,15 +659,14 @@ mod tests {
     }
 
     async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
-        let topic_filter = TopicFilter::new(pattern).unwrap();
+        let topic_filter = TopicFilter::new(pattern)?;
         let subscriber = Client::connect(
             client_name,
             &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
         )
-        .await
-        .unwrap();
+        .await?;
 
         // Obtain subscribe stream
-        subscriber.subscribe(topic_filter).await.unwrap()
+        subscriber.subscribe(topic_filter).await?
     }
 }
