@@ -12,3 +12,4 @@
 10. [How to retrieve JWT token from Cumulocity?](./011_retrieve_jwt_token_from_cumulocity.md)
 11. [How to install and enable software management?](./012_install_and_enable_software_management.md)
 12. [How to connect an external device?](./013_connect_external_device.md)
+14. [How to access the logs on the device?](./014_thin_edge_logs.md)
