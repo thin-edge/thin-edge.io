@@ -22,7 +22,9 @@ class SMDockerInstallRemove(SoftwareManagement):
     image2_name="registry"
     image2_version1="2.6.2::docker"
     image2_version2="2.7.1::docker"
-    image3_name="docker/getting-started"
+    # getting started is not available for arm
+    # image3_name="docker/getting-started"
+    image3_name="alpine"
 
     def setup(self):
         super().setup()

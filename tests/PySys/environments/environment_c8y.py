@@ -13,6 +13,9 @@ service mosquitto and service tedge-mapper.
 
 
 class Cumulocity(object):
+    """Class to retrieve information about Cumulocity.
+    TODO : Review if we download enough data -> pageSize
+    """
 
     c8y_url = ""
     tenant_id = ""
@@ -50,6 +53,7 @@ class Cumulocity(object):
         params = {
             "fragmentType": "c8y_IsDevice",
             "type": type,
+            "pageSize":100,
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
