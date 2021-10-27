@@ -157,6 +157,9 @@ jobs:
           command: build
           args: --release --target=${{ matrix.target }}
 
+      - name: apt update
+        run: sudo apt update
+
       # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
       # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
       - name: Install binutils to add `strip` for striping arm binaries
