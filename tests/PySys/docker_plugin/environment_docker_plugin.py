@@ -123,6 +123,9 @@ class DockerPlugin(BaseTest):
         return self.get_last_spawned_container_id()
 
     def plugin_install_with_cleanup(self, image_name, image_version=None):
+        """
+        TODO : If the plugin is updating containers self.containers_to_clean is not up to date anymore
+        """
         container_id = self.plugin_install(image_name, image_version)
         self.add_container_to_clean(container_id)
         self.add_image_to_clean(image_name, image_version)
@@ -179,7 +182,10 @@ class DockerPlugin(BaseTest):
             self.startProcess(
                 command=self.sudo,
                 arguments=["docker", "rm", "-f"] + self.containers_to_clean,
-                stdouterr="containers_for_cleanup"
+                stdouterr="containers_for_cleanup",
+                # TODO We ignore the exit status for now as it differs between docker version 20.10.5+dfsg1 and 18.09.1
+                # There might me more containers listed as running as the plugin replaces containers
+                ignoreExitStatus=True,
             )
 
     def add_image_to_clean(self, image_name, image_version=None):
