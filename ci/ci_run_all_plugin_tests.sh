@@ -32,11 +32,11 @@ sudo tedge config set software.plugin.default apt
 
 pysys.py run -v DEBUG 'apt_*' -XmyPlatform='container'
 
-sudo cp ../../sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
-
-pysys.py run -v DEBUG 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
-
-sudo rm -f /etc/tedge/sm-plugins/docker
+# sudo cp ../../sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
+#
+# pysys.py run -v DEBUG 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
+#
+# sudo rm -f /etc/tedge/sm-plugins/docker
 
 sudo tedge config unset software.plugin.default
 
