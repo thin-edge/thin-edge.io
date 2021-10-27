@@ -4,8 +4,6 @@ sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 """
 Validate apt plugin install from local file - FAIL case
-
-Using `rolldice` package from `_ROLLDICE_URL` bellow
 """
 
 
@@ -14,7 +12,6 @@ class AptPluginInstallFromLocalFileFail(AptPlugin):
     Testing that `apt` in `/etc/tedge/sm-plugins` install returns exit code 5 (Internal Error)
     when a wrong file_path is provided
     """
-    _ROLLDICE_URL = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
     _path_to_rolldice_binary = None
     _fake_path_to_rolldice_binary = None
 
