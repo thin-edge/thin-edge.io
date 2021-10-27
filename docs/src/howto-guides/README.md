@@ -9,3 +9,6 @@
 7. [How to configure the local mqtt port?](./008_config_local_mqtt_port.md)
 8. [How to trouble shoot device monitoring?](./009_touble_shooting_monitoring.md)
 9. [How to add self-signed certificate root to trusted certificates list?](./010_add_self_signed_trusted.md)
+10. [How to retrieve JWT token from Cumulocity?](./011_retrieve_jwt_token_from_cumulocity.md)
+11. [How to install and enable software management?](./012_install_and_enable_software_management.md)
+12. [How to connect an external device?](./013_connect_external_device.md)

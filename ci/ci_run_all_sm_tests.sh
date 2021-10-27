@@ -21,11 +21,30 @@ cd $TEBASEDIR
 # Check if clients are installed
 dpkg -s mosquitto-clients
 
+
+sudo cp sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
+
+sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+
+sudo tedge config set software.plugin.default apt
+
+sudo mkdir -p /tmp/.tedge_dummy_plugin/
+
+sudo cp tests/PySys/software-management-end-to-end/dummy-plugin-configuration/list-valid.0 /tmp/.tedge_dummy_plugin/list-valid.0
+
 # Run all PySys tests
 
 python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run -v DEBUG 'sm-apt-*' -XmyPlatform='smcontainer'
+
+# Run all software management tests, including the ones for the
+# fake- and the  docker plugin
+pysys.py run -v DEBUG 'SoftwareManagement.*' -XmyPlatform='smcontainer' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
+
 deactivate
+
+sudo tedge config unset software.plugin.default
+sudo rm -f /etc/tedge/sm-plugins/docker
+sudo rm -f /etc/tedge/sm-plugins/fruits
