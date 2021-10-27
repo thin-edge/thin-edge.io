@@ -105,6 +105,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Run all Tests
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
@@ -117,7 +118,7 @@ jobs:
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all plugin tests
-      continue-on-error: false
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
@@ -130,7 +131,7 @@ jobs:
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all sm tests
-      continue-on-error: false
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_sm_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
