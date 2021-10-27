@@ -157,6 +157,9 @@ jobs:
           command: build
           args: --release --target=${{ matrix.target }}
 
+      - name: apt update
+        run: sudo apt update
+
       # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
       # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
       - name: Install binutils to add `strip` for striping arm binaries
@@ -233,9 +236,6 @@ jobs:
         with:
           command: build
           args: --release -p tedge_dummy_plugin
-
-      - name: apt update
-        run: sudo apt update
 
       - name: Strip workaround for tedge_dummy_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_dummy_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_dummy_plugin
