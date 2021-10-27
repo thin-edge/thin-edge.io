@@ -136,6 +136,8 @@ impl CumulocitySoftwareManagement {
                 let () = self
                     .set_log_file_request_done(&binary_upload_event_url)
                     .await?;
+
+                info!("Log file request uploaded")
             }
 
             _ => {
@@ -404,7 +406,6 @@ async fn create_log_event(
     let create_event_url = get_url_for_create_event(&url_host);
 
     let local: DateTime<Local> = Local::now();
-    dbg!(&local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),);
 
     let c8y_log_event = C8yCreateEvent::new(
         c8y_managed_object,
@@ -427,30 +428,27 @@ async fn create_log_event(
     Ok(event_response_body.id)
 }
 
+/// Returns a date time object from a file path
+///
+/// # Examples:
+/// ```
+/// let path_buf = PathBuf::fromStr("/var/log/tedge/agent/software-list-2021-10-27T10:29:58Z.log");
+/// let path_buf_date_time = get_date_from_file_path(&path_buf).unwrap();
+/// ```
 fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
-    //"software-list-2021-10-24T21:46:32Z.log"
-    dbg!(&log_path);
-    // TODO: make this use regex instead
-
     if let Some(stem_string) = log_path.file_stem().unwrap().to_str() {
-        let date_string = {
-            if stem_string.contains("software-list-") {
-                stem_string.split("software-list-").nth(1).ok_or(
-                    SMCumulocityMapperError::InvalidDateInFileName(stem_string.to_string()),
-                )?
-            } else if stem_string.contains("software-update-") {
-                stem_string.split("software-update-").nth(1).ok_or(
-                    SMCumulocityMapperError::InvalidDateInFileName(stem_string.to_string()),
-                )?
-            } else {
-                stem_string
-            }
-        };
-        dbg!(&date_string);
-        let dt = chrono::NaiveDateTime::parse_from_str(date_string, "%Y-%m-%dT%H:%M:%SZ")?;
-        return Ok(dt);
-    };
+        // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
+        // to extract the date, rsplit string on "-" and take (last) 3
+        let mut stem_string_vec = stem_string.rsplit("-").take(3).collect::<Vec<_>>();
+        // reverse back the order (because of rsplit)
+        stem_string_vec.reverse();
+        // join on "-" to get the date string
+        let date_string = stem_string_vec.join("-");
 
+        let dt = chrono::NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%SZ")?;
+
+        return Ok(dt);
+    }
     Err(SMCumulocityMapperError::InvalidDateInFileName(
         log_path.to_str().unwrap().to_string(),
     ))
