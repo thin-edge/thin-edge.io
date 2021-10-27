@@ -4,7 +4,7 @@ use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, to
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
 use c8y_smartrest::error::SmartRestSerializerError;
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogEvent, SmartRestLogModule};
+use c8y_smartrest::smartrest_deserializer::{SmartRestLogEvent, SmartRestLogRequest};
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
     smartrest_deserializer::{SmartRestJwtResponse, SmartRestUpdateSoftware},
@@ -111,28 +111,25 @@ impl CumulocitySoftwareManagement {
             }
             "522" => {
                 // 1. set log file request to executing
-                // 2. read_logs(SmartRestLogModule) -> Ok() TODO rename smartrest_obj
-                // 3. create event
-                // 4. upload log file
-                // 5. set log file request to done
-
                 let () = self.set_log_file_request_executing().await?;
+
+                // 2. read_logs(SmartRestLogModule) -> Ok() TODO rename smartrest_obj
                 let log_output = read_tedge_agent_system_logs(&payload)?;
 
-                // create event log event
-
+                // 3. create event
                 let token = get_jwt_token(&self.client).await?;
+                let event_response_id = self.create_log_event(&token).await?;
 
-                let event_response_id = self.create_log_event_and_retrieve_id(&token).await?;
+                // 4. upload log file
+                let url_host = self.config.query_string(C8yUrlSetting)?;
+                let binary_upload_event_url =
+                    get_url_for_event_binary_upload(&url_host, &event_response_id);
 
                 let () = self
-                    .upload_log_binary_and_return_event_url(
-                        &token,
-                        &event_response_id,
-                        &log_output.as_str(),
-                    )
+                    .upload_log_binary(&token, &binary_upload_event_url, log_output.as_str())
                     .await?;
 
+                // 5. set log file request to done
                 let () = self
                     .set_log_file_request_done(&binary_upload_event_url)
                     .await?;
@@ -301,7 +298,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn create_log_event_and_retrieve_id(
+    async fn create_log_event(
         &self,
         token: &SmartRestJwtResponse,
     ) -> Result<String, SMCumulocityMapperError> {
@@ -338,27 +335,25 @@ impl CumulocitySoftwareManagement {
         Ok(event_response_body.id)
     }
 
-    async fn upload_log_binary_and_return_event_url(
+    async fn upload_log_binary(
         &self,
         token: &SmartRestJwtResponse,
-        event_id: &str,
+        binary_upload_event_url: &str,
         log_content: &str,
-    ) -> Result<String, SMCumulocityMapperError> {
+    ) -> Result<(), SMCumulocityMapperError> {
         let client = reqwest::ClientBuilder::new().build()?;
-        let url_host = self.config.query_string(C8yUrlSetting)?;
-        let binary_upload_event_url = get_url_for_event_binary_upload(&url_host, &event_id);
 
         let request = client
-            .post(&binary_upload_event_url)
+            .post(binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(log_content)
+            .body(log_content.to_string())
             .bearer_auth(token.token())
             .timeout(Duration::from_millis(10000))
             .build()?;
 
         let _response = client.execute(request).await?;
-        Ok(binary_upload_event_url)
+        Ok(())
     }
 
     async fn forward_software_request(
@@ -442,9 +437,44 @@ impl CumulocitySoftwareManagement {
     }
 }
 
-fn get_date_from_log_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
+async fn create_log_event(url_host: &str, c8y_managed_object: &str) -> Result<(), SMCumulocityMapperError> {
+    let client = reqwest::ClientBuilder::new().build()?;
+
+    let url_host = self.config.query_string(C8yUrlSetting)?;
+    let create_event_url = get_url_for_create_event(&url_host);
+
+    let c8y_managed_object = C8yManagedObject {
+        id: self.c8y_internal_id.clone(),
+    };
+
+    let local: DateTime<Local> = Local::now();
+    dbg!(&local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),);
+
+    let c8y_log_event = C8yCreateEvent::new(
+        c8y_managed_object,
+        "c8y_Logfile",
+        &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        "syslog log file",
+    );
+
+    let request = client
+        .post(create_event_url)
+        .json(&c8y_log_event)
+        .bearer_auth(token.token())
+        .header("Accept", "application/json")
+        .timeout(Duration::from_millis(10000))
+        .build()?;
+
+    let response = client.execute(request).await?;
+
+    let event_response_body = response.json::<SmartRestLogEvent>().await?;
+    Ok(())
+}
+
+fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
     //"software-list-2021-10-24T21:46:32Z.log"
     dbg!(&log_path);
+    // TODO: make this use regex instead
 
     if let Some(stem_string) = log_path.file_stem().unwrap().to_str() {
         let date_string = {
@@ -464,23 +494,18 @@ fn get_date_from_log_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumuloc
         let dt = chrono::NaiveDateTime::parse_from_str(date_string, "%Y-%m-%dT%H:%M:%SZ")?;
         return Ok(dt);
     };
+
     Err(SMCumulocityMapperError::InvalidDateInFileName(
         log_path.to_str().unwrap().to_string(),
     ))
 }
 
 /// Reads logs from `/var/log/tedge/`.
-///
-/// # Arguments
-///
-/// * `payload` (`&str`) - log request payload
-///
-/// * return (`String`) - concatenated logs if file date time >= date_from and <= date_to
 fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMapperError> {
     let mut output = String::new();
     // make smartrest object from payload
 
-    let mut smartrest_obj = SmartRestLogModule::new();
+    let mut smartrest_obj = SmartRestLogRequest::new();
     smartrest_obj = smartrest_obj.from_smartrest(payload)?;
 
     // convert `.date_from` & `.date_to` from String to date time object
@@ -491,24 +516,25 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
 
     for entry in read_iterator {
         let file_path = entry?.path();
-        let dt = get_date_from_log_path(&file_path)?;
+        let dt = get_date_from_file_path(&file_path)?;
 
         if dt >= date_from && dt <= date_to {
             let file_content = std::fs::read_to_string(file_path)?;
             output.push_str(&file_content);
         }
     }
+
     Ok(output)
 }
 
 fn convert_string_to_dt(date: &String) -> Result<NaiveDateTime, SMCumulocityMapperError> {
-    // TODO: fix date string with ":" in Tz part.
-    // let date = date.split("00").nth(0)?.to_string() + ":00";
-    // let dt = DateTime::parse_from_rfc3339(&date)?;
+    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
+    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
+    // c8y result:
     // 2021-10-23T19:03:26+0100
-    dbg!(&date);
-    let dt = NaiveDateTime::parse_from_str(&date, "%Y-%m-%dT%H:%M:%S%z")?;
-    Ok(dt)
+    // rfc3339 expected:
+    // 2021-10-23T19:03:26+01:00
+    Ok(NaiveDateTime::parse_from_str(&date, "%Y-%m-%dT%H:%M:%S%z")?)
 }
 
 fn url_is_in_my_tenant_domain(url: &str, tenant_uri: &str) -> bool {

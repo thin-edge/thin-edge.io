@@ -172,7 +172,7 @@ impl SmartRestUpdateSoftwareModule {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct SmartRestLogModule {
+pub struct SmartRestLogRequest {
     pub message_id: String,
     pub device: String,
     pub log_type: String,
@@ -182,7 +182,7 @@ pub struct SmartRestLogModule {
     pub lines: usize,
 }
 
-impl SmartRestLogModule {
+impl SmartRestLogRequest {
     pub fn new() -> Self {
         Self {
             message_id: "522".to_string(),
