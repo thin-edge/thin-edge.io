@@ -48,7 +48,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
         let messages = sm_mapper.client.subscribe(topic_filter).await?;
 
-        let () = sm_mapper.init().await?;
+        //let () = sm_mapper.init().await?;
         let () = sm_mapper.run(messages).await?;
 
         Ok(())
@@ -112,7 +112,7 @@ impl CumulocitySoftwareManagement {
                 // 1. set log file request to executing
                 let () = self.set_log_file_request_executing().await?;
 
-                // 2. read_logs(SmartRestLogModule) -> Ok() TODO rename smartrest_obj
+                // 2. read logs
                 let log_output = read_tedge_agent_system_logs(&payload)?;
 
                 // 3. create event
@@ -125,7 +125,6 @@ impl CumulocitySoftwareManagement {
                     create_log_event(&url_host, c8y_managed_object, &token).await?; // TODO: ask lukasz about consumed c8y_managed_object
 
                 // 4. upload log file
-                let url_host = self.config.query_string(C8yUrlSetting)?;
                 let binary_upload_event_url =
                     get_url_for_event_binary_upload(&url_host, &event_response_id);
 
@@ -283,7 +282,6 @@ impl CumulocitySoftwareManagement {
         &self,
         binary_upload_event_url: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        // SET TO DONE
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new_with_file(
             CumulocitySupportedOperations::C8yLogFileRequest,
@@ -428,11 +426,11 @@ async fn create_log_event(
     Ok(event_response_body.id)
 }
 
-/// Returns a date time object from a file path
-///
+/// Returns a date time object from a file path or file-path-like string
+/// a typical file stem looks like this: "software-list-2021-10-27T10:29:58Z"
 /// # Examples:
 /// ```
-/// let path_buf = PathBuf::fromStr("/var/log/tedge/agent/software-list-2021-10-27T10:29:58Z.log");
+/// let path_buf = PathBuf::fromStr("/path/to/file/with/date/in/path").unwrap();
 /// let path_buf_date_time = get_date_from_file_path(&path_buf).unwrap();
 /// ```
 fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
@@ -468,15 +466,33 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
     let date_to = convert_string_to_rfc3339_dt(&smartrest_obj.date_to)?;
 
     // loop `AGENT_LOG_DIR` for files to push to `output`
-    let read_iterator = std::fs::read_dir(AGENT_LOG_DIR)?;
+    let mut read_vector: Vec<_> = std::fs::read_dir(AGENT_LOG_DIR)?
+        .filter_map(|r| r.ok())
+        .collect();
+    read_vector.sort_by_key(|dir| dir.path());
 
-    for entry in read_iterator {
-        let file_path = entry?.path();
+    let mut line_counter: usize = 0;
+    for entry in read_vector {
+        let file_path = entry.path();
         let dt = get_date_from_file_path(&file_path)?;
 
         if dt >= date_from && dt <= date_to {
             let file_content = std::fs::read_to_string(file_path)?;
-            output.push_str(&file_content);
+
+            if !file_content.is_empty() {
+                // split at new line delimiter
+                let lines: Vec<&str> = file_content.split("\n").collect();
+                // compute difference between max allowed lines (`smartrest_obj.lines`) and currently
+                // generated (`line_counter`)
+                let diff = &smartrest_obj.lines - line_counter;
+                if diff > 0 {
+                    output.push_str(&lines[0..diff].to_vec().join("\n"));
+                    line_counter += diff;
+                } else {
+                    // no point continuing
+                    break;
+                }
+            }
         }
     }
 
@@ -607,8 +623,9 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hamcrest2::prelude::*;
     use mqtt_client::MqttMessageStream;
-    use std::sync::Arc;
+    use std::{str::FromStr, sync::Arc};
     use test_case::test_case;
 
     const MQTT_TEST_PORT: u16 = 55555;
@@ -707,5 +724,17 @@ mod tests {
 
         // Obtain subscribe stream
         subscriber.subscribe(topic_filter).await.unwrap()
+    }
+
+    #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]
+    #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
+    #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
+    #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
+    fn test_date_time_parsing_from_path(file_path: &str) -> Result<(), anyhow::Error> {
+        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        let path_buf = PathBuf::from_str(file_path).unwrap();
+        let path_buf_date_time = get_date_from_file_path(&path_buf);
+        assert_that!(path_buf_date_time, ok());
+        Ok(())
     }
 }

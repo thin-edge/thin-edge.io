@@ -2695,6 +2695,7 @@ dependencies = [
  "csv",
  "flockfile",
  "futures",
+ "hamcrest2",
  "json_sm",
  "mockall",
  "mqtt_client",
