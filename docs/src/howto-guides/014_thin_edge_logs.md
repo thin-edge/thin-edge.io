@@ -42,6 +42,7 @@ The agent service logs can be accessed as below
 `journalctl -u tedge-agent.service`
 
 For example: tedge-agent logs plugin calls finalize and list.
+
 tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt finalize
 tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt list
 
