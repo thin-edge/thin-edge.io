@@ -48,7 +48,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
         let messages = sm_mapper.client.subscribe(topic_filter).await?;
 
-        //let () = sm_mapper.init().await?;
+        let () = sm_mapper.init().await?;
         let () = sm_mapper.run(messages).await?;
 
         Ok(())
@@ -455,7 +455,6 @@ fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulo
 /// Reads logs from `/var/log/tedge/`.
 fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMapperError> {
     const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
-    let mut output = String::new();
 
     // make smartrest object from payload
     let mut smartrest_obj = SmartRestLogRequest::new();
@@ -466,6 +465,7 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
     let date_to = convert_string_to_rfc3339_dt(&smartrest_obj.date_to)?;
 
     // loop `AGENT_LOG_DIR` for files to push to `output`
+    let mut output = String::new();
     let mut read_vector: Vec<_> = std::fs::read_dir(AGENT_LOG_DIR)?
         .filter_map(|r| r.ok())
         .collect();
@@ -485,8 +485,9 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
                 // compute difference between max allowed lines (`smartrest_obj.lines`) and currently
                 // generated (`line_counter`)
                 let diff = &smartrest_obj.lines - line_counter;
+                let last_line = std::cmp::min(diff, lines.len());
                 if diff > 0 {
-                    output.push_str(&lines[0..diff].to_vec().join("\n"));
+                    output.push_str(&lines[0..last_line].to_vec().join("\n"));
                     line_counter += diff;
                 } else {
                     // no point continuing
@@ -732,9 +733,10 @@ mod tests {
     #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
     fn test_date_time_parsing_from_path(file_path: &str) -> Result<(), anyhow::Error> {
         // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_date_time = get_date_from_file_path(&path_buf);
-        assert_that!(path_buf_date_time, ok());
+        assert_that!(path_buf_date_time, is(ok()));
         Ok(())
     }
 }
