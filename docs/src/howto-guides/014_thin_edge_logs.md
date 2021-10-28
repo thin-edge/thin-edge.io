@@ -1,21 +1,22 @@
 # The thin-edge logs
-The logs that are useful to debug thin-edge.io break down into logs that are created by thin-edge itself and third party components.
+The logs that are useful for debugging thin-edge.io break down into logs that are created by thin-edge itself and by third party components.
 
-## Thin-edge component logs
-The Thin-edge is composed of different components like mappers, agent, and plugins. The log messages of these components can be accessed as below.
+## Thin-edge logs
+The thin-edge is composed of different components like mappers, agent, and plugins. The log messages of these components can be accessed as below.
+The logs here capture INFO, WARNING, and ERROR messages.
 
 ### Cloud mapper logs
-The Thin-edge cloud mapper services that send the measurement data to cloud can be accessed as below
+The thin-edge cloud mapper component that sends the measurement data to the cloud can be accessed as below.
 
 #### Tedge Cumulocity mapper
-The logs of the cumulocity mapper service that sends the measurement data from thin-edge device to the `Cumulocity`
-cloud can be accessed as below
+The log messages of the Cumulocity mapper component that sends the measurement data from the thin-edge device to the Cumulocity
+cloud can be accessed as below
 
 `journalctl -u tedge-mapper-c8y.service`
 
 #### Tedge Azure mapper
-The logs of the Azure mapper service that sends the measurement data from thin-edge device to the `Azure`
-cloud can be accessed as below
+The log messages of the Azure mapper component that sends the measurement data from the thin-edge device to the Azure
+cloud can be accessed as below.
 
 `journalctl -u tedge-mapper-az.service`
 
@@ -23,41 +24,48 @@ cloud can be accessed as below
 The thin-edge device monitoring component logs can be found as below
 
 #### Collectd mapper logs
-This service sends the device monitoring data to the cloud, the logs can be accessed as below
+The log messages of the collectd mapper that sends the monitoring data to the cloud can be accessed as below
 
 `journalctl -u tedge-mapper-collectd.service`
 
 ### Software Management logs
 This section describes how to access the software management component logs
 
-#### Software update logs
-The software update log is created per operation, and it can be found at `/var/log/tedge/agent`
+#### Software update operation log
+For every new software operation (list/update), a new log file will be created at `/var/log/tedge/agent`.
+For each `plugin command` like prepare, update-list (install, remove), finalize, and list,
+the log file captures `exit status, stdout, and stderr` messages.
 
 #### Tedge Agent logs
 The agent service logs can be accessed as below
 
-`journalctl -u journalctl -u tedge-agent.service`
+`journalctl -u tedge-agent.service`
+
+For example: tedge-agent logs plugin calls finalize and list.
+tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt finalize
+tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt list
 
 #### Tedge cumulocity sm mapper logs
 The software management mapper service logs can be accessed as below
 
 `journalctl -u tedge-mapper-sm-c8y.service`
 
+For example: tedge_mapper[6696]: 2021-09-29T03:38:53.853+00:00 ERROR tedge_mapper::mapper: MQTT connection error: I/O: Connection refused
+
 ## Thirdparty component logs
-Thin-edge uses the third-party components `Mosquitto` mqtt broker and `Collectd`. The logs that are created by these components
-can be accessed on a thin-edge device as below.
+Thin-edge uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
+The logs that are created by these components can be accessed on a thin-edge device as below.
 
 ### Mosquitto logs
-Thin-edge uses `Mosquitto` as the `mqtt broker` for local communication as well as to communicate with the cloud/s.
+Thin-edge uses `Mosquitto` as the `mqtt broker` for local communication as well as to communicate with the cloud.
 The `Mosquitto` logs can be found in `/var/log/mosquitto/mosquitto.log`.
 `Mosquitto` captures error, warning, notice, information, subscribe, and unsubscribe messages.
 
+> Note: Set `log_type debug` or `log_type all` on /etc/mosquitto/mosquitto.conf, to capture more debug information.
+
 ### Collectd logs
 `Collectd` is used for monitoring the resource status of a thin-edge device.
-Colelctd logs all the messages at `/var/log/syslog`
-Finding the collectd specific logs in `/var/log/syslog` could be tricky,
-So, the collectd specific logs can be found using the `journalctl` as below
+Collectd logs all the messages at `/var/log/syslog`.
+So, the collectd specific logs can be accessed using the `journalctl` as below
 
 `journalctl -u collectd.service`
-
-
