@@ -731,12 +731,11 @@ mod tests {
     #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
     #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
     #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
-    fn test_date_time_parsing_from_path(file_path: &str) -> Result<(), anyhow::Error> {
+    fn test_date_time_parsing_from_path(file_path: &str) {
         // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
         // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_date_time = get_date_from_file_path(&path_buf);
         assert_that!(path_buf_date_time, is(ok()));
-        Ok(())
     }
 }
