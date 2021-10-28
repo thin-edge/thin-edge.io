@@ -31,8 +31,9 @@ class AptPluginPrepare(AptPlugin):
         # make sure that the timestamp has changed
         self.assertThat("old != new", old=self.mtime_old, new=self.mtime_new)
         # make sure the cache was updated in the last N seconds
-        # N=100 : Took 91s to update at mythic beasts
-        self.assertThat("(new +100) >= now", new=self.mtime_new, now=self.now)
+        # N=300 : Took 250s to update at Mythic Beasts in October
+        # TODO Investigate: https://cumulocity.atlassian.net/browse/CIT-664
+        self.assertThat("(new +300) >= now", new=self.mtime_new, now=self.now)
 
     def cleanup_prepare(self):
         pass
