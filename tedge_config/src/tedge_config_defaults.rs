@@ -1,7 +1,9 @@
 use crate::models::FilePath;
 use crate::TEdgeConfigLocation;
 use crate::{Flag, Port};
+use std::fmt;
 use std::path::Path;
+use percentage::Percentage;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
@@ -19,6 +21,14 @@ const DEFAULT_BUFFER_SIZE_IN_PERCENTAGE: &str = "5";
 /// env `$HOME`.  But once we have found `tedge.toml`, we never again have to care about the
 /// executing user (except when `chown`ing files...).
 ///
+
+impl fmt::Debug for Percentage {    
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", self.
+        }
+     }
+
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TEdgeConfigDefaults {
     /// Default device cert path
@@ -40,7 +50,7 @@ pub struct TEdgeConfigDefaults {
     pub default_mqtt_port: Port,
 
     // Default buffer size for downloading the file
-    pub default_buffer_size_in_percentage: String,
+    pub default_buffer_size_in_percentage: Percentage,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
