@@ -2,7 +2,7 @@
 The logs that are useful for debugging thin-edge.io break down into logs that are created by thin-edge itself and by third party components.
 
 ## Thin-edge logs
-The thin-edge is composed of different components like mappers, agent, and plugins. The log messages of these components can be accessed as below.
+On a thin-edge device different components like mappers, agent, and plugins run. The log messages of these components can be accessed as below.
 The logs here capture INFO, WARNING, and ERROR messages.
 
 ### Cloud mapper logs
@@ -14,11 +14,15 @@ cloud can be accessed as below
 
 `journalctl -u tedge-mapper-c8y.service`
 
+> Note: Run `tedge_mapper --debug c8y` to log more debug messages
+
 #### Tedge Azure mapper
 The log messages of the Azure mapper component that sends the measurement data from the thin-edge device to the Azure
 cloud can be accessed as below.
 
 `journalctl -u tedge-mapper-az.service`
+
+> Note: Run `tedge_mapper --debug az` to log more debug messages
 
 ### Device monitoring logs
 The thin-edge device monitoring component logs can be found as below
@@ -27,6 +31,8 @@ The thin-edge device monitoring component logs can be found as below
 The log messages of the collectd mapper that sends the monitoring data to the cloud can be accessed as below
 
 `journalctl -u tedge-mapper-collectd.service`
+
+> Note: Run `tedge_mapper --debug collectd` to log more debug messages
 
 ### Software Management logs
 This section describes how to access the software management component logs
@@ -47,12 +53,16 @@ tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins
 
 tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt list
 
+> Note: Run `tedge_agent --debug` to log more debug messages
+
 #### Tedge cumulocity sm mapper logs
 The software management mapper service logs can be accessed as below
 
 `journalctl -u tedge-mapper-sm-c8y.service`
 
 For example: tedge_mapper[6696]: 2021-09-29T03:38:53.853+00:00 ERROR tedge_mapper::mapper: MQTT connection error: I/O: Connection refused
+
+> Note: Run `tedge_mapper --debug sm-c8y` to log more debug messages
 
 ## Thirdparty component logs
 Thin-edge uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
