@@ -1,7 +1,7 @@
 use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
-use rumqttc::StateError;
 use mqtt_tests::test_mqtt_server::start_broker_local;
+use rumqttc::StateError;
 use tokio::time::Duration;
 
 const MQTTTESTPORT1: u16 = 58584;

@@ -64,4 +64,3 @@ tokio-test = "0.4"
 
 [features]
 integration-test = []
-mosquitto-available = []

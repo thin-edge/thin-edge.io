@@ -1,5 +1,7 @@
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
+use mqtt_tests::message_logger::messages_published_on;
+use mqtt_tests::test_mqtt_server::start_broker_local;
 use serial_test::serial;
 use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
@@ -9,38 +11,24 @@ const MQTT_TEST_PORT: u16 = 55555;
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
 
-    // Create a subscriber to receive messages on the bus.
-    let mut subscriber = get_subscriber(
-        "tedge/commands/req/software/list",
-        "mapper_publishes_a_software_list_request",
-    )
-    .await;
+    let mut messages = messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list")
+        .await
+        .unwrap();
 
-    // Start SM Mapper
+    // Start the SM Mapper
     let sm_mapper = start_sm_mapper().await;
 
-    // Expect message that arrives on `tedge/commands/req/software/list` is software list request.
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    for _ in 0..5 {
-        // Loop 5 times, because it needs time to receive the messages
-        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                if msg.payload_str().unwrap().contains("{\"id\":\"") {
-                    assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
-                    break;
-                } else {
-                    continue;
-                }
-            }
-            _ => panic!("No message received after a second."),
+    // Expect on `tedge/commands/req/software/list` a software list request.
+    match tokio::time::timeout(TEST_TIMEOUT_MS, messages.recv()).await {
+        Ok(Some(msg)) => {
+            assert!(&msg.contains(r#"{"id":"}"#));
         }
+        _ => panic!("No message received after a second."),
     }
     sm_mapper.unwrap().abort();
 }

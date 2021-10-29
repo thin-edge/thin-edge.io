@@ -113,12 +113,11 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_tests::*;
     use mqtt_tests::test_mqtt_server::start_broker_local;
+    use mqtt_tests::*;
 
     #[tokio::test]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
-
         // Given an MQTT broker
         let mqtt_port: u16 = 55555;
         let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
@@ -173,7 +172,9 @@ mod tests {
                 Ok(input.to_uppercase())
             } else {
                 // Just a stupid error that matches the expectations of the mapper
-                Err(ConversionError::FromMapperError(MapperError::HomeDirNotFound))
+                Err(ConversionError::FromMapperError(
+                    MapperError::HomeDirNotFound,
+                ))
             }
         }
     }

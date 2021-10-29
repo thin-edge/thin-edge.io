@@ -1,6 +1,6 @@
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use std::time::Duration;
 use mqtt_tests::test_mqtt_server::start_broker_local;
+use std::time::Duration;
 use tokio::time::sleep;
 
 const MQTTTESTPORT: u16 = 58586;
@@ -16,6 +16,7 @@ fn sending_and_receiving_a_message() {
         )
         .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
+        sleep(Duration::from_millis(1000)).await;
 
         let message = Message::new(&topic, payload);
         let publisher = Client::connect(
@@ -60,6 +61,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
 
     // The messages for these topics will all be received on the same message stream
     let mut messages = subscriber.subscribe(topic_filter).await?;
+    sleep(Duration::from_millis(1000)).await;
 
     // So let us create another MQTT client publishing messages.
     let publisher = Client::connect(
