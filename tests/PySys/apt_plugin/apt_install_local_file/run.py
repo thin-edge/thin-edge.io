@@ -26,6 +26,7 @@ class AptPluginInstallFromLocalFile(AptPlugin):
         self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
+        self._path_to_rolldice_binary=os.path.abspath(self._rolldice_filename)
 
     def execute(self):
         """

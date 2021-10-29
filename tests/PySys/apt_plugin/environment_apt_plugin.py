@@ -18,6 +18,7 @@ from pathlib import Path
 import platform
 import requests
 import subprocess
+import tempfile
 from pysys.basetest import BaseTest
 
 
@@ -137,12 +138,22 @@ class AptPlugin(BaseTest):
     def get_rolldice_package_url(self):
         """Return OS version and arch dependent version of the rolldice url
         """
+        # We temporarily switch to a temporary directory so that apt-get does print the uris
+        # even when there is a rolldice package in the current dir.
 
-        sub_output = subprocess.check_output(["/usr/bin/apt-get", "download", "--print-uris", "rolldice"])
-        if len(sub_output)>0:
-            rolldice_url = sub_output.split()[0]
-        else:
-            raise SystemError("Cant parse ouptput of apt-get")
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            dir = os.getcwd()
+            os.chdir(tmpdirname)
+
+            sub_output = subprocess.check_output(["/usr/bin/apt-get", "download", "--print-uris", "rolldice"])
+            if len(sub_output)>0:
+                rolldice_url = sub_output.split()[0]
+            else:
+                # can happen when there already a rolldice package in the local directory.
+                # apt-get download is not downloading in this case
+                raise SystemError("Cant parse ouptput of apt-get")
+        # go back to our old directory
+        os.chdir(dir)
 
         self.log.info("URL of rolldice is %s", rolldice_url)
         return rolldice_url
