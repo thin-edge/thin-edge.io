@@ -1,5 +1,4 @@
 #[cfg(test)]
-#[cfg(feature = "mosquitto-available")]
 mod tests {
     use std::process::{Command, Stdio};
     use std::{thread, time};
@@ -28,14 +27,14 @@ mod tests {
 
         // trying up to 10 times before breaking out.
         for _ in 0..10 {
-            if let Ok(Some(code)) = agent.try_wait() {
+            if let Ok(Some(_)) = agent.try_wait() {
                 agent.wait_with_output().unwrap().assert().failure().stdout(
                     predicate::str::contains("Another instance of tedge_agent is running."),
                 );
-                agent_2.kill();
+                let _ = agent_2.kill();
                 let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
                 return Ok(());
-            } else if let Ok(Some(code)) = agent_2.try_wait() {
+            } else if let Ok(Some(_)) = agent_2.try_wait() {
                 agent_2
                     .wait_with_output()
                     .unwrap()
@@ -44,7 +43,7 @@ mod tests {
                     .stdout(predicate::str::contains(
                         "Another instance of tedge_agent is running.",
                     ));
-                agent.kill();
+                let _ = agent.kill();
                 let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
                 return Ok(());
             }
@@ -52,8 +51,8 @@ mod tests {
         }
 
         // cleanup before panic
-        agent.kill();
-        agent_2.kill();
+        let _ = agent.kill();
+        let _ = agent_2.kill();
         let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
         panic!("Agent failed to stop.")
     }
