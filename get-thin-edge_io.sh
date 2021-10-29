@@ -103,10 +103,10 @@ case $TYPE in
 minimal) install_basic_components ;;
 full)
     install_basic_components
-    install_tedge_agent
     if apt -v &>/dev/null; then
         install_tedge_plugins
     fi
+    install_tedge_agent
     ;;
 *)
     echo "Unsupported argument type."
