@@ -14,7 +14,11 @@ To run the tests:
 """
 
 import os
+from pathlib import Path
+import platform
 import requests
+import subprocess
+import tempfile
 from pysys.basetest import BaseTest
 
 
@@ -27,7 +31,8 @@ class AptPlugin(BaseTest):
 
     def setup(self):
         if self.myPlatform != 'container':
-            self.skipTest('Testing the apt plugin is not supported on this platform')
+            self.skipTest("Testing the apt plugin is not supported on this platform." +\
+                "To run the tests call PySys with -XmyPlatform='container'")
 
         self.apt_plugin = "/etc/tedge/sm-plugins/apt"
         self.apt_get = "/usr/bin/apt-get"
@@ -107,14 +112,49 @@ class AptPlugin(BaseTest):
             abortOnError=False,
         )
 
-    def _download_rolldice_binary(self, url: str):
-        # https://stackoverflow.com/questions/53101597/how-to-download-binary-file-using-requests
-        local_filename = url.split('/')[-1]
-        current_working_directory = os.path.abspath(os.getcwd())
-        self._path_to_rolldice_binary = os.path.join(current_working_directory, local_filename)
 
-        r = requests.get(url, stream=True)
-        with open(self._path_to_rolldice_binary, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
+    def _delete_old_rolldice_binary(self):
+        """Derive name of old rolldice binary and delete it from the current folder
+        """
+        package = list(Path('.').glob('rolldice_*.deb'))
+        if len(package) == 1:
+            package[0].unlink()
+        else:
+            raise SystemError("There is more than one rolldice_*.deb binary. Please delete the right one manually")
+
+    def _download_rolldice_binary(self, url: str):
+
+        infos = subprocess.check_output(["/usr/bin/apt-get", "download", "rolldice"])
+
+        arch = infos.split()[5].decode('ascii')
+        version = infos.split()[6].decode('ascii')
+
+        self._rolldice_filename = f'rolldice_{version}_{arch}.deb'
+        self._module_version  = version
+        self.log.info("Downloaded rolldcice in version %s", self._module_version)
+        self.log.info("Filename is %s", self._rolldice_filename)
+
+
+    def get_rolldice_package_url(self):
+        """Return OS version and arch dependent version of the rolldice url
+        """
+        # We temporarily switch to a temporary directory so that apt-get does print the uris
+        # even when there is a rolldice package in the current dir.
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            dir = os.getcwd()
+            os.chdir(tmpdirname)
+
+            sub_output = subprocess.check_output(["/usr/bin/apt-get", "download", "--print-uris", "rolldice"])
+            if len(sub_output)>0:
+                rolldice_url = sub_output.split()[0]
+            else:
+                # can happen when there already a rolldice package in the local directory.
+                # apt-get download is not downloading in this case
+                raise SystemError("Cant parse ouptput of apt-get")
+        # go back to our old directory
+        os.chdir(dir)
+
+        self.log.info("URL of rolldice is %s", rolldice_url)
+        return rolldice_url
+
