@@ -136,7 +136,7 @@ impl CumulocitySoftwareManagement {
                     .set_log_file_request_done(&binary_upload_event_url)
                     .await?;
 
-                info!("Log file request uploaded")
+                info!("Log file request uploaded");
             }
 
             _ => {
@@ -428,12 +428,15 @@ async fn create_log_event(
 
 /// Returns a date time object from a file path or file-path-like string
 /// a typical file stem looks like this: "software-list-2021-10-27T10:29:58Z"
+///
 /// # Examples:
 /// ```
 /// let path_buf = PathBuf::fromStr("/path/to/file/with/date/in/path").unwrap();
-/// let path_buf_date_time = get_date_from_file_path(&path_buf).unwrap();
+/// let path_bufdate_time = get_datetime_from_file_path(&path_buf).unwrap();
 /// ```
-fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulocityMapperError> {
+fn get_datetime_from_file_path(
+    log_path: &PathBuf,
+) -> Result<NaiveDateTime, SMCumulocityMapperError> {
     if let Some(stem_string) = log_path.file_stem().unwrap().to_str() {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
@@ -456,7 +459,7 @@ fn get_date_from_file_path(log_path: &PathBuf) -> Result<NaiveDateTime, SMCumulo
 fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMapperError> {
     const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
 
-    // make smartrest object from payload
+    // retrieve smartrest object from payload
     let mut smartrest_obj = SmartRestLogRequest::new();
     smartrest_obj = smartrest_obj.from_smartrest(payload)?;
 
@@ -464,31 +467,39 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
     let date_from = convert_string_to_rfc3339_dt(&smartrest_obj.date_from)?;
     let date_to = convert_string_to_rfc3339_dt(&smartrest_obj.date_to)?;
 
-    // loop `AGENT_LOG_DIR` for files to push to `output`
+    // collect `AGENT_LOG_DIR` files in a vec and sort
     let mut output = String::new();
     let mut read_vector: Vec<_> = std::fs::read_dir(AGENT_LOG_DIR)?
         .filter_map(|r| r.ok())
         .collect();
     read_vector.sort_by_key(|dir| dir.path());
 
+    // loop sorted vector and push store log file to `output`
     let mut line_counter: usize = 0;
     for entry in read_vector {
         let file_path = entry.path();
-        let dt = get_date_from_file_path(&file_path)?;
 
-        if dt >= date_from && dt <= date_to {
+        let datetime_object = get_datetime_from_file_path(&file_path)?;
+
+        if datetime_object >= date_from && datetime_object <= date_to {
             let file_content = std::fs::read_to_string(file_path)?;
-
             if !file_content.is_empty() {
                 // split at new line delimiter
-                let lines: Vec<&str> = file_content.split("\n").collect();
+                let mut lines = file_content.lines();
+
                 // compute difference between max allowed lines (`smartrest_obj.lines`) and currently
                 // generated (`line_counter`)
                 let diff = &smartrest_obj.lines - line_counter;
-                let last_line = std::cmp::min(diff, lines.len());
                 if diff > 0 {
-                    output.push_str(&lines[0..last_line].to_vec().join("\n"));
-                    line_counter += diff;
+                    for _ in 0..diff {
+                        if let Some(current_line) = lines.next() {
+                            output.push_str(&format!("{}\n", current_line));
+                            line_counter += 1;
+                        } else {
+                            // it could be that diff > number of lines in a file.
+                            break;
+                        }
+                    }
                 } else {
                     // no point continuing
                     break;
@@ -731,11 +742,11 @@ mod tests {
     #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
     #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
     #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
-    fn test_date_time_parsing_from_path(file_path: &str) {
+    fn test_datetime_parsing_from_path(file_path: &str) {
         // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
         // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
-        let path_buf_date_time = get_date_from_file_path(&path_buf);
-        assert_that!(path_buf_date_time, is(ok()));
+        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
+        assert_that!(path_buf_datetime, is(ok()));
     }
 }
