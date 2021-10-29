@@ -5,7 +5,7 @@ from environment_apt_plugin import AptPlugin
 """
 Validate apt plugin install from local file AND with a version - FAIL case
 
-Using `rolldice` package from `_ROLLDICE_URL` bellow
+Using `rolldice` package from `rolldice_url` bellow
 """
 
 
@@ -14,13 +14,12 @@ class AptPluginInstallFromLocalFileWithVersionFail(AptPlugin):
     Testing that `apt` in `/etc/tedge/sm-plugins` install returns exit code 5 (Internal Error) 
     when a wrong module-version is provided
     """
-    _ROLLDICE_URL = "http://ftp.br.debian.org/debian/pool/main/r/rolldice/rolldice_1.16-1+b3_amd64.deb"
     _path_to_rolldice_binary = None
     _module_version = "nonsense"
 
     def setup(self):
         super().setup()
-        self._download_rolldice_binary(url=self._ROLLDICE_URL)          # downloading the binary
+        self._download_rolldice_binary(url=self.get_rolldice_package_url())          # downloading the binary
         self.addCleanupFunction(self.cleanup_remove_rolldice_binary)    # adding cleanup function to remove the binary
         self.apt_remove("rolldice")                                     # removing just in case rolldice is already on the machine
         self.assert_isinstalled("rolldice", False)                      # asserting previous step worked
