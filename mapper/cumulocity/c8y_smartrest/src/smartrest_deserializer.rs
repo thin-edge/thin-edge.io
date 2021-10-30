@@ -173,7 +173,7 @@ pub struct SmartRestLogRequest {
     pub log_type: String,
     pub date_from: String,
     pub date_to: String,
-    pub error: Option<String>,
+    pub needle: Option<String>,
     pub lines: usize,
 }
 
@@ -185,7 +185,7 @@ impl SmartRestLogRequest {
             log_type: "".to_string(),
             date_from: "".to_string(),
             date_to: "".to_string(),
-            error: None,
+            needle: None,
             lines: 0,
         }
     }

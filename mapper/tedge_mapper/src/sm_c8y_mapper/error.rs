@@ -8,9 +8,6 @@ pub(crate) enum MapperTopicError {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum SMCumulocityMapperError {
-    #[error("Invalid date in file name: {0}")]
-    InvalidDateInFileName(String),
-
     #[error("Invalid MQTT Message.")]
     InvalidMqttMessage,
 
@@ -21,13 +18,7 @@ pub(crate) enum SMCumulocityMapperError {
     InvalidThinEdgeJson(#[from] json_sm::SoftwareError),
 
     #[error(transparent)]
-    FromChronoParse(#[from] chrono::ParseError),
-
-    #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),
-
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
 
     #[error(transparent)]
     FromMqttClient(#[from] mqtt_client::MqttClientError),
@@ -43,4 +34,34 @@ pub(crate) enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
+
+//    #[error(transparent)]
+//    LogFileError(#[from] LogFileError),
+
+    #[error("Software update request error.")]
+    SoftwareUpdateRequestError,
+
+    #[error("Log file request error.")]
+    LogFileRequestError,
+
+    #[error("Invalid date in file name: {0}")]
+    InvalidDateInFileName(String),
+
+    #[error(transparent)]
+    FromChronoParse(#[from] chrono::ParseError),
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
 }
+
+//#[derive(thiserror::Error, Debug)]
+//pub(crate) enum LogFileError {
+//    #[error("Invalid date in file name: {0}")]
+//    InvalidDateInFileName(String),
+//
+//    #[error(transparent)]
+//    FromChronoParse(#[from] chrono::ParseError),
+//
+//    #[error(transparent)]
+//    FromIo(#[from] std::io::Error),
+//}

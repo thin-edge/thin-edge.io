@@ -95,7 +95,7 @@ impl CumulocitySoftwareManagement {
 
         while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
             match err {
-                SMCumulocityMapperError::FromSmartRestDeserializer(_) => {
+                SMCumulocityMapperError::SoftwareUpdateRequestError => {
                     let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
                     // publish the operation status as `executing`
                     let () = self
@@ -106,6 +106,20 @@ impl CumulocitySoftwareManagement {
                         .publish(
                             &topic,
                             format!("502,c8y_SoftwareUpdate,\"{}\"", err.to_string()),
+                        )
+                        .await?;
+                }
+                SMCumulocityMapperError::LogFileRequestError => {
+                    let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+                    // publish the operation status as `executing`
+                    let () = self
+                        .publish(&topic, "501,c8y_LogfileRequest".into())
+                        .await?;
+                    // publish the operation status as `failed`
+                    let () = self
+                        .publish(
+                            &topic,
+                            format!("502,c8y_LogfileRequest,\"{}\"", err.to_string()),
                         )
                         .await?;
                 }
@@ -123,39 +137,17 @@ impl CumulocitySoftwareManagement {
         let message_id: &str = &payload[..3];
         match message_id {
             "528" => {
-                let () = self.forward_software_request(payload).await?;
+                let () = self
+                    .forward_software_request(payload)
+                    .await
+                    .map_err(|_| SMCumulocityMapperError::SoftwareUpdateRequestError)?;
             }
             "522" => {
-                // 1. set log file request to executing
-                let () = self.set_log_file_request_executing().await?;
-
-                // 2. read logs
-                let log_output = read_tedge_agent_system_logs(&payload)?;
-
-                // 3. create event
-                let token = get_jwt_token(&self.client).await?;
-                let url_host = self.config.query_string(C8yUrlSetting)?;
-                let c8y_managed_object = C8yManagedObject {
-                    id: self.c8y_internal_id.clone(),
-                };
-                let event_response_id =
-                    create_log_event(&url_host, c8y_managed_object, &token).await?; // TODO: ask lukasz about consumed c8y_managed_object
-
-                // 4. upload log file
-                let binary_upload_event_url =
-                    get_url_for_event_binary_upload(&url_host, &event_response_id);
-
-                let () = upload_log_binary(&token, &binary_upload_event_url, &log_output.as_str())
-                    .await?;
-
-                // 5. set log file request to done
                 let () = self
-                    .set_log_file_request_done(&binary_upload_event_url)
-                    .await?;
-
-                info!("Log file request uploaded");
+                    .retrieve_log_request(payload)
+                    .await
+                    .map_err(|_| SMCumulocityMapperError::LogFileRequestError)?;
             }
-
             _ => {
                 return Err(SMCumulocityMapperError::InvalidMqttMessage);
             }
@@ -307,6 +299,39 @@ impl CumulocitySoftwareManagement {
         .to_smartrest()?;
 
         let () = self.publish(&topic, smartrest_set_operation_status).await?;
+        Ok(())
+    }
+
+    async fn retrieve_log_request(&self, smartrest: &str) -> Result<(), SMCumulocityMapperError> {
+        // 1. set log file request to executing
+        let () = self.set_log_file_request_executing().await?;
+
+        // 2. read logs
+        let log_output = read_tedge_agent_system_logs(&smartrest)?; // TODO should i also async this?
+
+        // 3. create event
+        let token = get_jwt_token(&self.client).await?;
+        let url_host = self.config.query_string(C8yUrlSetting)?;
+
+        let c8y_managed_object = C8yManagedObject {
+            id: self.c8y_internal_id.clone(),
+        };
+        let event_response_id = create_log_event(&url_host, c8y_managed_object, &token).await?;
+        // TODO: ask lukasz about consumed c8y_managed_object
+
+        // 4. upload log file
+        let binary_upload_event_url =
+            get_url_for_event_binary_upload(&url_host, &event_response_id);
+
+        let () = upload_log_binary(&token, &binary_upload_event_url, &log_output.as_str()).await?;
+
+        // 5. set log file request to done
+        let () = self
+            .set_log_file_request_done(&binary_upload_event_url)
+            .await?;
+
+        info!("Log file request uploaded");
+
         Ok(())
     }
 
@@ -506,20 +531,22 @@ fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMap
 
                 // compute difference between max allowed lines (`smartrest_obj.lines`) and currently
                 // generated (`line_counter`)
-                let diff = &smartrest_obj.lines - line_counter;
-                if diff > 0 {
-                    for _ in 0..diff {
-                        if let Some(current_line) = lines.next() {
-                            output.push_str(&format!("{}\n", current_line));
-                            line_counter += 1;
+                let mut lines_to_fill = &smartrest_obj.lines - line_counter;
+
+                while lines_to_fill > 0 {
+                    if let Some(haystack) = lines.next() {
+                        if let Some(needle) = &smartrest_obj.needle {
+                            if haystack.contains(needle) {
+                                dbg!(&haystack);
+                                output.push_str(&format!("{}\n", haystack));
+                            }
                         } else {
-                            // it could be that diff > number of lines in a file.
-                            break;
+                            output.push_str(&format!("{}\n", haystack));
                         }
                     }
-                } else {
-                    // no point continuing
-                    break;
+
+                    line_counter += 1;
+                    lines_to_fill -= 1;
                 }
             }
         }
