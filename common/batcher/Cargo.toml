@@ -1,6 +1,6 @@
 [package]
 name = "batcher"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
