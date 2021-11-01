@@ -35,9 +35,8 @@ pub(crate) enum SMCumulocityMapperError {
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
 
-//    #[error(transparent)]
-//    LogFileError(#[from] LogFileError),
-
+    //    #[error(transparent)]
+    //    LogFileError(#[from] LogFileError),
     #[error("Software update request error.")]
     SoftwareUpdateRequestError,
 
