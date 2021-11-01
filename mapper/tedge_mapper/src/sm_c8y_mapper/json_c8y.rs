@@ -15,7 +15,7 @@ pub struct C8yCreateEvent {
     text: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yManagedObject {
     pub id: String,

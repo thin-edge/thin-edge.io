@@ -140,13 +140,13 @@ impl CumulocitySoftwareManagement {
                 let () = self
                     .forward_software_request(payload)
                     .await
-                    .map_err(|_| SMCumulocityMapperError::SoftwareUpdateRequestError)?;
+                    .map_err(|err| SMCumulocityMapperError::SoftwareUpdateRequestError)?;
             }
             "522" => {
                 let () = self
                     .retrieve_log_request(payload)
                     .await
-                    .map_err(|_| SMCumulocityMapperError::LogFileRequestError)?;
+                    .map_err(|err| SMCumulocityMapperError::LogFileRequestError)?;
             }
             _ => {
                 return Err(SMCumulocityMapperError::InvalidMqttMessage);
@@ -302,12 +302,14 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn retrieve_log_request(&self, smartrest: &str) -> Result<(), SMCumulocityMapperError> {
+    async fn retrieve_log_request(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
         // 1. set log file request to executing
         let () = self.set_log_file_request_executing().await?;
 
         // 2. read logs
-        let log_output = read_tedge_agent_system_logs(&smartrest)?; // TODO should i also async this?
+        // retrieve smartrest object from payload
+        let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
+        let log_output = read_tedge_agent_system_logs(&smartrest_obj)?; // TODO should i also async this?
 
         // 3. create event
         let token = get_jwt_token(&self.client).await?;
@@ -316,8 +318,7 @@ impl CumulocitySoftwareManagement {
         let c8y_managed_object = C8yManagedObject {
             id: self.c8y_internal_id.clone(),
         };
-        let event_response_id = create_log_event(&url_host, c8y_managed_object, &token).await?;
-        // TODO: ask lukasz about consumed c8y_managed_object
+        let event_response_id = create_log_event(&url_host, &c8y_managed_object, &token).await?;
 
         // 4. upload log file
         let binary_upload_event_url =
@@ -438,7 +439,7 @@ async fn upload_log_binary(
 
 async fn create_log_event(
     url_host: &str,
-    c8y_managed_object: C8yManagedObject,
+    c8y_managed_object: &C8yManagedObject,
     token: &SmartRestJwtResponse,
 ) -> Result<String, SMCumulocityMapperError> {
     let client = reqwest::ClientBuilder::new().build()?;
@@ -448,7 +449,7 @@ async fn create_log_event(
     let local: DateTime<Local> = Local::now();
 
     let c8y_log_event = C8yCreateEvent::new(
-        c8y_managed_object,
+        c8y_managed_object.to_owned(),
         "c8y_Logfile",
         &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         "syslog log file",
@@ -479,7 +480,7 @@ async fn create_log_event(
 fn get_datetime_from_file_path(
     log_path: &PathBuf,
 ) -> Result<NaiveDateTime, SMCumulocityMapperError> {
-    if let Some(stem_string) = log_path.file_stem().unwrap().to_str() {
+    if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
         let mut stem_string_vec = stem_string.rsplit("-").take(3).collect::<Vec<_>>();
@@ -487,82 +488,83 @@ fn get_datetime_from_file_path(
         stem_string_vec.reverse();
         // join on "-" to get the date string
         let date_string = stem_string_vec.join("-");
-
+        // TODO: capture timezone info
         let dt = chrono::NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%SZ")?;
 
         return Ok(dt);
     }
+
     Err(SMCumulocityMapperError::InvalidDateInFileName(
         log_path.to_str().unwrap().to_string(),
     ))
 }
 
 /// Reads logs from `/var/log/tedge/`.
-fn read_tedge_agent_system_logs(payload: &str) -> Result<String, SMCumulocityMapperError> {
+fn read_tedge_agent_system_logs(
+    smartrest_obj: &SmartRestLogRequest,
+) -> Result<String, SMCumulocityMapperError> {
     const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
+    let mut output = String::new();
 
-    // retrieve smartrest object from payload
-    let mut smartrest_obj = SmartRestLogRequest::new();
-    smartrest_obj = smartrest_obj.from_smartrest(payload)?;
-
-    // convert `.date_from` & `.date_to` from String to date time object
-    let date_from = convert_string_to_rfc3339_dt(&smartrest_obj.date_from)?;
-    let date_to = convert_string_to_rfc3339_dt(&smartrest_obj.date_to)?;
+    // TODO:
+    // 1. filter by date range.
+    // 2. sort them by date
+    // 3. iterate over lines -> filtering
 
     // collect `AGENT_LOG_DIR` files in a vec and sort
-    let mut output = String::new();
     let mut read_vector: Vec<_> = std::fs::read_dir(AGENT_LOG_DIR)?
         .filter_map(|r| r.ok())
+        .filter_map(|dir_entry| {
+            let file_path = &dir_entry.path();
+            let datetime_object = get_datetime_from_file_path(&file_path);
+            match datetime_object {
+                Ok(dt) => {
+                    if dt < smartrest_obj.date_from || dt > smartrest_obj.date_to {
+                        return None;
+                    }
+                    Some(dir_entry)
+                }
+                Err(_) => None,
+            }
+        })
         .collect();
-    read_vector.sort_by_key(|dir| dir.path());
+
+    read_vector.sort_by_key(|dir| {
+        get_datetime_from_file_path(&dir.path())
+            .unwrap()
+            .to_string()
+    });
 
     // loop sorted vector and push store log file to `output`
     let mut line_counter: usize = 0;
     for entry in read_vector {
         let file_path = entry.path();
+        let file_content = std::fs::read_to_string(&file_path)?;
+        if file_content.is_empty() {
+            continue;
+        }
 
-        let datetime_object = get_datetime_from_file_path(&file_path)?;
-
-        if datetime_object >= date_from && datetime_object <= date_to {
-            let file_content = std::fs::read_to_string(file_path)?;
-            if !file_content.is_empty() {
-                // split at new line delimiter
-                let mut lines = file_content.lines();
-
-                // compute difference between max allowed lines (`smartrest_obj.lines`) and currently
-                // generated (`line_counter`)
-                let mut lines_to_fill = &smartrest_obj.lines - line_counter;
-
-                while lines_to_fill > 0 {
-                    if let Some(haystack) = lines.next() {
-                        if let Some(needle) = &smartrest_obj.needle {
-                            if haystack.contains(needle) {
-                                dbg!(&haystack);
-                                output.push_str(&format!("{}\n", haystack));
-                            }
-                        } else {
-                            output.push_str(&format!("{}\n", haystack));
-                        }
+        // split at new line delimiter ("\n")
+        let mut lines = file_content.lines();
+        while line_counter < smartrest_obj.lines {
+            if let Some(haystack) = lines.next() {
+                if let Some(needle) = &smartrest_obj.needle {
+                    if haystack.contains(needle) {
+                        output.push_str(&format!("{}\n", haystack));
+                        line_counter += 1;
                     }
-
+                } else {
+                    output.push_str(&format!("{}\n", haystack));
                     line_counter += 1;
-                    lines_to_fill -= 1;
                 }
+            } else {
+                // there are no lines.next()
+                break;
             }
         }
     }
 
     Ok(output)
-}
-
-fn convert_string_to_rfc3339_dt(date: &String) -> Result<NaiveDateTime, SMCumulocityMapperError> {
-    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
-    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
-    // c8y result:
-    // 2021-10-23T19:03:26+0100
-    // rfc3339 expected:
-    // 2021-10-23T19:03:26+01:00
-    Ok(NaiveDateTime::parse_from_str(&date, "%Y-%m-%dT%H:%M:%S%z")?)
 }
 
 fn url_is_in_my_tenant_domain(url: &str, tenant_uri: &str) -> bool {
@@ -791,6 +793,6 @@ mod tests {
         // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
-        assert_that!(path_buf_datetime, is(ok()));
+        assert!(path_buf_datetime.is_ok());
     }
 }

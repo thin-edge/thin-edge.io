@@ -1,7 +1,8 @@
 use crate::error::SmartRestDeserializerError;
+use chrono::NaiveDateTime;
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug)]
@@ -166,13 +167,29 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
+fn to_datetime<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
+    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
+    // c8y result:
+    // 2021-10-23T19:03:26+0100
+    // rfc3339 expected:
+    // 2021-10-23T19:03:26+01:00
+    let date_string: String = Deserialize::deserialize(deserializer)?;
+    Ok(NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%S%z").unwrap())
+}
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestLogRequest {
     pub message_id: String,
     pub device: String,
     pub log_type: String,
-    pub date_from: String,
-    pub date_to: String,
+    #[serde(deserialize_with = "to_datetime")]
+    pub date_from: NaiveDateTime,
+    #[serde(deserialize_with = "to_datetime")]
+    pub date_to: NaiveDateTime,
     pub needle: Option<String>,
     pub lines: usize,
 }
@@ -183,14 +200,14 @@ impl SmartRestLogRequest {
             message_id: "522".to_string(),
             device: "".to_string(),
             log_type: "".to_string(),
-            date_from: "".to_string(),
-            date_to: "".to_string(),
+            date_from: NaiveDateTime::from_timestamp(0, 0),
+            date_to: NaiveDateTime::from_timestamp(0, 0),
             needle: None,
             lines: 0,
         }
     }
 
-    pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
             .flexible(true)
