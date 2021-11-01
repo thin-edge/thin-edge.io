@@ -2,6 +2,7 @@ use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
 use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use mqtt_tests::message_logger::messages_published_on;
 use mqtt_tests::test_mqtt_server::start_broker_local;
+use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
 use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
@@ -23,27 +24,23 @@ async fn mapper_publishes_a_software_list_request() {
     let sm_mapper = start_sm_mapper().await;
 
     // Expect on `tedge/commands/req/software/list` a software list request.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, messages.recv()).await {
-        Ok(Some(msg)) => {
-            assert!(&msg.contains(r#"{"id":"#));
-        }
-        _ => panic!("No message received after a second."),
-    }
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    dbg!(&msg);
+    assert!(&msg.contains(r#"{"id":"#));
+
     sm_mapper.unwrap().abort();
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
-
-    // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut c8y_subscriber = get_subscriber(
-        "c8y/s/us",
-        "mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic",
-    )
-    .await;
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    let mut messages = messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await;
@@ -52,20 +49,16 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     let mut received_supported_operation = false;
     let mut received_pending_operation_request = false;
     for _ in 0..2 {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, c8y_subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                    "114,c8y_SoftwareUpdate\n" => received_supported_operation = true,
-                    "500\n" => received_pending_operation_request = true,
-                    _ => {}
-                }
-                if received_supported_operation && received_pending_operation_request {
-                    break;
-                }
-                continue;
-            }
-            _ => panic!("No message received after a second."),
+        match messages
+            .recv()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received after a second.")
+            .as_str()
+        {
+            "114,c8y_SoftwareUpdate\n" => received_supported_operation = true,
+            "500\n" => received_pending_operation_request = true,
+            _ => {}
         }
     }
     sm_mapper.unwrap().abort();

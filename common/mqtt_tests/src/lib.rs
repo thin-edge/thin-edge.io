@@ -1,5 +1,6 @@
 pub mod message_logger;
 pub mod test_mqtt_server;
+pub mod with_timeout;
 
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, Packet};
