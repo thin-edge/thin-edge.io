@@ -8,7 +8,7 @@ use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 use tokio::task::JoinHandle;
 
 const MQTT_TEST_PORT: u16 = 55555;
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
 #[tokio::test]
 #[serial]
@@ -16,9 +16,8 @@ async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
     let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
 
-    let mut messages = messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list")
-        .await
-        .unwrap();
+    let mut messages =
+        messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list").await;
 
     // Start the SM Mapper
     let sm_mapper = start_sm_mapper().await;
@@ -26,7 +25,7 @@ async fn mapper_publishes_a_software_list_request() {
     // Expect on `tedge/commands/req/software/list` a software list request.
     match tokio::time::timeout(TEST_TIMEOUT_MS, messages.recv()).await {
         Ok(Some(msg)) => {
-            assert!(&msg.contains(r#"{"id":"}"#));
+            assert!(&msg.contains(r#"{"id":"#));
         }
         _ => panic!("No message received after a second."),
     }
