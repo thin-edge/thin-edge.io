@@ -3,6 +3,7 @@ use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, to
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
 use c8y_smartrest::{
+    error::SmartRestDeserializerError,
     smartrest_deserializer::{SmartRestJwtResponse, SmartRestUpdateSoftware},
     smartrest_serializer::{
         SmartRestGetPendingOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
@@ -87,22 +88,20 @@ impl CumulocitySoftwareManagement {
         let () = self.ask_software_list().await?;
 
         while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
-            match err {
-                SMCumulocityMapperError::FromSmartRestDeserializer(_) => {
-                    let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-                    // publish the operation status as `executing`
-                    let () = self
-                        .publish(&topic, "501,c8y_SoftwareUpdate".into())
-                        .await?;
-                    // publish the operation status as `failed`
-                    let () = self
-                        .publish(
-                            &topic,
-                            format!("502,c8y_SoftwareUpdate,\"{}\"", err.to_string()),
-                        )
-                        .await?;
-                }
-                _ => {}
+            if let SMCumulocityMapperError::FromSmartRestDeserializer(
+                SmartRestDeserializerError::InvalidParameter { operation, .. },
+            ) = &err
+            {
+                let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+                // publish the operation status as `executing`
+                let () = self.publish(&topic, format!("501,{}", operation)).await?;
+                // publish the operation status as `failed`
+                let () = self
+                    .publish(
+                        &topic,
+                        format!("502,{},\"{}\"", operation, &err.to_string()),
+                    )
+                    .await?;
             }
             error!("{}", err);
         }
