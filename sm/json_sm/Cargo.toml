@@ -2,7 +2,7 @@
 name = "json_sm"
 version = "0.4.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 description = "json_sm defines the thin-edge json extension for software management"
 
