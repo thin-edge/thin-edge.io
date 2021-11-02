@@ -273,5 +273,5 @@ impl ConfigSetting for SoftwareDownloadBufferSizeDefaultSetting {
         "Example: 5"
     );
 
-    type Value = String;
+    type Value = Buffer;
 }

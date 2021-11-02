@@ -427,28 +427,32 @@ impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
     }
 }
 
-
 impl ConfigSettingAccessor<SoftwareDownloadBufferSizeDefaultSetting> for TEdgeConfig {
-    fn query(&self, _setting: SoftwareDownloadBufferSizeDefaultSetting) -> ConfigSettingResult<String> {
-        self.data
+    fn query(
+        &self,
+        _setting: SoftwareDownloadBufferSizeDefaultSetting,
+    ) -> ConfigSettingResult<Buffer> {
+        Ok(self
+            .data
             .software
             .default_buffer_size_in_percentage
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: SoftwareDownloadBufferSizeDefaultSetting::KEY,
-            })
+            .map(Buffer)
+            .unwrap_or_else(|| self.config_defaults.default_buffer_size_in_percentage))
     }
 
     fn update(
         &mut self,
         _setting: SoftwareDownloadBufferSizeDefaultSetting,
-        value: String,
+        value: Buffer,
     ) -> ConfigSettingResult<()> {
         self.data.software.default_buffer_size_in_percentage = Some(value.into());
         Ok(())
     }
 
-    fn unset(&mut self, _setting: SoftwareDownloadBufferSizeDefaultSetting) -> ConfigSettingResult<()> {
+    fn unset(
+        &mut self,
+        _setting: SoftwareDownloadBufferSizeDefaultSetting,
+    ) -> ConfigSettingResult<()> {
         self.data.software.default_buffer_size_in_percentage = None;
         Ok(())
     }
