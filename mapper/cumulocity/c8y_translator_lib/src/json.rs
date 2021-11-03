@@ -43,6 +43,26 @@ fn from_thin_edge_json_with_timestamp(
     Ok(serializer.into_string()?)
 }
 
+/// Converts from thin-edge Json to c8y_json for child device
+pub fn from_thin_edge_json_with_child(
+    input: &str,
+    child_id: &str,
+) -> Result<String, CumulocityJsonError> {
+    let timestamp = WallClock.now();
+    let c8y_vec = from_thin_edge_json_with_child_with_timestamp(input, timestamp, child_id)?;
+    Ok(c8y_vec)
+}
+
+fn from_thin_edge_json_with_child_with_timestamp(
+    input: &str,
+    default_timestamp: DateTime<FixedOffset>,
+    child_id: &str,
+) -> Result<String, CumulocityJsonError> {
+    let mut serializer = serializer::C8yJsonSerializer::new_with_child(default_timestamp, child_id);
+    let () = parse_str(input, &mut serializer)?;
+    Ok(serializer.into_string()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

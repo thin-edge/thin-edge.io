@@ -18,6 +18,7 @@ mod error;
 mod mapper;
 mod size_threshold;
 mod sm_c8y_mapper;
+mod child;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {

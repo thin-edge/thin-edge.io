@@ -50,6 +50,34 @@ impl C8yJsonSerializer {
         }
     }
 
+    pub fn new_with_child(default_timestamp: DateTime<FixedOffset>, child_id: &str) -> Self {
+        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
+        let mut json = JsonWriter::with_capacity(capa);
+
+        json.write_open_obj();
+        let _ = json.write_key("type");
+        let _ = json.write_str("ThinEdgeMeasurement");
+
+        // In case the measurement is addressed to a child-device use fragment
+        // "externalSource" to tell c8Y identity API to use child-device
+        // object referenced by "externalId", instead of root device object
+        // referenced by MQTT client's Device ID.
+        let _ = json.write_key("externalSource");
+        let _ = json.write_open_obj();
+        let _ = json.write_key("externalId");
+        let _ = json.write_str(child_id);
+        let _ = json.write_key("type");
+        let _ = json.write_str("c8y_Serial");
+        let _ = json.write_close_obj();
+
+        Self {
+            json,
+            is_within_group: false,
+            timestamp_present: false,
+            default_timestamp,
+        }
+    }
+
     fn end(&mut self) -> Result<(), C8yJsonSerializationError> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());

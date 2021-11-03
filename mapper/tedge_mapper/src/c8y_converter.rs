@@ -12,6 +12,12 @@ impl Converter for CumulocityConverter {
         let () = self.size_threshold.validate(input)?;
         c8y_translator_lib::json::from_thin_edge_json(input).map_err(Into::into)
     }
+
+    fn convert_to_child_device(&self, input: &str, child_id: &str) -> Result<String, Self::Error> {
+        let () = self.size_threshold.validate(input)?;
+        c8y_translator_lib::json::from_thin_edge_json_with_child(input, child_id)
+            .map_err(Into::into)
+    }
 }
 
 #[cfg(test)]
