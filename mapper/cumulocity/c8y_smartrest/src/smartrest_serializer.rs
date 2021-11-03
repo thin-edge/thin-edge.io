@@ -118,23 +118,22 @@ impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 pub struct SmartRestSetOperationToSuccessful {
     pub message_id: &'static str,
     pub operation: &'static str,
-    pub url: Option<String>,
+    pub operation_parameter: Option<String>,
 }
 
 impl SmartRestSetOperationToSuccessful {
-    fn new(operation: CumulocitySupportedOperations) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations) -> Self {
         Self {
             message_id: "503",
             operation: operation.into(),
-            url: None,
+            operation_parameter: None,
         }
     }
 
-    pub fn new_with_file(operation: CumulocitySupportedOperations, url: &str) -> Self {
+    pub fn with_response_parameter(self, response_parameter: &str) -> Self {
         Self {
-            message_id: "503",
-            operation: operation.into(),
-            url: Some(url.into()),
+            operation_parameter: Some(response_parameter.into()),
+            ..self
         }
     }
 
@@ -274,7 +273,7 @@ mod tests {
         let expected_smartrest_obj = SmartRestSetOperationToSuccessful {
             message_id: "503",
             operation: "c8y_SoftwareUpdate",
-            url: None,
+            operation_parameter: None,
         };
         assert_eq!(smartrest_obj, expected_smartrest_obj);
     }
