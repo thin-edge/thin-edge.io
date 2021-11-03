@@ -18,7 +18,11 @@ impl TryFrom<String> for CumulocitySoftwareUpdateActions {
         match action.as_str() {
             "install" => Ok(Self::Install),
             "delete" => Ok(Self::Delete),
-            _ => Err(SmartRestDeserializerError::ActionNotFound { action }),
+            param => Err(SmartRestDeserializerError::InvalidParameter {
+                parameter: param.into(),
+                operation: "c8y_SoftwareUpdate".into(),
+                hint: "It must be install or delete.".into(),
+            }),
         }
     }
 }
