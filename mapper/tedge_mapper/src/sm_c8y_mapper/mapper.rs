@@ -288,7 +288,7 @@ impl CumulocitySoftwareManagement {
         let () = self.set_log_file_request_executing().await?;
 
         // 2. read logs
-        let log_output = read_tedge_system_logs(&smartrest_obj, AGENT_LOG_DIR)?;
+        let log_output = read_tedge_logs(&smartrest_obj, AGENT_LOG_DIR)?;
 
         // 3. create event
         let token = get_jwt_token(&self.client).await?;
@@ -494,7 +494,7 @@ fn get_datetime_from_file_path(
 ///
 /// let log = read_tedge_system_logs(&smartrest_obj, "/var/log/tedge").unwrap();
 /// ```
-fn read_tedge_system_logs(
+fn read_tedge_logs(
     smartrest_obj: &SmartRestLogRequest,
     logs_dir: &str,
 ) -> Result<String, SMCumulocityMapperError> {
@@ -819,22 +819,23 @@ mod tests {
     }
 
     #[test]
-    /// testing read_tedge_agent_system_logs
+    /// testing read_tedge_logs
     ///
     /// this test creates 5 fake log files in a temporary directory.
-    /// 3 files (a-c) are dated 2021-01-01T0X:00Z, where X = a different hour.
-    /// 1 file is dated 2021-01-11.. - which is outside the date range requests (`smartrest_obj`)
-    /// 1 file has the wrong file format.
+    /// files are dated 2021-01-0XT01:00Z, where X = a different day.
     ///
-    /// this tests will assert that correct files (a-c) are read from latest-oldest
+    /// this tests will assert that files are read alphanumerically from oldest to newest
     fn test_read_logs() {
+        // order in which files are created
         const LOG_FILE_NAMES: [&str; 5] = [
-            "software-list-2021-01-03T01:00:00Z.log",   // 3rd
-            "software-list-2021-01-02T01:00:00Z.log",   // 2nd
-            "software-list-2021-01-01T01:00:00Z.log",   // 1st
-            "software-update-2021-01-03T01:00:00Z.log", // 5th
-            "software-update-2021-01-02T01:00:00Z.log", // 4th
+            "software-list-2021-01-03T01:00:00Z.log",
+            "software-list-2021-01-02T01:00:00Z.log",
+            "software-list-2021-01-01T01:00:00Z.log",
+            "software-update-2021-01-03T01:00:00Z.log",
+            "software-update-2021-01-02T01:00:00Z.log",
         ];
+
+        // expected (sorted) output
         const EXPECTED_OUTPUT: [&str; 5] = [
             "software-list-2021-01-01T01:00:00Z",
             "software-list-2021-01-02T01:00:00Z",
@@ -849,17 +850,18 @@ mod tests {
         .unwrap();
 
         let temp_dir = tempfile::tempdir().unwrap();
-
+        // creating the files
         for (idx, file) in LOG_FILE_NAMES.iter().enumerate() {
             let file_path = &temp_dir.path().join(file);
             let mut file = File::create(file_path).unwrap();
             writeln!(file, "file num {}", idx).unwrap();
         }
 
-        let output =
-            read_tedge_system_logs(&smartrest_obj, temp_dir.path().to_str().unwrap()).unwrap();
+        // reading the logs and extracting the file names from the log output.
+        let output = read_tedge_logs(&smartrest_obj, temp_dir.path().to_str().unwrap()).unwrap();
         let parsed_values = parse_file_names_from_log_content(&output);
 
+        // asserting the order = `EXPECTED_OUTPUT`
         assert!(parsed_values.eq(&EXPECTED_OUTPUT));
     }
 }
