@@ -3,6 +3,7 @@ use crate::sm_c8y_mapper::json_c8y::{C8yCreateEvent, C8yManagedObject};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
+use c8y_smartrest::smartrest_deserializer::{SmartRestLogEvent, SmartRestLogRequest};
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
     error::SmartRestDeserializerError,
@@ -95,7 +96,6 @@ impl CumulocitySoftwareManagement {
         let () = self.ask_software_list().await?;
 
         while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
-
             if let SMCumulocityMapperError::FromSmartRestDeserializer(
                 SmartRestDeserializerError::InvalidParameter { operation, .. },
             ) = &err
@@ -118,21 +118,13 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn process_smartrest(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
-        // TODO; make [u8]
-        //let payload = "528,deviceSerial,software_a,4.0.0,http://example.com/software_a,install";
         let message_id: &str = &payload[..3];
         match message_id {
             "528" => {
-                let () = self
-                    .forward_software_request(payload)
-                    .await
-                    .map_err(|err| SMCumulocityMapperError::SoftwareUpdateRequestError)?;
+                let () = self.forward_software_request(payload).await?;
             }
             "522" => {
-                let () = self
-                    .retrieve_log_request(payload)
-                    .await
-                    .map_err(|err| SMCumulocityMapperError::LogFileRequestError)?;
+                let () = self.retrieve_log_request(payload).await?;
             }
             _ => {
                 return Err(SMCumulocityMapperError::InvalidMqttMessage);
