@@ -212,7 +212,7 @@ mod tests {
         let smartrest = SmartRestSetSupportedOperations::default()
             .to_smartrest()
             .unwrap();
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate\n");
+        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
         )
         .to_smartrest()
         .unwrap();
-        assert_eq!(smartrest, "503,c8y_SoftwareUpdate\n");
+        assert_eq!(smartrest, "503,c8y_SoftwareUpdate,\n");
     }
 
     #[test]
