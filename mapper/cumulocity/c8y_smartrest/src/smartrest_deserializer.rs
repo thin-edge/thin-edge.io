@@ -50,13 +50,6 @@ impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
-        //if message_id != self.message_id {
-        //    return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
-        //}
-        // 528,deviceSerial,software_a,4.0.0,http://example.com/software_a,install
-        //let smartrest = "522,tornado,software-management,2021-09-21T11:40:27+0200,2021-09-22T11:40:27+0200,five";
-        //let smartrest = "528,deviceSerial,software_a,4.0.0,http://example.com/software_a,install";
-        // 522,tornado,software-management,2021-09-21T11:40:27+0200,2021-09-22T11:40:27+0200,,1000
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
@@ -221,12 +214,6 @@ impl SmartRestLogRequest {
 
         Ok(record)
     }
-
-    // TODO: ask lukasz about this
-    //pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-    //    let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
-    //    Ok(request)
-    //}
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
