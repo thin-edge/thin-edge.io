@@ -281,13 +281,14 @@ impl CumulocitySoftwareManagement {
     }
 
     async fn retrieve_log_request(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
+        // retrieve smartrest object from payload
+        let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
+
         // 1. set log file request to executing
         let () = self.set_log_file_request_executing().await?;
 
         // 2. read logs
-        // retrieve smartrest object from payload
-        let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
-        let log_output = read_tedge_agent_system_logs(&smartrest_obj, AGENT_LOG_DIR)?;
+        let log_output = read_tedge_system_logs(&smartrest_obj, AGENT_LOG_DIR)?;
 
         // 3. create event
         let token = get_jwt_token(&self.client).await?;
@@ -430,7 +431,7 @@ async fn create_log_event(
         c8y_managed_object.to_owned(),
         "c8y_Logfile",
         &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-        "syslog log file",
+        "software-management",
     );
 
     let request = client
@@ -477,8 +478,23 @@ fn get_datetime_from_file_path(
     ))
 }
 
-/// Reads logs from `/var/log/tedge/`.
-fn read_tedge_agent_system_logs(
+/// Reads tedge logs according to `SmartRestLogRequest`.
+///
+/// If needed, logs are concatenated.
+///
+/// Logs are sorted alphanumerically from oldest to newest.
+///
+/// # Examples
+///
+/// ```
+/// let smartrest_obj = SmartRestLogRequest::from_smartrest(
+///     "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
+/// )
+/// .unwrap();
+///
+/// let log = read_tedge_system_logs(&smartrest_obj, "/var/log/tedge").unwrap();
+/// ```
+fn read_tedge_system_logs(
     smartrest_obj: &SmartRestLogRequest,
     logs_dir: &str,
 ) -> Result<String, SMCumulocityMapperError> {
@@ -504,11 +520,7 @@ fn read_tedge_agent_system_logs(
         })
         .collect();
 
-    read_vector.sort_by_key(|dir| {
-        get_datetime_from_file_path(&dir.path())
-            .unwrap()
-            .to_string()
-    });
+    read_vector.sort_by_key(|dir| dir.path());
 
     // loop sorted vector and push store log file to `output`
     let mut line_counter: usize = 0;
@@ -664,8 +676,9 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hamcrest2::prelude::*;
     use mqtt_client::MqttMessageStream;
+    use std::fs::File;
+    use std::io::Write;
     use std::{str::FromStr, sync::Arc};
     use test_case::test_case;
 
@@ -791,29 +804,62 @@ mod tests {
         assert!(path_buf_datetime.is_err());
     }
 
-    /// files will by default be called:
-    ///     file-one-dt.log -? "first file"
-    ///     file-two-dt.log    "second file"
-    ///     file-three-dt.log  "third file"  newest
-    /// where dt is a datetime object
-    fn create_fake_log_file_names() -> [&'static str; 3] {
-        //let date = Date::from_utc(naive);
-        //let mut dt: DateTime<Local> = Local::from(_);
-
-        ["bird", "frog", "toat"]
-    }
-
-    fn create_fake_log_file(content: &str, num_lines: usize) {
-        let mut output = String::new();
-        for _ in 0..num_lines {
-            output.push_str(&format!("{}\n", content));
+    fn parse_file_names_from_log_content(log_content: &str) -> [&str; 5] {
+        let mut files: Vec<&str> = vec![];
+        for line in log_content.lines() {
+            if line.contains("filename: ") {
+                let filename: &str = line.split("filename: ").last().unwrap();
+                files.push(filename);
+            }
+        }
+        match files.try_into() {
+            Ok(arr) => arr,
+            Err(_) => panic!("Could not convert to Array &str, size 5"),
         }
     }
 
     #[test]
+    /// testing read_tedge_agent_system_logs
+    ///
+    /// this test creates 5 fake log files in a temporary directory.
+    /// 3 files (a-c) are dated 2021-01-01T0X:00Z, where X = a different hour.
+    /// 1 file is dated 2021-01-11.. - which is outside the date range requests (`smartrest_obj`)
+    /// 1 file has the wrong file format.
+    ///
+    /// this tests will assert that correct files (a-c) are read from latest-oldest
     fn test_read_logs() {
+        const LOG_FILE_NAMES: [&str; 5] = [
+            "software-list-2021-01-03T01:00:00Z.log",   // 3rd
+            "software-list-2021-01-02T01:00:00Z.log",   // 2nd
+            "software-list-2021-01-01T01:00:00Z.log",   // 1st
+            "software-update-2021-01-03T01:00:00Z.log", // 5th
+            "software-update-2021-01-02T01:00:00Z.log", // 4th
+        ];
+        const EXPECTED_OUTPUT: [&str; 5] = [
+            "software-list-2021-01-01T01:00:00Z",
+            "software-list-2021-01-02T01:00:00Z",
+            "software-list-2021-01-03T01:00:00Z",
+            "software-update-2021-01-02T01:00:00Z",
+            "software-update-2021-01-03T01:00:00Z",
+        ];
+
+        let smartrest_obj = SmartRestLogRequest::from_smartrest(
+            "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
+        )
+        .unwrap();
+
         let temp_dir = tempfile::tempdir().unwrap();
-        create_fake_log_file_names();
-        dbg!(temp_dir.path());
+
+        for (idx, file) in LOG_FILE_NAMES.iter().enumerate() {
+            let file_path = &temp_dir.path().join(file);
+            let mut file = File::create(file_path).unwrap();
+            writeln!(file, "file num {}", idx).unwrap();
+        }
+
+        let output =
+            read_tedge_system_logs(&smartrest_obj, temp_dir.path().to_str().unwrap()).unwrap();
+        let parsed_values = parse_file_names_from_log_content(&output);
+
+        assert!(parsed_values.eq(&EXPECTED_OUTPUT));
     }
 }
