@@ -27,6 +27,8 @@ use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSettin
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
 
+const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
+
 pub struct CumulocitySoftwareManagementMapper {}
 
 impl CumulocitySoftwareManagementMapper {
@@ -292,10 +294,10 @@ impl CumulocitySoftwareManagement {
         binary_upload_event_url: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-        let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new_with_file(
+        let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
-            binary_upload_event_url,
         )
+        .with_response_parameter(binary_upload_event_url)
         .to_smartrest()?;
 
         let () = self.publish(&topic, smartrest_set_operation_status).await?;
@@ -309,7 +311,7 @@ impl CumulocitySoftwareManagement {
         // 2. read logs
         // retrieve smartrest object from payload
         let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
-        let log_output = read_tedge_agent_system_logs(&smartrest_obj)?; // TODO should i also async this?
+        let log_output = read_tedge_agent_system_logs(&smartrest_obj, AGENT_LOG_DIR)?;
 
         // 3. create event
         let token = get_jwt_token(&self.client).await?;
@@ -483,10 +485,10 @@ fn get_datetime_from_file_path(
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
-        let mut stem_string_vec = stem_string.rsplit("-").take(3).collect::<Vec<_>>();
+        let mut stem_string_vec = stem_string.rsplit('-').take(3).collect::<Vec<_>>();
         // reverse back the order (because of rsplit)
         stem_string_vec.reverse();
-        // join on "-" to get the date string
+        // join on '-' to get the date string
         let date_string = stem_string_vec.join("-");
         // TODO: capture timezone info
         let dt = chrono::NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%SZ")?;
@@ -502,17 +504,14 @@ fn get_datetime_from_file_path(
 /// Reads logs from `/var/log/tedge/`.
 fn read_tedge_agent_system_logs(
     smartrest_obj: &SmartRestLogRequest,
+    logs_dir: &str,
 ) -> Result<String, SMCumulocityMapperError> {
-    const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
     let mut output = String::new();
 
-    // TODO:
-    // 1. filter by date range.
-    // 2. sort them by date
-    // 3. iterate over lines -> filtering
-
-    // collect `AGENT_LOG_DIR` files in a vec and sort
-    let mut read_vector: Vec<_> = std::fs::read_dir(AGENT_LOG_DIR)?
+    // NOTE: As per documentation of std::fs::read_dir:
+    // "The order in which this iterator returns entries is platform and filesystem dependent."
+    // Therefore, files are sorted by date.
+    let mut read_vector: Vec<_> = std::fs::read_dir(logs_dir)?
         .filter_map(|r| r.ok())
         .filter_map(|dir_entry| {
             let file_path = &dir_entry.path();
@@ -542,6 +541,14 @@ fn read_tedge_agent_system_logs(
         let file_content = std::fs::read_to_string(&file_path)?;
         if file_content.is_empty() {
             continue;
+        }
+
+        // adding file header only if line_counter permits more lines to be added
+        match &file_path.file_stem().and_then(|f| f.to_str()) {
+            Some(file_name) if line_counter < smartrest_obj.lines => {
+                output.push_str(&format!("filename: {}\n", file_name));
+            }
+            _ => {}
         }
 
         // split at new line delimiter ("\n")
@@ -794,5 +801,43 @@ mod tests {
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
         assert!(path_buf_datetime.is_ok());
+    }
+
+    #[test_case("/path/to/software-list-2021-10-27-10:44:44Z.log")]
+    #[test_case("/path/to/tedge/agent/software-update-10-25-2021T07:45:41Z.log")]
+    #[test_case("/path/to/another-variant-07:45:41Z-2021-10-25T.log")]
+    #[test_case("/yet-another-variant-2021-10-25T07:45Z.log")]
+    fn test_datetime_parsing_from_path_fail(file_path: &str) {
+        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // this should return an err.
+        let path_buf = PathBuf::from_str(file_path).unwrap();
+        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
+        assert!(path_buf_datetime.is_err());
+    }
+
+    /// files will by default be called:
+    ///     file-one-dt.log -? "first file"
+    ///     file-two-dt.log    "second file"
+    ///     file-three-dt.log  "third file"  newest
+    /// where dt is a datetime object
+    fn create_fake_log_file_names() -> [&'static str; 3] {
+        //let date = Date::from_utc(naive);
+        //let mut dt: DateTime<Local> = Local::from(_);
+
+        ["bird", "frog", "toat"]
+    }
+
+    fn create_fake_log_file(content: &str, num_lines: usize) {
+        let mut output = String::new();
+        for _ in 0..num_lines {
+            output.push_str(&format!("{}\n", content));
+        }
+    }
+
+    #[test]
+    fn test_read_logs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        create_fake_log_file_names();
+        dbg!(temp_dir.path());
     }
 }
