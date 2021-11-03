@@ -1,5 +1,5 @@
-use std::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Buffer(pub u16);
@@ -38,6 +38,11 @@ impl From<Buffer> for u16 {
     }
 }
 
+impl Buffer {
+    pub fn apply_to(&self, value: u16) -> u16 {
+        (value / 100) * self.0
+    }
+}
 
 #[cfg(test)]
 use assert_matches::*;
@@ -57,4 +62,10 @@ fn conversion_from_longer_float_fails() {
 #[test]
 fn conversion_from_port_to_string() {
     assert_matches!(TryInto::<String>::try_into(Buffer(1234)), Ok(buffer_str) if buffer_str == "1234");
+}
+
+#[test]
+fn conversion_to_percentage() {
+    let val = Buffer(15);
+    assert_eq!(val.apply_to(1500), 225);
 }

@@ -673,6 +673,7 @@ dependencies = [
  "mockito",
  "regex",
  "reqwest",
+ "tedge_config",
  "tedge_utils",
  "tempfile",
  "test-case",

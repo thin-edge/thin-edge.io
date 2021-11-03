@@ -5,6 +5,10 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use tedge_config::{
+    Buffer, ConfigRepository, ConfigSettingAccessor, SoftwareDownloadBufferSizeDefaultSetting,
+    TEdgeConfigLocation,
+};
 
 #[derive(Debug)]
 pub struct Downloader {
@@ -24,6 +28,14 @@ impl Downloader {
         download_target.set_extension("tmp");
 
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
+
+        let config_location = TEdgeConfigLocation::from_default_system_location();
+        let config_repository = tedge_config::TEdgeConfigRepository::new(config_location.clone());
+        let tedge_config = config_repository.load().unwrap();
+
+        let buffer_size: Buffer = tedge_config
+            .query(SoftwareDownloadBufferSizeDefaultSetting)
+            .unwrap();
 
         Self {
             target_filename,
