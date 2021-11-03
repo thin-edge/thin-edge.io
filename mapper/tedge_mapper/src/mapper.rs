@@ -117,6 +117,7 @@ mod tests {
     use mqtt_tests::*;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
         let mqtt_port: u16 = 55555;
@@ -130,7 +131,8 @@ mod tests {
             errors_topic: Topic::new("err_topic")?,
         };
 
-        let flock = check_another_instance_is_not_running(name).unwrap(); // ISSUE this depends on the file system
+        let flock = check_another_instance_is_not_running(name)
+            .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
 
         let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
         let mqtt_client = Client::connect(name, &mqtt_config).await?;
@@ -156,13 +158,21 @@ mod tests {
 
         // Ill-formed input
         let input = "éèê";
-        let outcome = received_on_published(mqtt_port, "in_topic", input, "err_topic", 5).await;
-        assert!(outcome.is_ok());
+        let expected = format!("{}", UppercaseConverter::conversion_error());
+        let actual = received_on_published(mqtt_port, "in_topic", input, "err_topic", 5).await;
+        assert_eq!(expected, actual?);
 
         Ok(())
     }
 
     struct UppercaseConverter;
+
+    impl UppercaseConverter {
+        pub fn conversion_error() -> ConversionError {
+            // Just a stupid error that matches the expectations of the mapper
+            ConversionError::FromMapperError(MapperError::HomeDirNotFound)
+        }
+    }
 
     impl Converter for UppercaseConverter {
         type Error = ConversionError;
@@ -171,10 +181,7 @@ mod tests {
             if input.is_ascii() {
                 Ok(input.to_uppercase())
             } else {
-                // Just a stupid error that matches the expectations of the mapper
-                Err(ConversionError::FromMapperError(
-                    MapperError::HomeDirNotFound,
-                ))
+                Err(UppercaseConverter::conversion_error())
             }
         }
     }
