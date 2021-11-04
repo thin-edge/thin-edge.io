@@ -410,46 +410,37 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_client::MqttMessageStream;
-    use std::sync::Arc;
+    use mqtt_tests::test_mqtt_server::start_broker_local;
+    use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use test_case::test_case;
 
     const MQTT_TEST_PORT: u16 = 55555;
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+    #[serial_test::serial]
     async fn get_jwt_token_full_run() {
-        // Prepare subscribers to listen on messages on topic `c8y/s/us` where we expect to receive empty message.
-        let mut publish_messages_stream =
-            get_subscriber("c8y/s/uat", "get_jwt_token_full_run_sub1").await;
+        let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+        let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/uat").await;
 
-        let publisher = Arc::new(
-            Client::connect(
-                "get_jwt_token_full_run",
-                &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-            )
-            .await
-            .unwrap(),
-        );
-
-        let publisher2 = publisher.clone();
+        let publisher = Client::connect(
+            "get_jwt_token_full_run",
+            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+        )
+        .await
+        .unwrap();
 
         // Setup listener stream to publish on first message received on topic `c8y/s/us`.
         let responder_task = tokio::spawn(async move {
-            match tokio::time::timeout(TEST_TIMEOUT_MS, publish_messages_stream.next()).await {
-                Ok(Some(msg)) => {
-                    // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
-                    assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
-                    assert_eq!(msg.payload_str().unwrap(), "");
+            let msg = messages
+                .recv()
+                .with_timeout(TEST_TIMEOUT_MS)
+                .await
+                .expect_or("No JWT request received.");
+            assert_eq!(&msg, "");
 
-                    // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                    let message =
-                        mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
-                    let _ = publisher2.publish(message).await;
-                }
-                _ => panic!("No message received after a second."),
-            }
+            // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
+            let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/dat", "71,1111").await;
         });
 
         // Wait till token received.
@@ -497,18 +488,5 @@ mod tests {
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         assert!(!url_is_in_my_tenant_domain(url, "test.test.com"));
-    }
-
-    async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
-        let topic_filter = TopicFilter::new(pattern).unwrap();
-        let subscriber = Client::connect(
-            client_name,
-            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-        )
-        .await
-        .unwrap();
-
-        // Obtain subscribe stream
-        subscriber.subscribe(topic_filter).await.unwrap()
     }
 }

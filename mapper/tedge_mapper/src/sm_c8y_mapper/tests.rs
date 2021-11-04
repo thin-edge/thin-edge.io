@@ -1,6 +1,5 @@
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
-use mqtt_client::{Client, MqttClient, MqttMessageStream, Topic, TopicFilter};
-use mqtt_tests::message_logger::messages_published_on;
+use mqtt_client::{Client, MqttClient, TopicFilter};
 use mqtt_tests::test_mqtt_server::start_broker_local;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
@@ -18,7 +17,7 @@ async fn mapper_publishes_a_software_list_request() {
     let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
 
     let mut messages =
-        messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list").await;
+        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list").await;
 
     // Start the SM Mapper
     let sm_mapper = start_sm_mapper().await;
@@ -40,52 +39,39 @@ async fn mapper_publishes_a_software_list_request() {
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
     let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
-    let mut messages = messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await;
 
     // Expect both 114 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    let mut received_supported_operation = false;
-    let mut received_pending_operation_request = false;
-    for _ in 0..2 {
-        match messages
-            .recv()
-            .with_timeout(TEST_TIMEOUT_MS)
-            .await
-            .expect_or("No message received after a second.")
-            .as_str()
-        {
-            "114,c8y_SoftwareUpdate\n" => received_supported_operation = true,
-            "500\n" => received_pending_operation_request = true,
-            _ => {}
-        }
-    }
+    mqtt_tests::assert_received(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+    )
+    .await;
     sm_mapper.unwrap().abort();
-    assert!(received_supported_operation);
-    assert!(received_pending_operation_request);
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-
-    // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut subscriber = get_subscriber(
-        "tedge/commands/req/software/update",
-        "mapper_publishes_software_update_request",
-    )
-    .await;
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    let mut messages =
+        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/update")
+            .await;
 
     let sm_mapper = start_sm_mapper().await;
     let _ = publish_a_fake_jwt_token().await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
+    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+        .await
+        .unwrap();
 
     let expected_update_list = r#"
          "updateList": [
@@ -101,38 +87,35 @@ async fn mapper_publishes_software_update_request() {
             }"#;
 
     // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-        Ok(Some(msg)) => {
-            dbg!(&msg.payload_str().unwrap());
-            assert!(&msg.payload_str().unwrap().contains("{\"id\":\""));
-            assert!(&msg
-                .payload_str()
-                .unwrap()
-                .contains(&remove_whitespace(expected_update_list)));
-        }
-        _ => {
-            panic!("No message received after a second.");
-        }
-    }
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    dbg!(&msg);
+    assert!(&msg.contains("{\"id\":\""));
+    assert!(&msg.contains(&remove_whitespace(expected_update_list)));
     sm_mapper.unwrap().abort();
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
     // and publishes status of the operation `501` on `c8y/s/us`
-    // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut subscriber = get_subscriber(
-        "c8y/s/us",
-        "mapper_publishes_software_update_status_and_software_list_onto_c8y_topic",
-    )
-    .await;
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await;
     let _ = publish_a_fake_jwt_token().await;
+
+    mqtt_tests::assert_received(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+    )
+    .await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -140,25 +123,21 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
             "status": "executing"
         }"#;
 
-    let _ = publish(
-        &Topic::new("tedge/commands/res/software/update").unwrap(),
-        json_response.to_string(),
+    let _ = mqtt_tests::publish(
+        MQTT_TEST_PORT,
+        "tedge/commands/res/software/update",
+        json_response,
     )
-    .await;
+    .await
+    .unwrap();
 
     // Expect `501` smartrest message on `c8y/s/us`.
-    loop {
-        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                    "501,c8y_SoftwareUpdate\n" => break,
-                    _ => continue,
-                }
-            }
-            _ => panic!("No update operation status message received after a second."),
-        }
-    }
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    assert_eq!(&msg, "501,c8y_SoftwareUpdate\n");
 
     // Prepare and publish a software update response `successful`.
     let json_response = r#"{
@@ -170,46 +149,42 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
                 ]}
             ]}"#;
 
-    let _ = publish(
-        &Topic::new("tedge/commands/res/software/update").unwrap(),
-        json_response.to_string(),
+    let _ = mqtt_tests::publish(
+        MQTT_TEST_PORT,
+        "tedge/commands/res/software/update",
+        json_response,
     )
-    .await;
+    .await
+    .unwrap();
 
     // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    let mut received_status_successful = false;
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    assert_eq!(&msg, "503,c8y_SoftwareUpdate\n");
 
-    match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-        Ok(Some(msg)) => {
-            dbg!(&msg.payload_str().unwrap());
-            match msg.payload_str().unwrap() {
-                "503,c8y_SoftwareUpdate\n" => {
-                    received_status_successful = true;
-                }
-                _ => {}
-            }
-        }
-        _ => panic!("No update operation result message received after a second."),
-    }
     sm_mapper.unwrap().abort();
-    assert!(received_status_successful);
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
-    // Publish a software update response `failed`.
-    let mut subscriber = get_subscriber(
-        "c8y/s/us",
-        "mapper_publishes_software_update_failed_status_onto_c8y_topic",
-    )
-    .await;
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await;
     let _ = publish_a_fake_jwt_token().await;
+    mqtt_tests::assert_received(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+    )
+    .await;
 
+    // The agent publish an error
     let json_response = r#"
         {
             "id": "123",
@@ -229,41 +204,35 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
             "failures":[]
         }"#;
 
-    let _ = publish(
-        &Topic::new("tedge/commands/res/software/update").unwrap(),
-        json_response.to_string(),
+    let _ = mqtt_tests::publish(
+        MQTT_TEST_PORT,
+        "tedge/commands/res/software/update",
+        json_response,
     )
-    .await;
+    .await
+    .unwrap();
 
     // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    let mut received_status_failed = false;
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    dbg!(&msg);
+    assert_eq!(
+        &msg,
+        "502,c8y_SoftwareUpdate,\"Partial failure: Couldn\'t install collectd and nginx\"\n"
+    );
 
-    for _ in 0..10 {
-        // Loop 10 times, because it needs time to receive the messages
-        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                        "502,c8y_SoftwareUpdate,\"Partial failure: Couldn\'t install collectd and nginx\"\n" => { received_status_failed = true; break;}
-                        _ => {}
-                    }
-                continue;
-            }
-            _ => panic!("No failed status message received after a second."),
-        }
-    }
     sm_mapper.unwrap().abort();
-    assert!(received_status_failed);
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
-
-    // The test does the following steps
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
 
     // When a software update request message is received on `c8y/s/ds` by the sm mapper,
     // converts it to thin-edge json message, publishes a request message on `tedge/commands/req/software/update`.
@@ -273,26 +242,28 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // The subscriber that was waiting for the response on `c8/s/us` receives the response and validates it.
 
     // Create a subscriber to receive messages on `tedge/commands/req/software/update` topic.
-    let mut sw_update_req_sub = get_subscriber(
-        "tedge/commands/req/software/update",
-        "software_update_request",
-    )
-    .await;
+    let mut requests =
+        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/update")
+            .await;
 
     // Create a subscriber to receive messages on `"c8y/s/us` topic.
-    let mut sw_update_res_sub = get_subscriber(
-        "c8y/s/us",
-        "mapper_publishes_software_update_response_to_c8y_cloud",
-    )
-    .await;
+    let mut responses = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper().await?;
     let _ = publish_a_fake_jwt_token().await;
+    mqtt_tests::assert_received(
+        &mut responses,
+        TEST_TIMEOUT_MS,
+        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+    )
+    .await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
+    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+        .await
+        .unwrap();
 
     let expected_update_list = r#"
          "updateList": [
@@ -307,78 +278,63 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
                 ]
             }"#;
 
-    // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
-    match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_req_sub.next()).await {
-        Ok(Some(msg)) => {
-            dbg!(&msg.payload_str().unwrap());
-            if msg
-                .payload_str()
-                .unwrap()
-                .contains(&remove_whitespace(expected_update_list))
-            {
-                // Stop the SM Mapper
-                sm_mapper.abort();
-                assert!(sm_mapper.await.unwrap_err().is_cancelled());
+    // Wait for the request being published by the mapper on `tedge/commands/req/software/update`.
+    let msg = requests
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS * 5)
+        .await
+        .expect_or("No message received after a second.");
+    dbg!(&msg);
+    assert!(msg.contains(&remove_whitespace(expected_update_list)));
 
-                // Prepare and publish the response `successful`.
-                let json_response = r#"{
-                     "id":"123",
-                     "status":"successful",
-                     "currentSoftwareList":[
-                        {
-                            "type":"apt",
-                            "modules": [
-                                {
-                                    "name":"m",
-                                    "url":"https://foobar.io/m.epl"
-                                }
-                            ]
-                        }
-                    ]}"#;
-                let _ = publish(
-                    &Topic::new("tedge/commands/res/software/update").unwrap(),
-                    json_response.to_string(),
-                )
-                .await;
+    // Stop the SM Mapper (simulating a failure)
+    sm_mapper.abort();
+    assert!(sm_mapper.await.unwrap_err().is_cancelled());
+
+    // Let the agent publish the response `successful`.
+    let json_response = r#"{
+         "id":"123",
+         "status":"successful",
+         "currentSoftwareList":[
+            {
+                "type":"apt",
+                "modules": [
+                    {
+                        "name":"m",
+                        "url":"https://foobar.io/m.epl"
+                    }
+                ]
             }
-        }
-        _ => {
-            panic!("No software update message received after a second.");
-        }
-    }
+        ]}"#;
+    let _ = mqtt_tests::publish(
+        MQTT_TEST_PORT,
+        "tedge/commands/res/software/update",
+        json_response,
+    )
+    .await
+    .unwrap();
 
     // Restart SM Mapper
     let sm_mapper = start_sm_mapper().await?;
-    let _ = publish_a_fake_jwt_token().await;
 
-    let mut received_status_successful = false;
+    // Validate that the mapper process the response and forward it on 'c8y/s/us'
+    // Expect init messages followed by a 503 (success)
+    mqtt_tests::assert_received(
+        &mut responses,
+        TEST_TIMEOUT_MS,
+        vec![
+            "114,c8y_SoftwareUpdate\n",
+            "500\n",
+            "503,c8y_SoftwareUpdate\n",
+        ],
+    )
+    .await;
 
-    // Validate the response that is received on 'c8y/s/us'
-    // Wait till the mapper starts and receives the messages
-    for _ in 0..10 {
-        // Loop 10 times, because it needs time to receive the messages
-        match tokio::time::timeout(TEST_TIMEOUT_MS, sw_update_res_sub.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                    "503,c8y_SoftwareUpdate\n" => {
-                        received_status_successful = true;
-                        break;
-                    }
-
-                    _ => {}
-                }
-                continue;
-            }
-            _ => panic!("No software update message received after a second."),
-        }
-    }
     sm_mapper.abort();
-    Ok(assert!(received_status_successful))
+    Ok(())
 }
 
 #[tokio::test]
-#[cfg_attr(not(feature = "mosquitto-available"), ignore)]
 #[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -387,45 +343,35 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
+    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut subscriber =
-        get_subscriber("c8y/s/us", "mapper_publishes_software_update_failure").await;
+    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     let _sm_mapper = start_sm_mapper().await;
+    mqtt_tests::assert_received(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+    )
+    .await;
 
     // Prepare and publish a c8_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
-    let _ = publish(&Topic::new("c8y/s/ds").unwrap(), smartrest.to_string()).await;
+    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+        .await
+        .unwrap();
 
-    let mut received_status_failed = false;
-    let mut received_response_failed = false;
-
-    for _ in 0..2 {
-        // Expect thin-edge json message on `c8y/s/us` with expected payload.
-        match tokio::time::timeout(TEST_TIMEOUT_MS, subscriber.next()).await {
-            Ok(Some(msg)) => {
-                dbg!(&msg.payload_str().unwrap());
-                match msg.payload_str().unwrap() {
-                    "501,c8y_SoftwareUpdate" => {
-                       received_status_failed = true;
-                    },
-                    "502,c8y_SoftwareUpdate,\"Action remove is not recognized. It must be install or delete.\"" => {
-                        received_response_failed = true;
-                    },
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-        if received_status_failed && received_response_failed {
-            break;
-        } else {
-            continue;
-        }
-    }
-
-    assert!(received_status_failed);
-    assert!(received_response_failed);
+    // Expect a 501 (executing) followed by a 502 (failed)
+    mqtt_tests::assert_received(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        vec![
+        "501,c8y_SoftwareUpdate",
+        "502,c8y_SoftwareUpdate,\"Action remove is not recognized. It must be install or delete.\"",
+    ],
+    )
+    .await;
 }
 
 fn create_tedge_config() -> TEdgeConfig {
@@ -445,7 +391,6 @@ fn create_tedge_config() -> TEdgeConfig {
     // Create tedge_config.
     let tedge_config_file_path = path_buf;
     let tedge_config_root_path = tedge_config_file_path.parent().unwrap().to_owned();
-    dbg!(&tedge_config_file_path);
     let config_location = TEdgeConfigLocation {
         tedge_config_root_path,
         tedge_config_file_path,
@@ -456,39 +401,10 @@ fn create_tedge_config() -> TEdgeConfig {
         .unwrap()
 }
 
-async fn publish(topic: &Topic, payload: String) {
-    let client = Client::connect(
-        "sm_c8y_integration_test_publisher",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-    )
-    .await
-    .unwrap();
-
-    let () = client
-        .publish(mqtt_client::Message::new(topic, payload))
-        .await
-        .unwrap();
-}
-
 fn remove_whitespace(s: &str) -> String {
     let mut s = String::from(s);
     s.retain(|c| !c.is_whitespace());
     s
-}
-
-async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
-    let topic_filter = TopicFilter::new(pattern).unwrap();
-    let subscriber = Client::connect(
-        client_name,
-        &mqtt_client::Config::default()
-            .with_port(MQTT_TEST_PORT)
-            .clean_session(),
-    )
-    .await
-    .unwrap();
-
-    // Obtain subscribe stream
-    subscriber.subscribe(topic_filter).await.unwrap()
 }
 
 async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
@@ -508,5 +424,7 @@ async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
 }
 
 async fn publish_a_fake_jwt_token() {
-    let _ = publish(&Topic::new("c8y/s/dat").unwrap(), "71,1111".into()).await;
+    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/dat", "71,1111")
+        .await
+        .unwrap();
 }

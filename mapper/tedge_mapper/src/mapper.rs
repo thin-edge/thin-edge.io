@@ -150,17 +150,21 @@ mod tests {
         });
 
         // One can now send requests
+        let timeout = std::time::Duration::from_secs(1);
+
         // Happy path
         let input = "abcde";
-        let expected = "ABCDE".to_string();
-        let actual = received_on_published(mqtt_port, "in_topic", input, "out_topic", 5).await;
-        assert_eq!(expected, actual?);
+        let expected = Some("ABCDE".to_string());
+        let actual =
+            received_on_published(mqtt_port, "in_topic", input, "out_topic", timeout).await;
+        assert_eq!(expected, actual);
 
         // Ill-formed input
         let input = "éèê";
-        let expected = format!("{}", UppercaseConverter::conversion_error());
-        let actual = received_on_published(mqtt_port, "in_topic", input, "err_topic", 5).await;
-        assert_eq!(expected, actual?);
+        let expected = Some(format!("{}", UppercaseConverter::conversion_error()));
+        let actual =
+            received_on_published(mqtt_port, "in_topic", input, "err_topic", timeout).await;
+        assert_eq!(expected, actual);
 
         Ok(())
     }
