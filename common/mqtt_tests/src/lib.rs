@@ -1,8 +1,8 @@
-mod message_logger;
+mod test_mqtt_client;
 pub mod test_mqtt_server;
 pub mod with_timeout;
 
-pub use message_logger::assert_received;
-pub use message_logger::messages_published_on;
-pub use message_logger::publish;
-pub use message_logger::received_on_published;
+pub use test_mqtt_client::assert_received;
+pub use test_mqtt_client::messages_published_on;
+pub use test_mqtt_client::publish;
+pub use test_mqtt_client::received_on_published;
