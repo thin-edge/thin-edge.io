@@ -1,6 +1,5 @@
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
 use mqtt_client::{Client, MqttClient, TopicFilter};
-use mqtt_tests::test_mqtt_server::start_broker_local;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
 use std::{io::Write, time::Duration};
@@ -14,7 +13,7 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
 
     let mut messages =
         mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list").await;
@@ -38,7 +37,7 @@ async fn mapper_publishes_a_software_list_request() {
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
     let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
@@ -59,7 +58,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
     let mut messages =
         mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/update")
             .await;
@@ -103,7 +102,8 @@ async fn mapper_publishes_software_update_request() {
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
     // and publishes status of the operation `501` on `c8y/s/us`
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
+
     let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
@@ -171,7 +171,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 #[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
     let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
 
     // Start SM Mapper
@@ -232,7 +232,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
 
     // When a software update request message is received on `c8y/s/ds` by the sm mapper,
     // converts it to thin-edge json message, publishes a request message on `tedge/commands/req/software/update`.
@@ -343,7 +343,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
     let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;

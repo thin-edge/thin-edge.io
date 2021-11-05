@@ -1,18 +1,17 @@
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-use mqtt_tests::test_mqtt_server::start_broker_local;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const MQTTTESTPORT: u16 = 58586;
+const MQTT_TEST_PORT: u16 = 55555;
 
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT).await });
+        mqtt_tests::run_broker(MQTT_TEST_PORT);
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = Client::connect(
             "subscribe",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
         )
         .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
@@ -21,7 +20,7 @@ fn sending_and_receiving_a_message() {
         let message = Message::new(&topic, payload);
         let publisher = Client::connect(
             "publisher",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
         )
         .await?;
         let () = publisher.publish(message).await?;
@@ -43,13 +42,12 @@ fn sending_and_receiving_a_message() {
 #[tokio::test]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker
-    let mqtt_port: u16 = 55555;
-    let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
+    mqtt_tests::run_broker(MQTT_TEST_PORT);
 
     // And an MQTT client connected to that server
     let subscriber = Client::connect(
         "client_subscribing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
 
@@ -66,7 +64,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // So let us create another MQTT client publishing messages.
     let publisher = Client::connect(
         "client_publishing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
     )
     .await?;
 

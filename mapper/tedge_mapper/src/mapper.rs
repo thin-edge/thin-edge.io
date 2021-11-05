@@ -113,15 +113,13 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_tests::test_mqtt_server::start_broker_local;
-    use mqtt_tests::*;
 
     #[tokio::test]
     #[serial_test::serial]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
         let mqtt_port: u16 = 55555;
-        let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
+        mqtt_tests::run_broker(mqtt_port);
 
         // Given a mapper
         let name = "mapper_under_test";
@@ -156,14 +154,14 @@ mod tests {
         let input = "abcde";
         let expected = Some("ABCDE".to_string());
         let actual =
-            received_on_published(mqtt_port, "in_topic", input, "out_topic", timeout).await;
+            mqtt_tests::received_on_published(mqtt_port, "in_topic", input, "out_topic", timeout).await;
         assert_eq!(expected, actual);
 
         // Ill-formed input
         let input = "éèê";
         let expected = Some(format!("{}", UppercaseConverter::conversion_error()));
         let actual =
-            received_on_published(mqtt_port, "in_topic", input, "err_topic", timeout).await;
+            mqtt_tests::received_on_published(mqtt_port, "in_topic", input, "err_topic", timeout).await;
         assert_eq!(expected, actual);
 
         Ok(())

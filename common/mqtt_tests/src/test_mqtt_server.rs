@@ -3,19 +3,55 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 };
 
-use librumqttd::{async_locallink, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
+use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
+use once_cell::sync::Lazy;
 
-pub async fn start_broker_local(port: u16) -> anyhow::Result<()> {
-    let config: Config = get_rumqttd_config(port);
-    let (mut router, _console, servers, _builder) = async_locallink::construct_broker(config);
-    let router = tokio::task::spawn_blocking(move || -> anyhow::Result<()> { Ok(router.start()?) });
-    servers.await;
-    let _ = router.await;
+static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| {
+    MqttProcessHandler::new(55555)
+});
 
-    Ok(())
+pub fn run_broker(port: u16) {
+    let _mqtt_server_handle: u16 = SERVER.port;
 }
 
-fn get_rumqttd_config(port: u16) -> librumqttd::Config {
+struct MqttProcessHandler {
+    port: u16,
+}
+
+impl MqttProcessHandler {
+    pub fn new(port: u16) -> MqttProcessHandler {
+        spawn_broker(port);
+        MqttProcessHandler {
+            port,
+        }
+    }
+}
+
+fn spawn_broker(port: u16) {
+    let config= get_rumqttd_config(port);
+    let mut broker = Broker::new(config);
+    let mut tx = broker.link("localclient").unwrap();
+
+    std::thread::spawn(move || {
+        eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
+        if let Err(err) = broker.start() {
+            eprintln!("MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}", err);
+        }
+    });
+
+    std::thread::spawn(move || {
+        let mut rx = tx.connect(200).unwrap();
+        tx.subscribe("#").unwrap();
+
+        loop {
+            if let Some(message) = rx.recv().unwrap() {
+                eprintln!("MQTT-TEST MSG: topic = {}, message = {:?}", message.topic, message.payload.len());
+            }
+        }
+    });
+}
+
+fn get_rumqttd_config(port: u16) -> Config {
     let router_config = rumqttlog::Config {
         id: 0,
         dir: "/tmp/rumqttd".into(),

@@ -1431,6 +1431,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "fastrand",
+ "once_cell",
  "rumqttc 0.8.0",
  "rumqttd",
  "rumqttlog",

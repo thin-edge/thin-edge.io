@@ -410,7 +410,6 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_tests::test_mqtt_server::start_broker_local;
     use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use test_case::test_case;
 
@@ -420,7 +419,7 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn get_jwt_token_full_run() {
-        let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTT_TEST_PORT).await });
+        mqtt_tests::run_broker(MQTT_TEST_PORT);
         let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/uat").await;
 
         let publisher = Client::connect(
