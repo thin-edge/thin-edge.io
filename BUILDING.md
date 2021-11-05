@@ -2,7 +2,7 @@
 
 ## Requirements
 
-You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully). 
+You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully).
 
 Our recommended setup and required tools are:
 
@@ -49,7 +49,7 @@ And then you can run `rustc` to view current version:
 
 ```shell
 $ rustc --version
-rustc 1.54.0 (a178d0322 2021-07-26)
+rustc 1.56.1 (59eed8a2a 2021-11-01)
 ```
 
 > Note: Above command will add rust to path only for existing session,
@@ -62,7 +62,7 @@ rustc 1.54.0 (a178d0322 2021-07-26)
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
-Current MSRV is `1.54.0`.
+Current MSRV is `1.56.1`.
 
 ### Cross compilation toolchain (optional)
 

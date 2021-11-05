@@ -23,10 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install rust v1.54.0
+      - name: Install rust v1.56.1
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: "1.54.0"
+          toolchain: "1.56.1"
           override: true
 
       - name: Enable cache
