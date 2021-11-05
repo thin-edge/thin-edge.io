@@ -26,6 +26,10 @@ pub enum SmartRestDeserializerError {
     #[error("Jwt response contains incorrect ID: {0}")]
     InvalidMessageId(u16),
 
-    #[error("Action {action} is not recognized. It must be install or delete.")]
-    ActionNotFound { action: String },
+    #[error("Parameter {parameter} is not recognized. {hint}")]
+    InvalidParameter {
+        operation: String,
+        parameter: String,
+        hint: String,
+    },
 }
