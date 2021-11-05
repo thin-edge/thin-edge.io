@@ -2,16 +2,14 @@ use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::time::Duration;
 use tokio::time::sleep;
 
-const MQTT_TEST_PORT: u16 = 55555;
-
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        mqtt_tests::run_broker(MQTT_TEST_PORT);
+        let broker = mqtt_tests::test_mqtt_broker();
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = Client::connect(
             "subscribe",
-            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+            &mqtt_client::Config::default().with_port(broker.port),
         )
         .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
@@ -20,7 +18,7 @@ fn sending_and_receiving_a_message() {
         let message = Message::new(&topic, payload);
         let publisher = Client::connect(
             "publisher",
-            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+            &mqtt_client::Config::default().with_port(broker.port),
         )
         .await?;
         let () = publisher.publish(message).await?;
@@ -42,12 +40,12 @@ fn sending_and_receiving_a_message() {
 #[tokio::test]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
 
     // And an MQTT client connected to that server
     let subscriber = Client::connect(
         "client_subscribing_to_many_topics",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+        &mqtt_client::Config::default().with_port(broker.port),
     )
     .await?;
 
@@ -64,7 +62,7 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // So let us create another MQTT client publishing messages.
     let publisher = Client::connect(
         "client_publishing_to_many_topics",
-        &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+        &mqtt_client::Config::default().with_port(broker.port),
     )
     .await?;
 

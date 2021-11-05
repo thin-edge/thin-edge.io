@@ -118,8 +118,7 @@ mod tests {
     #[serial_test::serial]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let mqtt_port: u16 = 55555;
-        mqtt_tests::run_broker(mqtt_port);
+        let broker = mqtt_tests::test_mqtt_broker();
 
         // Given a mapper
         let name = "mapper_under_test";
@@ -132,7 +131,7 @@ mod tests {
         let flock = check_another_instance_is_not_running(name)
             .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
 
-        let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
+        let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
         let mqtt_client = Client::connect(name, &mqtt_config).await?;
 
         let mapper = Mapper {
@@ -154,14 +153,16 @@ mod tests {
         let input = "abcde";
         let expected = Some("ABCDE".to_string());
         let actual =
-            mqtt_tests::received_on_published(mqtt_port, "in_topic", input, "out_topic", timeout).await;
+            mqtt_tests::received_on_published(broker.port, "in_topic", input, "out_topic", timeout)
+                .await;
         assert_eq!(expected, actual);
 
         // Ill-formed input
         let input = "éèê";
         let expected = Some(format!("{}", UppercaseConverter::conversion_error()));
         let actual =
-            mqtt_tests::received_on_published(mqtt_port, "in_topic", input, "err_topic", timeout).await;
+            mqtt_tests::received_on_published(broker.port, "in_topic", input, "err_topic", timeout)
+                .await;
         assert_eq!(expected, actual);
 
         Ok(())

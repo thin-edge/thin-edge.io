@@ -6,20 +6,19 @@ use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 use tokio::task::JoinHandle;
 
-const MQTT_TEST_PORT: u16 = 55555;
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
 #[tokio::test]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages =
-        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/list").await;
+        mqtt_tests::messages_published_on(broker.port, "tedge/commands/req/software/list").await;
 
     // Start the SM Mapper
-    let sm_mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper(broker.port).await;
 
     // Expect on `tedge/commands/req/software/list` a software list request.
     let msg = messages
@@ -37,11 +36,11 @@ async fn mapper_publishes_a_software_list_request() {
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
-    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/us").await;
 
     // Start SM Mapper
-    let sm_mapper = start_sm_mapper().await;
+    let sm_mapper = start_sm_mapper(broker.port).await;
 
     // Expect both 114 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     mqtt_tests::assert_received(
@@ -58,17 +57,16 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
     let mut messages =
-        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/update")
-            .await;
+        mqtt_tests::messages_published_on(broker.port, "tedge/commands/req/software/update").await;
 
-    let sm_mapper = start_sm_mapper().await;
-    let _ = publish_a_fake_jwt_token().await;
+    let sm_mapper = start_sm_mapper(broker.port).await;
+    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+    let _ = mqtt_tests::publish(broker.port, "c8y/s/ds", smartrest)
         .await
         .unwrap();
 
@@ -102,13 +100,13 @@ async fn mapper_publishes_software_update_request() {
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
     // and publishes status of the operation `501` on `c8y/s/us`
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
 
-    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/us").await;
 
     // Start SM Mapper
-    let sm_mapper = start_sm_mapper().await;
-    let _ = publish_a_fake_jwt_token().await;
+    let sm_mapper = start_sm_mapper(broker.port).await;
+    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     mqtt_tests::assert_received(
         &mut messages,
@@ -124,7 +122,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
         }"#;
 
     let _ = mqtt_tests::publish(
-        MQTT_TEST_PORT,
+        broker.port,
         "tedge/commands/res/software/update",
         json_response,
     )
@@ -150,7 +148,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
             ]}"#;
 
     let _ = mqtt_tests::publish(
-        MQTT_TEST_PORT,
+        broker.port,
         "tedge/commands/res/software/update",
         json_response,
     )
@@ -171,12 +169,12 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 #[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
-    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/us").await;
 
     // Start SM Mapper
-    let sm_mapper = start_sm_mapper().await;
-    let _ = publish_a_fake_jwt_token().await;
+    let sm_mapper = start_sm_mapper(broker.port).await;
+    let _ = publish_a_fake_jwt_token(broker.port).await;
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
@@ -205,7 +203,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         }"#;
 
     let _ = mqtt_tests::publish(
-        MQTT_TEST_PORT,
+        broker.port,
         "tedge/commands/res/software/update",
         json_response,
     )
@@ -232,7 +230,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
 
     // When a software update request message is received on `c8y/s/ds` by the sm mapper,
     // converts it to thin-edge json message, publishes a request message on `tedge/commands/req/software/update`.
@@ -243,15 +241,14 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Create a subscriber to receive messages on `tedge/commands/req/software/update` topic.
     let mut requests =
-        mqtt_tests::messages_published_on(MQTT_TEST_PORT, "tedge/commands/req/software/update")
-            .await;
+        mqtt_tests::messages_published_on(broker.port, "tedge/commands/req/software/update").await;
 
     // Create a subscriber to receive messages on `"c8y/s/us` topic.
-    let mut responses = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let mut responses = mqtt_tests::messages_published_on(broker.port, "c8y/s/us").await;
 
     // Start SM Mapper
-    let sm_mapper = start_sm_mapper().await?;
-    let _ = publish_a_fake_jwt_token().await;
+    let sm_mapper = start_sm_mapper(broker.port).await?;
+    let _ = publish_a_fake_jwt_token(broker.port).await;
     mqtt_tests::assert_received(
         &mut responses,
         TEST_TIMEOUT_MS,
@@ -261,7 +258,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+    let _ = mqtt_tests::publish(broker.port, "c8y/s/ds", smartrest)
         .await
         .unwrap();
 
@@ -307,7 +304,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
             }
         ]}"#;
     let _ = mqtt_tests::publish(
-        MQTT_TEST_PORT,
+        broker.port,
         "tedge/commands/res/software/update",
         json_response,
     )
@@ -315,7 +312,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     .unwrap();
 
     // Restart SM Mapper
-    let sm_mapper = start_sm_mapper().await?;
+    let sm_mapper = start_sm_mapper(broker.port).await?;
 
     // Validate that the mapper process the response and forward it on 'c8y/s/us'
     // Expect init messages followed by a 503 (success)
@@ -343,12 +340,12 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
-    mqtt_tests::run_broker(MQTT_TEST_PORT);
+    let broker = mqtt_tests::test_mqtt_broker();
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
-    let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/us").await;
+    let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/us").await;
 
-    let _sm_mapper = start_sm_mapper().await;
+    let _sm_mapper = start_sm_mapper(broker.port).await;
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
@@ -358,7 +355,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
     // Prepare and publish a c8_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
-    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/ds", smartrest)
+    let _ = mqtt_tests::publish(broker.port, "c8y/s/ds", smartrest)
         .await
         .unwrap();
 
@@ -374,15 +371,18 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     .await;
 }
 
-fn create_tedge_config() -> TEdgeConfig {
+fn create_tedge_config(mqtt_port: u16) -> TEdgeConfig {
     // Create a config file in a temporary directory.
     let temp_dir = tempfile::tempdir().unwrap();
-    let content = r#"
+    let content = format!(
+        r#"
         [mqtt]
-        port=55555
+        port={}
         [c8y]
         url='test.c8y.com'
-        "#;
+        "#,
+        mqtt_port
+    );
     let mut file = tempfile::NamedTempFile::new_in(&temp_dir).unwrap();
     let _write_file = file.write_all(content.as_bytes()).unwrap();
     let path_buf = temp_dir.path().join("test");
@@ -407,9 +407,9 @@ fn remove_whitespace(s: &str) -> String {
     s
 }
 
-async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
-    let tedge_config = create_tedge_config();
-    let mqtt_config = mqtt_client::Config::default().with_port(MQTT_TEST_PORT);
+async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
+    let tedge_config = create_tedge_config(mqtt_port);
+    let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
     let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
     let sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
 
@@ -423,8 +423,8 @@ async fn start_sm_mapper() -> Result<JoinHandle<()>, anyhow::Error> {
     Ok(mapper_task)
 }
 
-async fn publish_a_fake_jwt_token() {
-    let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/dat", "71,1111")
+async fn publish_a_fake_jwt_token(mqtt_port: u16) {
+    let _ = mqtt_tests::publish(mqtt_port, "c8y/s/dat", "71,1111")
         .await
         .unwrap();
 }

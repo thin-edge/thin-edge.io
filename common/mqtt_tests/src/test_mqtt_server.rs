@@ -6,36 +6,37 @@ use std::{
 use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
 use once_cell::sync::Lazy;
 
-static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| {
-    MqttProcessHandler::new(55555)
-});
+const MQTT_TEST_PORT: u16 = 55555;
 
-pub fn run_broker(port: u16) {
-    let _mqtt_server_handle: u16 = SERVER.port;
+static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| MqttProcessHandler::new(MQTT_TEST_PORT));
+
+pub fn test_mqtt_broker() -> &'static MqttProcessHandler {
+    Lazy::force(&SERVER)
 }
 
-struct MqttProcessHandler {
-    port: u16,
+pub struct MqttProcessHandler {
+    pub port: u16,
 }
 
 impl MqttProcessHandler {
     pub fn new(port: u16) -> MqttProcessHandler {
         spawn_broker(port);
-        MqttProcessHandler {
-            port,
-        }
+        MqttProcessHandler { port }
     }
 }
 
 fn spawn_broker(port: u16) {
-    let config= get_rumqttd_config(port);
+    let config = get_rumqttd_config(port);
     let mut broker = Broker::new(config);
     let mut tx = broker.link("localclient").unwrap();
 
     std::thread::spawn(move || {
         eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
         if let Err(err) = broker.start() {
-            eprintln!("MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}", err);
+            eprintln!(
+                "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
+                err
+            );
         }
     });
 
@@ -45,7 +46,11 @@ fn spawn_broker(port: u16) {
 
         loop {
             if let Some(message) = rx.recv().unwrap() {
-                eprintln!("MQTT-TEST MSG: topic = {}, message = {:?}", message.topic, message.payload.len());
+                eprintln!(
+                    "MQTT-TEST MSG: topic = {}, message = {:?}",
+                    message.topic,
+                    message.payload.len()
+                );
             }
         }
     });

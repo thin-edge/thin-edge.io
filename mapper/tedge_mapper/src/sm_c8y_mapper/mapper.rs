@@ -413,18 +413,17 @@ mod tests {
     use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use test_case::test_case;
 
-    const MQTT_TEST_PORT: u16 = 55555;
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
     #[tokio::test]
     #[serial_test::serial]
     async fn get_jwt_token_full_run() {
-        mqtt_tests::run_broker(MQTT_TEST_PORT);
-        let mut messages = mqtt_tests::messages_published_on(MQTT_TEST_PORT, "c8y/s/uat").await;
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/uat").await;
 
         let publisher = Client::connect(
             "get_jwt_token_full_run",
-            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
+            &mqtt_client::Config::default().with_port(broker.port),
         )
         .await
         .unwrap();
@@ -439,7 +438,7 @@ mod tests {
             assert_eq!(&msg, "");
 
             // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-            let _ = mqtt_tests::publish(MQTT_TEST_PORT, "c8y/s/dat", "71,1111").await;
+            let _ = mqtt_tests::publish(broker.port, "c8y/s/dat", "71,1111").await;
         });
 
         // Wait till token received.
