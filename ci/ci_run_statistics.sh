@@ -44,7 +44,10 @@ sudo systemctl restart collectd
 
 python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
-pip3 install -r tests/requirements.txt
+
+# use rrdtool here, for reasons we need a working c compliler, Python.h and others.
+# We kind of like to avoid that for other systems
+pip3 install -r tests/requirements_rrdtool.txt
 cd tests/PySys/
 
 pysys.py run --progress -v DEBUG --include analytics
