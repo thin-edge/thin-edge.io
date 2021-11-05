@@ -1,26 +1,12 @@
 [workspace]
 
 members = [
-    "common/batcher",
-    "common/certificate",
-    "common/clock",
-    "common/flockfile",
-    "common/json_writer",
-    "common/mqtt_client",
-    "common/tedge_users",
-    "common/tedge_utils",
-    "mapper/cumulocity/c8y_translator_lib",
-    "mapper/cumulocity/c8y_smartrest",
-    "mapper/tedge_mapper",
-    "mapper/thin_edge_json",
-    "sm/download",
-    "sm/json_sm",
-    "sm/plugin_sm",
-    "sm/tedge_agent",
-    "sm/plugins/tedge_apt_plugin",
-    "sm/plugins/tedge_dummy_plugin",
-    "tedge_config",
-    "tedge",
+    "crates/common/*",
+    "crates/core/*",
+    "crates/plugins/*",
+]
+exclude = [
+    "crates/plugins/tedge_docker_plugin",
 ]
 
 [profile.release]

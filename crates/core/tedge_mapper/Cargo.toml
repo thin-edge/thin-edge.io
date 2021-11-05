@@ -28,24 +28,24 @@ stop-on-upgrade = false
 anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
-c8y_smartrest = { path = "../cumulocity/c8y_smartrest" }
-c8y_translator_lib = { path = "../cumulocity/c8y_translator_lib" }
+c8y_smartrest = { path = "../c8y_smartrest" }
+c8y_translator_lib = { path = "../c8y_translator_lib" }
 chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-json_sm = { path = "../../sm/json_sm"}
+json_sm = { path = "../json_sm"}
 mockall = "0.10"
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
-tedge_config = { path = "../../tedge_config" }
+tedge_config = { path = "../../common/tedge_config" }
 tedge_users = { path = "../../common/tedge_users" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
-thin_edge_json = {path = "../thin_edge_json" }
+thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }

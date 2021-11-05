@@ -21,7 +21,7 @@ json = "0.12"
 log = "0.4"
 rand = "0.8"
 serde = "1.0"
-tedge_utils = { path = "../../common/tedge_utils" }
+tedge_utils = { path = "../tedge_utils" }
 tokio-test = "0.4"
 
 [features]

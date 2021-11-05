@@ -13,7 +13,7 @@ maintainer-scripts = "configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0"
-certificate = { path = "../common/certificate" }
+certificate = { path = "../../common/certificate" }
 chrono = "0.4"
 futures = "0.3"
 hyper = { version = "0.14", default-features = false }
@@ -23,9 +23,9 @@ rumqttc = "0.8"
 rustls = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
-tedge_config = { path = "../tedge_config" }
-tedge_users = { path = "../common/tedge_users" }
-tedge_utils = { path = "../common/tedge_utils" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_users = { path = "../../common/tedge_users" }
+tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
 toml = "0.5"
 url = "2.2"

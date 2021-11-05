@@ -6,9 +6,9 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4"
-clock = { path = "../../../common/clock" }
-json-writer = { path = "../../../common/json_writer" }
-thin_edge_json = { path = "../../thin_edge_json" }
+clock = { path = "../../common/clock" }
+json-writer = { path = "../../common/json_writer" }
+thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 
 [dev-dependencies]
