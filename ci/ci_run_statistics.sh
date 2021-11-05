@@ -35,6 +35,11 @@ dpkg -s mosquitto-clients
 
 ./ci/configure_bridge.sh
 
+sudo cp ./configuration/contrib/collectd/collectd_analytics.conf /etc/collectd/collectd.conf
+sudo cp ./configuration/contrib/collectd/collect_tedge.sh ~/
+chmod +x ~/collect_tedge.sh
+sudo systemctl restart collectd
+
 # Run all PySys tests
 
 python3 -m venv ~/env-pysys
@@ -45,4 +50,7 @@ cd tests/PySys/
 pysys.py run --progress -v DEBUG --include analytics
 
 deactivate
+
+sudo cp ./configuration/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
+sudo systemctl restart collectd
 
