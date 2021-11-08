@@ -3,7 +3,7 @@ use crate::sm_c8y_mapper::json_c8y::{C8yCreateEvent, C8yManagedObject};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogEvent, SmartRestLogRequest};
+use c8y_smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
     error::SmartRestDeserializerError,
@@ -21,6 +21,7 @@ use json_sm::{
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use reqwest::Url;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::path::PathBuf;
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
@@ -414,6 +415,13 @@ async fn upload_log_binary(
 
     let _response = client.execute(request).await?;
     Ok(())
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+/// used to retrieve the id of a log event
+pub struct SmartRestLogEvent {
+    pub id: String,
 }
 
 async fn create_log_event(
