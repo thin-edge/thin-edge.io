@@ -1,11 +1,10 @@
 use crate::models::FilePath;
 use crate::TEdgeConfigLocation;
-use crate::{Buffer, Flag, Port};
+use crate::{Flag, Port};
 use std::path::Path;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_BUFFER_SIZE_IN_PERCENTAGE: u16 = 5;
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
@@ -39,9 +38,6 @@ pub struct TEdgeConfigDefaults {
 
     /// Default port for mqtt internal listener
     pub default_mqtt_port: Port,
-
-    // Default buffer size for downloading the file
-    pub default_buffer_size_in_percentage: Buffer,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -62,7 +58,6 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_c8y_root_cert_path: system_cert_path.into(),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
-            default_buffer_size_in_percentage: Buffer(DEFAULT_BUFFER_SIZE_IN_PERCENTAGE),
         }
     }
 }
@@ -85,7 +80,6 @@ fn test_from_tedge_config_location() {
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
-            default_buffer_size_in_percentage: Buffer(DEFAULT_BUFFER_SIZE_IN_PERCENTAGE),
         }
     );
 }

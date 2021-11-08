@@ -14,6 +14,9 @@ pub enum DownloadError {
 
     #[error(transparent)]
     FromUrlParse(#[from] url::ParseError),
+
+    #[error(transparent)]
+    FromNix(#[from] nix::Error),
 }
 
 impl From<reqwest::Error> for DownloadError {

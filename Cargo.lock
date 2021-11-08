@@ -675,7 +675,6 @@ dependencies = [
  "nix",
  "regex",
  "reqwest",
- "tedge_config",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -1710,15 +1709,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
-name = "percentage"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd23b938276f14057220b707937bcb42fa76dda7560e57a2da30cb52d557937"
-dependencies = [
- "num",
-]
-
-[[package]]
 name = "pin-project"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2684,7 +2674,6 @@ version = "0.4.0"
 dependencies = [
  "assert_matches",
  "certificate",
- "percentage",
  "serde",
  "tedge_utils",
  "tempfile",

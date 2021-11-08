@@ -260,17 +260,3 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
 
     type Value = String;
 }
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct SoftwareDownloadBufferSizeDefaultSetting;
-
-impl ConfigSetting for SoftwareDownloadBufferSizeDefaultSetting {
-    const KEY: &'static str = "software.buffer_size.default";
-
-    const DESCRIPTION: &'static str = concat!(
-        "The default buffer size in percentage to be used for downloading a file on the device",
-        "Example: 5"
-    );
-
-    type Value = Buffer;
-}

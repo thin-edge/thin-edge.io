@@ -1,7 +1,10 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
-use nix::fcntl::{fallocate, FallocateFlags};
+use nix::{
+    fcntl::{fallocate, FallocateFlags},
+    sys::statvfs,
+};
 use std::{
     fs::File,
     io::Write,
@@ -9,16 +12,11 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use tedge_config::{
-    Buffer, ConfigRepository, ConfigSettingAccessor, SoftwareDownloadBufferSizeDefaultSetting,
-    TEdgeConfigLocation,
-};
 
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
     download_target: PathBuf,
-    reserved_buffer_size: i64,
 }
 
 impl Downloader {
@@ -34,18 +32,9 @@ impl Downloader {
 
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
 
-        let config_location = TEdgeConfigLocation::from_default_system_location();
-        let config_repository = tedge_config::TEdgeConfigRepository::new(config_location.clone());
-        let tedge_config = config_repository.load().unwrap();
-
-        let buffer_size: Buffer = tedge_config
-            .query(SoftwareDownloadBufferSizeDefaultSetting)
-            .unwrap();
-
         Self {
             target_filename,
             download_target,
-            reserved_buffer_size: buffer_size.apply_to(fs2::total_space("/tmp").unwrap()) as i64,
         }
     }
 
@@ -90,19 +79,34 @@ impl Downloader {
             }
         })
         .await?;
-
-        let len: u64 = match response.content_length() {
-            Some(package_size) => package_size,
-            None => self.reserved_buffer_size as u64,
-        };
-
-        let mut file = File::create(self.target_filename.as_path())?;
-        // Reserve diskspace
-        let _ = fallocate(file.as_raw_fd(), FallocateFlags::empty(), 0, len as i64);
-
         let mut response = response;
+        let mut file = File::create(self.target_filename.as_path())?;
+
+        // Get 5% of the /tmp free space
+        let tmpstats = statvfs::statvfs("/tmp")?;
+        let five_percent_free_space =
+            (tmpstats.blocks_free() * tmpstats.block_size()) as f64 * 0.05;
+
+        // fail if content > reserve buffer
+        if let Some(len) = response.content_length() {
+            if five_percent_free_space as u64 > len {
+                return Err(DownloadError::FromIo {
+                    reason: "Not enough disk space".into(),
+                });
+            }
+            // Reserve diskspace
+            if let Err(err) = fallocate(file.as_raw_fd(), FallocateFlags::empty(), 0, len as i64) {
+                return Err(DownloadError::FromNix(err));
+            }
+        };
         while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk)?;
+            if let Err(err) = file.write_all(&chunk) {
+                drop(file);
+                std::fs::remove_file(self.target_filename.as_path())?;
+                return Err(DownloadError::FromIo {
+                    reason: format!("Failed to download with an error {}", err),
+                });
+            }
         }
 
         Ok(())

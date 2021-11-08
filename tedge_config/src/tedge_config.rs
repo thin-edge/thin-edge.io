@@ -427,37 +427,6 @@ impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
     }
 }
 
-impl ConfigSettingAccessor<SoftwareDownloadBufferSizeDefaultSetting> for TEdgeConfig {
-    fn query(
-        &self,
-        _setting: SoftwareDownloadBufferSizeDefaultSetting,
-    ) -> ConfigSettingResult<Buffer> {
-        Ok(self
-            .data
-            .software
-            .default_buffer_size_in_percentage
-            .map(Buffer)
-            .unwrap_or_else(|| self.config_defaults.default_buffer_size_in_percentage))
-    }
-
-    fn update(
-        &mut self,
-        _setting: SoftwareDownloadBufferSizeDefaultSetting,
-        value: Buffer,
-    ) -> ConfigSettingResult<()> {
-        self.data.software.default_buffer_size_in_percentage = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(
-        &mut self,
-        _setting: SoftwareDownloadBufferSizeDefaultSetting,
-    ) -> ConfigSettingResult<()> {
-        self.data.software.default_buffer_size_in_percentage = None;
-        Ok(())
-    }
-}
-
 /// Generic extension trait implementation for all `ConfigSetting`s of `TEdgeConfig`
 /// that provide `TryFrom`/`TryInto` implementations for `String`.
 impl<T, E, F> ConfigSettingAccessorStringExt<T> for TEdgeConfig
