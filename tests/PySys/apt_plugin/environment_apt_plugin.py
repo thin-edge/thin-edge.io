@@ -119,6 +119,8 @@ class AptPlugin(BaseTest):
         package = list(Path('.').glob('rolldice_*.deb'))
         if len(package) == 1:
             package[0].unlink()
+        else:
+            raise SystemError("There is more than one rolldice_*.deb binary. Please delete the right one manually")
 
     def _download_rolldice_binary(self, url: str):
 
