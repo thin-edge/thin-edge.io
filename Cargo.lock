@@ -2650,6 +2650,7 @@ dependencies = [
  "predicates 2.0.3",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_config",
  "tedge_utils",
