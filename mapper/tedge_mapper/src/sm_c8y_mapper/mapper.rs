@@ -40,11 +40,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
-        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
-        let messages = sm_mapper.client.subscribe(topic_filter).await?;
 
+        let messages = sm_mapper.subscribe().await?;
         let () = sm_mapper.init().await?;
         let () = sm_mapper.run(messages).await?;
 
@@ -66,6 +63,15 @@ impl CumulocitySoftwareManagement {
             config,
             c8y_internal_id: "".into(),
         }
+    }
+
+    pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error>{
+        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        let messages = self.client.subscribe(topic_filter).await?;
+
+        Ok(messages)
     }
 
     #[instrument(skip(self), name = "init")]
