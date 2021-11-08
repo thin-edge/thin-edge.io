@@ -18,7 +18,7 @@ const DEFAULT_PORT: u16 = 1883;
 /// env `$HOME`.  But once we have found `tedge.toml`, we never again have to care about the
 /// executing user (except when `chown`ing files...).
 ///
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TEdgeConfigDefaults {
     /// Default device cert path
     pub default_device_cert_path: FilePath,
