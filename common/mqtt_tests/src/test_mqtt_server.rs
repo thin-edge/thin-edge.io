@@ -83,8 +83,7 @@ fn get_rumqttd_config(port: u16) -> Config {
         max_payload_size: 268435455,
         max_inflight_count: 200,
         max_inflight_size: 1024,
-        username: None,
-        password: None,
+        login_credentials: None
     };
 
     let server_config = ServerSettings {

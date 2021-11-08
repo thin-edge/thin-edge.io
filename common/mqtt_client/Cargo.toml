@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1"
 mockall = "0.10"
-rumqttc = "0.9"
+rumqttc = "0.10"
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["sync", "macros"] }
 
