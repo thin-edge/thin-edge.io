@@ -118,5 +118,5 @@ sudo adduser <user> tedge-users
 
 ## Next steps
 
-1. [How to register?](./003_registration.md)
-2. [How to connect?](./004_connect.md)
+1. [Connect your device to Cumulocity IoT](../tutorials/connect-c8y.md)
+2. [Connect your device to Azure IoT](../tutorials/connect-azure.md)
