@@ -68,6 +68,7 @@ mod tests {
     use super::*;
     use assert_json_diff::*;
     use serde_json::json;
+    use test_case::test_case;
 
     #[test]
     fn check_single_value_translation() {
@@ -238,5 +239,39 @@ mod tests {
                 .collect::<String>()
         );
         }
+    }
+
+    #[test_case(
+    "{\"temperature\": 23.0, \"pressure\": 220.0}\"",
+    "child1"
+    ;"input thin-edge json")]
+    fn check_value_translation_for_child_device(thin_edge_json: &str, child_id: &str) {
+        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        let output =
+            from_thin_edge_json_with_child_with_timestamp(thin_edge_json, timestamp, child_id);
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "externalSource": {
+                "externalId": "child1",
+                "type": "c8y_Serial",
+            },
+            "time": "2021-04-08T00:00:00+05:00",
+            "temperature": {
+                "temperature": {
+                    "value": 23.0
+                }
+            },
+            "pressure": {
+                "pressure": {
+                    "value": 220.0
+                }
+            }
+        });
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            expected_output
+        );
     }
 }

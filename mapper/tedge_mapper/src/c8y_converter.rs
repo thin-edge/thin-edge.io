@@ -1,6 +1,7 @@
 use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
+use mqtt_client::{Message, Topic};
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -23,14 +24,29 @@ impl Converter for CumulocityConverter {
             .map_err(Into::into)
     }
 
-    fn convert_child_device_creation(&self, child_id: &str) -> String {
-        format!("101,{},{},thin-edge.io-child", child_id, child_id)
+    fn convert_child_device_creation(&self, child_id: &str) -> Option<Message> {
+        Some(Message::new(
+            &Topic::new("c8y/s/us").unwrap(),
+            format!("101,{},{},thin-edge.io-child", child_id, child_id),
+        ))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use test_case::test_case;
+
+    #[test_case("child1", "c8y/s/us", "101,child1,child1,thin-edge.io-child"; "smartrest")]
+    fn child_device_creation(child_id: &str, expected_topic: &str, expected_payload: &str) {
+        let expected_message = Message::new(&Topic::new(expected_topic).unwrap(), expected_payload);
+        let converter = Box::new(CumulocityConverter {
+            size_threshold: SizeThreshold(16 * 1024),
+        });
+        let message = converter.convert_child_device_creation(child_id).unwrap();
+        assert_eq!(message, expected_message)
+    }
+
     #[test]
     fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(16 * 1024);

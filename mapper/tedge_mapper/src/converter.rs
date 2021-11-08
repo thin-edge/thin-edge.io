@@ -11,7 +11,7 @@ pub trait Converter: Send + Sync {
         Ok("".to_string())
     }
 
-    fn convert_child_device_creation(&self, _child_id: &str) -> String {
-        "".to_string()
+    fn convert_child_device_creation(&self, _child_id: &str) -> Option<mqtt_client::Message> {
+        None
     }
 }

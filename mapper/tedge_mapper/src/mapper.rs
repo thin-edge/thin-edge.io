@@ -13,14 +13,7 @@ use tracing::{debug, error, info, instrument};
 pub struct MapperConfig {
     pub in_topic_filter: TopicFilter,
     pub out_topic: Topic,
-    pub device_management_topic: Topic,
     pub errors_topic: Topic,
-}
-
-#[derive(Debug)]
-pub struct OutTopic {
-    pub measurement: Topic,
-    pub child_creation: Topic,
 }
 
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
@@ -126,15 +119,12 @@ impl Mapper {
                     dbg!(&children);
                     if !children.contains(&child_id) {
                         children.insert(child_id.clone());
-                        let payload = self
+                        if let Some(message) = self
                             .converter
-                            .convert_child_device_creation(child_id.as_str());
-                        self.client
-                            .publish(mqtt_client::Message::new(
-                                &self.config.device_management_topic,
-                                payload.clone(),
-                            ))
-                            .await?;
+                            .convert_child_device_creation(child_id.as_str())
+                        {
+                            self.client.publish(message).await?;
+                        };
                     }
 
                     match self
@@ -191,23 +181,13 @@ mod test {
     use super::*;
     use test_case::test_case;
 
-    #[test_case("tedge/measurements/test"; "valid child id")]
-    fn extract_child_id(topic: &str) {
+    #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
+    #[test_case("tedge/measurements/", Some("".to_string()); "invalid child id (empty value)")]
+    #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
+    #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
+    fn extract_invalid_child_id(topic: &str, expected_child_id: Option<String>) {
         let in_topic = topic.to_string();
-        let child_id = get_child_id_from_topic(in_topic).unwrap();
-        assert_eq!(child_id, "test")
-    }
-
-    #[test_case("tedge/measurements/"; "invalid child id (empty value)")]
-    fn extract_invalid_child_id_empty(topic: &str) {
-        let in_topic = topic.to_string();
-        let child_id = get_child_id_from_topic(in_topic).unwrap();
-        assert_eq!(child_id, "")
-    }
-
-    #[test_case("tedge/measurements"; "invalid child id (parent topic)")]
-    fn extract_invalid_child_id_parent(topic: &str) {
-        let in_topic = topic.to_string();
-        assert!(get_child_id_from_topic(in_topic).is_none())
+        let child_id = get_child_id_from_topic(in_topic);
+        assert_eq!(child_id, expected_child_id)
     }
 }

@@ -51,7 +51,7 @@ impl C8yJsonSerializer {
     }
 
     pub fn new_with_child(default_timestamp: DateTime<FixedOffset>, child_id: &str) -> Self {
-        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
+        let capa = 1024;
         let mut json = JsonWriter::with_capacity(capa);
 
         json.write_open_obj();
@@ -376,6 +376,34 @@ mod tests {
             Err(C8yJsonSerializationError::MeasurementCollectorError(
                 MeasurementStreamError::UnexpectedEndOfData
             ))
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_timestamp_child_message() -> anyhow::Result<()> {
+        let timestamp = FixedOffset::east(5 * 3600)
+            .ymd(2021, 6, 22)
+            .and_hms_nano(17, 3, 14, 123456789);
+
+        let mut serializer = C8yJsonSerializer::new_with_child(timestamp, "child1");
+        serializer.visit_timestamp(timestamp)?;
+
+        let expected_output = json!({
+            "type": "ThinEdgeMeasurement",
+            "time": "2021-06-22T17:03:14.123456789+05:00",
+            "externalSource": {
+                "externalId": "child1",
+                "type": "c8y_Serial"
+            }
+        });
+
+        let output = serializer.into_string()?;
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&output)?,
+            expected_output
         );
 
         Ok(())
