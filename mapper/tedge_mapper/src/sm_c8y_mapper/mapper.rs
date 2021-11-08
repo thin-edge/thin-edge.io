@@ -65,7 +65,7 @@ impl CumulocitySoftwareManagement {
         }
     }
 
-    pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error>{
+    pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error> {
         let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
         topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
