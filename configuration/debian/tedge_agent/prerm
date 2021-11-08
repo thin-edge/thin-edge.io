@@ -3,7 +3,7 @@
 set -e
 
 print_hint() {
-    echo "$1 is running. Stop $1 before installation, use: systemctl stop $1"
+    echo "$1 is running. Stop $1 before installation, to stop it use: systemctl stop $1"
 }
 
 if systemctl is-active --quiet tedge-agent; then
