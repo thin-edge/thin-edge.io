@@ -15,8 +15,8 @@
 	<property name="platform" default='None' />
 
 	<pythonpath value="${testRootDir}/environments" />
-	<pythonpath value="${testRootDir}/apt_plugin" />
-	<pythonpath value="${testRootDir}/docker_plugin" />
+	<pythonpath value="${testRootDir}/plugin_apt" />
+	<pythonpath value="${testRootDir}/plugin_docker" />
 
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
