@@ -62,13 +62,13 @@ async fn mapper_publishes_software_update_request() {
         mqtt_tests::messages_published_on(broker.port, "tedge/commands/req/software/update").await;
 
     let sm_mapper = start_sm_mapper(broker.port).await;
-    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = mqtt_tests::publish(broker.port, "c8y/s/ds", smartrest)
         .await
         .unwrap();
+    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -89,7 +89,6 @@ async fn mapper_publishes_software_update_request() {
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
-    dbg!(&msg);
     assert!(&msg.contains("{\"id\":\""));
     assert!(&msg.contains(&remove_whitespace(expected_update_list)));
     sm_mapper.unwrap().abort();
@@ -216,7 +215,6 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
-    dbg!(&msg);
     assert_eq!(
         &msg,
         "502,c8y_SoftwareUpdate,\"Partial failure: Couldn\'t install collectd and nginx\"\n"
@@ -248,7 +246,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await?;
-    let _ = publish_a_fake_jwt_token(broker.port).await;
     mqtt_tests::assert_received(
         &mut responses,
         TEST_TIMEOUT_MS,
@@ -261,6 +258,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let _ = mqtt_tests::publish(broker.port, "c8y/s/ds", smartrest)
         .await
         .unwrap();
+    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -278,10 +276,9 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Wait for the request being published by the mapper on `tedge/commands/req/software/update`.
     let msg = requests
         .recv()
-        .with_timeout(TEST_TIMEOUT_MS * 5)
+        .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
-    dbg!(&msg);
     assert!(msg.contains(&remove_whitespace(expected_update_list)));
 
     // Stop the SM Mapper (simulating a failure)
@@ -306,19 +303,20 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let _ = mqtt_tests::publish(
         broker.port,
         "tedge/commands/res/software/update",
-        json_response,
+        &remove_whitespace(json_response),
     )
     .await
     .unwrap();
 
     // Restart SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await?;
+    let _ = publish_a_fake_jwt_token(broker.port).await;
 
     // Validate that the mapper process the response and forward it on 'c8y/s/us'
     // Expect init messages followed by a 503 (success)
     mqtt_tests::assert_received(
         &mut responses,
-        TEST_TIMEOUT_MS,
+        TEST_TIMEOUT_MS * 5,
         vec![
             "114,c8y_SoftwareUpdate\n",
             "500\n",

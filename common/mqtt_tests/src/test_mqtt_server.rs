@@ -46,22 +46,22 @@ fn spawn_broker(port: u16) {
 
         loop {
             if let Some(message) = rx.recv().unwrap() {
-                let mut bytes: Vec<u8> = vec![];
-                let len = message.payload.len();
                 for chunk in message.payload.into_iter() {
+                    let mut bytes: Vec<u8> = vec![];
                     for byte in chunk.into_iter() {
                         bytes.push(byte);
                     }
+                    let payload = match std::str::from_utf8(bytes.as_ref()) {
+                        Ok(payload) => format!("{:.60}", payload),
+                        Err(_) => format!("Non uft8 ({} bytes)", bytes.len()),
+                    };
+                    eprintln!(
+                        "MQTT-TEST MSG: topic = {}, payload = {:?}",
+                        message.topic, payload
+                    );
                 }
 
-                let payload = match std::str::from_utf8(bytes.as_ref()) {
-                    Ok(payload) => format!("{:.30}", payload),
-                    Err(_) => format!("Non uft8 ({} bytes)", len),
-                };
-                eprintln!(
-                    "MQTT-TEST MSG: topic = {}, payload = {:?}",
-                    message.topic, payload
-                );
+
             }
         }
     });
