@@ -39,8 +39,8 @@ impl From<Buffer> for u16 {
 }
 
 impl Buffer {
-    pub fn apply_to(&self, value: u16) -> u16 {
-        (value / 100) * self.0
+    pub fn apply_to(&self, value: u64) -> u64 {
+        (value / 100) * self.0 as u64
     }
 }
 

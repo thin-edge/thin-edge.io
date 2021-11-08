@@ -1,7 +1,11 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
+use nix::fcntl::{fallocate, FallocateFlags};
 use std::{
+    fs::File,
+    io::Write,
+    os::unix::prelude::AsRawFd,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -14,6 +18,7 @@ use tedge_config::{
 pub struct Downloader {
     target_filename: PathBuf,
     download_target: PathBuf,
+    reserved_buffer_size: i64,
 }
 
 impl Downloader {
@@ -40,12 +45,14 @@ impl Downloader {
         Self {
             target_filename,
             download_target,
+            reserved_buffer_size: buffer_size.apply_to(fs2::total_space("/tmp").unwrap()) as i64,
         }
     }
 
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
+
         let backoff = ExponentialBackoff {
             initial_interval: Duration::from_secs(30),
             max_elapsed_time: Some(Duration::from_secs(300)),
@@ -84,15 +91,19 @@ impl Downloader {
         })
         .await?;
 
-        let content = response.bytes().await?;
+        let len: u64 = match response.content_length() {
+            Some(package_size) => package_size,
+            None => self.reserved_buffer_size as u64,
+        };
 
-        // Cleanup after `disc full` will happen inside atomic write function.
-        tedge_utils::fs::atomically_write_file_async(
-            self.download_target.as_path(),
-            self.target_filename.as_path(),
-            content.as_ref(),
-        )
-        .await?;
+        let mut file = File::create(self.target_filename.as_path())?;
+        // Reserve diskspace
+        let _ = fallocate(file.as_raw_fd(), FallocateFlags::empty(), 0, len as i64);
+
+        let mut response = response;
+        while let Some(chunk) = response.chunk().await? {
+            file.write_all(&chunk)?;
+        }
 
         Ok(())
     }

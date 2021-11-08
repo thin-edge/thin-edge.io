@@ -261,7 +261,6 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
     type Value = String;
 }
 
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct SoftwareDownloadBufferSizeDefaultSetting;
 
