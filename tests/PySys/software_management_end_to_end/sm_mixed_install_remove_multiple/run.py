@@ -24,7 +24,7 @@ import requests
 import time
 import sys
 
-sys.path.append("software-management-end-to-end")
+sys.path.append("software_management_end_to_end")
 from environment_sm_management import SoftwareManagement
 
 
