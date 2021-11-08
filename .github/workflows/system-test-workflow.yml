@@ -61,7 +61,7 @@ jobs:
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-    - name: Run all Tests
+    - name: Run all statistics tests
       continue-on-error: true
       run:  bash  ./ci/ci_run_statistics.sh
       env:
