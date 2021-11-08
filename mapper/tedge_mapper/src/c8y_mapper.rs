@@ -5,8 +5,6 @@ use crate::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use tedge_config::TEdgeConfig;
 use tracing::{info_span, Instrument};
-use crate::child;
-use mqtt_client::{MqttClient, Topic};
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 
@@ -27,6 +25,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mapper_config = MapperConfig {
             in_topic_filter: topic_fiter,
             out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
+            device_management_topic: make_valid_topic_or_panic("c8y/s/us"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
 
@@ -50,3 +49,20 @@ impl TEdgeComponent for CumulocityMapper {
         Ok(())
     }
 }
+
+// #[async_trait]
+// impl child::SupportChildren for CumulocityMapper {
+//     async fn add_child(
+//         &self,
+//         child_id: &str,
+//         client: &mqtt_client::Client,
+//     ) -> Result<(), anyhow::Error> {
+//         client
+//             .publish(mqtt_client::Message::new(
+//                 &Topic::new("c8y/s/us")?,
+//                 format!("101,{}", child_id),
+//             ))
+//             .await?;
+//         Ok(())
+//     }
+// }

@@ -19,6 +19,9 @@ pub enum MapperError {
 
     #[error(transparent)]
     FlockfileError(#[from] flockfile::FlockfileError),
+
+    #[error("The given Child ID '{id}' is invalid.")]
+    InvalidChildId { id: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -37,4 +40,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     SizeThresholdExceeded(#[from] SizeThresholdExceeded),
+
+    #[error(transparent)]
+    MqttClientError(#[from] MqttClientError),
 }

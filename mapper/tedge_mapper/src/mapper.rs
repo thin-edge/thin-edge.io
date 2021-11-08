@@ -4,6 +4,7 @@ use crate::error::*;
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_client::{Client, MqttClient, MqttClientError, Topic, TopicFilter};
+use std::collections::HashSet;
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument};
@@ -12,7 +13,14 @@ use tracing::{debug, error, info, instrument};
 pub struct MapperConfig {
     pub in_topic_filter: TopicFilter,
     pub out_topic: Topic,
+    pub device_management_topic: Topic,
     pub errors_topic: Topic,
+}
+
+#[derive(Debug)]
+pub struct OutTopic {
+    pub measurement: Topic,
+    pub child_creation: Topic,
 }
 
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
@@ -95,75 +103,77 @@ impl Mapper {
             .subscribe(self.config.in_topic_filter.clone())
             .await?;
 
-        let mut children:Vec<String> = Vec::new();
+        let mut children: HashSet<String> = HashSet::new();
 
         while let Some(message) = messages.next().await {
-            info!("Mapping {:?}", message.payload_str());
-            info!("Topic {:?}", message.topic.name);
+            debug!("Mapping {:?}", message.payload_str());
+            debug!("Topic {:?}", message.topic.name);
 
-            if message.topic.name.as_str() == "tedge/measurements" {
-                // parent device
-                match self.converter.convert(message.payload_str()?) {
-                    Ok(mapped) => {
-                        self.client
-                            .publish(mqtt_client::Message::new(&self.config.out_topic, mapped))
-                            .await?;
-                    }
-                    Err(error) => {
-                        info!("Mapping error: {}", error);
+            // ? Validation for child device ID?
+            match get_child_id_from_topic(message.clone().topic.name) {
+                Some(child_id) if child_id.is_empty() => {
+                    let error = MapperError::InvalidChildId { id: child_id };
+                    error!("Child ID error: {}", error);
+                    self.client
+                        .publish(mqtt_client::Message::new(
+                            &self.config.errors_topic,
+                            error.to_string(),
+                        ))
+                        .await?;
+                }
+                Some(child_id) => {
+                    info!("Child ID {:?}", child_id);
+                    dbg!(&children);
+                    if !children.contains(&child_id) {
+                        children.insert(child_id.clone());
+                        let payload = self
+                            .converter
+                            .convert_child_device_creation(child_id.as_str());
                         self.client
                             .publish(mqtt_client::Message::new(
-                                &self.config.errors_topic,
-                                error.to_string(),
+                                &self.config.device_management_topic,
+                                payload.clone(),
                             ))
                             .await?;
+                    }
+
+                    match self
+                        .converter
+                        .convert_child_device_payload(message.payload_str()?, child_id.as_str())
+                    {
+                        Ok(mapped) => {
+                            self.client
+                                .publish(mqtt_client::Message::new(&self.config.out_topic, mapped))
+                                .await?;
+                        }
+                        Err(error) => {
+                            error!("Mapping error: {}", error);
+                            self.client
+                                .publish(mqtt_client::Message::new(
+                                    &self.config.errors_topic,
+                                    error.to_string(),
+                                ))
+                                .await?;
+                        }
                     }
                 }
-            } else {
-                let child_id = get_child_id_from_topic(message.clone().topic.name);
-                info!("child ID {:?}", child_id);
-                match child_id {
-                    Some(id) => {
-                        dbg!(&children);
-                        if !children.contains(&id) {
-                            children.push(id.clone());
-                            self.add_child(id, &self.client);
-                            self.client.publish(mqtt_client::Message::new(
-                                &Topic::new("c8y/s/us")?,
-                                format!("101,{}", id),
-                            )).await?;
+                None => {
+                    // parent device
+                    match self.converter.convert(message.payload_str()?) {
+                        Ok(mapped) => {
+                            self.client
+                                .publish(mqtt_client::Message::new(&self.config.out_topic, mapped))
+                                .await?;
                         }
-
-                        match self
-                            .converter
-                            .convert_to_child_device(message.payload_str()?, id.as_str())
-                        {
-                            Ok(mapped) => {
-                                self.client
-                                    .publish(mqtt_client::Message::new(
-                                        &self.config.out_topic,
-                                        mapped,
-                                    ))
-                                    .await?;
-                            }
-                            Err(error) => {
-                                info!("Mapping error: {}", error);
-                                self.client
-                                    .publish(mqtt_client::Message::new(
-                                        &self.config.errors_topic,
-                                        error.to_string(),
-                                    ))
-                                    .await?;
-                            }
+                        Err(error) => {
+                            error!("Mapping error: {}", error);
+                            self.client
+                                .publish(mqtt_client::Message::new(
+                                    &self.config.errors_topic,
+                                    error.to_string(),
+                                ))
+                                .await?;
                         }
-                    }
-                    None => {
-                        self.client
-                            .publish(mqtt_client::Message::new(
-                                &self.config.errors_topic,
-                                "Child ID must be specified in a topic.".to_string(),
-                            ))
-                            .await?;
                     }
                 }
             }
@@ -172,22 +182,32 @@ impl Mapper {
     }
 }
 
-// Edge case, if "tedge/measurements/"? Some("") to None?
 fn get_child_id_from_topic(topic: String) -> Option<String> {
-    let id = topic.strip_prefix("tedge/measurements/").map(String::from);
-    if id == Some("".to_string()) {
-        return None;
-    }
-    id
+    topic.strip_prefix("tedge/measurements/").map(String::from)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn extract_child_id() {
-        let in_topic = "tedge/measurements/test".to_string();
+    use test_case::test_case;
+
+    #[test_case("tedge/measurements/test"; "valid child id")]
+    fn extract_child_id(topic: &str) {
+        let in_topic = topic.to_string();
         let child_id = get_child_id_from_topic(in_topic).unwrap();
         assert_eq!(child_id, "test")
+    }
+
+    #[test_case("tedge/measurements/"; "invalid child id (empty value)")]
+    fn extract_invalid_child_id_empty(topic: &str) {
+        let in_topic = topic.to_string();
+        let child_id = get_child_id_from_topic(in_topic).unwrap();
+        assert_eq!(child_id, "")
+    }
+
+    #[test_case("tedge/measurements"; "invalid child id (parent topic)")]
+    fn extract_invalid_child_id_parent(topic: &str) {
+        let in_topic = topic.to_string();
+        assert!(get_child_id_from_topic(in_topic).is_none())
     }
 }

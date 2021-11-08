@@ -13,10 +13,18 @@ impl Converter for CumulocityConverter {
         c8y_translator_lib::json::from_thin_edge_json(input).map_err(Into::into)
     }
 
-    fn convert_to_child_device(&self, input: &str, child_id: &str) -> Result<String, Self::Error> {
+    fn convert_child_device_payload(
+        &self,
+        input: &str,
+        child_id: &str,
+    ) -> Result<String, Self::Error> {
         let () = self.size_threshold.validate(input)?;
         c8y_translator_lib::json::from_thin_edge_json_with_child(input, child_id)
             .map_err(Into::into)
+    }
+
+    fn convert_child_device_creation(&self, child_id: &str) -> String {
+        format!("101,{},{},thin-edge.io-child", child_id, child_id)
     }
 }
 
