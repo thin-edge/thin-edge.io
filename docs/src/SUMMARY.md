@@ -26,6 +26,7 @@
     - [How to install and enable software management?](./howto-guides/012_install_and_enable_software_management.md)
     - [How to connect an external device?](./howto-guides/013_connect_external_device.md)
     - [How to access the logs on the device?](./howto-guides/014_thin_edge_logs.md)
+    - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
 
 
 ## Reference guides
