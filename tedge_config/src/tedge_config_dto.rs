@@ -87,5 +87,4 @@ pub(crate) struct MqttConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SoftwareConfigDto {
     pub(crate) default_plugin_type: Option<String>,
-    pub(crate) default_buffer_size_in_percentage: Option<u16>,
 }
