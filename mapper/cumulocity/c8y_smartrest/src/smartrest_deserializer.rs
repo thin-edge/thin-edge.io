@@ -1,5 +1,5 @@
 use crate::error::SmartRestDeserializerError;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone, Utc};
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -164,7 +164,7 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
-fn to_datetime<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+fn to_datetime<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -174,8 +174,13 @@ where
     // 2021-10-23T19:03:26+0100
     // rfc3339 expected:
     // 2021-10-23T19:03:26+01:00
-    let date_string: String = Deserialize::deserialize(deserializer)?;
-    Ok(NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%S%z").unwrap())
+    // so we add a ':'
+    let mut date_string: String = Deserialize::deserialize(deserializer)?;
+    let str_size = date_string.len();
+    date_string = date_string[0..str_size - 2].to_string()
+        + ":"
+        + &date_string[str_size - 2..str_size].to_string();
+    Ok(DateTime::parse_from_rfc3339(&date_string).unwrap())
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -184,9 +189,9 @@ pub struct SmartRestLogRequest {
     pub device: String,
     pub log_type: String,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_from: NaiveDateTime,
+    pub date_from: DateTime<FixedOffset>,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_to: NaiveDateTime,
+    pub date_to: DateTime<FixedOffset>,
     pub needle: Option<String>,
     pub lines: usize,
 }
@@ -197,8 +202,8 @@ impl SmartRestLogRequest {
             message_id: "522".to_string(),
             device: "".to_string(),
             log_type: "".to_string(),
-            date_from: NaiveDateTime::from_timestamp(0, 0),
-            date_to: NaiveDateTime::from_timestamp(0, 0),
+            date_from: FixedOffset::east(0).ymd(1, 1, 1).and_hms(0, 0, 0),
+            date_to: FixedOffset::east(0).ymd(1, 1, 1).and_hms(0, 0, 0),
             needle: None,
             lines: 0,
         }

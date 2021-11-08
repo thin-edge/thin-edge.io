@@ -14,7 +14,7 @@ use c8y_smartrest::{
         SmartRestSetSupportedLogType, SmartRestSetSupportedOperations,
     },
 };
-use chrono::{DateTime, Local, NaiveDateTime};
+use chrono::{DateTime, FixedOffset, Local, NaiveDateTime};
 use json_sm::{
     Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareUpdateResponse,
@@ -466,7 +466,7 @@ async fn create_log_event(
 /// ```
 fn get_datetime_from_file_path(
     log_path: &PathBuf,
-) -> Result<NaiveDateTime, SMCumulocityMapperError> {
+) -> Result<DateTime<FixedOffset>, SMCumulocityMapperError> {
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
@@ -475,8 +475,7 @@ fn get_datetime_from_file_path(
         stem_string_vec.reverse();
         // join on '-' to get the date string
         let date_string = stem_string_vec.join("-");
-        // TODO: capture timezone info
-        let dt = chrono::NaiveDateTime::parse_from_str(&date_string, "%Y-%m-%dT%H:%M:%SZ")?;
+        let dt = DateTime::parse_from_rfc3339(&date_string)?;
 
         return Ok(dt);
     }
