@@ -1,5 +1,5 @@
 use crate::error::SmartRestDeserializerError;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone};
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -215,13 +215,11 @@ impl SmartRestLogRequest {
             .flexible(true)
             .from_reader(smartrest.as_bytes());
 
-        let mut record: Self = Self::new();
-
-        for result in rdr.deserialize() {
-            record = result?;
+        match rdr.deserialize().next() {
+            Some(Ok(record)) => Ok(record),
+            Some(Err(err)) => Err(err)?,
+            None => panic!("empty request"),
         }
-
-        Ok(record)
     }
 }
 
