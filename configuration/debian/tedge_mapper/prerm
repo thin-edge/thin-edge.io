@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -e
+
+print_hint() {
+    echo "$1 is running. Stop $1 before installation, use: systemctl stop $1"
+    echo "If you want to start $1 after installation, use: systemctl restart $1"
+    echo "Make sure that other mappers are not running: systemctl is-active [mapper_name]"
+    echo "Known mappers are: tedge-mapper-c8y, tedge-mapper-collectd, tedge-mapper-sm-c8y, tedge-mapper-az".
+}
+
+if systemctl is-active --quiet tedge-mapper-c8y; then
+    print_hint "tedge-mapper-c8y"
+    exit 1
+fi
+
+if systemctl is-active --quiet tedge-mapper-sm-c8y; then
+    print_hint "tedge-mapper-sm-c8y"
+    exit 1
+fi
+
+if systemctl is-active --quiet tedge-mapper-collectd; then
+    print_hint "tedge-mapper-collectd"
+    exit 1
+fi
+
+if systemctl is-active --quiet tedge-mapper-az; then
+    print_hint "tedge-mapper-az"
+    exit 1
+fi
+
+#DEBHELPER#
