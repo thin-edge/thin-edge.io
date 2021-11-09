@@ -373,7 +373,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
         TEST_TIMEOUT_MS,
         vec![
         "501,c8y_SoftwareUpdate",
-        "502,c8y_SoftwareUpdate,\"Action remove is not recognized. It must be install or delete.\"",
+        "502,c8y_SoftwareUpdate,\"Parameter remove is not recognized. It must be install or delete.\"",
     ],
     )
     .await;
