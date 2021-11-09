@@ -404,7 +404,13 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
-    let () = service_manager.check_operational()?;
+    let service_manager_result = service_manager.check_operational();
+
+    if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
+        println!("It appears that '{}' service manager is installed on the system, thin-edge.io works seamlessly with 'systemd'.", name);
+        println!("'tedge connect' will create MQTT configuration, but you will have to start required services on your own.");
+        println!("Start following services: mosquitto, tedge_mapper, tedge_agent.");
+    }
 
     println!("Checking if configuration for requested bridge already exists.\n");
     let () = bridge_config_exists(config_location, bridge_config)?;
@@ -419,6 +425,10 @@ fn new_bridge(
         // We want to preserve previous errors and therefore discard result of this function.
         let _ = clean_up(config_location, bridge_config);
         return Err(err);
+    }
+
+    if let Err(err) = service_manager_result {
+        return Err(err.into());
     }
 
     restart_mosquitto(bridge_config, service_manager, config_location)?;

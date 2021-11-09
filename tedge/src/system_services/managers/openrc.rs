@@ -29,7 +29,9 @@ impl SystemServiceManager for OpenRcServiceManager {
 
         match command.status() {
             Ok(status) if status.success() => Ok(()),
-            _ => Err(OpenRcServiceError::ServiceManagerNotAvailable.into()),
+            _ => Err(SystemServiceError::ServiceManagerUnavailable(
+                self.name().to_string(),
+            )),
         }
     }
 
