@@ -12,7 +12,6 @@ Then we receive a failure from the apt plugin
 import time
 import sys
 
-sys.path.append("software-management-end-to-end")
 from environment_sm_management import SoftwareManagement
 
 

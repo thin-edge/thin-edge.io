@@ -30,6 +30,9 @@ use tracing::{debug, error, info, instrument};
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
 
+const RETRY_TIMEOUT_SECS: u64 = 60;
+
+
 pub struct CumulocitySoftwareManagementMapper {}
 
 impl CumulocitySoftwareManagementMapper {
@@ -79,12 +82,17 @@ impl CumulocitySoftwareManagement {
         info!("Initialisation");
         while self.c8y_internal_id.is_empty() {
             if let Err(error) = self.try_get_and_set_internal_id().await {
-                error!("{:?}", error);
+                error!(
+                    "An error ocurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
+                    RETRY_TIMEOUT_SECS, error
+                );
 
-                tokio::time::sleep_until(Instant::now() + Duration::from_secs(300)).await;
+                tokio::time::sleep_until(Instant::now() + Duration::from_secs(RETRY_TIMEOUT_SECS))
+                    .await;
                 continue;
             };
         }
+        info!("Initialisation done.");
 
         Ok(())
     }
@@ -675,7 +683,7 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
         match tokio::time::timeout(Duration::from_secs(10), subscriber.next()).await {
             Ok(Some(msg)) => msg.payload_str()?.to_string(),
             Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
-            Err(err) => return Err(SMCumulocityMapperError::FromElapsed(err)),
+            Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
         };
 
     Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
