@@ -30,12 +30,3 @@ impl<T, E> Maybe<T> for Result<Option<T>, E> {
         }
     }
 }
-
-pub async fn recv_with_timeout<T>(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<T>,
-) -> Option<T> {
-    match receiver.recv().with_timeout(Duration::from_secs(1)).await {
-        Err(_) => None,
-        Ok(msg) => msg,
-    }
-}

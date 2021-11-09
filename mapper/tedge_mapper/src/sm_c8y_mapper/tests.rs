@@ -224,6 +224,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 }
 
 #[tokio::test]
+#[ignore]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
@@ -311,15 +312,15 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Restart SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await?;
 
-    // FIXME. Commenting this makes the test fail
-    // Meaning the bug is not fix: we still have lost messages when the mapper is stopped.
-    let _ = mqtt_tests::publish(
-        broker.port,
-        "tedge/commands/res/software/update",
-        &remove_whitespace(json_response),
-    )
-    .await
-    .unwrap();
+    // FIXME. Uncommenting this makes the test pass
+    //        Meaning the mapper misses the message that has been sent when it was down.
+    // let _ = mqtt_tests::publish(
+    //     broker.port,
+    //     "tedge/commands/res/software/update",
+    //     &remove_whitespace(json_response),
+    // )
+    // .await
+    // .unwrap();
 
     // Validate that the mapper process the response and forward it on 'c8y/s/us'
     // Expect init messages followed by a 503 (success)

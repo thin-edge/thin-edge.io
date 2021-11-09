@@ -55,7 +55,7 @@ pub async fn publish(mqtt_port: u16, topic: &str, payload: &str) -> Result<(), a
 /// 3  Publish the `pub_message` on the `pub_topic`,
 /// 4. Return the first received message
 /// 5. or give up after `timeout_sec` secondes.
-pub async fn received_on_published(
+pub async fn wait_for_response_on_publish(
     mqtt_port: u16,
     pub_topic: &str,
     pub_message: &str,

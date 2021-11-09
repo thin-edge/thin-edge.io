@@ -152,17 +152,27 @@ mod tests {
         // Happy path
         let input = "abcde";
         let expected = Some("ABCDE".to_string());
-        let actual =
-            mqtt_tests::received_on_published(broker.port, "in_topic", input, "out_topic", timeout)
-                .await;
+        let actual = mqtt_tests::wait_for_response_on_publish(
+            broker.port,
+            "in_topic",
+            input,
+            "out_topic",
+            timeout,
+        )
+        .await;
         assert_eq!(expected, actual);
 
         // Ill-formed input
         let input = "éèê";
         let expected = Some(format!("{}", UppercaseConverter::conversion_error()));
-        let actual =
-            mqtt_tests::received_on_published(broker.port, "in_topic", input, "err_topic", timeout)
-                .await;
+        let actual = mqtt_tests::wait_for_response_on_publish(
+            broker.port,
+            "in_topic",
+            input,
+            "err_topic",
+            timeout,
+        )
+        .await;
         assert_eq!(expected, actual);
 
         Ok(())
