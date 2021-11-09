@@ -83,17 +83,18 @@ impl Downloader {
         let mut file = File::create(self.target_filename.as_path())?;
 
         if let Some(file_len) = response.content_length() {
-            dbg!(file_len);
             let tmpstats = statvfs::statvfs("/tmp")?;
             let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
-            dbg!(usable_disk_space);
+
             if file_len >= usable_disk_space {
                 return Err(DownloadError::NotEnoughDiskspace);
             }
             // Reserve 5% of total disk space
             let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
 
-            if five_percent_disk_space > (usable_disk_space - file_len) {
+            let free_space_after_download = usable_disk_space - file_len;
+
+            if five_percent_disk_space > free_space_after_download {
                 return Err(DownloadError::NotEnoughDiskspace);
             }
             // Reserve diskspace
@@ -184,7 +185,6 @@ mod tests {
     async fn downloader_download_with_content_length() -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
-        dbg!("{:?}", usable_disk_space);
         let _mock1 = mock("GET", "/some_file.txt")
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
@@ -201,7 +201,7 @@ mod tests {
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Err(DownloadError::NotEnoughDiskspace) => return Ok(()),
-            _ => return Err(bail!("failed")),
+            _ => bail!("failed"),
         }
     }
 
