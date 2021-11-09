@@ -1,5 +1,5 @@
 use crate::error::SmartRestDeserializerError;
-use chrono::{DateTime, FixedOffset, TimeZone};
+use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -183,6 +183,10 @@ where
     Ok(DateTime::parse_from_rfc3339(&date_string).unwrap())
 }
 
+pub enum SmartRestVariant {
+    SmartRestLogRequest,
+}
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestLogRequest {
     pub message_id: String,
@@ -197,18 +201,6 @@ pub struct SmartRestLogRequest {
 }
 
 impl SmartRestLogRequest {
-    pub fn new() -> Self {
-        Self {
-            message_id: "522".to_string(),
-            device: "".to_string(),
-            log_type: "".to_string(),
-            date_from: FixedOffset::east(0).ymd(1, 1, 1).and_hms(0, 0, 0),
-            date_to: FixedOffset::east(0).ymd(1, 1, 1).and_hms(0, 0, 0),
-            needle: None,
-            lines: 0,
-        }
-    }
-
     pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
@@ -221,12 +213,6 @@ impl SmartRestLogRequest {
             None => panic!("empty request"),
         }
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SmartRestLogEvent {
-    pub id: String,
 }
 
 type JwtToken = String;

@@ -125,7 +125,7 @@ impl CumulocitySoftwareManagement {
                 let () = self.forward_software_request(payload).await?;
             }
             "522" => {
-                let () = self.retrieve_log_request(payload).await?;
+                let () = self.forward_log_request(payload).await?;
             }
             _ => {
                 return Err(SMCumulocityMapperError::InvalidMqttMessage);
@@ -281,7 +281,7 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
-    async fn retrieve_log_request(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
+    async fn forward_log_request(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
         // retrieve smartrest object from payload
         let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
 
@@ -291,7 +291,7 @@ impl CumulocitySoftwareManagement {
         // 2. read logs
         let log_output = read_tedge_logs(&smartrest_obj, AGENT_LOG_DIR)?;
 
-        // 3. create event
+        // 3. create log event
         let token = get_jwt_token(&self.client).await?;
         let url_host = self.config.query_string(C8yUrlSetting)?;
 
@@ -424,6 +424,8 @@ pub struct SmartRestLogEvent {
     pub id: String,
 }
 
+/// Make a POST request to /event/events and return the event id from response body.
+/// The event id is used to upload the binary.
 async fn create_log_event(
     url_host: &str,
     c8y_managed_object: &C8yManagedObject,
