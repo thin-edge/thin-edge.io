@@ -15,7 +15,6 @@ import time
 import subprocess
 import sys
 
-sys.path.append("software_management_end_to_end")
 from environment_sm_management import SoftwareManagement
 
 
