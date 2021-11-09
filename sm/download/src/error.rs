@@ -17,6 +17,9 @@ pub enum DownloadError {
 
     #[error(transparent)]
     FromNix(#[from] nix::Error),
+
+    #[error("Not enough disk space")]
+    NotEnoughDiskspace,
 }
 
 impl From<reqwest::Error> for DownloadError {
