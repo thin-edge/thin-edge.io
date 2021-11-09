@@ -5,7 +5,7 @@ import time
 """
 Validate end to end behaviour for the apt plugin for installation and removal of packages
 
-For the apt plugin with ::apt
+For the default plugin with a space as version
 
 When we install a package
 Then it is installed
@@ -18,7 +18,6 @@ import requests
 import time
 import sys
 
-sys.path.append("software-management-end-to-end")
 from environment_sm_management import SoftwareManagement
 
 
@@ -30,7 +29,7 @@ class PySysTest(SoftwareManagement):
     def execute(self):
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), "::apt", "notanurl", "install"
+            "rolldice", self.get_pkgid("rolldice"), " ", "notanurl", "install"
         )
 
         self.wait_until_succcess()
@@ -38,7 +37,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), "::apt", "notanurl", "delete"
+            "rolldice", self.get_pkgid("rolldice"), " ", "notanurl", "delete"
         )
 
         self.wait_until_succcess()

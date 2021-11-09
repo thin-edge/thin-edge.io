@@ -13,7 +13,6 @@ Then docker images are not installed
 
 """
 
-sys.path.append("software-management-end-to-end")
 from environment_sm_management import SoftwareManagement
 
 
@@ -28,7 +27,7 @@ class SMDockerInstallRemove(SoftwareManagement):
 
     def setup(self):
         super().setup()
-       
+
 
         if self.dockerplugin != "dockerplugin":
             self.skipTest(
@@ -55,7 +54,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         self.wait_until_succcess()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
-        
+
         self.assertThat("True == value",
                         value=self.check_is_installed(self.image1_name))
         self.assertThat("True == value",
@@ -88,7 +87,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         self.wait_until_succcess()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
-        
+
     def validate(self):
         self.assertThat("True == value",
                         value=self.check_is_installed(self.image1_name))
@@ -126,7 +125,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         self.wait_until_succcess()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
-        
+
         self.assertThat("False == value",
                         value=self.check_is_installed(self.image1_name))
         self.assertThat("False == value",
@@ -142,4 +141,3 @@ class SMDockerInstallRemove(SoftwareManagement):
             else:
                 continue
         return False
-        
