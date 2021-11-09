@@ -34,4 +34,7 @@ pub(crate) enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
+
+    #[error("Request timed out")]
+    RequestTimeout,
 }
