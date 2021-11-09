@@ -43,7 +43,7 @@ pub(crate) enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
-  
+
     #[error("Request timed out")]
     RequestTimeout,
 }

@@ -32,7 +32,6 @@ const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
-
 pub struct CumulocitySoftwareManagementMapper {}
 
 impl CumulocitySoftwareManagementMapper {
