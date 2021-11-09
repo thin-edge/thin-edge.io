@@ -50,7 +50,7 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements_rrdtool.txt
 cd tests/PySys/
 
-pysys.py run --progress -v DEBUG --include analytics
+pysys.py run --record -v DEBUG --include analytics
 
 deactivate
 
