@@ -20,9 +20,6 @@ tests/PySys/**/*.log
 tests/PySys/**/*.out
 tests/PySys/**/Output/
 tests/PySys/**/*.err
-tests/PySys/__pysys_junit_xml/*
-tests/PySys/*.html
-tests/PySys/*.xml
 tests/PySys/*.log
 **/__pycache__
 tests/PySys/**/Output/
