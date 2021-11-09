@@ -29,6 +29,14 @@
 			<property name="outputDir" value="__pysys_junit_xml"/>
 		</writer>
 
+        <writer classname="pysys.writer.outcomes.XMLResultsWriter">
+                <property name="file" value="__pysys_testsummary_${outDirName}_%Y-%m-%d_%H.%M.%S.xml"/>
+        </writer>
+
+        <writer classname="pysys.writer.outcomes.CSVResultsWriter">
+                <property name="file" value="__pysys_testsummary_%Y-%m-%d_%H.%M.%S.csv"/>
+        </writer>
+
 		<writer classname="pysys.writer.ci.GitHubActionsCIWriter"></writer>
 		<writer classname="pysys.writer.ci.TravisCIWriter"></writer>
 
