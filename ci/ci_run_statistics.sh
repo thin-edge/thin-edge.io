@@ -54,6 +54,8 @@ pysys.py run --record -v DEBUG --include analytics
 
 deactivate
 
+cd $TEBASEDIR
+
 sudo cp ./configuration/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 
