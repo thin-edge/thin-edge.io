@@ -28,3 +28,5 @@ if systemctl is-active --quiet tedge-mapper-az; then
     print_hint "tedge-mapper-az"
     exit 1
 fi
+
+#DEBHELPER#

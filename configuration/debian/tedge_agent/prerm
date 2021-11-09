@@ -10,3 +10,5 @@ if systemctl is-active --quiet tedge-agent; then
     print_hint "tedge-agent"
     exit 1
 fi
+
+#DEBHELPER#
