@@ -89,7 +89,7 @@ impl Downloader {
 
         // fail if content > reserve buffer
         if let Some(len) = response.content_length() {
-            if five_percent_free_space as u64 > len {
+            if len > five_percent_free_space as u64 {
                 return Err(DownloadError::FromIo {
                     reason: "Not enough disk space".into(),
                 });
