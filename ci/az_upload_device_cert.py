@@ -87,7 +87,7 @@ def delete_device(devname, hub, sas_name):
         sys.exit(1)
 
 
-def upload_device_cert(devname, thprint, hub, sas_name):
+def upload_device_cert(devname, thprint, hub, sas_name, verbose):
     """Upload device certificate
     first generate an SAS access token, then upload the certificate"""
 
@@ -135,7 +135,8 @@ def upload_device_cert(devname, thprint, hub, sas_name):
 
     if req.status_code == 200:
         print("Uploaded device certificate")
-        print("Uploaded Device Properties : ", req.text)
+        if verbose:
+            print("Uploaded Device Properties : ", req.text)
     else:
         print(f"Error: {req.status_code}")
         print("Response Properties", req.text)
@@ -160,10 +161,11 @@ def main():
     thprint = args.thumbprint
     hub = args.hub
     sas_name = args.name
+    verbose = args.verbose
 
     delete_device(devname, hub, sas_name)
 
-    upload_device_cert(devname, thprint, hub, sas_name)
+    upload_device_cert(devname, thprint, hub, sas_name, verbose)
 
 
 if __name__ == "__main__":
