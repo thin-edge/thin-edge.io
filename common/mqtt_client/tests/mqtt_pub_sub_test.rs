@@ -1,30 +1,27 @@
 use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
 use std::time::Duration;
-use tedge_utils::test_mqtt_server::start_broker_local;
 use tokio::time::sleep;
 
-const MQTTTESTPORT: u16 = 58586;
-
-#[ignore = "CIT-515"]
 #[test]
 fn sending_and_receiving_a_message() {
     async fn scenario(payload: String) -> Result<Option<Message>, mqtt_client::MqttClientError> {
-        let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT).await });
+        let broker = mqtt_tests::test_mqtt_broker();
         let topic = Topic::new("test/uubpb9wyi9asi46l624f")?;
         let subscriber = Client::connect(
             "subscribe",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+            &mqtt_client::Config::default().with_port(broker.port),
         )
         .await?;
         let mut received = subscriber.subscribe(topic.filter()).await?;
+        sleep(Duration::from_millis(1000)).await;
 
         let message = Message::new(&topic, payload);
         let publisher = Client::connect(
             "publisher",
-            &mqtt_client::Config::default().with_port(MQTTTESTPORT),
+            &mqtt_client::Config::default().with_port(broker.port),
         )
         .await?;
-        let _pkid = publisher.publish(message).await?;
+        let () = publisher.publish(message).await?;
 
         tokio::select! {
             msg = received.next() => Ok(msg),
@@ -40,17 +37,15 @@ fn sending_and_receiving_a_message() {
     }
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
     // Given an MQTT broker
-    let mqtt_port: u16 = 55555;
-    let _mqtt_server_handle = tokio::spawn(async move { start_broker_local(mqtt_port).await });
+    let broker = mqtt_tests::test_mqtt_broker();
 
     // And an MQTT client connected to that server
     let subscriber = Client::connect(
         "client_subscribing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(broker.port),
     )
     .await?;
 
@@ -62,11 +57,12 @@ async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
 
     // The messages for these topics will all be received on the same message stream
     let mut messages = subscriber.subscribe(topic_filter).await?;
+    sleep(Duration::from_millis(1000)).await;
 
     // So let us create another MQTT client publishing messages.
     let publisher = Client::connect(
         "client_publishing_to_many_topics",
-        &mqtt_client::Config::default().with_port(mqtt_port),
+        &mqtt_client::Config::default().with_port(broker.port),
     )
     .await?;
 

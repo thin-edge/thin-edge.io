@@ -39,7 +39,7 @@ pub struct ThinEdgeJsonParserError {
 
 /// Parses top-level ThinEdge JSON:
 ///
-/// ```ignore
+/// ```grammar
 /// {
 ///     time?: string,
 ///     [key: string]: number | {[key: string]: number},
@@ -55,7 +55,7 @@ where
 
 /// Parses a single value (number) or multi-value measurement:
 ///
-/// ```ignore
+/// ```grammar
 /// number | {[key: string]: number}
 /// ```
 ///
