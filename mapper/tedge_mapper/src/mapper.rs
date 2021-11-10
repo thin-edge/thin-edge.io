@@ -113,6 +113,8 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[tokio::test]
     #[serial_test::serial]
@@ -145,9 +147,10 @@ mod tests {
         tokio::spawn(async move {
             let _ = mapper.run().await;
         });
+        sleep(Duration::from_secs(1)).await;
 
         // One can now send requests
-        let timeout = std::time::Duration::from_secs(1);
+        let timeout = Duration::from_secs(1);
 
         // Happy path
         let input = "abcde";
