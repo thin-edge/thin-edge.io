@@ -152,6 +152,10 @@ def main():
     parser.add_argument("-v", "--verbose", help="Verbosity", action="count", default=0)
     args = parser.parse_args()
 
+    if not "SASKEYIOTHUB" in os.environ:
+        print("Error environment variable SASKEYIOTHUB not set")
+        sys.exit(1)
+
     devname = args.device
     thprint = args.thumbprint
     hub = args.hub

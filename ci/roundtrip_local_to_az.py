@@ -98,7 +98,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     # See also
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
 
-    # Do it manuylly with curl:
+    # Do it manally with curl:
     # curl --request DELETE \
     # --url "http{s}://thinedgebus.servicebus.windows.net/testqueue/messages/head" \
     # --header "Accept: application/json" \
@@ -182,6 +182,10 @@ def main():
     service_bus_name = args.bus
     queue_name = args.queue
     verbose = args.verbose
+
+    if not "SASKEYQUEUE" in os.environ:
+        print("Error environment variable SASKEYQUEUE not set")
+        sys.exit(1)
 
     publish_az(amount)
     result = retrieve_queue_az(
