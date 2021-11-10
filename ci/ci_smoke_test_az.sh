@@ -11,6 +11,8 @@
 # on a Raspberry Pi.
 
 # Disconnect - may fail if not there
+sudo tedge disconnect az
+
 sudo tedge disconnect c8y
 
 set -e
@@ -27,7 +29,7 @@ echo "DEVICE Thumbprint is " $THUMB
 
 sudo tedge connect az
 
-./ci/roundtrip_local_to_az.py -p sas_policy -b thinedgebus -q testqueue
+./ci/roundtrip_local_to_az.py -p sas_policy2 -b thinedgebus -q testqueue2
 
 sudo tedge disconnect az
 
