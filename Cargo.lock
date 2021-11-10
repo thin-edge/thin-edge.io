@@ -310,6 +310,7 @@ version = "0.4.1"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
+ "chrono",
  "csv",
  "json_sm",
  "serde",
@@ -393,6 +394,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time",
  "winapi",
 ]
