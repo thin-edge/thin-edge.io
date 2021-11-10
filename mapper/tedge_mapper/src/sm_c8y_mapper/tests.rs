@@ -1,11 +1,11 @@
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
 use mqtt_client::Client;
+use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
 use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 use tokio::task::JoinHandle;
-use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
@@ -417,7 +417,5 @@ async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error
 }
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
-    let _ = broker.publish("c8y/s/dat", "71,1111")
-        .await
-        .unwrap();
+    let _ = broker.publish("c8y/s/dat", "71,1111").await.unwrap();
 }
