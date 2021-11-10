@@ -407,9 +407,9 @@ fn new_bridge(
     let service_manager_result = service_manager.check_operational();
 
     if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
-        println!("It appears that '{}' service manager is installed on the system, thin-edge.io works seamlessly with 'systemd'.", name);
-        println!("'tedge connect' will create MQTT configuration, but you will have to start required services on your own.");
-        println!("Start following services: mosquitto, tedge_mapper, tedge_agent.");
+        println!("It appears that '{}' service manager is not installed on the system, thin-edge.io works seamlessly with 'systemd'.", name);
+        println!("'tedge connect' will configure the necessary tedge components, but you will have to start the required services on your own.");
+        println!("Start/restart following services: mosquitto, tedge_mapper, tedge_agent.");
     }
 
     println!("Checking if configuration for requested bridge already exists.\n");
