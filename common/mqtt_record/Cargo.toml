@@ -1,6 +1,6 @@
 [package]
 name = "mqtt_record"
-version = "0.4.1"
+version = "0.7.1"
 authors = ["diw"]
 edition = "2018"
 
