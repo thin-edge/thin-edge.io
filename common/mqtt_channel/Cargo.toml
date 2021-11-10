@@ -1,0 +1,15 @@
+[package]
+name = "mqtt_channel"
+version = "0.4.1"
+edition = "2018"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-broadcast = "0.3"
+rumqttc = "0.10"
+thiserror = "1.0"
+
+[dev-dependencies]
+mqtt_tests = { path = "../../common/mqtt_tests" }
