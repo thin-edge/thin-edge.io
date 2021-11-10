@@ -108,7 +108,13 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     messages = []
 
     while True:
-        req = requests.delete(url, headers=headers)
+
+        try:
+            req = requests.delete(url, headers=headers)
+        except requests.exceptions.ConnectionError:
+            print("Connection error: We wait for some seconds and then continue")
+            time.sleep(10)
+            continue
 
         if req.status_code == 200:
             text = req.text
