@@ -498,7 +498,7 @@ fn get_datetime_from_file_path(
         Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
             path.to_string(),
         )),
-        None => Err(SMCumulocityMapperError::NoFileNameInPathBuf),
+        None => Err(SMCumulocityMapperError::InvalidUtf8Path),
     }
 }
 

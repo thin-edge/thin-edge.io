@@ -183,7 +183,7 @@ where
         + &date_string[str_size - 2..str_size].to_string();
     match DateTime::parse_from_rfc3339(&date_string) {
         Ok(result) => Ok(result),
-        Err(e) => Err(e).map_err(D::Error::custom),
+        Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
     }
 }
 

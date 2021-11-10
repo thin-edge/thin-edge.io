@@ -48,7 +48,11 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
-        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+        vec![
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
+            "500\n",
+        ],
     )
     .await;
     sm_mapper.unwrap().abort();
@@ -111,7 +115,11 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
-        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+        vec![
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
+            "500\n",
+        ],
     )
     .await;
 
@@ -155,7 +163,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
-    assert_eq!(&msg, "503,c8y_SoftwareUpdate\n");
+    assert_eq!(&msg, "503,c8y_SoftwareUpdate,\n");
 
     sm_mapper.unwrap().abort();
 }
@@ -172,7 +180,11 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
-        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+        vec![
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
+            "500\n",
+        ],
     )
     .await;
 
@@ -243,7 +255,11 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     mqtt_tests::assert_received(
         &mut responses,
         TEST_TIMEOUT_MS,
-        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+        vec![
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
+            "500\n",
+        ],
     )
     .await;
 
@@ -318,7 +334,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
         &mut responses,
         TEST_TIMEOUT_MS * 5,
         vec![
-            "114,c8y_SoftwareUpdate\n",
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
             "500\n",
             "503,c8y_SoftwareUpdate\n",
         ],
@@ -347,7 +364,11 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     mqtt_tests::assert_received(
         &mut messages,
         TEST_TIMEOUT_MS,
-        vec!["114,c8y_SoftwareUpdate\n", "500\n"],
+        vec![
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "118,software-management\n",
+            "500\n",
+        ],
     )
     .await;
 
