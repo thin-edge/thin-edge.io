@@ -7,7 +7,6 @@ mod tests {
     use predicates::prelude::*;
 
     #[test]
-    #[ignore]
     /// Tests that only one instance of `tedge_agent` is running.
     /// This is done by spawning/running two instances of `tedge_agent`
     /// expecting the first one to work and the second to fail.
