@@ -7,7 +7,12 @@ pub struct Config {
     /// Clean the MQTT session upon connect if set to `true`.
     ///
     /// Default: `false`.
-    clean_session: bool,
+    pub clean_session: bool,
+
+    /// Capacity of the internal message queues
+    ///
+    /// Default: `1024`.
+    pub queue_capacity: usize,
 }
 
 /// By default a client connects the local MQTT broker.
@@ -17,6 +22,7 @@ impl Default for Config {
             host: String::from("localhost"),
             port: 1883,
             clean_session: false,
+            queue_capacity: 1024,
         }
     }
 }
@@ -41,5 +47,10 @@ impl Config {
             clean_session: true,
             ..self
         }
+    }
+
+    /// Set the queue capacity
+    pub fn with_queue_capacity(self, queue_capacity: usize) -> Self {
+        Self { queue_capacity, ..self }
     }
 }

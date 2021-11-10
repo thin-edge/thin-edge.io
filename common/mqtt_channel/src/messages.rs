@@ -1,5 +1,5 @@
 use crate::topics::Topic;
-use rumqttc::QoS;
+use rumqttc::{QoS, Publish};
 use crate::errors::MqttError;
 
 /// A message to be sent to or received from MQTT.
@@ -50,6 +50,33 @@ impl Message {
         self.payload
             .strip_suffix(&[0])
             .unwrap_or_else(|| self.payload.as_slice())
+    }
+}
+
+impl From<Message> for Publish {
+    fn from(val: Message) -> Self {
+        let mut publish = Publish::new(&val.topic.name, val.qos, val.payload);
+        publish.retain = val.retain;
+        publish
+    }
+}
+
+impl From<Publish> for Message {
+    fn from(msg: Publish) -> Self {
+        let Publish {
+            topic,
+            payload,
+            qos,
+            retain,
+            ..
+        } = msg;
+
+        Message {
+            topic: Topic::new_unchecked(&topic),
+            payload: payload.to_vec(),
+            qos,
+            retain,
+        }
     }
 }
 

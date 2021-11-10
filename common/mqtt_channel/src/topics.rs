@@ -19,7 +19,7 @@ impl Topic {
     }
 
     /// Build a new topic, assuming the name is valid since received from mqtt.
-    fn incoming(name: &str) -> Topic {
+    pub fn new_unchecked(name: &str) -> Topic {
         let name = String::from(name);
         Topic { name }
     }

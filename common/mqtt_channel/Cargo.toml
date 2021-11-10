@@ -8,8 +8,13 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 
 [dependencies]
 async-broadcast = "0.3"
+async-channel = "1.6"
 rumqttc = "0.10"
 thiserror = "1.0"
+tokio = { version = "1.12", features = ["rt"] }
+
 
 [dev-dependencies]
+anyhow = "1.0"
 mqtt_tests = { path = "../../common/mqtt_tests" }
+tokio = { version = "1.12", features = ["sync", "macros"] }
