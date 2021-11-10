@@ -30,10 +30,16 @@ import requests
 def publish_az(amount):
     """Publish to Azure topic"""
 
+    topic = "tedge/measurements"
+
+    #topic = "az/messages/events/" # In case that we want to avoid the azure mapper
+
+    print(f"Publishing messages to topic {topic}")
+
     for i in range(amount):
         message = f'{{"cafe": {i} }}'
-        cmd = ["/usr/bin/tedge", "mqtt", "pub", "az/messages/events/", message]
-        #cmd = ["/usr/bin/tedge", "mqtt", "pub", "tedge/measurements", message]
+
+        cmd = ["/usr/bin/tedge", "mqtt", "pub", topic, message]
 
         try:
             subprocess.run(cmd, check=True)
@@ -56,6 +62,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     uri = urllib.parse.quote_plus(
         "https://{}.servicebus.windows.net/{}".format(sb_name, eh_name)
     )
+
     sas = sas_value.encode("utf-8")
     expiry = str(int(time.time() + 10000))
     string_to_sign = (uri + "\n" + expiry).encode("utf-8")
@@ -135,7 +142,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
                 value = None
 
             print(
-                f"Got message {number} from {queuetime} message is {text} value: {value}"
+                f"Got message {number} from {queuetime} message is \"{text}\" value: \"{value}\""
             )
             messages.append(value)
 
