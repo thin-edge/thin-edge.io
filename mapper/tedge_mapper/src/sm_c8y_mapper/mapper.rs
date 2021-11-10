@@ -48,11 +48,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
 
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
-        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
-        let messages = sm_mapper.client.subscribe(topic_filter).await?;
 
+        let messages = sm_mapper.subscribe().await?;
         let () = sm_mapper.init().await?;
         let () = sm_mapper.run(messages).await?;
 
@@ -74,6 +71,15 @@ impl CumulocitySoftwareManagement {
             config,
             c8y_internal_id: "".into(),
         }
+    }
+
+    pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error> {
+        let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        let messages = self.client.subscribe(topic_filter).await?;
+
+        Ok(messages)
     }
 
     #[instrument(skip(self), name = "init")]
@@ -697,44 +703,35 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use std::{str::FromStr, sync::Arc};
+    use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use test_case::test_case;
 
-    const MQTT_TEST_PORT: u16 = 55555;
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(2000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "mosquitto-available"), ignore)]
+    #[serial_test::serial]
     async fn get_jwt_token_full_run() {
-        // Prepare subscribers to listen on messages on topic `c8y/s/us` where we expect to receive empty message.
-        let mut publish_messages_stream =
-            get_subscriber("c8y/s/uat", "get_jwt_token_full_run_sub1").await;
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut messages = broker.messages_published_on("c8y/s/uat").await;
 
-        let publisher = Arc::new(
-            Client::connect(
-                "get_jwt_token_full_run",
-                &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-            )
-            .await
-            .unwrap(),
-        );
-
-        let publisher2 = publisher.clone();
+        let publisher = Client::connect(
+            "get_jwt_token_full_run",
+            &mqtt_client::Config::default().with_port(broker.port),
+        )
+        .await
+        .unwrap();
 
         // Setup listener stream to publish on first message received on topic `c8y/s/us`.
         let responder_task = tokio::spawn(async move {
-            match tokio::time::timeout(TEST_TIMEOUT_MS, publish_messages_stream.next()).await {
-                Ok(Some(msg)) => {
-                    // When first messages is received assert it is on `c8y/s/us` topic and it has empty payload.
-                    assert_eq!(msg.topic, Topic::new("c8y/s/uat").unwrap());
-                    assert_eq!(msg.payload_str().unwrap(), "");
+            let msg = messages
+                .recv()
+                .with_timeout(TEST_TIMEOUT_MS)
+                .await
+                .expect_or("No JWT request received.");
+            assert_eq!(&msg, "");
 
-                    // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-                    let message =
-                        mqtt_client::Message::new(&Topic::new("c8y/s/dat").unwrap(), "71,1111");
-                    let _ = publisher2.publish(message).await;
-                }
-                _ => panic!("No message received after a second."),
-            }
+            // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
+            let _ = broker.publish("c8y/s/dat", "71,1111").await;
         });
 
         // Wait till token received.
@@ -783,7 +780,7 @@ mod tests {
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         assert!(!url_is_in_my_tenant_domain(url, "test.test.com"));
     }
-
+  
     async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
         let topic_filter = TopicFilter::new(pattern).unwrap();
         let subscriber = Client::connect(

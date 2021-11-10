@@ -1,11 +1,7 @@
 use futures::future::TryFutureExt;
 use mqtt_client::{Client, Message, MqttClient, MqttClientError, QoS, Topic, TopicFilter};
 use rumqttc::StateError;
-use tedge_utils::test_mqtt_server::start_broker_local;
 use tokio::time::Duration;
-
-const MQTTTESTPORT1: u16 = 58584;
-const MQTTTESTPORT2: u16 = 58585;
 
 #[derive(Debug)]
 enum TestJoinError {
@@ -13,17 +9,18 @@ enum TestJoinError {
     ElapseTime,
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     // Start the local broker
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT1).await });
+    let broker = mqtt_tests::test_mqtt_broker();
+
     // Start the subscriber
-    let subscriber = tokio::spawn(async move { subscribe_until_3_messages_received().await });
+    let subscriber =
+        tokio::spawn(async move { subscribe_until_3_messages_received(broker.port).await });
 
     // Start the publisher and publish 3 messages
-    let publisher = tokio::spawn(async move { publish_3_messages().await });
+    let publisher = tokio::spawn(async move { publish_3_messages(broker.port).await });
 
     let _ = publisher.await?;
     let res = subscriber.await?;
@@ -38,15 +35,15 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     }
 }
 
-#[ignore = "CIT-515"]
 #[tokio::test]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {
     // Start the broker
-    let _mqtt_server_handle = tokio::spawn(async { start_broker_local(MQTTTESTPORT2).await });
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_port = broker.port;
 
     // Start the publisher and publish a message
-    let publish = tokio::spawn(async { publish_big_message_wait_for_error().await });
+    let publish = tokio::spawn(async move { publish_big_message_wait_for_error(mqtt_port).await });
 
     // if error is received then test is ok, else test should fail
     let res = publish.await?;
@@ -81,11 +78,11 @@ async fn subscribe_errors(pub_client: &Client) -> Result<(), MqttClientError> {
     Ok(())
 }
 
-async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
+async fn subscribe_until_3_messages_received(mqtt_port: u16) -> Result<(), anyhow::Error> {
     let sub_filter = TopicFilter::new("test/hello")?;
     let client = Client::connect(
         "subscribe",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
+        &mqtt_client::Config::default().with_port(mqtt_port),
     )
     .await?;
     let mut messages = client.subscribe(sub_filter).await?;
@@ -102,13 +99,13 @@ async fn subscribe_until_3_messages_received() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_3_messages() -> Result<(), anyhow::Error> {
+async fn publish_3_messages(mqtt_port: u16) -> Result<(), anyhow::Error> {
     // create a 128MB message
     let buffer = create_packet(134217728);
     let topic = Topic::new("test/hello")?;
     let client = Client::connect(
         "publish_data",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT1),
+        &mqtt_client::Config::default().with_port(mqtt_port),
     )
     .await?;
     let message = Message::new(&topic, buffer.clone()).qos(QoS::AtMostOnce);
@@ -126,14 +123,14 @@ async fn publish_3_messages() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_big_message_wait_for_error() -> Result<(), anyhow::Error> {
+async fn publish_big_message_wait_for_error(mqtt_port: u16) -> Result<(), anyhow::Error> {
     // create a 260MB message
     let buffer = create_packet(272629760);
 
     let topic = Topic::new("test/hello")?;
     let publish_client = Client::connect(
         "publish_big_data",
-        &mqtt_client::Config::default().with_port(MQTTTESTPORT2),
+        &mqtt_client::Config::default().with_port(mqtt_port),
     )
     .await?;
 
