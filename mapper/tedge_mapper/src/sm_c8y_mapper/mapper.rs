@@ -488,10 +488,12 @@ fn get_datetime_from_file_path(
 
         return Ok(dt);
     }
-
-    Err(SMCumulocityMapperError::InvalidDateInFileName(
-        log_path.to_str().unwrap().to_string(),
-    ))
+    match log_path.to_str() {
+        Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
+            path.to_string(),
+        )),
+        None => Err(SMCumulocityMapperError::NoFileNameInPathBuf),
+    }
 }
 
 /// Reads tedge logs according to `SmartRestLogRequest`.

@@ -2,6 +2,7 @@ use crate::error::SmartRestDeserializerError;
 use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -180,7 +181,10 @@ where
     date_string = date_string[0..str_size - 2].to_string()
         + ":"
         + &date_string[str_size - 2..str_size].to_string();
-    Ok(DateTime::parse_from_rfc3339(&date_string).unwrap())
+    match DateTime::parse_from_rfc3339(&date_string) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(e).map_err(D::Error::custom),
+    }
 }
 
 pub enum SmartRestVariant {

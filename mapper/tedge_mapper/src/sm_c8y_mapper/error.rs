@@ -38,6 +38,9 @@ pub(crate) enum SMCumulocityMapperError {
     #[error("Invalid date in file name: {0}")]
     InvalidDateInFileName(String),
 
+    #[error("No file in pathbuf")]
+    NoFileNameInPathBuf,
+
     #[error(transparent)]
     FromChronoParse(#[from] chrono::ParseError),
 
