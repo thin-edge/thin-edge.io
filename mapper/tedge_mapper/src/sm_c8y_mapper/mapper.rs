@@ -425,7 +425,7 @@ mod tests {
     #[serial_test::serial]
     async fn get_jwt_token_full_run() {
         let broker = mqtt_tests::test_mqtt_broker();
-        let mut messages = mqtt_tests::messages_published_on(broker.port, "c8y/s/uat").await;
+        let mut messages = broker.messages_published_on("c8y/s/uat").await;
 
         let publisher = Client::connect(
             "get_jwt_token_full_run",
@@ -444,7 +444,7 @@ mod tests {
             assert_eq!(&msg, "");
 
             // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-            let _ = mqtt_tests::publish(broker.port, "c8y/s/dat", "71,1111").await;
+            let _ = broker.publish("c8y/s/dat", "71,1111").await;
         });
 
         // Wait till token received.

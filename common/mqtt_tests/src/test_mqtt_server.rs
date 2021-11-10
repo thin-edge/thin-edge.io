@@ -1,10 +1,12 @@
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    time::Duration,
 };
 
 use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
 use once_cell::sync::Lazy;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 const MQTT_TEST_PORT: u16 = 55555;
 
@@ -22,6 +24,31 @@ impl MqttProcessHandler {
     pub fn new(port: u16) -> MqttProcessHandler {
         spawn_broker(port);
         MqttProcessHandler { port }
+    }
+
+    pub async fn publish(&self, topic: &str, payload: &str) -> Result<(), anyhow::Error> {
+        crate::test_mqtt_client::publish(self.port, topic, payload).await
+    }
+
+    pub async fn messages_published_on(&self, topic: &str) -> UnboundedReceiver<String> {
+        crate::test_mqtt_client::messages_published_on(self.port, topic).await
+    }
+
+    pub async fn wait_for_response_on_publish(
+        &self,
+        pub_topic: &str,
+        pub_message: &str,
+        sub_topic: &str,
+        timeout: Duration,
+    ) -> Option<String> {
+        crate::test_mqtt_client::wait_for_response_on_publish(
+            self.port,
+            pub_topic,
+            pub_message,
+            sub_topic,
+            timeout,
+        )
+        .await
     }
 }
 
