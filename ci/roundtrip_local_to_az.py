@@ -98,8 +98,9 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     # --header "Content-Type: application/json;charset=utf-8" \
     # --header "Authorization: $SASTOKEN"     --verbose
 
-    url = "https://thinedgebus.servicebus.windows.net/testqueue/messages/head"
+    url = f"https://{service_bus_name}.servicebus.windows.net/{queue_name}/messages/head"
 
+    print(f"Downloading mesages from {url}")
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json;charset=utf-8",
@@ -111,8 +112,9 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
 
         try:
             req = requests.delete(url, headers=headers)
-        except requests.exceptions.ConnectionError:
-            print("Connection error: We wait for some seconds and then continue")
+        except requests.exceptions.ConnectionError as e:
+            print(e)
+            print("Connection error: We wait for some seconds and then continue ...")
             time.sleep(10)
             continue
 
