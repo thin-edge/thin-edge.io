@@ -8,7 +8,7 @@ members = [
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",
     "plugins/tedge_apama_plugin",
-    "tests/mqtt-record"
+    "common/mqtt_record"
 ]
 resolver = "2"
 
