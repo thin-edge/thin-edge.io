@@ -699,11 +699,10 @@ async fn get_jwt_token(client: &Client) -> Result<SmartRestJwtResponse, SMCumulo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_client::MqttMessageStream;
     use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use std::fs::File;
     use std::io::Write;
-    use std::{str::FromStr, sync::Arc};
+    use std::str::FromStr;
     use test_case::test_case;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
@@ -779,19 +778,6 @@ mod tests {
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         assert!(!url_is_in_my_tenant_domain(url, "test.test.com"));
-    }
-
-    async fn get_subscriber(pattern: &str, client_name: &str) -> Box<dyn MqttMessageStream> {
-        let topic_filter = TopicFilter::new(pattern).unwrap();
-        let subscriber = Client::connect(
-            client_name,
-            &mqtt_client::Config::default().with_port(MQTT_TEST_PORT),
-        )
-        .await
-        .unwrap();
-
-        // Obtain subscribe stream
-        subscriber.subscribe(topic_filter).await.unwrap()
     }
 
     #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]
