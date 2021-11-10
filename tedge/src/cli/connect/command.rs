@@ -61,7 +61,7 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             format!("test connection to {} cloud.", self.cloud.as_str())
         } else {
-            format!("create bridge to connect {} cloud.", self.cloud.as_str())
+            format!("connect {} cloud.", self.cloud.as_str())
         }
     }
 
@@ -407,9 +407,10 @@ fn new_bridge(
     let service_manager_result = service_manager.check_operational();
 
     if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
-        println!("It appears that '{}' service manager is not installed on the system, thin-edge.io works seamlessly with 'systemd'.", name);
-        println!("'tedge connect' will configure the necessary tedge components, but you will have to start the required services on your own.");
-        println!("Start/restart mosquitto and other thin edge components.");
+        println!(
+            "Warning: '{}' service manager is not available on the system.\n",
+            name
+        );
     }
 
     println!("Checking if configuration for requested bridge already exists.\n");
@@ -428,6 +429,9 @@ fn new_bridge(
     }
 
     if let Err(err) = service_manager_result {
+        println!("'tedge connect' configured the necessary tedge components, but you will have to start the required services on your own.");
+        println!("Start/restart mosquitto and other thin edge components.");
+        println!("thin-edge.io works seamlessly with 'systemd'.\n");
         return Err(err.into());
     }
 
