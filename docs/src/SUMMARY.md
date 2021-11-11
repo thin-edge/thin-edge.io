@@ -38,7 +38,7 @@
     - [The `tedge disconnect` command](./references/tedge-disconnect.md)
     - [The `tedge mqtt` command](./references/tedge-mqtt.md)
     - [The Bridged Topics](./references/bridged-topics.md)
-    - [The Plugin API](./references/plugin-api.md)
+    - [The Software Management Plugin API](./references/plugin-api.md)
 
 ## Architecture
 - [Architecture](architecture/README.md)
