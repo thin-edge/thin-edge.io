@@ -1,5 +1,6 @@
-use rumqttc::QoS;
 use crate::errors::MqttError;
+use rumqttc::QoS;
+use std::convert::TryInto;
 
 /// An MQTT topic
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -76,6 +77,28 @@ impl TopicFilter {
     /// A clone topic filter with the given QoS
     pub fn with_qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
+    }
+}
+
+impl TryInto<Topic> for &str {
+    type Error = MqttError;
+
+    fn try_into(self) -> Result<Topic, Self::Error> {
+        Topic::new(self)
+    }
+}
+
+impl Into<TopicFilter> for Topic {
+    fn into(self) -> TopicFilter {
+        self.filter()
+    }
+}
+
+impl TryInto<TopicFilter> for &str {
+    type Error = MqttError;
+
+    fn try_into(self) -> Result<TopicFilter, Self::Error> {
+        TopicFilter::new(self)
     }
 }
 

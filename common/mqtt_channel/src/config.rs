@@ -51,6 +51,9 @@ impl Config {
 
     /// Set the queue capacity
     pub fn with_queue_capacity(self, queue_capacity: usize) -> Self {
-        Self { queue_capacity, ..self }
+        Self {
+            queue_capacity,
+            ..self
+        }
     }
 }
