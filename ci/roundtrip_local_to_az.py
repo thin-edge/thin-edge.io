@@ -27,17 +27,13 @@ import urllib
 import requests
 
 
-def publish_az(amount):
+def publish_az(amount, topic, key):
     """Publish to Azure topic"""
-
-    topic = "tedge/measurements"
-
-    #topic = "az/messages/events/" # In case that we want to avoid the azure mapper
 
     print(f"Publishing messages to topic {topic}")
 
     for i in range(amount):
-        message = f'{{"cafe": {i} }}'
+        message = f'{{"{key}": {i} }}'
 
         cmd = ["/usr/bin/tedge", "mqtt", "pub", topic, message]
 
@@ -77,7 +73,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     }
 
 
-def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose):
+def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose, key):
     """Get the published messages back from a service bus queue"""
 
     if "SASKEYQUEUE" in os.environ:
@@ -133,7 +129,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
 
             try:
                 data = json.loads(text)
-                value = data["cafe"]
+                value = data[key]
             except json.decoder.JSONDecodeError:
                 print("Json Parsing Error: ", text)
                 value = None
@@ -187,9 +183,17 @@ def main():
         print("Error environment variable SASKEYQUEUE not set")
         sys.exit(1)
 
-    publish_az(amount)
+    # Send roundtrip via the tedge mapper
+    mqtt_topic = "tedge/measurements"
+    # In case that we want to avoid the azure mapper
+    # mqtt_topic = "az/messages/events/"
+
+    message_key="thin-edge-azure-roundtrip"
+
+    publish_az(amount, mqtt_topic, message_key)
+
     result = retrieve_queue_az(
-        sas_policy_name, service_bus_name, queue_name, amount, verbose
+        sas_policy_name, service_bus_name, queue_name, amount, verbose, message_key
     )
 
     if not result:
