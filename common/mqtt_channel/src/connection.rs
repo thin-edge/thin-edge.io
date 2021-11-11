@@ -1,5 +1,7 @@
 use crate::{Config, Message, MqttError, TopicFilter};
-use rumqttc::{AsyncClient, Event, EventLoop, Incoming, Outgoing, Packet, StateError};
+use rumqttc::{AsyncClient, Event, EventLoop, Incoming, Outgoing, Packet, StateError, ConnectionError};
+use tokio::time::sleep;
+use std::time::Duration;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -73,21 +75,7 @@ impl Connection {
 
                 Err(err) => {
                     eprintln!("ERROR: {}", err);
-                    let delay = match &err {
-                        rumqttc::ConnectionError::Io(_) => true,
-                        rumqttc::ConnectionError::MqttState(state_error)
-                            if matches!(state_error, StateError::Io(_)) =>
-                        {
-                            true
-                        }
-                        rumqttc::ConnectionError::MqttState(_) => true,
-                        rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
-                        _ => false,
-                    };
-
-                    if delay {
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    }
+                    Connection::pause_on_error(err).await;
                 }
                 _ => (),
             }
@@ -108,30 +96,18 @@ impl Connection {
 
                 Ok(Event::Incoming(Incoming::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                    // The connection has been closed
                     break;
                 }
 
                 Err(err) => {
                     eprintln!("ERROR: {}", err);
-                    let delay = match &err {
-                        rumqttc::ConnectionError::Io(_) => true,
-                        rumqttc::ConnectionError::MqttState(state_error)
-                            if matches!(state_error, StateError::Io(_)) =>
-                        {
-                            true
-                        }
-                        rumqttc::ConnectionError::MqttState(_) => true,
-                        rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
-                        _ => false,
-                    };
-
-                    if delay {
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    }
+                    Connection::pause_on_error(err).await;
                 }
                 _ => (),
             }
         }
+        // No more messages will be forwarded to the client
         message_sender.close();
     }
 
@@ -155,6 +131,25 @@ impl Connection {
                     }
                 }
             }
+        }
+        let _ = mqtt_client.disconnect().await;
+    }
+
+    async fn pause_on_error(err: ConnectionError) {
+        let delay = match &err {
+            rumqttc::ConnectionError::Io(_) => true,
+            rumqttc::ConnectionError::MqttState(state_error)
+            if matches!(state_error, StateError::Io(_)) =>
+                {
+                    true
+                }
+            rumqttc::ConnectionError::MqttState(_) => true,
+            rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
+            _ => false,
+        };
+
+        if delay {
+            sleep(Duration::from_secs(1)).await;
         }
     }
 }

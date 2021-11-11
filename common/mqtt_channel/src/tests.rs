@@ -195,4 +195,44 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn receiving_messages_while_not_connected() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        // A client that connects with a well-known session name, subscribing to some topic.
+        let session_name = "remember_me";
+        let topic = "test/topic";
+        {
+            let _con = Connection::connect(session_name, &mqtt_config, topic.try_into()?).await?;
+
+            // A connection is disconnected on drop
+        }
+
+        // Any messages published on that topic while down ...
+        broker.publish(topic, "1st msg sent when down").await?;
+        broker.publish(topic, "2nd msg sent when down").await?;
+        broker.publish(topic, "3rd msg sent when down").await?;
+
+        // ... will be received by the client once back with the same session name
+        let mut con = Connection::connect(session_name, &mqtt_config, topic.try_into()?).await?;
+
+        assert_eq!(
+            Next(message(topic, "1st msg sent when down")),
+            next_message(&mut con.received).await
+        );
+        assert_eq!(
+            Next(message(topic, "2nd msg sent when down")),
+            next_message(&mut con.received).await
+        );
+        assert_eq!(
+            Next(message(topic, "3rd msg sent when down")),
+            next_message(&mut con.received).await
+        );
+
+        Ok(())
+    }
 }
