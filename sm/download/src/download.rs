@@ -139,11 +139,10 @@ mod tests {
     use anyhow::bail;
     use json_sm::{Auth, DownloadInfo};
     use mockito::mock;
-    use nix::fcntl::{fallocate, FallocateFlags};
     use nix::sys::statvfs;
+    use std::io::Write;
     use std::{
         fs::File,
-        os::unix::prelude::AsRawFd,
         path::{Path, PathBuf},
     };
     use tempfile::TempDir;
@@ -213,18 +212,12 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
-        let file = File::create("/some_test.txt")?;
-        let _ = fallocate(
-            file.as_raw_fd(),
-            FallocateFlags::empty(),
-            0,
-            (10 * 1024 * 1024) as i64,
-        )
-        .map_err(|e| DownloadError::FromNix(e));
+        let mut file = File::create("/tmp/some_source_file.txt")?;
+        allocate_space(&mut file, 10 * 1024 * 1024)?;
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let _mock1 = mock("GET", "/tmp/some_source_file.txt")
             .with_header("content-length", &((10 * 1024 * 1024).to_string()))
-            .with_body_from_file("/some_test.txt")
+            .with_body_from_file("/tmp/some_source_file.txt")
             .create();
 
         let name = "test_download_with_length";
@@ -232,15 +225,44 @@ mod tests {
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/some_file.txt");
+        target_url.push_str("/tmp/some_source_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Ok(()) => return Ok(()),
+
             _ => bail!("failed"),
         }
+    }
+
+    #[tokio::test]
+    async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
+        let mut file = File::create("/tmp/data_source_file.txt")?;
+        allocate_space(&mut file, 10)?;
+
+        let _mock1 = mock("GET", "/tmp/data_source_file.txt")
+            .with_body_from_file("/tmp/data_source_file.txt")
+            .create();
+
+        let name = "test_download_with_length";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/tmp/data_source_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        downloader.download(&url).await?;
+
+        let log_content = std::fs::read(downloader.filename())?;
+
+        assert_eq!("Some data!".as_bytes(), log_content);
+
+        Ok(())
     }
 
     #[tokio::test]
@@ -370,6 +392,20 @@ mod tests {
                 assert!(err.to_string().contains(expected_err));
             }
         };
+        Ok(())
+    }
+
+    fn allocate_space(file: &mut File, size: usize) -> anyhow::Result<()> {
+        let data: String = "Some data!".into();
+        dbg!(data.len());
+        let loops = size / data.len();
+        let mut buffer = String::with_capacity(size);
+        for _ in 0..loops {
+            buffer.push_str("Some data!");
+        }
+
+        file.write_all(buffer.as_bytes())?;
+
         Ok(())
     }
 }
