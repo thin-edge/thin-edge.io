@@ -13,12 +13,11 @@ mod tests {
     async fn subscribing_to_messages() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
         let broker = mqtt_tests::test_mqtt_broker();
-        let config = Config::default().with_port(broker.port);
+        let mqtt_config = Config::default().with_port(broker.port);
 
         // A client subscribes to a topic on connect
         let topic = "test/topic";
-        let mut con = Connection::connect("test_client", &config, topic.try_into()?).await?;
-        //sleep(TIMEOUT).await;
+        let mut con = Connection::connect("test_client", &mqtt_config, topic.try_into()?).await?;
 
         // Any messages published on that topic ...
         broker.publish(topic, "msg 1").await?;
@@ -68,15 +67,20 @@ mod tests {
     async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
         let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
 
         // A client can subscribe to many topics
-        let mut topics = TopicFilter::new("/a/first/topic")?;
-        topics.add("/a/second/topic")?;
-        topics.add("/a/+/pattern")?; // one can use + pattern
-        topics.add("/any/#")?; // one can use # pattern
+        let topics = vec![
+            "/a/first/topic",
+            "/a/second/topic",
+            "/a/+/pattern", // one can use + pattern
+            "/any/#",       // one can use # pattern
+        ]
+        .try_into()
+        .expect("a list of topic filters");
 
-        let config = Config::default().with_port(broker.port);
-        let con = Connection::connect("client_subscribing_to_many_topics", &config, topics).await?;
+        let con =
+            Connection::connect("client_subscribing_to_many_topics", &mqtt_config, topics).await?;
 
         // The messages for these topics will all be received on the same message stream
         let mut messages = con.received;
@@ -107,6 +111,43 @@ mod tests {
             let () = broker.publish(topic, payload).await?;
             assert_eq!(Timeout, next_message(&mut messages).await);
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn publishing_messages() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        let mut all_messages = broker.messages_published_on("#").await;
+
+        // A client that wish only publish messages doesn't have to subscribe to any topics
+        let topic = vec![]
+            .try_into()
+            .expect("a list of topics (possibly empty)");
+        let con = Connection::connect("publishing_messages", &mqtt_config, topic).await?;
+
+        // Then all messages produced on the `con.published` channel
+        con.published
+            .send(message("foo/topic", "foo payload"))
+            .await?;
+        con.published
+            .send(message("foo/topic", "again a foo payload"))
+            .await?;
+        con.published
+            .send(message("bar/topic", "bar payload"))
+            .await?;
+
+        // ... must be actually published
+        mqtt_tests::assert_received(
+            &mut all_messages,
+            TIMEOUT,
+            vec!["foo payload", "again a foo payload", "bar payload"],
+        )
+        .await;
 
         Ok(())
     }

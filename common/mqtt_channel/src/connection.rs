@@ -53,6 +53,10 @@ impl Connection {
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                    if topic.patterns.is_empty() {
+                        break;
+                    }
+
                     for pattern in topic.patterns.iter() {
                         let () = mqtt_client.subscribe(pattern, qos).await?;
                     }
@@ -133,7 +137,24 @@ impl Connection {
 
     async fn sender_loop(
         mqtt_client: AsyncClient,
-        published_receiver: async_channel::Receiver<Message>,
+        messages_receiver: async_channel::Receiver<Message>,
     ) {
+        loop {
+            match messages_receiver.recv().await {
+                Err(async_channel::RecvError) => {
+                    // The sender channel has been drop
+                    break;
+                }
+                Ok(message) => {
+                    let payload = Vec::from(message.payload_bytes());
+                    if let Err(err) = mqtt_client
+                        .publish(message.topic, message.qos, message.retain, payload)
+                        .await
+                    {
+                        eprintln!("ERROR: Fail to publish a message: {}", err);
+                    }
+                }
+            }
+        }
     }
 }

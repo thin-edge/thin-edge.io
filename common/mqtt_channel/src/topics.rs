@@ -56,6 +56,14 @@ impl TopicFilter {
         }
     }
 
+    /// An empty topic filter
+    pub fn empty() -> TopicFilter {
+        TopicFilter {
+            patterns: vec![],
+            qos: QoS::AtLeastOnce,
+        }
+    }
+
     /// Check if the pattern is valid and at it to this topic filter.
     pub fn add(&mut self, pattern: &str) -> Result<(), MqttError> {
         let pattern = String::from(pattern);
@@ -99,6 +107,24 @@ impl TryInto<TopicFilter> for &str {
 
     fn try_into(self) -> Result<TopicFilter, Self::Error> {
         TopicFilter::new(self)
+    }
+}
+
+impl TryInto<TopicFilter> for Vec<&str> {
+    type Error = MqttError;
+
+    fn try_into(self) -> Result<TopicFilter, Self::Error> {
+        let mut filter = TopicFilter::empty();
+        for pattern in self.into_iter() {
+            filter.add(pattern)?
+        }
+        Ok(filter)
+    }
+}
+
+impl From<Topic> for String {
+    fn from(topic: Topic) -> Self {
+        topic.name
     }
 }
 
