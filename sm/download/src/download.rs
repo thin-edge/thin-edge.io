@@ -213,10 +213,9 @@ mod tests {
     #[tokio::test]
     async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
         let mut file = File::create("/tmp/some_source_file.txt")?;
-        allocate_space(&mut file, 10 * 1024 * 1024)?;
+        create_file_with_size(&mut file, 10 * 1024 * 1024)?;
 
         let _mock1 = mock("GET", "/tmp/some_source_file.txt")
-            .with_header("content-length", &((10 * 1024 * 1024).to_string()))
             .with_body_from_file("/tmp/some_source_file.txt")
             .create();
 
@@ -240,7 +239,7 @@ mod tests {
     #[tokio::test]
     async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
         let mut file = File::create("/tmp/data_source_file.txt")?;
-        allocate_space(&mut file, 10)?;
+        create_file_with_size(&mut file, 10)?;
 
         let _mock1 = mock("GET", "/tmp/data_source_file.txt")
             .with_body_from_file("/tmp/data_source_file.txt")
@@ -395,7 +394,7 @@ mod tests {
         Ok(())
     }
 
-    fn allocate_space(file: &mut File, size: usize) -> anyhow::Result<()> {
+    fn create_file_with_size(file: &mut File, size: usize) -> anyhow::Result<()> {
         let data: String = "Some data!".into();
         dbg!(data.len());
         let loops = size / data.len();
