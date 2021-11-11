@@ -1,10 +1,11 @@
 [package]
 name = "c8y_smartrest"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 csv = "1.1"
 json_sm = { path = "../../../sm/json_sm" }
 serde = { version = "1.0", features = ["derive"] }

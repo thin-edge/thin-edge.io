@@ -228,7 +228,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "tokio",
@@ -306,10 +306,11 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "c8y_smartrest"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
+ "chrono",
  "csv",
  "json_sm",
  "serde",
@@ -319,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_translator_lib"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -359,7 +360,7 @@ checksum = "79c2681d6594606957bbb8631c4b90a7fcaaa72cdb714743a437b156d6a7eedd"
 
 [[package]]
 name = "certificate"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -394,6 +395,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time",
  "winapi",
 ]
@@ -415,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chrono",
  "mockall",
@@ -665,7 +667,7 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
 name = "download"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "backoff",
@@ -731,6 +733,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
 
 [[package]]
+name = "fastrand"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b394ed3d285a429378d3b384b9eb1285267e7df4b166df24b7a6939a04dc392e"
+dependencies = [
+ "instant",
+]
+
+[[package]]
 name = "float-cmp"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -750,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1206,7 +1217,7 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "json-writer"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1215,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "json_sm"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "csv",
  "nanoid",
@@ -1397,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_client"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "async-log",
@@ -1408,29 +1419,33 @@ dependencies = [
  "json",
  "log",
  "mockall",
+ "mqtt_tests",
  "rand 0.8.4",
- "rumqttc 0.9.0",
+ "rumqttc",
  "serde",
- "tedge_utils",
  "thiserror",
  "tokio",
  "tokio-test",
 ]
 
 [[package]]
-name = "mqttbytes"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d710573f2144656d97b82b7ad85c464a1c35ae065278fbee545d40034ec1de5a"
+name = "mqtt_tests"
+version = "0.4.2"
 dependencies = [
- "bytes",
+ "anyhow",
+ "fastrand",
+ "once_cell",
+ "rumqttc",
+ "rumqttd",
+ "rumqttlog",
+ "tokio",
 ]
 
 [[package]]
 name = "mqttbytes"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12793a86f38eb258c5dbddf801dfd521c1d7a9def6e3a3de1ee248441c9dcc28"
+checksum = "a7bd39d24e28e1544d74ff5746e322a477e52353c8ba7adcaa83d2e760752853"
 dependencies = [
  "bytes",
 ]
@@ -1759,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2204,33 +2219,15 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd4cf48aa8588d907fc835c47fbc8ef01dc30552467fbf0123cd794f77fd2072"
+checksum = "e63ee9fd315db8880bf3fd3c20684dee03ca42cdd59b7d5cfdd4378f100a2aa0"
 dependencies = [
  "async-channel",
  "bytes",
  "http",
  "log",
- "mqttbytes 0.4.0",
- "pollster",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "webpki",
-]
-
-[[package]]
-name = "rumqttc"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "613456fdab2f811204edb36f25e397cc62956c85326c274d153bc0b17c44a777"
-dependencies = [
- "async-channel",
- "bytes",
- "http",
- "log",
- "mqttbytes 0.5.0",
+ "mqttbytes",
  "pollster",
  "thiserror",
  "tokio",
@@ -2240,9 +2237,9 @@ dependencies = [
 
 [[package]]
 name = "rumqttd"
-version = "0.7.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b794b3ee690eb1029e75e54dd75440613936685748e4d97e1888080477de515d"
+checksum = "3a1b0c1bb4e345c681c0a13174ce78df48885b0855c06f6eadbad53efb8b5e3b"
 dependencies = [
  "argh",
  "bytes",
@@ -2250,7 +2247,7 @@ dependencies = [
  "futures-util",
  "jemallocator",
  "log",
- "mqttbytes 0.4.0",
+ "mqttbytes",
  "pretty_env_logger",
  "rumqttlog",
  "serde",
@@ -2262,9 +2259,9 @@ dependencies = [
 
 [[package]]
 name = "rumqttlog"
-version = "0.7.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8209adbf8b592c49b1e02d92ea5b1dd4cb3e47007a9cdb8786100ab82068c628"
+checksum = "031d0d6fc69b8f36267870724b7a28e4a9396d0b3f722f84b5631c56c0840244"
 dependencies = [
  "byteorder",
  "bytes",
@@ -2272,7 +2269,7 @@ dependencies = [
  "jackiechan",
  "log",
  "memmap",
- "mqttbytes 0.4.0",
+ "mqttbytes",
  "segments",
  "serde",
  "thiserror",
@@ -2582,7 +2579,7 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2596,7 +2593,7 @@ dependencies = [
  "predicates 2.0.3",
  "reqwest",
  "rpassword",
- "rumqttc 0.8.0",
+ "rumqttc",
  "rustls",
  "serde",
  "structopt",
@@ -2613,7 +2610,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_agent"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2627,10 +2624,9 @@ dependencies = [
  "once_cell",
  "plugin_sm",
  "predicates 2.0.3",
- "rumqttd",
- "rumqttlog",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_config",
  "tedge_utils",
@@ -2643,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "csv",
@@ -2659,7 +2655,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "assert_matches",
  "certificate",
@@ -2673,7 +2669,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2681,7 +2677,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mapper"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -2698,6 +2694,7 @@ dependencies = [
  "json_sm",
  "mockall",
  "mqtt_client",
+ "mqtt_tests",
  "reqwest",
  "serde",
  "serde_json",
@@ -2717,7 +2714,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_users"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "thiserror",
  "users",
@@ -2725,13 +2722,11 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert_matches",
  "futures",
- "rumqttd",
- "rumqttlog",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2792,7 +2787,7 @@ dependencies = [
 
 [[package]]
 name = "thin_edge_json"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "chrono",
