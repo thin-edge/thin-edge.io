@@ -70,7 +70,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --verbose
+          args: --no-fail-fast
 
   cargo-build:
 

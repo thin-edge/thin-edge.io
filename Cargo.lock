@@ -310,6 +310,7 @@ version = "0.4.1"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
+ "chrono",
  "csv",
  "json_sm",
  "serde",
@@ -393,6 +394,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time",
  "winapi",
 ]
@@ -728,6 +730,15 @@ name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
+
+[[package]]
+name = "fastrand"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b394ed3d285a429378d3b384b9eb1285267e7df4b166df24b7a6939a04dc392e"
+dependencies = [
+ "instant",
+]
 
 [[package]]
 name = "float-cmp"
@@ -1407,29 +1418,33 @@ dependencies = [
  "json",
  "log",
  "mockall",
+ "mqtt_tests",
  "rand 0.8.4",
- "rumqttc 0.9.0",
+ "rumqttc",
  "serde",
- "tedge_utils",
  "thiserror",
  "tokio",
  "tokio-test",
 ]
 
 [[package]]
-name = "mqttbytes"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d710573f2144656d97b82b7ad85c464a1c35ae065278fbee545d40034ec1de5a"
+name = "mqtt_tests"
+version = "0.4.1"
 dependencies = [
- "bytes",
+ "anyhow",
+ "fastrand",
+ "once_cell",
+ "rumqttc",
+ "rumqttd",
+ "rumqttlog",
+ "tokio",
 ]
 
 [[package]]
 name = "mqttbytes"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12793a86f38eb258c5dbddf801dfd521c1d7a9def6e3a3de1ee248441c9dcc28"
+checksum = "a7bd39d24e28e1544d74ff5746e322a477e52353c8ba7adcaa83d2e760752853"
 dependencies = [
  "bytes",
 ]
@@ -2203,33 +2218,15 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd4cf48aa8588d907fc835c47fbc8ef01dc30552467fbf0123cd794f77fd2072"
+checksum = "e63ee9fd315db8880bf3fd3c20684dee03ca42cdd59b7d5cfdd4378f100a2aa0"
 dependencies = [
  "async-channel",
  "bytes",
  "http",
  "log",
- "mqttbytes 0.4.0",
- "pollster",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "webpki",
-]
-
-[[package]]
-name = "rumqttc"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "613456fdab2f811204edb36f25e397cc62956c85326c274d153bc0b17c44a777"
-dependencies = [
- "async-channel",
- "bytes",
- "http",
- "log",
- "mqttbytes 0.5.0",
+ "mqttbytes",
  "pollster",
  "thiserror",
  "tokio",
@@ -2239,9 +2236,9 @@ dependencies = [
 
 [[package]]
 name = "rumqttd"
-version = "0.7.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b794b3ee690eb1029e75e54dd75440613936685748e4d97e1888080477de515d"
+checksum = "3a1b0c1bb4e345c681c0a13174ce78df48885b0855c06f6eadbad53efb8b5e3b"
 dependencies = [
  "argh",
  "bytes",
@@ -2249,7 +2246,7 @@ dependencies = [
  "futures-util",
  "jemallocator",
  "log",
- "mqttbytes 0.4.0",
+ "mqttbytes",
  "pretty_env_logger",
  "rumqttlog",
  "serde",
@@ -2261,9 +2258,9 @@ dependencies = [
 
 [[package]]
 name = "rumqttlog"
-version = "0.7.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8209adbf8b592c49b1e02d92ea5b1dd4cb3e47007a9cdb8786100ab82068c628"
+checksum = "031d0d6fc69b8f36267870724b7a28e4a9396d0b3f722f84b5631c56c0840244"
 dependencies = [
  "byteorder",
  "bytes",
@@ -2271,7 +2268,7 @@ dependencies = [
  "jackiechan",
  "log",
  "memmap",
- "mqttbytes 0.4.0",
+ "mqttbytes",
  "segments",
  "serde",
  "thiserror",
@@ -2595,7 +2592,7 @@ dependencies = [
  "predicates 2.0.3",
  "reqwest",
  "rpassword",
- "rumqttc 0.8.0",
+ "rumqttc",
  "rustls",
  "serde",
  "structopt",
@@ -2626,10 +2623,9 @@ dependencies = [
  "once_cell",
  "plugin_sm",
  "predicates 2.0.3",
- "rumqttd",
- "rumqttlog",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_config",
  "tedge_utils",
@@ -2697,6 +2693,7 @@ dependencies = [
  "json_sm",
  "mockall",
  "mqtt_client",
+ "mqtt_tests",
  "reqwest",
  "serde",
  "serde_json",
@@ -2729,8 +2726,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "futures",
- "rumqttd",
- "rumqttlog",
  "tempfile",
  "thiserror",
  "tokio",

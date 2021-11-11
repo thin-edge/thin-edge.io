@@ -1,7 +1,9 @@
 use crate::error::SmartRestDeserializerError;
+use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use json_sm::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
-use serde::{Deserialize, Serialize};
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug)]
@@ -53,18 +55,17 @@ impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
-        if message_id != self.message_id {
-            return Err(SmartRestDeserializerError::UnsupportedOperation { id: message_id });
-        }
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
             .flexible(true)
             .from_reader(smartrest.as_bytes());
         let mut record: Self = Self::new();
+
         for result in rdr.deserialize() {
             record = result?;
         }
+
         Ok(record)
     }
 
@@ -160,6 +161,60 @@ impl SmartRestUpdateSoftwareModule {
             Some(url) if url.trim().is_empty() => None,
             Some(url) => Some(DownloadInfo::new(url.as_str())),
             None => None,
+        }
+    }
+}
+
+fn to_datetime<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
+    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
+    // c8y result:
+    // 2021-10-23T19:03:26+0100
+    // rfc3339 expected:
+    // 2021-10-23T19:03:26+01:00
+    // so we add a ':'
+    let mut date_string: String = Deserialize::deserialize(deserializer)?;
+    let str_size = date_string.len();
+    date_string = date_string[0..str_size - 2].to_string()
+        + ":"
+        + &date_string[str_size - 2..str_size].to_string();
+    match DateTime::parse_from_rfc3339(&date_string) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
+    }
+}
+
+pub enum SmartRestVariant {
+    SmartRestLogRequest,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestLogRequest {
+    pub message_id: String,
+    pub device: String,
+    pub log_type: String,
+    #[serde(deserialize_with = "to_datetime")]
+    pub date_from: DateTime<FixedOffset>,
+    #[serde(deserialize_with = "to_datetime")]
+    pub date_to: DateTime<FixedOffset>,
+    pub needle: Option<String>,
+    pub lines: usize,
+}
+
+impl SmartRestLogRequest {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        match rdr.deserialize().next() {
+            Some(Ok(record)) => Ok(record),
+            Some(Err(err)) => Err(err)?,
+            None => panic!("empty request"),
         }
     }
 }
