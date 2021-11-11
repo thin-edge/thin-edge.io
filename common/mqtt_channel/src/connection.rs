@@ -1,7 +1,9 @@
 use crate::{Config, Message, MqttError, TopicFilter};
-use rumqttc::{AsyncClient, Event, EventLoop, Incoming, Outgoing, Packet, StateError, ConnectionError};
-use tokio::time::sleep;
+use rumqttc::{
+    AsyncClient, ConnectionError, Event, EventLoop, Incoming, Outgoing, Packet, StateError,
+};
 use std::time::Duration;
+use tokio::time::sleep;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -139,10 +141,10 @@ impl Connection {
         let delay = match &err {
             rumqttc::ConnectionError::Io(_) => true,
             rumqttc::ConnectionError::MqttState(state_error)
-            if matches!(state_error, StateError::Io(_)) =>
-                {
-                    true
-                }
+                if matches!(state_error, StateError::Io(_)) =>
+            {
+                true
+            }
             rumqttc::ConnectionError::MqttState(_) => true,
             rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
             _ => false,
