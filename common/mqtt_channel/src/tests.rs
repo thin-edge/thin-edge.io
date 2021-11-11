@@ -151,4 +151,48 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn implementing_a_message_mapper() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        // and an MQTT connection with input and output topics
+        let in_topic = "mapper/input".try_into().expect("a valid topic filter");
+        let out_topic = "mapper/output".try_into().expect("a valid topic name");
+        let mut out_messages = broker.messages_published_on("mapper/output").await;
+
+        let con = Connection::connect("mapper", &mqtt_config, in_topic).await?;
+
+        // A message mapper can be implemented as
+        // * a consumer of input messages
+        // * and a producer of output messages
+        // * unaware of the underlying MQTT connection.
+        let mut input = con.received;
+        let output = con.published;
+        tokio::spawn(async move {
+            while let Next(msg) = next_message(&mut input).await {
+                let req = msg.payload_str().expect("utf8 payload");
+                let res = req.to_uppercase();
+                let msg = Message::new(&out_topic, res.as_bytes());
+                if let Err(_) = output.send(msg).await {
+                    // the connection has been closed
+                    break;
+                }
+            }
+        });
+
+        // Any messages published on the input topic ...
+        broker.publish("mapper/input", "msg 1").await?;
+        broker.publish("mapper/input", "msg 2").await?;
+        broker.publish("mapper/input", "msg 3").await?;
+
+        // ... is then transformed and published on the output topic.
+        mqtt_tests::assert_received(&mut out_messages, TIMEOUT, vec!["MSG 1", "MSG 2", "MSG 3"])
+            .await;
+
+        Ok(())
+    }
 }
