@@ -83,29 +83,7 @@ impl Downloader {
         let mut file = File::create(self.target_filename.as_path())?;
 
         if let Some(file_len) = response.content_length() {
-            let tmpstats = statvfs::statvfs("/tmp")?;
-            // Reserve 5% of total disk space
-            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
-            let usable_disk_space =
-                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
-
-            if file_len >= usable_disk_space {
-                return Err(DownloadError::InsufficientSpace);
-            }
-
-            let free_space_after_download = usable_disk_space - file_len;
-            if five_percent_disk_space > free_space_after_download {
-                return Err(DownloadError::InsufficientSpace);
-            }
-            // Reserve diskspace
-            if let Err(err) = fallocate(
-                file.as_raw_fd(),
-                FallocateFlags::empty(),
-                0,
-                file_len as i64,
-            ) {
-                return Err(DownloadError::FromNix(err));
-            }
+            pre_allocate_space(&file, file_len)?;
         };
         while let Some(chunk) = response.chunk().await? {
             if let Err(err) = file.write_all(&chunk) {
@@ -128,6 +106,29 @@ impl Downloader {
         let _res = tokio::fs::remove_file(&self.target_filename).await;
         Ok(())
     }
+}
+
+fn pre_allocate_space(file: &File, file_len: u64) -> Result<(), DownloadError> {
+    let tmpstats = statvfs::statvfs("/tmp")?;
+    // Reserve 5% of total disk space
+    let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
+    let usable_disk_space =
+        tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+
+    if file_len >= usable_disk_space {
+        return Err(DownloadError::InsufficientSpace);
+    }
+
+    // Reserve diskspace
+    if let Err(err) = fallocate(
+        file.as_raw_fd(),
+        FallocateFlags::empty(),
+        0,
+        file_len as i64,
+    ) {
+        return Err(DownloadError::FromNix(err));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
