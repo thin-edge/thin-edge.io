@@ -36,9 +36,9 @@ pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
-    default_timestamp: DateTime<FixedOffset>,
+    timestamp: DateTime<FixedOffset>,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp);
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -55,10 +55,10 @@ pub fn from_thin_edge_json_with_child(
 
 fn from_thin_edge_json_with_child_with_timestamp(
     input: &str,
-    default_timestamp: DateTime<FixedOffset>,
+    timestamp: DateTime<FixedOffset>,
     child_id: &str,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new_with_child(default_timestamp, child_id);
+    let mut serializer = serializer::C8yJsonSerializer::new_with_child(timestamp, child_id);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -242,33 +242,47 @@ mod tests {
     }
 
     #[test_case(
-    "{\"temperature\": 23.0, \"pressure\": 220.0}\"",
-    "child1"
-    ;"input thin-edge json")]
+    "{\"temperature\": 23.0}\"", "child1"
+    ;"child device single value thin-edge json translation")]
+    #[test_case(
+    "{\"temperature\": 23.0, \"pressure\": 220.0}\"", "child2"
+    ;"child device multiple values thin-edge json translation")]
+    #[test_case(
+    "{\"temperature\": 23.0, \"time\": \"2021-04-23T19:00:00+05:00\"}\"", "child3"
+    ;"child device single value with timestamp thin-edge json translation")]
     fn check_value_translation_for_child_device(thin_edge_json: &str, child_id: &str) {
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
         let output =
             from_thin_edge_json_with_child_with_timestamp(thin_edge_json, timestamp, child_id);
 
-        let expected_output = json!({
+        let expected_output_for_child1 = json!({
             "type": "ThinEdgeMeasurement",
-            "externalSource": {
-                "externalId": "child1",
-                "type": "c8y_Serial",
-            },
+            "externalSource": {"externalId": "child1","type": "c8y_Serial",},
             "time": "2021-04-08T00:00:00+05:00",
-            "temperature": {
-                "temperature": {
-                    "value": 23.0
-                }
-            },
-            "pressure": {
-                "pressure": {
-                    "value": 220.0
-                }
-            }
+            "temperature": {"temperature": {"value": 23.0}}
+        });
+        let expected_output_for_child2 = json!({
+            "type": "ThinEdgeMeasurement",
+            "externalSource": {"externalId": "child2","type": "c8y_Serial",},
+            "time": "2021-04-08T00:00:00+05:00",
+            "temperature": {"temperature": {"value": 23.0}},
+            "pressure": {"pressure": {"value": 220.0}}
+        });
+        let expected_output_for_child3 = json!({
+            "type": "ThinEdgeMeasurement",
+            "externalSource": {"externalId": "child3","type": "c8y_Serial",},
+            "time": "2021-04-23T19:00:00+05:00",
+            "temperature": {"temperature": {"value": 23.0}},
         });
 
+        let expected_output = match child_id {
+            "child1" => expected_output_for_child1,
+            "child2" => expected_output_for_child2,
+            "child3" => expected_output_for_child3,
+            _ => {
+                unreachable!()
+            }
+        };
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output

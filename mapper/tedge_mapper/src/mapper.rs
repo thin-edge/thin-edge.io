@@ -17,11 +17,11 @@ pub struct MapperConfig {
 }
 
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
-    Topic::new(topic_name).expect("This is a valid topic name")
+    Topic::new(topic_name).expect("Invalid topic name")
 }
 
 pub fn make_valid_topic_filter_or_panic(filter_name: &str) -> TopicFilter {
-    TopicFilter::new(filter_name).expect("This is a valid topic filter name")
+    TopicFilter::new(filter_name).expect("Invalid topic filter name")
 }
 
 pub async fn create_mapper<'a>(
@@ -180,14 +180,14 @@ fn get_child_id_from_topic(topic: String) -> Option<String> {
 mod tests {
     use super::*;
     use std::time::Duration;
-    use tokio::time::sleep;
     use test_case::test_case;
+    use tokio::time::sleep;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
     #[test_case("tedge/measurements/", Some("".to_string()); "invalid child id (empty value)")]
     #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
     #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
-    fn extract_invalid_child_id(topic: &str, expected_child_id: Option<String>) {
+    fn extract_child_id(topic: &str, expected_child_id: Option<String>) {
         let in_topic = topic.to_string();
         let child_id = get_child_id_from_topic(in_topic);
         assert_eq!(child_id, expected_child_id)
