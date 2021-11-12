@@ -53,7 +53,7 @@ class Cumulocity(object):
         params = {
             "fragmentType": "c8y_IsDevice",
             "type": type,
-            "pageSize":100,
+            "pageSize": 100,
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
@@ -68,6 +68,29 @@ class Cumulocity(object):
             if device_id in device['name']:
                 return device
         return None
+
+    def get_child_device_of_thin_edge_device_by_name(self, thin_edge_device_id: str, child_device_id: str):
+        self.device_fragment = self.get_thin_edge_device_by_name(
+            thin_edge_device_id)
+        internal_id = self.device_fragment['id']
+        child_devices = self.to_json_response(requests.get(
+            url="{}/inventory/managedObjects/{}/childDevices".format(self.c8y_url, internal_id), auth=self.auth))
+        for child_device in child_devices['references']:
+            if child_device_id in child_device['managedObject']['name']:
+                return child_device['managedObject']
+
+        return None
+
+    def get_last_measurements_from_device(self, device_internal_id: str):
+        params = {
+            "source": device_internal_id,
+            "pageSize": 1,
+            "revert": True
+        }
+        res = requests.get(
+            url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
+        measurements_json = self.to_json_response(res)
+        return measurements_json['measurements'][0]
 
 
 class EnvironmentC8y(BaseTest):
