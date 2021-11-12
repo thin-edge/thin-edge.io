@@ -1,4 +1,5 @@
 import json
+import re
 from pysys.constants import FAILED
 import requests
 from pysys.basetest import BaseTest
@@ -91,6 +92,12 @@ class Cumulocity(object):
             url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
         measurements_json = self.to_json_response(res)
         return measurements_json['measurements'][0]
+
+    def delete_managed_object_by_internal_id(self, internal_id: str):
+        res = requests.delete(
+            url="{}/inventory/managedObjects/{}".format(self.c8y_url, internal_id), auth=self.auth)
+        if res.status_code != 204 or res.status_code != 404:
+            res.raise_for_status()
 
 
 class EnvironmentC8y(BaseTest):
