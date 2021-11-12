@@ -80,13 +80,13 @@ impl Downloader {
         })
         .await?;
         let mut response = response;
-        let mut file = File::create(self.target_filename.as_path())?;
 
-        if let Some(file_len) = response.content_length() {
-            if file_len > 0 {
-                pre_allocate_space(&file, file_len)?;
-            }
+        let file_len = match response.content_length() {
+            Some(len) => len as u64,
+            None => 0,
         };
+        let mut file =
+            create_file_and_try_pre_allocate_space(self.target_filename.as_path(), file_len)?;
 
         while let Some(chunk) = response.chunk().await? {
             if let Err(err) = file.write_all(&chunk) {
@@ -111,24 +111,32 @@ impl Downloader {
     }
 }
 
-fn pre_allocate_space(file: &File, file_len: u64) -> Result<(), DownloadError> {
-    let tmpstats = statvfs::statvfs("/tmp")?;
-    // Reserve 5% of total disk space
-    let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
-    let usable_disk_space =
-        tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+fn create_file_and_try_pre_allocate_space(
+    file_path: &Path,
+    file_len: u64,
+) -> Result<File, DownloadError> {
+    let file = File::create(file_path)?;
+    if file_len > 0 {
+        if let Some(root) = file_path.parent() {
+            let tmpstats = statvfs::statvfs(root)?;
+            // Reserve 5% of total disk space
+            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
+            let usable_disk_space =
+                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
 
-    if file_len >= usable_disk_space {
-        return Err(DownloadError::InsufficientSpace);
+            if file_len >= usable_disk_space {
+                return Err(DownloadError::InsufficientSpace);
+            }
+            // Reserve diskspace
+            let _ = fallocate(
+                file.as_raw_fd(),
+                FallocateFlags::empty(),
+                0,
+                file_len as i64,
+            );
+        }
     }
-    // Reserve diskspace
-    fallocate(
-        file.as_raw_fd(),
-        FallocateFlags::empty(),
-        0,
-        file_len as i64,
-    )
-    .map_err(|e| DownloadError::FromNix(e))
+    Ok(file)
 }
 
 #[cfg(test)]
@@ -141,11 +149,8 @@ mod tests {
     use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
-    use std::{
-        fs::File,
-        path::{Path, PathBuf},
-    };
-    use tempfile::TempDir;
+    use std::path::{Path, PathBuf};
+    use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
 
     #[test]
@@ -212,11 +217,10 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
-        let mut file = File::create("/tmp/some_source_file.txt")?;
-        create_file_with_size(&mut file, 10 * 1024 * 1024)?;
+        let file = create_file_with_size(10 * 1024 * 1024)?;
 
         let _mock1 = mock("GET", "/some_file.txt")
-            .with_body_from_file("/tmp/some_source_file.txt")
+            .with_body_from_file(file.into_temp_path())
             .create();
 
         let name = "test_download_with_length";
@@ -238,11 +242,10 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
-        let mut file = File::create("/tmp/data_source_file.txt")?;
-        create_file_with_size(&mut file, 10)?;
+        let file = create_file_with_size(10)?;
 
         let _mock1 = mock("GET", "/some_file.txt")
-            .with_body_from_file("/tmp/data_source_file.txt")
+            .with_body_from_file(file.into_temp_path())
             .create();
 
         let name = "test_download_with_length";
@@ -266,14 +269,14 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_without_content_length() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/tmp/some_file.txt").create();
+        let _mock1 = mock("GET", "/some_file.txt").create();
 
         let name = "test_download_without_length";
         let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/tmp/some_file.txt");
+        target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
@@ -394,9 +397,9 @@ mod tests {
         Ok(())
     }
 
-    fn create_file_with_size(file: &mut File, size: usize) -> anyhow::Result<()> {
+    fn create_file_with_size(size: usize) -> Result<NamedTempFile, anyhow::Error> {
+        let mut file = NamedTempFile::new()?;
         let data: String = "Some data!".into();
-        dbg!(data.len());
         let loops = size / data.len();
         let mut buffer = String::with_capacity(size);
         for _ in 0..loops {
@@ -405,6 +408,6 @@ mod tests {
 
         file.write_all(buffer.as_bytes())?;
 
-        Ok(())
+        Ok(file)
     }
 }

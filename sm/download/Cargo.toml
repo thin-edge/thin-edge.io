@@ -8,7 +8,6 @@ description = "download_manager"
 
 [dependencies]
 backoff = { version = "0.3", features = ["tokio"] }
-fs2="0.4.3"
 json_sm = { path = "../json_sm" }
 log = "0.4"
 nix = "0.23"
