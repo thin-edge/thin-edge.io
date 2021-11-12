@@ -81,3 +81,15 @@ Collectd logs all the messages at `/var/log/syslog`.
 So, the collectd specific logs can be accessed using the `journalctl` as below
 
 `journalctl -u collectd.service`
+
+## Accessing logs remotely
+You can access logs from Cumulocity's "Logs" tab in Device Management. Do to this, go to the device you want to the logs for
+and click on the "Logs" button on the left-hand side. Next, click on the "Request log file" button located in the top right corner. 
+This will bring a dropdown into view where you can select the date and time range, the type of log required as well as filter 
+for any particular words in the logs (such as ERROR) and select the total number of lines to upload.
+
+![Log request dropdown](images/log_request_dropdown.png)
+
+Logs are uploaded in the "Events" tab, where you can download them. 
+
+![Log request events tab](images/log_request_events_tab.png)

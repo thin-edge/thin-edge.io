@@ -269,7 +269,7 @@ fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectErro
     let registration_payload = format!("100,{},{}", device_id, DEVICE_TYPE);
 
     let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
-    options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
+    options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
     let mut acknowledged = false;
@@ -338,7 +338,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
     const REGISTRATION_OK: &str = "200";
 
     let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
-    options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
+    options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
     let mut acknowledged = false;
