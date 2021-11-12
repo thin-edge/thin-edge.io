@@ -162,7 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_content_no_auth() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/tmp/some_file.txt")
+        let _mock1 = mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
@@ -172,7 +172,7 @@ mod tests {
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/tmp/some_file.txt");
+        target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
@@ -190,7 +190,7 @@ mod tests {
     async fn downloader_download_with_content_length() -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
-        let _mock1 = mock("GET", "/tmp/some_file.txt")
+        let _mock1 = mock("GET", "/some_file.txt")
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
 
@@ -199,7 +199,7 @@ mod tests {
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/tmp/some_file.txt");
+        target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
@@ -215,7 +215,7 @@ mod tests {
         let mut file = File::create("/tmp/some_source_file.txt")?;
         create_file_with_size(&mut file, 10 * 1024 * 1024)?;
 
-        let _mock1 = mock("GET", "/tmp/some_source_file.txt")
+        let _mock1 = mock("GET", "/some_file.txt")
             .with_body_from_file("/tmp/some_source_file.txt")
             .create();
 
@@ -224,7 +224,7 @@ mod tests {
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/tmp/some_source_file.txt");
+        target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
@@ -241,7 +241,7 @@ mod tests {
         let mut file = File::create("/tmp/data_source_file.txt")?;
         create_file_with_size(&mut file, 10)?;
 
-        let _mock1 = mock("GET", "/tmp/data_source_file.txt")
+        let _mock1 = mock("GET", "/some_file.txt")
             .with_body_from_file("/tmp/data_source_file.txt")
             .create();
 
@@ -250,7 +250,7 @@ mod tests {
         let target_dir_path = TempDir::new()?;
 
         let mut target_url = mockito::server_url();
-        target_url.push_str("/tmp/data_source_file.txt");
+        target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
