@@ -57,10 +57,10 @@ def delete_device(devname, hub, sas_name):
 
     uri = f"{hub}.azure-devices.net"
 
-    # generate a sharec acces token
+    # generate a sharec access token
     token = generate_sas_token(uri, sas_policy_primary_key_iothub, sas_name, expiry)
 
-    url = f"https://ThinEdgeHub.azure-devices.net/devices/{devname}"
+    url = f"https://{hub}.azure-devices.net/devices/{devname}"
 
     headers = {
         "Content-Type": "application/json",
@@ -77,7 +77,7 @@ def delete_device(devname, hub, sas_name):
         print("Deleted the device")
         print("Device Properties: ", req.text)
     if req.status_code == 204:
-        print("Unconditinally deleted the device")
+        print("Unconditionally deleted the device")
         print("Deleted Device Properties: ", req.text)
     elif req.status_code == 404:
         print("Device is not there, not deleted")
@@ -101,7 +101,7 @@ def upload_device_cert(devname, thprint, hub, sas_name, verbose):
 
     uri = f"{hub}.azure-devices.net"
 
-    # generate a sharec acces token
+    # generate a sharec access token
     token = generate_sas_token(uri, sas_policy_primary_key_iothub, sas_name, expiry)
 
     # print(token)
@@ -115,7 +115,7 @@ def upload_device_cert(devname, thprint, hub, sas_name, verbose):
 
     # Now upload the certificate
 
-    url = f"https://ThinEdgeHub.azure-devices.net/devices/{devname}"
+    url = f"https://{hub}.azure-devices.net/devices/{devname}"
 
     headers = {
         "Content-Type": "application/json",
