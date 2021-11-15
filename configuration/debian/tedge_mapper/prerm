@@ -9,24 +9,27 @@ print_hint() {
     echo "Known mappers are: tedge-mapper-c8y, tedge-mapper-collectd, tedge-mapper-sm-c8y, tedge-mapper-az".
 }
 
-if systemctl is-active --quiet tedge-mapper-c8y; then
-    print_hint "tedge-mapper-c8y"
-    exit 1
-fi
+# Reenable the services only if systemctl is available
+if command -v systemctl >/dev/null; then
+    if systemctl is-active --quiet tedge-mapper-c8y; then
+        print_hint "tedge-mapper-c8y"
+        exit 1
+    fi
 
-if systemctl is-active --quiet tedge-mapper-sm-c8y; then
-    print_hint "tedge-mapper-sm-c8y"
-    exit 1
-fi
+    if systemctl is-active --quiet tedge-mapper-sm-c8y; then
+        print_hint "tedge-mapper-sm-c8y"
+        exit 1
+    fi
 
-if systemctl is-active --quiet tedge-mapper-collectd; then
-    print_hint "tedge-mapper-collectd"
-    exit 1
-fi
+    if systemctl is-active --quiet tedge-mapper-collectd; then
+        print_hint "tedge-mapper-collectd"
+        exit 1
+    fi
 
-if systemctl is-active --quiet tedge-mapper-az; then
-    print_hint "tedge-mapper-az"
-    exit 1
+    if systemctl is-active --quiet tedge-mapper-az; then
+        print_hint "tedge-mapper-az"
+        exit 1
+    fi
 fi
 
 #DEBHELPER#

@@ -35,6 +35,18 @@ pub(crate) enum SMCumulocityMapperError {
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
 
+    #[error("Invalid date in file name: {0}")]
+    InvalidDateInFileName(String),
+
+    #[error("Invalid path. Not UTF-8.")]
+    InvalidUtf8Path,
+
+    #[error(transparent)]
+    FromChronoParse(#[from] chrono::ParseError),
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
     #[error("Request timed out")]
     RequestTimeout,
 }
