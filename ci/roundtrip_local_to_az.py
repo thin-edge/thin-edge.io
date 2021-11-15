@@ -49,6 +49,7 @@ else:
 logger = logging.getLogger("roundtrip")
 logger.setLevel(level=logging.INFO)
 
+
 def publish_az(amount, topic, key):
     """Publish to Azure topic"""
 
@@ -65,7 +66,7 @@ def publish_az(amount, topic, key):
             logger.error("Failed to publish")
             sys.exit(1)
 
-        logger.info("Published message: %s"%message)
+        logger.info("Published message: %s" % message)
         time.sleep(0.05)
 
 
@@ -98,7 +99,9 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     }
 
 
-def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, verbose, key):
+def retrieve_queue_az(
+    sas_policy_name, service_bus_name, queue_name, amount, verbose, key
+):
     """Get the published messages back from a service bus queue"""
 
     if "SASKEYQUEUE" in os.environ:
@@ -119,7 +122,9 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     # See also:
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
 
-    url = f"https://{service_bus_name}.servicebus.windows.net/{queue_name}/messages/head"
+    url = (
+        f"https://{service_bus_name}.servicebus.windows.net/{queue_name}/messages/head"
+    )
 
     print(f"Downloading mesages from {url}")
     headers = {
@@ -134,7 +139,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
         try:
             req = requests.delete(url, headers=headers)
         except requests.exceptions.ConnectionError as e:
-            print("Exception: ",e)
+            print("Exception: ", e)
             print("Connection error: We wait for some seconds and then continue ...")
             time.sleep(10)
             continue
@@ -156,7 +161,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
                 value = None
 
             print(
-                f"Got message {number} from {queuetime} message is \"{text}\" value: \"{value}\""
+                f'Got message {number} from {queuetime} message is "{text}" value: "{value}"'
             )
             messages.append(value)
 
@@ -203,26 +208,33 @@ class EventHub:
             logger.error("Error environment variable AZUREEVENTHUB not set")
             sys.exit(1)
 
-
         self.message_key = message_key
         self.amount = amount
-        consumer_group = '$Default'
-        timeout = 10 # 10s : minimum timeout
+        consumer_group = "$Default"
+        timeout = 10  # 10s : minimum timeout
 
-        self.client = EventHubConsumerClient.from_connection_string(connection_str, consumer_group, eventhub_name=eventhub_name, idle_timeout=timeout)
+        self.client = EventHubConsumerClient.from_connection_string(
+            connection_str,
+            consumer_group,
+            eventhub_name=eventhub_name,
+            idle_timeout=timeout,
+        )
 
         self.received_messages = []
 
-
     def on_error(self, partition_context, event):
-        logger.error("Received Error from partition {}".format(partition_context.partition_id))
+        logger.error(
+            "Received Error from partition {}".format(partition_context.partition_id)
+        )
         logger.error(f"Event: {event}")
 
     def on_event(self, partition_context, event):
-        logger.debug("Received event from partition {}".format(partition_context.partition_id))
+        logger.debug(
+            "Received event from partition {}".format(partition_context.partition_id)
+        )
         logger.debug(f"Event: {event}")
 
-        if event==None:
+        if event == None:
             logger.debug("Timeout: Exiting event loop ... ")
             self.client.close()
             return
@@ -232,22 +244,21 @@ class EventHub:
         jevent = event.body_as_json()
 
         message = jevent.get(self.message_key)
-        if  message != None:
-            logger.info("Matched key: %s"%message)
+        if message != None:
+            logger.info("Matched key: %s" % message)
             self.received_messages.append(message)
         else:
-            logger.info("Not matched key: %s"%jevent)
-
+            logger.info("Not matched key: %s" % jevent)
 
     def read_from_hub(self, start):
-        """ Read data from the event hub
+        """Read data from the event hub
 
-            Possible values for start:
-            start = "-1" : Read all messages
-            start = "@latest" : Read only the latest messages
-            start = datetime.datetime.now(tz=datetime.timezone.utc) : use current sdate
+        Possible values for start:
+        start = "-1" : Read all messages
+        start = "@latest" : Read only the latest messages
+        start = datetime.datetime.now(tz=datetime.timezone.utc) : use current sdate
 
-            When no messages are received the client.receive will return.
+        When no messages are received the client.receive will return.
         """
 
         with self.client:
@@ -269,10 +280,11 @@ class EventHub:
             print("Validation FAILED")
             return False
 
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser()
-    parser.add_argument('method', choices=['eventhub', 'servicebus'])
+    parser.add_argument("method", choices=["eventhub", "servicebus"])
     parser.add_argument("-b", "--bus", help="Service Bus Name")
     parser.add_argument("-p", "--policy", help="SAS Policy Name")
     parser.add_argument("-q", "--queue", help="Queue Name")
@@ -289,7 +301,7 @@ def main():
     verbose = args.verbose
     method = args.method
 
-    if method == 'servicebus':
+    if method == "servicebus":
         if not "SASKEYQUEUE" in os.environ:
             print("Error environment variable SASKEYQUEUE not set")
             sys.exit(1)
@@ -299,9 +311,9 @@ def main():
     # In case that we want to avoid the azure mapper
     # mqtt_topic = "az/messages/events/"
 
-    message_key="thin-edge-azure-roundtrip"
+    message_key = "thin-edge-azure-roundtrip"
 
-    if method == 'eventhub':
+    if method == "eventhub":
 
         eh = EventHub(message_key=message_key, amount=amount)
 
@@ -313,7 +325,7 @@ def main():
         if not eh.validate():
             sys.exit(1)
 
-    elif method == 'servicebus':
+    elif method == "servicebus":
 
         publish_az(amount, mqtt_topic, message_key)
 
