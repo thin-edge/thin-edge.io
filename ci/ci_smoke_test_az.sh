@@ -17,6 +17,9 @@ set -e
 # lets avoid to create a new certifiate here ()
 # ./ci/configure_bridge.sh
 
+#set temporarily here
+sudo tedge config set az.url ThinEdgeCiHub.azure-devices.net
+
 # Read device thumbprint from command line
 THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
 echo "DEVICE Thumbprint is " $THUMB
