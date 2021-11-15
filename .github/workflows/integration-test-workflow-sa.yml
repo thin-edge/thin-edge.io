@@ -12,6 +12,10 @@ jobs:
     runs-on: [self-hosted, Linux, ARM, onsite]
 
     steps:
+
+      - name: checkout
+        uses: actions/checkout@v2
+
       - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
 
