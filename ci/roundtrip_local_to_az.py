@@ -175,7 +175,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
 
 class EventHub:
 
-    def __init__(self):
+    def __init__(self, message_key, amount):
         # https://pypi.org/project/azure-eventhub
 
         # Docs:
@@ -189,11 +189,22 @@ class EventHub:
             logger.error("Error environment variable AZUREENDPOINT not set")
             sys.exit(1)
 
+        if "AZUREEVENTHUB" in os.environ:
+            eventhub_name = os.environ["AZUREEVENTHUB"]
+        else:
+            logger.error("Error environment variable AZUREEVENTHUB not set")
+            sys.exit(1)
+
+
+        self.message_key = message_key
+        self.amount = amount
         consumer_group = '$Default'
-        eventhub_name = 'iothub-ehub-thinedgeci-16036845-ea2f9f07b2'
-        timeout = 10
+        #eventhub_name = 'iothub-ehub-thinedgeci-16036845-ea2f9f07b2'
+        timeout = 10 # 10s : minimum timeout
 
         self.client = EventHubConsumerClient.from_connection_string(connection_str, consumer_group, eventhub_name=eventhub_name, idle_timeout=timeout)
+
+        self.received_messages = []
 
 
     def on_error(self, partition_context, event):
@@ -202,9 +213,8 @@ class EventHub:
 
     def on_event(self, partition_context, event):
         logger.debug("Received event from partition {}".format(partition_context.partition_id))
+        logger.debug(f"Event: {event}")
 
-
-        logger.info(f"Event: {event}")
         if event==None:
             logger.debug("Timeout: Exiting event loop ... ")
             self.client.close()
@@ -212,8 +222,13 @@ class EventHub:
         partition_context.update_checkpoint(event)
 
         jevent = event.body_as_json()
-        logger.info("*** %s"%jevent)
-        logger.info("*** %s"%jevent.get('thin-edge-azure-roundtrip'))
+
+        message = jevent.get(self.message_key)
+        if  message != None:
+            logger.info("Matched key: %s"%message)
+            self.received_messages.append(message)
+        else:
+            logger.info("Not matched key: %s"%jevent)
 
 
     def read_from_hub(self, start):
@@ -230,6 +245,14 @@ class EventHub:
                 max_wait_time=10,
             )
             logger.info("Exiting event loop")
+
+    def validate(self):
+        if self.received_messages == list(range(self.amount)):
+            print("Validation PASSED")
+            return True
+        else:
+            print("Validation FAILED")
+            return False
 
 def main():
     """Main entry point"""
@@ -260,7 +283,7 @@ def main():
 
     message_key="thin-edge-azure-roundtrip"
 
-    eh = EventHub()
+    eh = EventHub(message_key=message_key, amount=amount)
 
     start = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -274,6 +297,8 @@ def main():
     #    sys.exit(1)
 
     eh.read_from_hub(start)
+    if not eh.validate():
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
