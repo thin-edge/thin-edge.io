@@ -25,6 +25,11 @@ set -e
 THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
 echo "DEVICE Thumbprint is " $THUMB
 
+
+python3 -m venv ~/env-eventhub
+source ~/env-eventhub/bin/activate
+pip install azure-eventhub
+
 ./ci/az_upload_device_cert.py -d octocatrpi3 -t $THUMB -u ThinEdgeHub -s iothubowner
 
 sudo tedge connect az
@@ -33,4 +38,5 @@ sudo tedge connect az
 
 sudo tedge disconnect az
 
+deactivate
 

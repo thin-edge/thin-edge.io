@@ -201,3 +201,5 @@ jobs:
         env:
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
