@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 """Perform a full roundtrip of messages from thin-edge to Azure IoT
 
@@ -25,6 +25,15 @@ import time
 import urllib
 
 import requests
+
+import logging
+from azure.eventhub import EventHubConsumerClient
+import datetime
+
+logger = logging.getLogger("azure.eventhub")
+debug = True
+if debug:
+    logging.basicConfig(level=logging.INFO)
 
 
 def publish_az(amount, topic, key):
@@ -161,6 +170,64 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
         return False
 
 
+class EventHub:
+
+    def __init__(self):
+        # https://pypi.org/project/azure-eventhub
+
+        # Docs:
+        # https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-read-builtin
+        # https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html
+        # https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html#azure.eventhub.EventData
+
+        if "AZUREENDPOINT" in os.environ:
+            connection_str = os.environ["AZUREENDPOINT"]
+        else:
+            print("Error environment variable AZUREENDPOINT not set")
+            sys.exit(1)
+
+        consumer_group = '$Default'
+        eventhub_name = 'iothub-ehub-thinedgeci-16036845-ea2f9f07b2'
+        timeout = 10
+
+        self.client = EventHubConsumerClient.from_connection_string(connection_str, consumer_group, eventhub_name=eventhub_name, idle_timeout=timeout)
+
+
+    def on_error(self, partition_context, event):
+        logger.error("Received Error from partition {}".format(partition_context.partition_id))
+        logger.error(f"Event: {event}")
+
+    def on_event(self, partition_context, event):
+        logger.info("Received event from partition {}".format(partition_context.partition_id))
+
+
+        logger.info(f"Event: {event}")
+        if event==None:
+            print("Dropping of you ... ")
+            self.client.close()
+
+        partition_context.update_checkpoint(event)
+
+        jevent = event.body_as_json()
+        print("***", jevent)
+        print("***", jevent.get('thin-edge-azure-roundtrip'))
+
+
+    def read_from_hub(self, start):
+
+        with self.client:
+            #start = "-1" # all
+            #start = "@latest" # latest
+            #start = datetime.datetime(2021, 11, 11, 11, 2, 2, 20000, tzinfo=datetime.timezone.utc)
+            #start = datetime.datetime.now(tz=datetime.timezone.utc)
+            self.client.receive(
+                on_event=self.on_event,
+                on_error=self.on_error,
+                starting_position=start,  # "-1" is from the beginning of the partition.
+                max_wait_time=10,
+            )
+            print("Exiting event loop")
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser()
@@ -179,9 +246,9 @@ def main():
     queue_name = args.queue
     verbose = args.verbose
 
-    if not "SASKEYQUEUE" in os.environ:
-        print("Error environment variable SASKEYQUEUE not set")
-        sys.exit(1)
+    #if not "SASKEYQUEUE" in os.environ:
+    #    print("Error environment variable SASKEYQUEUE not set")
+    #    sys.exit(1)
 
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"
@@ -190,15 +257,20 @@ def main():
 
     message_key="thin-edge-azure-roundtrip"
 
+    eh = EventHub()
+
+    start = datetime.datetime.now(tz=datetime.timezone.utc)
+
     publish_az(amount, mqtt_topic, message_key)
 
-    result = retrieve_queue_az(
-        sas_policy_name, service_bus_name, queue_name, amount, verbose, message_key
-    )
+    #result = retrieve_queue_az(
+    #    sas_policy_name, service_bus_name, queue_name, amount, verbose, message_key
+    #)
 
-    if not result:
-        sys.exit(1)
+    #if not result:
+    #    sys.exit(1)
 
+    eh.read_from_hub(start)
 
 if __name__ == "__main__":
     main()
