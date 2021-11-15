@@ -30,16 +30,19 @@ import logging
 from azure.eventhub import EventHubConsumerClient
 import datetime
 
-logger = logging.getLogger("azure.eventhub")
-debug = True
+debug = False
 if debug:
     logging.basicConfig(level=logging.INFO)
+else:
+    logging.basicConfig()
 
+logger = logging.getLogger("roundtrip")
+logger.setLevel(level=logging.INFO)
 
 def publish_az(amount, topic, key):
     """Publish to Azure topic"""
 
-    print(f"Publishing messages to topic {topic}")
+    logger.info(f"Publishing messages to topic {topic}")
 
     for i in range(amount):
         message = f'{{"{key}": {i} }}'
@@ -49,10 +52,10 @@ def publish_az(amount, topic, key):
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError:
-            print("Failed to publish")
+            logger.error("Failed to publish")
             sys.exit(1)
 
-        print("Published message: ", message)
+        logger.info("Published message: %s"%message)
         time.sleep(0.05)
 
 
@@ -183,7 +186,7 @@ class EventHub:
         if "AZUREENDPOINT" in os.environ:
             connection_str = os.environ["AZUREENDPOINT"]
         else:
-            print("Error environment variable AZUREENDPOINT not set")
+            logger.error("Error environment variable AZUREENDPOINT not set")
             sys.exit(1)
 
         consumer_group = '$Default'
@@ -198,19 +201,19 @@ class EventHub:
         logger.error(f"Event: {event}")
 
     def on_event(self, partition_context, event):
-        logger.info("Received event from partition {}".format(partition_context.partition_id))
+        logger.debug("Received event from partition {}".format(partition_context.partition_id))
 
 
         logger.info(f"Event: {event}")
         if event==None:
-            print("Dropping of you ... ")
+            logger.debug("Timeout: Exiting event loop ... ")
             self.client.close()
 
         partition_context.update_checkpoint(event)
 
         jevent = event.body_as_json()
-        print("***", jevent)
-        print("***", jevent.get('thin-edge-azure-roundtrip'))
+        logger.info("*** %s"%jevent)
+        logger.info("*** %s"%jevent.get('thin-edge-azure-roundtrip'))
 
 
     def read_from_hub(self, start):
@@ -226,7 +229,7 @@ class EventHub:
                 starting_position=start,  # "-1" is from the beginning of the partition.
                 max_wait_time=10,
             )
-            print("Exiting event loop")
+            logger.info("Exiting event loop")
 
 def main():
     """Main entry point"""
