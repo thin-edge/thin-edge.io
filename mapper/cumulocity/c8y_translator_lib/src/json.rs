@@ -30,35 +30,26 @@ pub enum CumulocityJsonError {
 /// Converts from thin-edge Json to c8y_json
 pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;
+    Ok(c8y_vec)
+}
+
+/// Converts from thin-edge Json to c8y_json with child id information
+pub fn from_thin_edge_json_with_child(
+    input: &str,
+    child_id: &str,
+) -> Result<String, CumulocityJsonError> {
+    let timestamp = WallClock.now();
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, Some(child_id))?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
     timestamp: DateTime<FixedOffset>,
+    maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(timestamp);
-    let () = parse_str(input, &mut serializer)?;
-    Ok(serializer.into_string()?)
-}
-
-/// Converts from thin-edge Json to c8y_json for child device
-pub fn from_thin_edge_json_with_child(
-    input: &str,
-    child_id: &str,
-) -> Result<String, CumulocityJsonError> {
-    let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_child_with_timestamp(input, timestamp, child_id)?;
-    Ok(c8y_vec)
-}
-
-fn from_thin_edge_json_with_child_with_timestamp(
-    input: &str,
-    timestamp: DateTime<FixedOffset>,
-    child_id: &str,
-) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new_with_child(timestamp, child_id);
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -79,7 +70,8 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp);
+        let output =
+            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -147,7 +139,8 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp);
+        let output =
+            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -252,8 +245,7 @@ mod tests {
     ;"child device single value with timestamp thin-edge json translation")]
     fn check_value_translation_for_child_device(thin_edge_json: &str, child_id: &str) {
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
-        let output =
-            from_thin_edge_json_with_child_with_timestamp(thin_edge_json, timestamp, child_id);
+        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, Some(child_id));
 
         let expected_output_for_child1 = json!({
             "type": "ThinEdgeMeasurement",

@@ -34,7 +34,7 @@ pub enum MeasurementStreamError {
 }
 
 impl C8yJsonSerializer {
-    pub fn new(default_timestamp: DateTime<FixedOffset>) -> Self {
+    pub fn new(default_timestamp: DateTime<FixedOffset>, maybe_child_id: Option<&str>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
         let mut json = JsonWriter::with_capacity(capa);
 
@@ -42,33 +42,19 @@ impl C8yJsonSerializer {
         let _ = json.write_key("type");
         let _ = json.write_str("ThinEdgeMeasurement");
 
-        Self {
-            json,
-            is_within_group: false,
-            timestamp_present: false,
-            default_timestamp,
+        if let Some(child_id) = maybe_child_id {
+            // In case the measurement is addressed to a child-device use fragment
+            // "externalSource" to tell c8Y identity API to use child-device
+            // object referenced by "externalId", instead of root device object
+            // referenced by MQTT client's Device ID.
+            let _ = json.write_key("externalSource");
+            let _ = json.write_open_obj();
+            let _ = json.write_key("externalId");
+            let _ = json.write_str(child_id);
+            let _ = json.write_key("type");
+            let _ = json.write_str("c8y_Serial");
+            let _ = json.write_close_obj();
         }
-    }
-
-    pub fn new_with_child(default_timestamp: DateTime<FixedOffset>, child_id: &str) -> Self {
-        let capa = 1024;
-        let mut json = JsonWriter::with_capacity(capa);
-
-        json.write_open_obj();
-        let _ = json.write_key("type");
-        let _ = json.write_str("ThinEdgeMeasurement");
-
-        // In case the measurement is addressed to a child-device use fragment
-        // "externalSource" to tell c8Y identity API to use child-device
-        // object referenced by "externalId", instead of root device object
-        // referenced by MQTT client's Device ID.
-        let _ = json.write_key("externalSource");
-        let _ = json.write_open_obj();
-        let _ = json.write_key("externalId");
-        let _ = json.write_str(child_id);
-        let _ = json.write_key("type");
-        let _ = json.write_str("c8y_Serial");
-        let _ = json.write_close_obj();
 
         Self {
             json,
@@ -173,7 +159,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
 
@@ -201,7 +187,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
         serializer.visit_start_group("location")?;
@@ -254,7 +240,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
@@ -275,7 +261,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
 
         let expected_output = json!({
@@ -299,7 +285,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
 
         let expected_err = serializer.visit_timestamp(timestamp);
@@ -319,7 +305,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
 
@@ -341,7 +327,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
@@ -364,7 +350,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp);
+        let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
@@ -387,7 +373,7 @@ mod tests {
             .ymd(2021, 6, 22)
             .and_hms_nano(17, 3, 14, 123456789);
 
-        let mut serializer = C8yJsonSerializer::new_with_child(timestamp, "child1");
+        let mut serializer = C8yJsonSerializer::new(timestamp, Some("child1"));
         serializer.visit_timestamp(timestamp)?;
 
         let expected_output = json!({

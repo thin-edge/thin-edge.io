@@ -3,6 +3,8 @@ use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use mqtt_client::{Message, Topic};
 
+const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
+
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
 }
@@ -26,7 +28,7 @@ impl Converter for CumulocityConverter {
 
     fn convert_child_device_creation(&self, child_id: &str) -> Option<Message> {
         Some(Message::new(
-            &Topic::new("c8y/s/us").unwrap(),
+            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
             format!("101,{},{},thin-edge.io-child", child_id, child_id),
         ))
     }

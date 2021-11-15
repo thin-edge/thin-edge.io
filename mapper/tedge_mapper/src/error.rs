@@ -40,7 +40,4 @@ pub enum ConversionError {
 
     #[error(transparent)]
     SizeThresholdExceeded(#[from] SizeThresholdExceeded),
-
-    #[error(transparent)]
-    MqttClientError(#[from] MqttClientError),
 }
