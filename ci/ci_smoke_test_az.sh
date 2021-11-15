@@ -30,11 +30,12 @@ python3 -m venv ~/env-eventhub
 source ~/env-eventhub/bin/activate
 pip install azure-eventhub
 
-./ci/az_upload_device_cert.py -d octocatrpi3 -t $THUMB -u ThinEdgeHub -s iothubowner
+./ci/az_upload_device_cert.py -d octocatrpi3 -t $THUMB -u ThinEdgeCiHub -s iothubowner
 
 sudo tedge connect az
 
-./ci/roundtrip_local_to_az.py -p sas_policy2 -b thinedgebus -q testqueue2
+#./ci/roundtrip_local_to_az.py -p sas_policy2 -b thinedgebus -q testqueue2
+./ci/roundtrip_local_to_az.py eventhub
 
 sudo tedge disconnect az
 
