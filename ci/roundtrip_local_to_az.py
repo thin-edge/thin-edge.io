@@ -257,6 +257,7 @@ class EventHub:
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser()
+    parser.add_argument('method', choices=['eventhub', 'servicebus'])
     parser.add_argument("-b", "--bus", help="Service Bus Name")
     parser.add_argument("-p", "--policy", help="SAS Policy Name")
     parser.add_argument("-q", "--queue", help="Queue Name")
@@ -271,10 +272,12 @@ def main():
     service_bus_name = args.bus
     queue_name = args.queue
     verbose = args.verbose
+    method = args.method
 
-    #if not "SASKEYQUEUE" in os.environ:
-    #    print("Error environment variable SASKEYQUEUE not set")
-    #    sys.exit(1)
+    if method == 'servicebus':
+        if not "SASKEYQUEUE" in os.environ:
+            print("Error environment variable SASKEYQUEUE not set")
+            sys.exit(1)
 
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"
@@ -283,22 +286,29 @@ def main():
 
     message_key="thin-edge-azure-roundtrip"
 
-    eh = EventHub(message_key=message_key, amount=amount)
+    if method == 'eventhub':
 
-    start = datetime.datetime.now(tz=datetime.timezone.utc)
+        eh = EventHub(message_key=message_key, amount=amount)
 
-    publish_az(amount, mqtt_topic, message_key)
+        start = datetime.datetime.now(tz=datetime.timezone.utc)
 
-    #result = retrieve_queue_az(
-    #    sas_policy_name, service_bus_name, queue_name, amount, verbose, message_key
-    #)
+        publish_az(amount, mqtt_topic, message_key)
 
-    #if not result:
-    #    sys.exit(1)
+        eh.read_from_hub(start)
+        if not eh.validate():
+            sys.exit(1)
 
-    eh.read_from_hub(start)
-    if not eh.validate():
-        sys.exit(1)
+    elif method == 'servicebus':
+
+        publish_az(amount, mqtt_topic, message_key)
+
+        result = retrieve_queue_az(
+            sas_policy_name, service_bus_name, queue_name, amount, verbose, message_key
+        )
+
+        if not result:
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
