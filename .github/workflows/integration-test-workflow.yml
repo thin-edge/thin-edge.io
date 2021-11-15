@@ -31,6 +31,9 @@ jobs:
           name: debian-packages-amd64
           path: debian-package_unpack
 
+      - name: Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
         # We need to continue when there is no tedge already installed
@@ -115,7 +118,7 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: Workaround Stop collectd mapper
+      - name: Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
 
       - name: disconnect c8y

@@ -47,6 +47,19 @@ jobs:
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
+      - name: Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: disconnect az
+        run: sudo tedge disconnect az
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge packages
