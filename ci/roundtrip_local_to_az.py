@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 
-"""Perform a full roundtrip of messages from thin-edge to Azure IoT
+"""Perform a full roundtrip of messages from thin-edge to Azure IoT.
 
 We publish with thin-edge to Azure IoT; then route the messages to a
 Service Bus Queue; from there we retrieve the messages via a REST
 Interface and compare them with what we have sent in the beginning.
 
+Alternatively, we can use the Azure SDK to access the IoT Hub directly.
+
 When this script is called you need to be already connected to Azure.
 
 Call example:
 $ ./roundtrip_local_to_az.py  -a 10 -p sas_policy -b thinedgebus -q testqueue
+    Set Env:
+    - SASKEYQUEUE : Shared Access Key to the service bus queue
+
+Alternatively:
+./ci/roundtrip_local_to_az.py eventhub
+    Set Env:
+    - AZUREENDPOINT : Endpoint descritpion string copied from the Azure UI
+    - AZUREEVENTHUB : Name of the IoT Hub
 """
 
 import argparse
@@ -59,14 +69,17 @@ def publish_az(amount, topic, key):
         time.sleep(0.05)
 
 
-# Function taken from :
-# https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
-# TODO : Care about license for this part
 def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     """
     Returns an authorization token dictionary
     for making calls to Event Hubs REST API.
+
+    Function copied from Microsoft documentation
+    https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
+    TODO : Care about license for this part
+    See also : https://docs.microsoft.com/en-us/legal/termsofuse
     """
+
     uri = urllib.parse.quote_plus(
         "https://{}.servicebus.windows.net/{}".format(sb_name, eh_name)
     )
@@ -103,15 +116,8 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
     if verbose:
         print("Token", token)
 
-    # See also
+    # See also:
     # https://docs.microsoft.com/en-us/rest/api/servicebus/receive-and-delete-message-destructive-read
-
-    # Do it manally with curl:
-    # curl --request DELETE \
-    # --url "http{s}://thinedgebus.servicebus.windows.net/testqueue/messages/head" \
-    # --header "Accept: application/json" \
-    # --header "Content-Type: application/json;charset=utf-8" \
-    # --header "Authorization: $SASTOKEN"     --verbose
 
     url = f"https://{service_bus_name}.servicebus.windows.net/{queue_name}/messages/head"
 
@@ -128,7 +134,7 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
         try:
             req = requests.delete(url, headers=headers)
         except requests.exceptions.ConnectionError as e:
-            print(e)
+            print("Exception: ",e)
             print("Connection error: We wait for some seconds and then continue ...")
             time.sleep(10)
             continue
@@ -174,14 +180,16 @@ def retrieve_queue_az(sas_policy_name, service_bus_name, queue_name, amount, ver
 
 
 class EventHub:
+    """Class to host all properties and access functions for an IoT Hub/ Eventhub
+    Needs https://pypi.org/project/azure-eventhub
+
+    Docs:
+        https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-read-builtin
+        https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html
+        https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html#azure.eventhub.EventData
+    """
 
     def __init__(self, message_key, amount):
-        # https://pypi.org/project/azure-eventhub
-
-        # Docs:
-        # https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-messages-read-builtin
-        # https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html
-        # https://azuresdkdocs.blob.core.windows.net/$web/python/azure-eventhub/latest/azure.eventhub.html#azure.eventhub.EventData
 
         if "AZUREENDPOINT" in os.environ:
             connection_str = os.environ["AZUREENDPOINT"]
@@ -199,7 +207,6 @@ class EventHub:
         self.message_key = message_key
         self.amount = amount
         consumer_group = '$Default'
-        #eventhub_name = 'iothub-ehub-thinedgeci-16036845-ea2f9f07b2'
         timeout = 10 # 10s : minimum timeout
 
         self.client = EventHubConsumerClient.from_connection_string(connection_str, consumer_group, eventhub_name=eventhub_name, idle_timeout=timeout)
@@ -218,6 +225,7 @@ class EventHub:
         if event==None:
             logger.debug("Timeout: Exiting event loop ... ")
             self.client.close()
+            return
 
         partition_context.update_checkpoint(event)
 
@@ -232,21 +240,28 @@ class EventHub:
 
 
     def read_from_hub(self, start):
+        """ Read data from the event hub
+
+            Possible values for start:
+            start = "-1" : Read all messages
+            start = "@latest" : Read only the latest messages
+            start = datetime.datetime.now(tz=datetime.timezone.utc) : use current sdate
+
+            When no messages are received the client.receive will return.
+        """
 
         with self.client:
-            #start = "-1" # all
-            #start = "@latest" # latest
-            #start = datetime.datetime(2021, 11, 11, 11, 2, 2, 20000, tzinfo=datetime.timezone.utc)
-            #start = datetime.datetime.now(tz=datetime.timezone.utc)
             self.client.receive(
                 on_event=self.on_event,
                 on_error=self.on_error,
-                starting_position=start,  # "-1" is from the beginning of the partition.
+                starting_position=start,
                 max_wait_time=10,
             )
             logger.info("Exiting event loop")
 
     def validate(self):
+        """Validate the messages that we have received against"""
+
         if self.received_messages == list(range(self.amount)):
             print("Validation PASSED")
             return True

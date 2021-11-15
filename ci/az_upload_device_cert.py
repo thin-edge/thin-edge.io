@@ -8,6 +8,8 @@ https://docs.microsoft.com/en-us/rest/api/iothub/service/devices/create-or-updat
 
 call example:
 $ ./az_upload_device_cert.py -d devpi3 -t 01F...222 -u ThinEdgeHub -s iothubowner
+
+Export environment variable SASKEYIOTHUB to the Shared access key of your IoT Hub.
 """
 
 import argparse
@@ -26,6 +28,7 @@ def generate_sas_token(uri, key, policy_name, expiry=3600):
     """Function copied from Microsoft documentation
     https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-dev-guide-sas?tabs=python
     TODO : Care about license for this part
+    See also : https://docs.microsoft.com/en-us/legal/termsofuse
     """
     ttl = time.time() + expiry
     sign_key = "%s\n%d" % ((urllib.parse.quote_plus(uri)), int(ttl))
@@ -57,7 +60,7 @@ def delete_device(devname, hub, sas_name):
 
     uri = f"{hub}.azure-devices.net"
 
-    # generate a sharec access token
+    # generate a shared access token
     token = generate_sas_token(uri, sas_policy_primary_key_iothub, sas_name, expiry)
 
     url = f"https://{hub}.azure-devices.net/devices/{devname}"
@@ -103,15 +106,6 @@ def upload_device_cert(devname, thprint, hub, sas_name, verbose):
 
     # generate a sharec access token
     token = generate_sas_token(uri, sas_policy_primary_key_iothub, sas_name, expiry)
-
-    # print(token)
-
-    # Do it manually with curl:
-    # curl -L -i -X PUT \
-    # https://ThinEdgeHub.azure-devices.net/devices/devpi3?api-version=2020-05-31-preview \
-    # -H 'Content-Type:application/json' -H 'Content-Encoding:utf-8' -H "Authorization:$KEY" \
-    # -d '{"deviceId":"devpi3", "authentication": {"type" : "selfSigned","x509Thumbprint": \
-    # { "primaryThumbprint":"01FDB2436885747A1174B1C95A1E884E8512E222" }}}'
 
     # Now upload the certificate
 
