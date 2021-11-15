@@ -2,10 +2,10 @@ name: integration-test-workflow
 
 on:
   workflow_dispatch:
-    branches: [main]
+    branches: [continuous_integration]
   workflow_run:
     workflows: ["build-workflow"]
-    branches: [main]
+    branches: [main, continuous_integration]
     types:
       - completed
 env:
@@ -27,7 +27,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: main
+          branch: continuous_integration
           name: debian-packages-amd64
           path: debian-package_unpack
 
@@ -97,7 +97,7 @@ jobs:
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi:
-    runs-on: [self-hosted, Linux, ARM]
+    runs-on: [self-hosted, Linux, ARM, onsite]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -111,9 +111,12 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: main
+          branch: continuous_integration
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
+
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
@@ -160,7 +163,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: main
+          branch: continuous_integration
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
@@ -174,14 +177,14 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: main
+          branch: continuous_integration
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
       - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
-      - name: Run Smoke Test
+      - name: Run Smoke Test vor Cumulocity
         run: ./ci/ci_smoke_test.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
@@ -192,3 +195,11 @@ jobs:
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+      - name: Run Smoke Test for Azure
+        run: ./ci/ci_smoke_test_az.sh
+        env:
+          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
