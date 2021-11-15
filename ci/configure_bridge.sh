@@ -13,7 +13,7 @@ sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
 
 sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
-sudo tedge config set az.url ThinEdgeHub.azure-devices.net
+sudo tedge config set az.url ThinEdgeCiHub.azure-devices.net
 
 sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 
