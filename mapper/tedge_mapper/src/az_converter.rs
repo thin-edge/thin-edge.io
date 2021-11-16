@@ -9,6 +9,7 @@ pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
     pub(crate) clock: Box<dyn Clock>,
     pub(crate) size_threshold: SizeThreshold,
+    pub(crate) mapper_config: MapperConfig,
 }
 
 impl AzureConverter {
@@ -44,7 +45,6 @@ impl Converter for AzureConverter {
         let () = self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-
         let () = thin_edge_json::parser::parse_str(input, &mut serializer)?;
 
         let payload = serializer.into_string()?;
@@ -81,9 +81,16 @@ mod tests {
         );
 
         let input = "This is not Thin Edge JSON";
-        let result = converter.convert(input.as_ref());
+        let result = converter.convert(&new_tedge_message(input));
 
         assert!(result.is_err());
+    }
+
+    fn new_tedge_message(input: &str) -> Message {
+        Message::new(
+            &Topic::new_unchecked("tedge/measurements"),
+            input
+        )
     }
 
     #[test]
@@ -103,12 +110,16 @@ mod tests {
            "temperature": 23.0
         });
 
-        let output = converter.convert(input.as_ref());
+        let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
             expected_output
         );
+    }
+
+    fn extract_first_message_payload(messages: Result<Vec<Message>, ConversionError>) -> String {
+        messages.unwrap().pop().unwrap().payload_str().unwrap().to_string()
     }
 
     #[test]
@@ -133,7 +144,7 @@ mod tests {
         let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
             expected_output
         );
     }
@@ -141,11 +152,11 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let converter = AzureConverter {
-            add_timestamp: true,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(255 * 1024),
-        };
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            SizeThreshold(255 * 1024)
+        );
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",

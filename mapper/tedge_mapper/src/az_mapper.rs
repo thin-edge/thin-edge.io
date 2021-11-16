@@ -25,11 +25,11 @@ impl TEdgeComponent for AzureMapper {
         let clock = Box::new(WallClock);
         let size_threshold = SizeThreshold(255 * 1024);
 
-        let converter = Box::new(AzureConverter {
+        let converter = Box::new(AzureConverter::new(
             add_timestamp,
             clock,
             size_threshold,
-        });
+        ));
 
         let mut mapper =
             create_mapper(AZURE_MAPPER_NAME, &tedge_config, converter).await?;
