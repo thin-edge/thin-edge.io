@@ -33,6 +33,7 @@ jobs:
 
       - name: Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
@@ -120,6 +121,7 @@ jobs:
 
       - name: Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
 
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
