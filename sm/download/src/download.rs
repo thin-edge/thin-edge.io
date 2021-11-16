@@ -48,7 +48,7 @@ impl Downloader {
             ..Default::default()
         };
 
-        let response = retry(backoff, || async {
+        let mut response = retry(backoff, || async {
             let client = if let Some(json_sm::Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
@@ -79,7 +79,6 @@ impl Downloader {
             }
         })
         .await?;
-        let mut response = response;
 
         let file_len = match response.content_length() {
             Some(len) => len as u64,
@@ -192,7 +191,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn downloader_download_with_content_length() -> anyhow::Result<()> {
+    async fn downloader_download_with_content_length_larger_than_usable_disk_space(
+    ) -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
         let _mock1 = mock("GET", "/some_file.txt")
@@ -218,9 +218,10 @@ mod tests {
     #[tokio::test]
     async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
         let file = create_file_with_size(10 * 1024 * 1024)?;
+        let file_path = file.into_temp_path();
 
         let _mock1 = mock("GET", "/some_file.txt")
-            .with_body_from_file(file.into_temp_path())
+            .with_body_from_file(&file_path)
             .create();
 
         let name = "test_download_with_length";
@@ -233,9 +234,14 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
-        match downloader.download(&url).await {
-            Ok(()) => return Ok(()),
 
+        match downloader.download(&url).await {
+            Ok(()) => {
+                let log_content = std::fs::read(downloader.filename())?;
+                let expected_content = std::fs::read(file_path)?;
+                assert_eq!(log_content, expected_content);
+                return Ok(());
+            }
             _ => bail!("failed"),
         }
     }
@@ -282,7 +288,10 @@ mod tests {
 
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
+                return Ok(());
+            }
             _ => {
                 bail!("failed")
             }
