@@ -307,10 +307,10 @@ def main():
             sys.exit(1)
 
     if not "SECRET_C8YDEVICE" in os.environ:
-        print("Error environment variable SECRET_C8YDEVICE not set")
+        print("Error environment variable C8YDEVICE not set")
         sys.exit(1)
 
-    device = os.environ["SECRET_C8YDEVICE"]
+    device = os.environ["C8YDEVICE"]
 
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"
