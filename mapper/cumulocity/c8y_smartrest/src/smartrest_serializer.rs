@@ -8,12 +8,14 @@ type SmartRest = String;
 #[derive(Debug)]
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
+    C8yLogFileRequest,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
     fn from(op: CumulocitySupportedOperations) -> Self {
         match op {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
+            CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
         }
     }
 }
@@ -28,6 +30,23 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestSetSupportedLogType {
+    pub message_id: &'static str,
+    pub supported_operations: Vec<&'static str>,
+}
+
+impl Default for SmartRestSetSupportedLogType {
+    fn default() -> Self {
+        Self {
+            message_id: "118",
+            supported_operations: vec!["software-management".into()],
+        }
+    }
+}
+
+impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedLogType {}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestSetSupportedOperations {
     pub message_id: &'static str,
     pub supported_operations: Vec<&'static str>,
@@ -37,7 +56,10 @@ impl Default for SmartRestSetSupportedOperations {
     fn default() -> Self {
         Self {
             message_id: "114",
-            supported_operations: vec![CumulocitySupportedOperations::C8ySoftwareUpdate.into()],
+            supported_operations: vec![
+                CumulocitySupportedOperations::C8ySoftwareUpdate.into(),
+                CumulocitySupportedOperations::C8yLogFileRequest.into(),
+            ],
         }
     }
 }
@@ -96,13 +118,22 @@ impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 pub struct SmartRestSetOperationToSuccessful {
     pub message_id: &'static str,
     pub operation: &'static str,
+    pub operation_parameter: Option<String>,
 }
 
 impl SmartRestSetOperationToSuccessful {
-    fn new(operation: CumulocitySupportedOperations) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations) -> Self {
         Self {
             message_id: "503",
             operation: operation.into(),
+            operation_parameter: None,
+        }
+    }
+
+    pub fn with_response_parameter(self, response_parameter: &str) -> Self {
+        Self {
+            operation_parameter: Some(response_parameter.into()),
+            ..self
         }
     }
 
@@ -181,7 +212,7 @@ mod tests {
         let smartrest = SmartRestSetSupportedOperations::default()
             .to_smartrest()
             .unwrap();
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate\n");
+        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
     }
 
     #[test]
@@ -225,7 +256,7 @@ mod tests {
         )
         .to_smartrest()
         .unwrap();
-        assert_eq!(smartrest, "503,c8y_SoftwareUpdate\n");
+        assert_eq!(smartrest, "503,c8y_SoftwareUpdate,\n");
     }
 
     #[test]
@@ -242,6 +273,7 @@ mod tests {
         let expected_smartrest_obj = SmartRestSetOperationToSuccessful {
             message_id: "503",
             operation: "c8y_SoftwareUpdate",
+            operation_parameter: None,
         };
         assert_eq!(smartrest_obj, expected_smartrest_obj);
     }
