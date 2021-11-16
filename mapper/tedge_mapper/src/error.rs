@@ -6,38 +6,41 @@ use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {
     #[error(transparent)]
-    MqttClientError(#[from] MqttClientError),
+    FromMqttClient(#[from] MqttClientError),
 
     #[error("Home directory is not found.")]
     HomeDirNotFound,
 
     #[error(transparent)]
-    TEdgeConfigError(#[from] TEdgeConfigError),
+    FromTEdgeConfig(#[from] TEdgeConfigError),
 
     #[error(transparent)]
-    ConfigSettingError(#[from] tedge_config::ConfigSettingError),
+    FromConfigSetting(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    FlockfileError(#[from] flockfile::FlockfileError),
-
-    #[error("The given Child ID '{id}' is invalid.")]
-    InvalidChildId { id: String },
+    FromFlockfile(#[from] flockfile::FlockfileError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConversionError {
     #[error(transparent)]
-    FromMapperError(#[from] MapperError),
+    FromMapper(#[from] MapperError),
 
     #[error(transparent)]
-    FromCumulocityJsonError(#[from] c8y_translator_lib::json::CumulocityJsonError),
+    FromCumulocityJson(#[from] c8y_translator_lib::json::CumulocityJsonError),
 
     #[error(transparent)]
-    FromThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),
+    FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    FromThinEdgeJsonParserError(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
+    FromThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]
-    SizeThresholdExceeded(#[from] SizeThresholdExceeded),
+    FromSizeThresholdExceeded(#[from] SizeThresholdExceeded),
+
+    #[error("The given Child ID '{id}' is invalid.")]
+    InvalidChildId { id: String },
+
+    #[error(transparent)]
+    FromMqttClient(#[from] MqttClientError),
 }

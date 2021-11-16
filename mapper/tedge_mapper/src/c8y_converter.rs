@@ -2,35 +2,84 @@ use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use mqtt_client::{Message, Topic};
+use std::collections::HashSet;
 
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
+    children: HashSet<String>,
+    pub(crate) mapper_config: MapperConfig,
+}
+
+impl CumulocityConverter {
+    pub fn new(size_threshold: SizeThreshold) -> Self {
+        let mut topic_fiter = make_valid_topic_filter_or_panic("tedge/measurements");
+        let () = topic_fiter.add("tedge/measurements/+").expect("invalid topic filter");
+
+        let mapper_config = MapperConfig {
+            in_topic_filter: topic_fiter,
+            out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
+            errors_topic: make_valid_topic_or_panic("tedge/errors"),
+        };
+
+        let children: HashSet<String> = HashSet::new();
+        CumulocityConverter{size_threshold, children, mapper_config}
+    }
 }
 
 impl Converter for CumulocityConverter {
     type Error = ConversionError;
-    fn convert(&self, input: &str) -> Result<String, Self::Error> {
-        let () = self.size_threshold.validate(input)?;
-        c8y_translator_lib::json::from_thin_edge_json(input).map_err(Into::into)
+
+    fn get_mapper_config(&self) -> &MapperConfig {
+        &self.mapper_config
     }
 
-    fn convert_child_device_payload(
-        &self,
-        input: &str,
-        child_id: &str,
-    ) -> Result<String, Self::Error> {
-        let () = self.size_threshold.validate(input)?;
-        c8y_translator_lib::json::from_thin_edge_json_with_child(input, child_id)
-            .map_err(Into::into)
-    }
+    fn convert(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, Self::Error> {
+        let () = self.size_threshold.validate(input.payload_str()?)?;
 
-    fn convert_child_device_creation(&self, child_id: &str) -> Option<Message> {
-        Some(Message::new(
-            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-            format!("101,{},{},thin-edge.io-child", child_id, child_id),
-        ))
+        let mut vec: Vec<Message> = Vec::new();
+
+        let maybe_child_id = get_child_id_from_topic(input.clone().topic.name)?;
+        match maybe_child_id {
+            Some(child_id) => {
+                if !self.children.contains(child_id.as_str()) {
+                    self.children.insert(child_id.clone());
+                    vec.push(Message::new(
+                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                        format!("101,{},{},thin-edge.io-child", child_id, child_id),
+                    ));
+                }
+
+                let c8y_json_child_payload =
+                    c8y_translator_lib::json::from_thin_edge_json_with_child(
+                        input.payload_str()?,
+                        child_id.as_str(),
+                    )?;
+                vec.push(Message::new(
+                    &self.mapper_config.out_topic,
+                    c8y_json_child_payload,
+                ));
+            }
+            None => {
+                let c8y_json_payload =
+                    c8y_translator_lib::json::from_thin_edge_json(input.payload_str()?)?;
+                vec.push(Message::new(&self.mapper_config.out_topic, c8y_json_payload));
+            }
+        }
+        Ok(vec)
+    }
+}
+
+fn get_child_id_from_topic(topic: String) -> Result<Option<String>, ConversionError> {
+    match topic.strip_prefix("tedge/measurements/").map(String::from) {
+        Some(maybe_id) if maybe_id.is_empty() => {
+            Err(ConversionError::InvalidChildId { id: maybe_id })
+        }
+        option => Ok(option),
     }
 }
 
@@ -39,20 +88,36 @@ mod test {
     use super::*;
     use test_case::test_case;
 
-    #[test_case("child1", "c8y/s/us", "101,child1,child1,thin-edge.io-child"; "smartrest")]
-    fn child_device_creation(child_id: &str, expected_topic: &str, expected_payload: &str) {
-        let expected_message = Message::new(&Topic::new(expected_topic).unwrap(), expected_payload);
-        let converter = Box::new(CumulocityConverter {
-            size_threshold: SizeThreshold(16 * 1024),
-        });
-        let message = converter.convert_child_device_creation(child_id).unwrap();
-        assert_eq!(message, expected_message)
+    #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
+    #[test_case("tedge/measurements/", Some("".to_string()); "invalid child id (empty value)")]
+    #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
+    #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
+    fn extract_child_id(topic: &str, expected_child_id: Option<String>) {
+        let in_topic = topic.to_string();
+        let child_id = get_child_id_from_topic(in_topic).unwrap();
+        assert_eq!(child_id, expected_child_id)
+    }
+
+    #[test_case("c8y/s/us", "101,child1,child1,thin-edge.io-child"; "smartrest")]
+    fn child_device_creation(expected_topic: &str, expected_payload: &str) {
+        let mut converter = Box::new(CumulocityConverter::new(
+            SizeThreshold(16 * 1024),
+        ));
+        let in_topic = "tedge/measurements/child1";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+        let messages = converter.convert(&in_message).unwrap();
+        let expected_c8y_json = "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temp\":{\"temp\":{\"value\":1.0}},\"time\":\"2021-11-16T17:45:40.571760714+01:00\"}";
+        assert_eq!(messages, vec![
+            Message::new(&Topic::new_unchecked(expected_topic), expected_payload),
+            Message::new(&Topic::new_unchecked("c8y/measurement/measurements/create"), expected_c8y_json),
+        ]);
     }
 
     #[test]
     fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(16 * 1024);
-        let converter = CumulocityConverter { size_threshold };
+        let converter = CumulocityConverter::new(size_threshold);
         let buffer = create_packet(1024 * 20);
         let err = converter.size_threshold.validate(&buffer).unwrap_err();
         assert_eq!(

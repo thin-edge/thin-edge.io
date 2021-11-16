@@ -30,12 +30,11 @@ impl TEdgeComponent for CumulocityMapper {
 
         let size_threshold = SizeThreshold(16 * 1024);
 
-        let converter = Box::new(CumulocityConverter { size_threshold });
+        let converter = Box::new(CumulocityConverter::new(size_threshold));
 
-        let mapper = create_mapper(
+        let mut mapper = create_mapper(
             CUMULOCITY_MAPPER_NAME,
             &tedge_config,
-            mapper_config,
             converter,
         )
         .await?;

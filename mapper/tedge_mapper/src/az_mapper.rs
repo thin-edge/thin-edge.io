@@ -21,12 +21,6 @@ impl AzureMapper {
 #[async_trait]
 impl TEdgeComponent for AzureMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-        let mapper_config = MapperConfig {
-            in_topic_filter: make_valid_topic_filter_or_panic("tedge/measurements"),
-            out_topic: make_valid_topic_or_panic("az/messages/events/"),
-            errors_topic: make_valid_topic_or_panic("tedge/errors"),
-        };
-
         let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
         let clock = Box::new(WallClock);
         let size_threshold = SizeThreshold(255 * 1024);
@@ -37,8 +31,8 @@ impl TEdgeComponent for AzureMapper {
             size_threshold,
         });
 
-        let mapper =
-            create_mapper(AZURE_MAPPER_NAME, &tedge_config, mapper_config, converter).await?;
+        let mut mapper =
+            create_mapper(AZURE_MAPPER_NAME, &tedge_config, converter).await?;
 
         mapper
             .run()

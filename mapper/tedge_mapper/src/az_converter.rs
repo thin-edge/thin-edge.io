@@ -2,6 +2,7 @@ use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use clock::Clock;
+use mqtt_client::Message;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
@@ -10,18 +11,46 @@ pub struct AzureConverter {
     pub(crate) size_threshold: SizeThreshold,
 }
 
+impl AzureConverter {
+    pub fn new(add_timestamp: bool, clock: Box<dyn Clock>, size_threshold: SizeThreshold) -> Self {
+        let mapper_config = MapperConfig {
+            in_topic_filter: make_valid_topic_filter_or_panic("tedge/measurements"),
+            out_topic: make_valid_topic_or_panic("az/messages/events/"),
+            errors_topic: make_valid_topic_or_panic("tedge/errors"),
+        };
+        AzureConverter{
+            add_timestamp,
+            clock,
+            size_threshold,
+            mapper_config
+        }
+    }
+}
+
+
+
 impl Converter for AzureConverter {
     type Error = ConversionError;
-    fn convert(&self, input: &str) -> Result<String, Self::Error> {
+
+    fn get_mapper_config(&self) -> &MapperConfig {
+        &self.mapper_config
+    }
+
+    fn convert(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, Self::Error> {
+        let input = input.payload_str()?;
         let () = self.size_threshold.validate(input)?;
-
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
-
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
 
         let () = thin_edge_json::parser::parse_str(input, &mut serializer)?;
 
-        Ok(serializer.into_string()?)
+        let payload = serializer.into_string()?;
+        Ok(vec![
+            (Message::new(&self.mapper_config.out_topic, payload)),
+        ])
     }
 }
 
@@ -33,6 +62,7 @@ mod tests {
     use assert_matches::*;
     use chrono::{FixedOffset, TimeZone};
     use serde_json::json;
+    use mqtt_client::Topic;
 
     struct TestClock;
 
@@ -44,11 +74,11 @@ mod tests {
 
     #[test]
     fn converting_invalid_json_is_invalid() {
-        let converter = AzureConverter {
-            add_timestamp: false,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(255 * 1024),
-        };
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            SizeThreshold(255 * 1024)
+        );
 
         let input = "This is not Thin Edge JSON";
         let result = converter.convert(input.as_ref());
@@ -59,11 +89,11 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let converter = AzureConverter {
-            add_timestamp: false,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(255 * 1024),
-        };
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            SizeThreshold(255 * 1024)
+        );
 
         let input = r#"{
                   "temperature": 23.0
@@ -84,11 +114,11 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let converter = AzureConverter {
-            add_timestamp: false,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(255 * 1024),
-        };
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            SizeThreshold(255 * 1024)
+        );
 
         let input = r#"{
                   "time" : "2013-06-22T17:03:14.000+02:00",
@@ -100,7 +130,7 @@ mod tests {
            "temperature": 23.0
         });
 
-        let output = converter.convert(input.as_ref());
+        let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
@@ -127,10 +157,10 @@ mod tests {
            "temperature": 23.0
         });
 
-        let output = converter.convert(input.as_ref());
+        let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
             expected_output
         );
     }
@@ -138,11 +168,11 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let converter = AzureConverter {
-            add_timestamp: true,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(255 * 1024),
-        };
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            SizeThreshold(255 * 1024)
+        );
 
         let input = r#"{
                   "temperature": 23.0
@@ -153,28 +183,28 @@ mod tests {
            "time": "2021-04-08T00:00:00+05:00"
         });
 
-        let output = converter.convert(input.as_ref());
+        let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
             expected_output
         );
     }
 
     #[test]
     fn exceeding_threshold_returns_error() {
-        let converter = AzureConverter {
-            add_timestamp: false,
-            clock: Box::new(TestClock),
-            size_threshold: SizeThreshold(1),
-        };
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            SizeThreshold(1)
+        );
 
         let input = "ABC";
-        let result = converter.convert(input.as_ref());
+        let result = converter.convert(&new_tedge_message(input));
 
         assert_matches!(
             result,
-            Err(ConversionError::SizeThresholdExceeded(
+            Err(ConversionError::FromSizeThresholdExceeded(
                 SizeThresholdExceeded {
                     actual_size: 3,
                     threshold: 1
