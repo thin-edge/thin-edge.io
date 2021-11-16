@@ -306,12 +306,18 @@ def main():
             print("Error environment variable SASKEYQUEUE not set")
             sys.exit(1)
 
+    if not "SECRET_C8YDEVICE" in os.environ:
+        print("Error environment variable C8YDEVICE not set")
+        sys.exit(1)
+
+    device = os.environ["C8YDEVICE"]
+
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"
     # In case that we want to avoid the azure mapper
     # mqtt_topic = "az/messages/events/"
 
-    message_key = "thin-edge-azure-roundtrip"
+    message_key = "thin-edge-azure-roundtrip-" + device
 
     if method == "eventhub":
 
