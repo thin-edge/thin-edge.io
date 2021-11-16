@@ -17,6 +17,9 @@ pub enum SystemServiceError {
 
     #[error("Unsupported operation.")]
     UnsupportedOperation,
+
+    #[error("Service Manager: '{0}' is not available on the system or elevated permissions have not been granted.")]
+    ServiceManagerUnavailable(String),
 }
 
 /// The error type used by the `SystemdServiceManager`
@@ -35,11 +38,6 @@ pub enum SystemdError {
     #[error("Service {service} not loaded.")]
     ServiceNotLoaded { service: &'static str },
 
-    #[error(
-        "Systemd is not available on the system or elevated permissions have not been granted."
-    )]
-    SystemdNotAvailable,
-
     #[error("Returned exit code: '{code:?}' for: systemd' is unhandled.")]
     UnhandledReturnCode { code: i32 },
 }
@@ -47,9 +45,6 @@ pub enum SystemdError {
 /// The error type used by the `OpenRcServiceManager`
 #[derive(thiserror::Error, Debug)]
 pub enum OpenRcServiceError {
-    #[error("OpenRC is not available on the system.")]
-    ServiceManagerNotAvailable,
-
     #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
     ServiceCommandFailed {
         service_command: String,
@@ -60,9 +55,6 @@ pub enum OpenRcServiceError {
 /// The error type used by the `BsdServiceManager`
 #[derive(thiserror::Error, Debug)]
 pub enum BsdServiceError {
-    #[error("service(8) is not available on the system.")]
-    ServiceManagerNotAvailable,
-
     #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
     ServiceCommandFailed {
         service_command: String,
