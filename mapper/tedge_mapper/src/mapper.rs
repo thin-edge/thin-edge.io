@@ -109,3 +109,86 @@ impl Mapper {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+
+        // Given a mapper
+        let name = "mapper_under_test";
+        let mapper_config = MapperConfig {
+            in_topic: Topic::new("in_topic")?,
+            out_topic: Topic::new("out_topic")?,
+            errors_topic: Topic::new("err_topic")?,
+        };
+
+        let flock = check_another_instance_is_not_running(name)
+            .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
+
+        let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
+        let mqtt_client = Client::connect(name, &mqtt_config).await?;
+
+        let mapper = Mapper {
+            client: mqtt_client,
+            config: mapper_config,
+            converter: Box::new(UppercaseConverter),
+            _flock: flock,
+        };
+
+        // Let's run the mapper in the background
+        tokio::spawn(async move {
+            let _ = mapper.run().await;
+        });
+        sleep(Duration::from_secs(1)).await;
+
+        // One can now send requests
+        let timeout = Duration::from_secs(1);
+
+        // Happy path
+        let input = "abcde";
+        let expected = Some("ABCDE".to_string());
+        let actual = broker
+            .wait_for_response_on_publish("in_topic", input, "out_topic", timeout)
+            .await;
+        assert_eq!(expected, actual);
+
+        // Ill-formed input
+        let input = "éèê";
+        let expected = Some(format!("{}", UppercaseConverter::conversion_error()));
+        let actual = broker
+            .wait_for_response_on_publish("in_topic", input, "err_topic", timeout)
+            .await;
+        assert_eq!(expected, actual);
+
+        Ok(())
+    }
+
+    struct UppercaseConverter;
+
+    impl UppercaseConverter {
+        pub fn conversion_error() -> ConversionError {
+            // Just a stupid error that matches the expectations of the mapper
+            ConversionError::FromMapperError(MapperError::HomeDirNotFound)
+        }
+    }
+
+    impl Converter for UppercaseConverter {
+        type Error = ConversionError;
+
+        fn convert(&self, input: &str) -> Result<String, Self::Error> {
+            if input.is_ascii() {
+                Ok(input.to_uppercase())
+            } else {
+                Err(UppercaseConverter::conversion_error())
+            }
+        }
+    }
+}

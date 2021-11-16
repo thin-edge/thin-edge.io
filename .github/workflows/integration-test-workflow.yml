@@ -31,6 +31,20 @@ jobs:
           name: debian-packages-amd64
           path: debian-package_unpack
 
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: disconnect az
+        run: sudo tedge disconnect az
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
       - name: purge
         run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
@@ -105,6 +119,20 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: disconnect az
+        run: sudo tedge disconnect az
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
@@ -146,6 +174,20 @@ jobs:
 
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: main
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh
