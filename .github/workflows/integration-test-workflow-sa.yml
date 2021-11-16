@@ -37,3 +37,4 @@ jobs:
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
           AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}

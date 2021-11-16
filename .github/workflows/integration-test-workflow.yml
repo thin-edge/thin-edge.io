@@ -204,6 +204,7 @@ jobs:
       - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
         env:
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
