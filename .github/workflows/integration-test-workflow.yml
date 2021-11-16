@@ -196,9 +196,10 @@ jobs:
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-      - name: Run smoke test for Azure
+      - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
         env:
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
