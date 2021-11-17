@@ -1,7 +1,6 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
-
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
