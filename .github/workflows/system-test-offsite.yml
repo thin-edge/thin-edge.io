@@ -33,6 +33,10 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
