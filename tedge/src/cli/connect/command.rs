@@ -61,7 +61,7 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             format!("test connection to {} cloud.", self.cloud.as_str())
         } else {
-            format!("create bridge to connect {} cloud.", self.cloud.as_str())
+            format!("connect {} cloud.", self.cloud.as_str())
         }
     }
 
@@ -404,7 +404,14 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
-    let () = service_manager.check_operational()?;
+    let service_manager_result = service_manager.check_operational();
+
+    if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
+        println!(
+            "Warning: '{}' service manager is not available on the system.\n",
+            name
+        );
+    }
 
     println!("Checking if configuration for requested bridge already exists.\n");
     let () = bridge_config_exists(config_location, bridge_config)?;
@@ -419,6 +426,13 @@ fn new_bridge(
         // We want to preserve previous errors and therefore discard result of this function.
         let _ = clean_up(config_location, bridge_config);
         return Err(err);
+    }
+
+    if let Err(err) = service_manager_result {
+        println!("'tedge connect' configured the necessary tedge components, but you will have to start the required services on your own.");
+        println!("Start/restart mosquitto and other thin edge components.");
+        println!("thin-edge.io works seamlessly with 'systemd'.\n");
+        return Err(err.into());
     }
 
     restart_mosquitto(bridge_config, service_manager, config_location)?;

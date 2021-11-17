@@ -674,6 +674,7 @@ dependencies = [
  "json_sm",
  "log",
  "mockito",
+ "nix",
  "regex",
  "reqwest",
  "tedge_utils",
