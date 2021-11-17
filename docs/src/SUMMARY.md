@@ -26,6 +26,7 @@
     - [How to install and enable software management?](./howto-guides/012_install_and_enable_software_management.md)
     - [How to connect an external device?](./howto-guides/013_connect_external_device.md)
     - [How to access the logs on the device?](./howto-guides/014_thin_edge_logs.md)
+    - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
 
 
 ## Reference guides
@@ -37,7 +38,7 @@
     - [The `tedge disconnect` command](./references/tedge-disconnect.md)
     - [The `tedge mqtt` command](./references/tedge-mqtt.md)
     - [The Bridged Topics](./references/bridged-topics.md)
-    - [The Plugin API](./references/plugin-api.md)
+    - [The Software Management Plugin API](./references/plugin-api.md)
 
 ## Architecture
 - [Architecture](architecture/README.md)

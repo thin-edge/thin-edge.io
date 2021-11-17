@@ -38,7 +38,7 @@ external_keyfile = "key.pem"
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
         FilePath::from("/path/to/key")
@@ -140,7 +140,7 @@ port = 1883
 
     {
         let mut config = config_repo.load()?;
-        assert!(config.query_optional(DeviceIdSetting)?.is_none());
+        assert!(config.query_optional(DeviceIdSetting).is_err());
         assert_eq!(
             config.query(DeviceKeyPathSetting)?,
             FilePath::from("/path/to/key")
@@ -204,7 +204,7 @@ port = 1883
     {
         let config = config_repo.load()?;
 
-        assert!(config.query_optional(DeviceIdSetting)?.is_none());
+        assert!(config.query_optional(DeviceIdSetting).is_err());
         assert_eq!(
             config.query(DeviceKeyPathSetting)?,
             FilePath::from("/path/to/key")
@@ -275,7 +275,7 @@ fn test_parse_config_with_only_device_configuration() -> Result<(), TEdgeConfigE
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
         FilePath::from("/etc/ssl/certs/tedge-certificate.pem")
@@ -320,7 +320,7 @@ url = "your-tenant.cumulocity.com"
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
         FilePath::from("/etc/ssl/certs/tedge-certificate.pem")
@@ -368,7 +368,7 @@ url = "MyAzure.azure-devices.net"
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
         FilePath::from("/etc/ssl/certs/tedge-certificate.pem")
@@ -416,7 +416,7 @@ port = 2222
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
         FilePath::from("/etc/ssl/certs/tedge-certificate.pem")
@@ -532,7 +532,7 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     let config =
         TEdgeConfigRepository::new_with_defaults(config_location, config_defaults).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
 
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
@@ -565,7 +565,7 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
     let config_location = TEdgeConfigLocation::from_custom_root("/non/existent/path");
     let config = TEdgeConfigRepository::new(config_location).load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceCertPathSetting)?,
         FilePath::from("/non/existent/path/device-certs/tedge-certificate.pem")
@@ -684,7 +684,7 @@ port = 1024
     let original_device_key_path = FilePath::from("/path/to/key");
     let original_device_cert_path = FilePath::from("/path/to/cert");
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
         original_device_key_path
@@ -723,7 +723,7 @@ port = 1024
     config.unset(AzureMapperTimestamp)?;
 
     let updated_mqtt_port = Port(2048);
-    config.update(MqttPortSetting, updated_mqtt_port.clone())?;
+    config.update(MqttPortSetting, updated_mqtt_port)?;
 
     assert_eq!(
         config.query(DeviceKeyPathSetting)?,
@@ -764,7 +764,7 @@ cert_path = "/path/to/cert"
         TEdgeConfigRepository::new_with_defaults(config_location, dummy_tedge_config_defaults())
             .load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     Ok(())
 }
 
@@ -780,7 +780,7 @@ cert_path = "/path/to/cert"
         TEdgeConfigRepository::new_with_defaults(config_location, dummy_tedge_config_defaults())
             .load()?;
 
-    assert!(config.query_optional(DeviceIdSetting)?.is_none());
+    assert!(config.query_optional(DeviceIdSetting).is_err());
     Ok(())
 }
 
@@ -861,7 +861,7 @@ fn create_certificate(
         device_id,
     )?;
     let pem = keypair.certificate_pem_string()?;
-    let mut file = std::fs::File::create(path.clone())?;
+    let mut file = std::fs::File::create(path)?;
     file.write_all(pem.as_bytes())?;
     Ok(())
 }

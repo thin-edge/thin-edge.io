@@ -63,6 +63,16 @@ impl DisconnectBridgeCommand {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         self.remove_bridge_config_file()?;
 
+        if let Err(SystemServiceError::ServiceManagerUnavailable(name)) =
+            self.service_manager.check_operational()
+        {
+            println!(
+                "Service manager '{}' is not available, skipping stopping/disabling of tedge components.",
+                name
+            );
+            return Ok(());
+        }
+
         // Ignore failure
         let _ = self.apply_changes_to_mosquitto();
 

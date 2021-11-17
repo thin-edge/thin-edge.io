@@ -7,8 +7,18 @@ const EMPTY_STRING: &str = "";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct C8yManagedObject {
-    id: String,
+pub struct C8yCreateEvent {
+    source: C8yManagedObject,
+    #[serde(rename = "type")]
+    event_type: String,
+    time: String,
+    text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yManagedObject {
+    pub id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,6 +84,19 @@ impl From<&SoftwareListResponse> for C8yUpdateSoftwareListResponse {
         }
     }
 }
+
+impl C8yCreateEvent {
+    pub fn new(source: C8yManagedObject, event_type: &str, time: &str, text: &str) -> Self {
+        Self {
+            source,
+            event_type: event_type.into(),
+            time: time.into(),
+            text: text.into(),
+        }
+    }
+}
+
+impl<'a> Jsonify<'a> for C8yCreateEvent {}
 
 fn combine_version_and_type(
     version: &Option<SoftwareVersion>,

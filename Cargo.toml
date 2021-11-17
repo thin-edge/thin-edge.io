@@ -3,10 +3,9 @@
 members = [
     "crates/common/*",
     "crates/core/*",
-    "crates/plugins/*",
-]
-exclude = [
-    "crates/plugins/tedge_docker_plugin",
+    "crates/tests/*",
+    "plugins/tedge_apt_plugin",
+    "plugins/tedge_dummy_plugin"
 ]
 
 [profile.release]
