@@ -1,6 +1,7 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
+
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
@@ -81,7 +82,7 @@ impl Downloader {
         .await?;
 
         let file_len = match response.content_length() {
-            Some(len) => len as u64,
+            Some(len) => len as usize,
             None => 0,
         };
         let mut file =
@@ -112,7 +113,7 @@ impl Downloader {
 
 fn create_file_and_try_pre_allocate_space(
     file_path: &Path,
-    file_len: u64,
+    file_len: usize,
 ) -> Result<File, DownloadError> {
     let file = File::create(file_path)?;
     if file_len > 0 {
@@ -123,7 +124,7 @@ fn create_file_and_try_pre_allocate_space(
             let usable_disk_space =
                 tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
 
-            if file_len >= usable_disk_space {
+            if file_len >= usable_disk_space as usize {
                 return Err(DownloadError::InsufficientSpace);
             }
             // Reserve diskspace
@@ -131,7 +132,7 @@ fn create_file_and_try_pre_allocate_space(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
                 0,
-                file_len as i64,
+                file_len as libc::off_t,
             );
         }
     }
