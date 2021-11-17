@@ -131,7 +131,7 @@ fn create_file_and_try_pre_allocate_space(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
                 0,
-                file_len as libc::off_t,
+                file_len as nix::libc::off_t,
             );
         }
     }
