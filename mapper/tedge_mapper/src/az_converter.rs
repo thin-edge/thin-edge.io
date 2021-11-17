@@ -71,7 +71,7 @@ mod tests {
             AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = "This is not Thin Edge JSON";
-        let result = converter.convert(&new_tedge_message(input));
+        let result = converter.convert_messages(&new_tedge_message(input));
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
