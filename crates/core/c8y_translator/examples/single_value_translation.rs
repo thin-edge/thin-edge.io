@@ -1,4 +1,4 @@
-use c8y_translator_lib::json::from_thin_edge_json;
+use c8y_translator::json::from_thin_edge_json;
 
 fn single_value_translation() {
     let single_value_thin_edge_json = r#"  {

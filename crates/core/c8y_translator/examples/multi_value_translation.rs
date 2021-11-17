@@ -1,4 +1,4 @@
-use c8y_translator_lib::json::from_thin_edge_json;
+use c8y_translator::json::from_thin_edge_json;
 
 fn multi_value_translation() {
     let multi_value_thin_edge_json = r#"   {

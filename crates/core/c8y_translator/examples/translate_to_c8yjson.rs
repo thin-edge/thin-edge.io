@@ -1,4 +1,4 @@
-use c8y_translator_lib::json::from_thin_edge_json;
+use c8y_translator::json::from_thin_edge_json;
 
 fn thin_edge_translation_with_type_and_timestamp() {
     let single_value_thin_edge_json_with_type_and_time = r#"   {

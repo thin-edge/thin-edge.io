@@ -1,4 +1,4 @@
-use c8y_translator_lib::json;
+use c8y_translator::json;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 pub fn criterion_benchmark(c: &mut Criterion) {

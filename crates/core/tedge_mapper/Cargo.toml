@@ -29,7 +29,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 c8y_smartrest = { path = "../c8y_smartrest" }
-c8y_translator_lib = { path = "../c8y_translator_lib" }
+c8y_translator = { path = "../c8y_translator" }
 chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"

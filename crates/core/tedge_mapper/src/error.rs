@@ -27,7 +27,7 @@ pub enum ConversionError {
     FromMapperError(#[from] MapperError),
 
     #[error(transparent)]
-    FromCumulocityJsonError(#[from] c8y_translator_lib::json::CumulocityJsonError),
+    FromCumulocityJsonError(#[from] c8y_translator::json::CumulocityJsonError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerializationError(#[from] ThinEdgeJsonSerializationError),

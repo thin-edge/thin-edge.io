@@ -319,7 +319,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "c8y_translator_lib"
+name = "c8y_translator"
 version = "0.4.2"
 dependencies = [
  "anyhow",
@@ -2685,7 +2685,7 @@ dependencies = [
  "async-trait",
  "batcher",
  "c8y_smartrest",
- "c8y_translator_lib",
+ "c8y_translator",
  "chrono",
  "clock",
  "csv",

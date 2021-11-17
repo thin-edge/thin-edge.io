@@ -1,5 +1,5 @@
 [package]
-name = "c8y_translator_lib"
+name = "c8y_translator"
 version = "0.4.2"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
