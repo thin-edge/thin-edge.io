@@ -200,6 +200,7 @@ jobs:
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
       - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
@@ -210,3 +211,6 @@ jobs:
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
           AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+

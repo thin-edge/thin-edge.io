@@ -26,7 +26,7 @@ python3 -m venv ~/env-eventhub
 source ~/env-eventhub/bin/activate
 pip install azure-eventhub
 
-./ci/az_upload_device_cert.py -d octocatrpi3 -t $THUMB -u ThinEdgeCiHub -s iothubowner
+./ci/az_upload_device_cert.py -d $C8YDEVICE -t $THUMB -u $IOTHUBNAME -s iothubowner
 
 sudo tedge connect az
 
