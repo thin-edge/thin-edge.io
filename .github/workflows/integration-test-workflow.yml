@@ -204,7 +204,6 @@ jobs:
 
       - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
-        continue-on-error: true
         env:
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}

@@ -61,10 +61,11 @@ def publish_az(amount, topic, key):
         cmd = ["/usr/bin/tedge", "mqtt", "pub", topic, message]
 
         try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError:
-            logger.error("Failed to publish")
+            ret = subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error("Failed to publish %s", e)
             sys.exit(1)
+        ret.check_returncode()
 
         logger.info("Published message: %s" % message)
         time.sleep(0.05)
@@ -79,6 +80,8 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
     https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
     TODO : Care about license for this part
     See also : https://docs.microsoft.com/en-us/legal/termsofuse
+
+    Probably soon obsolete.
     """
 
     uri = urllib.parse.quote_plus(
@@ -102,11 +105,13 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
 def retrieve_queue_az(
     sas_policy_name, service_bus_name, queue_name, amount, verbose, key
 ):
-    """Get the published messages back from a service bus queue"""
+    """Get the published messages back from a service bus queue
+    Probably soon obsolete.
+    """
 
-    if "SASKEYQUEUE" in os.environ:
+    try:
         sas_policy_primary_key = os.environ["SASKEYQUEUE"]
-    else:
+    except KeyError:
         print("Error environment variable SASKEYQUEUE not set")
         sys.exit(1)
 
@@ -196,15 +201,15 @@ class EventHub:
 
     def __init__(self, message_key, amount):
 
-        if "AZUREENDPOINT" in os.environ:
+        try:
             connection_str = os.environ["AZUREENDPOINT"]
-        else:
+        except KeyError:
             logger.error("Error environment variable AZUREENDPOINT not set")
             sys.exit(1)
 
-        if "AZUREEVENTHUB" in os.environ:
+        try:
             eventhub_name = os.environ["AZUREEVENTHUB"]
-        else:
+        except KeyError:
             logger.error("Error environment variable AZUREEVENTHUB not set")
             sys.exit(1)
 
@@ -302,15 +307,17 @@ def main():
     method = args.method
 
     if method == "servicebus":
-        if not "SASKEYQUEUE" in os.environ:
+        try:
+            os.environ["SASKEYQUEUE"]
+        except KeyError:
             print("Error environment variable SASKEYQUEUE not set")
             sys.exit(1)
 
-    if not "C8YDEVICE" in os.environ:
+    try:
+        device = os.environ["C8YDEVICE"]
+    except KeyError:
         print("Error environment variable C8YDEVICE not set")
         sys.exit(1)
-
-    device = os.environ["C8YDEVICE"]
 
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"

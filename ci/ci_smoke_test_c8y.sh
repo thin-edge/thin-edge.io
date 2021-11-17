@@ -10,7 +10,7 @@
 # on a Raspberry Pi.
 
 # Command line parameters:
-# ci_smoke_test.sh  <timezone>
+# ci_smoke_test_c8y.sh  <timezone>
 # Environment variables:
 #    C8YDEVICE
 #    C8YUSERNAME
