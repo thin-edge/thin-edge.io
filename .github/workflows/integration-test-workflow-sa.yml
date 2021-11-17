@@ -31,7 +31,7 @@ jobs:
         continue-on-error: true
 
       - name: Run Smoke Test vor Cumulocity
-        run: ./ci/ci_smoke_test.sh
+        run: ./ci/ci_smoke_test_c8y.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
