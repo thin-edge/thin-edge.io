@@ -46,7 +46,7 @@ impl Converter for CumulocityConverter {
 
         let mut vec: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_topic(input.clone().topic.name)?;
+        let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
         match maybe_child_id {
             Some(child_id) => {
                 let c8y_json_child_payload =
@@ -81,7 +81,7 @@ impl Converter for CumulocityConverter {
     }
 }
 
-fn get_child_id_from_topic(topic: String) -> Result<Option<String>, ConversionError> {
+fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
     match topic.strip_prefix("tedge/measurements/").map(String::from) {
         Some(maybe_id) if maybe_id.is_empty() => {
             Err(ConversionError::InvalidChildId { id: maybe_id })
@@ -99,9 +99,7 @@ mod test {
     #[test_case("tedge/measurements/", None; "returns an error (empty value)")]
     #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
     #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
-    fn extract_child_id(topic: &str, expected_child_id: Option<String>) {
-        let in_topic = topic.to_string();
-
+    fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
         match get_child_id_from_topic(in_topic) {
             Ok(maybe_id) => assert_eq!(maybe_id, expected_child_id),
             Err(ConversionError::InvalidChildId { id }) => {

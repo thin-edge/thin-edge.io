@@ -375,6 +375,7 @@ mod tests {
 
         let mut serializer = C8yJsonSerializer::new(timestamp, Some("child1"));
         serializer.visit_timestamp(timestamp)?;
+        serializer.visit_measurement("temperature", 25.5)?;
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -382,6 +383,11 @@ mod tests {
             "externalSource": {
                 "externalId": "child1",
                 "type": "c8y_Serial"
+            },
+            "temperature": {
+                "temperature": {
+                    "value": 25.5
+                }
             }
         });
 
