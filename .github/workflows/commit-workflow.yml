@@ -94,8 +94,8 @@ jobs:
           command: build
           args: --release
 
-  build_matrix_arm_32bit:
-    name: Build tedge and mapper Debian for armv7
+  cargo_build_arm7_32bit:
+    name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
 
     steps:
