@@ -94,6 +94,34 @@ jobs:
           command: build
           args: --release
 
+  build_matrix_arm_32bit:
+    name: Build tedge and mapper Debian for armv7
+    runs-on: Ubuntu-20.04
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        # https://github.com/actions-rs/toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: armv7-unknown-linux-gnueabihf
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: build cross release for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=armv7-unknown-linux-gnueabihf
+
   cargo-outdated:
 
     name: Run cargo outdated
