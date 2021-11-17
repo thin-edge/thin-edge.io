@@ -30,11 +30,28 @@ jobs:
         # We need to continue when there is no tedge already installed
         continue-on-error: true
 
+      - name: Run Smoke Test vor Cumulocity
+        run: ./ci/ci_smoke_test.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
       - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
+        continue-on-error: true
         env:
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
           SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
           AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+
