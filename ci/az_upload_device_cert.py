@@ -50,9 +50,9 @@ def generate_sas_token(uri, key, policy_name, expiry=3600):
 def delete_device(devname, hub, sas_name):
     """Delete the device"""
 
-    if "SASKEYIOTHUB" in os.environ:
+    try:
         sas_policy_primary_key_iothub = os.environ["SASKEYIOTHUB"]
-    else:
+    except KeyError:
         print("Error environment variable SASKEYIOTHUB not set")
         sys.exit(1)
 
@@ -73,30 +73,29 @@ def delete_device(devname, hub, sas_name):
     }
 
     params = {"api-version": "2020-05-31-preview"}
-
     req = requests.delete(url, params=params, headers=headers)
 
     if req.status_code == 200:
         print("Deleted the device")
         print("Device Properties: ", req.text)
-    if req.status_code == 204:
+    elif req.status_code == 204:
         print("Unconditionally deleted the device")
         print("Deleted Device Properties: ", req.text)
     elif req.status_code == 404:
         print("Device is not there, not deleted")
     else:
         print(f"Error: {req.status_code}")
-        print("Response Properties", req.text)
-        sys.exit(1)
+        print(f"Response Properties {req.text}")
+        raise req.raise_for_status()
 
 
 def upload_device_cert(devname, thprint, hub, sas_name, verbose):
     """Upload device certificate
     first generate an SAS access token, then upload the certificate"""
 
-    if "SASKEYIOTHUB" in os.environ:
+    try:
         sas_policy_primary_key_iothub = os.environ["SASKEYIOTHUB"]
-    else:
+    except KeyError:
         print("Error environment variable SASKEYIOTHUB not set")
         sys.exit(1)
 
@@ -147,9 +146,10 @@ def main():
     parser.add_argument("-v", "--verbose", help="Verbosity", action="count", default=0)
     args = parser.parse_args()
 
-    if not "SASKEYIOTHUB" in os.environ:
+    try:
+        os.environ["SASKEYIOTHUB"]
+    except KeyError:
         print("Error environment variable SASKEYIOTHUB not set")
-        sys.exit(1)
 
     devname = args.device
     thprint = args.thumbprint
