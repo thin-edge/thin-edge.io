@@ -49,6 +49,12 @@ impl Converter for CumulocityConverter {
         let maybe_child_id = get_child_id_from_topic(input.clone().topic.name)?;
         match maybe_child_id {
             Some(child_id) => {
+                let c8y_json_child_payload =
+                    c8y_translator_lib::json::from_thin_edge_json_with_child(
+                        input.payload_str()?,
+                        child_id.as_str(),
+                    )?;
+
                 if !self.children.contains(child_id.as_str()) {
                     self.children.insert(child_id.clone());
                     vec.push(Message::new(
@@ -57,11 +63,6 @@ impl Converter for CumulocityConverter {
                     ));
                 }
 
-                let c8y_json_child_payload =
-                    c8y_translator_lib::json::from_thin_edge_json_with_child(
-                        input.payload_str()?,
-                        child_id.as_str(),
-                    )?;
                 vec.push(Message::new(
                     &self.mapper_config.out_topic,
                     c8y_json_child_payload,
@@ -113,7 +114,7 @@ mod test {
     }
 
     #[test]
-    fn thin_edge_json_published_with_child_id() {
+    fn convert_thin_edge_json_with_child_id() {
         let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
         let in_topic = "tedge/measurements/child1";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -141,6 +142,39 @@ mod test {
         // Test the second output messages doesn't contain SmartREST child device creation.
         let second_out_messages = converter.convert(&in_message);
         assert_eq!(second_out_messages, vec![expected_c8y_json_message.clone()]);
+    }
+
+    #[test]
+    fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
+        let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
+        let in_topic = "tedge/measurements/child1";
+        let in_invalid_payload = r#"{"temp": invalid}"#;
+        let in_valid_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_first_message = Message::new(&Topic::new_unchecked(in_topic), in_invalid_payload);
+        let in_second_message = Message::new(&Topic::new_unchecked(in_topic), in_valid_payload);
+
+        // First convert invalid Thin Edge JSON message.
+        let _ = converter.convert(&in_first_message);
+
+        // Second convert valid Thin Edge JSON message.
+        let second_out_messages = converter.convert(&in_second_message);
+
+        let expected_smart_rest_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            "101,child1,child1,thin-edge.io-child",
+        );
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temp\":{\"temp\":{\"value\":1.0}},\"time\":\"2021-11-16T17:45:40.571760714+01:00\"}"
+        );
+        dbg!(&second_out_messages);
+        assert_eq!(
+            second_out_messages,
+            vec![
+                expected_smart_rest_message,
+                expected_c8y_json_message.clone()
+            ]
+        );
     }
 
     #[test]
