@@ -27,11 +27,11 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: continuous_integration
+          branch: main
           name: debian-packages-amd64
           path: debian-package_unpack
 
-      - name: Stop collectd mapper
+      - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
         continue-on-error: true
 
@@ -119,7 +119,7 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: Stop collectd mapper
+      - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
         continue-on-error: true
 

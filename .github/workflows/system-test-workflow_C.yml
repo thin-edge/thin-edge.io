@@ -1,4 +1,4 @@
-name: system-test-workflow-C
+name: system-test-offsite
 
 on:
   workflow_dispatch:
@@ -14,8 +14,8 @@ env:
 
 jobs:
 
-  install-and-use-rpi-offsite:
-    runs-on: [self-hosted, Linux, ARM, offsitec]
+  install-and-use-rpi-all-offsite:
+    runs-on: [self-hosted, Linux, ARM, offsiteall ]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -33,7 +33,7 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: Stop collectd mapper
+      - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
         continue-on-error: true
 
@@ -61,8 +61,6 @@ jobs:
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge packages
         run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
@@ -94,7 +92,7 @@ jobs:
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
-      - name: chmod publisher
+      - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
@@ -103,15 +101,18 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
-          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
+          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-  system-test-offsite:
-    needs: [install-and-use-rpi-offsite]
-    runs-on: [self-hosted, Linux, ARM, offsitec]
+# System Test Workflow
+
+  system-test-all-offsite:
+    needs: [install-and-use-rpi-all-offsite]
+    runs-on: [self-hosted, Linux, ARM, offsiteall]
+    continue-on-error: true
 
     steps:
 
@@ -124,9 +125,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -137,9 +138,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -150,9 +151,9 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_C }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_ALL }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_C }}
+            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_ALL }}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
