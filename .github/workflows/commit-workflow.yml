@@ -97,6 +97,7 @@ jobs:
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
@@ -125,6 +126,7 @@ jobs:
   cargo_build_tests_arm7_32bit:
     name: cargo build tests for armv7 32bit
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
