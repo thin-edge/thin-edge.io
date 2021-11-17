@@ -14,6 +14,12 @@ pub enum DownloadError {
 
     #[error(transparent)]
     FromUrlParse(#[from] url::ParseError),
+
+    #[error(transparent)]
+    FromNix(#[from] nix::Error),
+
+    #[error("Not enough disk space")]
+    InsufficientSpace,
 }
 
 impl From<reqwest::Error> for DownloadError {
