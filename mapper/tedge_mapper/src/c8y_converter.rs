@@ -15,7 +15,9 @@ pub struct CumulocityConverter {
 impl CumulocityConverter {
     pub fn new(size_threshold: SizeThreshold) -> Self {
         let mut topic_fiter = make_valid_topic_filter_or_panic("tedge/measurements");
-        let () = topic_fiter.add("tedge/measurements/+").expect("invalid topic filter");
+        let () = topic_fiter
+            .add("tedge/measurements/+")
+            .expect("invalid topic filter");
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_fiter,
@@ -24,7 +26,11 @@ impl CumulocityConverter {
         };
 
         let children: HashSet<String> = HashSet::new();
-        CumulocityConverter{size_threshold, children, mapper_config}
+        CumulocityConverter {
+            size_threshold,
+            children,
+            mapper_config,
+        }
     }
 }
 
@@ -35,10 +41,7 @@ impl Converter for CumulocityConverter {
         &self.mapper_config
     }
 
-    fn convert(
-        &mut self,
-        input: &Message,
-    ) -> Result<Vec<Message>, Self::Error> {
+    fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let () = self.size_threshold.validate(input.payload_str()?)?;
 
         let mut vec: Vec<Message> = Vec::new();
@@ -67,7 +70,10 @@ impl Converter for CumulocityConverter {
             None => {
                 let c8y_json_payload =
                     c8y_translator_lib::json::from_thin_edge_json(input.payload_str()?)?;
-                vec.push(Message::new(&self.mapper_config.out_topic, c8y_json_payload));
+                vec.push(Message::new(
+                    &self.mapper_config.out_topic,
+                    c8y_json_payload,
+                ));
             }
         }
         Ok(vec)
@@ -89,29 +95,52 @@ mod test {
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
-    #[test_case("tedge/measurements/", Some("".to_string()); "invalid child id (empty value)")]
+    #[test_case("tedge/measurements/", None; "returns an error (empty value)")]
     #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
     #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
     fn extract_child_id(topic: &str, expected_child_id: Option<String>) {
         let in_topic = topic.to_string();
-        let child_id = get_child_id_from_topic(in_topic).unwrap();
-        assert_eq!(child_id, expected_child_id)
+
+        match get_child_id_from_topic(in_topic) {
+            Ok(maybe_id) => assert_eq!(maybe_id, expected_child_id),
+            Err(ConversionError::InvalidChildId { id }) => {
+                assert_eq!(id, "".to_string())
+            }
+            _ => {
+                panic!("Unexpected error type")
+            }
+        }
     }
 
-    #[test_case("c8y/s/us", "101,child1,child1,thin-edge.io-child"; "smartrest")]
-    fn child_device_creation(expected_topic: &str, expected_payload: &str) {
-        let mut converter = Box::new(CumulocityConverter::new(
-            SizeThreshold(16 * 1024),
-        ));
+    #[test]
+    fn thin_edge_json_published_with_child_id() {
+        let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
         let in_topic = "tedge/measurements/child1";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
-        let messages = converter.convert(&in_message).unwrap();
-        let expected_c8y_json = "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temp\":{\"temp\":{\"value\":1.0}},\"time\":\"2021-11-16T17:45:40.571760714+01:00\"}";
-        assert_eq!(messages, vec![
-            Message::new(&Topic::new_unchecked(expected_topic), expected_payload),
-            Message::new(&Topic::new_unchecked("c8y/measurement/measurements/create"), expected_c8y_json),
-        ]);
+
+        let expected_smart_rest_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            "101,child1,child1,thin-edge.io-child",
+        );
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temp\":{\"temp\":{\"value\":1.0}},\"time\":\"2021-11-16T17:45:40.571760714+01:00\"}"
+        );
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let first_out_messages = converter.convert(&in_message);
+        assert_eq!(
+            first_out_messages,
+            vec![
+                expected_smart_rest_message,
+                expected_c8y_json_message.clone()
+            ]
+        );
+
+        // Test the second output messages doesn't contain SmartREST child device creation.
+        let second_out_messages = converter.convert(&in_message);
+        assert_eq!(second_out_messages, vec![expected_c8y_json_message.clone()]);
     }
 
     #[test]

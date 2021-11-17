@@ -19,16 +19,14 @@ impl AzureConverter {
             out_topic: make_valid_topic_or_panic("az/messages/events/"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
-        AzureConverter{
+        AzureConverter {
             add_timestamp,
             clock,
             size_threshold,
-            mapper_config
+            mapper_config,
         }
     }
 }
-
-
 
 impl Converter for AzureConverter {
     type Error = ConversionError;
@@ -37,10 +35,7 @@ impl Converter for AzureConverter {
         &self.mapper_config
     }
 
-    fn convert(
-        &mut self,
-        input: &Message,
-    ) -> Result<Vec<Message>, Self::Error> {
+    fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
         let input = input.payload_str()?;
         let () = self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
@@ -48,9 +43,7 @@ impl Converter for AzureConverter {
         let () = thin_edge_json::parser::parse_str(input, &mut serializer)?;
 
         let payload = serializer.into_string()?;
-        Ok(vec![
-            (Message::new(&self.mapper_config.out_topic, payload)),
-        ])
+        Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])
     }
 }
 
@@ -61,8 +54,8 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use chrono::{FixedOffset, TimeZone};
-    use serde_json::json;
     use mqtt_client::Topic;
+    use serde_json::json;
 
     struct TestClock;
 
@@ -74,77 +67,67 @@ mod tests {
 
     #[test]
     fn converting_invalid_json_is_invalid() {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            SizeThreshold(255 * 1024)
-        );
+        let mut converter =
+            AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = "This is not Thin Edge JSON";
         let result = converter.convert(&new_tedge_message(input));
 
-        assert!(result.is_err());
+        assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
 
     fn new_tedge_message(input: &str) -> Message {
-        Message::new(
-            &Topic::new_unchecked("tedge/measurements"),
-            input
-        )
+        Message::new(&Topic::new_unchecked("tedge/measurements"), input)
+    }
+
+    fn extract_first_message_payload(mut messages: Vec<Message>) -> String {
+        messages.pop().unwrap().payload_str().unwrap().to_string()
     }
 
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            SizeThreshold(255 * 1024)
-        );
+        let mut converter =
+            AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = r#"{
-                  "temperature": 23.0
-               }"#;
+            "temperature": 23.0
+         }"#;
 
         let expected_output = json!({
-           "temperature": 23.0
+            "temperature": 23.0
         });
 
         let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
             expected_output
         );
-    }
-
-    fn extract_first_message_payload(messages: Result<Vec<Message>, ConversionError>) -> String {
-        messages.unwrap().pop().unwrap().payload_str().unwrap().to_string()
     }
 
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            SizeThreshold(255 * 1024)
-        );
+        let mut converter =
+            AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = r#"{
-                  "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23.0
-               }"#;
+            "time" : "2013-06-22T17:03:14.000+02:00",
+            "temperature": 23.0
+        }"#;
 
         let expected_output = json!({
-           "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23.0
+            "time" : "2013-06-22T17:03:14+02:00",
+            "temperature": 23.0
         });
 
         let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
             expected_output
         );
     }
@@ -152,26 +135,24 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            SizeThreshold(255 * 1024)
-        );
+        let mut converter =
+            AzureConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = r#"{
-                  "time" : "2013-06-22T17:03:14.000+02:00",
-                  "temperature": 23.0
-               }"#;
+            "time" : "2013-06-22T17:03:14.000+02:00",
+            "temperature": 23.0
+        }"#;
 
         let expected_output = json!({
-           "time" : "2013-06-22T17:03:14+02:00",
-           "temperature": 23.0
+            "time" : "2013-06-22T17:03:14+02:00",
+            "temperature": 23.0
         });
 
         let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
             expected_output
         );
     }
@@ -179,39 +160,33 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            SizeThreshold(255 * 1024)
-        );
+        let mut converter =
+            AzureConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = r#"{
-                  "temperature": 23.0
-               }"#;
+            "temperature": 23.0
+        }"#;
 
         let expected_output = json!({
-           "temperature": 23.0,
-           "time": "2021-04-08T00:00:00+05:00"
+            "temperature": 23.0,
+            "time": "2021-04-08T00:00:00+05:00"
         });
 
         let output = converter.convert(&new_tedge_message(input));
 
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output)).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
             expected_output
         );
     }
 
     #[test]
     fn exceeding_threshold_returns_error() {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            SizeThreshold(1)
-        );
+        let mut converter = AzureConverter::new(false, Box::new(TestClock), SizeThreshold(1));
 
         let input = "ABC";
-        let result = converter.convert(&new_tedge_message(input));
+        let result = converter.convert_messages(&new_tedge_message(input));
 
         assert_matches!(
             result,

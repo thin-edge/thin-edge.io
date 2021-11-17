@@ -8,7 +8,6 @@ use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
 use tracing::{error, info, instrument};
 
-
 pub async fn create_mapper<'a>(
     app_name: &'a str,
     tedge_config: &'a TEdgeConfig,
@@ -78,21 +77,9 @@ impl Mapper {
             .await?;
 
         while let Some(message) = messages.next().await {
-            match self.converter.convert(&message) {
-                Ok(converted_messages) => {
-                    for converted_message in converted_messages.into_iter() {
-                        self.client.publish(converted_message).await?
-                    }
-                }
-                Err(error) => {
-                    error!("Mapping error: {}", error);
-                    self.client
-                        .publish(mqtt_client::Message::new(
-                            &self.converter.get_mapper_config().errors_topic,
-                            error.to_string(),
-                        ))
-                        .await?;
-                }
+            let converted_messages = self.converter.convert(&message);
+            for converted_message in converted_messages.into_iter() {
+                self.client.publish(converted_message).await?
             }
         }
         Ok(())
@@ -102,9 +89,9 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mqtt_client::{Message, Topic, TopicFilter};
     use std::time::Duration;
     use tokio::time::sleep;
-    use mqtt_client::{TopicFilter, Topic, Message};
 
     #[tokio::test]
     #[serial_test::serial]
@@ -182,12 +169,13 @@ mod tests {
             &self.mapper_config
         }
 
-        fn convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+        fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
             let input = input.payload_str().expect("utf8");
             if input.is_ascii() {
-                let msg = vec![
-                    Message::new(&self.mapper_config.out_topic,input.to_uppercase())
-                ];
+                let msg = vec![Message::new(
+                    &self.mapper_config.out_topic,
+                    input.to_uppercase(),
+                )];
                 Ok(msg)
             } else {
                 Err(UppercaseConverter::conversion_error())
