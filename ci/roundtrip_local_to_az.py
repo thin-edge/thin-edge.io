@@ -103,7 +103,7 @@ def get_auth_token(sb_name, eh_name, sas_name, sas_value):
 
 
 def retrieve_queue_az(
-    sas_policy_name, service_bus_name, queue_name, amount, verbose, key,
+    sas_policy_name, service_bus_name, queue_name, amount, verbose, key
 ):
     """Get the published messages back from a service bus queue
     Probably soon obsolete.
@@ -318,7 +318,6 @@ def main():
     except KeyError:
         print("Error environment variable C8YDEVICE not set")
         sys.exit(1)
-
 
     # Send roundtrip via the tedge mapper
     mqtt_topic = "tedge/measurements"

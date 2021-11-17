@@ -86,7 +86,7 @@ def delete_device(devname, hub, sas_name):
     else:
         print(f"Error: {req.status_code}")
         print(f"Response Properties {req.text}")
-        raise req.raise_for_status()
+        req.raise_for_status()
 
 
 def upload_device_cert(devname, thprint, hub, sas_name, verbose):
@@ -150,6 +150,7 @@ def main():
         os.environ["SASKEYIOTHUB"]
     except KeyError:
         print("Error environment variable SASKEYIOTHUB not set")
+        sys.exit(1)
 
     devname = args.device
     thprint = args.thumbprint
