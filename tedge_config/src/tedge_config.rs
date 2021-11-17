@@ -45,7 +45,12 @@ fn device_id_read_only_error() -> ConfigSettingError {
 fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ConfigSettingError {
     match &err {
         CertificateError::IoError(io_err) => match io_err.kind() {
-            std::io::ErrorKind::NotFound => ConfigSettingError::ConfigNotSet { key },
+            std::io::ErrorKind::NotFound => ConfigSettingError::SettingIsNotConfigurable { key,
+                message: concat!(
+                    "The device id is read from the device certificate.\n",
+                    "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+                ),
+            },
             _ => ConfigSettingError::DerivationFailed {
                 key,
                 cause: format!("{}", err),

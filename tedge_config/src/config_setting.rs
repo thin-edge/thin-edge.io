@@ -66,4 +66,10 @@ pub enum ConfigSettingError {
 
     #[error("Derivation for `{key}` failed: {cause}")]
     DerivationFailed { key: &'static str, cause: String },
+
+    #[error("Config value {key}, cannot be configured: {message} ")]
+    SettingIsNotConfigurable {
+        key: &'static str,
+        message: &'static str,
+    },
 }

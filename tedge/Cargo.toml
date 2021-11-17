@@ -1,6 +1,6 @@
 [package]
 name = "tedge"
-version = "0.4.0"
+version = "0.4.2"
 edition = "2018"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ futures = "0.3"
 hyper = { version = "0.14", default-features = false }
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
-rumqttc = "0.8"
+rumqttc = "0.10"
 rustls = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"

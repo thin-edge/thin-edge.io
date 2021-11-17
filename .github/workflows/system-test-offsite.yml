@@ -33,6 +33,10 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
@@ -66,6 +70,20 @@ jobs:
 
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: main
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test.sh

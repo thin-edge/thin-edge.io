@@ -51,7 +51,7 @@ The `tedge cert create` command creates a self-signed certificate which can be u
 A single argument is required: an identifier for the device.
 This identifier will be used to uniquely identify your devices among others in your cloud tenant.
 This identifier will be also used as the Common Name (CN) of the certificate.
-Indeed, this certificate aims to authenticate that this device is actually the device with that identity. 
+Indeed, this certificate aims to authenticate that this device is actually the device with that identity.
 
 ```
 $ sudo tedge cert create --device-id my-device
@@ -104,7 +104,7 @@ Also, if you have installed `tedge_mapper`, this command starts and enables the 
 At last, it sends packets to Cumulocity to check the connection.
 If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
 
-```
+```shell
 $ sudo tedge connect c8y
 Checking if systemd is available.
 
@@ -118,22 +118,38 @@ Restarting mosquitto service.
 
 Awaiting mosquitto to start. This may take up to 5 seconds.
 
-Persisting mosquitto on reboot.
+Enabling mosquitto service on reboots.
 
 Successfully created bridge connection!
 
 Checking if tedge-mapper is installed.
 
-Starting tedge-mapper service.
+Starting tedge-mapper-c8y service.
 
-Persisting tedge-mapper on reboot.
+Persisting tedge-mapper-c8y on reboot.
 
-tedge-mapper service successfully started and enabled!
+tedge-mapper-c8y service successfully started and enabled!
 
 Sending packets to check connection. This may take up to 10 seconds.
 
-Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, it's normal to get no response in the first try.
-Try 2 / 2: Sending a message to Cumulocity. Received expected response message, connection check is successful.
+Try 1 / 2: Sending a message to Cumulocity.
+Received expected response message, connection check is successful.
+
+Enabling software management.
+
+Checking if tedge-agent is installed.
+
+Starting tedge-agent service.
+
+Persisting tedge-agent on reboot.
+
+tedge-agent service successfully started and enabled!
+
+Starting tedge-mapper-sm-c8y service.
+
+Persisting tedge-mapper-sm-c8y on reboot.
+
+tedge-mapper-sm-c8y service successfully started and enabled!
 ```
 
 ## Sending your first telemetry data
