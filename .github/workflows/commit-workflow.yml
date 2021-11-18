@@ -83,7 +83,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          args: version
+          command: version
 
       - name: Cargo test
         uses: actions-rs/cargo@v1
@@ -111,7 +111,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          args: version
+          command: version
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
