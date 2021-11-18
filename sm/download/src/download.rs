@@ -13,6 +13,8 @@ use std::{
     time::Duration,
 };
 
+//use std::libc;
+
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
@@ -81,7 +83,7 @@ impl Downloader {
         .await?;
 
         let file_len = match response.content_length() {
-            Some(len) => len as u64,
+            Some(len) => len as usize,
             None => 0,
         };
         let mut file =
@@ -112,16 +114,18 @@ impl Downloader {
 
 fn create_file_and_try_pre_allocate_space(
     file_path: &Path,
-    file_len: u64,
+    file_len: usize,
 ) -> Result<File, DownloadError> {
     let file = File::create(file_path)?;
     if file_len > 0 {
         if let Some(root) = file_path.parent() {
             let tmpstats = statvfs::statvfs(root)?;
             // Reserve 5% of total disk space
-            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
-            let usable_disk_space =
-                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+            let five_percent_disk_space: usize =
+                (tmpstats.blocks() as usize * tmpstats.block_size() as usize) * 5 / 100;
+            let usable_disk_space: usize = tmpstats.blocks_free() as usize
+                * tmpstats.block_size() as usize
+                - five_percent_disk_space as usize;
 
             if file_len >= usable_disk_space {
                 return Err(DownloadError::InsufficientSpace);
@@ -131,7 +135,7 @@ fn create_file_and_try_pre_allocate_space(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
                 0,
-                file_len as i64,
+                file_len as libc::off_t,
             );
         }
     }
