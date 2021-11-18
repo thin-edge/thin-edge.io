@@ -419,8 +419,8 @@ dependencies = [
 name = "clock"
 version = "0.4.2"
 dependencies = [
- "chrono",
  "mockall",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -2531,6 +2531,7 @@ dependencies = [
  "tedge_utils",
  "tempfile",
  "thiserror",
+ "time 0.3.5",
  "toml",
  "url",
  "webpki",
@@ -2544,7 +2545,6 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-trait",
- "chrono",
  "flockfile",
  "futures",
  "json_sm",

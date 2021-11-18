@@ -1,7 +1,7 @@
-use chrono::{DateTime, FixedOffset, Local};
 use mockall::automock;
+use time::OffsetDateTime;
 
-pub type Timestamp = DateTime<FixedOffset>;
+pub type Timestamp = OffsetDateTime;
 
 #[automock]
 pub trait Clock: Sync + Send + 'static {
@@ -13,7 +13,6 @@ pub struct WallClock;
 
 impl Clock for WallClock {
     fn now(&self) -> Timestamp {
-        let local_time_now = Local::now();
-        local_time_now.with_timezone(local_time_now.offset())
+        OffsetDateTime::now_utc()
     }
 }
