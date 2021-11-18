@@ -18,10 +18,10 @@ pub trait Converter: Send + Sync {
         &self.get_mapper_config().in_topic_filter
     }
 
-    fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
+    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
 
     fn convert(&mut self, input: &Message) -> Vec<Message> {
-        match self.convert_messages(input) {
+        match self.try_convert(input) {
             Ok(messages) => messages,
             Err(error) => {
                 error!("Mapping error: {}", error);

@@ -169,7 +169,7 @@ mod tests {
             &self.mapper_config
         }
 
-        fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+        fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
             let input = input.payload_str().expect("utf8");
             if input.is_ascii() {
                 let msg = vec![Message::new(

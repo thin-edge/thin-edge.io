@@ -41,7 +41,7 @@ impl Converter for CumulocityConverter {
         &self.mapper_config
     }
 
-    fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let () = self.size_threshold.validate(input.payload_str()?)?;
 
         let mut vec: Vec<Message> = Vec::new();

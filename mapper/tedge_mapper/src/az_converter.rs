@@ -35,7 +35,7 @@ impl Converter for AzureConverter {
         &self.mapper_config
     }
 
-    fn convert_messages(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
         let input = input.payload_str()?;
         let () = self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
@@ -71,7 +71,7 @@ mod tests {
             AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = "This is not Thin Edge JSON";
-        let result = converter.convert_messages(&new_tedge_message(input));
+        let result = converter.try_convert(&new_tedge_message(input));
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
@@ -186,7 +186,7 @@ mod tests {
         let mut converter = AzureConverter::new(false, Box::new(TestClock), SizeThreshold(1));
 
         let input = "ABC";
-        let result = converter.convert_messages(&new_tedge_message(input));
+        let result = converter.try_convert(&new_tedge_message(input));
 
         assert_matches!(
             result,
