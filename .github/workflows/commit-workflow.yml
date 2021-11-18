@@ -131,6 +131,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      # In usual case, we don't need this step.
+      # There is an issue with cargo-outdated 0.10.0, therefore, explicitly install latest version for now.
+      # This step can be removed in the future.
+      - name: Cargo install outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-outdated
+
       - name: Cargo outdated --version
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
