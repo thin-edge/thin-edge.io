@@ -23,6 +23,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Cargo fmt --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: --version
+
       - name: Cargo fmt
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -44,6 +51,13 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
+      - name: Cargo clippy --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: clippy
+          args: --version
+
       - name: Cargo clippy
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -64,6 +78,12 @@ jobs:
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Cargo --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          args: --version
 
       - name: Cargo test
         uses: actions-rs/cargo@v1
@@ -87,6 +107,12 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
+      - name: Cargo --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          args: --version
+
       - name: Cargo build
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -104,6 +130,13 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Cargo outdated --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
+          args: --version
 
       - name: Cargo outdated
         uses: actions-rs/cargo@v1
@@ -124,12 +157,19 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: Cargo install msrv
+#      - name: Cargo install msrv
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: install
+#          args: cargo-msrv
+
+      - name: Cargo msrv --version
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          command: install
-          args: cargo-msrv
+          command: msrv
+          args: --version
 
       - name: Cargo msrv
         uses: actions-rs/cargo@v1
