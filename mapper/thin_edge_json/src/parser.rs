@@ -92,6 +92,11 @@ where
 
             match key.as_ref() {
                 "type" => return Err(de::Error::custom(invalid_measurement_name("type"))),
+                "externalSource" => {
+                    return Err(de::Error::custom(invalid_measurement_name(
+                        "externalSource",
+                    )))
+                }
                 "time" => {
                     let timestamp_str: &str = map.next_value()?;
                     let timestamp = DateTime::parse_from_rfc3339(timestamp_str)
