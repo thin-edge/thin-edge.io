@@ -34,6 +34,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromFlockfileError(#[from] FlockfileError),
+
+    #[error("Command returned non 0 exit code.")]
+    CommandFailed,
 }
 
 #[derive(Debug, thiserror::Error)]

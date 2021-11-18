@@ -1,14 +1,17 @@
 use crate::{
     error::AgentError,
-    state::{AgentStateRepository, State, StateRepository},
+    state::{
+        AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
+        StateRepository, StateStatus,
+    },
 };
 
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use json_sm::{
-    software_filter_topic, Jsonify, SoftwareError, SoftwareListRequest, SoftwareListResponse,
-    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
-    SoftwareUpdateResponse,
+    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
+    SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
@@ -31,8 +34,10 @@ pub struct SmAgentConfig {
     pub request_topic_list: Topic,
     pub request_topic_update: Topic,
     pub request_topics: TopicFilter,
+    pub request_topic_restart: Topic,
     pub response_topic_list: Topic,
     pub response_topic_update: Topic,
+    pub response_topic_restart: Topic,
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
     config_location: TEdgeConfigLocation,
@@ -44,7 +49,8 @@ impl Default for SmAgentConfig {
 
         let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
 
-        let request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
+        let mut request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
+        let () = request_topics.add(control_filter_topic()).unwrap(); // TODO: fix this unwrap
 
         let request_topic_list =
             Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");
@@ -57,6 +63,12 @@ impl Default for SmAgentConfig {
 
         let response_topic_update =
             Topic::new(SoftwareUpdateResponse::topic_name()).expect("Invalid topic");
+
+        let request_topic_restart =
+            Topic::new(RestartOperationRequest::topic_name()).expect("Invalid topic");
+
+        let response_topic_restart =
+            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
 
         let sm_home = PathBuf::from("/etc/tedge");
 
@@ -72,6 +84,8 @@ impl Default for SmAgentConfig {
             request_topics,
             response_topic_list,
             response_topic_update,
+            request_topic_restart,
+            response_topic_restart,
             sm_home,
             log_dir,
             config_location,
@@ -168,12 +182,13 @@ impl SmAgent {
             }
         });
 
-        let () = self.fail_pending_operation(&mqtt).await?;
+        let () = self.process_pending_operation(&mqtt).await?;
 
         // * Maybe it would be nice if mapper/registry responds
         let () = publish_capabilities(&mqtt).await?;
-
-        let () = self.subscribe_and_process(&mqtt, &plugins).await?;
+        while let Err(error) = self.subscribe_and_process(&mqtt, &plugins).await {
+            error!("{}", error);
+        }
 
         Ok(())
     }
@@ -222,6 +237,11 @@ impl SmAgent {
                         });
                 }
 
+                topic if topic == &self.config.request_topic_restart => {
+                    dbg!("restart requested!");
+                    let () = self.handle_restart_operation(mqtt, &message).await?;
+                }
+
                 _ => error!("Unknown operation. Discarded."),
             }
         }
@@ -242,7 +262,7 @@ impl SmAgent {
                     .persistance_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
-                        operation: Some("list".into()),
+                        operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
                     })
                     .await?;
 
@@ -283,7 +303,7 @@ impl SmAgent {
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state = self.persistance_store.clear().await?;
+        let _state: State = self.persistance_store.clear().await?;
 
         Ok(())
     }
@@ -301,7 +321,7 @@ impl SmAgent {
                     .persistance_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
-                        operation: Some("update".into()),
+                        operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
                     })
                     .await?;
 
@@ -345,29 +365,138 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn fail_pending_operation(&self, mqtt: &Client) -> Result<(), AgentError> {
+    async fn handle_restart_operation(
+        &self,
+        mqtt: &Client,
+        message: &Message,
+    ) -> Result<(), AgentError> {
+        let request = match RestartOperationRequest::from_slice(message.payload_trimmed()) {
+            Ok(request) => {
+                let () = self
+                    .persistance_store
+                    .store(&State {
+                        operation_id: Some(request.id.clone()),
+                        operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
+                    })
+                    .await?;
+                request
+            }
+
+            Err(error) => {
+                error!("Parsing error: {}", error);
+                let _ = mqtt
+                    .publish(Message::new(
+                        &self.config.errors_topic,
+                        format!("{}", error),
+                    ))
+                    .await?;
+
+                return Err(SoftwareError::ParseError {
+                    reason: "Parsing failed".into(),
+                }
+                .into());
+            }
+        };
+
+        self.persistance_store
+            .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
+            .await?;
+
+        let _process_result = std::process::Command::new("sudo").arg("sync").status();
+        // state = "Restarting"
+        match std::process::Command::new("sudo")
+            .arg("init")
+            .arg("6")
+            .status()
+        {
+            Ok(process_status) => {
+                {
+                    if !process_status.success() {
+                        // process executed but command might not be successful
+                        // fail operation
+                        let _state = self.persistance_store.clear().await?;
+                        let status = OperationStatus::Failed;
+                        let response = RestartOperationResponse::new(&request).with_status(status);
+                        let () = mqtt
+                            .publish(Message::new(
+                                &self.config.request_topic_restart,
+                                response.to_bytes()?,
+                            ))
+                            .await?;
+                        error!("{}", AgentError::CommandFailed);
+                    }
+                }
+            }
+            Err(e) => {
+                self.persistance_store.clear().await?;
+                let status = OperationStatus::Failed;
+                let response = RestartOperationResponse::new(&request).with_status(status);
+                let () = mqtt
+                    .publish(Message::new(
+                        &self.config.request_topic_restart,
+                        response.to_bytes()?,
+                    ))
+                    .await?;
+                return Err(AgentError::FromIo(e));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_pending_operation(&self, mqtt: &Client) -> Result<(), AgentError> {
+        let state: Result<State, _> = self.persistance_store.load().await;
+        let mut status = OperationStatus::Failed;
+
         if let State {
             operation_id: Some(id),
-            operation: Some(operation_string),
-        } = match self.persistance_store.load().await {
+            operation: Some(operation),
+        } = match state {
             Ok(state) => state,
             Err(_) => State {
                 operation_id: None,
                 operation: None,
             },
         } {
-            let topic = match operation_string.into() {
-                SoftwareOperation::CurrentSoftwareList => &self.config.response_topic_list,
+            let topic = match operation {
+                StateStatus::Software(SoftwareOperationVariants::List) => {
+                    &self.config.response_topic_list
+                }
 
-                SoftwareOperation::SoftwareUpdates => &self.config.response_topic_update,
+                StateStatus::Software(SoftwareOperationVariants::Update) => {
+                    &self.config.response_topic_update
+                }
 
-                SoftwareOperation::UnknownOperation => {
+                StateStatus::Restart(RestartOperationStatus::Pending) => {
+                    &self.config.response_topic_restart
+                }
+
+                StateStatus::Restart(RestartOperationStatus::Restarting) => {
+                    status = OperationStatus::Successful;
+                    &self.config.response_topic_restart
+                }
+
+                StateStatus::UnknownOperation => {
                     error!("UnknownOperation in store.");
                     &self.config.errors_topic
                 }
             };
 
-            let response = SoftwareRequestResponse::new(&id, SoftwareOperationStatus::Failed);
+            // trigger
+            // state store: operation_id, operation = Pending
+
+            //let topic = match operation_string {
+            //    SoftwareOperation::CurrentSoftwareList => &self.config.response_topic_list,
+
+            //SoftwareOperation::SoftwareUpdates => &self.config.response_topic_update,
+
+            //    SoftwareOperation::UnknownOperation => {
+            //        error!("UnknownOperation in store.");
+            //        &self.config.errors_topic
+            //    }
+            //};
+            // this currently fails all pending operations
+            let response = SoftwareRequestResponse::new(&id, status);
 
             let () = mqtt
                 .publish(Message::new(topic, response.to_bytes()?))
@@ -405,6 +534,7 @@ pub enum SoftwareOperation {
     UnknownOperation,
 }
 
+// TODO: what exactly does this do?
 impl From<String> for SoftwareOperation {
     fn from(s: String) -> Self {
         match s.as_str() {
