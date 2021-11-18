@@ -74,9 +74,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'device.id' is not set",
-            ));
+            .stdout(predicate::str::contains("device.id"));
 
         // The create command created a certificate
         create_cmd.assert().success();
@@ -112,9 +110,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'device.id' is not set",
-            ));
+            .stdout(predicate::str::contains("device.id"));
 
         // The a new certificate can then be created.
         create_cmd.assert().success();
@@ -137,9 +133,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'device.id' is not set",
-            ));
+            .stdout(predicate::str::contains("device.id"));
 
         // forbidden to set read-only key by CLI
         let mut set_device_id_cmd = tedge_command_with_test_home(
@@ -222,9 +216,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'device.id' is not set",
-            ));
+            .stdout(predicate::str::contains("device.id"));
 
         let mut get_cert_path_cmd =
             tedge_command_with_test_home(test_home_str, &["config", "get", "device.cert.path"])?;

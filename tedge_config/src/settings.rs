@@ -3,6 +3,7 @@ use crate::{config_setting::*, models::*};
 ///
 /// Identifier of the device within the fleet. It must be globally
 /// unique and the same one used in the device certificate.
+/// NOTE: This setting is derived from the device certificate and therefore is read only.
 ///
 /// Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")
 ///
@@ -14,8 +15,9 @@ impl ConfigSetting for DeviceIdSetting {
 
     const DESCRIPTION: &'static str = concat!(
         "Identifier of the device within the fleet. It must be ",
-        "globally unique and the same one used in the device certificate. ",
-        "Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665"
+        "globally unique and is derived from the device certificate. ",
+        "Example: Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665",
+        "NOTE: This setting is derived from the device certificate and therefore is read only."
     );
 
     type Value = String;
