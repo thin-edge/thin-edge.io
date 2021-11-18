@@ -59,3 +59,4 @@ cd $TEBASEDIR
 sudo cp ./configuration/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 
+mv tests/PySys/__pysys_junit_xml tests/PySys/pysys_junit_xml_analytics

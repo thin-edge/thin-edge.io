@@ -46,3 +46,5 @@ cd tests/PySys/
 pysys.py run --record -v DEBUG --exclude analytics
 
 deactivate
+
+mv tests/PySys/__pysys_junit_xml tests/PySys/pysys_junit_xml_all
