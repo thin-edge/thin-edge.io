@@ -72,34 +72,24 @@ def publish_az(amount, topic, key):
 
 
 def get_auth_token(sb_name, eh_name, sas_name, sas_value):
+    """Create authentication token
+    Analog to:
+        https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
     """
-    Returns an authorization token dictionary
-    for making calls to Event Hubs REST API.
-
-    Function copied from Microsoft documentation
-    https://docs.microsoft.com/en-us/rest/api/eventhub/generate-sas-token
-    TODO : Care about license for this part
-    See also : https://docs.microsoft.com/en-us/legal/termsofuse
-
-    Probably soon obsolete.
-    """
-
-    uri = urllib.parse.quote_plus(
-        "https://{}.servicebus.windows.net/{}".format(sb_name, eh_name)
+    newuri = urllib.parse.quote_plus(
+        f"https://{sb_name}.servicebus.windows.net/{eh_name}"
     )
-
-    sas = sas_value.encode("utf-8")
-    expiry = str(int(time.time() + 10000))
-    string_to_sign = (uri + "\n" + expiry).encode("utf-8")
-    signed_hmac_sha256 = hmac.HMAC(sas, string_to_sign, hashlib.sha256)
-    signature = urllib.parse.quote(base64.b64encode(signed_hmac_sha256.digest()))
-    return {
+    sas_enc = sas_value.encode("utf-8")
+    expiry = str(int(time.time()) + 10000)
+    str_sign = newuri + "\n" + expiry
+    signed_hmac = hmac.HMAC(sas_enc, str_sign.encode("utf-8"), hashlib.sha256)
+    signature = urllib.parse.quote(base64.b64encode(signed_hmac.digest()))
+    ret = {
         "sb_name": sb_name,
         "eh_name": eh_name,
-        "token": "SharedAccessSignature sr={}&sig={}&se={}&skn={}".format(
-            uri, signature, expiry, sas_name
-        ),
+        "token": f"SharedAccessSignature sr={newuri}&sig={signature}&se={expiry}&skn={sas_name}",
     }
+    return ret
 
 
 def retrieve_queue_az(
