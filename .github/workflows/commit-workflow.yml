@@ -131,8 +131,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
       # In usual case, we don't need this step.
-      # There is an issue with cargo-outdated 0.10.0, therefore, explicitly install latest version for now.
+      # There is an issue with cargo-outdated 0.10.0, therefore, explicitly install the latest version.
       # This step can be removed in the future.
       - name: Cargo install outdated
         uses: actions-rs/cargo@v1
@@ -163,9 +167,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
 
       - name: Cargo msrv --version
         uses: actions-rs/cargo@v1
