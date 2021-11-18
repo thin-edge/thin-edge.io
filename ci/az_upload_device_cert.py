@@ -25,26 +25,22 @@ import requests
 
 
 def generate_sas_token(uri, key, policy_name, expiry=3600):
-    """Function copied from Microsoft documentation
-    https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-dev-guide-sas?tabs=python
-    TODO : Care about license for this part
-    See also : https://docs.microsoft.com/en-us/legal/termsofuse
+    """Generate Shared Access Token
+    Analog to:
+        https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-dev-guide-sas?tabs=python
     """
-    ttl = time.time() + expiry
-    sign_key = "%s\n%d" % ((urllib.parse.quote_plus(uri)), int(ttl))
-    # print(sign_key)
-    signature = base64.b64encode(
-        hmac.HMAC(
-            base64.b64decode(key), sign_key.encode("utf-8"), hashlib.sha256
+    ttlive = int(time.time() + expiry)
+    newuri = urllib.parse.quote_plus(uri)
+    skey = "%s\n%d" % ((newuri), ttlive)
+    code = hmac.HMAC(
+        base64.b64decode(key), skey.encode("utf-8"), hashlib.sha256
         ).digest()
-    )
-
-    rawtoken = {"sr": uri, "sig": signature, "se": str(int(ttl))}
-
+    sign = base64.b64encode(code)
+    token = {"sr": uri, "sig": sign, "se": str(ttlive)}
     if policy_name is not None:
-        rawtoken["skn"] = policy_name
-
-    return "SharedAccessSignature " + urllib.parse.urlencode(rawtoken)
+        token["skn"] = policy_name
+    final_token = "SharedAccessSignature " + urllib.parse.urlencode(token)
+    return final_token
 
 
 def delete_device(devname, hub, sas_name):
