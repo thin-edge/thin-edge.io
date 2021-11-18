@@ -30,7 +30,7 @@ Example in Thin Edge JSON:
 
 ```json
 {
-	"temperature": 23
+  "temperature": 23
 }
 ```
 
@@ -38,13 +38,13 @@ Translated into JSON via MQTT by the Cumulocity mapper:
 
 ```json
 {
-	"type": "ThinEdgeMeasurement",
-	"time": "2021-04-22T17:05:26.958340390+00:00",
-	"temperature": {
-		"temperature": {
-			"value": 23
-		}
-	}
+  "type": "ThinEdgeMeasurement",
+  "time": "2021-04-22T17:05:26.958340390+00:00",
+  "temperature": {
+    "temperature": {
+      "value": 23
+    }
+  }
 }
 ```
 
@@ -67,6 +67,48 @@ as both a fragment type and a fragment series in [Cumulocity's measurements](htt
 After the mapper publishes a message on the topic `c8y/measurement/measurements/create`,
 the message will be transferred to the topic `measurement/measurements/create` by [the MQTT bridge](../references/bridged-topics.md).
 
+### For child devices
+
+The Cumulocity mapper supports sending measurements to child devices under the `thin-edge.io` parent device.
+The incoming topic is different from the parent device.
+For child devices, use `tedge/measurements/<child-id>` topic. (`<child-id>` is your desired child device ID.)
+
+The mapper works in the following steps.
+
+1. When the mapper receives a Thin Edge JSON message on the `tedge/measurements/<child-id>`,
+   the mapper publishes the SmartREST `101` message to create a child device under the `thin-edge.io` parent device.
+   The name of the child device is the given child ID, and the type is `thin-edge.io-child`.
+2. Publish corresponded Cumulocity JSON measurements messages over MQTT.
+3. If the given child ID by the topic name is already known by the mapper,
+   the mapper doesn't publish the first child device creation message again.
+   This known child ID list is kept in memory.
+
+If the incoming Thin Edge JSON message (published on `tedge/measurements/child1`) is as follows,
+
+```json
+{
+  "temperature": 23
+}
+```
+
+it gets translated into JSON via MQTT by the Cumulocity mapper.
+
+```json
+{
+  "type":"ThinEdgeMeasurement",
+  "externalSource":{
+    "externalId":"child1",
+    "type":"c8y_Serial"
+  },
+  "time":"2013-06-22T17:03:14+02:00",
+  "temperature":{
+    "temperature":{
+      "value":23
+    }
+  }
+}
+```
+
 ## Azure IoT Hub mapper
 
 The Azure IoT Hub mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
@@ -86,7 +128,7 @@ So, if the input is below,
 
 ```json
 {
-	"temperature": 23
+  "temperature": 23
 }
 ```
 
@@ -94,8 +136,8 @@ the output of the mapper is
 
 ```json
 {
-	"temperature": 23,
-	"time": "2021-06-01T17:24:48.709803664+02:00"
+  "temperature": 23,
+  "time": "2021-06-01T17:24:48.709803664+02:00"
 }
 ```
 
@@ -136,9 +178,10 @@ $ tedge mqtt sub tedge/errors
 ## Topics used by tedge-mapper
 
 - Incoming topics
-    - `tedge/measurements`
+  - `tedge/measurements`
+  - `tedge/measurements/<child-id>` (for Cumulocity)
 
 - Outgoing topics
-    - `tedge/errors` (for errors)
-    - `c8y/measurement/measurements/create` (for Cumulocity)
-    - `az/messages/events/` (for Azure IoT Hub)
+  - `tedge/errors` (for errors)
+  - `c8y/measurement/measurements/create` (for Cumulocity)
+  - `az/messages/events/` (for Azure IoT Hub)
