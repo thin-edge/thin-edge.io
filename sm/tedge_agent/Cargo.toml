@@ -23,7 +23,6 @@ stop-on-upgrade = false
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = "0.4"
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 json_sm = { path = "../json_sm" }
@@ -36,6 +35,7 @@ structopt = "0.3"
 tedge_config = { path = "../../tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
 tokio = { version = "1.8", features = ["fs","process", "rt"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }

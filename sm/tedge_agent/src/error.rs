@@ -34,6 +34,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromFlockfileError(#[from] FlockfileError),
+
+    #[error(transparent)]
+    FromTime(#[from] crate::operation_logs::OperationLogsError),
 }
 
 #[derive(Debug, thiserror::Error)]

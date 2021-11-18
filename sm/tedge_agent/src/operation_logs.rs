@@ -1,9 +1,21 @@
-use chrono::{SecondsFormat, Utc};
 use plugin_sm::log_file::LogFile;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::path::PathBuf;
+use time::{format_description, OffsetDateTime};
 use tracing::log;
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationLogsError {
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromTimeInvalidFormatDescription(#[from] time::error::InvalidFormatDescription),
+
+    #[error(transparent)]
+    FromTimeFormat(#[from] time::error::Format),
+}
 
 #[derive(Debug)]
 pub struct OperationLogs {
@@ -17,11 +29,11 @@ pub enum LogKind {
     SoftwareList,
 }
 
-const UPDATE_PREFIX: &'static str = "software-update";
-const LIST_PREFIX: &'static str = "software-list";
+const UPDATE_PREFIX: &str = "software-update";
+const LIST_PREFIX: &str = "software-list";
 
 impl OperationLogs {
-    pub fn try_new(log_dir: PathBuf) -> Result<OperationLogs, std::io::Error> {
+    pub fn try_new(log_dir: PathBuf) -> Result<OperationLogs, OperationLogsError> {
         std::fs::create_dir_all(log_dir.clone())?;
         let operation_logs = OperationLogs {
             log_dir,
@@ -38,31 +50,33 @@ impl OperationLogs {
         Ok(operation_logs)
     }
 
-    pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, std::io::Error> {
+    pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, OperationLogsError> {
         if let Err(err) = self.remove_outdated_logs() {
             // In no case a log-cleaning error should prevent the agent to run.
             // Hence the error is logged but not returned.
             log::warn!("Fail to remove the out-dated log files: {}", err);
         }
 
-        let now = Utc::now();
+        let now = OffsetDateTime::now_utc();
+        let format = format_description::parse(
+            "[year]-[month]-[day]T[hour repr:24]:[minute]:[seconds]+[offset_hour]:[offset_minute]",
+        )?;
+
         let file_prefix = match kind {
             LogKind::SoftwareUpdate => UPDATE_PREFIX,
             LogKind::SoftwareList => LIST_PREFIX,
         };
-        let file_name = format!(
-            "{}-{}.log",
-            file_prefix,
-            now.to_rfc3339_opts(SecondsFormat::Secs, true)
-        );
+        let file_name = format!("{}-{}.log", file_prefix, now.format(&format)?);
 
         let mut log_file_path = self.log_dir.clone();
         log_file_path.push(file_name);
 
-        LogFile::try_new(log_file_path).await
+        LogFile::try_new(log_file_path)
+            .await
+            .map_err(OperationLogsError::FromIo)
     }
 
-    pub fn remove_outdated_logs(&self) -> Result<(), std::io::Error> {
+    pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
         let mut update_logs = BinaryHeap::new();
         let mut list_logs = BinaryHeap::new();
         for entry in self.log_dir.read_dir()? {
