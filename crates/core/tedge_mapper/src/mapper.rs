@@ -1,10 +1,10 @@
 use crate::converter::*;
 use crate::error::*;
 
-use mqtt_client::{Client, MqttClient, MqttClientError};
+use mqtt_channel::{Connection, Message, MqttError};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
-use tokio::task::JoinHandle;
-use tracing::{error, info, instrument};
+use tokio::time::Duration;
+use tracing::{info, instrument};
 
 pub async fn create_mapper<'a>(
     app_name: &'a str,
@@ -13,10 +13,21 @@ pub async fn create_mapper<'a>(
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
 
-    let mqtt_config = mqtt_config(tedge_config)?;
-    let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
+    let mapper_config = converter.get_mapper_config();
+    let mqtt_config =
+        mqtt_channel::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
+    let mqtt_client = Connection::connect(
+        app_name,
+        &mqtt_config,
+        mapper_config.in_topic_filter.clone().into(),
+    )
+    .await?;
 
-    Ok(Mapper::new(mqtt_client, converter))
+    Ok(Mapper::new(
+        mqtt_client.received,
+        mqtt_client.published,
+        converter,
+    ))
 }
 
 pub(crate) fn mqtt_config(
@@ -26,65 +37,70 @@ pub(crate) fn mqtt_config(
 }
 
 pub struct Mapper {
-    client: mqtt_client::Client,
+    input: async_broadcast::Receiver<Message>,
+    output: async_channel::Sender<Message>,
     converter: Box<dyn Converter<Error = ConversionError>>,
 }
 
 impl Mapper {
+    pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
+        info!("Running");
+        self.subscribe_messages().await?;
+        Ok(())
+    }
+
     pub fn new(
-        client: mqtt_client::Client,
+        input: async_broadcast::Receiver<Message>,
+        output: async_channel::Sender<Message>,
         converter: Box<dyn Converter<Error = ConversionError>>,
     ) -> Self {
-        Self { client, converter }
+        Self {
+            input,
+            output,
+            converter,
+        }
     }
 
-    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
-        info!("Running");
-        let errors_handle = self.subscribe_errors();
-        let messages_handle = self.subscribe_messages();
-        messages_handle.await?;
-        errors_handle
-            .await
-            .map_err(|_| MqttClientError::JoinError)?;
-        Ok(())
-    }
-
-    #[instrument(skip(self), name = "errors")]
-    fn subscribe_errors(&self) -> JoinHandle<()> {
-        let mut errors = self.client.subscribe_errors();
-        tokio::spawn(async move {
-            while let Some(error) = errors.next().await {
-                error!("{}", error);
-            }
-        })
-    }
+    // TODO add support for error in mqtt_channel
+    // #[instrument(skip(self), name = "errors")]
+    // fn subscribe_errors(&self) -> JoinHandle<()> {
+    //     let mut errors = self.client.subscribe_errors();
+    //     tokio::spawn(async move {
+    //         while let Some(error) = errors.next().await {
+    //             error!("{}", error);
+    //         }
+    //     })
+    // }
 
     #[instrument(skip(self), name = "messages")]
-    async fn subscribe_messages(&mut self) -> Result<(), MqttClientError> {
+    async fn subscribe_messages(&mut self) -> Result<(), MqttError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
-            self.client.publish(init_message).await?
+            let _ =self.output.send(init_message).await;
         }
 
-        let mut messages = self
-            .client
-            .subscribe(self.converter.get_in_topic_filter().clone())
-            .await?;
-
-        while let Some(message) = messages.next().await {
+        while let Some(message) = next_message(&mut self.input).await {
             let converted_messages = self.converter.convert(&message);
             for converted_message in converted_messages.into_iter() {
-                self.client.publish(converted_message).await?
+                let _ = self.output.send(converted_message).await;
             }
         }
         Ok(())
+    }
+}
+
+async fn next_message(received: &mut async_broadcast::Receiver<Message>) -> Option<Message> {
+    match tokio::time::timeout(Duration::from_secs(5), received.recv()).await {
+        Ok(Ok(msg)) => Some(msg),
+        Ok(Err(async_broadcast::RecvError)) => None,
+        Err(_elapsed) => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_client::{Message, Topic, TopicFilter};
+    use mqtt_channel::{Message, Topic, TopicFilter};
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -97,11 +113,13 @@ mod tests {
         // Given a mapper
         let name = "mapper_under_test";
 
-        let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
-        let mqtt_client = Client::connect(name, &mqtt_config).await?;
+        let mqtt_config = mqtt_channel::Config::default().with_port(broker.port);
+        let mqtt_client =
+            Connection::connect(name, &mqtt_config, TopicFilter::new_unchecked("in_topic")).await?;
 
         let mut mapper = Mapper {
-            client: mqtt_client,
+            input: mqtt_client.received,
+            output: mqtt_client.published,
             converter: Box::new(UppercaseConverter::new()),
         };
 

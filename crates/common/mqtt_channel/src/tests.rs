@@ -235,4 +235,47 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
+        // Given an mqtt client
+        async fn run(mut input: impl StreamInput<Message>, mut output: impl StreamOutput<Message>) {
+            let in_topic = TopicFilter::new_unchecked("in/topic");
+            let out_topic = Topic::new_unchecked("out/topic");
+
+            //let mut input = input.filter(|msg| in_topic.accept(msg));
+
+            while let Some(msg) = input.next().await {
+                let req = msg.payload_str().expect("utf8 payload");
+                let res = req.to_uppercase();
+                let msg = Message::new(&out_topic, res.as_bytes());
+                if let Err(_) = output.push(msg).await {
+                    // the connection has been closed
+                    break;
+                }
+            }
+            //output.done();
+        }
+
+        // This client can be tested without any MQTT broker.
+        let input = vec![
+            message("in/topic", "a message"),
+            message("in/topic", "another message"),
+            message("in/topic", "yet another message"),
+            //message("unrelated/topic", "some unrelated message"),
+        ];
+        let expected = vec![
+            message("out/topic", "A MESSAGE"),
+            message("out/topic", "ANOTHER MESSAGE"),
+            message("out/topic", "YET ANOTHER MESSAGE"),
+        ];
+
+        let mut output = StreamRecorder::new();
+        let output_stream = output.collector_stream();
+        tokio::spawn(async move { run(input, output_stream) });
+        assert_eq!(expected, output.collected().await);
+
+        Ok(())
+    }
 }

@@ -38,6 +38,9 @@ download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 mockall = "0.10"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+async-broadcast = "0.3"  # To be removed
+async-channel = "1.6"    # To be removed
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }

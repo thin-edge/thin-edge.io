@@ -1,4 +1,5 @@
 use crate::errors::MqttError;
+use crate::Message;
 use rumqttc::QoS;
 use std::convert::TryInto;
 
@@ -64,6 +65,15 @@ impl TopicFilter {
         }
     }
 
+    /// Build a new topic filter, assuming the pattern is valid.
+    pub fn new_unchecked(pattern: &str) -> TopicFilter {
+        let patterns = vec![String::from(pattern)];
+        TopicFilter {
+            patterns,
+            qos: QoS::AtLeastOnce,
+        }
+    }
+
     /// Check if the pattern is valid and at it to this topic filter.
     pub fn add(&mut self, pattern: &str) -> Result<(), MqttError> {
         let pattern = String::from(pattern);
@@ -76,10 +86,15 @@ impl TopicFilter {
     }
 
     /// Check if the given topic matches this filter pattern.
-    fn accept(&self, topic: &Topic) -> bool {
+    pub fn accept_topic(&self, topic: &Topic) -> bool {
         self.patterns
             .iter()
             .any(|pattern| rumqttc::matches(&topic.name, pattern))
+    }
+
+    /// Check if the given message matches this filter pattern.
+    pub fn accept(&self, msg: &Message) -> bool {
+        self.accept_topic(&msg.topic)
     }
 
     /// A clone topic filter with the given QoS
