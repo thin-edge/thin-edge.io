@@ -69,19 +69,18 @@ the message will be transferred to the topic `measurement/measurements/create` b
 
 ### For child devices
 
-The Cumulocity mapper supports sending measurements to child devices under the `thin-edge.io` parent device.
-The incoming topic is different from the parent device.
-For child devices, use `tedge/measurements/<child-id>` topic. (`<child-id>` is your desired child device ID.)
+The Cumulocity mapper collects measurements not only from the main device but also from child devices.
+These measurements are collected under the `tedge/measurements/<child-id>` topics and forwarded to Cumulocity to corresponding child devices created under the `thin-edge.io` parent device.
+(`<child-id>` is your desired child device ID.)
 
 The mapper works in the following steps.
 
-1. When the mapper receives a Thin Edge JSON message on the `tedge/measurements/<child-id>`,
-   the mapper publishes the SmartREST `101` message to create a child device under the `thin-edge.io` parent device.
-   The name of the child device is the given child ID, and the type is `thin-edge.io-child`.
+1. When the mapper receives a Thin Edge JSON message on the `tedge/measurements/<child-id>` topic,
+   the mapper sends a request to create a child device under the `thin-edge.io` parent device.
+   The child device is named after the `<child-id>` topic name, and the type is `thin-edge.io-child`.
 2. Publish corresponded Cumulocity JSON measurements messages over MQTT.
-3. If the given child ID by the topic name is already known by the mapper,
-   the mapper doesn't publish the first child device creation message again.
-   This known child ID list is kept in memory.
+3. The child device is created on receipt of the very first measurement for that child device.
+
 
 If the incoming Thin Edge JSON message (published on `tedge/measurements/child1`) is as follows,
 
@@ -110,6 +109,8 @@ it gets translated into JSON via MQTT by the Cumulocity mapper.
 ```
 
 ## Azure IoT Hub mapper
+
+> Note: Child device measurements are not supported yet on Azure IoT Hub.
 
 The Azure IoT Hub mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
 It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
