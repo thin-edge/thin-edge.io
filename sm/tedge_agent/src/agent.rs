@@ -7,6 +7,7 @@ use crate::{
 };
 
 use flockfile::{check_another_instance_is_not_running, Flockfile};
+use serde::{Deserialize, Serialize};
 
 use json_sm::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
@@ -16,6 +17,8 @@ use json_sm::{
 use mqtt_client::{Client, Config, Message, MqttClient, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
+    fmt::Debug,
+    io::Read,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -26,6 +29,8 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
+
+const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
@@ -402,10 +407,13 @@ impl SmAgent {
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
+        let tedge_agent_restart_marker = PathBuf::from(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+        let _ = std::fs::File::create(tedge_agent_restart_marker)?;
+
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
         match std::process::Command::new("sudo")
-            .arg("init")
+            .arg("echo")
             .arg("6")
             .status()
         {
@@ -471,6 +479,49 @@ impl SmAgent {
                     &self.config.response_topic_restart
                 }
 
+                StateStatus::Restart(RestartOperationStatus::Restarting)
+                    if tedge_agent_restart_file_exists() =>
+                {
+                    // if the status is `::Restarting` but `/run/tedge_agent_restart` has not been
+                    // deleted, we need extra checks to be sure the system rebooted.
+                    //
+                    // 1. read /proc/uptime{0}
+                    // 2. diff from datetime.now()
+                    // 3. compare with /run/tedge_agent_restart.modified()
+                    // 4. if diff is small, we can be confident the restart happened.
+                    let file = std::fs::File::open(std::path::Path::new("/proc/uptime"))?;
+                    let mut buf_reader = std::io::BufReader::new(file);
+                    let mut buffer = String::new();
+                    buf_reader.read_to_string(&mut buffer)?;
+
+                    dbg!(SystemUptime::from_slice(buffer.as_bytes()));
+
+                    dbg!(&buffer);
+
+                    //if std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())
+                    //    .exists()
+                    //{
+                    //    let metadata =
+                    //        std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())
+                    //            .metadata()
+                    //            .unwrap();
+                    //    // 1. /run/tedge_agent_restart ---> metadata... | on reboot is deleted.
+                    //    // 2. check pending operations, if "::Restarting", && no /run/tedge_agent -> SUCCESS
+                    //    // 3. ::Pending? -> FAIL
+                    //    // 4. ::Restarting but /run/tedge_agent -> {compare time.now() - /proc/uptime{0} COMPARE with /run/tedge_agent_restart }
+
+                    //    if let Ok(time) = metadata.modified() {
+                    //        dbg!(&time);
+                    //        let epoch_timestamp =
+                    //            time.duration_since(std::time::UNIX_EPOCH).unwrap();
+                    //        dbg!(epoch_timestamp);
+                    //    } else {
+                    //        println!("Not supported on this platform");
+                    //    }
+                    //}
+                    status = OperationStatus::Successful;
+                    &self.config.response_topic_restart
+                }
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
                     status = OperationStatus::Successful;
                     &self.config.response_topic_restart
@@ -482,20 +533,6 @@ impl SmAgent {
                 }
             };
 
-            // trigger
-            // state store: operation_id, operation = Pending
-
-            //let topic = match operation_string {
-            //    SoftwareOperation::CurrentSoftwareList => &self.config.response_topic_list,
-
-            //SoftwareOperation::SoftwareUpdates => &self.config.response_topic_update,
-
-            //    SoftwareOperation::UnknownOperation => {
-            //        error!("UnknownOperation in store.");
-            //        &self.config.errors_topic
-            //    }
-            //};
-            // this currently fails all pending operations
             let response = SoftwareRequestResponse::new(&id, status);
 
             let () = mqtt
@@ -505,6 +542,40 @@ impl SmAgent {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(tag = "type")]
+struct SystemUptime {
+    uptime_secs: f32,
+    cpu_cores_idle_secs: f32,
+}
+
+pub trait JsonifySystem<'a>
+where
+    Self: Deserialize<'a> + Serialize + Sized,
+{
+    fn from_json(json_str: &'a str) -> Result<Self, SoftwareError> {
+        Ok(serde_json::from_str(json_str)?)
+    }
+
+    fn from_slice(bytes: &'a [u8]) -> Result<Self, SoftwareError> {
+        Ok(serde_json::from_slice(bytes)?)
+    }
+
+    fn to_json(&self) -> Result<String, SoftwareError> {
+        Ok(serde_json::to_string(self)?)
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, SoftwareError> {
+        Ok(serde_json::to_vec(self)?)
+    }
+}
+
+impl<'a> JsonifySystem<'a> for SystemUptime {}
+
+fn tedge_agent_restart_file_exists() -> bool {
+    std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string()).exists()
 }
 
 fn get_default_plugin(
@@ -524,23 +595,4 @@ async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
         .await?;
 
     Ok(())
-}
-
-/// Variants of supported software operations.
-#[derive(Debug, Clone, PartialEq)]
-pub enum SoftwareOperation {
-    CurrentSoftwareList,
-    SoftwareUpdates,
-    UnknownOperation,
-}
-
-// TODO: what exactly does this do?
-impl From<String> for SoftwareOperation {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            r#"list"# => Self::CurrentSoftwareList,
-            r#"update"# => Self::SoftwareUpdates,
-            _ => Self::UnknownOperation,
-        }
-    }
 }
