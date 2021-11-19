@@ -23,7 +23,7 @@ jobs:
         with:
           toolchain: 1.54.0
           override: true
-          components: rustfmt, clippy, msrv
+          components: rustfmt, clippy
 
   cargo-fmt:
 
@@ -141,16 +141,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-#      - name: Enable cache
-#        # https://github.com/marketplace/actions/rust-cache
-#        uses: Swatinem/rust-cache@v1
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
 
-#      - name: Cargo install msrv
-#        uses: actions-rs/cargo@v1
-#        # https://github.com/marketplace/actions/rust-cargo
-#        with:
-#          command: install
-#          args: cargo-msrv
+      - name: Cargo install msrv
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-msrv
 
       - name: Cargo msrv --version
         uses: actions-rs/cargo@v1
