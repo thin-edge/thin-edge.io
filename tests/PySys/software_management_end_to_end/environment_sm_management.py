@@ -89,7 +89,8 @@ class SoftwareManagement(EnvironmentC8y):
 
     dockerplugin = None
 
-    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
+    #tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
+    tenant_url = "pradeep.latest.stage.c8y.io"
 
     def setup(self):
         """Setup Environment"""
@@ -201,6 +202,84 @@ class SoftwareManagement(EnvironmentC8y):
         self.log.info("Started operation: %s", self.operation)
 
         req.raise_for_status()
+
+    def trigger_log_request(self):
+        """Take an actions description that is then forwarded to c8y.
+        So far, no checks are done on the json_content.
+
+        TODO Improve repository ID management to avoid hardcoded IDs
+        """
+
+        url = f"https://{self.tenant_url}/devicecontrol/operations"
+
+        payload = {
+            "deviceId": self.project.deviceid,
+            "description":"Log file request",
+            "c8y_LogfileRequest":
+            {
+                "dateFrom":"2021-11-17T18:55:49+0530",
+                "dateTo":"2021-11-19T18:55:49+0530",
+                "logFile":"software-management",
+                "searchText":"",
+                "maximumLines":1000
+            }
+        }
+        
+        req = requests.post(
+            url, json=payload, headers=self.header, timeout=self.timeout_req
+        )
+
+        jresponse = json.loads(req.text)
+
+        self.log.info("Response status: %s", req.status_code)
+        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
+
+        self.operation = jresponse
+        self.operation_id = jresponse.get("id")
+
+        if not self.operation_id:
+            raise SystemError("field id is missing in response")
+
+        self.log.info("Started operation: %s", self.operation)
+
+        req.raise_for_status()
+
+    
+    def check_if_log_req_complete(self):
+        """Check if a package is installed"""
+
+        url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
+        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
+
+        req.raise_for_status()
+
+        jresponse = json.loads(req.text)
+
+        ret = False
+       
+        log_response = jresponse.get("c8y_LogfileRequest")
+        #self.log.info("Started operation: %s", log_response)
+        log_file = log_response.get("file")
+        self.log.info("Started operation: %s", log_file)
+        if log_response.get("file") != None:
+            ret = True
+            # f = open(log_file, "r")
+            # print(f.read())
+
+
+        # if log_response.get("file") == package_name:
+        #     self.log.info("Package %s is installed", package_name)
+        #     # self.log.info(package)
+        #     if version:
+        #         if package.get("version") == version:
+        #             ret = True
+        #             break
+
+        #     raise SystemError("Wrong version is installed")
+
+        #     ret = True
+        #     break
+        return ret
 
     def is_status_fail(self):
         """Check if the current status is a fail"""
@@ -403,6 +482,8 @@ class SoftwareManagement(EnvironmentC8y):
                 ret = True
                 break
         return ret
+
+        
 
     def get_pkg_version(self, pkg):
         """ "Use apt-cache madison to derive a package version from
