@@ -23,7 +23,6 @@ jobs:
         with:
           toolchain: 1.54.0
           override: true
-          components: audit, outdated
 
   cargo-tarpaulin:
 
