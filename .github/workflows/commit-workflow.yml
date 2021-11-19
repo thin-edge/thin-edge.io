@@ -23,6 +23,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Cargo fmt --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: --version
+
       - name: Cargo fmt
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -43,6 +50,13 @@ jobs:
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Cargo clippy --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: clippy
+          args: --version
 
       - name: Cargo clippy
         uses: actions-rs/cargo@v1
@@ -65,6 +79,12 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
+      - name: Cargo version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: version
+
       - name: Cargo test
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -86,6 +106,12 @@ jobs:
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Cargo version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: version
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
@@ -135,6 +161,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      # In usual case, we don't need this step.
+      # There is an issue with cargo-outdated 0.10.0, therefore, explicitly need to install the latest version.
+      # This step takes a certain time, so it should be removed in the future.
+      - name: Cargo install outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-outdated
+
+      - name: Cargo outdated --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
+          args: --version
+
       - name: Cargo outdated
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -160,6 +207,13 @@ jobs:
         with:
           command: install
           args: cargo-msrv
+
+      - name: Cargo msrv --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: msrv
+          args: --version
 
       - name: Cargo msrv
         uses: actions-rs/cargo@v1
