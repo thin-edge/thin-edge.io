@@ -332,6 +332,7 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "serde_json",
+ "test-case",
  "thin_edge_json",
  "thiserror",
 ]
