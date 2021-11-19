@@ -1,13 +1,16 @@
 mod error;
 
 use crate::error::InternalError;
-use serde::Deserialize;
 use std::fs::{self, File};
 use std::os::unix::prelude::ExitStatusExt;
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
 
+/// This plugin supports the installation, updation and removal of a single unversioned apama project named "project".
+/// Installation of multiple parallel projects is not supported.
+/// Installing a project will replace the existing project with the new one.
+/// Delta update of a project(for eg: updating just the `mon` file definitions in the project) is not supported either.
 #[derive(StructOpt)]
 struct ApamaCli {
     #[structopt(subcommand)]
@@ -16,10 +19,10 @@ struct ApamaCli {
 
 #[derive(StructOpt)]
 pub enum PluginOp {
-    /// List all the installed modules
+    /// List the one and only apama project if one is installed
     List,
 
-    /// Install a module
+    /// Install an apama project
     Install {
         module: String,
         #[structopt(short = "v", long = "--module-version")]
@@ -28,7 +31,7 @@ pub enum PluginOp {
         file_path: String,
     },
 
-    /// Uninstall a module
+    /// Remove an apama project
     Remove {
         module: String,
         #[structopt(short = "v", long = "--module-version")]
@@ -42,25 +45,10 @@ pub enum PluginOp {
     Finalize,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum UpdateAction {
-    Install,
-    Remove,
-}
-#[derive(Debug, Deserialize)]
-struct SoftwareModuleUpdate {
-    pub action: UpdateAction,
-    pub name: String,
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub path: Option<String>,
-}
-
 const APAMA_ENV_EXE: &str = "/opt/softwareag/Apama/bin/apama_env";
 const TEDGE_APAMA_PROJECT_DIR: &str = "/etc/tedge/apama/project";
 const TMP_APAMA_PROJECT_DIR: &str = "/tmp/tedge_apama_project";
+const APAMA_PROJECT_NAME: &str = "project";
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let success = ExitStatus::from_raw(0);
@@ -75,9 +63,10 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let tmp_apama_project_path = Path::new(TMP_APAMA_PROJECT_DIR);
 
     let status = match operation {
+        // Since there can only be a single project named `project`, print its name if installed
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
-                println!("project\t")
+                println!("{}\t", APAMA_PROJECT_NAME)
             }
             success
         }
@@ -85,7 +74,10 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
         PluginOp::Prepare => success,
 
         PluginOp::Finalize => {
-            fs::remove_dir_all(tmp_apama_project_path)?;
+            // Cleanup any temporary artefacts created by this plugin
+            if tmp_apama_project_path.exists() {
+                fs::remove_dir_all(tmp_apama_project_path)?;
+            }
             success
         }
 
@@ -130,13 +122,15 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             module: _,
             version: _,
         } => {
-            println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
-            fs::remove_dir_all(tedge_apama_project_path)?;
-            println!("Removal of existing project successful");
+            if tedge_apama_project_path.exists() {
+                println!("Stopping apama service");
+                run_cmd("service", "apama stop")?;
+                println!("Stopping apama service successful");
 
-            println!("Stopping apama service");
-            run_cmd("service", "apama stop")?;
-            println!("Stopping apama service successful");
+                println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
+                fs::remove_dir_all(tedge_apama_project_path)?;
+                println!("Removal of existing project successful");
+            }
 
             success
         }
@@ -157,9 +151,9 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
 
 fn main() {
     // On usage error, the process exits with a status code of 1
-    let apt = ApamaCli::from_args();
+    let apama = ApamaCli::from_args();
 
-    match run(apt.operation) {
+    match run(apama.operation) {
         Ok(status) if status.success() => {
             std::process::exit(0);
         }
