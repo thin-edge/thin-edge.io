@@ -21,7 +21,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.24.3
+          toolchain: 1.54.0
           override: true
           components: rustfmt, clippy, msrv
 
