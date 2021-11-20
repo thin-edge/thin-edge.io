@@ -37,6 +37,15 @@ pub enum AgentError {
 
     #[error("Command returned non 0 exit code.")]
     CommandFailed,
+
+    #[error("Failed parsing /proc/uptime")]
+    UptimeParserError,
+
+    #[error("Failed to cast string to float.")]
+    FloatCastingError,
+
+    #[error("Failed to read 'modified at' for /run/tedge_agent_restart file.")]
+    NoModifiedAt,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -5,9 +5,8 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-
+use chrono::{prelude::*, Duration};
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-use serde::{Deserialize, Serialize};
 
 use json_sm::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
@@ -30,8 +29,8 @@ use tedge_config::{
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
 
-// tmp
 const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
+const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
@@ -408,8 +407,7 @@ impl SmAgent {
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
-        let tedge_agent_restart_marker = PathBuf::from(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
-        let _ = std::fs::File::create(tedge_agent_restart_marker)?;
+        let () = TedgeRebootHandler::create_slash_run_file()?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
@@ -481,7 +479,7 @@ impl SmAgent {
                 }
 
                 StateStatus::Restart(RestartOperationStatus::Restarting)
-                    if tedge_agent_restart_file_exists() =>
+                    if TedgeRebootHandler::slash_run_file_exists() =>
                 {
                     // if the status is `::Restarting` but `/run/tedge_agent_restart` has not been
                     // deleted, we need extra checks to be sure the system rebooted.
@@ -490,40 +488,22 @@ impl SmAgent {
                     // 2. diff from datetime.now()
                     // 3. compare with /run/tedge_agent_restart.modified()
                     // 4. if diff is small, we can be confident the restart happened.
-                    let file = std::fs::File::open(std::path::Path::new("/proc/uptime"))?;
-                    let mut buf_reader = std::io::BufReader::new(file);
-                    let mut buffer = String::new();
-                    buf_reader.read_to_string(&mut buffer)?;
+                    let _state = self.persistance_store.clear().await?;
 
-                    dbg!(SystemUptime::from_slice(buffer.as_bytes()));
-
-                    dbg!(&buffer);
-
-                    //if std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())
-                    //    .exists()
-                    //{
-                    //    let metadata =
-                    //        std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())
-                    //            .metadata()
-                    //            .unwrap();
-                    //    // 1. /run/tedge_agent_restart ---> metadata... | on reboot is deleted.
-                    //    // 2. check pending operations, if "::Restarting", && no /run/tedge_agent -> SUCCESS
-                    //    // 3. ::Pending? -> FAIL
-                    //    // 4. ::Restarting but /run/tedge_agent -> {compare time.now() - /proc/uptime{0} COMPARE with /run/tedge_agent_restart }
-
-                    //    if let Ok(time) = metadata.modified() {
-                    //        dbg!(&time);
-                    //        let epoch_timestamp =
-                    //            time.duration_since(std::time::UNIX_EPOCH).unwrap();
-                    //        dbg!(epoch_timestamp);
-                    //    } else {
-                    //        println!("Not supported on this platform");
-                    //    }
-                    //}
-                    status = OperationStatus::Successful;
-                    &self.config.response_topic_restart
+                    let system_uptime = SystemUptime::compute()?;
+                    let tedge_agent_restart_dt = TedgeRebootHandler::get_slash_run_file_datetime()?;
+                    let diff = tedge_agent_restart_dt - system_uptime.reboot_time;
+                    let maximum_duration = Duration::minutes(5);
+                    if maximum_duration > diff {
+                        status = OperationStatus::Successful;
+                        &self.config.response_topic_restart
+                    } else {
+                        error!("Restart failed, duration > 5 minutes.");
+                        &self.config.response_topic_restart
+                    }
                 }
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
+                    let _state = self.persistance_store.clear().await?;
                     status = OperationStatus::Successful;
                     &self.config.response_topic_restart
                 }
@@ -545,38 +525,93 @@ impl SmAgent {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(tag = "type")]
+#[derive(Debug)]
 struct SystemUptime {
-    uptime_secs: f32,
-    cpu_cores_idle_secs: f32,
+    reboot_time: DateTime<Local>,
 }
 
-pub trait JsonifySystem<'a>
-where
-    Self: Deserialize<'a> + Serialize + Sized,
-{
-    fn from_json(json_str: &'a str) -> Result<Self, SoftwareError> {
-        Ok(serde_json::from_str(json_str)?)
+struct TedgeRebootHandler {}
+
+impl TedgeRebootHandler {
+    /// creates an empty file in /run
+    /// the file name is given in `SLASH_RUN_PATH_TEDGE_AGENT_RESTART`
+    ///
+    /// # Example
+    /// ```
+    /// let () = TedgeRebootHandler::create_slash_run_file()?;
+    /// ```
+    fn create_slash_run_file() -> Result<(), AgentError> {
+        let tedge_agent_restart_marker = PathBuf::from(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+        let _ = std::fs::File::create(tedge_agent_restart_marker)?;
+        Ok(())
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, SoftwareError> {
-        Ok(serde_json::from_slice(bytes)?)
+    fn slash_run_file_exists() -> bool {
+        std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string()).exists()
     }
 
-    fn to_json(&self) -> Result<String, SoftwareError> {
-        Ok(serde_json::to_string(self)?)
-    }
+    fn get_slash_run_file_datetime() -> Result<DateTime<Local>, AgentError> {
+        let metadata = std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())
+            .metadata()
+            .expect("metadata call failed.");
+        // 1. /run/tedge_agent_restart ---> metadata... | on reboot is deleted.
+        // 2. check pending operations, if "::Restarting", && no /run/tedge_agent -> SUCCESS
+        // 3. ::Pending? -> FAIL
+        // 4. ::Restarting but /run/tedge_agent -> {compare time.now() - /proc/uptime{0} COMPARE with /run/tedge_agent_restart }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, SoftwareError> {
-        Ok(serde_json::to_vec(self)?)
+        if let Ok(time) = metadata.modified() {
+            let duration = time
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let dt = NaiveDateTime::from_timestamp(duration as i64, 0);
+            let dt: DateTime<Local> = Local.from_local_datetime(&dt).unwrap();
+            Ok(dt)
+        } else {
+            Err(AgentError::NoModifiedAt)
+        }
     }
 }
 
-impl<'a> JsonifySystem<'a> for SystemUptime {}
+impl SystemUptime {
+    /// computes the time of last reboot.
+    ///
+    /// where "time of last reboot" is defined as:
+    ///     current datetime - number of seconds the system has been up.
+    ///
+    /// number of seconds the system has been up are obtained from /proc/uptime
+    ///
+    /// # Example
+    /// ```
+    /// let system_uptime = SystemUptime::compute()?;
+    /// println!(system_uptime.reboot_time);
+    /// ```
+    ///
+    fn compute() -> Result<Self, AgentError> {
+        // reading uptime
+        let uptime_file = std::fs::File::open(std::path::Path::new(SLASH_PROC_UPTIME))?;
+        let mut buf_reader = std::io::BufReader::new(uptime_file);
+        let mut buffer = String::new();
+        buf_reader.read_to_string(&mut buffer)?;
 
-fn tedge_agent_restart_file_exists() -> bool {
-    std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string()).exists()
+        // system uptime is the first value of the /proc/uptime file content
+        let maybe_uptime = buffer.split(' ').nth(0);
+
+        if let Some(uptime) = maybe_uptime {
+            match uptime.parse::<f64>() {
+                Ok(result) => {
+                    let local: DateTime<Local> = Local::now();
+                    let uptime_secs = result as i64;
+                    let duration = Duration::seconds(uptime_secs);
+                    let reboot_time = local - duration;
+                    Ok(Self { reboot_time })
+                }
+                Err(_err) => Err(AgentError::FloatCastingError),
+            }
+        } else {
+            return Err(AgentError::UptimeParserError);
+        }
+    }
 }
 
 fn get_default_plugin(
