@@ -5,11 +5,11 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
-chrono = "0.4"
 clock = { path = "../../../common/clock" }
 json-writer = { path = "../../../common/json_writer" }
 thin_edge_json = { path = "../../thin_edge_json" }
 thiserror = "1.0"
+time = "0.3"
 
 [dev-dependencies]
 anyhow = "1.0"

@@ -230,7 +230,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "batcher"
 version = "0.4.2"
 dependencies = [
- "chrono",
+ "time 0.3.5",
  "tokio",
 ]
 
@@ -310,12 +310,12 @@ version = "0.4.2"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "csv",
  "json_sm",
  "serde",
  "serde_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -325,7 +325,6 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -335,6 +334,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -395,7 +395,6 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "serde",
  "time 0.1.43",
  "winapi",
 ]
@@ -2616,7 +2615,6 @@ dependencies = [
  "batcher",
  "c8y_smartrest",
  "c8y_translator_lib",
- "chrono",
  "clock",
  "csv",
  "flockfile",
@@ -2637,6 +2635,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
  "tokio",
  "tokio-test",
  "tracing",
@@ -2720,7 +2719,6 @@ name = "thin_edge_json"
 version = "0.4.2"
 dependencies = [
  "anyhow",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -2730,6 +2728,7 @@ dependencies = [
  "serde_json",
  "stats_alloc",
  "thiserror",
+ "time 0.3.5",
  "walkdir",
 ]
 
@@ -2780,6 +2779,7 @@ checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
 dependencies = [
  "itoa",
  "libc",
+ "serde",
 ]
 
 [[package]]

@@ -14,9 +14,9 @@
 //! ```
 
 use crate::serializer;
-use chrono::prelude::*;
 use clock::{Clock, WallClock};
 use thin_edge_json::parser::*;
+use time::{self, OffsetDateTime};
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
@@ -46,7 +46,7 @@ pub fn from_thin_edge_json_with_child(
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
-    timestamp: DateTime<FixedOffset>,
+    timestamp: OffsetDateTime,
     maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);

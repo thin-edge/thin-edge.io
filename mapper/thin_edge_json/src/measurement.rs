@@ -1,5 +1,4 @@
-use chrono::offset::FixedOffset;
-use chrono::DateTime;
+use time::OffsetDateTime;
 
 /// The `MeasurementVisitor` trait represents the capability to visit a series of measurements, possibly grouped.
 ///
@@ -7,7 +6,8 @@ use chrono::DateTime;
 ///
 /// ```
 /// # use thin_edge_json::measurement::*;
-/// # use chrono::*;
+/// # use time::OffsetDateTime;
+///
 /// struct MeasurementPrinter {
 ///     group: Option<String>,
 /// }
@@ -27,7 +27,7 @@ use chrono::DateTime;
 /// impl MeasurementVisitor for MeasurementPrinter {
 ///     type Error = MeasurementError;
 ///
-///     fn visit_timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+///     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
 ///         if self.group.is_none() {
 ///             Ok(println!("time = {}", timestamp.to_rfc2822()))
 ///         } else {
@@ -67,7 +67,7 @@ pub trait MeasurementVisitor {
     type Error: std::error::Error + std::fmt::Debug;
 
     /// Set the timestamp shared by all the measurements of this series.
-    fn visit_timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), Self::Error>;
+    fn visit_timestamp(&mut self, value: OffsetDateTime) -> Result<(), Self::Error>;
 
     /// Add a new measurement, attached to the current group if any.
     fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error>;

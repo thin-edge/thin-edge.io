@@ -42,9 +42,6 @@ pub(crate) enum SMCumulocityMapperError {
     InvalidUtf8Path,
 
     #[error(transparent)]
-    FromChronoParse(#[from] chrono::ParseError),
-
-    #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
     #[error("Request timed out")]

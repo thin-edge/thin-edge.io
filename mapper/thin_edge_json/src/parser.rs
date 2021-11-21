@@ -3,7 +3,6 @@
 //! [^1]: It only allocates in presence of escaped strings as keys.
 //!
 use crate::measurement::MeasurementVisitor;
-use chrono::prelude::*;
 use serde::{
     de::{self, DeserializeSeed, MapAccess},
     Deserializer,
@@ -11,6 +10,7 @@ use serde::{
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
+use time::{format_description, OffsetDateTime};
 
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(
@@ -99,8 +99,11 @@ where
                 }
                 "time" => {
                     let timestamp_str: &str = map.next_value()?;
-                    let timestamp = DateTime::parse_from_rfc3339(timestamp_str)
-                        .map_err(|err| de::Error::custom(invalid_timestamp(timestamp_str, err)))?;
+                    let timestamp = OffsetDateTime::parse(
+                        timestamp_str,
+                        &format_description::well_known::Rfc3339,
+                    )
+                    .map_err(|err| de::Error::custom(invalid_timestamp(timestamp_str, err)))?;
 
                     let () = self
                         .visitor

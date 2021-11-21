@@ -7,7 +7,6 @@ use thin_edge_json::{
 };
 
 use crate::collectd_mapper::{collectd::CollectdMessage, error::DeviceMonitorError};
-use chrono::Local;
 use thin_edge_json::group::MeasurementGrouperError;
 
 #[derive(Debug)]
@@ -72,7 +71,6 @@ impl MessageBatch {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use chrono::{TimeZone, Utc};
     use clock::{Clock, WallClock};
 
     #[test]

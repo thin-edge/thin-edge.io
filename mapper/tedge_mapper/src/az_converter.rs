@@ -53,7 +53,6 @@ mod tests {
     use crate::size_threshold::SizeThresholdExceeded;
     use assert_json_diff::*;
     use assert_matches::*;
-    use chrono::{FixedOffset, TimeZone};
     use mqtt_client::Topic;
     use serde_json::json;
 

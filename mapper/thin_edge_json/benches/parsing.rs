@@ -1,6 +1,6 @@
-use chrono::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use thin_edge_json::measurement::MeasurementVisitor;
+use time::OffsetDateTime;
 
 const INPUT: &str = r#"{
     "time" : "2021-04-30T17:03:14.123+02:00",
@@ -26,7 +26,7 @@ struct DummyVisitor;
 impl MeasurementVisitor for DummyVisitor {
     type Error = DummyError;
 
-    fn visit_timestamp(&mut self, _value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, _value: OffsetDateTime) -> Result<(), Self::Error> {
         Ok(())
     }
     fn visit_measurement(&mut self, _name: &str, _value: f64) -> Result<(), Self::Error> {
@@ -41,7 +41,7 @@ impl MeasurementVisitor for DummyVisitor {
 }
 
 fn parse_stream(input: &str) {
-    thin_edge_json::stream::parse_str(input, &mut DummyVisitor).unwrap();
+    thin_edge_json::parser::parse_str(input, &mut DummyVisitor).unwrap();
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

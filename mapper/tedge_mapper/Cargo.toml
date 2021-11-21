@@ -30,7 +30,6 @@ async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 c8y_smartrest = { path = "../cumulocity/c8y_smartrest" }
 c8y_translator_lib = { path = "../cumulocity/c8y_translator_lib" }
-chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"
 flockfile = { path = "../../common/flockfile" }
@@ -47,6 +46,7 @@ tedge_users = { path = "../../common/tedge_users" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = {path = "../thin_edge_json" }
 thiserror = "1.0"
+time = "0.3"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
 

@@ -14,7 +14,6 @@ use c8y_smartrest::{
         SmartRestSetSupportedLogType, SmartRestSetSupportedOperations,
     },
 };
-use chrono::{DateTime, FixedOffset, Local};
 use json_sm::{
     Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
     SoftwareOperationStatus, SoftwareUpdateResponse,
@@ -25,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
+use time::OffsetDateTime;
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
 
@@ -448,7 +448,7 @@ async fn create_log_event(
 
     let create_event_url = get_url_for_create_event(&url_host);
 
-    let local: DateTime<Local> = Local::now();
+    let local = time::OffsetDateTime::now_utc();
 
     let c8y_log_event = C8yCreateEvent::new(
         c8y_managed_object.to_owned(),
@@ -481,7 +481,7 @@ async fn create_log_event(
 /// ```
 fn get_datetime_from_file_path(
     log_path: &PathBuf,
-) -> Result<DateTime<FixedOffset>, SMCumulocityMapperError> {
+) -> Result<OffsetDateTime, SMCumulocityMapperError> {
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3

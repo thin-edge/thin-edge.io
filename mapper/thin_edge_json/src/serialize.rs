@@ -1,12 +1,11 @@
 use crate::measurement::MeasurementVisitor;
-use chrono::offset::FixedOffset;
-use chrono::DateTime;
 use json_writer::{JsonWriter, JsonWriterError};
+use time::{format_description, OffsetDateTime};
 
 pub struct ThinEdgeJsonSerializer {
     json: JsonWriter,
     is_within_group: bool,
-    default_timestamp: Option<DateTime<FixedOffset>>,
+    default_timestamp: Option<OffsetDateTime>,
     timestamp_present: bool,
 }
 
@@ -45,7 +44,7 @@ impl ThinEdgeJsonSerializer {
         Self::new_with_timestamp(None)
     }
 
-    pub fn new_with_timestamp(default_timestamp: Option<DateTime<FixedOffset>>) -> Self {
+    pub fn new_with_timestamp(default_timestamp: Option<OffsetDateTime>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
         let mut json = JsonWriter::with_capacity(capa);
         json.write_open_obj();
@@ -92,13 +91,18 @@ impl Default for ThinEdgeJsonSerializer {
 impl MeasurementVisitor for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
 
-    fn visit_timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
         self.json.write_key("time")?;
-        self.json.write_str(timestamp.to_rfc3339().as_str())?;
+        self.json.write_str(
+            timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
+        )?;
         self.timestamp_present = true;
         Ok(())
     }
@@ -134,8 +138,9 @@ impl MeasurementVisitor for ThinEdgeJsonSerializer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{offset::FixedOffset, DateTime, Local};
-    fn test_timestamp() -> DateTime<FixedOffset> {
+    use time::OffsetDateTime;
+
+    fn test_timestamp() -> OffsetDateTime {
         let local_time_now: DateTime<Local> = Local::now();
         local_time_now.with_timezone(local_time_now.offset())
     }

@@ -27,6 +27,7 @@ tedge_config = { path = "../tedge_config" }
 tedge_users = { path = "../common/tedge_users" }
 tedge_utils = { path = "../common/tedge_utils" }
 thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
 toml = "0.5"
 url = "2.2"
 webpki = "0.21"

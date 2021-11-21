@@ -1,9 +1,9 @@
 use crate::batchable::Batchable;
 use crate::batcher::Batcher;
 use crate::batcher::BatcherOutput;
-use chrono::{DateTime, Utc};
 use std::collections::BTreeSet;
 use std::time::Duration;
+use time::OffsetDateTime;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -33,13 +33,13 @@ pub struct BatchDriver<B: Batchable> {
     batcher: Batcher<B>,
     input: Receiver<BatchDriverInput<B>>,
     output: Sender<BatchDriverOutput<B>>,
-    timers: BTreeSet<DateTime<Utc>>,
+    timers: BTreeSet<OffsetDateTime>,
 }
 
 enum TimeTo {
     Unbounded,
     Future(std::time::Duration),
-    Past(DateTime<Utc>),
+    Past(OffsetDateTime),
 }
 
 impl<B: Batchable> BatchDriver<B> {
@@ -65,7 +65,7 @@ impl<B: Batchable> BatchDriver<B> {
                 TimeTo::Future(timeout) => self.recv(Some(timeout)),
                 TimeTo::Past(timer) => {
                     self.timers.remove(&timer);
-                    self.time(Utc::now()).await?;
+                    self.time(OffsetDateTime::now_utc()).await?;
                     continue;
                 }
             };
@@ -95,17 +95,18 @@ impl<B: Batchable> BatchDriver<B> {
         match self.timers.iter().next() {
             None => TimeTo::Unbounded,
             Some(timer) => {
-                let signed_duration = timer.signed_duration_since(Utc::now());
-                match signed_duration.to_std() {
-                    Ok(d) => TimeTo::Future(d),
-                    Err(_) => TimeTo::Past(*timer),
+                let timer2 = timer.clone();
+                let signed_duration = timer2 - OffsetDateTime::now_utc();
+                if signed_duration.is_negative() {
+                    return TimeTo::Past(*timer);
                 }
+                TimeTo::Future(std::time::Duration::new(signed_duration.abs()))
             }
         }
     }
 
     async fn event(&mut self, event: B) -> Result<(), SendError<BatchDriverOutput<B>>> {
-        for action in self.batcher.event(Utc::now(), event) {
+        for action in self.batcher.event(OffsetDateTime::now_utc(), event) {
             match action {
                 BatcherOutput::Batch(batch) => {
                     self.output.send(BatchDriverOutput::Batch(batch)).await?;
@@ -119,7 +120,7 @@ impl<B: Batchable> BatchDriver<B> {
         Ok(())
     }
 
-    async fn time(&mut self, timer: DateTime<Utc>) -> Result<(), SendError<BatchDriverOutput<B>>> {
+    async fn time(&mut self, timer: OffsetDateTime) -> Result<(), SendError<BatchDriverOutput<B>>> {
         for batch in self.batcher.time(timer) {
             self.output.send(BatchDriverOutput::Batch(batch)).await?;
         }
@@ -143,7 +144,6 @@ mod tests {
     use crate::batcher::Batcher;
     use crate::config::BatchConfigBuilder;
     use crate::driver::BatchDriver;
-    use chrono::{DateTime, Utc};
     use std::time::Duration;
     use tokio::sync::mpsc::error::SendError;
     use tokio::sync::mpsc::{channel, Receiver, Sender};

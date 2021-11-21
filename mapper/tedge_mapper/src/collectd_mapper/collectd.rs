@@ -1,13 +1,13 @@
 use batcher::Batchable;
-use chrono::{DateTime, NaiveDateTime, Utc};
 use mqtt_client::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
+use time::{Duration, OffsetDateTime};
 
 #[derive(Debug)]
 pub struct CollectdMessage {
     pub metric_group_key: String,
     pub metric_key: String,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: OffsetDateTime,
     pub metric_value: f64,
 }
 
@@ -43,7 +43,7 @@ impl CollectdMessage {
         metric_group_key: &str,
         metric_key: &str,
         metric_value: f64,
-        timestamp: DateTime<Utc>,
+        timestamp: OffsetDateTime,
     ) -> Self {
         Self {
             metric_group_key: metric_group_key.to_string(),
@@ -154,10 +154,12 @@ impl CollectdPayload {
         }
     }
 
-    pub fn timestamp(&self) -> DateTime<Utc> {
+    pub fn timestamp(&self) -> OffsetDateTime {
         let timestamp = self.timestamp.trunc() as i64;
         let nanoseconds = (self.timestamp.fract() * 1.0e9) as u32;
-        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, nanoseconds), Utc)
+        OffsetDateTime::from_unix_timestamp(timestamp).unwrap()
+            + Duration::nanoseconds(nanoseconds as i64)
+        // DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, nanoseconds), Utc)
     }
 }
 
@@ -168,7 +170,7 @@ impl Batchable for CollectdMessage {
         format!("{}/{}", &self.metric_group_key, &self.metric_key)
     }
 
-    fn event_time(&self) -> DateTime<Utc> {
+    fn event_time(&self) -> OffsetDateTime {
         self.timestamp
     }
 }
@@ -176,7 +178,6 @@ impl Batchable for CollectdMessage {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use chrono::TimeZone;
     use mqtt_client::Topic;
 
     use super::*;
