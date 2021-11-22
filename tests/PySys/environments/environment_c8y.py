@@ -83,15 +83,19 @@ class Cumulocity(object):
         return None
 
     def get_last_measurements_from_device(self, device_internal_id: str):
+        self.get_last_n_measurements_from_device(
+            device_internal_id=device_internal_id, target_size=1)
+
+    def get_last_n_measurements_from_device(self, device_internal_id: int, target_size: int):
         params = {
             "source": device_internal_id,
-            "pageSize": 1,
+            "pageSize": target_size,
             "revert": True
         }
         res = requests.get(
             url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
         measurements_json = self.to_json_response(res)
-        return measurements_json['measurements'][0]
+        return measurements_json['measurements']
 
     def delete_managed_object_by_internal_id(self, internal_id: str):
         res = requests.delete(
