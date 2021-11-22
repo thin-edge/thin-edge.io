@@ -32,13 +32,13 @@ sudo tedge config set software.plugin.default apt
 
 pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='container'
 
-mv tests/PySys/__pysys_junit_xml tests/PySys/pysys_junit_xml_apt
+mv __pysys_junit_xml pysys_junit_xml_apt
 
 sudo cp ../../sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
 
 pysys.py run --record -v DEBUG 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
 
-mv tests/PySys/__pysys_junit_xml tests/PySys/pysys_junit_xml_docker
+mv __pysys_junit_xml pysys_junit_xml_docker
 
 sudo rm -f /etc/tedge/sm-plugins/docker
 

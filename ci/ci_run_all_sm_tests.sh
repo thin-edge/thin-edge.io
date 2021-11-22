@@ -49,4 +49,4 @@ sudo tedge config unset software.plugin.default
 sudo rm -f /etc/tedge/sm-plugins/docker
 sudo rm -f /etc/tedge/sm-plugins/fruits
 
-mv tests/PySys/__pysys_junit_xml tests/PySys/pysys_junit_xml_sm
+mv __pysys_junit_xml pysys_junit_xml_sm
