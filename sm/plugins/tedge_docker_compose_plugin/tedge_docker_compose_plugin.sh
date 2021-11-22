@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Expected signature example: $sudo ./tedge_docker_compose_plugin.sh remove nextcloud-postgres
+# File should be downloaded to /tmp/
 usage() {
     cat << EOF
 USAGE:
@@ -16,6 +18,7 @@ EOF
 
 DOCKER_COMPOSE_PLUGIN_PATH='/etc/tedge/sm-plugins/docker-compose/'
 EXTENSION=".yaml"
+TMP_PATH="/tmp/"
 
 unsupported_args_check() {
     if ! [ -z $1 ]; then
@@ -69,8 +72,10 @@ case "$COMMAND" in
     install)
         # Extract the docker docker-compose path into the COMPOSE_FILE variable
         extract_docker_compose_path_from_args $@
-        sudo cp $COMPOSE_FILE $DOCKER_COMPOSE_PLUGIN_PATH
-        COMPOSE_NAME="$(echo $COMPOSE_FILE | cut -d/ -f3 | cut -d. -f1)"
+        TMP_PATH="$TMP_PATH$COMPOSE_ARG$EXTENSION"
+        echo $TMP_PATH
+        sudo cp $TMP_PATH $DOCKER_COMPOSE_PLUGIN_PATH
+        COMPOSE_NAME="$(echo $TMP_PATH | cut -d/ -f3 | cut -d. -f1)"
         INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME$EXTENSION"
         echo $INSTALL_PATH
 
