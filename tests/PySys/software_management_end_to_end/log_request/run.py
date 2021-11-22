@@ -32,14 +32,14 @@ class LogRequest(SoftwareManagement):
                 "dateFrom":"2021-11-16T18:55:49+0530",
                 "dateTo":"2021-11-18T18:55:49+0530",
                 "logFile":"software-management",
-                "searchText":"",
-                "maximumLines":1000
+                "searchText":"Error",
+                "maximumLines":10
             }
 
         self.trigger_log_request(log_file_request_payload)
 
     def validate(self):
-        status = self.wait_until_installed()
+        status = self.wait_until_retrieved_logs()
         if not status:
             self.log.info("failed, explicitly failing request")
             self.stopLogOpCleanup()
@@ -54,7 +54,7 @@ class LogRequest(SoftwareManagement):
             stdouterr="send_failed",           
         )
 
-    def wait_until_installed(self):
+    def wait_until_retrieved_logs(self):
         for i in range(1,20):
             time.sleep(1)
             if self.check_if_log_req_complete():

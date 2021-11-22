@@ -249,9 +249,18 @@ class SoftwareManagement(EnvironmentC8y):
         log_file = log_response.get("file")
         self.log.info("Logfile path: %s", log_file)
         if log_response.get("file") != None:
-            ret = True
-
+            if self.download_file_and_verify(log_file):
+                ret = True
         return ret
+
+    def download_file_and_verify(self, url):
+        get_response = requests.get(url,auth=(self.project.username, self.project.c8ypass), stream=True)
+        file_name  = url.split("/")[-1]
+        for chunk in get_response.iter_content(chunk_size=1024):
+            if b"Error" in chunk:
+                return True
+            else:
+                return False
 
     def is_status_fail(self):
         """Check if the current status is a fail"""
