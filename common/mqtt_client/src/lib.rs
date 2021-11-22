@@ -499,7 +499,7 @@ impl Topic {
     }
 
     /// Build a new topic, assuming the name is valid since received from mqtt.
-    fn incoming(name: &str) -> Topic {
+    pub fn new_unchecked(name: &str) -> Topic {
         let name = String::from(name);
         Topic { name }
     }
@@ -638,7 +638,7 @@ impl From<Publish> for Message {
         } = msg;
 
         Message {
-            topic: Topic::incoming(&topic),
+            topic: Topic::new_unchecked(&topic),
             payload: payload.to_vec(),
             qos,
             pkid,

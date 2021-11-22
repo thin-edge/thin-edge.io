@@ -1,7 +1,14 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
 use json_sm::DownloadInfo;
+use nix::{
+    fcntl::{fallocate, FallocateFlags},
+    sys::statvfs,
+};
 use std::{
+    fs::File,
+    io::Write,
+    os::unix::prelude::AsRawFd,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -34,13 +41,14 @@ impl Downloader {
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
+
         let backoff = ExponentialBackoff {
             initial_interval: Duration::from_secs(30),
             max_elapsed_time: Some(Duration::from_secs(300)),
             ..Default::default()
         };
 
-        let response = retry(backoff, || async {
+        let mut response = retry(backoff, || async {
             let client = if let Some(json_sm::Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
@@ -72,15 +80,22 @@ impl Downloader {
         })
         .await?;
 
-        let content = response.bytes().await?;
+        let file_len = match response.content_length() {
+            Some(len) => len as usize,
+            None => 0,
+        };
+        let mut file =
+            create_file_and_try_pre_allocate_space(self.target_filename.as_path(), file_len)?;
 
-        // Cleanup after `disc full` will happen inside atomic write function.
-        tedge_utils::fs::atomically_write_file_async(
-            self.download_target.as_path(),
-            self.target_filename.as_path(),
-            content.as_ref(),
-        )
-        .await?;
+        while let Some(chunk) = response.chunk().await? {
+            if let Err(err) = file.write_all(&chunk) {
+                drop(file);
+                std::fs::remove_file(self.target_filename.as_path())?;
+                return Err(DownloadError::FromIo {
+                    reason: format!("Failed to download the file with an error {}", err),
+                });
+            }
+        }
 
         Ok(())
     }
@@ -95,13 +110,46 @@ impl Downloader {
     }
 }
 
+fn create_file_and_try_pre_allocate_space(
+    file_path: &Path,
+    file_len: usize,
+) -> Result<File, DownloadError> {
+    let file = File::create(file_path)?;
+    if file_len > 0 {
+        if let Some(root) = file_path.parent() {
+            let tmpstats = statvfs::statvfs(root)?;
+            // Reserve 5% of total disk space
+            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
+            let usable_disk_space =
+                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+
+            if file_len >= usable_disk_space as usize {
+                return Err(DownloadError::InsufficientSpace);
+            }
+            // Reserve diskspace
+            let _ = fallocate(
+                file.as_raw_fd(),
+                FallocateFlags::empty(),
+                0,
+                file_len as nix::libc::off_t,
+            );
+        }
+    }
+    Ok(file)
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::DownloadError;
+
     use super::Downloader;
+    use anyhow::bail;
     use json_sm::{Auth, DownloadInfo};
     use mockito::mock;
+    use nix::sys::statvfs;
+    use std::io::Write;
     use std::path::{Path, PathBuf};
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
 
     #[test]
@@ -140,6 +188,114 @@ mod tests {
         assert_eq!("hello".as_bytes(), log_content);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn downloader_download_with_content_length_larger_than_usable_disk_space(
+    ) -> anyhow::Result<()> {
+        let tmpstats = statvfs::statvfs("/tmp")?;
+        let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_header("content-length", &(usable_disk_space.to_string()))
+            .create();
+
+        let name = "test_download_with_length";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        match downloader.download(&url).await {
+            Err(DownloadError::InsufficientSpace) => return Ok(()),
+            _ => bail!("failed"),
+        }
+    }
+
+    #[tokio::test]
+    async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
+        let file = create_file_with_size(10 * 1024 * 1024)?;
+        let file_path = file.into_temp_path();
+
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_body_from_file(&file_path)
+            .create();
+
+        let name = "test_download_with_length";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+
+        match downloader.download(&url).await {
+            Ok(()) => {
+                let log_content = std::fs::read(downloader.filename())?;
+                let expected_content = std::fs::read(file_path)?;
+                assert_eq!(log_content, expected_content);
+                return Ok(());
+            }
+            _ => bail!("failed"),
+        }
+    }
+
+    #[tokio::test]
+    async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
+        let file = create_file_with_size(10)?;
+
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_body_from_file(file.into_temp_path())
+            .create();
+
+        let name = "test_download_with_length";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        downloader.download(&url).await?;
+
+        let log_content = std::fs::read(downloader.filename())?;
+
+        assert_eq!("Some data!".as_bytes(), log_content);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn downloader_download_without_content_length() -> anyhow::Result<()> {
+        let _mock1 = mock("GET", "/some_file.txt").create();
+
+        let name = "test_download_without_length";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        match downloader.download(&url).await {
+            Ok(()) => {
+                assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
+                return Ok(());
+            }
+            _ => {
+                bail!("failed")
+            }
+        }
     }
 
     // Parameters:
@@ -248,5 +404,19 @@ mod tests {
             }
         };
         Ok(())
+    }
+
+    fn create_file_with_size(size: usize) -> Result<NamedTempFile, anyhow::Error> {
+        let mut file = NamedTempFile::new()?;
+        let data: String = "Some data!".into();
+        let loops = size / data.len();
+        let mut buffer = String::with_capacity(size);
+        for _ in 0..loops {
+            buffer.push_str("Some data!");
+        }
+
+        file.write_all(buffer.as_bytes())?;
+
+        Ok(file)
     }
 }

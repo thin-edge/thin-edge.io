@@ -25,6 +25,12 @@ impl Command for GetConfigCommand {
                     self.config_key.key
                 );
             }
+            Err(tedge_config::ConfigSettingError::SettingIsNotConfigurable { .. }) => {
+                println!(
+                    "The provided config key: '{}' is not configurable",
+                    self.config_key.key
+                );
+            }
             Err(err) => return Err(err.into()),
         }
 

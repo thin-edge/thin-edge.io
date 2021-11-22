@@ -33,7 +33,7 @@ impl SystemServiceManager for SystemdServiceManager {
         "systemd"
     }
 
-    fn check_operational(&self) -> Result<(), Error> {
+    fn check_operational(&self) -> Result<(), SystemServiceError> {
         match std::process::Command::new(&self.systemctl_bin)
             .arg(SystemCtlParam::Version.as_str())
             .stdout(std::process::Stdio::null())
@@ -41,7 +41,9 @@ impl SystemServiceManager for SystemdServiceManager {
             .status()
         {
             Ok(status) if status.success() => Ok(()),
-            _ => Err(SystemdError::SystemdNotAvailable.into()),
+            _ => Err(SystemServiceError::ServiceManagerUnavailable(
+                self.name().to_string(),
+            )),
         }
     }
 
