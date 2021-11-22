@@ -112,7 +112,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-outdated --version 0.10.2 --force
+          args: cargo-outdated --version 0.10.2
 
 #       - name: Cargo install outdared new
 #         uses: actions-rs/install@v0.1
