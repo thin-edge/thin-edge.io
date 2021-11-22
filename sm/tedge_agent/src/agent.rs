@@ -504,6 +504,24 @@ impl SmAgent {
                 }
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
                     let _state = self.persistance_store.clear().await?;
+                    // check timestamp
+                    if std::path::Path::new(&(SLASH_RUN_PATH.to_string() + "/tedge_agent_restart"))
+                        .exists()
+                    {
+                        let metadata = std::path::Path::new(
+                            &(SLASH_RUN_PATH.to_string() + "/tedge_agent_restart"),
+                        )
+                        .metadata()
+                        .unwrap();
+
+                        if let Ok(time) = metadata.modified() {
+                            let epoch_timestamp =
+                                time.duration_since(std::time::UNIX_EPOCH).unwrap();
+                            dbg!(epoch_timestamp);
+                        } else {
+                            println!("Not supported on this platform");
+                        }
+                    }
                     status = OperationStatus::Successful;
                     &self.config.response_topic_restart
                 }
