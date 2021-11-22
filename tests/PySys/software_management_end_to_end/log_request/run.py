@@ -1,5 +1,11 @@
 import sys
 import time
+import os
+from datetime import datetime, timedelta
+from random import randint, shuffle
+from typing import Optional
+import subprocess
+import shlex
 
 """
 Validate end to end behaviour for the log request operation.
@@ -15,18 +21,18 @@ from environment_sm_management import SoftwareManagement
 
 
 class LogRequest(SoftwareManagement):
-    
-    def setup(self):
+   
+    def setup(self):        
         super().setup()
-        self.addCleanupFunction(self.logOpCleanup)
-
+        self.create_logs_for_test()
+        self.addCleanupFunction(self.cleanup_logs)
+        
     def execute(self):
-
         log_file_request_payload = {
-                "dateFrom":"2021-11-17T18:55:49+0530",
-                "dateTo":"2021-11-19T18:55:49+0530",
+                "dateFrom":"2021-11-16T18:55:49+0530",
+                "dateTo":"2021-11-18T18:55:49+0530",
                 "logFile":"software-management",
-                "searchText":"Error",
+                "searchText":"",
                 "maximumLines":1000
             }
 
@@ -36,12 +42,13 @@ class LogRequest(SoftwareManagement):
         status = self.wait_until_installed()
         if not status:
             self.log.info("failed, explicitly failing request")
+            self.stopLogOpCleanup()
         else:
            self.assertThat("True == value", value=status)
 
       
-    def logOpCleanup(self): 
-        pub = self.startProcess(
+    def stopLogOpCleanup(self): 
+        log = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub", "c8y/s/us/", "502,c8y_LogfileRequest"],
             stdouterr="send_failed",           
@@ -55,3 +62,16 @@ class LogRequest(SoftwareManagement):
             else:
                 continue
         return False
+
+    def create_logs_for_test(self):
+        log = self.startProcess(
+            command=self.sudo,
+            arguments=["python3", f"{os.getcwd()}/software_management_end_to_end/log_request/create_test_logs.py"],
+            stdouterr="log_failed",           
+        )
+
+    
+    def cleanup_logs(self):
+        # Removing files form startProcess is not working
+        os.system("sudo rm -rf /var/log/tedge/agent/*")
+       

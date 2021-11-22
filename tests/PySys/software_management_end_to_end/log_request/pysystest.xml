@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate end to end behaviour for the docker plugin for multiple docker images with mixed versions</title>
+	<title>Validate end to end behaviour for the log request operation</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
