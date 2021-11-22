@@ -14,6 +14,9 @@ SUBCOMMANDS:
 EOF
 }
 
+DOCKER_COMPOSE_PLUGIN_PATH='/etc/tedge/sm-plugins/docker-compose/'
+EXTENSION=".yaml"
+
 unsupported_args_check() {
     if ! [ -z $1 ]; then
         echo "Unsupported arguments: $@"
@@ -21,31 +24,16 @@ unsupported_args_check() {
     fi
 }
 
-extract_image_tag_from_args() {
-    IMAGE_NAME="$1"
-    if [ -z "$IMAGE_NAME" ]; then
-        echo "Image name is a mandatory argument"
+extract_docker_compose_path_from_args() {
+    COMPOSE_ARG="$1"
+    if [ -z "$COMPOSE_ARG" ]; then
+        echo "docker-compose.yaml path is a mandatory argument"
         exit 1
     fi
     shift   # Pop image name from args list
-    IMAGE_TAG=$IMAGE_NAME
-    
-    if ! [ -z $1 ]; then
-        case "$1" in 
-            --module-version)
-                IMAGE_VERSION="$2"
-                IMAGE_TAG=$IMAGE_NAME:$IMAGE_VERSION
-                shift 2  # Pop --version and the version value from the args list
-                ;;
-            *)
-                echo "Unsupported argument option: $1"
-                exit 1
-                ;;
-        esac
-    fi
+    COMPOSE_FILE=$COMPOSE_ARG
     
     unsupported_args_check $@
-
 }
 
 extract_docker_compose_path_from_args() {
@@ -79,20 +67,26 @@ case "$COMMAND" in
         docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
-        # Extract the docker image tag into the IMAGE_TAG variable
-        echo $@
-
-        #COMPOSE_FILE=$1
+        # Extract the docker docker-compose path into the COMPOSE_FILE variable
         extract_docker_compose_path_from_args $@
+        sudo cp $COMPOSE_FILE $DOCKER_COMPOSE_PLUGIN_PATH
+        COMPOSE_NAME="$(echo $COMPOSE_FILE | cut -d/ -f3 | cut -d. -f1)"
+        INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME$EXTENSION"
+        echo $INSTALL_PATH
 
         # Spawn new containers with the provided image name and version to replace the stopped one
-        echo "Compose file" $COMPOSE_FILE
-        sudo docker-compose -f $COMPOSE_FILE up -d || exit 2
+        echo "Install path" $INSTALL_PATH
+        sudo docker-compose -f $INSTALL_PATH up -d || exit 2
         ;;
     remove)
-        #COMPOSE_FILE=$1
+        # Extract the docker docker-compose path into the COMPOSE_FILE variable
         extract_docker_compose_path_from_args $@
-        sudo docker-compose -f $COMPOSE_FILE down || exit 2
+        REMOVE_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_FILE$EXTENSION"
+        echo $REMOVE_PATH
+    
+        sudo docker-compose -f $REMOVE_PATH down || exit 2
+        
+        sudo rm $REMOVE_PATH
         ;;
     finalize)
         unsupported_args_check $@
