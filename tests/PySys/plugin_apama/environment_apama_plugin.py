@@ -83,6 +83,15 @@ class ApamaPlugin(BaseTest):
                 stdouterr="stop_apama_service"
             )
 
+    def assert_apama_service_running(self, negate=False):
+        exitStatusExpr = "!=0" if negate else "==0"
+        self.startProcess(
+            command=self.sudo,
+            arguments=["service", "apama", "status"],
+            stdouterr="apama_service_status",
+            expectedExitStatus=exitStatusExpr
+        )
+
     def plugin_install(self, project_archive_path):
         """Use apama plugin `install` command to install a project from the provided archive.
         """
