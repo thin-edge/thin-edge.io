@@ -40,9 +40,9 @@ jobs:
           toolchain: "1.54.0"
           override: true
 
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+#       - name: Enable cache
+#         # https://github.com/marketplace/actions/rust-cache
+#         uses: Swatinem/rust-cache@v1
 
       - name: install libssl
         run: sudo apt install libssl-dev
