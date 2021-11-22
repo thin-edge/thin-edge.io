@@ -159,7 +159,7 @@ mod tests {
         let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
         let destination_path = temp_dir.path().join(".agent/current-operation");
 
-        let content = "operation_id = \'1234\'\noperation = \"InProgress\"";
+        let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
 
         let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
 

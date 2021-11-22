@@ -177,6 +177,7 @@ where
     // 2021-10-23T19:03:26+01:00
     // so we add a ':'
     let mut date_string: String = Deserialize::deserialize(deserializer)?;
+
     let str_size = date_string.len();
     date_string = date_string[0..str_size - 2].to_string()
         + ":"

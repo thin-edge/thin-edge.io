@@ -43,9 +43,6 @@ pub enum AgentError {
 
     #[error("Failed to cast string to float.")]
     FloatCastingError,
-
-    #[error("Failed to read 'modified at' for /run/tedge_agent_restart file.")]
-    NoModifiedAt,
 }
 
 #[derive(Debug, thiserror::Error)]

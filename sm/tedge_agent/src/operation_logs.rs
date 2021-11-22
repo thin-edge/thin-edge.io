@@ -1,4 +1,3 @@
-use chrono::{SecondsFormat, Utc};
 use plugin_sm::log_file::LogFile;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -45,16 +44,15 @@ impl OperationLogs {
             log::warn!("Fail to remove the out-dated log files: {}", err);
         }
 
-        let now = Utc::now();
+        let now = time::OffsetDateTime::now_utc();
+        let format =
+            time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z")
+                .unwrap();
         let file_prefix = match kind {
             LogKind::SoftwareUpdate => UPDATE_PREFIX,
             LogKind::SoftwareList => LIST_PREFIX,
         };
-        let file_name = format!(
-            "{}-{}.log",
-            file_prefix,
-            now.to_rfc3339_opts(SecondsFormat::Secs, true)
-        );
+        let file_name = format!("{}-{}.log", file_prefix, now.format(&format).unwrap());
 
         let mut log_file_path = self.log_dir.clone();
         log_file_path.push(file_name);
