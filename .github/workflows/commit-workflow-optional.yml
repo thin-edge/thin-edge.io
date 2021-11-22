@@ -97,6 +97,7 @@ jobs:
         with:
           toolchain: "1.56.1"
           override: true
+          cache-on-failure: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
