@@ -89,7 +89,7 @@ class ApamaPlugin(BaseTest):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "install",
-                       "project", project_archive_path],
+                       "project", "--file", project_archive_path],
             stdouterr="plugin_install"
         )
 
