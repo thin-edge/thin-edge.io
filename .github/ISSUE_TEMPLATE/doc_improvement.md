@@ -13,4 +13,4 @@ A clear and concise description of what the problem is. E.g. I'm always frustrat
 A clear and concise description of what you want to happen.
 
 **Additional context**
-Add any other context or screenshots about the documenatation request here.
+Add any other context or screenshots about the documentation request here.
