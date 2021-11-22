@@ -138,6 +138,7 @@ Here is the complete list of topics reserved by `thin-edge.io` for its internal 
 | --- | --- |
 | `tedge/` | Reserved root topic of `thin-edge.io` |
 | `tedge/measurements` | Topic to publish measurements to `thin-edge.io` |
+| `tedge/measurements/<child-id>` | Topic to publish measurements to `thin-edge.io`'s child device |
 | `tedge/errors` | Topic to subscribe to receive any error messages emitted by `thin-edge.io` while processing measurements|
 
 ## Sending measurements to the cloud
