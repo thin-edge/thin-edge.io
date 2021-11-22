@@ -178,9 +178,12 @@ where
     // so we add a ':'
     let mut date_string: String = Deserialize::deserialize(deserializer)?;
     let str_size = date_string.len();
-    date_string = date_string[0..str_size - 2].to_string()
-        + ":"
-        + &date_string[str_size - 2..str_size].to_string();
+    // check if `date_string` does not have a colon.
+    if !date_string.contains(':') {
+        date_string = date_string[0..str_size - 2].to_string()
+            + ":"
+            + &date_string[str_size - 2..str_size].to_string();
+    }
     match DateTime::parse_from_rfc3339(&date_string) {
         Ok(result) => Ok(result),
         Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
