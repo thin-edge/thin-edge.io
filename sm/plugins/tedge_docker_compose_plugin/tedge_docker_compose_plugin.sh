@@ -67,16 +67,16 @@ case "$COMMAND" in
         ;;
     list)
         unsupported_args_check $@
-        docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
+        ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
         ;;
     install)
         # Extract the docker docker-compose path into the COMPOSE_FILE variable
         extract_docker_compose_path_from_args $@
-        TMP_PATH="$TMP_PATH$COMPOSE_ARG$EXTENSION"
+        TMP_PATH="$TMP_PATH$COMPOSE_ARG"
         echo $TMP_PATH
         sudo cp $TMP_PATH $DOCKER_COMPOSE_PLUGIN_PATH
         COMPOSE_NAME="$(echo $TMP_PATH | cut -d/ -f3 | cut -d. -f1)"
-        INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME$EXTENSION"
+        INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME"
         echo $INSTALL_PATH
 
         # Spawn new containers with the provided image name and version to replace the stopped one
@@ -86,7 +86,7 @@ case "$COMMAND" in
     remove)
         # Extract the docker docker-compose path into the COMPOSE_FILE variable
         extract_docker_compose_path_from_args $@
-        REMOVE_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_FILE$EXTENSION"
+        REMOVE_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_FILE"
         echo $REMOVE_PATH
     
         sudo docker-compose -f $REMOVE_PATH down || exit 2
