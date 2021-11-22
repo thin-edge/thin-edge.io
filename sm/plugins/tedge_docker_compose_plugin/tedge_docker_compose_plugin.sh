@@ -35,20 +35,6 @@ extract_docker_compose_path_from_args() {
     fi
     shift   # Pop image name from args list
     COMPOSE_FILE=$COMPOSE_ARG
-    
-    unsupported_args_check $@
-}
-
-extract_docker_compose_path_from_args() {
-    COMPOSE_ARG="$1"
-    if [ -z "$COMPOSE_ARG" ]; then
-        echo "docker-compose.yaml path is a mandatory argument"
-        exit 1
-    fi
-    shift   # Pop image name from args list
-    COMPOSE_FILE=$COMPOSE_ARG
-    
-    unsupported_args_check $@
 }
 
 if [ -z $1 ]; then
@@ -62,11 +48,9 @@ shift   # Pop the command from args list
 
 case "$COMMAND" in
     prepare)
-        unsupported_args_check $@
         # nothing to do here
         ;;
     list)
-        unsupported_args_check $@
         ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
         ;;
     install)
