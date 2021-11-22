@@ -107,12 +107,19 @@ jobs:
       # In usual case, we don't need this step.
       # There is an issue with cargo-outdated 0.10.0, therefore, explicitly need to install the latest version.
       # This step takes a certain time, so it should be removed in the future.
-      - name: Cargo install outdated
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
+#       - name: Cargo install outdated
+#         uses: actions-rs/cargo@v1
+#         # https://github.com/marketplace/actions/rust-cargo
+#         with:
+#           command: install
+#           args: cargo-outdated --version 0.10.2
+
+      - name: Cargo install outdared new
+        uses: actions-rs/install@v0.1
         with:
-          command: install
-          args: cargo-outdated --version 0.10.2
+          crate: cargo-outdated
+          version: 0.10.2
+      - run: cargo outdated
 
       - name: Cargo outdated --version
         uses: actions-rs/cargo@v1
