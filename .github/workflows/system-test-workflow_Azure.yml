@@ -3,11 +3,11 @@ name: system-test-workflow-Azure
 on:
   workflow_dispatch:
     branches: [ main, continuous_integration]
-  workflow_run:
-    workflows: ["integration-test-workflow"]
-    branches: [main, continuous_integration]
-    types:
-      - completed
+#  workflow_run:
+#    workflows: ["integration-test-workflow"]
+#    branches: [main, continuous_integration]
+#    types:
+#      - completed
 
 env:
   CARGO_TERM_COLOR: always
