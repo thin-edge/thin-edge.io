@@ -203,36 +203,23 @@ class SoftwareManagement(EnvironmentC8y):
 
         req.raise_for_status()
 
-    def trigger_log_request(self):
-        """Take an actions description that is then forwarded to c8y.
-        So far, no checks are done on the json_content.
-
-        TODO Improve repository ID management to avoid hardcoded IDs
-        """
-
+    def trigger_log_request(self, log_file_request_payload):
         url = f"https://{self.tenant_url}/devicecontrol/operations"
 
-        payload = {
+        log_file_request_payload = {
             "deviceId": self.project.deviceid,
             "description":"Log file request",
-            "c8y_LogfileRequest":
-            {
-                "dateFrom":"2021-11-17T18:55:49+0530",
-                "dateTo":"2021-11-19T18:55:49+0530",
-                "logFile":"software-management",
-                "searchText":"",
-                "maximumLines":1000
-            }
+            "c8y_LogfileRequest": log_file_request_payload,
         }
-        
+
         req = requests.post(
-            url, json=payload, headers=self.header, timeout=self.timeout_req
+            url, json=log_file_request_payload, headers=self.header, timeout=self.timeout_req
         )
 
         jresponse = json.loads(req.text)
 
         self.log.info("Response status: %s", req.status_code)
-        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
+        self.log.info("logfile path: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
         self.operation_id = jresponse.get("id")
@@ -246,7 +233,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     
     def check_if_log_req_complete(self):
-        """Check if a package is installed"""
+        """Check if log received"""
 
         url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.header, timeout=self.timeout_req)
@@ -258,27 +245,12 @@ class SoftwareManagement(EnvironmentC8y):
         ret = False
        
         log_response = jresponse.get("c8y_LogfileRequest")
-        #self.log.info("Started operation: %s", log_response)
+        # check if the response contains the logfile
         log_file = log_response.get("file")
-        self.log.info("Started operation: %s", log_file)
+        self.log.info("Logfile path: %s", log_file)
         if log_response.get("file") != None:
             ret = True
-            # f = open(log_file, "r")
-            # print(f.read())
 
-
-        # if log_response.get("file") == package_name:
-        #     self.log.info("Package %s is installed", package_name)
-        #     # self.log.info(package)
-        #     if version:
-        #         if package.get("version") == version:
-        #             ret = True
-        #             break
-
-        #     raise SystemError("Wrong version is installed")
-
-        #     ret = True
-        #     break
         return ret
 
     def is_status_fail(self):
