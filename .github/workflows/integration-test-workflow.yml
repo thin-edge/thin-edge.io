@@ -98,7 +98,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
+          args: --verbose --features integration-test -- --skip sending_and_receiving_a_message --skip mapper::tests::a_valid_input_leads_to_a_translated_output
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
