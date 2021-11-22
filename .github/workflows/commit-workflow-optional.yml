@@ -97,21 +97,22 @@ jobs:
         with:
           toolchain: "1.56.1"
           override: true
-          cache-on-failure: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
 
       # In usual case, we don't need this step.
       # There is an issue with cargo-outdated 0.10.0, therefore, explicitly need to install the latest version.
       # This step takes a certain time, so it should be removed in the future.
-#      - name: Cargo install outdated
-#        uses: actions-rs/cargo@v1
-#        # https://github.com/marketplace/actions/rust-cargo
-#        with:
-#          command: install
-#          args: cargo-outdated --version 0.10.2
+      - name: Cargo install outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: install
+          args: cargo-outdated --version 0.10.2
 
       - name: Cargo outdated --version
         uses: actions-rs/cargo@v1
