@@ -40,9 +40,9 @@ jobs:
           toolchain: "1.54.0"
           override: true
 
-#       - name: Enable cache
-#         # https://github.com/marketplace/actions/rust-cache
-#         uses: Swatinem/rust-cache@v1
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
 
       - name: install libssl
         run: sudo apt install libssl-dev
@@ -98,11 +98,11 @@ jobs:
           toolchain: "1.56.1"
           override: true
 
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
+#       - name: Enable cache
+#         # https://github.com/marketplace/actions/rust-cache
+#         uses: Swatinem/rust-cache@v1
+#         with:
+#           cache-on-failure: true
 
       # In usual case, we don't need this step.
       # There is an issue with cargo-outdated 0.10.0, therefore, explicitly need to install the latest version.
