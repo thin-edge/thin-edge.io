@@ -48,6 +48,18 @@ extract_image_tag_from_args() {
 
 }
 
+extract_docker_compose_path_from_args() {
+    COMPOSE_ARG="$1"
+    if [ -z "$COMPOSE_ARG" ]; then
+        echo "docker-compose.yaml path is a mandatory argument"
+        exit 1
+    fi
+    shift   # Pop image name from args list
+    COMPOSE_FILE=$COMPOSE_ARG
+    
+    unsupported_args_check $@
+}
+
 if [ -z $1 ]; then
     echo "Provide at least one subcommand\n"
     usage
@@ -70,24 +82,17 @@ case "$COMMAND" in
         # Extract the docker image tag into the IMAGE_TAG variable
         echo $@
 
-        COMPOSE_FILE=$2
+        #COMPOSE_FILE=$1
+        extract_docker_compose_path_from_args $@
 
         # Spawn new containers with the provided image name and version to replace the stopped one
         echo "Compose file" $COMPOSE_FILE
         sudo docker-compose -f $COMPOSE_FILE up -d || exit 2
         ;;
     remove)
-        extract_image_tag_from_args $@
-
-        containers=$(docker ps -a --format "{{.ID}} {{.Image}}" | grep $IMAGE_TAG | awk '{print $1}') || exit 2
-        if [ -z "$containers" ]
-        then
-            echo "No containers found for the image: $IMAGE_TAG"
-        fi
-        for container in $containers
-        do
-            docker-compose stop $(docker stop "$container") || exit 2
-        done
+        #COMPOSE_FILE=$1
+        extract_docker_compose_path_from_args $@
+        sudo docker-compose -f $COMPOSE_FILE down || exit 2
         ;;
     finalize)
         unsupported_args_check $@
