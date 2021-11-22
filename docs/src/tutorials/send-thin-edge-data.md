@@ -6,7 +6,7 @@ to learn how to connect your Thin Edge device to an IoT cloud provider.
 
 In this tutorial, we'll see how different kinds of measurements are represented in Thin Edge JSON format and 
 how they can be sent to the connected cloud provider.
-For a more detailed specification of this data format, refer to [Thin Edge JSON Specification](../architecture/thin-edge-json.md)
+For a more detailed specification of this data format, refer to [Thin Edge JSON Specification](../architecture/thin-edge-json.md).
 
 ## Sending measurements
 
@@ -77,6 +77,22 @@ along with a multi-valued `coordinate` measurement, all sharing a single timesta
 The `time` field is not a regular measurement like `temperature` or `pressure` but a special reserved field.
 Refer to [Thin Edge JSON Specification](../architecture/thin-edge-json.md) for more details on the kinds of telemetry 
 data that can be represented in Thin Edge JSON format and the reserved fields like `time` used in the above example.
+
+## Sending measurements to child devices
+
+> Note: Currently this feature supports Cumulocity IoT only.
+
+If valid Thin Edge JSON measurements are published to the `tedge/measurements/<child-id>` topic,
+the measurements are recorded under a child device of your thin-edge.io device.
+
+Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the `tedge/measurements/child1` topic:
+
+```shell
+$ tedge mqtt pub tedge/measurements/child1 '{ "temperature": 25 }'
+```
+
+Then, you will see a child device with the name `child1` is created in your Cumulocity IoT tenant,
+and the measurement is recorded in `Measurements` of the `child1` device.
 
 ## Error detection
 
