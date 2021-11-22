@@ -24,63 +24,63 @@ jobs:
 #          toolchain: 1.54.0
 #          override: true
 
-  cargo-tarpaulin:
+#   cargo-tarpaulin:
 
-    name: Run cargo tarpaulin
-    runs-on: Ubuntu-20.04
+#     name: Run cargo tarpaulin
+#     runs-on: Ubuntu-20.04
 
-    steps:
+#     steps:
 
-      - name: Checkout
-        uses: actions/checkout@v2
+#       - name: Checkout
+#         uses: actions/checkout@v2
 
-      - name: Install rust v1.54.0
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: "1.54.0"
-          override: true
+#       - name: Install rust v1.54.0
+#         uses: actions-rs/toolchain@v1
+#         with:
+#           toolchain: "1.54.0"
+#           override: true
 
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+#       - name: Enable cache
+#         # https://github.com/marketplace/actions/rust-cache
+#         uses: Swatinem/rust-cache@v1
 
-      - name: install libssl
-        run: sudo apt install libssl-dev
+#       - name: install libssl
+#         run: sudo apt install libssl-dev
 
-      - name: Cargo install tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-tarpaulin
+#       - name: Cargo install tarpaulin
+#         uses: actions-rs/cargo@v1
+#         # https://github.com/marketplace/actions/rust-cargo
+#         with:
+#           command: install
+#           args: cargo-tarpaulin
 
-      - name: Cargo tarpaulin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: tarpaulin
-          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
+#       - name: Cargo tarpaulin
+#         uses: actions-rs/cargo@v1
+#         # https://github.com/marketplace/actions/rust-cargo
+#         with:
+#           command: tarpaulin
+#           args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
 
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
+#       - name: Upload to codecov.io
+#         uses: codecov/codecov-action@v1
+#         with:
+#           token: ${{secrets.CODECOV_TOKEN}}
 
-  cargo-audit:
+#   cargo-audit:
 
-    name: Run cargo audit
-    runs-on: Ubuntu-20.04
+#     name: Run cargo audit
+#     runs-on: Ubuntu-20.04
 
-    steps:
+#     steps:
 
-      - name: Checkout
-        uses: actions/checkout@v2
+#       - name: Checkout
+#         uses: actions/checkout@v2
 
-      - name: Cargo audit
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: audit
+#       - name: Cargo audit
+#         uses: actions-rs/cargo@v1
+#         # https://github.com/marketplace/actions/rust-cargo
+#         with:
+#           command: audit
 
   cargo-outdated:
 
@@ -98,28 +98,28 @@ jobs:
           toolchain: "1.56.1"
           override: true
 
-#       - name: Enable cache
-#         # https://github.com/marketplace/actions/rust-cache
-#         uses: Swatinem/rust-cache@v1
-#         with:
-#           cache-on-failure: true
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
 
       # In usual case, we don't need this step.
       # There is an issue with cargo-outdated 0.10.0, therefore, explicitly need to install the latest version.
       # This step takes a certain time, so it should be removed in the future.
-#       - name: Cargo install outdated
-#         uses: actions-rs/cargo@v1
-#         # https://github.com/marketplace/actions/rust-cargo
-#         with:
-#           command: install
-#           args: cargo-outdated --version 0.10.2
-
-      - name: Cargo install outdared new
-        uses: actions-rs/install@v0.1
+      - name: Cargo install outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
         with:
-          crate: cargo-outdated
-          version: 0.10.2
-          use-tool-cache: true
+          command: install
+          args: cargo-outdated --version 0.10.2
+
+#       - name: Cargo install outdared new
+#         uses: actions-rs/install@v0.1
+#         with:
+#           crate: cargo-outdated
+#           version: 0.10.2
+#           use-tool-cache: true
 
       - name: Cargo outdated --version
         uses: actions-rs/cargo@v1
