@@ -11,7 +11,7 @@ json-writer = { path = "../../common/json_writer" }
 serde = "1"
 serde_json = "1"
 thiserror = "1.0"
-time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+time = { version = "0.3", features = ["formatting", "local-offset", "parsing", "serde"] }
 
 [dev-dependencies]
 anyhow = "1.0"

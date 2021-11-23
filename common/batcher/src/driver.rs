@@ -164,7 +164,7 @@ mod tests {
     async fn flush_one_batch() -> Result<(), SendError<BatchDriverInput<TestBatchEvent>>> {
         let (input_send, mut output_recv) = spawn_driver();
 
-        let event1 = TestBatchEvent::new(1, Utc::now());
+        let event1 = TestBatchEvent::new(1, OffsetDateTime::now_utc());
         input_send.send(BatchDriverInput::Event(event1)).await?;
         input_send.send(BatchDriverInput::Flush).await?;
 
@@ -178,12 +178,12 @@ mod tests {
     async fn two_batches_with_timer() -> Result<(), SendError<BatchDriverInput<TestBatchEvent>>> {
         let (input_send, mut output_recv) = spawn_driver();
 
-        let event1 = TestBatchEvent::new(1, Utc::now());
+        let event1 = TestBatchEvent::new(1, OffsetDateTime::now_utc());
         input_send.send(BatchDriverInput::Event(event1)).await?;
 
         assert_recv_batch(&mut output_recv, vec![event1]).await;
 
-        let event2 = TestBatchEvent::new(2, Utc::now());
+        let event2 = TestBatchEvent::new(2, OffsetDateTime::now_utc());
         input_send.send(BatchDriverInput::Event(event2)).await?;
 
         assert_recv_batch(&mut output_recv, vec![event2]).await;
@@ -240,11 +240,11 @@ mod tests {
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     struct TestBatchEvent {
         key: u64,
-        event_time: DateTime<Utc>,
+        event_time: OffsetDateTime,
     }
 
     impl TestBatchEvent {
-        fn new(key: u64, event_time: DateTime<Utc>) -> TestBatchEvent {
+        fn new(key: u64, event_time: OffsetDateTime) -> TestBatchEvent {
             TestBatchEvent { key, event_time }
         }
     }
@@ -256,7 +256,7 @@ mod tests {
             self.key
         }
 
-        fn event_time(&self) -> DateTime<Utc> {
+        fn event_time(&self) -> OffsetDateTime {
             self.event_time
         }
     }

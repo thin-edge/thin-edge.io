@@ -192,6 +192,7 @@ mod tests {
     use super::*;
     use mockall::predicate::*;
     use mockall::*;
+    use time::macros::datetime;
 
     #[derive(thiserror::Error, Debug, Clone)]
     pub enum TestError {
@@ -346,8 +347,9 @@ mod tests {
     }
 
     fn test_timestamp(minute: u32) -> OffsetDateTime {
-        FixedOffset::east(5 * 3600)
-            .ymd(2021, 4, 8)
-            .and_hms(13, minute, 00)
+        datetime!(2021-04-08 13:00:00 +05:00)
+        // FixedOffset::east(5 * 3600)
+        //     .ymd(2021, 4, 8)
+        //     .and_hms(13, minute, 00)
     }
 }

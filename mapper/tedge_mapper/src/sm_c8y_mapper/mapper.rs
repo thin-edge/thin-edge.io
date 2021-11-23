@@ -497,6 +497,7 @@ fn get_datetime_from_file_path(
 
         return Ok(dt);
     }
+
     match log_path.to_str() {
         Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
             path.to_string(),

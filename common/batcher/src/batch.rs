@@ -101,12 +101,11 @@ fn midpoint(event_time1: OffsetDateTime, event_time2: OffsetDateTime) -> OffsetD
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     #[test]
     fn add() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(2, 60);
 
@@ -121,8 +120,8 @@ mod tests {
 
     #[test]
     fn split() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(1, 60);
 
@@ -143,8 +142,8 @@ mod tests {
 
     #[test]
     fn duplicate() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(1, 40);
 
@@ -159,12 +158,12 @@ mod tests {
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct TestBatchEvent {
         key: u64,
-        event_time: DateTime<Utc>,
+        event_time: OffsetDateTime,
     }
 
     impl TestBatchEvent {
         fn new(key: u64, event_time: i64) -> TestBatchEvent {
-            let event_time = Utc.timestamp_millis(event_time);
+            let event_time = OffsetDateTime::from_unix_timestamp(event_time).unwrap();
             TestBatchEvent { key, event_time }
         }
     }
@@ -176,7 +175,7 @@ mod tests {
             self.key
         }
 
-        fn event_time(&self) -> DateTime<Utc> {
+        fn event_time(&self) -> OffsetDateTime {
             self.event_time
         }
     }

@@ -141,8 +141,7 @@ mod tests {
     use time::OffsetDateTime;
 
     fn test_timestamp() -> OffsetDateTime {
-        let local_time_now: DateTime<Local> = Local::now();
-        local_time_now.with_timezone(local_time_now.offset())
+        OffsetDateTime::now_local().unwrap()
     }
 
     #[test]
@@ -154,7 +153,15 @@ mod tests {
         serializer.visit_measurement("temperature", 25.5)?;
 
         let body = r#""temperature":25.5"#;
-        let expected_output = format!(r#"{{"time":"{}",{}}}"#, timestamp.to_rfc3339(), body);
+
+        let expected_output = format!(
+            r#"{{"time":"{}",{}}}"#,
+            timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
+            body
+        );
         let output = serializer.into_string()?;
         assert_eq!(output, expected_output);
         Ok(())
@@ -183,7 +190,14 @@ mod tests {
         serializer.visit_end_group()?;
         serializer.visit_measurement("pressure", 255.0)?;
         let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255.0}"#;
-        let expected_output = format!(r#"{{"time":"{}",{}"#, timestamp.to_rfc3339(), body);
+        let expected_output = format!(
+            r#"{{"time":"{}",{}"#,
+            timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
+            body
+        );
         let output = serializer.into_string()?;
         assert_eq!(expected_output, output);
         Ok(())
@@ -203,7 +217,14 @@ mod tests {
         let mut serializer = ThinEdgeJsonSerializer::new();
         let timestamp = test_timestamp();
         serializer.visit_timestamp(timestamp)?;
-        let expected_output = format!(r#"{{"time":"{}"{}"#, timestamp.to_rfc3339(), "}");
+        let expected_output = format!(
+            r#"{{"time":"{}"{}"#,
+            timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
+            "}"
+        );
         let output = serializer.into_string()?;
         assert_eq!(expected_output, output);
         Ok(())

@@ -148,6 +148,8 @@ impl<B: Batchable> Batcher<B> {
 
 #[cfg(test)]
 mod tests {
+    use time::Duration;
+
     use super::*;
     use crate::batchable::Batchable;
     use crate::config::BatchConfigBuilder;
@@ -422,7 +424,7 @@ mod tests {
 
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct TestBatchEvent {
-        event_time: DateTime<Utc>,
+        event_time: OffsetDateTime,
         key: String,
         value: u64,
     }
@@ -434,7 +436,7 @@ mod tests {
             self.key.clone()
         }
 
-        fn event_time(&self) -> DateTime<Utc> {
+        fn event_time(&self) -> OffsetDateTime {
             self.event_time
         }
     }
@@ -446,11 +448,11 @@ mod tests {
     }
 
     struct BatcherTest {
-        start_time: DateTime<Utc>,
+        start_time: OffsetDateTime,
         batcher: Batcher<TestBatchEvent>,
-        inputs: BTreeMap<DateTime<Utc>, EventOrTimer>,
-        flush_time: Option<DateTime<Utc>>,
-        expected_batches: BTreeMap<DateTime<Utc>, Vec<Vec<TestBatchEvent>>>,
+        inputs: BTreeMap<OffsetDateTime, EventOrTimer>,
+        flush_time: Option<OffsetDateTime>,
+        expected_batches: BTreeMap<OffsetDateTime, Vec<Vec<TestBatchEvent>>>,
     }
 
     impl BatcherTest {
@@ -461,7 +463,7 @@ mod tests {
                 .message_leap_limit(message_leap_limit)
                 .build();
 
-            let start_time = Utc.timestamp_millis(0);
+            let start_time = OffsetDateTime::from_unix_timestamp(0).unwrap();
             let batcher = Batcher::new(batcher_config);
 
             BatcherTest {
@@ -536,10 +538,10 @@ mod tests {
 
         fn handle_outputs(
             &mut self,
-            t: DateTime<Utc>,
+            t: OffsetDateTime,
             outputs: Vec<BatcherOutput<TestBatchEvent>>,
-            all_batches: &mut BTreeMap<DateTime<Utc>, Vec<Vec<TestBatchEvent>>>,
-            flush_time: Option<DateTime<Utc>>,
+            all_batches: &mut BTreeMap<OffsetDateTime, Vec<Vec<TestBatchEvent>>>,
+            flush_time: Option<OffsetDateTime>,
         ) {
             let mut batches = vec![];
 
@@ -575,14 +577,14 @@ mod tests {
             }
         }
 
-        fn create_instant(&self, time: i64) -> DateTime<Utc> {
+        fn create_instant(&self, time: i64) -> OffsetDateTime {
             self.start_time + Duration::milliseconds(time)
         }
     }
 
     fn verify(
-        expected_batches: BTreeMap<DateTime<Utc>, Vec<Vec<TestBatchEvent>>>,
-        mut actual_batches: BTreeMap<DateTime<Utc>, Vec<Vec<TestBatchEvent>>>,
+        expected_batches: BTreeMap<OffsetDateTime, Vec<Vec<TestBatchEvent>>>,
+        mut actual_batches: BTreeMap<OffsetDateTime, Vec<Vec<TestBatchEvent>>>,
     ) {
         assert_eq!(
             actual_batches.keys().collect::<Vec<_>>(),

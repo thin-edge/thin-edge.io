@@ -179,6 +179,7 @@ impl Batchable for CollectdMessage {
 mod tests {
     use assert_matches::assert_matches;
     use mqtt_client::Topic;
+    use time::macros::datetime;
 
     use super::*;
 
@@ -198,10 +199,7 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
-        assert_eq!(
-            timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
-        );
+        assert_eq!(timestamp, datetime!(1973-11-29 21:33:09 UTC));
         assert_eq!(metric_value, 32.5);
     }
 
@@ -221,10 +219,7 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
-        assert_eq!(
-            timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125)
-        );
+        assert_eq!(timestamp, datetime!(1973-11-29 21:33:09.125 UTC));
         assert_eq!(metric_value, 32.5);
     }
 

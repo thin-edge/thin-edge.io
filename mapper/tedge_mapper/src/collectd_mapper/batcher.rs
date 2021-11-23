@@ -72,10 +72,11 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use clock::{Clock, WallClock};
+    use time::macros::datetime;
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let timestamp = Utc.ymd(2015, 5, 15).and_hms_milli(0, 0, 1, 444);
+        let timestamp = datetime!(2015-05-15 0:00:01.444 UTC);
         let collectd_message = CollectdMessage::new("temperature", "value", 32.5, timestamp);
         let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
 

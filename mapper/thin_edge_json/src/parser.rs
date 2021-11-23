@@ -10,7 +10,7 @@ use serde::{
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
-use time::{format_description, OffsetDateTime};
+use time::{format_description, macros::datetime, OffsetDateTime};
 
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(
@@ -320,11 +320,7 @@ fn it_deserializes_thin_edge_json() -> anyhow::Result<()> {
 
     assert_eq!(
         output.timestamp,
-        Some(
-            FixedOffset::east(2 * 3600)
-                .ymd(2021, 4, 30)
-                .and_hms_milli(17, 3, 14, 123)
-        )
+        Some(datetime!(2021-04-30 17:03:14.123 +02:00))
     );
 
     assert_eq!(
