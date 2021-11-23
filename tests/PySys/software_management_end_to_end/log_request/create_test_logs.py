@@ -45,8 +45,8 @@ def create_fake_logs(bad_lines_ratio=.3, num_lines=100) -> str:
 
 
 if __name__ == "__main__":    
-    file_names = ["software-list-example-log", "software-operation-example-log", "software-test-log"]
-    file_sizes = [10, 50, 70]
+    file_names = ["example-log1", "example-log2", "example-log3"]
+    file_sizes = [50, 100, 250]
     for idx, file_name in enumerate(file_names):
         timestamp = get_file_timestamp()
         with open(f"/var/log/tedge/agent/{file_name}-{timestamp}.log", "w") as handle:
