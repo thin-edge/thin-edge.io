@@ -5,7 +5,8 @@ members = [
     "crates/core/*",
     "crates/tests/*",
     "plugins/tedge_apt_plugin",
-    "plugins/tedge_dummy_plugin"
+    "plugins/tedge_dummy_plugin",
+    "plugins/tedge_apama_plugin"
 ]
 
 [profile.release]

@@ -3,26 +3,14 @@ use crate::error::*;
 
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 
-use mqtt_client::{Client, MqttClient, MqttClientError, Topic};
+use mqtt_client::{Client, MqttClient, MqttClientError};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, instrument};
-
-#[derive(Debug)]
-pub struct MapperConfig {
-    pub in_topic: Topic,
-    pub out_topic: Topic,
-    pub errors_topic: Topic,
-}
-
-pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
-    Topic::new(topic_name).expect("This is a valid topic name")
-}
+use tracing::{error, info, instrument};
 
 pub async fn create_mapper<'a>(
     app_name: &'a str,
     tedge_config: &'a TEdgeConfig,
-    mapper_config: impl Into<MapperConfig>,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
     let flock = check_another_instance_is_not_running(app_name)?;
@@ -32,7 +20,7 @@ pub async fn create_mapper<'a>(
     let mqtt_config = mqtt_config(tedge_config)?;
     let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
 
-    Ok(Mapper::new(mqtt_client, mapper_config, converter, flock))
+    Ok(Mapper::new(mqtt_client, converter, flock))
 }
 
 pub(crate) fn mqtt_config(
@@ -43,13 +31,12 @@ pub(crate) fn mqtt_config(
 
 pub struct Mapper {
     client: mqtt_client::Client,
-    config: MapperConfig,
     converter: Box<dyn Converter<Error = ConversionError>>,
     _flock: Flockfile,
 }
 
 impl Mapper {
-    pub(crate) async fn run(&self) -> Result<(), MqttClientError> {
+    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
         info!("Running");
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
@@ -62,13 +49,11 @@ impl Mapper {
 
     pub fn new(
         client: mqtt_client::Client,
-        config: impl Into<MapperConfig>,
         converter: Box<dyn Converter<Error = ConversionError>>,
         _flock: Flockfile,
     ) -> Self {
         Self {
             client,
-            config: config.into(),
             converter,
             _flock,
         }
@@ -85,25 +70,16 @@ impl Mapper {
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn subscribe_messages(&self) -> Result<(), MqttClientError> {
-        let mut messages = self.client.subscribe(self.config.in_topic.filter()).await?;
+    async fn subscribe_messages(&mut self) -> Result<(), MqttClientError> {
+        let mut messages = self
+            .client
+            .subscribe(self.converter.get_in_topic_filter().clone())
+            .await?;
+
         while let Some(message) = messages.next().await {
-            debug!("Mapping {:?}", message.payload_str());
-            match self.converter.convert(message.payload_str()?) {
-                Ok(mapped) => {
-                    self.client
-                        .publish(mqtt_client::Message::new(&self.config.out_topic, mapped))
-                        .await?;
-                }
-                Err(error) => {
-                    debug!("Mapping error: {}", error);
-                    self.client
-                        .publish(mqtt_client::Message::new(
-                            &self.config.errors_topic,
-                            error.to_string(),
-                        ))
-                        .await?;
-                }
+            let converted_messages = self.converter.convert(&message);
+            for converted_message in converted_messages.into_iter() {
+                self.client.publish(converted_message).await?
             }
         }
         Ok(())
@@ -113,6 +89,7 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mqtt_client::{Message, Topic, TopicFilter};
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -124,11 +101,6 @@ mod tests {
 
         // Given a mapper
         let name = "mapper_under_test";
-        let mapper_config = MapperConfig {
-            in_topic: Topic::new("in_topic")?,
-            out_topic: Topic::new("out_topic")?,
-            errors_topic: Topic::new("err_topic")?,
-        };
 
         let flock = check_another_instance_is_not_running(name)
             .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
@@ -136,10 +108,9 @@ mod tests {
         let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
         let mqtt_client = Client::connect(name, &mqtt_config).await?;
 
-        let mapper = Mapper {
+        let mut mapper = Mapper {
             client: mqtt_client,
-            config: mapper_config,
-            converter: Box::new(UppercaseConverter),
+            converter: Box::new(UppercaseConverter::new()),
             _flock: flock,
         };
 
@@ -171,21 +142,41 @@ mod tests {
         Ok(())
     }
 
-    struct UppercaseConverter;
+    struct UppercaseConverter {
+        mapper_config: MapperConfig,
+    }
 
     impl UppercaseConverter {
+        pub fn new() -> UppercaseConverter {
+            let mapper_config = MapperConfig {
+                in_topic_filter: TopicFilter::new("in_topic").expect("invalid topic filter"),
+                out_topic: Topic::new_unchecked("out_topic"),
+                errors_topic: Topic::new_unchecked("err_topic"),
+            };
+            UppercaseConverter { mapper_config }
+        }
+
         pub fn conversion_error() -> ConversionError {
             // Just a stupid error that matches the expectations of the mapper
-            ConversionError::FromMapperError(MapperError::HomeDirNotFound)
+            ConversionError::FromMapper(MapperError::HomeDirNotFound)
         }
     }
 
     impl Converter for UppercaseConverter {
         type Error = ConversionError;
 
-        fn convert(&self, input: &str) -> Result<String, Self::Error> {
+        fn get_mapper_config(&self) -> &MapperConfig {
+            &self.mapper_config
+        }
+
+        fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+            let input = input.payload_str().expect("utf8");
             if input.is_ascii() {
-                Ok(input.to_uppercase())
+                let msg = vec![Message::new(
+                    &self.mapper_config.out_topic,
+                    input.to_uppercase(),
+                )];
+                Ok(msg)
             } else {
                 Err(UppercaseConverter::conversion_error())
             }

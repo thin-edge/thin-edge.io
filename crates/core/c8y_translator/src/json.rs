@@ -30,15 +30,26 @@ pub enum CumulocityJsonError {
 /// Converts from thin-edge Json to c8y_json
 pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp)?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;
+    Ok(c8y_vec)
+}
+
+/// Converts from thin-edge Json to c8y_json with child id information
+pub fn from_thin_edge_json_with_child(
+    input: &str,
+    child_id: &str,
+) -> Result<String, CumulocityJsonError> {
+    let timestamp = WallClock.now();
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, Some(child_id))?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
-    default_timestamp: DateTime<FixedOffset>,
+    timestamp: DateTime<FixedOffset>,
+    maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(default_timestamp);
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -47,7 +58,8 @@ fn from_thin_edge_json_with_timestamp(
 mod tests {
     use super::*;
     use assert_json_diff::*;
-    use serde_json::json;
+    use serde_json::{json, Value};
+    use test_case::test_case;
 
     #[test]
     fn check_single_value_translation() {
@@ -58,7 +70,8 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp);
+        let output =
+            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -126,7 +139,8 @@ mod tests {
 
         let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
 
-        let output = from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp);
+        let output =
+            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
@@ -218,5 +232,49 @@ mod tests {
                 .collect::<String>()
         );
         }
+    }
+
+    #[test_case(
+    "child1",
+    r#"{"temperature": 23.0}"#,
+    json!({
+        "type": "ThinEdgeMeasurement",
+        "externalSource": {"externalId": "child1","type": "c8y_Serial",},
+        "time": "2021-04-08T00:00:00+05:00",
+        "temperature": {"temperature": {"value": 23.0}}
+    })
+    ;"child device single value thin-edge json translation")]
+    #[test_case(
+    "child2",
+    r#"{"temperature": 23.0, "pressure": 220.0}"#,
+    json!({
+        "type": "ThinEdgeMeasurement",
+        "externalSource": {"externalId": "child2","type": "c8y_Serial",},
+        "time": "2021-04-08T00:00:00+05:00",
+        "temperature": {"temperature": {"value": 23.0}},
+        "pressure": {"pressure": {"value": 220.0}}
+    })
+    ;"child device multiple values thin-edge json translation")]
+    #[test_case(
+    "child3",
+    r#"{"temperature": 23.0, "time": "2021-04-23T19:00:00+05:00"}"#,
+    json!({
+        "type": "ThinEdgeMeasurement",
+        "externalSource": {"externalId": "child3","type": "c8y_Serial",},
+        "time": "2021-04-23T19:00:00+05:00",
+        "temperature": {"temperature": {"value": 23.0}},
+    })
+    ;"child device single value with timestamp thin-edge json translation")]
+    fn check_value_translation_for_child_device(
+        child_id: &str,
+        thin_edge_json: &str,
+        expected_output: Value,
+    ) {
+        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, Some(child_id));
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
+            expected_output
+        );
     }
 }
