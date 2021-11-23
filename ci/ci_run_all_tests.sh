@@ -14,12 +14,25 @@
 # EXAMPLEDIR : The direcory of the sawtooth example
 # C8YURL : e.g. https://thin-edge-io.eu-latest.cumulocity.com
 
+# Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
+PATH=$PATH:/usr/sbin
+
+echo "Disconnect old bridge"
+
+# Disconnect - may fail if not there
+sudo tedge disconnect c8y
+
+# From now on exit if a command exits with a non-zero status.
+# Commands above are allowed to fail
 set -e
+
 
 cd $TEBASEDIR
 
 # Check if clients are installed
 dpkg -s mosquitto-clients
+
+./ci/configure_bridge.sh
 
 # Run all PySys tests
 

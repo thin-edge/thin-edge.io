@@ -37,7 +37,8 @@ fn print_config_list(
             Ok(value) => {
                 println!("{}={}", config_key.key, value);
             }
-            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
+            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. })
+            | Err(tedge_config::ConfigSettingError::SettingIsNotConfigurable { .. }) => {
                 keys_without_values.push(config_key.key.into());
             }
             Err(err) => return Err(err.into()),

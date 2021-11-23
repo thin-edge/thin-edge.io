@@ -33,6 +33,10 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
@@ -82,7 +86,7 @@ jobs:
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
-        run: ./ci/ci_smoke_test.sh
+        run: ./ci/ci_smoke_test_c8y.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}

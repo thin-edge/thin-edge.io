@@ -19,23 +19,11 @@ impl CumulocityMapper {
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-        let mapper_config = MapperConfig {
-            in_topic: make_valid_topic_or_panic("tedge/measurements"),
-            out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
-            errors_topic: make_valid_topic_or_panic("tedge/errors"),
-        };
-
         let size_threshold = SizeThreshold(16 * 1024);
 
-        let converter = Box::new(CumulocityConverter { size_threshold });
+        let converter = Box::new(CumulocityConverter::new(size_threshold));
 
-        let mapper = create_mapper(
-            CUMULOCITY_MAPPER_NAME,
-            &tedge_config,
-            mapper_config,
-            converter,
-        )
-        .await?;
+        let mut mapper = create_mapper(CUMULOCITY_MAPPER_NAME, &tedge_config, converter).await?;
 
         mapper
             .run()
