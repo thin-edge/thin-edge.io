@@ -27,7 +27,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/measurements/thin-edge-child",
-                       '{"temperature": 12, "time": "2021-06-15T17:01:15.806+02:00"}'],
+                       '{"temperature": 12, "time": "2021-01-01T10:10:10.100+02:00"}'],
             stdouterr="tedge_pub",
             environs=os.environ
         )
@@ -37,24 +37,27 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/measurements/thin-edge-child",
-                       '{"temperature": 11, "time": "2021-06-15T17:02:25.765+02:00"}'],
+                       '{"temperature": 11}'],
             stdouterr="tedge_pub",
             environs=os.environ
         )
 
+        # Publish one temperature measurement to the parent thin-edge device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/measurements",
-                       '{"temperature": 5, "time": "2021-06-15T17:03:35.456+02:00"}'],
+                       '{"temperature": 5}'],
             stdouterr="tedge_pub",
             environs=os.environ
         )
+
+        # Publish one temperature measurement to the other child device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/measurements/other-thin-edge-child",
-                       '{"temperature": 6, "time": "2021-06-15T17:04:45.789+02:00"}'],
+                       '{"temperature": 6}'],
             stdouterr="tedge_pub",
             environs=os.environ
         )
@@ -64,7 +67,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/measurements/thin-edge-child",
-                       '{"temperature": 10, "time": "2021-06-15T17:06:55.923+02:00"}'],
+                       '{"temperature": 10}'],
             stdouterr="tedge_pub",
             environs=os.environ
         )
@@ -79,37 +82,39 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
     def validate(self):
         child_measurements = self.cumulocity.get_last_n_measurements_from_device(
             self.child_device_json['id'], 3)
-        other_child_measurement = self.cumulocity.get_last_measurements_from_device(
-            self.other_child_device_json['id'])
-        parent_measurement = self.cumulocity.get_last_measurements_from_device(
-            self.project.deviceid)
 
         # Validate the last 3 measurements of thin-edge-child device
         self.validate_measurement(
             child_measurements[0], "temperature", 10, "2021-06-15T17:06:55.923+02:00")
         self.validate_measurement(
-            child_measurements[1], "temperature", 11, "2021-06-15T17:02:25.765+02:00")
+            child_measurements[1], "temperature", 11)
         self.validate_measurement(
-            child_measurements[2], "temperature", 12, "2021-06-15T17:01:15.806+02:00")
+            child_measurements[2], "temperature", 12)
 
         # Validate the last measurement of other-thin-edge-child device
+        other_child_measurement = self.cumulocity.get_last_measurements_from_device(
+            self.other_child_device_json['id'])
         self.validate_measurement(
-            other_child_measurement, "temperature", 6, "2021-06-15T17:04:45.789+02:00")
+            other_child_measurement, "temperature", 6)
 
         # Validate the last measurement of the parent thin-edge device
+        parent_measurement = self.cumulocity.get_last_measurements_from_device(
+            self.project.deviceid)
         self.validate_measurement(
-            parent_measurement, "temperature", 5, "2021-06-15T17:03:35.456+02:00")
+            parent_measurement, "temperature", 5)
 
     def validate_measurement(self, measurement_json,
-                             measurement_key, measurement_value, measurement_timestamp,
+                             measurement_key, measurement_value,
+                             measurement_timestamp=None,
                              measurement_type="ThinEdgeMeasurement"):
         self.log.info(json.dumps(measurement_json, indent=4))
         self.assertThat('actual == expected',
                         actual=measurement_json['type'], expected=measurement_type)
         self.assertThat('actual == expected',
                         actual=measurement_json[measurement_key][measurement_key]['value'], expected=measurement_value)
-        self.assertThat('actual == expected',
-                        actual=measurement_json['time'], expected=measurement_timestamp)
+        if measurement_timestamp:
+            self.assertThat('actual == expected',
+                            actual=measurement_json['time'], expected=measurement_timestamp)
 
     def test_cleanup(self):
         self.cumulocity.delete_managed_object_by_internal_id(

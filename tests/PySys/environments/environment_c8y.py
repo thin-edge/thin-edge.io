@@ -83,13 +83,14 @@ class Cumulocity(object):
         return None
 
     def get_last_measurements_from_device(self, device_internal_id: str):
-        self.get_last_n_measurements_from_device(
-            device_internal_id=device_internal_id, target_size=1)
+        return self.get_last_n_measurements_from_device(
+            device_internal_id=device_internal_id, target_size=1)[0]
 
     def get_last_n_measurements_from_device(self, device_internal_id: int, target_size: int):
         params = {
             "source": device_internal_id,
             "pageSize": target_size,
+            "dateFrom": "1970-01-01",
             "revert": True
         }
         res = requests.get(
