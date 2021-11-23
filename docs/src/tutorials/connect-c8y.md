@@ -164,7 +164,7 @@ $ tedge mqtt pub c8y/s/us 211,20
 ```
 
 To check that this message has been received by Cumulocity,
-navigate to "Device Management/Devices/All devices/<your device id>/Measurements".
+navigate to "Device Management/Devices/All devices/\<your device id\>/Measurements".
 You should observe a "temperature measurement" graph with the new data point.
 
 
