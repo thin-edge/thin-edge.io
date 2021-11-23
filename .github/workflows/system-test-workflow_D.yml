@@ -14,7 +14,7 @@ env:
 
 jobs:
 
-  install-and-use-rpi-offsite:
+  install-and-use-rpi-offsite_d:
     runs-on: [self-hosted, Linux, ARM, offsited]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -33,20 +33,6 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
-        continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
       - name: delete old publisher
         run: rm -f /home/pi/examples/sawtooth_publisher
 
@@ -60,6 +46,20 @@ jobs:
           branch: continuous_integration
           name: examples_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
+
+      - name: Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: disconnect az
+        run: sudo tedge disconnect az
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
 
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
@@ -109,8 +109,8 @@ jobs:
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-  system-test-offsite:
-    needs: [install-and-use-rpi-offsite]
+  system-test-offsite_d:
+    needs: [install-and-use-rpi-offsite_d]
     runs-on: [self-hosted, Linux, ARM, offsited]
 
     steps:
@@ -120,6 +120,7 @@ jobs:
 
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -132,6 +133,7 @@ jobs:
 
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -144,6 +146,7 @@ jobs:
 
     - name: Run all sm tests
       run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}

@@ -14,8 +14,8 @@ env:
 
 jobs:
 
-  install-and-use-rpi-offsite:
-    runs-on: [self-hosted, Linux, ARM, offsitec ]
+  install-and-use-rpi-offsite_c:
+    runs-on: [self-hosted, Linux, ARM, offsitec]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -109,8 +109,8 @@ jobs:
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-  system-test-offsite:
-    needs: [install-and-use-rpi-offsite]
+  system-test-offsite_c:
+    needs: [install-and-use-rpi-offsite_c]
     runs-on: [self-hosted, Linux, ARM, offsitec]
 
     steps:
@@ -120,6 +120,7 @@ jobs:
 
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -132,6 +133,7 @@ jobs:
 
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -144,6 +146,7 @@ jobs:
 
     - name: Run all sm tests
       run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
