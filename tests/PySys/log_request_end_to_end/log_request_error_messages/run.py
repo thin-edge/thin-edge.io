@@ -34,8 +34,6 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
         }
         self.cumulocity.trigger_log_request(log_file_request_payload)
 
-        self.log.info("op id %s", self.cumulocity.operation_id)
-
     def validate(self):
         status = self.wait_until_retrieved_logs()
         if not status:
@@ -48,7 +46,6 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
         for i in range(1, 20):
             time.sleep(1)
             log_file = self.cumulocity.check_if_log_req_complete()
-            self.log.info("url: %s", log_file)
             if len(log_file) != 0:
                 if self.download_file_and_verify_error_messages(log_file):
                     return True
@@ -70,10 +67,8 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
         get_response = requests.get(url, auth=(
             self.project.username, self.project.c8ypass), stream=True)
         nErrors = 0
-        self.log.info("content size %s", len(get_response.content))
         for chunk in get_response.iter_content(chunk_size=1024):
               nErrors += chunk.decode('utf-8').count("Error")
-        self.log.info("num lines %s", nErrors)
         if nErrors >= 49:
             return True
         else:

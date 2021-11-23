@@ -87,23 +87,19 @@ class Cumulocity(object):
         return header
 
     def trigger_log_request(self, log_file_request_payload):
-
         url = f"https://{self.c8y_url}/devicecontrol/operations"
-
         log_file_request_payload = {
             "deviceId": self.device_id,
             "description": "Log file request",
             "c8y_LogfileRequest": log_file_request_payload,
         }
-
         req = requests.post(
             url, json=log_file_request_payload, headers=self.get_header(), timeout=self.timeout_req
         )
-
         jresponse = json.loads(req.text)
 
-        self.log.info("Response status: %s", req.status_code)
-        self.log.info("logfile path: %s", json.dumps(jresponse, indent=4))
+        # self.log.info("Response status: %s", req.status_code)
+        # self.log.info("logfile path: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
         self.operation_id = jresponse.get("id")
@@ -111,13 +107,12 @@ class Cumulocity(object):
         if not self.operation_id:
             raise SystemError("field id is missing in response")
 
-        self.log.info("Started operation: %s", self.operation)
+        # self.log.info("Started operation: %s", self.operation)
 
         req.raise_for_status()
 
     def check_if_log_req_complete(self):
         """Check if log received"""
-
         url = f"https://{self.c8y_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
