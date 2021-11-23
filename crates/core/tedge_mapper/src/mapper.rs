@@ -2,7 +2,6 @@ use crate::converter::*;
 use crate::error::*;
 
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-
 use mqtt_client::{Client, MqttClient, MqttClientError};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;

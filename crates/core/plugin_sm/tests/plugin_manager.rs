@@ -191,7 +191,9 @@ mod tests {
             .unwrap()
             .parent()
             .unwrap()
-            .join("../target/debug/tedge_dummy_plugin");
+            .parent()
+            .unwrap()
+            .join("target/debug/tedge_dummy_plugin");
 
         dummy_plugin_path
     }
