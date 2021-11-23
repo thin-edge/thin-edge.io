@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate end to end behaviour for the log request operation</title>
+	<title>Validate end to end behaviour for the log request operation check for number of lines</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>

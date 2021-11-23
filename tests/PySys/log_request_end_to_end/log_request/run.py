@@ -1,11 +1,7 @@
 import sys
 import time
 import os
-from datetime import datetime, timedelta
-from random import randint, shuffle
-from typing import Optional
 import subprocess
-import shlex
 import requests
 
 """
@@ -18,10 +14,10 @@ If number of lines are greater than 25 then pass the test
 Else stop and cleanup the operation by sending operation failed message.
 """
 
-from environment_sm_management import SoftwareManagement
+from environment_c8y import EnvironmentC8y
 
 
-class LogRequestVerifyNumberOfLines(SoftwareManagement):
+class LogRequestVerifyNumberOfLines(EnvironmentC8y):
 
     def setup(self):
         super().setup()
@@ -30,13 +26,15 @@ class LogRequestVerifyNumberOfLines(SoftwareManagement):
 
     def execute(self):
         log_file_request_payload = {
-            "dateFrom": "2021-11-16T18:55:49+0530",
-            "dateTo": "2021-11-18T18:55:49+0530",
+            "dateFrom": "2021-11-15T18:55:49+0530",
+            "dateTo": "2021-11-19T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "",
-            "maximumLines": 25
+            "maximumLines": 250
         }
-        self.trigger_log_request(log_file_request_payload)
+        self.cumulocity.trigger_log_request(log_file_request_payload)
+
+        self.log.info("op id %s", self.cumulocity.operation_id)
 
     def validate(self):
         status = self.wait_until_retrieved_logs()
@@ -49,7 +47,8 @@ class LogRequestVerifyNumberOfLines(SoftwareManagement):
     def wait_until_retrieved_logs(self):
         for i in range(1, 20):
             time.sleep(1)
-            log_file = self.check_if_log_req_complete()
+            log_file = self.cumulocity.check_if_log_req_complete()
+            self.log.info("url: %s", log_file)
             if len(log_file) != 0:
                 if self.download_file_and_verify_number_of_lines(log_file):
                     return True
@@ -63,21 +62,19 @@ class LogRequestVerifyNumberOfLines(SoftwareManagement):
         log = self.startProcess(
             command=self.sudo,
             arguments=[
-                "python3", f"{os.getcwd()}/software_management_end_to_end/log_request/create_test_logs.py"],
+                "python3", f"{os.getcwd()}/log_request_end_to_end/log_request/create_test_logs.py"],
             stdouterr="log_failed",
         )
-        # wait for logs to get created
-        time.sleep(1)
 
     def download_file_and_verify_number_of_lines(self, url):
         get_response = requests.get(url, auth=(
             self.project.username, self.project.c8ypass), stream=True)
         nlines = 0
+        self.log.info("content size %s", len(get_response.content))
         for chunk in get_response.iter_content(chunk_size=1024):
             nlines += len(chunk.decode('utf-8').split('\n'))
-
-        self.log.info("num logs %d", nlines)
-        if nlines > 25:
+        self.log.info("num lines %s", nlines)
+        if nlines > 250:
             return True
         else:
             return False
