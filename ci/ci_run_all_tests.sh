@@ -32,8 +32,6 @@ cd $TEBASEDIR
 # Check if clients are installed
 dpkg -s mosquitto-clients
 
-#sudo apt install librrd-dev python3-rrdtool rrdtool collectd
-
 ./ci/configure_bridge.sh
 
 # Run all PySys tests
