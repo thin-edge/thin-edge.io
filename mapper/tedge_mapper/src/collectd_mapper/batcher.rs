@@ -21,7 +21,7 @@ impl MessageBatch {
         let mut messages = messages.into_iter();
 
         if let Some(first_message) = messages.next() {
-            let timestamp = first_message.timestamp.with_timezone(Local::now().offset());
+            let timestamp = first_message.timestamp;
             let mut batch = MessageBatch::start_batch(first_message, timestamp)?;
             for message in messages {
                 batch.add_to_batch(message)?;

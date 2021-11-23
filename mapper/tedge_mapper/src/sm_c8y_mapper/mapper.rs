@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{convert::TryInto, time::Duration};
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
-use time::OffsetDateTime;
+use time::{format_description, OffsetDateTime};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument};
 
@@ -450,10 +450,13 @@ async fn create_log_event(
 
     let local = time::OffsetDateTime::now_utc();
 
+    let format =
+        format_description::parse("[year]-[month]-[day]T[hour repr:24]:[minute]:[seconds]Z")?;
+
     let c8y_log_event = C8yCreateEvent::new(
         c8y_managed_object.to_owned(),
         "c8y_Logfile",
-        &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        &local.format(&format)?,
         "software-management",
     );
 
@@ -490,7 +493,7 @@ fn get_datetime_from_file_path(
         stem_string_vec.reverse();
         // join on '-' to get the date string
         let date_string = stem_string_vec.join("-");
-        let dt = DateTime::parse_from_rfc3339(&date_string)?;
+        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339)?;
 
         return Ok(dt);
     }

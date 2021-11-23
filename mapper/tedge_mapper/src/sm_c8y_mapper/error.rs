@@ -35,6 +35,15 @@ pub(crate) enum SMCumulocityMapperError {
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
 
+    #[error(transparent)]
+    FromTimeFormat(#[from] time::error::Format),
+
+    #[error(transparent)]
+    FromTimeInvalidFormatDescription(#[from] time::error::InvalidFormatDescription),
+
+    #[error(transparent)]
+    FromTimeParse(#[from] time::error::Parse),
+
     #[error("Invalid date in file name: {0}")]
     InvalidDateInFileName(String),
 

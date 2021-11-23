@@ -100,7 +100,10 @@ impl<B: Batchable> BatchDriver<B> {
                 if signed_duration.is_negative() {
                     return TimeTo::Past(*timer);
                 }
-                TimeTo::Future(std::time::Duration::new(signed_duration.abs()))
+                TimeTo::Future(std::time::Duration::new(
+                    signed_duration.abs().whole_seconds() as u64,
+                    0,
+                ))
             }
         }
     }
