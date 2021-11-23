@@ -404,13 +404,12 @@ impl SmAgent {
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
-        dbg!("restart requested!");
         let () = restart_operation::create_slash_run_file()?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
         match std::process::Command::new("sudo")
-            .arg("echo")
+            .arg("init")
             .arg("6")
             .status()
         {
