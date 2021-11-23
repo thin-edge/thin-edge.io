@@ -80,7 +80,7 @@ pub mod restart_operation {
                 Err(_err) => Err(AgentError::FloatCastingError),
             }
         } else {
-            return Err(AgentError::UptimeParserError);
+            Err(AgentError::UptimeParserError)
         }
     }
 

@@ -51,7 +51,9 @@ impl Default for SmAgentConfig {
         let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
 
         let mut request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
-        let () = request_topics.add(control_filter_topic()).unwrap(); // TODO: fix this unwrap
+        let () = request_topics
+            .add(control_filter_topic())
+            .expect("Invalid topic filter");
 
         let request_topic_list =
             Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");
