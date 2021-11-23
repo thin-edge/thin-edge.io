@@ -97,7 +97,7 @@ class SoftwareManagement(EnvironmentC8y):
         if self.myPlatform != "smcontainer":
             self.skipTest(
                 "Testing the apt plugin is not supported on this platform."+\
-                 "Use parameter -XmyPlatform='smcontainer' to enable it")
+                    "Use parameter -XmyPlatform='smcontainer' to enable it")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
@@ -117,7 +117,7 @@ class SoftwareManagement(EnvironmentC8y):
             "registry": "8018911",
             "hello-world": "8021526",
             "docker/getting-started": "8021973", # warning not available for arm
-            "alpine": "7991792",
+            "alpine" : "7991792",
         }
 
         if self.project.c8yswrepo:
@@ -268,7 +268,9 @@ class SoftwareManagement(EnvironmentC8y):
         # In this case we just jump everything to see what is goin on
         if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
-            self.log.debug("State of current operation: %s", json.dumps(operation, indent=4))
+            self.log.debug(
+                "State of current operation: %s", json.dumps(operation, indent=4)
+            )
 
         if not operation.get("status"):
             raise SystemError("No valid field status in response")
