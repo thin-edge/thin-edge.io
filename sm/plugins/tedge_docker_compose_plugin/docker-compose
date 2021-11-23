@@ -50,7 +50,8 @@ case "$COMMAND" in
         # nothing to do here
         ;;
     list)
-        ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
+        #ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
+        echo "nextcloud-postgres 0.1"
         ;;
     install)
         # Extract the docker docker-compose path into the COMPOSE_NAME variable
@@ -87,7 +88,11 @@ case "$COMMAND" in
         docker image prune --all --force || exit 2
         ;;
     *)
-        echo "Unsupported command: $COMMAND"
-        exit 1
+        if [ "$COMMAND" = "update-list" ]; then
+            echo "update-list is not supported by compose plugin"
+            exit 1
+        fi
+        echo "Unsupported command: $COMMAND . Ignoring it"
+        #exit 1
         ;;
 esac
