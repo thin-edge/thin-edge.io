@@ -85,11 +85,11 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
 
         # Validate the last 3 measurements of thin-edge-child device
         self.validate_measurement(
-            child_measurements[0], "temperature", 10, "2021-06-15T17:06:55.923+02:00")
+            child_measurements[0], "temperature", 10)
         self.validate_measurement(
             child_measurements[1], "temperature", 11)
         self.validate_measurement(
-            child_measurements[2], "temperature", 12)
+            child_measurements[2], "temperature", 12, "2021-01-01T10:10:10.100+02:00")
 
         # Validate the last measurement of other-thin-edge-child device
         other_child_measurement = self.cumulocity.get_last_measurements_from_device(
