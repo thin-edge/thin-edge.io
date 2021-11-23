@@ -1,7 +1,7 @@
 pub mod restart_operation {
 
     use crate::error::AgentError;
-    use std::{fs::File, io::Read, io::Write, path::PathBuf};
+    use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
     use time::OffsetDateTime;
     use tracing::error;
 
@@ -16,8 +16,19 @@ pub mod restart_operation {
     /// let () = RestartOperationHelper::create_slash_run_file()?;
     /// ```
     pub fn create_slash_run_file() -> Result<(), AgentError> {
-        let tedge_agent_restart_marker = PathBuf::from(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
-        let mut file = std::fs::File::create(tedge_agent_restart_marker)?;
+        let path = Path::new(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+
+        let mut file = match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) => {
+                return Err(AgentError::FromIo(err));
+            }
+        };
         let date_utc = OffsetDateTime::now_utc().unix_timestamp();
         file.write_all(date_utc.to_string().as_bytes())?;
         Ok(())
