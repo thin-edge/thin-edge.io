@@ -179,9 +179,17 @@ where
     let mut date_string: String = Deserialize::deserialize(deserializer)?;
 
     let str_size = date_string.len();
-    date_string = date_string[0..str_size - 2].to_string()
-        + ":"
-        + &date_string[str_size - 2..str_size].to_string();
+    // check if `date_string` does not have a colon.
+    let date_string_end = &date_string.split('+').last();
+    date_string = match date_string_end {
+        Some(string) if !string.contains(':') => {
+            date_string[0..str_size - 2].to_string()
+                + ":"
+                + &date_string[str_size - 2..str_size].to_string()
+        }
+        _ => date_string,
+    };
+
     match DateTime::parse_from_rfc3339(&date_string) {
         Ok(result) => Ok(result),
         Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
@@ -264,6 +272,7 @@ mod tests {
     use assert_json_diff::*;
     use json_sm::*;
     use serde_json::json;
+    use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.
     impl SmartRestUpdateSoftware {
@@ -517,5 +526,18 @@ mod tests {
         ];
 
         assert_eq!(vec, expected_vec);
+    }
+
+    #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+0200"; "c8y expected")]
+    #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+02:00"; "with colon both")]
+    #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+0200"; "with colon date from")]
+    #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+02:00"; "with colon date to")]
+    fn deserialize_smartrest_log_file_request_operation(date_from: &str, date_to: &str) {
+        let smartrest = String::from(&format!(
+            "522,DeviceSerial,syslog,{},{},ERROR,1000",
+            date_from, date_to
+        ));
+        let log = SmartRestLogRequest::from_smartrest(&smartrest);
+        assert!(log.is_ok());
     }
 }
