@@ -10,7 +10,7 @@ use serde::{
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
-use time::{format_description, macros::datetime, OffsetDateTime};
+use time::{format_description, OffsetDateTime};
 
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(
@@ -297,64 +297,71 @@ fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
     }
 }
 
-#[test]
-fn it_deserializes_thin_edge_json() -> anyhow::Result<()> {
-    use crate::builder::ThinEdgeJsonBuilder;
-    let input = r#"{
-            "time" : "2021-04-30T17:03:14.123+02:00",
-            "pressure": 123.4,
-            "temperature": 24,
-            "coordinate": {
-                "x": 1,
-                "y": 2.0,
-                "z": -42.0
-            },
-            "escaped\\": 123.0
-        }"#;
+#[cfg(test)]
+mod tests {
+    use time::macros::datetime;
 
-    let mut builder = ThinEdgeJsonBuilder::new();
+    use crate::parser::parse_str;
 
-    let () = parse_str(input, &mut builder)?;
+    #[test]
+    fn it_deserializes_thin_edge_json() -> anyhow::Result<()> {
+        use crate::builder::ThinEdgeJsonBuilder;
+        let input = r#"{
+        "time" : "2021-04-30T17:03:14.123+02:00",
+        "pressure": 123.4,
+        "temperature": 24,
+        "coordinate": {
+            "x": 1,
+            "y": 2.0,
+            "z": -42.0
+        },
+        "escaped\\": 123.0
+    }"#;
 
-    let output = builder.done()?;
+        let mut builder = ThinEdgeJsonBuilder::new();
 
-    assert_eq!(
-        output.timestamp,
-        Some(datetime!(2021-04-30 17:03:14.123 +02:00))
-    );
+        let () = parse_str(input, &mut builder)?;
 
-    assert_eq!(
-        output.values,
-        vec![
-            ("pressure", 123.4).into(),
-            ("temperature", 24.0).into(),
-            (
-                "coordinate",
-                vec![("x", 1.0).into(), ("y", 2.0).into(), ("z", -42.0).into(),]
-            )
-                .into(),
-            (r#"escaped\"#, 123.0).into(),
-        ]
-    );
-    Ok(())
-}
+        let output = builder.done()?;
 
-#[test]
-fn it_shows_input_excerpt_on_error() -> anyhow::Result<()> {
-    use crate::builder::ThinEdgeJsonBuilder;
+        assert_eq!(
+            output.timestamp,
+            Some(datetime!(2021-04-30 17:03:14.123 +02:00))
+        );
 
-    let input = "{\n\"time\" : null\n}";
+        assert_eq!(
+            output.values,
+            vec![
+                ("pressure", 123.4).into(),
+                ("temperature", 24.0).into(),
+                (
+                    "coordinate",
+                    vec![("x", 1.0).into(), ("y", 2.0).into(), ("z", -42.0).into(),]
+                )
+                    .into(),
+                (r#"escaped\"#, 123.0).into(),
+            ]
+        );
+        Ok(())
+    }
 
-    let mut builder = ThinEdgeJsonBuilder::new();
+    #[test]
+    fn it_shows_input_excerpt_on_error() -> anyhow::Result<()> {
+        use crate::builder::ThinEdgeJsonBuilder;
 
-    let res = parse_str(input, &mut builder);
+        let input = "{\n\"time\" : null\n}";
 
-    assert!(res.is_err());
+        let mut builder = ThinEdgeJsonBuilder::new();
 
-    assert_eq!(
+        let res = parse_str(input, &mut builder);
+
+        assert!(res.is_err());
+
+        assert_eq!(
         res.unwrap_err().to_string(),
         "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}`",
     );
 
-    Ok(())
+        Ok(())
+    }
 }

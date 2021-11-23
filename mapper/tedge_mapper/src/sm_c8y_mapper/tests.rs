@@ -28,7 +28,6 @@ async fn mapper_publishes_a_software_list_request() {
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
-    dbg!(&msg);
     assert!(&msg.contains(r#"{"id":"#));
 
     sm_mapper.unwrap().abort();

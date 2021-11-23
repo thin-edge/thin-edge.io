@@ -58,9 +58,8 @@ impl OperationLogs {
         }
 
         let now = OffsetDateTime::now_utc();
-        let format = format_description::parse(
-            "[year]-[month]-[day]T[hour repr:24]:[minute]:[seconds]+[offset_hour]:[offset_minute]",
-        )?;
+        let format =
+            format_description::parse("[year]-[month]-[day]T[hour repr:24]:[minute]:[second]z")?;
 
         let file_prefix = match kind {
             LogKind::SoftwareUpdate => UPDATE_PREFIX,

@@ -192,7 +192,7 @@ mod tests {
     use super::*;
     use mockall::predicate::*;
     use mockall::*;
-    use time::macros::datetime;
+    use time::{macros::datetime, Duration};
 
     #[derive(thiserror::Error, Debug, Clone)]
     pub enum TestError {
@@ -294,6 +294,8 @@ mod tests {
         let _ = grouper.visit_timestamp(test_timestamp(6));
         let _ = grouper.visit_timestamp(test_timestamp(5));
 
+        dbg!(&grouper);
+
         let mut mock = MockGroupedVisitor::new();
         mock.expect_visit_timestamp()
             .times(1)
@@ -347,7 +349,10 @@ mod tests {
     }
 
     fn test_timestamp(minute: u32) -> OffsetDateTime {
-        datetime!(2021-04-08 13:00:00 +05:00)
+        // let dt = format!("2021-04-08T13:{}:00+05:00", minute);
+        let mut dt = datetime!(2021-04-08 13:00:00 +05:00);
+        dt += Duration::minutes(minute as i64);
+        dt
         // FixedOffset::east(5 * 3600)
         //     .ymd(2021, 4, 8)
         //     .and_hms(13, minute, 00)

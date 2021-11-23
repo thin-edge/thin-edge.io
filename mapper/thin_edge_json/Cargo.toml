@@ -20,6 +20,7 @@ criterion = "0.3"
 mockall = "0.10"
 proptest = "1.0"
 stats_alloc = "0.1"
+time = { version = "0.3", features = ["macros"] }
 walkdir = "2"
 
 [[bench]]

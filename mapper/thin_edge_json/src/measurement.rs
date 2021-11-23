@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 ///
 /// ```
 /// # use thin_edge_json::measurement::*;
-/// # use time::OffsetDateTime;
+/// # use time::{OffsetDateTime, format_description};
 ///
 /// struct MeasurementPrinter {
 ///     group: Option<String>,
@@ -28,8 +28,10 @@ use time::OffsetDateTime;
 ///     type Error = MeasurementError;
 ///
 ///     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
+///     let format =
+///         format_description::parse("[day] [month repr:short] [year] [hour repr:24]:[minute]:[seconds] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
 ///         if self.group.is_none() {
-///             Ok(println!("time = {}", timestamp.to_rfc2822()))
+///             Ok(println!("time = {}", timestamp.format(&format).unwrap()))
 ///         } else {
 ///             Err(MeasurementError::UnexpectedTimestamp)
 ///         }

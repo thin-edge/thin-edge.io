@@ -451,7 +451,7 @@ async fn create_log_event(
     let local = time::OffsetDateTime::now_utc();
 
     let format =
-        format_description::parse("[year]-[month]-[day]T[hour repr:24]:[minute]:[seconds]Z")?;
+        format_description::parse("[year]-[month]-[day]T[hour repr:24]:[minute]:[seconds]z")?;
 
     let c8y_log_event = C8yCreateEvent::new(
         c8y_managed_object.to_owned(),

@@ -141,7 +141,7 @@ mod tests {
     use time::OffsetDateTime;
 
     fn test_timestamp() -> OffsetDateTime {
-        OffsetDateTime::now_local().unwrap()
+        OffsetDateTime::now_utc()
     }
 
     #[test]
@@ -198,6 +198,8 @@ mod tests {
                 .as_str(),
             body
         );
+        dbg!(&expected_output);
+
         let output = serializer.into_string()?;
         assert_eq!(expected_output, output);
         Ok(())
