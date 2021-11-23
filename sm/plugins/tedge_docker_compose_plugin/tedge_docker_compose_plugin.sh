@@ -5,19 +5,18 @@
 usage() {
     cat << EOF
 USAGE:
-    docker <SUBCOMMAND>
+    compose <SUBCOMMAND>
 
 SUBCOMMANDS:
     list           List all the installed modules
     prepare        Prepare a sequences of install/remove commands
-    install        Install a module
-    remove         Uninstall a module
-    finalize       Finalize a sequences of install/remove commands
+    install        Install a module (install expects docker-compose file to be under "/tmp/")
+    remove         Uninstall a module 
+    finalize       Removes unused images
 EOF
 }
 
-DOCKER_COMPOSE_PLUGIN_PATH='/etc/tedge/sm-plugins/docker-compose/'
-EXTENSION=".yaml"
+DOCKER_COMPOSE_PLUGIN_PATH="/etc/tedge/sm-plugins/docker-compose/"
 TMP_PATH="/tmp/"
 
 unsupported_args_check() {
@@ -27,14 +26,14 @@ unsupported_args_check() {
     fi
 }
 
-extract_docker_compose_path_from_args() {
+extract_docker_compose_name_from_args() {
     COMPOSE_ARG="$1"
     if [ -z "$COMPOSE_ARG" ]; then
         echo "docker-compose.yaml path is a mandatory argument"
         exit 1
     fi
     shift   # Pop image name from args list
-    COMPOSE_FILE=$COMPOSE_ARG
+     COMPOSE_NAME=$COMPOSE_ARG
 }
 
 if [ -z $1 ]; then
@@ -54,23 +53,28 @@ case "$COMMAND" in
         ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
         ;;
     install)
-        # Extract the docker docker-compose path into the COMPOSE_FILE variable
-        extract_docker_compose_path_from_args $@
-        TMP_PATH="$TMP_PATH$COMPOSE_ARG"
-        echo $TMP_PATH
-        sudo cp $TMP_PATH $DOCKER_COMPOSE_PLUGIN_PATH
-        COMPOSE_NAME="$(echo $TMP_PATH | cut -d/ -f3 | cut -d. -f1)"
-        INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME"
-        echo $INSTALL_PATH
+        # Extract the docker docker-compose path into the COMPOSE_NAME variable
+        extract_docker_compose_name_from_args $@
+        TMP_PATH="$TMP_PATH$COMPOSE_NAME"
+        #echo $TMP_PATH
 
-        # Spawn new containers with the provided image name and version to replace the stopped one
-        echo "Install path" $INSTALL_PATH
-        sudo docker-compose -f $INSTALL_PATH up -d || exit 2
+        if [ -f "$TMP_PATH" ]; then
+            echo "Starting docker-compose file $TMP_PATH"
+            # Copy docker-compose file to plugin folder to store it ther until removal
+            sudo cp $TMP_PATH $DOCKER_COMPOSE_PLUGIN_PATH
+            #COMPOSE_NAME="$(echo $TMP_PATH | cut -d/ -f3 | cut -d. -f1)"
+            INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME"
+
+            # Spawn new containers with the provided image name and version to replace the stopped one
+            sudo docker-compose -f $INSTALL_PATH up -d || exit 2
+        else
+            echo "File $TMP_PATH not found, make sure to use a working link or file uploaded to make the file available"
+        fi
         ;;
     remove)
-        # Extract the docker docker-compose path into the COMPOSE_FILE variable
-        extract_docker_compose_path_from_args $@
-        REMOVE_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_FILE"
+        # Extract the docker docker-compose path into the  COMPOSE_NAME variable
+        extract_docker_compose_name_from_args $@
+        REMOVE_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME"
         echo $REMOVE_PATH
     
         sudo docker-compose -f $REMOVE_PATH down || exit 2
