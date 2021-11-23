@@ -43,6 +43,9 @@ pub enum AgentError {
 
     #[error("Failed to cast string to float.")]
     FloatCastingError,
+
+    #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {}")]
+    TimestampConversionError { timestamp: i64, error_msg: String },
 }
 
 #[derive(Debug, thiserror::Error)]

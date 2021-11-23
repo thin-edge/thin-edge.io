@@ -175,7 +175,6 @@ mod tests {
         );
     }
 
-    // thread 'state::tests::agent_state_repository_exists_loads_some' panicked at 'called `Result::unwrap()` on an `Err` value: FromTOMLParse(Error { inner: ErrorInner { kind: Custom, line: Some(0), col: 0, at: Some(0), message: "unknown variant `list`, expected `Software` or `Restart`", key: ["operation"] } })', sm/tedge_agent/src/state.rs:138:38
     #[tokio::test]
     async fn agent_state_repository_exists_loads_none() {
         let temp_dir = tempdir().unwrap();

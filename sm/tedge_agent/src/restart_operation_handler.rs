@@ -43,12 +43,20 @@ pub mod restart_operation {
         let mut file = File::open(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        let dt = OffsetDateTime::from_unix_timestamp(
-            contents
-                .parse::<i64>()
-                .expect("Could not parse unix timestamp"),
-        )
-        .unwrap();
+
+        let unix_timestamp = contents
+            .parse::<i64>()
+            .expect("Could not parse unix timestamp");
+
+        let dt = match OffsetDateTime::from_unix_timestamp(unix_timestamp) {
+            Ok(result) => result,
+            Err(error) => {
+                return Err(AgentError::TimestampConversionError {
+                    timestamp: unix_timestamp,
+                    error_msg: error.to_string(),
+                });
+            }
+        };
         Ok(dt)
     }
 

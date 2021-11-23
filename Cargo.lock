@@ -2665,6 +2665,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-trait",
+ "chrono",
  "flockfile",
  "futures",
  "json_sm",
