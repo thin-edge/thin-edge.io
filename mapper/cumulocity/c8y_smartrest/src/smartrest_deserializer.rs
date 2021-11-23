@@ -271,6 +271,7 @@ mod tests {
     use assert_json_diff::*;
     use json_sm::*;
     use serde_json::json;
+    use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.
     impl SmartRestUpdateSoftware {
@@ -524,5 +525,18 @@ mod tests {
         ];
 
         assert_eq!(vec, expected_vec);
+    }
+
+    #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+0200"; "c8y expected")]
+    #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+02:00"; "with colon both")]
+    #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+0200"; "with colon date from")]
+    #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+02:00"; "with colon date to")]
+    fn deserialize_smartrest_log_file_request_operation(date_from: &str, date_to: &str) {
+        let smartrest = String::from(&format!(
+            "522,DeviceSerial,syslog,{},{},ERROR,1000",
+            date_from, date_to
+        ));
+        let log = SmartRestLogRequest::from_smartrest(&smartrest);
+        assert!(log.is_ok());
     }
 }
