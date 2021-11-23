@@ -3,6 +3,8 @@ name = "tedge_agent"
 version = "0.4.2"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "tedge_agent interacts with a Cloud Mapper and one or more Software Plugins"
 
 [package.metadata.deb]
 depends = "tedge_mapper"

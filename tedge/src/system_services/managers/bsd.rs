@@ -25,7 +25,9 @@ impl SystemServiceManager for BsdServiceManager {
 
         match command.status() {
             Ok(status) if status.success() => Ok(()),
-            _ => Err(BsdServiceError::ServiceManagerNotAvailable.into()),
+            _ => Err(SystemServiceError::ServiceManagerUnavailable(
+                self.name().to_string(),
+            )),
         }
     }
 
