@@ -89,16 +89,15 @@ class SoftwareManagement(EnvironmentC8y):
 
     dockerplugin = None
 
-    #tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
-    tenant_url = "pradeep.latest.stage.c8y.io"
+    tenant_url = "thin-edge-io.eu-latest.cumulocity.com"
 
     def setup(self):
         """Setup Environment"""
 
         if self.myPlatform != "smcontainer":
             self.skipTest(
-                "Testing the apt plugin is not supported on this platform." +
-                "Use parameter -XmyPlatform='smcontainer' to enable it")
+                "Testing the apt plugin is not supported on this platform."+\
+                 "Use parameter -XmyPlatform='smcontainer' to enable it")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
@@ -117,13 +116,13 @@ class SoftwareManagement(EnvironmentC8y):
             # # docker plugin
             "registry": "8018911",
             "hello-world": "8021526",
-            "docker/getting-started": "8021973",  # warning not available for arm
+            "docker/getting-started": "8021973", # warning not available for arm
             "alpine": "7991792",
         }
 
         if self.project.c8yswrepo:
             self.pkg_id_db = json.loads(self.project.c8yswrepo)
-        self.log.info("Using sw id database: %s" % self.pkg_id_db)
+        self.log.info("Using sw id database: %s"% self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -191,8 +190,7 @@ class SoftwareManagement(EnvironmentC8y):
         jresponse = json.loads(req.text)
 
         self.log.info("Response status: %s", req.status_code)
-        self.log.info("Response to action: %s",
-                      json.dumps(jresponse, indent=4))
+        self.log.info("Response to action: %s", json.dumps(jresponse, indent=4))
 
         self.operation = jresponse
         self.operation_id = jresponse.get("id")
@@ -203,53 +201,6 @@ class SoftwareManagement(EnvironmentC8y):
         self.log.info("Started operation: %s", self.operation)
 
         req.raise_for_status()
-
-    def trigger_log_request(self, log_file_request_payload):
-        url = f"https://{self.tenant_url}/devicecontrol/operations"
-
-        log_file_request_payload = {
-            "deviceId": self.project.deviceid,
-            "description": "Log file request",
-            "c8y_LogfileRequest": log_file_request_payload,
-        }
-
-        req = requests.post(
-            url, json=log_file_request_payload, headers=self.header, timeout=self.timeout_req
-        )
-
-        jresponse = json.loads(req.text)
-
-        self.log.info("Response status: %s", req.status_code)
-        self.log.info("logfile path: %s", json.dumps(jresponse, indent=4))
-
-        self.operation = jresponse
-        self.operation_id = jresponse.get("id")
-
-        if not self.operation_id:
-            raise SystemError("field id is missing in response")
-
-        self.log.info("Started operation: %s", self.operation)
-
-        req.raise_for_status()
-
-    def check_if_log_req_complete(self):
-        """Check if log received"""
-
-        url = f"https://{self.tenant_url}/devicecontrol/operations/{self.operation_id}"
-        req = requests.get(url, headers=self.header, timeout=self.timeout_req)
-
-        req.raise_for_status()
-
-        jresponse = json.loads(req.text)
-
-        ret = ""
-
-        log_response = jresponse.get("c8y_LogfileRequest")
-        # check if the response contains the logfile
-        log_file = log_response.get("file")
-        if log_response.get("file") != None:
-            ret = log_file
-        return ret
 
     def is_status_fail(self):
         """Check if the current status is a fail"""
@@ -307,22 +258,17 @@ class SoftwareManagement(EnvironmentC8y):
         operations = jresponse.get("operations")
 
         if not operations or len(operations) != 1:
-            raise SystemError(
-                "field operations is missing in response or to long")
+            raise SystemError("field operations is missing in response or to long")
 
         operation = operations[0]
 
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
-        self.log.info("State of current operation: %s",
-                      operation.get("status"))
+        self.log.info("State of current operation: %s", operation.get("status"))
 
         # In this case we just jump everything to see what is goin on
         if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
-            self.log.debug(
-                "State of current operation: %s", json.dumps(
-                    operation, indent=4)
-            )
+            self.log.debug("State of current operation: %s", json.dumps(operation, indent=4))
 
         if not operation.get("status"):
             raise SystemError("No valid field status in response")
