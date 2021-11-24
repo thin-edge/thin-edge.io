@@ -98,7 +98,8 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --verbose --features integration-test -- --skip sending_and_receiving_a_message --skip mapper::tests::a_valid_input_leads_to_a_translated_output
+          #args: --verbose --features integration-test -- --skip sending_and_receiving_a_message --skip mapper::tests::a_valid_input_leads_to_a_translated_output
+          args: --features integration-test -- --skip sending_and_receiving_a_message --skip mapper::tests::a_valid_input_leads_to_a_translated_output --skip install_from_local_file_success::version_with_path --skip install_from_local_file_success::path --skip install_from_local_file_success::path_with_version
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
