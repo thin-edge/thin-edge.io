@@ -2,24 +2,21 @@ name: commit-workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
   cargo-fmt:
-
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -38,12 +35,10 @@ jobs:
           args: -- --check
 
   cargo-clippy:
-
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -65,13 +60,11 @@ jobs:
           command: clippy
 
   cargo-test:
-
     name: Run cargo test
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -85,6 +78,13 @@ jobs:
         with:
           command: version
 
+      - name: Cargo build dummy plugin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: -p tedge_dummy_plugin
+
       - name: Cargo test
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -93,13 +93,11 @@ jobs:
           args: --no-fail-fast
 
   cargo-build:
-
     name: Run cargo build
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
