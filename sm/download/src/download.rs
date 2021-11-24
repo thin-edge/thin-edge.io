@@ -81,7 +81,7 @@ impl Downloader {
         .await?;
 
         let file_len = match response.content_length() {
-            Some(len) => len as usize,
+            Some(len) => len as u64,
             None => 0,
         };
         let mut file =
@@ -112,21 +112,23 @@ impl Downloader {
 
 fn create_file_and_try_pre_allocate_space(
     file_path: &Path,
-    file_len: usize,
+    file_len: u64,
 ) -> Result<File, DownloadError> {
     let file = File::create(file_path)?;
     if file_len > 0 {
         if let Some(root) = file_path.parent() {
             let tmpstats = statvfs::statvfs(root)?;
             // Reserve 5% of total disk space
-            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
-            let usable_disk_space =
-                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+            let five_percent_disk_space =
+                (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
+            let usable_disk_space = tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64
+                - five_percent_disk_space as u64;
 
-            if file_len >= usable_disk_space as usize {
+            if file_len >= usable_disk_space as u64 {
                 return Err(DownloadError::InsufficientSpace);
             }
-            // Reserve diskspace
+
+            // Reserve disk space
             let _ = fallocate(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
