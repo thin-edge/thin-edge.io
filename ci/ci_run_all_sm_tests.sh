@@ -41,7 +41,9 @@ cd tests/PySys/
 
 # Run all software management tests, including the ones for the
 # fake- and the  docker plugin
+set +e
 pysys.py run --record -v DEBUG 'SoftwareManagement.*' -XmyPlatform='smcontainer' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
+set -e
 
 deactivate
 

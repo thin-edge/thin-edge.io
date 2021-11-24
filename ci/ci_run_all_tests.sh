@@ -41,7 +41,9 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
+set +e
 pysys.py run --record -v DEBUG --exclude analytics
+set -e
 
 deactivate
 
