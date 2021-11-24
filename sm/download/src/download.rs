@@ -119,11 +119,13 @@ fn create_file_and_try_pre_allocate_space(
         if let Some(root) = file_path.parent() {
             let tmpstats = statvfs::statvfs(root)?;
             // Reserve 5% of total disk space
-            let five_percent_disk_space = (tmpstats.blocks() * tmpstats.block_size()) * 5 / 100;
-            let usable_disk_space =
-                tmpstats.blocks_free() * tmpstats.block_size() - five_percent_disk_space;
+            let five_percent_disk_space =
+                (tmpstats.blocks() as usize * tmpstats.block_size() as usize) * 5 / 100;
+            let usable_disk_space = tmpstats.blocks_free() as usize
+                * tmpstats.block_size() as usize
+                - five_percent_disk_space;
 
-            if file_len >= usable_disk_space as usize {
+            if file_len >= usable_disk_space {
                 return Err(DownloadError::InsufficientSpace);
             }
             // Reserve diskspace
