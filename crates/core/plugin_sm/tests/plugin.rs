@@ -288,13 +288,16 @@ mod tests {
     fn get_dummy_plugin_path() -> PathBuf {
         // Return a path to a dummy plugin in target directory.
         let package_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+
+        // To get the plugin binary path we need to find the `target` directory which is 3 levels above the `Cargo.toml` file of the package
+        // CARGO_MANIFEST_DIR == ./thin-edge.io/crates/core/plugin_sm
         let dummy_plugin_path = PathBuf::from_str(package_dir.as_str())
             .unwrap()
-            .parent()
+            .parent() //./thin-edge.io/crates/core/
             .unwrap()
-            .parent()
+            .parent() // ./thin-edge.io/crates/
             .unwrap()
-            .parent()
+            .parent() // ./thin-edge.io/
             .unwrap()
             .join("target/debug/tedge_dummy_plugin");
 
