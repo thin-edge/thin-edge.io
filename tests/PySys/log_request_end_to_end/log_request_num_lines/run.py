@@ -27,7 +27,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     def execute(self):
         log_file_request_payload = {
             "dateFrom": "2021-11-15T18:55:49+0530",
-            "dateTo": "2021-11-19T18:55:49+0530",
+            "dateTo": "2021-11-21T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "",
             "maximumLines": 250
@@ -45,7 +45,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     def wait_until_retrieved_logs(self):
         for i in range(1, 20):
             time.sleep(1)
-            log_file = self.cumulocity.check_if_log_req_complete()
+            log_file = self.cumulocity.retrieve_log_file()
             if len(log_file) != 0:
                 if self.download_file_and_verify_number_of_lines(log_file):
                     return True

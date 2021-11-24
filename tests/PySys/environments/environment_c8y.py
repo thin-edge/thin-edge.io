@@ -107,20 +107,17 @@ class Cumulocity(object):
         if not self.operation_id:
             raise SystemError("field id is missing in response")
 
-        # self.log.info("Started operation: %s", self.operation)
-
         req.raise_for_status()
 
-    def check_if_log_req_complete(self):
+    def retrieve_log_file(self):
         """Check if log received"""
+
         url = f"https://{self.c8y_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
-
         req.raise_for_status()
 
         jresponse = json.loads(req.text)
-
         ret = ""
 
         log_response = jresponse.get("c8y_LogfileRequest")

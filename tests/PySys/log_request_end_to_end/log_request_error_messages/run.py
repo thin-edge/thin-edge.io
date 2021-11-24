@@ -27,7 +27,7 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
     def execute(self):
         log_file_request_payload = {
             "dateFrom": "2021-11-15T18:55:49+0530",
-            "dateTo": "2021-11-19T18:55:49+0530",
+            "dateTo": "2021-11-21T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "Error",
             "maximumLines": 50
@@ -35,17 +35,17 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
         self.cumulocity.trigger_log_request(log_file_request_payload)
 
     def validate(self):
-        status = self.wait_until_retrieved_logs()
+        status = self.wait_until_logs_retrieved()
         if not status:
             self.log.info("Explicitly send the operation status as failed.")
             self.stopLogRequestOp()
         else:
             self.assertThat("True == value", value=status)
 
-    def wait_until_retrieved_logs(self):
+    def wait_until_logs_retrieved(self):
         for i in range(1, 20):
             time.sleep(1)
-            log_file = self.cumulocity.check_if_log_req_complete()
+            log_file = self.cumulocity.retrieve_log_file()
             if len(log_file) != 0:
                 if self.download_file_and_verify_error_messages(log_file):
                     return True
