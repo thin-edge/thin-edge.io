@@ -21,8 +21,7 @@ cd $TEBASEDIR
 # Check if clients are installed
 dpkg -s mosquitto-clients
 
-
-sudo cp sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
+sudo cp plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
 
 sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
 
@@ -30,7 +29,7 @@ sudo tedge config set software.plugin.default apt
 
 sudo mkdir -p /tmp/.tedge_dummy_plugin/
 
-sudo cp tests/PySys/software-management-end-to-end/dummy-plugin-configuration/list-valid.0 /tmp/.tedge_dummy_plugin/list-valid.0
+sudo cp tests/PySys/software_management_end_to_end/dummy_plugin_configuration/list-valid.0 /tmp/.tedge_dummy_plugin/list-valid.0
 
 # Run all PySys tests
 

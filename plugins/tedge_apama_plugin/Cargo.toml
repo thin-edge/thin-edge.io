@@ -1,0 +1,15 @@
+[package]
+name = "tedge_apama_plugin"
+version = "0.4.3"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "thin.edge.io plugin for installing apama projects"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+structopt = "0.3"
+thiserror = "1.0"
+serde = { version = "1", features = ["derive"] }
+zip = "0.5"

@@ -3,9 +3,11 @@
 ## Installation with get-thin-edge_io.sh script
 
 There are two possibilities to install thin-edge.io, the easiest way is to use the installation script with this command:
-```
+
+```shell
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
+
 You can execute that command on your device and it will do all required steps for an initial setup.
 
 If you prefer to have a little more control over the installation or the script did not work for you, please go on with the following steps.
@@ -32,6 +34,17 @@ sudo apt install mosquitto
 ## `thin-edge.io` installation
 
 When all dependencies are in place you can proceed with installation of `thin-edge.io cli` and `thin-edge.io mapper` service.
+
+### Upgrading `thin-edge.io`
+
+If you already have `thin-edge.io` on your device to upgrade `thin-edge.io` follow the steps below, there is no need to remove old version.
+
+> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components should be stopped, eg: `tedge-mapper` and `tedge-agent`:
+>
+> ```shell
+> systemctl stop tedge-mapper-c8y
+> systemctl stop tedge-agent
+> ```
 
 ### Package download
 
@@ -105,5 +118,5 @@ sudo adduser <user> tedge-users
 
 ## Next steps
 
-1. [How to register?](./003_registration.md)
-2. [How to connect?](./004_connect.md)
+1. [Connect your device to Cumulocity IoT](../tutorials/connect-c8y.md)
+2. [Connect your device to Azure IoT](../tutorials/connect-azure.md)

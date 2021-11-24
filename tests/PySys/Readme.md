@@ -8,6 +8,24 @@ See also:
 * [https://pysys-test.github.io/pysys-test/](https://pysys-test.github.io/pysys-test/)
 * [https://github.com/pysys-test/](https://github.com/pysys-test/)
 
+### Folders for tests
+
+- Folder: analytics : Tests that generate analytics
+- Folder: cloud\_c8y : Related to Cumulocity
+- Folder: environments : Used to keep our PySys BaseTest extesions
+- Folder: misc\_features : Test for miscellaneous features
+- Folder: monitoring : Related to collect monitoring
+- Folder: mqtt\_port : Related to MQTT port switching
+- Folder: plugin\_apt : For apt plugin tests
+- Folder: plugin\_docker : For docker plugin tests
+- Folder: smoketests : For smoketests
+- Folder: software\_management\_end\_to\_end :
+    For tests that simulate software management actions from an end to end
+    perspective by accessing the devie via the C8y REST interface
+- Folder: tedge : Generally related to tedge commands
+- Folder: tedge\_connect : Related to connecting with tedge
+- Folder: tedge\_mapper\_az : Related to our Azure mapper
+- Folder: tedge\_mapper\_c8y : Related to our Cumulocity mapper
 
 #### Running System tests manually on your device / Linux PC
 
