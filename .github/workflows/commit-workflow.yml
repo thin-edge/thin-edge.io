@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Extract
         run:  python3 -c 'import os; print(" ".join(os.environ["IOTHUBNAME"]))'
-        with:
+        env:
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
   cargo-fmt:
