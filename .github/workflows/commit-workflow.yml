@@ -2,26 +2,30 @@ name: commit-workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
   cargo-fmt:
-
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Cargo fmt --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: fmt
+          args: --version
 
       - name: Cargo fmt
         uses: actions-rs/cargo@v1
@@ -31,18 +35,23 @@ jobs:
           args: -- --check
 
   cargo-clippy:
-
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Cargo clippy --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: clippy
+          args: --version
 
       - name: Cargo clippy
         uses: actions-rs/cargo@v1
@@ -51,19 +60,30 @@ jobs:
           command: clippy
 
   cargo-test:
-
     name: Run cargo test
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
+
+      - name: Cargo version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: version
+
+      - name: Cargo build dummy plugin
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: build
+          args: -p tedge_dummy_plugin
 
       - name: Cargo test
         uses: actions-rs/cargo@v1
@@ -73,13 +93,11 @@ jobs:
           args: --no-fail-fast
 
   cargo-build:
-
     name: Run cargo build
     runs-on: Ubuntu-20.04
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -87,29 +105,18 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
+      - name: Cargo version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: version
+
       - name: Cargo build
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
           args: --release
-
-  cargo-outdated:
-
-    name: Run cargo outdated
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo outdated
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
 
   cargo-msrv:
     name: Run cargo msrv
@@ -130,6 +137,13 @@ jobs:
         with:
           command: install
           args: cargo-msrv
+
+      - name: Cargo msrv --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: msrv
+          args: --version
 
       - name: Cargo msrv
         uses: actions-rs/cargo@v1
