@@ -1,0 +1,19 @@
+[package]
+name = "json_sm"
+version = "0.4.3"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "json_sm defines the thin-edge json extension for software management"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+csv = "1.1"
+nanoid = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+regex = "1.5"

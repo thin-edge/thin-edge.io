@@ -24,9 +24,9 @@ appendtofile() {
     STRING=$1
     FILE=$2
     if grep "$STRING" $FILE; then
-        echo 'line already there';
+        echo 'line already there'
     else
-        echo $STRING >> $FILE;
+        echo $STRING >>$FILE
     fi
 }
 
@@ -43,7 +43,6 @@ if [ -z $C8YDEVICEID ]; then
 else
     echo "Your device: HIDDEN"
 fi
-
 
 if [ -z $C8YUSERNAME ]; then
     echo "Error: Please supply your user name  as environment variable C8YUSERNAME"
