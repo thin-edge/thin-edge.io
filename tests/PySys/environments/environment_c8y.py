@@ -1,4 +1,5 @@
 import json
+import re
 from pysys.constants import FAILED
 import requests
 from pysys.basetest import BaseTest
@@ -53,7 +54,7 @@ class Cumulocity(object):
         params = {
             "fragmentType": "c8y_IsDevice",
             "type": type,
-            "pageSize":100,
+            "pageSize": 100,
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
@@ -68,6 +69,40 @@ class Cumulocity(object):
             if device_id in device['name']:
                 return device
         return None
+
+    def get_child_device_of_thin_edge_device_by_name(self, thin_edge_device_id: str, child_device_id: str):
+        self.device_fragment = self.get_thin_edge_device_by_name(
+            thin_edge_device_id)
+        internal_id = self.device_fragment['id']
+        child_devices = self.to_json_response(requests.get(
+            url="{}/inventory/managedObjects/{}/childDevices".format(self.c8y_url, internal_id), auth=self.auth))
+        for child_device in child_devices['references']:
+            if child_device_id in child_device['managedObject']['name']:
+                return child_device['managedObject']
+
+        return None
+
+    def get_last_measurements_from_device(self, device_internal_id: str):
+        return self.get_last_n_measurements_from_device(
+            device_internal_id=device_internal_id, target_size=1)[0]
+
+    def get_last_n_measurements_from_device(self, device_internal_id: int, target_size: int):
+        params = {
+            "source": device_internal_id,
+            "pageSize": target_size,
+            "dateFrom": "1970-01-01",
+            "revert": True
+        }
+        res = requests.get(
+            url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
+        measurements_json = self.to_json_response(res)
+        return measurements_json['measurements']
+
+    def delete_managed_object_by_internal_id(self, internal_id: str):
+        res = requests.delete(
+            url="{}/inventory/managedObjects/{}".format(self.c8y_url, internal_id), auth=self.auth)
+        if res.status_code != 204 or res.status_code != 404:
+            res.raise_for_status()
 
 
 class EnvironmentC8y(BaseTest):
