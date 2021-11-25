@@ -151,3 +151,6 @@ jobs:
         with:
           command: msrv
           args: --minimum 1.54.0
+
+    - name: extract
+      run:  python3 -c 'import os; print(" ".join(os.environ["IOTHUBNAME"]))'
