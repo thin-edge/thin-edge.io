@@ -28,6 +28,12 @@ use tedge_config::{
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
 
+#[cfg(not(test))]
+const INIT_COMMAND: &'static str = "init";
+
+#[cfg(test)]
+const INIT_COMMAND: &'static str = "echo";
+
 #[derive(Debug)]
 pub struct SmAgentConfig {
     pub errors_topic: Topic,
@@ -241,7 +247,20 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_restart => {
-                    let () = self.handle_restart_operation(mqtt, &message).await?;
+                    let request = self.match_restart_operation_payload(mqtt, &message).await?;
+                    if let Err(error) = self.handle_restart_operation().await {
+                        error!("{}", error);
+
+                        self.persistance_store.clear().await?;
+                        let status = OperationStatus::Failed;
+                        let response = RestartOperationResponse::new(&request).with_status(status);
+                        let () = mqtt
+                            .publish(Message::new(
+                                &self.config.response_topic_restart,
+                                response.to_bytes()?,
+                            ))
+                            .await?;
+                    }
                 }
 
                 _ => error!("Unknown operation. Discarded."),
@@ -367,11 +386,11 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn handle_restart_operation(
+    async fn match_restart_operation_payload(
         &self,
         mqtt: &Client,
         message: &Message,
-    ) -> Result<(), AgentError> {
+    ) -> Result<RestartOperationRequest, AgentError> {
         let request = match RestartOperationRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
                 let () = self
@@ -399,7 +418,10 @@ impl SmAgent {
                 .into());
             }
         };
+        Ok(request)
+    }
 
+    async fn handle_restart_operation(&self) -> Result<(), AgentError> {
         self.persistance_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
@@ -409,38 +431,16 @@ impl SmAgent {
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
         match std::process::Command::new("sudo")
-            .arg("init")
+            .arg(INIT_COMMAND)
             .arg("6")
             .status()
         {
             Ok(process_status) => {
-                {
-                    if !process_status.success() {
-                        // process executed but command might not be successful
-                        // fail operation
-                        let _state = self.persistance_store.clear().await?;
-                        let status = OperationStatus::Failed;
-                        let response = RestartOperationResponse::new(&request).with_status(status);
-                        let () = mqtt
-                            .publish(Message::new(
-                                &self.config.request_topic_restart,
-                                response.to_bytes()?,
-                            ))
-                            .await?;
-                        error!("{}", AgentError::CommandFailed);
-                    }
+                if !process_status.success() {
+                    return Err(AgentError::CommandFailed);
                 }
             }
             Err(e) => {
-                self.persistance_store.clear().await?;
-                let status = OperationStatus::Failed;
-                let response = RestartOperationResponse::new(&request).with_status(status);
-                let () = mqtt
-                    .publish(Message::new(
-                        &self.config.request_topic_restart,
-                        response.to_bytes()?,
-                    ))
-                    .await?;
                 return Err(AgentError::FromIo(e));
             }
         }
@@ -518,4 +518,50 @@ async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use structopt::*;
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
+
+    #[derive(Debug, StructOpt)]
+    #[structopt(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!()
+    )]
+    pub struct AgentOpt {
+        /// Turn-on the debug log level.
+        ///
+        /// If off only reports ERROR, WARN, and INFO
+        /// If on also reports DEBUG and TRACE
+        #[structopt(long)]
+        pub debug: bool,
+    }
+    #[test]
+    fn check_init_command_value() {
+        assert_eq!(INIT_COMMAND, "echo");
+    }
+
+    #[tokio::test]
+    async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
+        let tedge_config_location =
+            tedge_config::TEdgeConfigLocation::from_default_system_location();
+        let agent = SmAgent::try_new(
+            "tedge_agent_test",
+            SmAgentConfig::try_new(tedge_config_location).unwrap(),
+        )
+        .unwrap();
+
+        // calling handle_restart_operation should create a file in /run/tedge_agent_restart
+        let () = agent.handle_restart_operation().await?;
+        assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
+
+        // removing the file
+        let () = std::fs::remove_file(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).unwrap();
+
+        Ok(())
+    }
 }
