@@ -35,7 +35,7 @@ serde_json = "1.0"
 structopt = "0.3"
 tedge_config = { path = "../../tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
-time = { version = "0.3.5", features = ["formatting"] }
+time = { version = "0.3", features = ["formatting"] }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["fs","process", "rt"] }
 toml = "0.5"

@@ -3,11 +3,10 @@ pub mod restart_operation {
     use crate::error::AgentError;
     use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
     use time::OffsetDateTime;
-    use tracing::error;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
-    const MAX_ALLOWED_DURATION: usize = 5;
+
     /// creates an empty file in /run
     /// the file name defined by `SLASH_RUN_PATH_TEDGE_AGENT_RESTART`
     ///
@@ -40,7 +39,7 @@ pub mod restart_operation {
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
     fn get_restart_file_datetime() -> Result<time::OffsetDateTime, AgentError> {
-        let mut file = File::open(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string())?;
+        let mut file = File::open(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
@@ -92,28 +91,20 @@ pub mod restart_operation {
         }
     }
 
-    /// computes the difference between system reboot datetime and tedge_agent_restart datetime
-    fn compute_uptime_duration() -> Result<time::Duration, AgentError> {
-        let system_reboot_dt = get_system_uptime()?;
-        let tedge_restart_file_dt = get_restart_file_datetime()?;
-        Ok(tedge_restart_file_dt - system_reboot_dt)
-    }
-
-    /// checks if system rebooted
+    /// checks if system rebooted by comparing dt of tedge_agent_restart with dt of system restart.
     pub fn has_rebooted() -> Result<bool, AgentError> {
         // there is no slash run file after the reboot, so we assume success.
         // this is true for most of the cases as "/run/" is normally cleared after a reboot.
         if !slash_run_file_exists() {
             return Ok(true);
         }
-        // if the file is still present, we compute the difference between system uptime and the
-        // unix timestamp of /run/tedge_agent_restart
-        let duration = compute_uptime_duration()?;
 
-        if duration < time::Duration::minutes(MAX_ALLOWED_DURATION as i64) {
+        let system_reboot_dt = get_system_uptime()?;
+        let tedge_restart_file_dt = get_restart_file_datetime()?;
+
+        if system_reboot_dt > tedge_restart_file_dt {
             Ok(true)
         } else {
-            error!("Restart failed, duration > 5 minutes.");
             Ok(false)
         }
     }
