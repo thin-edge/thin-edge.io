@@ -21,7 +21,12 @@ class ApamaPluginRemoveTest(ApamaPlugin):
         self.assert_project_installed(abortOnError=True)
 
     def execute(self):
-        self.remove_project()
+        # Use apama plugin `remove` command to remove the project, if one is installed already.
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "remove", "project"],
+            stdouterr="plugin_remove"
+        )
 
     def validate(self):
         # Assert project NOT installed

@@ -22,7 +22,12 @@ class ApamaPluginUpdateTest(ApamaPlugin):
         self.assert_monitor_installed("TedgeDemoMonitor")
 
     def execute(self):
-        self.plugin_install(self.input + "/limitedbandwidth.zip")
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "install",
+                       "project", "--file", self.input + "/limitedbandwidth.zip"],
+            stdouterr="plugin_install"
+        )
 
     def validate(self):
         self.assert_project_installed()

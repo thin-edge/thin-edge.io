@@ -73,7 +73,7 @@ class ApamaPlugin(BaseTest):
 
             self.startProcess(
                 command=self.sudo,
-                arguments=["rm", "-rf", self.apama_project_dir],
+                arguments=["rm", "-rf", "/etc/tedge/apama/project"],
                 stdouterr="remove_apama_project"
             )
 
@@ -103,7 +103,7 @@ class ApamaPlugin(BaseTest):
         )
 
     def plugin_remove(self):
-        """Use apama plugin `install` command to install a project from the provided archive.
+        """Use apama plugin `remove` command to remove the project, if one is installed already.
         """
         self.startProcess(
             command=self.sudo,
@@ -125,6 +125,6 @@ class ApamaPlugin(BaseTest):
         if os.path.exists(self.tmp_apama_dir):
             self.startProcess(
                 command=self.sudo,
-                arguments=["rm", "-rf", self.tmp_apama_dir],
+                arguments=["rm", "-rf", "/tmp/apama_project"],
                 stdouterr="remove_apama_tmp_dir"
             )

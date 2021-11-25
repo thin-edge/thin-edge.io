@@ -17,7 +17,13 @@ class ApamaPluginInstallTest(ApamaPlugin):
         self.assert_project_installed(negate=True)
 
     def execute(self):
-        self.plugin_install(self.input + "/quickstart.zip")
+        # Use apama plugin `install` command to install a project with the archive in the shared input directory
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "install",
+                       "project", "--file", self.input + "/quickstart.zip"],
+            stdouterr="plugin_install"
+        )
 
     def validate(self):
         self.assert_project_installed()
