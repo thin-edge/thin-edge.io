@@ -102,10 +102,6 @@ pub mod restart_operation {
         let system_reboot_dt = get_system_uptime()?;
         let tedge_restart_file_dt = get_restart_file_datetime()?;
 
-        if system_reboot_dt > tedge_restart_file_dt {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(system_reboot_dt > tedge_restart_file_dt)
     }
 }

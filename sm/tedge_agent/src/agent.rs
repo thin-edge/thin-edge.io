@@ -523,30 +523,11 @@ async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use structopt::*;
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
-
-    #[derive(Debug, StructOpt)]
-    #[structopt(
-    name = clap::crate_name!(),
-    version = clap::crate_version!(),
-    about = clap::crate_description!()
-    )]
-    pub struct AgentOpt {
-        /// Turn-on the debug log level.
-        ///
-        /// If off only reports ERROR, WARN, and INFO
-        /// If on also reports DEBUG and TRACE
-        #[structopt(long)]
-        pub debug: bool,
-    }
-    #[test]
-    fn check_init_command_value() {
-        assert_eq!(INIT_COMMAND, "echo");
-    }
 
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
+        assert_eq!(INIT_COMMAND, "echo");
         let tedge_config_location =
             tedge_config::TEdgeConfigLocation::from_default_system_location();
         let agent = SmAgent::try_new(
