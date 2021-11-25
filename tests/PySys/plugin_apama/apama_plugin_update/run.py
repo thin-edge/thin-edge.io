@@ -27,7 +27,7 @@ class ApamaPluginUpdateTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "install",
-                       "project", "--file", self.apama_input_dir + "/limitedbandwidth.zip"],
+                       "project", "--file", self.project.apama_input_dir + "/limitedbandwidth.zip"],
             stdouterr="plugin_install"
         )
         self.wait_till_correlator_ready()
