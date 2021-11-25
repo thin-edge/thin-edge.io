@@ -32,7 +32,6 @@ class Cumulocity(object):
         self.username = username
         self.password = password
         self.timeout_req = 80  # seconds, got timeout with 60s
-        self.operation_id = None
         self.log = log
 
         self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
@@ -98,18 +97,17 @@ class Cumulocity(object):
         )
         jresponse = json.loads(req.text)
 
-        self.operation = jresponse
-        self.operation_id = jresponse.get("id")
+        operation_id = jresponse.get("id")
 
-        if not self.operation_id:
+        if not operation_id:
             raise SystemError("field id is missing in response")
 
-        req.raise_for_status()
+        return operation_id
 
-    def retrieve_log_file(self):
+    def retrieve_log_file(self, operation_id):
         """Check if log received"""
 
-        url = f"https://{self.c8y_url}/devicecontrol/operations/{self.operation_id}"
+        url = f"https://{self.c8y_url}/devicecontrol/operations/{operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
 

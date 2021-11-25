@@ -3,6 +3,7 @@ import time
 import os
 import subprocess
 import requests
+from retry import retry
 
 """
 Validate end to end behaviour for the log request operation.
@@ -18,6 +19,7 @@ from environment_c8y import EnvironmentC8y
 
 
 class LogRequestVerifySearchTextError(EnvironmentC8y):
+    operation_id = None
 
     def setup(self):
         super().setup()
@@ -30,25 +32,25 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
             "dateTo": "2021-11-21T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "Error",
-            "maximumLines": 50
+            "maximumLines": 25
         }
-        self.cumulocity.trigger_log_request(log_file_request_payload, self.project.deviceid)
+        self.operation_id = self.cumulocity.trigger_log_request(
+            log_file_request_payload, self.project.deviceid)
 
     def validate(self):
-        self.assertThat("True == value", value=self.wait_until_logs_retrieved())
+        self.assertThat("True == value",
+                        value=self.wait_until_logs_retrieved())
 
+    @retry(Exception, tries=20, delay=1)
     def wait_until_logs_retrieved(self):
-        for i in range(1, 20):
-            time.sleep(1)
-            log_file = self.cumulocity.retrieve_log_file()
-            if len(log_file) != 0:
-                if self.download_file_and_verify_error_messages(log_file):
-                    return True
-                else:
-                    return False
-            else:
-                continue
-        return False
+        # for i in range(1, 20):
+        #     time.sleep(1)
+        log_file = self.cumulocity.retrieve_log_file(self.operation_id)
+        if len(log_file) != 0:
+            return self.download_file_and_verify_error_messages(log_file)
+        else:
+            raise Exception("retry")
+        # return False
 
     def create_logs_for_test(self):
         log = self.startProcess(
@@ -60,22 +62,17 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
 
     def download_file_and_verify_error_messages(self, url):
         get_response = requests.get(url, auth=(
-            self.project.username, self.project.c8ypass), stream=True)
-        nErrors = 0
-        for chunk in get_response.iter_content(chunk_size=1024):
-              nErrors += chunk.decode('utf-8').count("Error")
-        if nErrors >= 49:
-            return True
-        else:
-            return False
+            self.project.username, self.project.c8ypass), stream=False)
+        nlines = get_response.content.decode('utf-8')
+        return sum([1 if line.startswith("Error") else 0 for line in nlines.split("\n")]) == 25
 
     def cleanup_logs(self):
         # Removing files form startProcess is not working
         os.system("sudo rm -rf /var/log/tedge/agent/example-*")
         if self.getOutcome().isFailure():
-                log = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "c8y/s/us/", "502,c8y_LogfileRequest"],
-            stdouterr="send_failed",
-        )
+            log = self.startProcess(
+                command=self.sudo,
+                arguments=[self.tedge, "mqtt", "pub",
+                           "c8y/s/us/", "502,c8y_LogfileRequest"],
+                stdouterr="send_failed",
+            )

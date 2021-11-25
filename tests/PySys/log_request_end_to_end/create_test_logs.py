@@ -1,10 +1,11 @@
 import os
 from datetime import datetime, timedelta
-from random import randint, shuffle
+from random import randint, shuffle, seed
 from typing import Optional
 from retry import retry
 # this test will look at the date of current files in /var/log/tedge/agent/
 # and create example files with the same date.
+seed(100)
 
 def read_example_log():
     if not os.path.isdir("/var/log/tedge/agent"):
@@ -45,10 +46,11 @@ class FailedToCreateLogs(Exception):
     pass
 
 @retry(FailedToCreateLogs, tries=20, delay=1)
-def check_files_created() -> bool:
-    print("n files :%s", len(os.listdir("/var/log/tedge/agent/")))
-    return len(os.listdir("/var/log/tedge/agent/")) >= 4
-    
+def check_files_created():
+    if len(os.listdir("/var/log/tedge/agent/")) >= 4:
+        return True
+    else:
+        raise FailedToCreateLogs
 if __name__ == "__main__":
     file_names = ["example-log1", "example-log2", "example-log3"]
     file_sizes = [50, 100, 250]
@@ -57,6 +59,5 @@ if __name__ == "__main__":
         with open(f"/var/log/tedge/agent/{file_name}-{time_stamps[idx]}.log", "w") as handle:
             fake_log = create_fake_logs(num_lines=file_sizes[idx])
             handle.write(fake_log)
-    if check_files_created() == False:
-        raise FailedToCreateLogs
+    check_files_created()
 
