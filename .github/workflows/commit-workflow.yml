@@ -12,142 +12,185 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  cargo-fmt:
-    name: Run cargo fmt
+
+  cargo-tarpaulin:
+
+    name: Run cargo tarpaulin
     runs-on: Ubuntu-20.04
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Cargo fmt --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
+      - name: Install rust v1.54.0
+        uses: actions-rs/toolchain@v1
         with:
-          command: fmt
-          args: --version
+          toolchain: "1.54.0"
+          override: true
 
-      - name: Cargo fmt
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: -- --check
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
 
-  cargo-clippy:
-    name: Run cargo clippy
-    runs-on: Ubuntu-20.04
+      - name: install libssl
+        run: sudo apt install libssl-dev
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo clippy --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: clippy
-          args: --version
-
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: clippy
-
-  cargo-test:
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: version
-
-      - name: Cargo build dummy plugin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: -p tedge_dummy_plugin
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --no-fail-fast
-
-  cargo-build:
-    name: Run cargo build
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: version
-
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release
-
-  cargo-msrv:
-    name: Run cargo msrv
-    runs-on: Ubuntu-20.04
-    needs: [cargo-fmt, cargo-clippy]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo install msrv
+      - name: Cargo install tarpaulin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-msrv
+          args: cargo-tarpaulin
 
-      - name: Cargo msrv --version
+      - name: Cargo tarpaulin
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          command: msrv
-          args: --version
+          command: tarpaulin
+          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
 
-      - name: Cargo msrv
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
         with:
-          command: msrv
-          args: --minimum 1.54.0
+          token: ${{secrets.CODECOV_TOKEN}}
+
+#  cargo-fmt:
+#    name: Run cargo fmt
+#    runs-on: Ubuntu-20.04
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Cargo fmt --version
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: fmt
+#          args: --version
+#
+#      - name: Cargo fmt
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: fmt
+#          args: -- --check
+#
+#  cargo-clippy:
+#    name: Run cargo clippy
+#    runs-on: Ubuntu-20.04
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo clippy --version
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: clippy
+#          args: --version
+#
+#      - name: Cargo clippy
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: clippy
+#
+#  cargo-test:
+#    name: Run cargo test
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo version
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: version
+#
+#      - name: Cargo build dummy plugin
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: build
+#          args: -p tedge_dummy_plugin
+#
+#      - name: Cargo test
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: test
+#          args: --no-fail-fast
+#
+#  cargo-build:
+#    name: Run cargo build
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo version
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: version
+#
+#      - name: Cargo build
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: build
+#          args: --release
+#
+#  cargo-msrv:
+#    name: Run cargo msrv
+#    runs-on: Ubuntu-20.04
+#    needs: [cargo-fmt, cargo-clippy]
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: Cargo install msrv
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: install
+#          args: cargo-msrv
+#
+#      - name: Cargo msrv --version
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: msrv
+#          args: --version
+#
+#      - name: Cargo msrv
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: msrv
+#          args: --minimum 1.54.0
