@@ -8,6 +8,7 @@ class ApamaPlugin(BaseTest):
     # E.g.:
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform = None
+    apama_port = 15903
     apama_plugin = "/etc/tedge/sm-plugins/apama"
     apama_env_cmd = "/opt/softwareag/Apama/bin/apama_env"
     apama_project_dir = "/etc/tedge/apama/project"
@@ -15,12 +16,21 @@ class ApamaPlugin(BaseTest):
     sudo = "/usr/bin/sudo"
 
     def setup(self):
-        if self.myPlatform != 'container':
+        if self.myPlatform is None:
             self.skipTest(
-                'Testing the apama plugin is not supported on this platform')
+                "Apama plugin tests are disabled by default. Execute `pysys run` with `-XmyPlatform=container` to run these tests")
 
         # Register routines to cleanup containers and images added during test
         self.addCleanupFunction(self.cleanup_project)
+
+    def wait_till_correlator_ready(self, timeout=5):
+        """Wait till apama correlator is running and ready"""
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_env_cmd, "component_management",
+                       "--port", str(self.apama_port), "--waitFor", str(timeout)],
+            stdouterr="apama_correlator_wait"
+        )
 
     def assert_monitor_installed(self, monitor_name, negate=False, abortOnError=False):
         """Asserts that a monitor with the given name is loaded in apama correlator"""

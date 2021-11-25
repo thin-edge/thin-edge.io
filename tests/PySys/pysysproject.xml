@@ -13,6 +13,7 @@
 	<property name="deviceid" value="${env.C8YDEVICEID}" default=""/>
 	<property name="device" value="${env.C8YDEVICE}" default=""/>
 	<property name="platform" default='None' />
+	<property name="apama_input_dir" value='${testRootDir}/plugin_apama/Input' />
 
 	<pythonpath value="${testRootDir}/environments" />
 	<pythonpath value="${testRootDir}/plugin_apt" />
