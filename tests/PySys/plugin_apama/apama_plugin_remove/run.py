@@ -17,7 +17,7 @@ class ApamaPluginRemoveTest(ApamaPlugin):
         self.assert_project_installed(negate=True, abortOnError=True)
 
         # Install the project to be removed by this test
-        self.install_project(self.input + "/quickstart.zip")
+        self.install_project(self.project.apama_input_dir + "/quickstart.zip")
         self.assert_project_installed(abortOnError=True)
 
     def execute(self):

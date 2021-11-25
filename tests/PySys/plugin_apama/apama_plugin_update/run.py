@@ -17,7 +17,7 @@ class ApamaPluginUpdateTest(ApamaPlugin):
         self.assert_project_installed(negate=True, abortOnError=True)
 
         # Install the project to be updated by this test
-        self.install_project(self.input + "/quickstart.zip")
+        self.install_project(self.project.apama_input_dir + "/quickstart.zip")
         self.wait_till_correlator_ready()
         self.assert_project_installed(abortOnError=True)
         self.assert_monitor_installed("TedgeDemoMonitor")
