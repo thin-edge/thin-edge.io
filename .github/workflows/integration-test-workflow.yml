@@ -53,7 +53,7 @@ jobs:
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install libmosquitto1
-        run:  sudo apt-get --assume-yes install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
 
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
@@ -90,6 +90,12 @@ jobs:
           command: test
           args: --verbose --no-run --features integration-test
 
+      - name: Cargo build dummy plugin
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p tedge_dummy_plugin
+
         # To run the test for features here is kind of experimental
         # they could fail if GitHub blocks external connections.
         # It seems like they rarely do.
@@ -123,7 +129,6 @@ jobs:
         run: sudo systemctl stop tedge-mapper-collectd
         continue-on-error: true
 
-
       - name: disconnect c8y
         run: sudo tedge disconnect c8y
         # We need to continue when there is no tedge already installed
@@ -144,7 +149,7 @@ jobs:
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install libmosquitto1
-        run:  sudo apt-get --assume-yes install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
 
       - name: install mosquitto-clients
         run: sudo apt-get --assume-yes install mosquitto-clients
@@ -212,5 +217,3 @@ jobs:
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
           AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-
