@@ -32,15 +32,11 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             "searchText": "",
             "maximumLines": 250
         }
-        self.cumulocity.trigger_log_request(log_file_request_payload)
+        self.log.info("devid =>%s", self.project.deviceid)
+        self.cumulocity.trigger_log_request(log_file_request_payload, self.project.deviceid)
 
     def validate(self):
-        status = self.wait_until_retrieved_logs()
-        if not status:
-            self.log.info("Explicitly send the operation status as failed.")
-            self.stopLogRequestOp()
-        else:
-            self.assertThat("True == value", value=status)
+        self.assertThat("True == value", value=self.wait_until_retrieved_logs())
 
     def wait_until_retrieved_logs(self):
         for i in range(1, 20):
@@ -73,15 +69,14 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             return True
         else:
             return False
-
-    def stopLogRequestOp(self):
-        log = self.startProcess(
+    
+    def cleanup_logs(self):
+        # Removing files form startProcess is not working
+        os.system("sudo rm -rf /var/log/tedge/agent/example-*")
+        if self.getOutcome().isFailure():
+            log = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub",
                        "c8y/s/us/", "502,c8y_LogfileRequest"],
             stdouterr="send_failed",
         )
-
-    def cleanup_logs(self):
-        # Removing files form startProcess is not working
-        os.system("sudo rm -rf /var/log/tedge/agent/example-*")

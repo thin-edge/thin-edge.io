@@ -17,7 +17,7 @@ Else stop and cleanup the operation by sending operation failed message.
 from environment_c8y import EnvironmentC8y
 
 
-class LogRequestVerifyErrorMesages(EnvironmentC8y):
+class LogRequestVerifySearchTextError(EnvironmentC8y):
 
     def setup(self):
         super().setup()
@@ -32,15 +32,10 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
             "searchText": "Error",
             "maximumLines": 50
         }
-        self.cumulocity.trigger_log_request(log_file_request_payload)
+        self.cumulocity.trigger_log_request(log_file_request_payload, self.project.deviceid)
 
     def validate(self):
-        status = self.wait_until_logs_retrieved()
-        if not status:
-            self.log.info("Explicitly send the operation status as failed.")
-            self.stopLogRequestOp()
-        else:
-            self.assertThat("True == value", value=status)
+        self.assertThat("True == value", value=self.wait_until_logs_retrieved())
 
     def wait_until_logs_retrieved(self):
         for i in range(1, 20):
@@ -74,14 +69,13 @@ class LogRequestVerifyErrorMesages(EnvironmentC8y):
         else:
             return False
 
-    def stopLogRequestOp(self):
-        log = self.startProcess(
+    def cleanup_logs(self):
+        # Removing files form startProcess is not working
+        os.system("sudo rm -rf /var/log/tedge/agent/example-*")
+        if self.getOutcome().isFailure():
+                log = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub",
                        "c8y/s/us/", "502,c8y_LogfileRequest"],
             stdouterr="send_failed",
         )
-
-    def cleanup_logs(self):
-        # Removing files form startProcess is not working
-        os.system("sudo rm -rf /var/log/tedge/agent/example-*")

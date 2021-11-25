@@ -1,9 +1,6 @@
 import json
-<<<<<<< HEAD
 import base64
-=======
 import re
->>>>>>> main
 from pysys.constants import FAILED
 import requests
 from pysys.basetest import BaseTest
@@ -27,7 +24,6 @@ class Cumulocity(object):
     username = ""
     password = ""
     auth = ""
-    device_id = ""
     timeout_req = ""
 
     def __init__(self, c8y_url, tenant_id, username, password, device_id, log):
@@ -35,7 +31,6 @@ class Cumulocity(object):
         self.tenant_id = tenant_id
         self.username = username
         self.password = password
-        self.device_id = device_id
         self.timeout_req = 80  # seconds, got timeout with 60s
         self.operation_id = None
         self.log = log
@@ -43,6 +38,7 @@ class Cumulocity(object):
         self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
 
     def request(self, method, url_path, **kwargs) -> requests.Response:
+
         return requests.request(method, self.c8y_url + url_path, auth=self.auth, **kwargs)
 
     def get_all_devices(self) -> requests.Response:
@@ -90,10 +86,10 @@ class Cumulocity(object):
         }
         return header
 
-    def trigger_log_request(self, log_file_request_payload):
+    def trigger_log_request(self, log_file_request_payload, device_id):
         url = f"https://{self.c8y_url}/devicecontrol/operations"
         log_file_request_payload = {
-            "deviceId": self.device_id,
+            "deviceId": device_id,
             "description": "Log file request",
             "c8y_LogfileRequest": log_file_request_payload,
         }
@@ -116,6 +112,7 @@ class Cumulocity(object):
         url = f"https://{self.c8y_url}/devicecontrol/operations/{self.operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
+
         req.raise_for_status()
 
         jresponse = json.loads(req.text)
@@ -128,6 +125,7 @@ class Cumulocity(object):
         if log_file != None:
             ret = log_file
         return ret
+
     def get_child_device_of_thin_edge_device_by_name(self, thin_edge_device_id: str, child_device_id: str):
         self.device_fragment = self.get_thin_edge_device_by_name(
             thin_edge_device_id)
