@@ -100,6 +100,7 @@ jobs:
         # they could fail if GitHub blocks external connections.
         # It seems like they rarely do.
       - name: Cargo test features
+        continue-on-error: true
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
@@ -210,6 +211,7 @@ jobs:
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
       - name: Run Smoke Test for Azure
+        continue-on-error: true
         run: ./ci/ci_smoke_test_az.sh
         env:
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
