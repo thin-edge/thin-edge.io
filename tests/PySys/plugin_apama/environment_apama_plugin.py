@@ -11,8 +11,9 @@ class ApamaPlugin(BaseTest):
     apama_port = 15903
     apama_plugin = "/etc/tedge/sm-plugins/apama"
     apama_env_cmd = "/opt/softwareag/Apama/bin/apama_env"
+    apama_dir = "/etc/tedge/apama"
     apama_project_dir = "/etc/tedge/apama/project"
-    tmp_apama_dir = "/tmp/apama_project"
+    tmp_apama_dir = "/tmp/apama/project"
     sudo = "/usr/bin/sudo"
 
     def setup(self):
@@ -52,7 +53,7 @@ class ApamaPlugin(BaseTest):
         """Install apama project from the provided archive."""
         self.startProcess(
             command=self.sudo,
-            arguments=["mkdir", "-p", self.apama_project_dir],
+            arguments=["mkdir", "-p", self.apama_dir],
             stdouterr="create_project_dir"
         )
 
@@ -135,6 +136,6 @@ class ApamaPlugin(BaseTest):
         if os.path.exists(self.tmp_apama_dir):
             self.startProcess(
                 command=self.sudo,
-                arguments=["rm", "-rf", "/tmp/apama_project"],
+                arguments=["rm", "-rf", "/tmp/apama"],
                 stdouterr="remove_apama_tmp_dir"
             )
