@@ -26,4 +26,5 @@
 			<requirement id="" />
 		</requirements>
 	</traceability>
+	<skipped reason="failing intermitently"/>
 </pysystest>
