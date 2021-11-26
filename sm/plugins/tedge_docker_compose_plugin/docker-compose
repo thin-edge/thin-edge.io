@@ -50,8 +50,9 @@ case "$COMMAND" in
         # nothing to do here
         ;;
     list)
-        #ls $DOCKER_COMPOSE_PLUGIN_PATH | cut -d. -f1 || exit 2
-        echo "nextcloud-postgres 0.1"
+        ls $DOCKER_COMPOSE_PLUGIN_PATH | sed $'s/$/\t1/'  || exit 2
+        #echo 'test-test\t1'
+        #echo 'blabla\t1'
         ;;
     install)
         # Extract the docker docker-compose path into the COMPOSE_NAME variable
@@ -87,11 +88,11 @@ case "$COMMAND" in
         # Prune all the unused images. The --force command is used to avoid a [y/N] user prompt
         docker image prune --all --force || exit 2
         ;;
+    update-list)
+        echo "update-list is not supported by compose plugin"
+        exit 1
+        ;;
     *)
-        if [ "$COMMAND" = "update-list" ]; then
-            echo "update-list is not supported by compose plugin"
-            exit 1
-        fi
         echo "Unsupported command: $COMMAND . Ignoring it"
         #exit 1
         ;;
