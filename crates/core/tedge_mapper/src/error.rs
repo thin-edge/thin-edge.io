@@ -44,3 +44,15 @@ pub enum ConversionError {
     #[error(transparent)]
     FromMqttClient(#[from] MqttClientError),
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationsError {
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error("Problem reading directory: {dir} Message: {source}")]
+    ReadDir {
+        dir: std::path::PathBuf,
+        source: std::io::Error,
+    },
+}
