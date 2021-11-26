@@ -17,7 +17,7 @@ class ApamaPlugin(BaseTest):
     sudo = "/usr/bin/sudo"
 
     def setup(self):
-        if self.myPlatform is None:
+        if self.myPlatform != "container":
             self.skipTest(
                 "Apama plugin tests are disabled by default. Execute `pysys run` with `-XmyPlatform=container` to run these tests")
 
