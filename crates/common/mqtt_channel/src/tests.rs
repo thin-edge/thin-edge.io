@@ -244,7 +244,6 @@ mod tests {
             mut input: impl Stream<Item = Message> + Unpin,
             mut output: impl Sink<Message> + Unpin,
         ) {
-            let in_topic = TopicFilter::new_unchecked("in/topic");
             let out_topic = Topic::new_unchecked("out/topic");
 
             while let Some(msg) = input.next().await {
@@ -270,83 +269,11 @@ mod tests {
             message("out/topic", "YET ANOTHER MESSAGE"),
         ];
 
-        let input_stream = MessageInputStream::new(input);
-        let (output, output_stream) = recorder();
+        let input_stream = mqtt_tests::MessageInputStream::new(input);
+        let (output, output_stream) = mqtt_tests::recorder();
         tokio::spawn(async move { run(input_stream, output_stream).await });
         assert_eq!(expected, output.await.unwrap());
 
         Ok(())
-    }
-
-    type MessageOutputStream = Option<StreamRecorder<Message>>;
-    struct StreamRecorder<T> {
-        messages: Vec<T>,
-        sender: oneshot::Sender<Vec<T>>,
-    }
-
-    fn recorder() -> (oneshot::Receiver<Vec<Message>>, MessageOutputStream) {
-        let (sender, receiver) = oneshot::channel();
-        let recorder = StreamRecorder {
-            messages: vec![],
-            sender,
-        };
-        (receiver, Some(recorder))
-    }
-
-    use core::pin::Pin;
-    use core::task::{Context, Poll};
-    use futures::channel::oneshot;
-    use std::fmt::Display;
-
-    impl Sink<Message> for Option<StreamRecorder<Message>> {
-        type Error = core::convert::Infallible;
-
-        fn poll_ready(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
-            if let Some(recorder) = unsafe { self.get_unchecked_mut() }.as_mut() {
-                dbg!(&item);
-                recorder.messages.push(item);
-            }
-            Ok(())
-        }
-
-        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            if let Some(recorder) = unsafe { self.get_unchecked_mut() }.take() {
-                let messages = recorder.messages;
-                dbg!(&messages);
-                let _ = recorder.sender.send(messages);
-            }
-            Poll::Ready(Ok(()))
-        }
-    }
-
-    struct MessageInputStream {
-        items: Box<dyn Iterator<Item = Message>>,
-    }
-
-    impl MessageInputStream {
-        pub fn new(items: Vec<Message>) -> MessageInputStream {
-            MessageInputStream {
-                items: Box::new(items.into_iter()),
-            }
-        }
-    }
-
-    unsafe impl Send for MessageInputStream {}
-
-    impl Stream for MessageInputStream {
-        type Item = Message;
-
-        fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            let item = unsafe { self.get_unchecked_mut() }.items.next();
-            Poll::Ready(item)
-        }
     }
 }

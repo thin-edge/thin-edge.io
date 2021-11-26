@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 fastrand = "1.5"
+futures = "0.3"
 once_cell = "1.8"
 rumqttc = "0.10"
 rumqttd = "0.9"

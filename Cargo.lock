@@ -1462,6 +1462,7 @@ version = "0.5.2"
 dependencies = [
  "anyhow",
  "fastrand",
+ "futures",
  "once_cell",
  "rumqttc",
  "rumqttd",
