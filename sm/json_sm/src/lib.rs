@@ -4,9 +4,9 @@ mod software;
 
 pub use error::*;
 pub use messages::{
-    software_filter_topic, Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
-    SoftwareOperationStatus, SoftwareRequestResponse, SoftwareUpdateRequest,
-    SoftwareUpdateResponse,
+    control_filter_topic, software_filter_topic, Auth, DownloadInfo, Jsonify, OperationStatus,
+    RestartOperationRequest, RestartOperationResponse, SoftwareListRequest, SoftwareListResponse,
+    SoftwareRequestResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 pub use software::*;
 
@@ -153,7 +153,7 @@ mod tests {
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), "123");
-        assert_eq!(response.status(), SoftwareOperationStatus::Successful);
+        assert_eq!(response.status(), OperationStatus::Successful);
         assert_eq!(response.error(), None);
 
         // The mapper can use then the current list of modules
@@ -227,7 +227,7 @@ mod tests {
             SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), "123");
-        assert_eq!(response.status(), SoftwareOperationStatus::Failed);
+        assert_eq!(response.status(), OperationStatus::Failed);
         assert_eq!(response.error(), Some("Request timed-out".into()));
         assert_eq!(response.modules(), vec![]);
     }
@@ -592,7 +592,7 @@ mod tests {
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), "123".to_string());
-        assert_eq!(response.status(), SoftwareOperationStatus::Executing);
+        assert_eq!(response.status(), OperationStatus::Executing);
         assert_eq!(response.error(), None);
         assert_eq!(response.modules(), vec![]);
     }
@@ -864,7 +864,7 @@ mod tests {
             SoftwareUpdateResponse::from_json(json_response).expect("Failed to deserialize");
 
         assert_eq!(response.id(), "123");
-        assert_eq!(response.status(), SoftwareOperationStatus::Failed);
+        assert_eq!(response.status(), OperationStatus::Failed);
         assert_eq!(
             response.error(),
             Some("2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".into())

@@ -16,8 +16,8 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset, Local};
 use json_sm::{
-    Auth, DownloadInfo, Jsonify, SoftwareListRequest, SoftwareListResponse,
-    SoftwareOperationStatus, SoftwareUpdateResponse,
+    Auth, DownloadInfo, Jsonify, OperationStatus, SoftwareListRequest, SoftwareListResponse,
+    SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use reqwest::Url;
@@ -198,15 +198,15 @@ impl CumulocitySoftwareManagement {
         let response = SoftwareListResponse::from_json(json_response)?;
 
         match response.status() {
-            SoftwareOperationStatus::Successful => {
+            OperationStatus::Successful => {
                 let () = self.send_software_list_http(&response).await?;
             }
 
-            SoftwareOperationStatus::Failed => {
+            OperationStatus::Failed => {
                 error!("Received a failed software response: {}", json_response);
             }
 
-            SoftwareOperationStatus::Executing => {} // C8Y doesn't expect any message to be published
+            OperationStatus::Executing => {} // C8Y doesn't expect any message to be published
         }
 
         Ok(())
@@ -242,13 +242,13 @@ impl CumulocitySoftwareManagement {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
         match response.status() {
-            SoftwareOperationStatus::Executing => {
+            OperationStatus::Executing => {
                 let smartrest_set_operation_status =
                     SmartRestSetOperationToExecuting::from_thin_edge_json(response)?
                         .to_smartrest()?;
                 let () = self.publish(&topic, smartrest_set_operation_status).await?;
             }
-            SoftwareOperationStatus::Successful => {
+            OperationStatus::Successful => {
                 let smartrest_set_operation =
                     SmartRestSetOperationToSuccessful::from_thin_edge_json(response)?
                         .to_smartrest()?;
@@ -257,7 +257,7 @@ impl CumulocitySoftwareManagement {
                     .validate_and_publish_software_list(json_response)
                     .await?;
             }
-            SoftwareOperationStatus::Failed => {
+            OperationStatus::Failed => {
                 let smartrest_set_operation =
                     SmartRestSetOperationToFailed::from_thin_edge_json(response)?.to_smartrest()?;
                 let () = self.publish(&topic, smartrest_set_operation).await?;
