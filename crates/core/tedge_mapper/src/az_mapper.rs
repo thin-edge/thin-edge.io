@@ -30,7 +30,7 @@ impl TEdgeComponent for AzureMapper {
         let mut mapper = create_mapper(AZURE_MAPPER_NAME, &tedge_config, converter).await?;
 
         mapper
-            .run()
+            .run("az")
             .instrument(info_span!(AZURE_MAPPER_NAME))
             .await?;
 

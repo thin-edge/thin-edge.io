@@ -1,8 +1,9 @@
-use crate::converter::*;
 use crate::error::*;
+use crate::{converter::*, operations::Operations};
 
+use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-use mqtt_client::{Client, MqttClient, MqttClientError};
+use mqtt_client::{Client, MqttClient, MqttClientError, Topic};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
 use tracing::{error, info, instrument};
@@ -18,8 +19,10 @@ pub async fn create_mapper<'a>(
 
     let mqtt_config = mqtt_config(tedge_config)?;
     let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
+    let operations = Operations::new("/etc/tedge/operations");
+    dbg!(&operations);
 
-    Ok(Mapper::new(mqtt_client, converter, flock))
+    Ok(Mapper::new(mqtt_client, converter, operations, flock))
 }
 
 pub(crate) fn mqtt_config(
@@ -31,12 +34,28 @@ pub(crate) fn mqtt_config(
 pub struct Mapper {
     client: mqtt_client::Client,
     converter: Box<dyn Converter<Error = ConversionError>>,
+    operations: Operations,
     _flock: Flockfile,
 }
 
 impl Mapper {
-    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
+    pub fn new(
+        client: mqtt_client::Client,
+        converter: Box<dyn Converter<Error = ConversionError>>,
+        operations: Operations,
+        _flock: Flockfile,
+    ) -> Self {
+        Self {
+            client,
+            converter,
+            operations,
+            _flock,
+        }
+    }
+
+    pub(crate) async fn run(&mut self, cloud: &str) -> Result<(), MqttClientError> {
         info!("Running");
+        let () = self.post_operations(cloud).await?;
         let errors_handle = self.subscribe_errors();
         let messages_handle = self.subscribe_messages();
         messages_handle.await?;
@@ -46,16 +65,22 @@ impl Mapper {
         Ok(())
     }
 
-    pub fn new(
-        client: mqtt_client::Client,
-        converter: Box<dyn Converter<Error = ConversionError>>,
-        _flock: Flockfile,
-    ) -> Self {
-        Self {
-            client,
-            converter,
-            _flock,
+    async fn post_operations(&self, cloud: &str) -> Result<(), MqttClientError> {
+        let ops = self.operations.get_operations_list(cloud);
+
+        if !ops.is_empty() {
+            let ops_msg = SmartRestSetSupportedOperations::new(&ops);
+            let topic = Topic::new_unchecked("c8y/s/us");
+
+            self.client
+                .publish(mqtt_client::Message::new(
+                    &topic,
+                    ops_msg.to_smartrest().unwrap(),
+                ))
+                .await?;
         }
+
+        Ok(())
     }
 
     #[instrument(skip(self), name = "errors")]
@@ -111,11 +136,12 @@ mod tests {
             client: mqtt_client,
             converter: Box::new(UppercaseConverter::new()),
             _flock: flock,
+            operations: todo!(),
         };
 
         // Let's run the mapper in the background
         tokio::spawn(async move {
-            let _ = mapper.run().await;
+            let _ = mapper.run("test").await;
         });
         sleep(Duration::from_secs(1)).await;
 

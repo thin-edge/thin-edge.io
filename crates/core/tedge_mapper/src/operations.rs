@@ -129,7 +129,7 @@ mod tests {
     fn get_operations_all() {
         // let temp_dir = tempfile::tempdir().unwrap();
         // let dir = temp_dir.path();
-        let dir = Path::new("/home/makrist/tedge/operations/");
+        let dir = Path::new("/home/user/tedge/operations/");
 
         // create_clouds_directories(2, dir, true).unwrap();
 
