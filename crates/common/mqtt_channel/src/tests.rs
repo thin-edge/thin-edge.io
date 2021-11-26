@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use futures::{Sink, SinkExt, Stream, StreamExt};
     use serial_test::serial;
     use std::convert::TryInto;
     use std::time::Duration;
-    use Stream::*;
 
     const TIMEOUT: Duration = Duration::from_millis(1000);
 
@@ -26,15 +26,15 @@ mod tests {
 
         // ... must be received by the client
         assert_eq!(
-            Next(message(topic, "msg 1")),
+            MaybeMessage::Next(message(topic, "msg 1")),
             next_message(&mut con.received).await
         );
         assert_eq!(
-            Next(message(topic, "msg 2")),
+            MaybeMessage::Next(message(topic, "msg 2")),
             next_message(&mut con.received).await
         );
         assert_eq!(
-            Next(message(topic, "msg 3")),
+            MaybeMessage::Next(message(topic, "msg 3")),
             next_message(&mut con.received).await
         );
 
@@ -42,7 +42,7 @@ mod tests {
     }
 
     #[derive(Debug, Clone, Eq, PartialEq)]
-    enum Stream {
+    enum MaybeMessage {
         Next(Message),
         Eos,
         Timeout,
@@ -54,11 +54,11 @@ mod tests {
         Message::new(&topic, payload)
     }
 
-    async fn next_message(received: &mut async_broadcast::Receiver<Message>) -> Stream {
-        match tokio::time::timeout(TIMEOUT, received.recv()).await {
-            Ok(Ok(msg)) => Stream::Next(msg),
-            Ok(Err(async_broadcast::RecvError)) => Stream::Eos,
-            Err(_elapsed) => Stream::Timeout,
+    async fn next_message(received: &mut (impl StreamExt<Item = Message> + Unpin)) -> MaybeMessage {
+        match tokio::time::timeout(TIMEOUT, received.next()).await {
+            Ok(Some(msg)) => MaybeMessage::Next(msg),
+            Ok(None) => MaybeMessage::Eos,
+            Err(_elapsed) => MaybeMessage::Timeout,
         }
     }
 
@@ -96,7 +96,7 @@ mod tests {
         {
             let () = broker.publish(topic, payload).await?;
             assert_eq!(
-                Next(message(topic, payload)),
+                MaybeMessage::Next(message(topic, payload)),
                 next_message(&mut messages).await
             );
         }
@@ -109,7 +109,7 @@ mod tests {
         .into_iter()
         {
             let () = broker.publish(topic, payload).await?;
-            assert_eq!(Timeout, next_message(&mut messages).await);
+            assert_eq!(MaybeMessage::Timeout, next_message(&mut messages).await);
         }
 
         Ok(())
@@ -128,7 +128,7 @@ mod tests {
         let topic = vec![]
             .try_into()
             .expect("a list of topics (possibly empty)");
-        let con = Connection::connect("publishing_messages", &mqtt_config, topic).await?;
+        let mut con = Connection::connect("publishing_messages", &mqtt_config, topic).await?;
 
         // Then all messages produced on the `con.published` channel
         con.published
@@ -171,9 +171,9 @@ mod tests {
         // * and a producer of output messages
         // * unaware of the underlying MQTT connection.
         let mut input = con.received;
-        let output = con.published;
+        let mut output = con.published;
         tokio::spawn(async move {
-            while let Next(msg) = next_message(&mut input).await {
+            while let MaybeMessage::Next(msg) = next_message(&mut input).await {
                 let req = msg.payload_str().expect("utf8 payload");
                 let res = req.to_uppercase();
                 let msg = Message::new(&out_topic, res.as_bytes());
@@ -221,15 +221,15 @@ mod tests {
         let mut con = Connection::connect(session_name, &mqtt_config, topic.try_into()?).await?;
 
         assert_eq!(
-            Next(message(topic, "1st msg sent when down")),
+            MaybeMessage::Next(message(topic, "1st msg sent when down")),
             next_message(&mut con.received).await
         );
         assert_eq!(
-            Next(message(topic, "2nd msg sent when down")),
+            MaybeMessage::Next(message(topic, "2nd msg sent when down")),
             next_message(&mut con.received).await
         );
         assert_eq!(
-            Next(message(topic, "3rd msg sent when down")),
+            MaybeMessage::Next(message(topic, "3rd msg sent when down")),
             next_message(&mut con.received).await
         );
 
@@ -240,22 +240,22 @@ mod tests {
     #[serial]
     async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
         // Given an mqtt client
-        async fn run(mut input: impl StreamInput<Message>, mut output: impl StreamOutput<Message>) {
+        async fn run(
+            mut input: impl Stream<Item = Message> + Unpin,
+            mut output: impl Sink<Message> + Unpin,
+        ) {
             let in_topic = TopicFilter::new_unchecked("in/topic");
             let out_topic = Topic::new_unchecked("out/topic");
-
-            //let mut input = input.filter(|msg| in_topic.accept(msg));
 
             while let Some(msg) = input.next().await {
                 let req = msg.payload_str().expect("utf8 payload");
                 let res = req.to_uppercase();
                 let msg = Message::new(&out_topic, res.as_bytes());
-                if let Err(_) = output.push(msg).await {
-                    // the connection has been closed
+                if let Err(_) = output.send(msg).await {
                     break;
                 }
             }
-            //output.done();
+            let _ = output.close().await;
         }
 
         // This client can be tested without any MQTT broker.
@@ -263,7 +263,6 @@ mod tests {
             message("in/topic", "a message"),
             message("in/topic", "another message"),
             message("in/topic", "yet another message"),
-            //message("unrelated/topic", "some unrelated message"),
         ];
         let expected = vec![
             message("out/topic", "A MESSAGE"),
@@ -271,11 +270,83 @@ mod tests {
             message("out/topic", "YET ANOTHER MESSAGE"),
         ];
 
-        let mut output = StreamRecorder::new();
-        let output_stream = output.collector_stream();
-        tokio::spawn(async move { run(input, output_stream) });
-        assert_eq!(expected, output.collected().await);
+        let input_stream = MessageInputStream::new(input);
+        let (output, output_stream) = recorder();
+        tokio::spawn(async move { run(input_stream, output_stream).await });
+        assert_eq!(expected, output.await.unwrap());
 
         Ok(())
+    }
+
+    type MessageOutputStream = Option<StreamRecorder<Message>>;
+    struct StreamRecorder<T> {
+        messages: Vec<T>,
+        sender: oneshot::Sender<Vec<T>>,
+    }
+
+    fn recorder() -> (oneshot::Receiver<Vec<Message>>, MessageOutputStream) {
+        let (sender, receiver) = oneshot::channel();
+        let recorder = StreamRecorder {
+            messages: vec![],
+            sender,
+        };
+        (receiver, Some(recorder))
+    }
+
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
+    use futures::channel::oneshot;
+    use std::fmt::Display;
+
+    impl Sink<Message> for Option<StreamRecorder<Message>> {
+        type Error = core::convert::Infallible;
+
+        fn poll_ready(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
+            if let Some(recorder) = unsafe { self.get_unchecked_mut() }.as_mut() {
+                dbg!(&item);
+                recorder.messages.push(item);
+            }
+            Ok(())
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            if let Some(recorder) = unsafe { self.get_unchecked_mut() }.take() {
+                let messages = recorder.messages;
+                dbg!(&messages);
+                let _ = recorder.sender.send(messages);
+            }
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    struct MessageInputStream {
+        items: Box<dyn Iterator<Item = Message>>,
+    }
+
+    impl MessageInputStream {
+        pub fn new(items: Vec<Message>) -> MessageInputStream {
+            MessageInputStream {
+                items: Box::new(items.into_iter()),
+            }
+        }
+    }
+
+    unsafe impl Send for MessageInputStream {}
+
+    impl Stream for MessageInputStream {
+        type Item = Message;
+
+        fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let item = unsafe { self.get_unchecked_mut() }.items.next();
+            Poll::Ready(item)
+        }
     }
 }

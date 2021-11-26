@@ -1,9 +1,10 @@
 use crate::converter::*;
 use crate::error::*;
 
-use mqtt_channel::{Connection, Message, MqttError};
+use mqtt_channel::{
+    Connection, Message, MqttError, SinkExt, StreamExt, UnboundedReceiver, UnboundedSender,
+};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
-use tokio::time::Duration;
 use tracing::{info, instrument};
 
 pub async fn create_mapper<'a>(
@@ -37,8 +38,8 @@ pub(crate) fn mqtt_config(
 }
 
 pub struct Mapper {
-    input: async_broadcast::Receiver<Message>,
-    output: async_channel::Sender<Message>,
+    input: UnboundedReceiver<Message>,
+    output: UnboundedSender<Message>,
     converter: Box<dyn Converter<Error = ConversionError>>,
 }
 
@@ -50,8 +51,8 @@ impl Mapper {
     }
 
     pub fn new(
-        input: async_broadcast::Receiver<Message>,
-        output: async_channel::Sender<Message>,
+        input: UnboundedReceiver<Message>,
+        output: UnboundedSender<Message>,
         converter: Box<dyn Converter<Error = ConversionError>>,
     ) -> Self {
         Self {
@@ -79,21 +80,13 @@ impl Mapper {
             let _ =self.output.send(init_message).await;
         }
 
-        while let Some(message) = next_message(&mut self.input).await {
+        while let Some(message) = &mut self.input.next().await {
             let converted_messages = self.converter.convert(&message);
             for converted_message in converted_messages.into_iter() {
                 let _ = self.output.send(converted_message).await;
             }
         }
         Ok(())
-    }
-}
-
-async fn next_message(received: &mut async_broadcast::Receiver<Message>) -> Option<Message> {
-    match tokio::time::timeout(Duration::from_secs(5), received.recv()).await {
-        Ok(Ok(msg)) => Some(msg),
-        Ok(Err(async_broadcast::RecvError)) => None,
-        Err(_elapsed) => None,
     }
 }
 
