@@ -35,6 +35,9 @@ install_tedge_agent() {
 install_tedge_plugins() {
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb
+    # TODO: uncomment when we have released apama
+    # wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    # dpkg -i /tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb
 }
 
 if [ $# -lt 3 ]; then
