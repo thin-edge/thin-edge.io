@@ -11,7 +11,7 @@ use c8y_smartrest::{
     smartrest_serializer::{
         SmartRestGetPendingOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
         SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-        SmartRestSetSupportedLogType, SmartRestSetSupportedOperations,
+        SmartRestSetSupportedLogType,
     },
 };
 use chrono::{DateTime, FixedOffset, Local};
@@ -104,7 +104,6 @@ impl CumulocitySoftwareManagement {
 
     pub async fn run(&self, mut messages: Box<dyn MqttMessageStream>) -> Result<(), anyhow::Error> {
         info!("Running");
-        let () = self.publish_supported_operations().await?;
         let () = self.publish_supported_log_types().await?;
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
@@ -215,14 +214,6 @@ impl CumulocitySoftwareManagement {
     async fn publish_supported_log_types(&self) -> Result<(), SMCumulocityMapperError> {
         let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-        let () = self.publish(&topic, payload).await?;
-        Ok(())
-    }
-
-    async fn publish_supported_operations(&self) -> Result<(), SMCumulocityMapperError> {
-        let data = SmartRestSetSupportedOperations::default();
-        let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
-        let payload = data.to_smartrest()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
     }
