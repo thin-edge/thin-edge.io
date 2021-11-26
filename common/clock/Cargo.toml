@@ -1,9 +1,0 @@
-[package]
-name = "clock"
-version = "0.4.2"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2018"
-
-[dependencies]
-chrono = "0.4"
-mockall = "0.10"

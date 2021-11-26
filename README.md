@@ -64,7 +64,7 @@ For an overview of the supported platforms please have a look at the [platform s
 <!-- ROADMAP -->
 # Roadmap
 
-See the [open issues](https://github.com/thin-edge/thin-edge.io/issues) for a list of proposed features (and known issues).
+See the [public roadmap](https://github.com/thin-edge/thin-edge.io-roadmap/projects/1) for a list of items that the maintainers agreed to work on. If you want to propose features to the maintainers or want to contribute a development of yours, it´s always a good idea to get started with a conversation based on an [issue](https://github.com/thin-edge/thin-edge.io/issues).
 <br/>
 <br/>
 
