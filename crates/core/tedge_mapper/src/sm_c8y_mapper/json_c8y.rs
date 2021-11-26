@@ -38,6 +38,8 @@ impl InternalIdResponse {
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
     pub url: Option<DownloadInfo>,
 }
 
@@ -205,7 +207,7 @@ mod tests {
             ]),
         };
 
-        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":{"url":""}},{"name":"b","version":"1.0::debian","url":{"url":""}},{"name":"c","version":"::debian","url":{"url":"https://foobar.io/c.deb"}},{"name":"d","version":"beta::debian","url":{"url":"https://foobar.io/d.deb"}},{"name":"m","version":"::apama","url":{"url":"https://foobar.io/m.epl"}}]}"#;
+        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":""},{"name":"b","version":"1.0::debian","url":""},{"name":"c","version":"::debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta::debian","url":"https://foobar.io/d.deb"},{"name":"m","version":"::apama","url":"https://foobar.io/m.epl"}]}"#;
 
         assert_eq!(c8y_software_list, expected_struct);
         assert_eq!(c8y_software_list.to_json().unwrap(), expected_json);
