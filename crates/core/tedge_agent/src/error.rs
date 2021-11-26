@@ -34,6 +34,18 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromFlockfileError(#[from] FlockfileError),
+
+    #[error("Command returned non 0 exit code.")]
+    CommandFailed,
+
+    #[error("Failed parsing /proc/uptime")]
+    UptimeParserError,
+
+    #[error("Failed to cast string to float.")]
+    FloatCastingError,
+
+    #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {}")]
+    TimestampConversionError { timestamp: i64, error_msg: String },
 }
 
 #[derive(Debug, thiserror::Error)]
