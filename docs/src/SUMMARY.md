@@ -20,7 +20,7 @@
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
     - [How to test the cloud connection?](./howto-guides/007_test_connection.md)
     - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
-    - [How to trouble shoot device monitoring](./howto-guides/009_touble_shooting_monitoring.md)
+    - [How to trouble shoot device monitoring](./howto-guides/009_trouble_shooting_monitoring.md)
     - [How to add self-signed certificate root to trusted certificates list?](./howto-guides/010_add_self_signed_trusted.md)
     - [How to retrieve JWT token from Cumulocity?](./howto-guides/011_retrieve_jwt_token_from_cumulocity.md)
     - [How to install and enable software management?](./howto-guides/012_install_and_enable_software_management.md)
