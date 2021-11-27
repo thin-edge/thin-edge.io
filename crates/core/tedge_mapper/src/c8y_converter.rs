@@ -1,6 +1,7 @@
-use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
+use crate::{converter::*, operations::Operations};
+use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
 use c8y_translator::json;
 use mqtt_client::{Message, Topic};
 use std::collections::HashSet;
@@ -76,6 +77,20 @@ impl Converter for CumulocityConverter {
             }
         }
         Ok(vec)
+    }
+
+    fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
+        let ops = Operations::new("/etc/tedge/operations");
+        let ops = ops.get_operations_list("c8y");
+
+        if !ops.is_empty() {
+            let ops_msg = SmartRestSetSupportedOperations::new(&ops);
+            let topic = Topic::new_unchecked("c8y/s/us");
+            let msg = Message::new(&topic, ops_msg.to_smartrest()?);
+            Ok(vec![msg])
+        } else {
+            Ok(Vec::new())
+        }
     }
 }
 

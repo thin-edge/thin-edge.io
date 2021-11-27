@@ -43,6 +43,12 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromMqttClient(#[from] MqttClientError),
+
+    #[error(transparent)]
+    FromOperationsError(#[from] OperationsError),
+
+    #[error(transparent)]
+    FromSmartRestSerializerError(#[from] c8y_smartrest::error::SmartRestSerializerError),
 }
 
 #[derive(Debug, thiserror::Error)]

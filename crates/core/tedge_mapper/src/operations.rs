@@ -11,7 +11,8 @@ use crate::error::OperationsError;
 /// The file name is the operation name
 
 type Cloud = String;
-type Operation = HashMap<String, PathBuf>;
+type OperationName = String;
+type Operation = HashMap<OperationName, PathBuf>;
 type OperationsMap = HashMap<Cloud, Operation>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,16 +46,6 @@ impl Operations {
             dir: dir.as_ref().to_path_buf(),
             operations,
         })
-    }
-
-    fn get(&self, cloud: &str, operation: &str) -> Option<&PathBuf> {
-        self.operations
-            .get(cloud)
-            .and_then(|operations| operations.get(operation))
-    }
-
-    pub fn get_operations(&self, cloud: &str) -> Option<&Operation> {
-        self.operations.get(cloud)
     }
 
     pub fn get_operations_list(&self, cloud: &str) -> Vec<&str> {

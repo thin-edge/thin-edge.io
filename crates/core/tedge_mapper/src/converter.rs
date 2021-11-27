@@ -32,6 +32,23 @@ pub trait Converter: Send + Sync {
             }
         }
     }
+
+    fn try_init_messages(&self) -> Result<Vec<Message>, Self::Error> {
+        Ok(vec![])
+    }
+
+    fn init_messages(&self) -> Vec<Message> {
+        match self.try_init_messages() {
+            Ok(messages) => messages,
+            Err(error) => {
+                error!("Mapping error: {}", error);
+                vec![Message::new(
+                    &self.get_mapper_config().errors_topic,
+                    error.to_string(),
+                )]
+            }
+        }
+    }
 }
 
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {

@@ -26,7 +26,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut mapper = create_mapper(CUMULOCITY_MAPPER_NAME, &tedge_config, converter).await?;
 
         mapper
-            .run("c8y")
+            .run()
             .instrument(info_span!(CUMULOCITY_MAPPER_NAME))
             .await?;
 
