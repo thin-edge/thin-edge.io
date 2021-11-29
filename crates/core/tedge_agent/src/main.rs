@@ -4,6 +4,7 @@ use structopt::*;
 mod agent;
 mod error;
 mod operation_logs;
+mod restart_operation_handler;
 mod state;
 
 #[derive(Debug, StructOpt)]
