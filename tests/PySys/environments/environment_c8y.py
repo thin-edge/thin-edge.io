@@ -26,12 +26,12 @@ class Cumulocity(object):
     auth = ""
     timeout_req = ""
 
-    def __init__(self, c8y_url, tenant_id, username, password, device_id, log):
+    def __init__(self, c8y_url, tenant_id, username, password, log):
         self.c8y_url = c8y_url
         self.tenant_id = tenant_id
         self.username = username
         self.password = password
-        self.timeout_req = 80  # seconds, got timeout with 60s
+        self.timeout_req = 60  # seconds, got timeout with 60s
         self.log = log
 
         self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
@@ -225,7 +225,7 @@ class EnvironmentC8y(BaseTest):
         )
 
         self.cumulocity = Cumulocity(
-            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass, self.project.deviceid, self.log)
+            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass, self.log)
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")
