@@ -491,6 +491,10 @@ fn enable_software_management(
         if which("tedge_agent").is_ok() {
             service_manager
                 .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            println!("wait till tedge agent starts");
+            use std::{thread, time};        
+            thread::sleep(time::Duration::from_millis(5000));
+            
             service_manager
                 .start_and_enable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
         } else {

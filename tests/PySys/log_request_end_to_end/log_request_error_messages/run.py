@@ -41,7 +41,7 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
         self.assertThat("True == value",
                         value=self.wait_until_logs_retrieved())
 
-    @retry(Exception, tries=20, delay=1)
+    @retry(Exception, tries=30, delay=1)
     def wait_until_logs_retrieved(self):
        
         log_file = self.cumulocity.retrieve_log_file(self.operation_id)

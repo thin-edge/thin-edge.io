@@ -170,6 +170,10 @@ impl SmAgent {
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
+        
+        let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),
@@ -177,13 +181,16 @@ impl SmAgent {
             Some("sudo".into()),
         )?));
 
+        info!("elapsed time plugin check {:?}",start.elapsed());
         if plugins.lock().unwrap().empty() {
             // `unwrap` should be safe here as we only access data.
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);
         }
 
-        let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
+        info!("elapsed time {:?}",start.elapsed());
+
+
         let mut errors = mqtt.subscribe_errors();
         tokio::spawn(async move {
             while let Some(error) = errors.next().await {
@@ -194,7 +201,8 @@ impl SmAgent {
         let () = self.process_pending_operation(&mqtt).await?;
 
         // * Maybe it would be nice if mapper/registry responds
-        let () = publish_capabilities(&mqtt).await?;
+         let () = publish_capabilities(&mqtt).await?;
+        info!("subscribe to messages");
         while let Err(error) = self.subscribe_and_process(&mqtt, &plugins).await {
             error!("{}", error);
         }
@@ -210,9 +218,11 @@ impl SmAgent {
         let mut operations = mqtt.subscribe(self.config.request_topics.clone()).await?;
         while let Some(message) = operations.next().await {
             debug!("Request {:?}", message);
+            info!("subscribe list request {:?}", &message);
 
             match &message.topic {
                 topic if topic == &self.config.request_topic_list => {
+                    info!("received list request {:?}", &message);
                     let _success = self
                         .handle_software_list_request(
                             mqtt,
@@ -279,6 +289,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareListRequest::from_slice(message.payload_trimmed()) {
             Ok(request) => {
+                info!("list request");
                 let () = self
                     .persistance_store
                     .store(&State {
