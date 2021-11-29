@@ -75,6 +75,6 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             log = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "c8y/s/us/", "502,c8y_LogfileRequest"],
+                           "c8y/s/us", "502,c8y_LogfileRequest"],
                 stdouterr="send_failed",
             )

@@ -8,7 +8,7 @@ from retry import retry
 """
 Validate end to end behaviour for the log request operation.
 
-When we send a log request (for Error text with, 50 lines) from cumulocity to device and wait for some time.
+When we send a log request (for Error text with, 25 lines) from cumulocity to device and wait for some time.
 Then sm mapper receives the request and sends the response
 Validate if the response contains the log file for number of lines.
 If number of lines are 50 Error messages then pass the test
@@ -43,15 +43,13 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
 
     @retry(Exception, tries=20, delay=1)
     def wait_until_logs_retrieved(self):
-        # for i in range(1, 20):
-        #     time.sleep(1)
+       
         log_file = self.cumulocity.retrieve_log_file(self.operation_id)
         if len(log_file) != 0:
             return self.download_file_and_verify_error_messages(log_file)
         else:
             raise Exception("retry")
-        # return False
-
+      
     def create_logs_for_test(self):
         log = self.startProcess(
             command=self.sudo,
@@ -73,6 +71,6 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
             log = self.startProcess(
                 command=self.sudo,
                 arguments=[self.tedge, "mqtt", "pub",
-                           "c8y/s/us/", "502,c8y_LogfileRequest"],
+                           "c8y/s/us", "502,c8y_LogfileRequest"],
                 stdouterr="send_failed",
             )
