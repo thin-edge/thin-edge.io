@@ -215,7 +215,6 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         while let Some(message) = operations.next().await {
             debug!("Request {:?}", message);
-
             match &message.topic {
                 topic if topic == &self.config.request_topic_list => {
                     let _success = self
