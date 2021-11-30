@@ -274,6 +274,26 @@ mod tests {
         tokio::spawn(async move { run(input_stream, output_stream).await });
         assert_eq!(expected, output.await.unwrap());
 
+        // This very same client can be tested with an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+        let mut out_messages = broker.messages_published_on("out/topic").await;
+
+        let in_topic = "in/topic".try_into().expect("a valid topic filter");
+        let con = Connection::connect("mapper under test", &mqtt_config, in_topic).await?;
+        tokio::spawn(async move { run(con.received, con.published).await });
+
+        broker.publish("in/topic", "msg 1, over MQTT").await?;
+        broker.publish("in/topic", "msg 2, over MQTT").await?;
+        broker.publish("in/topic", "msg 3, over MQTT").await?;
+
+        mqtt_tests::assert_received(
+            &mut out_messages,
+            TIMEOUT,
+            vec!["MSG 1, OVER MQTT", "MSG 2, OVER MQTT", "MSG 3, OVER MQTT"],
+        )
+        .await;
+
         Ok(())
     }
 }
