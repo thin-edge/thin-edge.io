@@ -19,8 +19,12 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     operation_id = None
+    logRequest = None
 
     def setup(self):
+        if self.logRequest != "yes":
+            self.skipTest(
+                "Testing the log request feature not enabled")
         super().setup()
         self.create_logs_for_test()
         self.addCleanupFunction(self.cleanup_logs)
