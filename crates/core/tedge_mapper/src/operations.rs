@@ -104,56 +104,78 @@ mod tests {
     #[test_case(0, true)]
     #[test_case(2, false)]
     #[test_case(2, true)]
-    fn get_clouds_2(count: usize, files: bool) {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let dir = temp_dir.path();
+    fn get_clouds_tests(clouds_count: usize, files: bool) {
+        let operations = TestOperations::new().with_clouds(clouds_count);
 
-        create_clouds_directories(count, dir, files).unwrap();
-
-        let clouds = get_clouds(dir).unwrap();
-        dbg!(&clouds);
-
-        assert_eq!(clouds.len(), count);
-    }
-
-    #[test]
-    fn get_operations_all() {
-        // let temp_dir = tempfile::tempdir().unwrap();
-        // let dir = temp_dir.path();
-        let dir = Path::new("/home/user/tedge/operations/");
-
-        // create_clouds_directories(2, dir, true).unwrap();
-
-        let operations = get_operations(dir).unwrap();
-        dbg!(&operations);
-
-        assert_eq!(operations.len(), 2);
-    }
-
-    fn create_clouds_directories(
-        count: usize,
-        dir: impl AsRef<Path>,
-        random_file: bool,
-    ) -> Result<(), OperationsError> {
-        for i in 0..count {
-            let path = dir.as_ref().join(format!("cloud{}", i));
-            fs::create_dir(path)?;
+        if files {
+            operations.with_random_file_in_clouds_directory();
         }
 
-        if random_file {
-            let path = dir.as_ref().join("cloudfile");
-            fs::File::create(path)?;
-        }
+        let clouds = get_clouds(operations.temp_dir()).unwrap();
 
-        Ok(())
+        assert_eq!(clouds.len(), clouds_count);
     }
 
-    fn crate_operations_files(count: usize, dir: impl AsRef<Path>) -> Result<(), OperationsError> {
-        for i in 0..count {
-            let path = dir.as_ref().join(format!("operation{}", i));
+    #[test_case(0, 0)]
+    #[test_case(2, 1)]
+    #[test_case(2, 10)]
+    fn get_operations_all(clouds_count: usize, ops_count: usize) {
+        let test_operations = TestOperations::new()
+            .with_clouds(clouds_count)
+            .with_operations(ops_count);
+
+        let operations = get_operations(test_operations.temp_dir()).unwrap();
+
+        assert_eq!(operations.len(), ops_count);
+    }
+
+    struct TestOperations {
+        temp_dir: tempfile::TempDir,
+        clouds: Vec<PathBuf>,
+        operations: Vec<PathBuf>,
+    }
+
+    impl TestOperations {
+        fn new() -> Self {
+            Self {
+                temp_dir: tempfile::tempdir().unwrap(),
+                clouds: Vec::new(),
+                operations: Vec::new(),
+            }
+        }
+
+        fn with_clouds(self, clouds_count: usize) -> Self {
+            let mut clouds = Vec::new();
+            for i in 0..clouds_count {
+                let cloud = self.temp_dir.as_ref().join(format!("cloud{}", i));
+                fs::create_dir(&cloud).unwrap();
+                clouds.push(cloud);
+            }
+
+            Self { clouds, ..self }
+        }
+
+        fn with_operations(self, operations_count: usize) -> Self {
+            let mut operations = Vec::new();
+            self.clouds.iter().for_each(|path| {
+                dbg!(&path);
+                for i in 0..operations_count {
+                    let file_path = path.join(format!("operation{}", i));
+                    fs::File::create(&file_path).unwrap();
+                    operations.push(file_path);
+                }
+            });
+
+            Self { operations, ..self }
+        }
+
+        fn with_random_file_in_clouds_directory(&self) {
+            let path = self.temp_dir.as_ref().join("cloudfile");
             fs::File::create(path).unwrap();
         }
 
-        Ok(())
+        fn temp_dir(&self) -> &tempfile::TempDir {
+            &self.temp_dir
+        }
     }
 }
