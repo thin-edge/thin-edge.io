@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pysysdirconfig>
+  <id-prefix>SoftwareManagement.Plugin.</id-prefix>
+  <input-dir>${testRootDir}/plugin_apama/Input</input-dir>
+</pysysdirconfig>

@@ -61,6 +61,13 @@ jobs:
           command: deb
           args: -p tedge_apt_plugin
 
+      - name: Build tedge_apama_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_apama_plugin
+
       - name: Build tedge_agent debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -116,7 +123,7 @@ jobs:
             aarch64-unknown-linux-musl,
             arm-unknown-linux-gnueabihf,
             armv7-unknown-linux-gnueabihf,
-            #armv7-unknown-linux-musleabihf, # Temporarily disabled due to build issues
+            armv7-unknown-linux-musleabihf,
           ]
 
     steps:
@@ -177,6 +184,9 @@ jobs:
       - name: Strip tedge_apt_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
 
+      - name: Strip tedge_apama_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apama_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apama_plugin
+
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -204,6 +214,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_apama_plugin debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build examples
         uses: actions-rs/cargo@v1

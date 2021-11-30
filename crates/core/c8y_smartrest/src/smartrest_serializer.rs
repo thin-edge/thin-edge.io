@@ -1,6 +1,6 @@
 use crate::error::SmartRestSerializerError;
 use csv::{QuoteStyle, WriterBuilder};
-use json_sm::{SoftwareOperationStatus, SoftwareUpdateResponse};
+use json_sm::{OperationStatus, SoftwareUpdateResponse};
 use serde::{Deserialize, Serialize, Serializer};
 
 type SmartRest = String;
@@ -104,7 +104,7 @@ impl SmartRestSetOperationToExecuting {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
-            SoftwareOperationStatus::Executing => {
+            OperationStatus::Executing => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
             _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
@@ -141,7 +141,7 @@ impl SmartRestSetOperationToSuccessful {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
-            SoftwareOperationStatus::Successful => {
+            OperationStatus::Successful => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
             _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
@@ -172,7 +172,7 @@ impl SmartRestSetOperationToFailed {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match &response.status() {
-            SoftwareOperationStatus::Failed => Ok(Self::new(
+            OperationStatus::Failed => Ok(Self::new(
                 CumulocitySupportedOperations::C8ySoftwareUpdate,
                 response.error().unwrap_or_else(|| "".to_string()),
             )),

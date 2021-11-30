@@ -6,7 +6,10 @@ edition = "2021"
 license = "Apache-2.0"
 description = "thin.edge.io plugin for installing apama projects"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.deb]
+assets = [
+    ["target/release/tedge_apama_plugin", "/etc/tedge/sm-plugins/apama", "755"],
+]
 
 [dependencies]
 structopt = "0.3"
