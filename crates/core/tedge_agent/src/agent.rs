@@ -198,7 +198,7 @@ impl SmAgent {
         // * Maybe it would be nice if mapper/registry responds
         let () = publish_capabilities(&mqtt).await?;
         while let Err(error) = self
-            .subscribe_and_process(&mqtt, &mut operations, &plugins)
+            .process_subscribed_messages(&mqtt, &mut operations, &plugins)
             .await
         {
             error!("{}", error);
@@ -207,7 +207,7 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn subscribe_and_process(
+    async fn process_subscribed_messages(
         &mut self,
         mqtt: &Client,
         operations: &mut Box<dyn MqttMessageStream>,
