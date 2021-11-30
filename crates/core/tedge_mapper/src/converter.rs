@@ -21,7 +21,12 @@ pub trait Converter: Send + Sync {
     fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
 
     fn convert(&mut self, input: &Message) -> Vec<Message> {
-        match self.try_convert(input) {
+        let messages_or_err = self.try_convert(input);
+        self.wrap_error(messages_or_err)
+    }
+
+    fn wrap_error(&self, messages_or_err: Result<Vec<Message>, Self::Error>) -> Vec<Message> {
+        match messages_or_err {
             Ok(messages) => messages,
             Err(error) => {
                 error!("Mapping error: {}", error);

@@ -59,7 +59,7 @@ impl Operations {
 fn get_clouds(dir: impl AsRef<Path>) -> Result<Vec<String>, OperationsError> {
     Ok(fs::read_dir(dir)?
         .map(|entry| entry.map(|e| e.path()))
-        .collect::<Result<Vec<_>, _>>()?
+        .collect::<Result<Vec<PathBuf>, _>>()?
         .into_iter()
         .filter(|path| path.is_dir())
         .map(|path| {
@@ -76,7 +76,7 @@ fn get_operations(dir: impl AsRef<Path>) -> Result<OperationsMap, OperationsErro
         let path = dir.as_ref().join(cloud.as_str());
         let operations_map = fs::read_dir(&path)?
             .map(|entry| entry.map(|e| e.path()))
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<PathBuf>, _>>()?
             .into_iter()
             .filter(|path| path.is_file())
             .map(|path| {
