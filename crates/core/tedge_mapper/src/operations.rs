@@ -83,7 +83,6 @@ fn get_operations(dir: impl AsRef<Path>) -> Result<OperationsMap, OperationsErro
                 (
                     {
                         let filename = path.file_name();
-                        dbg!(filename);
                         filename.unwrap().to_str().unwrap().to_string()
                     },
                     path,
@@ -117,8 +116,9 @@ mod tests {
     }
 
     #[test_case(0, 0)]
-    #[test_case(2, 1)]
-    #[test_case(2, 10)]
+    #[test_case(1, 1)]
+    #[test_case(1, 5)]
+    #[test_case(2, 5)]
     fn get_operations_all(clouds_count: usize, ops_count: usize) {
         let test_operations = TestOperations::new()
             .with_clouds(clouds_count)
@@ -126,7 +126,11 @@ mod tests {
 
         let operations = get_operations(test_operations.temp_dir()).unwrap();
 
-        assert_eq!(operations.len(), ops_count);
+        assert_eq!(operations.len(), clouds_count);
+        assert_eq!(
+            operations.values().map(|ops| ops.len()).sum::<usize>(),
+            ops_count * clouds_count
+        );
     }
 
     struct TestOperations {
@@ -176,6 +180,10 @@ mod tests {
 
         fn temp_dir(&self) -> &tempfile::TempDir {
             &self.temp_dir
+        }
+
+        fn operations(&self) -> &Vec<PathBuf> {
+            &self.operations
         }
     }
 }
