@@ -75,7 +75,7 @@ pub enum CertError {
     UserSwitchError(#[from] UserSwitchError),
 
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
-    WebpkiValidation { hint: String, msg: String },
+    CertificateValidation { hint: String, msg: String },
 }
 
 impl CertError {
@@ -111,59 +111,58 @@ impl CertError {
 //         kind: Other,
 //         error: Custom {
 //             kind: InvalidData,
-//             error: WebPKIError(
+//             error: InvalidCertificateData(
 //                 ..., // This is where we need to get
 //             ),
 //         },
 //     },
 // )
+// At the last layer we have the InvalidCertificateData error which is a Box<&dyn Error> derived from WebpkiError not included anymore, just as a String
 // This chain may break if underlying crates change.
 pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
-    if let Some(rustls::TLSError::WebPKIError(cert_validation_error)) = err
+    if let Some(rustls::Error::InvalidCertificateData(inner)) = err
         // get `hyper::Error::Connect`
         .source()
-        .and_then(|hyper_error| hyper_error.downcast_ref::<hyper::Error>())
-        .and_then(|hyper_error| hyper_error.source())
-        // Surprise: `Custom` type is `std::io::Error`; this is our first `Custom`.
-        .and_then(|connect_error| connect_error.downcast_ref::<std::io::Error>())
-        // A shortcut to get ref to our error 2 layers down.
+        .and_then(|err| err.source())
+        // From here the errors are converted from std::io::Error.
+        // `Custom` type is `std::io::Error`; this is our first `Custom`.
+        .and_then(|custom_error| custom_error.downcast_ref::<std::io::Error>())
         .and_then(|custom_error| custom_error.get_ref())
         // This is our second `Custom`.
         .and_then(|custom_error2| custom_error2.downcast_ref::<std::io::Error>())
-        // Get final error type from `Custom`.
         .and_then(|custom_error2| custom_error2.get_ref())
-        .and_then(|webpki_error| webpki_error.downcast_ref::<rustls::TLSError>())
+        // Get final error type from `rustls::Error`.
+        .and_then(|rustls_error| rustls_error.downcast_ref::<rustls::Error>())
     {
-        match cert_validation_error {
-            webpki::Error::CAUsedAsEndEntity => CertError::WebpkiValidation {
+        match inner {
+            msg if msg.contains("CaUsedAsEndEntity") => CertError::CertificateValidation {
                 hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
-                msg: cert_validation_error.to_string(),
+                msg: msg.to_string(),
             },
 
-            webpki::Error::CertExpired => CertError::WebpkiValidation {
-                hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time."
-                .into(),
-                msg: cert_validation_error.to_string(),
+            msg if msg.contains("CertExpired") => CertError::CertificateValidation {
+                hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time.".into(),
+                msg: msg.to_string(),
             },
 
-            webpki::Error::CertNotValidYet => CertError::WebpkiValidation {
+            msg if msg.contains("CertNotValidYet") => CertError::CertificateValidation {
                 hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
-                msg: cert_validation_error.to_string(),
+                msg: msg.to_string(),
             },
 
-            webpki::Error::EndEntityUsedAsCA => CertError::WebpkiValidation {
+            msg if msg.contains("EndEntityUsedAsCa") => CertError::CertificateValidation {
                 hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
-                msg: cert_validation_error.to_string(),
+                msg: msg.to_string(),
             },
 
-            webpki::Error::InvalidCertValidity => CertError::WebpkiValidation {
+            msg if msg.contains("InvalidCertValidity") => CertError::CertificateValidation {
                 hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
-                msg: cert_validation_error.to_string(),
+                msg: msg.to_string(),
             },
 
-            _ => CertError::WebpkiValidation {
+            _ => CertError::CertificateValidation {
                 hint: "Server certificate validation error.".into(),
-                msg: cert_validation_error.to_string(),
+                msg: inner.to_string(),
             },
         }
     } else {
