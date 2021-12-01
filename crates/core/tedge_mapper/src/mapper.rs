@@ -15,11 +15,9 @@ pub async fn create_mapper<'a>(
     info!("{} starting", app_name);
 
     let mapper_config = converter.get_mapper_config();
-    let mqtt_config =
-        mqtt_channel::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
     let mqtt_client = Connection::connect(
         app_name,
-        &mqtt_config,
+        &mqtt_config(tedge_config)?,
         mapper_config.in_topic_filter.clone().into(),
     )
     .await?;
@@ -33,8 +31,8 @@ pub async fn create_mapper<'a>(
 
 pub(crate) fn mqtt_config(
     tedge_config: &TEdgeConfig,
-) -> Result<mqtt_client::Config, anyhow::Error> {
-    Ok(mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
+) -> Result<mqtt_channel::Config, anyhow::Error> {
+    Ok(mqtt_channel::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
 }
 
 pub struct Mapper {
@@ -46,7 +44,8 @@ pub struct Mapper {
 impl Mapper {
     pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
         info!("Running");
-        self.subscribe_messages().await?;
+        let messages_handle = self.process_messages();
+        messages_handle.await?;
         Ok(())
     }
 
@@ -74,7 +73,7 @@ impl Mapper {
     // }
 
     #[instrument(skip(self), name = "messages")]
-    async fn subscribe_messages(&mut self) -> Result<(), MqttError> {
+    async fn process_messages(&mut self) -> Result<(), MqttError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             let _ =self.output.send(init_message).await;

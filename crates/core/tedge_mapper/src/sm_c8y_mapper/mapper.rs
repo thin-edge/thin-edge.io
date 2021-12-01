@@ -1,6 +1,5 @@
 use crate::{
     component::TEdgeComponent,
-    mapper::mqtt_config,
     operations::Operations,
     sm_c8y_mapper::{
         error::*,
@@ -31,6 +30,7 @@ use download::{Auth, DownloadInfo};
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
 use std::{convert::TryInto, process::Stdio};
 use tedge_config::TEdgeConfig;
 use tracing::{debug, error, info, instrument};
@@ -49,7 +49,7 @@ impl CumulocitySoftwareManagementMapper {
 impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-        let mqtt_config = mqtt_config(&tedge_config)?;
+        let mqtt_config = mqtt_client::Config::default();
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
         let mqtt_jwt_client = Client::connect("JWT-Requester", &mqtt_config).await?;
 
@@ -330,8 +330,8 @@ where
         let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
         )
-        .with_response_parameter(binary_upload_event_url)
-        .to_smartrest()?;
+            .with_response_parameter(binary_upload_event_url)
+            .to_smartrest()?;
 
         let () = self.publish(&topic, smartrest_set_operation_status).await?;
         Ok(())
@@ -648,7 +648,7 @@ mod tests {
         let smartrest_obj = SmartRestLogRequest::from_smartrest(
             "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
         )
-        .unwrap();
+            .unwrap();
 
         let temp_dir = tempfile::tempdir().unwrap();
         // creating the files
