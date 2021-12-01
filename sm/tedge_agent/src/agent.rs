@@ -241,7 +241,13 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_restart => {
-                    let () = self.handle_restart_operation(mqtt, &message).await?;
+                    let () = self
+                        .handle_restart_operation(
+                            mqtt,
+                            &self.config.response_topic_restart,
+                            &message,
+                        )
+                        .await?;
                 }
 
                 _ => error!("Unknown operation. Discarded."),
@@ -370,6 +376,7 @@ impl SmAgent {
     async fn handle_restart_operation(
         &self,
         mqtt: &Client,
+        topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
         let request = match RestartOperationRequest::from_slice(message.payload_trimmed()) {
@@ -404,12 +411,17 @@ impl SmAgent {
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
+        // update status to executing.
+        let executing_response = RestartOperationResponse::new(&request);
+        let _ = mqtt
+            .publish(Message::new(&topic, executing_response.to_bytes()?))
+            .await?;
         let () = restart_operation::create_slash_run_file()?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
-        // state = "Restarting"
+
         match std::process::Command::new("sudo")
-            .arg("init")
+            .arg("echo")
             .arg("6")
             .status()
         {

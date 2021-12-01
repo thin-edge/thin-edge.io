@@ -9,6 +9,7 @@ type SmartRest = String;
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
     C8yLogFileRequest,
+    C8yRestartRequest,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -16,6 +17,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
         match op {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
+            CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
         }
     }
 }
@@ -59,6 +61,7 @@ impl Default for SmartRestSetSupportedOperations {
             supported_operations: vec![
                 CumulocitySupportedOperations::C8ySoftwareUpdate.into(),
                 CumulocitySupportedOperations::C8yLogFileRequest.into(),
+                CumulocitySupportedOperations::C8yRestartRequest.into(),
             ],
         }
     }
@@ -160,7 +163,7 @@ pub struct SmartRestSetOperationToFailed {
 }
 
 impl SmartRestSetOperationToFailed {
-    fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
         Self {
             message_id: "502",
             operation: operation.into(),
@@ -208,11 +211,15 @@ mod tests {
     use json_sm::*;
 
     #[test]
+    // NOTE: this test always needs changing when a new operation is added
     fn serialize_smartrest_supported_operations() {
         let smartrest = SmartRestSetSupportedOperations::default()
             .to_smartrest()
             .unwrap();
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
+        assert_eq!(
+            smartrest,
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest,c8y_Restart\n"
+        );
     }
 
     #[test]
