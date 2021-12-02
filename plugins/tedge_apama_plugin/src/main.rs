@@ -2,9 +2,8 @@ mod error;
 
 use crate::error::InternalError;
 use std::fs::{self, File};
-use std::os::unix::prelude::ExitStatusExt;
-use std::path::{self, Path};
-use std::process::{Command, ExitStatus, Stdio};
+use std::path::Path;
+use std::process::{Command, Stdio};
 use structopt::StructOpt;
 
 /// This plugin supports the installation, update and removal of a single unversioned apama project named "project".
@@ -75,6 +74,7 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
         // Since there can only be a single project named `project`, print its name if installed
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
+                //TODO: Read the project name from .project XML file if present
                 // Print the project name
                 println!("{}::project\t", APAMA_PROJECT_NAME);
 
@@ -181,6 +181,7 @@ fn remove_project(_project_name: &str) -> Result<(), InternalError> {
 }
 
 fn get_installed_monitors() -> Result<Vec<String>, InternalError> {
+    // Run `engine_inspect -m -r` command to list all monitors in raw format
     let output = Command::new(APAMA_ENV_EXE)
         .arg(ENGINE_INSPECT_CMD)
         .arg("-m")
@@ -189,9 +190,17 @@ fn get_installed_monitors() -> Result<Vec<String>, InternalError> {
         .output()
         .map_err(|err| InternalError::exec_error(ENGINE_INSPECT_CMD, err))?;
     let output = String::from_utf8(output.stdout)?;
+
+    // The output contains monitor names and their instance counts separated by a space as follows:
+    // ```
+    // TedgeDemoMonitor 1
+    // TedgeTestMonitor 1
+    // ```
     let mon_files = output
         .lines()
+        // The first line of the output could "WARNING: JAVA_HOME not set" which is filtered out
         .filter(|line| !line.starts_with("WARNING:"))
+        // The counts are filtered out too
         .filter_map(|line| line.split_whitespace().next())
         .map(|line| line.into())
         .collect();
@@ -201,6 +210,7 @@ fn get_installed_monitors() -> Result<Vec<String>, InternalError> {
 
 fn install_or_update_monitor(mon_name: &str, mon_file_path: &str) -> Result<(), InternalError> {
     let installed_monitors = get_installed_monitors()?;
+    // If an existing monitor needs to be updated, older version needs to be removed first before installing the new one
     if installed_monitors.contains(&mon_name.to_string()) {
         remove_monitor(mon_name)?;
         install_monitor(mon_file_path)
@@ -221,11 +231,6 @@ fn remove_monitor(mon_name: &str) -> Result<(), InternalError> {
         APAMA_ENV_EXE,
         format!("{} {}", ENGINE_DELETE_CMD, mon_name).as_str(),
     )
-}
-
-fn update_monitor(mon_name: &str, mon_file_path: &str) -> Result<(), InternalError> {
-    remove_monitor(mon_name)?;
-    install_monitor(mon_file_path)
 }
 
 fn run_cmd(cmd: &str, args: &str) -> Result<(), InternalError> {
