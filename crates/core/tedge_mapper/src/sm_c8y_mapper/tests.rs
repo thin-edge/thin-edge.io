@@ -395,31 +395,25 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 #[tokio::test]
 #[serial_test::serial]
 async fn get_jwt_token_full_run() {
+    // Given a background process that publish JWT tokens on demand.
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut messages = broker.messages_published_on("c8y/s/uat").await;
+    broker.map_messages_background(|(topic, _)| {
+        let mut response = vec![];
+        if &topic == "c8y/s/uat" {
+            response.push(("c8y/s/dat".into(), "71,1111".into()));
+        }
+        response
+    });
 
+    // An MqttAuthHttpProxy ...
     let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
     let mqtt_client = Client::connect("JWT-Requester-Test", &mqtt_config)
         .await
         .unwrap();
-
     let http_proxy = MqttAuthHttpProxy::new(mqtt_client, "test.tenant.com", "test-device");
 
-    // Setup listener stream to publish on first message received on topic `c8y/s/us`.
-    let responder_task = tokio::spawn(async move {
-        let msg = messages
-            .recv()
-            .with_timeout(TEST_TIMEOUT_MS)
-            .await
-            .expect_or("No JWT request received.");
-        assert_eq!(&msg, "");
-
-        // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-        let _ = broker.publish("c8y/s/dat", "71,1111").await;
-    });
-
-    // Wait till token received.
-    let (jwt_token, _responder) = tokio::join!(http_proxy.get_jwt_token(), responder_task);
+    // ... fetches and returns these JWT tokens.
+    let jwt_token = http_proxy.get_jwt_token().await;
 
     // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
     assert!(jwt_token.is_ok());
