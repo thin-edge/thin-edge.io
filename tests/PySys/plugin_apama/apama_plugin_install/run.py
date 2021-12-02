@@ -21,7 +21,7 @@ class ApamaPluginInstallTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "install",
-                       "project", "--file", self.project.apama_input_dir + "/quickstart.zip"],
+                       "QuickStart::project", "--file", self.project.apama_input_dir + "/quickstart.zip"],
             stdouterr="plugin_install"
         )
         self.wait_till_correlator_ready()
