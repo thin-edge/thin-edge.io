@@ -75,10 +75,13 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
         // Since there can only be a single project named `project`, print its name if installed
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
-                println!("{}::project\t", APAMA_PROJECT_NAME)
-            }
-            for monitor in get_installed_monitors()? {
-                println!("{}::mon\t", monitor)
+                // Print the project name
+                println!("{}::project\t", APAMA_PROJECT_NAME);
+
+                // Print the installed monitors
+                for monitor in get_installed_monitors()? {
+                    println!("{}::mon\t", monitor)
+                }
             }
             Ok(())
         }
