@@ -7,7 +7,7 @@ event Number {
 
 /**
  * This monitor is an arbitrary demonstration how to connect Apama and thin-edge.io
- * It subscribes to the mqtt topic demo/number and sends the number incremented by 1 to mqtt topic tedge/measurements
+ * It subscribes to the mqtt topic demo/number and sends the number multiplied by 2 to mqtt topic tedge/measurements
  */
 monitor TedgeTestMonitor {
 

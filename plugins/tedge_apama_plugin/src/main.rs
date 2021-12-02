@@ -99,7 +99,9 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
             file_path,
         } => match apama_module_from_string(&module)? {
             ApamaModule::Project(_) => install_project(Path::new(&file_path)),
-            ApamaModule::MonFile(_) => install_monitor(&file_path),
+            ApamaModule::MonFile(monitor_name) => {
+                install_or_update_monitor(&monitor_name, &file_path)
+            }
         },
 
         PluginOp::Remove { module, version: _ } => match apama_module_from_string(&module)? {
@@ -192,6 +194,16 @@ fn get_installed_monitors() -> Result<Vec<String>, InternalError> {
         .collect();
 
     Ok(mon_files)
+}
+
+fn install_or_update_monitor(mon_name: &str, mon_file_path: &str) -> Result<(), InternalError> {
+    let installed_monitors = get_installed_monitors()?;
+    if installed_monitors.contains(&mon_name.to_string()) {
+        remove_monitor(mon_name)?;
+        install_monitor(mon_file_path)
+    } else {
+        install_monitor(mon_file_path)
+    }
 }
 
 fn install_monitor(mon_file_path: &str) -> Result<(), InternalError> {

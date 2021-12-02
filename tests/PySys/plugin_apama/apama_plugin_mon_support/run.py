@@ -34,7 +34,7 @@ class ApamaPluginMonSupportTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "install",
-                       "TedgeTestMonitor::mon", "--file", self.project.apama_input_dir + "TedgeTestMonitor.mon"],
+                       "TedgeTestMonitor::mon", "--file", self.project.apama_input_dir + "/TedgeTestMonitor.mon"],
             stdouterr="plugin_install"
         )
         self.wait_till_correlator_ready()
@@ -43,6 +43,20 @@ class ApamaPluginMonSupportTest(ApamaPlugin):
             command=self.sudo,
             arguments=[self.apama_plugin, "list"],
             stdouterr="plugin_list_after_install"
+        )
+
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "install",
+                       "TedgeTestMonitor::mon", "--file", self.project.apama_input_dir + "/TedgeTestMonitorV2.mon"],
+            stdouterr="plugin_update"
+        )
+        self.wait_till_correlator_ready()
+
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "list"],
+            stdouterr="plugin_list_after_update"
         )
 
         self.startProcess(
@@ -61,5 +75,6 @@ class ApamaPluginMonSupportTest(ApamaPlugin):
         self.assertGrep("plugin_list_before_install.out",
                         "TedgeTestMonitor", contains=False)
         self.assertGrep("plugin_list_after_install.out", "TedgeTestMonitor")
+        self.assertGrep("plugin_list_after_update.out", "TedgeTestMonitor")
         self.assertGrep("plugin_list_after_remove.out",
                         "TedgeTestMonitor", contains=False)
