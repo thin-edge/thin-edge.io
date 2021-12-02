@@ -1,4 +1,8 @@
+use crate::sm_c8y_mapper::error::SMCumulocityMapperError;
+use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, MqttAuthHttpProxy};
+use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
+use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_client::Client;
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
@@ -388,6 +392,40 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     .await;
 }
 
+#[tokio::test]
+#[serial_test::serial]
+async fn get_jwt_token_full_run() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut messages = broker.messages_published_on("c8y/s/uat").await;
+
+    let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
+    let mqtt_client = Client::connect("JWT-Requester-Test", &mqtt_config)
+        .await
+        .unwrap();
+
+    let http_proxy = MqttAuthHttpProxy::new(mqtt_client, "test.tenant.com", "test-device");
+
+    // Setup listener stream to publish on first message received on topic `c8y/s/us`.
+    let responder_task = tokio::spawn(async move {
+        let msg = messages
+            .recv()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No JWT request received.");
+        assert_eq!(&msg, "");
+
+        // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
+        let _ = broker.publish("c8y/s/dat", "71,1111").await;
+    });
+
+    // Wait till token received.
+    let (jwt_token, _responder) = tokio::join!(http_proxy.get_jwt_token(), responder_task);
+
+    // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
+    assert!(jwt_token.is_ok());
+    assert_eq!(jwt_token.unwrap().token(), "1111");
+}
+
 fn create_tedge_config(mqtt_port: u16) -> TEdgeConfig {
     // Create a config file in a temporary directory.
     let temp_dir = tempfile::tempdir().unwrap();
@@ -425,10 +463,11 @@ fn remove_whitespace(s: &str) -> String {
 }
 
 async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
-    let tedge_config = create_tedge_config(mqtt_port);
     let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
+
     let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
-    let sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, tedge_config);
+    let http_proxy = FakeC8YHttpProxy {};
+    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy);
     let messages = sm_mapper.subscribe().await?;
 
     let mapper_task = tokio::spawn(async move {
@@ -439,4 +478,35 @@ async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
     let _ = broker.publish("c8y/s/dat", "71,1111").await.unwrap();
+}
+
+struct FakeC8YHttpProxy {}
+
+#[async_trait::async_trait]
+impl C8YHttpProxy for FakeC8YHttpProxy {
+    async fn init(&mut self) -> Result<(), SMCumulocityMapperError> {
+        Ok(())
+    }
+
+    fn url_is_in_my_tenant_domain(&self, _url: &str) -> bool {
+        true
+    }
+
+    async fn get_jwt_token(&self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+        Ok(SmartRestJwtResponse::try_new("71,fake-token")?)
+    }
+
+    async fn send_software_list_http(
+        &self,
+        _c8y_software_list: &C8yUpdateSoftwareListResponse,
+    ) -> Result<(), SMCumulocityMapperError> {
+        Ok(())
+    }
+
+    async fn upload_log_binary(
+        &self,
+        _log_content: &str,
+    ) -> Result<String, SMCumulocityMapperError> {
+        Ok("fake/upload/url".into())
+    }
 }

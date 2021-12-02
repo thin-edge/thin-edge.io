@@ -30,10 +30,6 @@ pub trait C8YHttpProxy {
 
     async fn upload_log_binary(&self, log_content: &str)
         -> Result<String, SMCumulocityMapperError>;
-
-    fn create_log_event(&self) -> C8yCreateEvent;
-
-    async fn get_event_id(&self, event: C8yCreateEvent) -> Result<String, SMCumulocityMapperError>;
 }
 
 /// Define a C8y endpoint
@@ -44,6 +40,14 @@ pub struct C8yEndPoint {
 }
 
 impl C8yEndPoint {
+    fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
+        C8yEndPoint {
+            c8y_host: c8y_host.into(),
+            device_id: device_id.into(),
+            c8y_internal_id: c8y_internal_id.into(),
+        }
+    }
+
     fn get_url_for_sw_list(&self) -> String {
         let mut url_update_swlist = String::new();
         url_update_swlist.push_str("https://");
@@ -117,20 +121,24 @@ pub struct MqttAuthHttpProxy {
 }
 
 impl MqttAuthHttpProxy {
+    pub fn new(mqtt_con: Client, c8y_host: &str, device_id: &str) -> MqttAuthHttpProxy {
+        MqttAuthHttpProxy {
+            mqtt_con,
+            end_point: C8yEndPoint {
+                c8y_host: c8y_host.into(),
+                device_id: device_id.into(),
+                c8y_internal_id: "".into(),
+            },
+        }
+    }
+
     pub fn try_new(
         mqtt_con: Client,
         tedge_config: &TEdgeConfig,
     ) -> Result<MqttAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
-        Ok(MqttAuthHttpProxy {
-            mqtt_con,
-            end_point: C8yEndPoint {
-                c8y_host,
-                device_id,
-                c8y_internal_id: "".into(),
-            },
-        })
+        Ok(MqttAuthHttpProxy::new(mqtt_con, &c8y_host, &device_id))
     }
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
@@ -155,6 +163,45 @@ impl MqttAuthHttpProxy {
 
         let internal_id = internal_id_response.id();
         Ok(internal_id)
+    }
+
+    /// Make a POST request to /event/events and return the event id from response body.
+    /// The event id is used to upload the binary.
+    fn create_log_event(&self) -> C8yCreateEvent {
+        let local: DateTime<Local> = Local::now();
+
+        let c8y_managed_object = C8yManagedObject {
+            id: self.end_point.c8y_internal_id.clone(),
+        };
+
+        C8yCreateEvent::new(
+            c8y_managed_object.to_owned(),
+            "c8y_Logfile",
+            &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "software-management",
+        )
+    }
+
+    async fn get_event_id(
+        &self,
+        c8y_event: C8yCreateEvent,
+    ) -> Result<String, SMCumulocityMapperError> {
+        let client = reqwest::ClientBuilder::new().build()?;
+        let token = self.get_jwt_token().await?;
+        let create_event_url = self.end_point.get_url_for_create_event();
+
+        let request = client
+            .post(create_event_url)
+            .json(&c8y_event)
+            .bearer_auth(token.token())
+            .header("Accept", "application/json")
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+
+        let response = client.execute(request).await?;
+        let event_response_body = response.json::<SmartRestLogEvent>().await?;
+
+        Ok(event_response_body.id)
     }
 }
 
@@ -226,45 +273,6 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
         Ok(())
     }
 
-    /// Make a POST request to /event/events and return the event id from response body.
-    /// The event id is used to upload the binary.
-    fn create_log_event(&self) -> C8yCreateEvent {
-        let local: DateTime<Local> = Local::now();
-
-        let c8y_managed_object = C8yManagedObject {
-            id: self.end_point.c8y_internal_id.clone(),
-        };
-
-        C8yCreateEvent::new(
-            c8y_managed_object.to_owned(),
-            "c8y_Logfile",
-            &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            "software-management",
-        )
-    }
-
-    async fn get_event_id(
-        &self,
-        c8y_event: C8yCreateEvent,
-    ) -> Result<String, SMCumulocityMapperError> {
-        let client = reqwest::ClientBuilder::new().build()?;
-        let token = self.get_jwt_token().await?;
-        let create_event_url = self.end_point.get_url_for_create_event();
-
-        let request = client
-            .post(create_event_url)
-            .json(&c8y_event)
-            .bearer_auth(token.token())
-            .header("Accept", "application/json")
-            .timeout(Duration::from_millis(10000))
-            .build()?;
-
-        let response = client.execute(request).await?;
-        let event_response_body = response.json::<SmartRestLogEvent>().await?;
-
-        Ok(event_response_body.id)
-    }
-
     async fn upload_log_binary(
         &self,
         log_content: &str,
@@ -289,5 +297,54 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
 
         let _response = client.execute(request).await?;
         Ok(binary_upload_event_url)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test]
+    fn get_url_for_get_id_returns_correct_address() {
+        let c8y = C8yEndPoint::new("test_host", "test_device", "internal-id");
+        let res = c8y.get_url_for_get_id();
+
+        assert_eq!(
+            res,
+            "https://test_host/identity/externalIds/c8y_Serial/test_device"
+        );
+    }
+
+    #[test]
+    fn get_url_for_sw_list_returns_correct_address() {
+        let c8y = C8yEndPoint::new("test_host", "test_device", "12345");
+        let res = c8y.get_url_for_sw_list();
+
+        assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
+    }
+
+    #[test_case("http://aaa.test.com")]
+    #[test_case("https://aaa.test.com")]
+    #[test_case("ftp://aaa.test.com")]
+    #[test_case("mqtt://aaa.test.com")]
+    #[test_case("https://t1124124.test.com")]
+    #[test_case("https://t1124124.test.com:12345")]
+    #[test_case("https://t1124124.test.com/path")]
+    #[test_case("https://t1124124.test.com/path/to/file.test")]
+    #[test_case("https://t1124124.test.com/path/to/file")]
+    fn url_is_my_tenant_correct_urls(url: &str) {
+        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        assert!(c8y.url_is_in_my_tenant_domain(url));
+    }
+
+    #[test_case("test.com")]
+    #[test_case("http://test.co")]
+    #[test_case("http://test.co.te")]
+    #[test_case("http://test.com:123456")]
+    #[test_case("http://test.com::12345")]
+    fn url_is_my_tenant_incorrect_urls(url: &str) {
+        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        assert!(!c8y.url_is_in_my_tenant_domain(url));
     }
 }

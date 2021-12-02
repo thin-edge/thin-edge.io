@@ -540,86 +540,10 @@ fn read_tedge_logs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_tests::with_timeout::{Maybe, WithTimeout};
     use std::fs::File;
     use std::io::Write;
     use std::str::FromStr;
     use test_case::test_case;
-
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
-
-    #[tokio::test]
-    #[serial_test::serial]
-    async fn get_jwt_token_full_run() {
-        let broker = mqtt_tests::test_mqtt_broker();
-        let mut messages = broker.messages_published_on("c8y/s/uat").await;
-
-        let publisher = Client::connect(
-            "get_jwt_token_full_run",
-            &mqtt_client::Config::default().with_port(broker.port),
-        )
-        .await
-        .unwrap();
-
-        // Setup listener stream to publish on first message received on topic `c8y/s/us`.
-        let responder_task = tokio::spawn(async move {
-            let msg = messages
-                .recv()
-                .with_timeout(TEST_TIMEOUT_MS)
-                .await
-                .expect_or("No JWT request received.");
-            assert_eq!(&msg, "");
-
-            // After receiving successful message publish response with a custom 'token' on topic `c8y/s/dat`.
-            let _ = broker.publish("c8y/s/dat", "71,1111").await;
-        });
-
-        // Wait till token received.
-        let (jwt_token, _responder) = tokio::join!(get_jwt_token(&publisher), responder_task);
-
-        // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
-        assert!(jwt_token.is_ok());
-        assert_eq!(jwt_token.unwrap().token(), "1111");
-    }
-
-    #[test]
-    fn get_url_for_get_id_returns_correct_address() {
-        let res = get_url_for_get_id("test_host", "test_device");
-
-        assert_eq!(
-            res,
-            "https://test_host/identity/externalIds/c8y_Serial/test_device"
-        );
-    }
-
-    #[test]
-    fn get_url_for_sw_list_returns_correct_address() {
-        let res = get_url_for_sw_list("test_host", "12345");
-
-        assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
-    }
-
-    #[test_case("http://aaa.test.com")]
-    #[test_case("https://aaa.test.com")]
-    #[test_case("ftp://aaa.test.com")]
-    #[test_case("mqtt://aaa.test.com")]
-    #[test_case("https://t1124124.test.com")]
-    #[test_case("https://t1124124.test.com:12345")]
-    #[test_case("https://t1124124.test.com/path")]
-    #[test_case("https://t1124124.test.com/path/to/file.test")]
-    #[test_case("https://t1124124.test.com/path/to/file")]
-    fn url_is_my_tenant_correct_urls(url: &str) {
-        assert!(url_is_in_my_tenant_domain(url, "test.test.com"));
-    }
-
-    #[test_case("test.com")]
-    #[test_case("http://test.co")]
-    #[test_case("http://test.co.te")]
-    #[test_case("http://test.com:123456")]
-    #[test_case("http://test.com::12345")]
-    fn url_is_my_tenant_incorrect_urls(url: &str) {
-        assert!(!url_is_in_my_tenant_domain(url, "test.test.com"));
-    }
 
     #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]
     #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
