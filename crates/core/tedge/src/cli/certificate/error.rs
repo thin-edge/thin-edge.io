@@ -75,7 +75,7 @@ pub enum CertError {
     UserSwitchError(#[from] UserSwitchError),
 
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
-    CertificateValidation { hint: String, msg: String },
+    CertificateValidationFailure { hint: String, msg: String },
 }
 
 impl CertError {
@@ -135,32 +135,32 @@ pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
         .and_then(|rustls_error| rustls_error.downcast_ref::<rustls::Error>())
     {
         match inner {
-            msg if msg.contains("CaUsedAsEndEntity") => CertError::CertificateValidation {
+            msg if msg.contains("CaUsedAsEndEntity") => CertError::CertificateValidationFailure {
                 hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
                 msg: msg.to_string(),
             },
 
-            msg if msg.contains("CertExpired") => CertError::CertificateValidation {
+            msg if msg.contains("CertExpired") => CertError::CertificateValidationFailure {
                 hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time.".into(),
                 msg: msg.to_string(),
             },
 
-            msg if msg.contains("CertNotValidYet") => CertError::CertificateValidation {
+            msg if msg.contains("CertNotValidYet") => CertError::CertificateValidationFailure {
                 hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
                 msg: msg.to_string(),
             },
 
-            msg if msg.contains("EndEntityUsedAsCa") => CertError::CertificateValidation {
+            msg if msg.contains("EndEntityUsedAsCa") => CertError::CertificateValidationFailure {
                 hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
                 msg: msg.to_string(),
             },
 
-            msg if msg.contains("InvalidCertValidity") => CertError::CertificateValidation {
+            msg if msg.contains("InvalidCertValidity") => CertError::CertificateValidationFailure {
                 hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
                 msg: msg.to_string(),
             },
 
-            _ => CertError::CertificateValidation {
+            _ => CertError::CertificateValidationFailure {
                 hint: "Server certificate validation error.".into(),
                 msg: inner.to_string(),
             },
