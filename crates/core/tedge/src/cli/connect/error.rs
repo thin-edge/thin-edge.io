@@ -38,4 +38,13 @@ pub enum ConnectError {
 
     #[error("Device is not connected to {cloud} cloud")]
     DeviceNotConnected { cloud: String },
+
+    #[error("Provided JWT token is invalid: {token}")]
+    InvalidJWTToken { token: String },
+
+    #[error("Provided payload is not Base64 encoded.\n{0}")]
+    FromBase64Decode(#[from] base64::DecodeError),
+
+    #[error("Provided JSON does not contain URL.\n{0}")]
+    FromSerdeJson(#[from] serde_json::Error),
 }
