@@ -115,20 +115,20 @@ impl C8yEndPoint {
 ///
 /// - Keep the connection info to c8y and the internal Id of the device
 /// - Handle JWT requests
-pub struct MqttAuthHttpProxy {
+pub struct JwtAuthHttpProxy {
     mqtt_con: Client,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
 }
 
-impl MqttAuthHttpProxy {
+impl JwtAuthHttpProxy {
     pub fn new(
         mqtt_con: Client,
         http_con: reqwest::Client,
         c8y_host: &str,
         device_id: &str,
-    ) -> MqttAuthHttpProxy {
-        MqttAuthHttpProxy {
+    ) -> JwtAuthHttpProxy {
+        JwtAuthHttpProxy {
             mqtt_con,
             http_con,
             end_point: C8yEndPoint {
@@ -142,11 +142,11 @@ impl MqttAuthHttpProxy {
     pub fn try_new(
         mqtt_con: Client,
         tedge_config: &TEdgeConfig,
-    ) -> Result<MqttAuthHttpProxy, SMCumulocityMapperError> {
+    ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
         let http_con = reqwest::ClientBuilder::new().build()?;
-        Ok(MqttAuthHttpProxy::new(
+        Ok(JwtAuthHttpProxy::new(
             mqtt_con, http_con, &c8y_host, &device_id,
         ))
     }
@@ -220,7 +220,7 @@ impl MqttAuthHttpProxy {
 }
 
 #[async_trait]
-impl C8YHttpProxy for MqttAuthHttpProxy {
+impl C8YHttpProxy for JwtAuthHttpProxy {
     fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
         self.end_point.url_is_in_my_tenant_domain(url)
     }

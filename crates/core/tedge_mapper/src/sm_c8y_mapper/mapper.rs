@@ -1,6 +1,6 @@
 use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
-use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, MqttAuthHttpProxy};
+use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRestartRequest};
@@ -44,7 +44,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
         let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
         let mqtt_jwt_client = Client::connect("JWT-Requester", &mqtt_config).await?;
 
-        let http_proxy = MqttAuthHttpProxy::try_new(mqtt_jwt_client, &tedge_config)?;
+        let http_proxy = JwtAuthHttpProxy::try_new(mqtt_jwt_client, &tedge_config)?;
         let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy);
 
         let messages = sm_mapper.subscribe().await?;

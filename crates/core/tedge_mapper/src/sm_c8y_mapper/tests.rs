@@ -1,5 +1,5 @@
 use crate::sm_c8y_mapper::error::SMCumulocityMapperError;
-use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, MqttAuthHttpProxy};
+use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
@@ -412,7 +412,7 @@ async fn get_jwt_token_full_run() {
         .unwrap();
     let http_client = reqwest::ClientBuilder::new().build().unwrap();
     let http_proxy =
-        MqttAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
+        JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
 
     // ... fetches and returns these JWT tokens.
     let jwt_token = http_proxy.get_jwt_token().await;
