@@ -228,6 +228,27 @@ impl SmartRestLogRequest {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestRestartRequest {
+    pub message_id: String,
+    pub device: String,
+}
+
+impl SmartRestRestartRequest {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        match rdr.deserialize().next() {
+            Some(Ok(record)) => Ok(record),
+            Some(Err(err)) => Err(err)?,
+            None => panic!("empty request"),
+        }
+    }
+}
+
 type JwtToken = String;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -538,6 +559,13 @@ mod tests {
             date_from, date_to
         ));
         let log = SmartRestLogRequest::from_smartrest(&smartrest);
+        assert!(log.is_ok());
+    }
+
+    #[test]
+    fn deserialize_smartrest_restart_request_operation() {
+        let smartrest = String::from(&format!("510,user"));
+        let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
     }
 }
