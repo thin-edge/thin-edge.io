@@ -150,4 +150,4 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.56.1
+          args: --minimum 1.57.0
