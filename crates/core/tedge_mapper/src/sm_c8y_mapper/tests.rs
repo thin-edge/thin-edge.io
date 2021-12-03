@@ -410,7 +410,9 @@ async fn get_jwt_token_full_run() {
     let mqtt_client = Client::connect("JWT-Requester-Test", &mqtt_config)
         .await
         .unwrap();
-    let http_proxy = MqttAuthHttpProxy::new(mqtt_client, "test.tenant.com", "test-device");
+    let http_client = reqwest::ClientBuilder::new().build().unwrap();
+    let http_proxy =
+        MqttAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
 
     // ... fetches and returns these JWT tokens.
     let jwt_token = http_proxy.get_jwt_token().await;

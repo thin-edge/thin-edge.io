@@ -117,13 +117,20 @@ impl C8yEndPoint {
 /// - Handle JWT requests
 pub struct MqttAuthHttpProxy {
     mqtt_con: Client,
+    http_con: reqwest::Client,
     end_point: C8yEndPoint,
 }
 
 impl MqttAuthHttpProxy {
-    pub fn new(mqtt_con: Client, c8y_host: &str, device_id: &str) -> MqttAuthHttpProxy {
+    pub fn new(
+        mqtt_con: Client,
+        http_con: reqwest::Client,
+        c8y_host: &str,
+        device_id: &str,
+    ) -> MqttAuthHttpProxy {
         MqttAuthHttpProxy {
             mqtt_con,
+            http_con,
             end_point: C8yEndPoint {
                 c8y_host: c8y_host.into(),
                 device_id: device_id.into(),
@@ -138,27 +145,34 @@ impl MqttAuthHttpProxy {
     ) -> Result<MqttAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
-        Ok(MqttAuthHttpProxy::new(mqtt_con, &c8y_host, &device_id))
+        let http_con = reqwest::ClientBuilder::new().build()?;
+        Ok(MqttAuthHttpProxy::new(
+            mqtt_con, http_con, &c8y_host, &device_id,
+        ))
     }
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
-        let reqwest_client = reqwest::ClientBuilder::new().build()?;
         let url_get_id = self.end_point.get_url_for_get_id();
 
-        self.end_point.c8y_internal_id =
-            MqttAuthHttpProxy::try_get_internal_id(&reqwest_client, &url_get_id, &token.token())
-                .await?;
+        self.end_point.c8y_internal_id = self
+            .try_get_internal_id(&url_get_id, &token.token())
+            .await?;
 
         Ok(())
     }
 
     async fn try_get_internal_id(
-        client: &reqwest::Client,
+        &self,
         url_get_id: &str,
         token: &str,
     ) -> Result<String, SMCumulocityMapperError> {
-        let internal_id = client.get(url_get_id).bearer_auth(token).send().await?;
+        let internal_id = self
+            .http_con
+            .get(url_get_id)
+            .bearer_auth(token)
+            .send()
+            .await?;
         let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
         let internal_id = internal_id_response.id();
@@ -186,11 +200,11 @@ impl MqttAuthHttpProxy {
         &self,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
-        let client = reqwest::ClientBuilder::new().build()?;
         let token = self.get_jwt_token().await?;
         let create_event_url = self.end_point.get_url_for_create_event();
 
-        let request = client
+        let request = self
+            .http_con
             .post(create_event_url)
             .json(&c8y_event)
             .bearer_auth(token.token())
@@ -198,7 +212,7 @@ impl MqttAuthHttpProxy {
             .timeout(Duration::from_millis(10000))
             .build()?;
 
-        let response = client.execute(request).await?;
+        let response = self.http_con.execute(request).await?;
         let event_response_body = response.json::<SmartRestLogEvent>().await?;
 
         Ok(event_response_body.id)
@@ -258,17 +272,17 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         let url = self.end_point.get_url_for_sw_list();
-        let client = reqwest::ClientBuilder::new().build()?;
         let token = self.get_jwt_token().await?;
 
-        let request = client
+        let request = self
+            .http_con
             .put(url)
             .json(c8y_software_list)
             .bearer_auth(&token.token())
             .timeout(Duration::from_millis(10000))
             .build()?;
 
-        let _response = client.execute(request).await?;
+        let _response = self.http_con.execute(request).await?;
 
         Ok(())
     }
@@ -277,7 +291,6 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
         &self,
         log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
-        let client = reqwest::ClientBuilder::new().build()?;
         let token = self.get_jwt_token().await?;
 
         let log_event = self.create_log_event();
@@ -286,7 +299,8 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
             .end_point
             .get_url_for_event_binary_upload(&event_response_id);
 
-        let request = client
+        let request = self
+            .http_con
             .post(&binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
@@ -295,7 +309,7 @@ impl C8YHttpProxy for MqttAuthHttpProxy {
             .timeout(Duration::from_millis(10000))
             .build()?;
 
-        let _response = client.execute(request).await?;
+        let _response = self.http_con.execute(request).await?;
         Ok(binary_upload_event_url)
     }
 }
