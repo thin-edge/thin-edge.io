@@ -38,7 +38,7 @@ def download_artifact(
 
     if os.path.exists(artifact_filename):
         print(f"Skipped {artifact_filename} as it is already there")
-        #raise SystemError("File already there!")
+        # raise SystemError("File already there!")
         return
 
     req = requests.get(url, auth=auth, headers=headers, stream=True)
@@ -133,6 +133,7 @@ def get_workflow(token: str, user: str, name: str) -> int:
 
     return wfid
 
+
 def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> int:
 
     # second request:
@@ -151,7 +152,7 @@ def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> in
         req = requests.get(url, params=param, auth=auth, headers=headers)
         stuff = json.loads(req.text)
 
-        #print(json.dumps(stuff, indent='  '))
+        # print(json.dumps(stuff, indent='  '))
 
         if not stuff.get("workflow_runs"):
             print("GOT ERROR:")
@@ -172,7 +173,7 @@ def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> in
 
         filename = f"{workflowname}_{wfrun}.json"
         with open(filename, "w") as thefile:
-            thefile.write(json.dumps(stuff, indent='  '))
+            thefile.write(json.dumps(stuff, indent="  "))
 
         if state == conclusion:
             found = True
@@ -181,6 +182,7 @@ def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> in
             index += 1
 
     return wfrunid
+
 
 def main():
     """main entry point"""
@@ -208,7 +210,7 @@ def main():
 
     wfid = get_workflow(token, username, workflowname)
 
-    runid = get_valid_run(wfid, token, username, workflowname, 'success')
+    runid = get_valid_run(wfid, token, username, workflowname, "success")
 
     get_artifacts_for_runid(runid, token, username, myfilter, workflowname, output)
 
