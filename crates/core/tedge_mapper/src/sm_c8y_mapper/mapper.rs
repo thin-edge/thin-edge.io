@@ -3,7 +3,7 @@ use crate::sm_c8y_mapper::json_c8y::{C8yCreateEvent, C8yManagedObject};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse, topic::*};
 use crate::{component::TEdgeComponent, sm_c8y_mapper::json_c8y::InternalIdResponse};
 use async_trait::async_trait;
-use c8y_smartrest::smartrest_deserializer::SmartRestLogRequest;
+use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRestartRequest};
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
     error::SmartRestDeserializerError,
@@ -16,8 +16,8 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset, Local};
 use json_sm::{
-    Auth, DownloadInfo, Jsonify, OperationStatus, SoftwareListRequest, SoftwareListResponse,
-    SoftwareUpdateResponse,
+Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use reqwest::Url;
@@ -77,6 +77,7 @@ impl CumulocitySoftwareManagement {
         let mut topic_filter = TopicFilter::new(IncomingTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(IncomingTopic::SoftwareUpdateResponse.as_str())?;
         topic_filter.add(IncomingTopic::SmartRestRequest.as_str())?;
+        topic_filter.add(IncomingTopic::RestartResponse.as_str())?;
         let messages = self.client.subscribe(topic_filter).await?;
 
         Ok(messages)
@@ -140,6 +141,9 @@ impl CumulocitySoftwareManagement {
             "522" => {
                 let () = self.forward_log_request(payload).await?;
             }
+            "510" => {
+                let () = self.forward_restart_request(payload).await?;
+            }
             _ => {
                 return Err(SMCumulocityMapperError::InvalidMqttMessage);
             }
@@ -169,6 +173,11 @@ impl CumulocitySoftwareManagement {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
+                        .await?;
+                }
+                IncomingTopic::RestartResponse => {
+                    let () = self
+                        .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
                 IncomingTopic::SmartRestRequest => {
@@ -269,6 +278,41 @@ impl CumulocitySoftwareManagement {
         Ok(())
     }
 
+    async fn publish_restart_operation_status(
+        &self,
+        json_response: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
+        let response = RestartOperationResponse::from_json(json_response)?;
+        let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
+
+        match response.status() {
+            OperationStatus::Executing => {
+                let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
+
+                let () = self.publish(&topic, smartrest_set_operation).await?;
+            }
+            OperationStatus::Successful => {
+                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
+                let () = self.publish(&topic, smartrest_set_operation).await?;
+            }
+            OperationStatus::Failed => {
+                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                    "Restart Failed".into(),
+                )
+                .to_smartrest()?;
+                let () = self.publish(&topic, smartrest_set_operation).await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn set_log_file_request_executing(&self) -> Result<(), SMCumulocityMapperError> {
         let topic = OutgoingTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status =
@@ -363,6 +407,19 @@ impl CumulocitySoftwareManagement {
         let () = self
             .publish(&topic, software_update_request.to_json()?)
             .await?;
+
+        Ok(())
+    }
+
+    async fn forward_restart_request(
+        &self,
+        smartrest: &str,
+    ) -> Result<(), SMCumulocityMapperError> {
+        let topic = OutgoingTopic::RestartRequest.to_topic()?;
+        let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
+
+        let request = RestartOperationRequest::new();
+        let () = self.publish(&topic, request.to_json()?).await?;
 
         Ok(())
     }
