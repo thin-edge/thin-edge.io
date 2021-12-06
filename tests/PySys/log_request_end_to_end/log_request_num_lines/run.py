@@ -19,8 +19,7 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     operation_id = None
-    python = "/usr/bin/python3"
-
+ 
     def setup(self):
         super().setup()
         self.create_logs_for_test()
