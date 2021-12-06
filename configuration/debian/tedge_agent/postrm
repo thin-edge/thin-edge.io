@@ -24,24 +24,16 @@ purge_agent_directory() {
     fi
 }
 
-remove_operation_file() {
-    if [ -f "/etc/tedge/operations/c8y/c8y_SoftwareUpdate" ]; then
-        rm -rf /etc/tedge/operations/c8y/c8y_SoftwareUpdate
-    fi
-}
-
 case "$1" in
     purge)
         remove_tedge_agent_user
         remove_sudoers_file
-        remove_operation_file
         purge_agent_directory
     ;;
 
     remove)
         remove_tedge_agent_user
         remove_sudoers_file
-        remove_operation_file
     ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -12,7 +12,7 @@ use crate::error::OperationsError;
 
 type Cloud = String;
 type OperationName = String;
-type Operation = HashMap<OperationName, PathBuf>;
+type Operation = HashSet<OperationName>;
 type OperationsMap = HashMap<Cloud, Operation>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,24 +21,7 @@ pub struct Operations {
     operations: OperationsMap,
 }
 
-impl Default for Operations {
-    fn default() -> Self {
-        Self {
-            dir: Path::new("/etc/tedge/operations").to_path_buf(),
-            operations: HashMap::new(),
-        }
-    }
-}
-
 impl Operations {
-    pub fn new(dir: impl AsRef<Path>) -> Self {
-        let operations = get_operations(&dir.as_ref()).unwrap_or_default();
-        Self {
-            dir: dir.as_ref().to_path_buf(),
-            operations,
-        }
-    }
-
     pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
         let operations = get_operations(dir.as_ref())?;
 
@@ -51,7 +34,7 @@ impl Operations {
     pub fn get_operations_list(&self, cloud: &str) -> Vec<&str> {
         self.operations
             .get(cloud)
-            .map(|operations| operations.keys().map(|k| k.as_str()).collect())
+            .map(|operations| operations.iter().map(|k| k.as_str()).collect())
             .unwrap_or_default()
     }
 }
@@ -79,13 +62,8 @@ fn get_operations(dir: impl AsRef<Path>) -> Result<OperationsMap, OperationsErro
             .into_iter()
             .filter(|path| path.is_file())
             .map(|path| {
-                (
-                    {
-                        let filename = path.file_name();
-                        filename.unwrap().to_str().unwrap().to_string()
-                    },
-                    path,
-                )
+                let filename = path.file_name();
+                filename.unwrap().to_str().unwrap().to_string()
             })
             .collect();
         operations.insert(cloud, operations_map);

@@ -25,9 +25,6 @@ fi
 # Create tedge-agent state directory /etc/tedge/.agent
 install -g tedge-agent -o tedge-agent -m 754 -d /etc/tedge/.agent
 
-# Create new operations file.
-install -g tedge -o tedge -m 754 -f /etc/tedge/operations/c8y/c8y_SoftwareUpdate
-
 # Create /var/log/tedge/agent directory
 install -g tedge-agent -o tedge-agent -m 755 -d /var/log/tedge/agent
 

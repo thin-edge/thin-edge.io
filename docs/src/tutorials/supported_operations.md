@@ -35,7 +35,7 @@ The list is growing as we support more operations, but is not exhaustive and we 
 
 ### Listing current operations
 
-You can obtain current list of supported operations by running listing content of `/etc/tedge/operations` directory.
+You can obtain the current list of supported operations by listing the content of the `/etc/tedge/operations` directory.
 This directory will contain a set subdirectories based on cloud providers currently supported eg:
 
 ```shell

@@ -80,7 +80,7 @@ impl Converter for CumulocityConverter {
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
-        let ops = Operations::new("/etc/tedge/operations");
+        let ops = Operations::try_new("/etc/tedge/operations")?;
         let ops = ops.get_operations_list("c8y");
 
         if !ops.is_empty() {
