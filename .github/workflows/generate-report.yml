@@ -13,6 +13,9 @@ jobs:
 
     steps:
 
+    - name: checkout
+      uses: actions/checkout@v2
+
     - name: Generate Report
       run:  bash ./ci/report/build.sh
       continue-on-error: false
