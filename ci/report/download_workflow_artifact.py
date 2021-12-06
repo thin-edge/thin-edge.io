@@ -95,7 +95,7 @@ def get_artifacts_for_runid(
             pass  # skipp that file
 
 
-def get_run(token: str, user: str, name: str) -> int:
+def get_workflow(token: str, user: str, name: str) -> int:
     """
     Derive the last run ID of a GitHub workflow.
 
@@ -105,7 +105,7 @@ def get_run(token: str, user: str, name: str) -> int:
     :return: ID of the workflow
     """
 
-    print("Getting id of last build-workflow")
+    print(f"Getting id of last execution of workflow {name}")
 
     assert name.endswith(".yml")
 
@@ -122,19 +122,29 @@ def get_run(token: str, user: str, name: str) -> int:
 
     # print(json.dumps(stuff, indent='  '))
 
-    theid = stuff.get("id")
-    if not theid:
+    wfid = stuff.get("id")
+    if not wfid:
         raise SystemError(stuff)
 
     # print(stuff.get('id'))
 
-    print("Getting properties of last build-workflow")
+    print(f"ID of workflow {name} is {wfid}")
+
+    return wfid
+
+def get_run(wfid: int, token: str, user: str, name: str) -> int:
 
     # second request:
 
-    url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/workflows/{theid}/runs"
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    auth = HTTPBasicAuth(user, token)
+    index = 0  # Hint: 0 and 1 seem to have an identical meaning when we request
+    param = {"per_page": 1, "page": index}
 
-    print("Getting last build")
+
+    url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/workflows/{wfid}/runs"
+
+    print("Getting execution of workflow")
 
     param = {"per_page": 1, "page": index}
 
@@ -149,10 +159,10 @@ def get_run(token: str, user: str, name: str) -> int:
         raise SystemError
 
     workflowname = stuff["workflow_runs"][0]["name"]
-    wfid = stuff["workflow_runs"][0]["id"]
+    wfrunid = int(stuff["workflow_runs"][0]["id"])
     wfrun = stuff["workflow_runs"][0]["run_number"]
     print("Workflow : ", workflowname)
-    print("ID       : ", wfid)
+    print("ID       : ", wfrunid)
     print("Run      : ", wfrun)
     print("Status   :", stuff["workflow_runs"][0]["status"])
     print("Creation :", stuff["workflow_runs"][0]["created_at"])
@@ -162,8 +172,7 @@ def get_run(token: str, user: str, name: str) -> int:
     with open(filename, "w") as thefile:
         thefile.write(json.dumps(stuff, indent='  '))
 
-    return int(stuff["workflow_runs"][0]["id"])
-
+    return wfrunid
 
 def main():
     """main entry point"""
@@ -189,7 +198,9 @@ def main():
     else:
         print("Warning: Environment variable THEGHTOKEN not set")
 
-    runid = get_run(token, username, workflowname)
+    wfid = get_workflow(token, username, workflowname)
+
+    runid = get_run(wfid, token, username, workflowname)
 
     get_artifacts_for_runid(runid, token, username, myfilter, workflowname, output)
 
