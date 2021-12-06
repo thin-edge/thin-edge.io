@@ -20,16 +20,14 @@ def download_artifact(
     url: str, name: str, token: str, user: str, workflowname: str, output: str = None
 ) -> None:
     """Download the artifact and store it as a zip file"""
-
-    assert workflowname.endswith(".yml")
-
+    failhard = False
     headers = {"Accept": "application/vnd.github.v3+json"}
-
     auth = HTTPBasicAuth(user, token)
 
-    print(f"Will try file {name}.zip")
-
+    assert workflowname.endswith(".yml")
     workflowname = os.path.splitext(workflowname)[0]
+
+    print(f"Will try to download file {name}.zip")
 
     if output:
         artifact_filename = os.path.splitext(os.path.basename(output))[0] + ".zip"
@@ -38,10 +36,12 @@ def download_artifact(
 
     if os.path.exists(artifact_filename):
         print(f"Skipped {artifact_filename} as it is already there")
-        # raise SystemError("File already there!")
+        if failhard:
+            raise SystemError("File already there!")
         return
 
     req = requests.get(url, auth=auth, headers=headers, stream=True)
+    req.raise_for_status()
 
     with open(os.path.expanduser(artifact_filename), "wb") as thefile:
         for chunk in req.iter_content(chunk_size=128):
@@ -63,26 +63,29 @@ def get_artifacts_for_runid(
 
     url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/runs/{runid}/artifacts"
     headers = {"Accept": "application/vnd.github.v3+json"}
-
     auth = HTTPBasicAuth(user, token)
 
     req = requests.get(url, auth=auth, headers=headers)
-    if not req.status_code == 200:
-        print("Status code:", req.status_code)
-        raise SystemError
+    req.raise_for_status()
 
     text = json.loads(req.text)
 
-    # print(json.dumps(text, indent='  '))
-
-    artifacts = text["artifacts"]
+    try:
+        artifacts = text["artifacts"]
+    except KeyError as err:
+        print("Issue in response:")
+        raise err
 
     print(f"Found {len(artifacts)} artifacts")
 
     for artifact in artifacts:
-        artifact_name = artifact["name"]
-        artifact_url = artifact["archive_download_url"]
-        # print(artifact_name, artifact_url)
+        try:
+            artifact_name = artifact["name"]
+            artifact_url = artifact["archive_download_url"]
+        except KeyError as err:
+            print("Issue in response:")
+            raise err
+
         print("Found:", artifact_name)
         if myfilter is None:
             download_artifact(
@@ -118,6 +121,7 @@ def get_workflow(token: str, user: str, name: str) -> int:
     # first request:
     url = f"https://api.github.com/repos/{user}/thin-edge.io/actions/workflows/{name}"
     req = requests.get(url, params=param, auth=auth, headers=headers)
+    req.raise_for_status()
 
     stuff = json.loads(req.text)
 
@@ -135,8 +139,7 @@ def get_workflow(token: str, user: str, name: str) -> int:
 
 
 def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
-    """Download the last valid run of workflow that is in requested state
-    """
+    """Download the last valid run of workflow that is in requested state"""
 
     index = 0  # Hint: 0 and 1 seem to have an identical meaning when we request
     found = False
@@ -150,6 +153,8 @@ def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
     while not found:
         param = {"per_page": 1, "page": index}
         req = requests.get(url, params=param, auth=auth, headers=headers)
+        req.raise_for_status()
+
         response = json.loads(req.text)
 
         if not response.get("workflow_runs"):
@@ -157,19 +162,24 @@ def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
             print(json.dumps(response, indent="  "))
             raise SystemError
 
-        workflow = response["workflow_runs"][0]
+        try:
+            workflow = response["workflow_runs"][0]
+            workflowname = workflow["name"]
+            wfrunid = int(workflow["id"])
+            wfrun = workflow["run_number"]
+            conclusion = workflow["conclusion"]
+            status = workflow["status"]
+            creation = workflow["created_at"]
+        except KeyError as err:
+            print("Issue in response:")
+            raise err
 
-        workflowname = workflow["name"]
-        wfrunid = int(workflow["id"])
-        wfrun = workflow["run_number"]
-        conclusion = workflow["conclusion"]
         print("Workflow   : ", workflowname)
         print("Conclusion : ", conclusion)
         print("ID         : ", wfrunid)
         print("Run        : ", wfrun)
-        print("Status     :", workflow["status"])
-        print("Creation   :", workflow["created_at"])
-        # print(stuff['workflow_runs'][0]['artifacts_url'])
+        print("Status     :", status)
+        print("Creation   :", creation)
 
         filename = f"{workflowname}_{wfrun}.json"
         with open(filename, "w") as thefile:
@@ -203,9 +213,9 @@ def main():
 
     token = None
 
-    if "THEGHTOKEN" in os.environ:
+    try:
         token = os.environ["THEGHTOKEN"]
-    else:
+    except KeyError:
         print("Warning: Environment variable THEGHTOKEN not set")
 
     wfid = get_workflow(token, username, workflowname)
