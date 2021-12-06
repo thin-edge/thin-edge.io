@@ -130,9 +130,9 @@ mod test {
     )]
     fn check_decode_invalid_jwt_token(input: &str, expected_error_msg: &str) {
         match decode_jwt_token(input) {
-            Ok(_) => panic!("This test should fail"),
-            err => {
-                let error_msg = format!("{}", err.unwrap_err());
+            Ok(_) => panic!("This test should result in an error"),
+            Err(err) => {
+                let error_msg = format!("{}", err);
                 assert_eq!(error_msg, expected_error_msg)
             }
         }
