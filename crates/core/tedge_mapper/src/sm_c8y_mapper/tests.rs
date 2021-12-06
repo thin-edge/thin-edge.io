@@ -49,7 +49,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
         &mut messages,
         TEST_TIMEOUT_MS,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest,c8y_Restart\n",
             "118,software-management\n",
             "500\n",
         ],
@@ -116,7 +116,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
         &mut messages,
         TEST_TIMEOUT_MS,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest,c8y_Restart\n",
             "118,software-management\n",
             "500\n",
         ],
@@ -181,7 +181,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         &mut messages,
         TEST_TIMEOUT_MS,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest,c8y_Restart\n",
             "118,software-management\n",
             "500\n",
         ],
@@ -365,7 +365,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
         &mut messages,
         TEST_TIMEOUT_MS,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest,c8y_Restart\n",
             "118,software-management\n",
             "500\n",
         ],
