@@ -2,6 +2,7 @@ mod error;
 
 use crate::error::InternalError;
 use std::fs::{self, File};
+use std::io::ErrorKind;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use structopt::StructOpt;
@@ -184,7 +185,12 @@ fn remove_project(_project_name: &str) -> Result<(), InternalError> {
         println!("Stopping apama service successful");
 
         println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
-        fs::remove_dir_all(tedge_apama_project_path)?;
+        let result = fs::remove_dir_all(tedge_apama_project_path);
+        if let Err(err) = result {
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err)?;
+            }
+        }
         println!("Removal of existing project successful");
     }
 
