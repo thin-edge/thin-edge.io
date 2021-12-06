@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import os
 from datetime import datetime, timedelta
 from random import randint, shuffle, seed
@@ -47,16 +49,18 @@ class FailedToCreateLogs(Exception):
 
 @retry(FailedToCreateLogs, tries=20, delay=1)
 def check_files_created():
-    if len(os.listdir("/var/log/tedge/agent/")) >= 4:
+    if len(os.listdir("/tmp/sw_logs")) == 3:
         return True
     else:
         raise FailedToCreateLogs
+
 if __name__ == "__main__":
     file_names = ["example-log1", "example-log2", "example-log3"]
     file_sizes = [50, 100, 250]
     time_stamps = ["2021-11-18T13:15:10Z", "2021-11-19T21:15:10Z", "2021-11-20T13:15:10Z"]
+    os.mkdir("/tmp/sw_logs")
     for idx, file_name in enumerate(file_names):
-        with open(f"/var/log/tedge/agent/{file_name}-{time_stamps[idx]}.log", "w") as handle:
+        with open(f"/tmp/sw_logs/{file_name}-{time_stamps[idx]}.log", "w") as handle:
             fake_log = create_fake_logs(num_lines=file_sizes[idx])
             handle.write(fake_log)
     check_files_created()

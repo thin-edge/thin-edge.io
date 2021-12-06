@@ -39,7 +39,7 @@ dpkg -s mosquitto-clients
 python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
-sudo pip3 install retry
+pip3 install retry
 cd tests/PySys/
 pysys.py run -v DEBUG
 deactivate

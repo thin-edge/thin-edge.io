@@ -19,6 +19,7 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     operation_id = None
+    python = "/usr/bin/python3"
 
     def setup(self):
         super().setup()
@@ -50,17 +51,19 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             raise Exception("retry")
 
     def create_logs_for_test(self):
-        log = self.startProcess(
-            command=self.sudo,
-            arguments=[
-                "python3", f"{os.getcwd()}/log_request_end_to_end/create_test_logs.py"],
-            stdouterr="log_failed",
-        )
+        # remove if there are any old files
+        os.system("sudo rm -rf /tmp/sw_logs")
+
+        # create logs
+        os.system(f"{os.getcwd()}/log_request_end_to_end/create_test_logs.py")
+
+        # Move files to /var/log/tedge/agent/
+        os.system("sudo mv /tmp/sw_logs/* /var/log/tedge/agent/")
 
     def download_file_and_verify_number_of_lines(self, url):
         get_response = requests.get(url, auth=(
             self.project.username, self.project.c8ypass), stream=False)
-        
+
         nlines = len(get_response.content.decode('utf-8').split('\n')[:-1])
         # The log lines are concatenated from 3 different log files, so there will be 3 extra lines.
         if nlines == 303:
@@ -69,8 +72,12 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             return False
 
     def cleanup_logs(self):
+        # remove if there are any old files
+        os.system("sudo rm -rf /tmp/sw_logs")
+        
         # Removing files form startProcess is not working
         os.system("sudo rm -rf /var/log/tedge/agent/example-*")
+        
         if self.getOutcome().isFailure():
             log = self.startProcess(
                 command=self.sudo,
