@@ -29,3 +29,11 @@ jobs:
         name: report_${{ github.run_number }}
         path: ci/report/report.zip
 
+    - name: upload report as html
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: system-test-report-matrix_${{ github.run_number }}
+        path: system-test-report-matrix.html
+
+
