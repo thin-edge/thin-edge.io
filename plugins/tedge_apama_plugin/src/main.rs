@@ -149,7 +149,10 @@ fn install_project(project_archive_path: &Path) -> Result<(), InternalError> {
 
     let mut archive = zip::ZipArchive::new(archive_file)?;
 
-    // TODO: Validate the zip to be valid apama project before extraction?
+    if let Err(zip::result::ZipError::FileNotFound) = archive.by_name("project/") {
+        return Err(InternalError::InvalidProjectArchive);
+    }
+
     println!("Extracting the archive at {:?}", project_archive_path);
     archive.extract(tmp_apama_project_path)?;
     println!("Extraction successful");
@@ -166,7 +169,10 @@ fn install_project(project_archive_path: &Path) -> Result<(), InternalError> {
         TEDGE_APAMA_PROJECT_DIR
     );
     fs::create_dir_all(tedge_apama_project_path)?;
-    fs::rename(tmp_apama_project_path, tedge_apama_project_path)?;
+    fs::rename(
+        tmp_apama_project_path.join("project"),
+        tedge_apama_project_path,
+    )?;
     println!("Installation of new project successful");
 
     println!("Restarting apama to load the new project");
@@ -279,7 +285,7 @@ fn main() {
 
         Err(err) => {
             eprintln!("ERROR: {}", err);
-            std::process::exit(5);
+            std::process::exit(2);
         }
     }
 }

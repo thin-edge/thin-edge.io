@@ -33,6 +33,9 @@ pub enum InternalError {
         "Module type suffix not provided in module name: `{module_name}`. Add ::project or ::mon"
     )]
     ModuleTypeNotProvided { module_name: String },
+
+    #[error("Mandatory top-level directory named `project` missing in the archive")]
+    InvalidProjectArchive,
 }
 
 impl InternalError {
