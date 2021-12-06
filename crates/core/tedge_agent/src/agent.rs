@@ -447,7 +447,7 @@ impl SmAgent {
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
         match std::process::Command::new("sudo")
-            .arg("echo")
+            .arg(INIT_COMMAND)
             .arg("6")
             .status()
         {
