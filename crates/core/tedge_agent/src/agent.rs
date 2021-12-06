@@ -252,7 +252,10 @@ impl SmAgent {
 
                 topic if topic == &self.config.request_topic_restart => {
                     let request = self.match_restart_operation_payload(mqtt, &message).await?;
-                    if let Err(error) = self.handle_restart_operation().await {
+                    if let Err(error) = self
+                        .handle_restart_operation(mqtt, &self.config.response_topic_restart)
+                        .await
+                    {
                         error!("{}", error);
 
                         self.persistance_store.clear().await?;
@@ -425,11 +428,20 @@ impl SmAgent {
         Ok(request)
     }
 
-    async fn handle_restart_operation(&self) -> Result<(), AgentError> {
+    async fn handle_restart_operation(
+        &self,
+        mqtt: &Client,
+        topic: &Topic,
+    ) -> Result<(), AgentError> {
         self.persistance_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
+        // update status to executing.
+        let executing_response = RestartOperationResponse::new(&RestartOperationRequest::new());
+        let _ = mqtt
+            .publish(Message::new(&topic, executing_response.to_bytes()?))
+            .await?;
         let () = restart_operation::create_slash_run_file()?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
@@ -542,7 +554,16 @@ mod tests {
         .unwrap();
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-        let () = agent.handle_restart_operation().await?;
+        let mqtt = Client::connect(
+            "sm-agent-test",
+            &mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024),
+        )
+        .await?;
+        let response_topic_restart =
+            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+        let () = agent
+            .handle_restart_operation(&mqtt, &response_topic_restart)
+            .await?;
         assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
 
         // removing the file
