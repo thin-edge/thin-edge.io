@@ -13,7 +13,7 @@ class ApamaPlugin(BaseTest):
     apama_env_cmd = "/opt/softwareag/Apama/bin/apama_env"
     apama_dir = "/etc/tedge/apama"
     apama_project_dir = "/etc/tedge/apama/project"
-    tmp_apama_dir = "/tmp/apama/project"
+    tmp_apama_dir = "/tmp/tedge_apama_project"
     sudo = "/usr/bin/sudo"
 
     def setup(self):
