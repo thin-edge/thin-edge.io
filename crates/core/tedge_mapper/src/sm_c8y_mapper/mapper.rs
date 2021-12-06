@@ -16,7 +16,7 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset, Local};
 use json_sm::{
-Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};

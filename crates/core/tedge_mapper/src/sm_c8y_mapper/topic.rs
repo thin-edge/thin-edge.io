@@ -76,7 +76,7 @@ impl OutgoingTopic {
             Self::SoftwareListRequest => Topic::new(Self::SoftwareListRequest.as_str()),
             Self::SoftwareUpdateRequest => Topic::new(Self::SoftwareUpdateRequest.as_str()),
             Self::SmartRestResponse => Topic::new(Self::SmartRestResponse.as_str()),
- Self::RestartRequest => Topic::new(Self::RestartRequest.as_str()),
+            Self::RestartRequest => Topic::new(Self::RestartRequest.as_str()),
         }
     }
 }
