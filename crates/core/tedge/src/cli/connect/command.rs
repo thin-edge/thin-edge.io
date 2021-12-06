@@ -143,7 +143,6 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            // check if the connected tenant is the one that is configured.
             check_connected_c8y_tenant_as_configured(
                 &config.query_string(C8yUrlSetting)?,
                 config.query(MqttPortSetting)?.into(),
