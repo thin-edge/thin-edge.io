@@ -1,5 +1,5 @@
 pysys == 1.6.1
 requests == 2.25.1
 toml == 0.10.2
-junit2html == 30.0.6
+retry == 0.9.2
 
