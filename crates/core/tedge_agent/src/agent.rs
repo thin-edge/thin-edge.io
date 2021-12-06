@@ -554,7 +554,16 @@ mod tests {
         .unwrap();
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-        let () = agent.handle_restart_operation().await?;
+        let mqtt = Client::connect(
+            "sm-agent-test",
+            &mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024),
+        )
+        .await?;
+        let response_topic_restart =
+            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+        let () = agent
+            .handle_restart_operation(&mqtt, &response_topic_restart)
+            .await?;
         assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
 
         // removing the file
