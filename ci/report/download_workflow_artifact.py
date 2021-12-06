@@ -134,9 +134,9 @@ def get_workflow(token: str, user: str, name: str) -> int:
     return wfid
 
 
-def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> int:
-
-    # second request:
+def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
+    """Download the last valid run of workflow that is in requested state
+    """
 
     index = 0  # Hint: 0 and 1 seem to have an identical meaning when we request
     found = False
@@ -150,30 +150,30 @@ def get_valid_run(wfid: int, token: str, user: str, name: str, state: str) -> in
     while not found:
         param = {"per_page": 1, "page": index}
         req = requests.get(url, params=param, auth=auth, headers=headers)
-        stuff = json.loads(req.text)
+        response = json.loads(req.text)
 
-        # print(json.dumps(stuff, indent='  '))
-
-        if not stuff.get("workflow_runs"):
+        if not response.get("workflow_runs"):
             print("GOT ERROR:")
-            print(json.dumps(stuff, indent="  "))
+            print(json.dumps(response, indent="  "))
             raise SystemError
 
-        workflowname = stuff["workflow_runs"][0]["name"]
-        wfrunid = int(stuff["workflow_runs"][0]["id"])
-        wfrun = stuff["workflow_runs"][0]["run_number"]
-        conclusion = stuff["workflow_runs"][0]["conclusion"]
+        workflow = response["workflow_runs"][0]
+
+        workflowname = workflow["name"]
+        wfrunid = int(workflow["id"])
+        wfrun = workflow["run_number"]
+        conclusion = workflow["conclusion"]
         print("Workflow   : ", workflowname)
         print("Conclusion : ", conclusion)
         print("ID         : ", wfrunid)
         print("Run        : ", wfrun)
-        print("Status     :", stuff["workflow_runs"][0]["status"])
-        print("Creation   :", stuff["workflow_runs"][0]["created_at"])
+        print("Status     :", workflow["status"])
+        print("Creation   :", workflow["created_at"])
         # print(stuff['workflow_runs'][0]['artifacts_url'])
 
         filename = f"{workflowname}_{wfrun}.json"
         with open(filename, "w") as thefile:
-            thefile.write(json.dumps(stuff, indent="  "))
+            thefile.write(json.dumps(response, indent="  "))
 
         if state == conclusion:
             found = True
@@ -210,7 +210,7 @@ def main():
 
     wfid = get_workflow(token, username, workflowname)
 
-    runid = get_valid_run(wfid, token, username, workflowname, "success")
+    runid = get_valid_run(wfid, token, username, "success")
 
     get_artifacts_for_runid(runid, token, username, myfilter, workflowname, output)
 
