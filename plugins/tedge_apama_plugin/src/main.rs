@@ -47,7 +47,8 @@ pub enum PluginOp {
 const APAMA_ENV_EXE: &str = "/opt/softwareag/Apama/bin/apama_env";
 const TEDGE_APAMA_PROJECT_DIR: &str = "/etc/tedge/apama/project";
 const TMP_APAMA_PROJECT_DIR: &str = "/tmp/tedge_apama_project";
-const APAMA_PROJECT_NAME: &str = "project";
+const DEFAULT_APAMA_PROJECT_NAME: &str = "unnamed";
+const APAMA_PROJECT_DESCRIPTOR_FILE: &str = "/etc/tedge/apama/project/.project";
 
 const ENGINE_INJECT_CMD: &str = "engine_inject";
 const ENGINE_INSPECT_CMD: &str = "engine_inspect";
@@ -74,9 +75,8 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
         // Since there can only be a single project named `project`, print its name if installed
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
-                //TODO: Read the project name from .project XML file if present
                 // Print the project name
-                println!("{}::project\t", APAMA_PROJECT_NAME);
+                println!("{}::project\t", get_project_name()?);
 
                 // Print the installed monitors
                 for monitor in get_installed_monitors()? {
@@ -112,6 +112,17 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
             ApamaModule::MonFile(monitor_name) => remove_monitor(&monitor_name),
         },
     }
+}
+
+fn get_project_name() -> Result<String, InternalError> {
+    let xml_content = fs::read_to_string(APAMA_PROJECT_DESCRIPTOR_FILE).unwrap();
+    let root = roxmltree::Document::parse(xml_content.as_str())?;
+    let name_node = root.descendants().find(|node| node.has_tag_name("name"));
+    let name = name_node
+        .and_then(|node| node.first_child())
+        .and_then(|node| node.text())
+        .unwrap_or(DEFAULT_APAMA_PROJECT_NAME);
+    Ok(name.into())
 }
 
 fn apama_module_from_string(module: &str) -> Result<ApamaModule, InternalError> {

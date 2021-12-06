@@ -20,6 +20,9 @@ pub enum InternalError {
     #[error(transparent)]
     FromZipError(#[from] zip::result::ZipError),
 
+    #[error(transparent)]
+    FromXmlError(#[from] roxmltree::Error),
+
     #[error("Apama not installed at /opt/softwareag/Apama")]
     ApamaNotInstalled,
 
