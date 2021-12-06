@@ -694,6 +694,7 @@ dependencies = [
  "anyhow",
  "backoff",
  "json_sm",
+ "libc",
  "log",
  "mockito",
  "nix",
