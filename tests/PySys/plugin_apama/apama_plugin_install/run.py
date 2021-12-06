@@ -25,7 +25,16 @@ class ApamaPluginInstallTest(ApamaPlugin):
             stdouterr="plugin_install"
         )
         self.wait_till_correlator_ready()
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "list"],
+            stdouterr="plugin_list_after_install"
+        )
 
     def validate(self):
         self.assert_project_installed()
         self.assert_monitor_installed("TedgeDemoMonitor")
+        self.assertGrep("plugin_list_after_install.out",
+                        "tedge-demo-test::project")
+        self.assertGrep("plugin_list_after_install.out",
+                        "TedgeDemoMonitor::mon")
