@@ -44,7 +44,7 @@ cd tests/PySys/
 set +e
 #pysys.py run --record -v DEBUG --exclude analytics
 #pysys.py run --record -v DEBUG -c 20 mqtt_port_set
-pysys.py run --record -v DEBUGmqtt_port_set
+pysys.py run --record -v DEBUG mqtt_port_set
 set -e
 
 deactivate
