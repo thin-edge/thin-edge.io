@@ -65,7 +65,8 @@ class ApamaPlugin(BaseTest):
 
         self.startProcess(
             command=self.sudo,
-            arguments=["mv", self.tmp_apama_dir, self.apama_project_dir],
+            arguments=["mv", self.tmp_apama_dir +
+                       "/project", self.apama_project_dir],
             stdouterr="move_apama_project"
         )
 
@@ -136,6 +137,6 @@ class ApamaPlugin(BaseTest):
         if os.path.exists(self.tmp_apama_dir):
             self.startProcess(
                 command=self.sudo,
-                arguments=["rm", "-rf", "/tmp/apama"],
+                arguments=["rm", "-rf", "/tmp/tedge_apama_project"],
                 stdouterr="remove_apama_tmp_dir"
             )
