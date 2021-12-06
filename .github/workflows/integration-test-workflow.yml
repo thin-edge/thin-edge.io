@@ -211,7 +211,6 @@ jobs:
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
       - name: Run Smoke Test for Azure
-        continue-on-error: true
         run: ./ci/ci_smoke_test_az.sh
         # Temporarily continue on error
         continue-on-error: true
