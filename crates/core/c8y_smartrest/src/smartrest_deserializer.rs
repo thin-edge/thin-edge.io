@@ -244,7 +244,7 @@ impl SmartRestRestartRequest {
         match rdr.deserialize().next() {
             Some(Ok(record)) => Ok(record),
             Some(Err(err)) => Err(err)?,
-            None => panic!("empty request"),
+            None => Err(SmartRestDeserializerError::EmptyRequest),
         }
     }
 }
