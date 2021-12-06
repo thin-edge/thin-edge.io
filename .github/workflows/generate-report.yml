@@ -19,6 +19,8 @@ jobs:
     - name: Generate Report
       run:  bash ./ci/report/build.sh
       continue-on-error: false
+      env:
+        THEGHTOKEN: ${{secrets.GITHUB_TOKEN}}
 
     - name: upload report as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
