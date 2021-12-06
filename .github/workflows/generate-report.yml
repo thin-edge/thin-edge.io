@@ -8,13 +8,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  system-test_onsite:
+  generate-report:
     runs-on: [self-hosted, Linux, ARM, onsite]
 
     steps:
 
     - name: Generate Report
-      run:  bash  ./ci/report/build.sh
+      run:  bash ci/report/build.sh
       continue-on-error: false
 
     - name: upload report as zip
