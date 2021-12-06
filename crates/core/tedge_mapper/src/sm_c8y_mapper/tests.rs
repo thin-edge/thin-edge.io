@@ -405,7 +405,7 @@ async fn get_jwt_token_full_run() {
         response
     });
 
-    // An MqttAuthHttpProxy ...
+    // An JwtAuthHttpProxy ...
     let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
     let mqtt_client = Client::connect("JWT-Requester-Test", &mqtt_config)
         .await
