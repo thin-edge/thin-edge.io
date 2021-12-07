@@ -40,10 +40,14 @@ cd tests/PySys/
 
 # Run all software management tests, including the ones for the
 # fake- and the  docker plugin
-pysys.py run -v DEBUG 'SoftwareManagement.*' -XmyPlatform='smcontainer' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
+set +e
+pysys.py run --record -v DEBUG 'SoftwareManagement.*' -XmyPlatform='smcontainer' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
+set -e
 
 deactivate
 
 sudo tedge config unset software.plugin.default
 sudo rm -f /etc/tedge/sm-plugins/docker
 sudo rm -f /etc/tedge/sm-plugins/fruits
+
+mv __pysys_junit_xml pysys_junit_xml_sm
