@@ -1,6 +1,6 @@
 use crate::error::SmartRestSerializerError;
 use csv::{QuoteStyle, WriterBuilder};
-use json_sm::{SoftwareOperationStatus, SoftwareUpdateResponse};
+use json_sm::{OperationStatus, SoftwareUpdateResponse};
 use serde::{Deserialize, Serialize, Serializer};
 
 type SmartRest = String;
@@ -9,6 +9,7 @@ type SmartRest = String;
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
     C8yLogFileRequest,
+    C8yRestartRequest,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -16,6 +17,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
         match op {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
+            CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
         }
     }
 }
@@ -105,7 +107,7 @@ impl SmartRestSetOperationToExecuting {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
-            SoftwareOperationStatus::Executing => {
+            OperationStatus::Executing => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
             _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
@@ -142,7 +144,7 @@ impl SmartRestSetOperationToSuccessful {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match response.status() {
-            SoftwareOperationStatus::Successful => {
+            OperationStatus::Successful => {
                 Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
             }
             _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
@@ -161,7 +163,7 @@ pub struct SmartRestSetOperationToFailed {
 }
 
 impl SmartRestSetOperationToFailed {
-    fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
         Self {
             message_id: "502",
             operation: operation.into(),
@@ -173,7 +175,7 @@ impl SmartRestSetOperationToFailed {
         response: SoftwareUpdateResponse,
     ) -> Result<Self, SmartRestSerializerError> {
         match &response.status() {
-            SoftwareOperationStatus::Failed => Ok(Self::new(
+            OperationStatus::Failed => Ok(Self::new(
                 CumulocitySupportedOperations::C8ySoftwareUpdate,
                 response.error().unwrap_or_else(|| "".to_string()),
             )),
@@ -208,13 +210,14 @@ mod tests {
     use super::*;
     use json_sm::*;
 
-    // #[test]
-    // fn serialize_smartrest_supported_operations() {
-    //     let smartrest = SmartRestSetSupportedOperations::default()
-    //         .to_smartrest()
-    //         .unwrap();
-    //     assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
-    // }
+    #[test]
+    fn serialize_smartrest_supported_operations() {
+        let smartrest =
+            SmartRestSetSupportedOperations::new(&["c8y_SoftwareUpdate", "c8y_LogfileRequest"])
+                .to_smartrest()
+                .unwrap();
+        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
+    }
 
     #[test]
     fn serialize_smartrest_get_pending_operations() {

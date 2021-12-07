@@ -1,4 +1,5 @@
 import json
+import base64
 import re
 from pysys.constants import FAILED
 import requests
@@ -23,16 +24,20 @@ class Cumulocity(object):
     username = ""
     password = ""
     auth = ""
+    timeout_req = ""
 
-    def __init__(self, c8y_url, tenant_id, username, password):
+    def __init__(self, c8y_url, tenant_id, username, password, log):
         self.c8y_url = c8y_url
         self.tenant_id = tenant_id
         self.username = username
         self.password = password
+        self.timeout_req = 60  # seconds, got timeout with 60s
+        self.log = log
 
         self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
 
     def request(self, method, url_path, **kwargs) -> requests.Response:
+
         return requests.request(method, self.c8y_url + url_path, auth=self.auth, **kwargs)
 
     def get_all_devices(self) -> requests.Response:
@@ -69,6 +74,55 @@ class Cumulocity(object):
             if device_id in device['name']:
                 return device
         return None
+
+    def get_header(self):
+        auth = bytes(
+            f"{self.tenant_id}/{self.username}:{self.password}", "utf-8")
+        header = {
+            b"Authorization": b"Basic " + base64.b64encode(auth),
+            b"content-type": b"application/json",
+            b"Accept": b"application/json",
+        }
+        return header
+
+    def trigger_log_request(self, log_file_request_payload, device_id):
+        url = f"https://{self.c8y_url}/devicecontrol/operations"
+        log_file_request_payload = {
+            "deviceId": device_id,
+            "description": "Log file request",
+            "c8y_LogfileRequest": log_file_request_payload,
+        }
+        req = requests.post(
+            url, json=log_file_request_payload, headers=self.get_header(), timeout=self.timeout_req
+        )
+        jresponse = json.loads(req.text)
+
+        operation_id = jresponse.get("id")
+
+        if not operation_id:
+            raise SystemError("field id is missing in response")
+
+        return operation_id
+
+    def retrieve_log_file(self, operation_id):
+        """Check if log received"""
+
+        url = f"https://{self.c8y_url}/devicecontrol/operations/{operation_id}"
+        req = requests.get(url, headers=self.get_header(),
+                           timeout=self.timeout_req)
+
+        req.raise_for_status()
+
+        jresponse = json.loads(req.text)
+        ret = ""
+
+        log_response = jresponse.get("c8y_LogfileRequest")
+        # check if the response contains the logfile
+        log_file = log_response.get("file")
+        self.log.info("log response %s", log_file)
+        if log_file != None:
+            ret = log_file
+        return ret
 
     def get_child_device_of_thin_edge_device_by_name(self, thin_edge_device_id: str, child_device_id: str):
         self.device_fragment = self.get_thin_edge_device_by_name(
@@ -171,7 +225,7 @@ class EnvironmentC8y(BaseTest):
         )
 
         self.cumulocity = Cumulocity(
-            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass)
+            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass, self.log)
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")

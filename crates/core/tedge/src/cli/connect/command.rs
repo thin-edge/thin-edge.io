@@ -1,4 +1,6 @@
-use crate::{cli::connect::*, command::Command, system_services::*, ConfigError};
+use crate::{
+    cli::connect::jwt_token::*, cli::connect::*, command::Command, system_services::*, ConfigError,
+};
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use std::path::{Path, PathBuf};
@@ -8,11 +10,11 @@ use tedge_config::*;
 use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
-const DEFAULT_HOST: &str = "localhost";
+pub(crate) const DEFAULT_HOST: &str = "localhost";
 const WAIT_FOR_CHECK_SECONDS: u64 = 10;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
-const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
@@ -141,6 +143,10 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
+            check_connected_c8y_tenant_as_configured(
+                &config.query_string(C8yUrlSetting)?,
+                config.query(MqttPortSetting)?.into(),
+            );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
 
@@ -498,6 +504,7 @@ fn enable_software_management(
         }
     }
 }
+
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 fn clean_up(
@@ -566,4 +573,17 @@ fn get_common_mosquitto_config_file_path(
         .tedge_config_root_path
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&common_mosquitto_config.config_file)
+}
+
+// To confirm the connected c8y tenant is the one that user configured.
+fn check_connected_c8y_tenant_as_configured(configured_url: &str, port: u16) {
+    match get_connected_c8y_url(port) {
+        Ok(url) if url == configured_url => {}
+        Ok(url) => println!(
+            "Warning: Connecting to {}, but the configured URL is {}.\n\
+            The device certificate has to be removed from the former tenant.\n",
+            url, configured_url
+        ),
+        Err(_) => println!("Failed to get the connected tenant URL from Cumulocity.\n"),
+    }
 }

@@ -12,15 +12,16 @@ pub struct AgentStateRepository {
 }
 
 #[async_trait]
-pub trait StateRepository<T> {
+pub trait StateRepository {
     type Error;
-    async fn load(&self) -> Result<T, Self::Error>;
-    async fn store(&self, state: &T) -> Result<(), Self::Error>;
-    async fn clear(&self) -> Result<T, Self::Error>;
+    async fn load(&self) -> Result<State, Self::Error>;
+    async fn store(&self, state: &State) -> Result<(), Self::Error>;
+    async fn clear(&self) -> Result<State, Self::Error>;
+    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
-impl StateRepository<State> for AgentStateRepository {
+impl StateRepository for AgentStateRepository {
     type Error = StateError;
 
     async fn load(&self) -> Result<State, StateError> {
@@ -57,6 +58,15 @@ impl StateRepository<State> for AgentStateRepository {
 
         Ok(state)
     }
+
+    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error> {
+        let mut state = self.load().await?;
+        state.operation = Some(status.to_owned());
+
+        self.store(&state).await?;
+
+        Ok(())
+    }
 }
 
 impl AgentStateRepository {
@@ -74,16 +84,40 @@ impl AgentStateRepository {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum StateStatus {
+    Software(SoftwareOperationVariants),
+    Restart(RestartOperationStatus),
+    UnknownOperation,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SoftwareOperationVariants {
+    List,
+    Update,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub enum RestartOperationStatus {
+    Pending,
+    Restarting,
+}
+
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
     pub operation_id: Option<String>,
-    pub operation: Option<String>,
+    pub operation: Option<StateStatus>,
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::state::{AgentStateRepository, State, StateRepository};
+    use crate::state::{
+        AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
+        StateRepository, StateStatus,
+    };
 
     use tempfile::tempdir;
 
@@ -113,7 +147,30 @@ mod tests {
             data,
             State {
                 operation_id: Some("1234".into()),
-                operation: Some("list".into()),
+                operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_state_repository_exists_loads_some_restart_variant() {
+        let temp_dir = tempdir().unwrap();
+
+        let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
+        let destination_path = temp_dir.path().join(".agent/current-operation");
+
+        let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
+
+        let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
+
+        let repo = AgentStateRepository::new(temp_dir.into_path());
+
+        let data = repo.load().await.unwrap();
+        assert_eq!(
+            data,
+            State {
+                operation_id: Some("1234".into()),
+                operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
             }
         );
     }
@@ -156,7 +213,7 @@ mod tests {
 
         repo.store(&State {
             operation_id: Some("1234".into()),
-            operation: Some("list".into()),
+            operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
         })
         .await
         .unwrap();

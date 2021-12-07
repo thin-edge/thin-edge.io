@@ -14,5 +14,5 @@ assets = [
 [dependencies]
 structopt = "0.3"
 thiserror = "1.0"
-serde = { version = "1", features = ["derive"] }
 zip = "0.5"
+roxmltree = "0.14"

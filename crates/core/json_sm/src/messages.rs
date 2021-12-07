@@ -28,6 +28,10 @@ pub const fn software_filter_topic() -> &'static str {
     "tedge/commands/req/software/#"
 }
 
+pub const fn control_filter_topic() -> &'static str {
+    "tedge/commands/req/control/#"
+}
+
 /// Message payload definition for SoftwareList request.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -171,7 +175,7 @@ pub struct SoftwareRequestResponseSoftwareList {
 /// Possible statuses for result of Software operation.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Clone)]
 #[serde(rename_all = "camelCase")]
-pub enum SoftwareOperationStatus {
+pub enum OperationStatus {
     Successful,
     Failed,
     Executing,
@@ -189,7 +193,7 @@ impl<'a> Jsonify<'a> for SoftwareListResponse {}
 impl SoftwareListResponse {
     pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
         SoftwareListResponse {
-            response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
+            response: SoftwareRequestResponse::new(&req.id, OperationStatus::Executing),
         }
     }
 
@@ -208,7 +212,7 @@ impl SoftwareListResponse {
     }
 
     pub fn set_error(&mut self, reason: &str) {
-        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.status = OperationStatus::Failed;
         self.response.reason = Some(reason.into());
     }
 
@@ -216,7 +220,7 @@ impl SoftwareListResponse {
         &self.response.id
     }
 
-    pub fn status(&self) -> SoftwareOperationStatus {
+    pub fn status(&self) -> OperationStatus {
         self.response.status
     }
 
@@ -241,7 +245,7 @@ impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
 impl SoftwareUpdateResponse {
     pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
         SoftwareUpdateResponse {
-            response: SoftwareRequestResponse::new(&req.id, SoftwareOperationStatus::Executing),
+            response: SoftwareRequestResponse::new(&req.id, OperationStatus::Executing),
         }
     }
 
@@ -270,7 +274,7 @@ impl SoftwareUpdateResponse {
     }
 
     pub fn set_error(&mut self, reason: &str) {
-        self.response.status = SoftwareOperationStatus::Failed;
+        self.response.status = OperationStatus::Failed;
         self.response.reason = Some(reason.into());
     }
 
@@ -278,7 +282,7 @@ impl SoftwareUpdateResponse {
         &self.response.id
     }
 
-    pub fn status(&self) -> SoftwareOperationStatus {
+    pub fn status(&self) -> OperationStatus {
         self.response.status
     }
 
@@ -373,7 +377,7 @@ pub struct SoftwareModuleItem {
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareRequestResponse {
     pub id: String,
-    pub status: SoftwareOperationStatus,
+    pub status: OperationStatus,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
@@ -388,7 +392,7 @@ pub struct SoftwareRequestResponse {
 impl<'a> Jsonify<'a> for SoftwareRequestResponse {}
 
 impl SoftwareRequestResponse {
-    pub fn new(id: &str, status: SoftwareOperationStatus) -> Self {
+    pub fn new(id: &str, status: OperationStatus) -> Self {
         SoftwareRequestResponse {
             id: id.to_string(),
             status,
@@ -400,7 +404,7 @@ impl SoftwareRequestResponse {
 
     pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
         if self.failures.is_empty() {
-            self.status = SoftwareOperationStatus::Successful;
+            self.status = OperationStatus::Successful;
         }
 
         if self.current_software_list.is_none() {
@@ -416,7 +420,7 @@ impl SoftwareRequestResponse {
     }
 
     pub fn add_errors(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
-        self.status = SoftwareOperationStatus::Failed;
+        self.status = OperationStatus::Failed;
 
         self.failures.push(SoftwareRequestResponseSoftwareList {
             plugin_type,
@@ -501,6 +505,66 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub enum RestartOperation {
+    Request(RestartOperationRequest),
+    Response(RestartOperationResponse),
+}
+
+/// Message payload definition for restart operation request.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartOperationRequest {
+    pub id: String,
+}
+
+impl<'a> Jsonify<'a> for RestartOperationRequest {}
+
+impl RestartOperationRequest {
+    pub fn new() -> RestartOperationRequest {
+        let id = nanoid!();
+        RestartOperationRequest { id }
+    }
+
+    pub fn new_with_id(id: &str) -> RestartOperationRequest {
+        RestartOperationRequest { id: id.to_string() }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/req/control/restart"
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct RestartOperationResponse {
+    pub id: String,
+    pub status: OperationStatus,
+}
+
+impl<'a> Jsonify<'a> for RestartOperationResponse {}
+
+impl RestartOperationResponse {
+    pub fn new(req: &RestartOperationRequest) -> Self {
+        Self {
+            id: req.id.clone(),
+            status: OperationStatus::Executing,
+        }
+    }
+
+    pub fn with_status(self, status: OperationStatus) -> Self {
+        Self { status, ..self }
+    }
+
+    pub fn topic_name() -> &'static str {
+        "tedge/commands/res/control/restart"
+    }
+
+    pub fn status(&self) -> OperationStatus {
+        self.status
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,7 +640,7 @@ mod tests {
     fn serde_software_list_empty_successful() {
         let request = SoftwareRequestResponse {
             id: "1234".to_string(),
-            status: SoftwareOperationStatus::Successful,
+            status: OperationStatus::Successful,
             reason: None,
             current_software_list: Some(vec![]),
             failures: vec![],
@@ -609,7 +673,7 @@ mod tests {
 
         let request = SoftwareRequestResponse {
             id: "1234".to_string(),
-            status: SoftwareOperationStatus::Successful,
+            status: OperationStatus::Successful,
             reason: None,
             current_software_list: Some(vec![docker_module1]),
             failures: vec![],

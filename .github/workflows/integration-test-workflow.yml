@@ -46,7 +46,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
@@ -142,7 +142,7 @@ jobs:
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
@@ -210,6 +210,8 @@ jobs:
 
       - name: Run Smoke Test for Azure
         run: ./ci/ci_smoke_test_az.sh
+        # Temporarily continue on error
+        continue-on-error: true
         env:
           C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
           SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}

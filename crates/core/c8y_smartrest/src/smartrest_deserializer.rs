@@ -177,6 +177,7 @@ where
     // 2021-10-23T19:03:26+01:00
     // so we add a ':'
     let mut date_string: String = Deserialize::deserialize(deserializer)?;
+
     let str_size = date_string.len();
     // check if `date_string` does not have a colon.
     let date_string_end = &date_string.split('+').last();
@@ -223,6 +224,27 @@ impl SmartRestLogRequest {
             Some(Ok(record)) => Ok(record),
             Some(Err(err)) => Err(err)?,
             None => panic!("empty request"),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestRestartRequest {
+    pub message_id: String,
+    pub device: String,
+}
+
+impl SmartRestRestartRequest {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        match rdr.deserialize().next() {
+            Some(Ok(record)) => Ok(record),
+            Some(Err(err)) => Err(err)?,
+            None => Err(SmartRestDeserializerError::EmptyRequest),
         }
     }
 }
@@ -537,6 +559,13 @@ mod tests {
             date_from, date_to
         ));
         let log = SmartRestLogRequest::from_smartrest(&smartrest);
+        assert!(log.is_ok());
+    }
+
+    #[test]
+    fn deserialize_smartrest_restart_request_operation() {
+        let smartrest = String::from(&format!("510,user"));
+        let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
     }
 }

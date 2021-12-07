@@ -7,6 +7,7 @@ pub(crate) enum IncomingTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
     SmartRestRequest,
+    RestartResponse,
 }
 
 impl IncomingTopic {
@@ -15,6 +16,7 @@ impl IncomingTopic {
             Self::SoftwareListResponse => r#"tedge/commands/res/software/list"#,
             Self::SoftwareUpdateResponse => r#"tedge/commands/res/software/update"#,
             Self::SmartRestRequest => r#"c8y/s/ds"#,
+            Self::RestartResponse => r#"tedge/commands/res/control/restart"#,
         }
     }
 }
@@ -27,6 +29,7 @@ impl TryFrom<String> for IncomingTopic {
             r#"tedge/commands/res/software/list"# => Ok(IncomingTopic::SoftwareListResponse),
             r#"tedge/commands/res/software/update"# => Ok(IncomingTopic::SoftwareUpdateResponse),
             r#"c8y/s/ds"# => Ok(IncomingTopic::SmartRestRequest),
+            r#"tedge/commands/res/control/restart"# => Ok(IncomingTopic::RestartResponse),
             err => Err(MapperTopicError::UnknownTopic {
                 topic: err.to_string(),
             }),
@@ -55,6 +58,7 @@ pub(crate) enum OutgoingTopic {
     SoftwareListRequest,
     SoftwareUpdateRequest,
     SmartRestResponse,
+    RestartRequest,
 }
 
 impl OutgoingTopic {
@@ -63,6 +67,7 @@ impl OutgoingTopic {
             Self::SoftwareListRequest => r#"tedge/commands/req/software/list"#,
             Self::SoftwareUpdateRequest => r#"tedge/commands/req/software/update"#,
             Self::SmartRestResponse => r#"c8y/s/us"#,
+            Self::RestartRequest => r#"tedge/commands/req/control/restart"#,
         }
     }
 
@@ -71,6 +76,7 @@ impl OutgoingTopic {
             Self::SoftwareListRequest => Topic::new(Self::SoftwareListRequest.as_str()),
             Self::SoftwareUpdateRequest => Topic::new(Self::SoftwareUpdateRequest.as_str()),
             Self::SmartRestResponse => Topic::new(Self::SmartRestResponse.as_str()),
+            Self::RestartRequest => Topic::new(Self::RestartRequest.as_str()),
         }
     }
 }

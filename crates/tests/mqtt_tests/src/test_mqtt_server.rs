@@ -50,6 +50,13 @@ impl MqttProcessHandler {
         )
         .await
     }
+
+    pub fn map_messages_background<F>(&self, func: F)
+    where
+        F: 'static + Send + Sync + Fn((String, String)) -> Vec<(String, String)>,
+    {
+        tokio::spawn(crate::test_mqtt_client::map_messages_loop(self.port, func));
+    }
 }
 
 fn spawn_broker(port: u16) {
