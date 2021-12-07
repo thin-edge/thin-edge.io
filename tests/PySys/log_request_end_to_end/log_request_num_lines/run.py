@@ -4,6 +4,8 @@ import os
 import subprocess
 import requests
 from retry import retry
+from create_test_logs import create_example_logs
+
 """
 Validate end to end behaviour for the log request operation.
 
@@ -50,20 +52,30 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             raise Exception("retry")
 
     def create_logs_for_test(self):
-        # remove if there are any old files
-        os.system("sudo rm -rf /tmp/sw_logs")
+         # remove if there are any old files
+        rm_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["rm", "-rf", "/tmp/sw_logs",
+                       ],
+            stdouterr="rm_logs",
+        )
 
-        # create logs
-        os.system(f"{os.getcwd()}/log_request_end_to_end/create_test_logs.py")
-
-        # Move files to /var/log/tedge/agent/
-        os.system("sudo mv /tmp/sw_logs/* /var/log/tedge/agent/")
+        # create example logs
+        create_example_logs()
+        
+        move_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/",
+                       ],
+            stdouterr="move_logs",
+        )
 
     def download_file_and_verify_number_of_lines(self, url):
         get_response = requests.get(url, auth=(
             self.project.username, self.project.c8ypass), stream=False)
 
         nlines = len(get_response.content.decode('utf-8').split('\n')[:-1])
+        self.log.info("nlines %s", nlines)
         # The log lines are concatenated from 3 different log files, so there will be 3 extra lines.
         if nlines == 303:
             return True
@@ -71,11 +83,19 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             return False
 
     def cleanup_logs(self):
-        # remove if there are any old files
-        os.system("sudo rm -rf /tmp/sw_logs")
-        
-        # Removing files form startProcess is not working
-        os.system("sudo rm -rf /var/log/tedge/agent/example-*")
+        rm_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*",
+                       ],
+            stdouterr="rm_logs",
+        )
+
+        rm_tmp_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["rm", "-rf", "/tmp/sw_logs",
+                       ],
+            stdouterr="rm_tmp_logs",
+        )
         
         if self.getOutcome().isFailure():
             log = self.startProcess(

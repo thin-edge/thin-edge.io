@@ -4,6 +4,7 @@ import os
 import subprocess
 import requests
 from retry import retry
+from create_test_logs import create_example_logs
 
 """
 Validate end to end behaviour for the log request operation.
@@ -20,7 +21,7 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifySearchTextError(EnvironmentC8y):
     operation_id = None
-    
+
     def setup(self):
         super().setup()
         self.create_logs_for_test()
@@ -52,14 +53,24 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
 
     def create_logs_for_test(self):
         # remove if there are any old files
-        os.system("sudo rm -rf /tmp/sw_logs")
-        
-        #create logs
-        os.system(f"{os.getcwd()}/log_request_end_to_end/create_test_logs.py")
-       
-        # Copy files to /var/log/tedge/agent/ 
-        os.system("sudo mv /tmp/sw_logs/* /var/log/tedge/agent/")
+        rm_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["rm", "-rf", "/tmp/sw_logs",
+                       ],
+            stdouterr="rm_logs",
+        )
 
+        # create example logs
+        create_example_logs()
+
+        # move the logs
+        move_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/",
+                       ],
+            stdouterr="move_logs",
+        )
+     
     def download_file_and_verify_error_messages(self, url):
         get_response = requests.get(url, auth=(
             self.project.username, self.project.c8ypass), stream=False)
@@ -67,9 +78,21 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
         return sum([1 if line.startswith("Error") else 0 for line in nlines.split("\n")]) == 25
 
     def cleanup_logs(self):
-        # Removing files form startProcess is not working
-        os.system("sudo rm -rf /var/log/tedge/agent/example-*")
-        os.system("sudo rm -rf /tmp/sw_logs")
+      
+        rm_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*",
+                       ],
+            stdouterr="rm_logs",
+        )
+
+        rm_tmp_logs = self.startProcess(
+            command=self.sudo,
+            arguments=["rm", "-rf", "/tmp/sw_logs",
+                       ],
+            stdouterr="rm_tmp_logs",
+        )
+
         if self.getOutcome().isFailure():
             log = self.startProcess(
                 command=self.sudo,
