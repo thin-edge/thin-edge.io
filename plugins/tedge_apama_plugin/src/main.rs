@@ -73,7 +73,6 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
     }
 
     match operation {
-        // Since there can only be a single project named `project`, print its name if installed
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
                 // Print the project name
@@ -158,11 +157,7 @@ fn install_project(project_archive_path: &Path) -> Result<(), InternalError> {
     println!("Extraction successful");
 
     // Deleting existing project as the rename API expects the target dir to be empty
-    if tedge_apama_project_path.exists() {
-        println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
-        fs::remove_dir_all(tedge_apama_project_path)?;
-        println!("Removal of existing project successful");
-    }
+    delete_project()?;
 
     println!(
         "Installing newly extracted project to {}",
@@ -175,31 +170,46 @@ fn install_project(project_archive_path: &Path) -> Result<(), InternalError> {
     )?;
     println!("Installation of new project successful");
 
-    println!("Restarting apama to load the new project");
-    let status = run_cmd("service", "apama restart")?;
-    println!("Restart of apama service successful");
+    restart_apama_service()?;
 
-    Ok(status)
+    Ok(())
+}
+
+fn restart_apama_service() -> Result<(), InternalError> {
+    println!("Restarting apama to load the new project");
+    run_cmd("service", "apama restart")?;
+    println!("Restart of apama service successful");
+    Ok(())
 }
 
 fn remove_project(_project_name: &str) -> Result<(), InternalError> {
     let tedge_apama_project_path: &Path = Path::new(TEDGE_APAMA_PROJECT_DIR);
 
     if tedge_apama_project_path.exists() {
-        println!("Stopping apama service");
-        run_cmd("service", "apama stop")?;
-        println!("Stopping apama service successful");
-
-        println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
-        let result = fs::remove_dir_all(tedge_apama_project_path);
-        if let Err(err) = result {
-            if err.kind() != ErrorKind::NotFound {
-                return Err(err)?;
-            }
-        }
-        println!("Removal of existing project successful");
+        stop_apama_service()?;
+        delete_project()?;
+    } else {
+        println!("Doing nothing as there's no project installed");
     }
+    Ok(())
+}
 
+fn delete_project() -> Result<(), InternalError> {
+    println!("Removing existing project at {}", TEDGE_APAMA_PROJECT_DIR);
+    let result = fs::remove_dir_all(TEDGE_APAMA_PROJECT_DIR);
+    if let Err(err) = result {
+        if err.kind() != ErrorKind::NotFound {
+            return Err(err)?;
+        }
+    }
+    println!("Removal of existing project successful");
+    Ok(())
+}
+
+fn stop_apama_service() -> Result<(), InternalError> {
+    println!("Stopping apama service");
+    run_cmd("service", "apama stop")?;
+    println!("Stopping apama service successful");
     Ok(())
 }
 
