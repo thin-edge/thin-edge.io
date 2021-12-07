@@ -1,13 +1,13 @@
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum MapperTopicError {
+pub enum MapperTopicError {
     #[error("Topic {topic} is unknown.")]
     UnknownTopic { topic: String },
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum SMCumulocityMapperError {
+pub enum SMCumulocityMapperError {
     #[error("Invalid MQTT Message.")]
     InvalidMqttMessage,
 
