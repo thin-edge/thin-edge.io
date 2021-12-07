@@ -2161,6 +2161,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "921904a62e410e37e215c40381b7117f830d9d89ba60ab5236170541dd25646b"
+dependencies = [
+ "xmlparser",
+]
+
+[[package]]
 name = "rpassword"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2568,6 +2577,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "base64",
  "certificate",
  "chrono",
  "futures",
@@ -2580,11 +2590,13 @@ dependencies = [
  "rumqttc",
  "rustls 0.20.2",
  "serde",
+ "serde_json",
  "structopt",
  "tedge_config",
  "tedge_users",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "toml",
  "url",
@@ -2626,7 +2638,7 @@ dependencies = [
 name = "tedge_apama_plugin"
 version = "0.4.3"
 dependencies = [
- "serde",
+ "roxmltree",
  "structopt",
  "thiserror",
  "zip",
@@ -3449,6 +3461,12 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
 ]
+
+[[package]]
+name = "xmlparser"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
 
 [[package]]
 name = "yasna"

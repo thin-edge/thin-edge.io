@@ -14,5 +14,5 @@ toml = "0.5"
 url = "2.2"
 
 [dev-dependencies]
-assert_matches = "1.4"
+assert_matches = "1.5"
 tempfile = "3.2"
