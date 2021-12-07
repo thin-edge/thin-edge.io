@@ -32,4 +32,7 @@ pub enum SmartRestDeserializerError {
         parameter: String,
         hint: String,
     },
+
+    #[error("Empty request")]
+    EmptyRequest,
 }
