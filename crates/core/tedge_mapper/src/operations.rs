@@ -17,7 +17,7 @@ type OperationsMap = HashMap<Cloud, Operation>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Operations {
-    dir: PathBuf,
+    cloud: PathBuf,
     operations: OperationsMap,
 }
 
@@ -26,7 +26,7 @@ impl Operations {
         let operations = get_operations(dir.as_ref())?;
 
         Ok(Self {
-            dir: dir.as_ref().to_path_buf(),
+            cloud: dir.as_ref().to_path_buf(),
             operations,
         })
     }

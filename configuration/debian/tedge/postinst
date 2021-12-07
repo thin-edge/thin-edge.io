@@ -25,8 +25,7 @@ install -g tedge -o tedge -m 755 -d /etc/tedge
 install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
 install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
 
-# Create a directory for the opertions to store operations added by the user.
-# TODO: permisssion and ownership
+# Create a directory for the operations added by the user.
 install -g tedge -o tedge -m 755 -d /etc/tedge/operations
 install -g tedge -o tedge -m 755 -d /etc/tedge/plugins
 

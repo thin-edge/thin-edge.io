@@ -10,20 +10,17 @@ IoT devices often do more than just send data to the cloud. They also do things 
 * reboot on demand
 * install or remove software
 
-These are all operations that are supported by Cumulocity IoT and other cloud providers.
-In thin-edge.io we support these operations by writing a plugin that implements the
-[`Operation`](https://cumulocity.com/guides/reference/operation) interface and registering it with the
-thin-edge.io Supported Operations API.
+These operations that are supported by [Cumulocity IoT](https://cumulocity.com/api/10.11.0/#section/Device-management-library) and other cloud providers.
+On `thin-edge.io` the support for one such operation can be added using the `thin-edge.io` Supported Operations API.
 
 ### thin-edge.io Supported Operations API
 
-The Supported Operations utilises file system to add and remove operations. Special file placed in `/etc/tedge/operations` directory will indicate that the operation is supported.
+The Supported Operations utilises the file system to add and remove operations. A special file placed in `/etc/tedge/operations` directory will indicate that an operation is supported.
 The specification for the operation files is described in thin-edge.io specifications repository[src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/a99a8cbf78a4c4c9637fb1794797cb2fb468a0f4/src/supported-operations/README.md)
 
 ## thin-edge.io List of Supported Operations
 
-thin-edge.io comes with some operations that are supported `natively` by thin-edge.io.
-Following operations are supported:
+thin-edge.io supports natively the following operations:
 
 * Software Update
 * Software Update Log Upload
