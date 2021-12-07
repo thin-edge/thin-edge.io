@@ -46,14 +46,14 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install libmosquitto1
-        run:  sudo apt-get --assume-yes install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
 
       - name: install collectd-core
         run: sudo apt-get --assume-yes install collectd-core
@@ -90,6 +90,12 @@ jobs:
           command: test
           args: --verbose --no-run --features integration-test
 
+      - name: Cargo build dummy plugin
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p tedge_dummy_plugin
+
         # To run the test for features here is kind of experimental
         # they could fail if GitHub blocks external connections.
         # It seems like they rarely do.
@@ -101,7 +107,7 @@ jobs:
           args: --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
   install-and-use-rpi:
-    runs-on: [self-hosted, Linux, ARM]
+    runs-on: [self-hosted, Linux, ARM, onsite]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -136,14 +142,14 @@ jobs:
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
 
       - name: install libmosquitto1
-        run:  sudo apt-get --assume-yes install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
 
       - name: install mosquitto-clients
         run: sudo apt-get --assume-yes install mosquitto-clients
@@ -189,8 +195,8 @@ jobs:
       - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
-      - name: Run Smoke Test
-        run: ./ci/ci_smoke_test.sh
+      - name: Run smoke test for Cumulocity
+        run: ./ci/ci_smoke_test_c8y.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -200,3 +206,16 @@ jobs:
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+      - name: Run Smoke Test for Azure
+        run: ./ci/ci_smoke_test_az.sh
+        # Temporarily continue on error
+        continue-on-error: true
+        env:
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}

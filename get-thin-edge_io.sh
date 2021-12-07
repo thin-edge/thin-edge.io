@@ -33,8 +33,13 @@ install_tedge_agent() {
 }
 
 install_tedge_plugins() {
+    # Download and install apt plugin
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb
+
+    # Download and install apama plugin
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb
 }
 
 if [ $# -lt 3 ]; then
@@ -67,7 +72,7 @@ fi
 echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
 if [ -z "$VERSION" ]; then
-    VERSION=0.4.2
+    VERSION=0.4.3
 
     echo "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
     echo "To install a particular version use this script with the version as an argument."

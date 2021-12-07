@@ -23,7 +23,7 @@ class PySysTest(BaseTest):
     def setup(self):
 
         # retrieve the expected toml version from the Cargo.toml
-        tomlname = os.path.join( self.project.tebasedir, "tedge/Cargo.toml" )
+        tomlname = os.path.join( self.project.tebasedir, "crates/core/tedge/Cargo.toml" )
         with open(tomlname, 'r') as tomlfile:
             tedgetoml= toml.load(tomlfile)
             self.tedgeversion = tedgetoml['package']['version']
