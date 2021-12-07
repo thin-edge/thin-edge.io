@@ -22,6 +22,9 @@ pub(crate) struct TEdgeConfigDto {
 
     #[serde(default)]
     pub(crate) software: SoftwareConfigDto,
+
+    #[serde(default)]
+    pub(crate) download: DownloadConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -87,4 +90,11 @@ pub(crate) struct MqttConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SoftwareConfigDto {
     pub(crate) default_plugin_type: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DownloadConfigDto {
+    #[serde(default)]
+    pub(crate) path: Option<FilePath>,
 }

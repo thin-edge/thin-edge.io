@@ -30,6 +30,9 @@ external_bind_interface = "wlan0"
 external_capath = "ca.pem"
 external_certfile = "cert.pem"
 external_keyfile = "key.pem"
+
+[download]
+path = "/some/value"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -96,6 +99,10 @@ external_keyfile = "key.pem"
         FilePath::from("key.pem")
     );
 
+    assert_eq!(
+        config.query(DownloadPathDefaultSetting)?,
+        FilePath::from("/some/value")
+    );
     Ok(())
 }
 
@@ -849,6 +856,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_azure_root_cert_path: FilePath::from("/dev/null"),
         default_mapper_timestamp: Flag(true),
         default_mqtt_port: Port(1883),
+        default_download_path: FilePath::from("/tmp"),
     }
 }
 

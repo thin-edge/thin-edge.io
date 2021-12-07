@@ -5,6 +5,7 @@ use std::path::Path;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
+const DEFAULT_DOWNLOAD_PATH: &str = "/tmp";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
@@ -37,11 +38,15 @@ pub struct TEdgeConfigDefaults {
 
     /// Default port for mqtt internal listener
     pub default_mqtt_port: Port,
+
+    /// Default download path
+    pub default_download_path: FilePath,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
     fn from(config_location: &TEdgeConfigLocation) -> Self {
         let system_cert_path = Path::new(DEFAULT_ETC_PATH).join("ssl").join("certs");
+        let download_path = Path::new(DEFAULT_DOWNLOAD_PATH);
         Self {
             default_device_cert_path: config_location
                 .tedge_config_root_path()
@@ -57,6 +62,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_c8y_root_cert_path: system_cert_path.into(),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
+            default_download_path: download_path.into(),
         }
     }
 }
@@ -79,6 +85,7 @@ fn test_from_tedge_config_location() {
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
+            default_download_path: FilePath::from("/tmp")
         }
     );
 }

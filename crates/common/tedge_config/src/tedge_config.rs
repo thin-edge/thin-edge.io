@@ -453,3 +453,29 @@ where
             .and_then(|value| self.update(setting, value))
     }
 }
+
+impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<FilePath> {
+        self.data
+            .download
+            .path
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: SoftwarePluginDefaultSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: DownloadPathDefaultSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.download.path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<()> {
+        self.data.download.path = None;
+        Ok(())
+    }
+}

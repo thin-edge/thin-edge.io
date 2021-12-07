@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
+use std::path::Path;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -47,12 +48,16 @@ pub trait Plugin {
         &self,
         update: &SoftwareModuleUpdate,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
                 let module_url = module.url.clone();
                 match module_url {
-                    Some(url) => self.install_from_url(&mut module, &url, logger).await?,
+                    Some(url) => {
+                        self.install_from_url(&mut module, &url, logger, &download_path)
+                            .await?
+                    }
                     None => self.install(&module, logger).await?,
                 }
 
@@ -66,6 +71,7 @@ pub trait Plugin {
         &self,
         mut updates: Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
@@ -84,7 +90,7 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger).await {
+                match Self::download_from_url(module, &url, logger, &download_path).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;
@@ -99,7 +105,7 @@ pub trait Plugin {
             let outcome = self.update_list(&updates, logger).await;
             if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
                 for update in updates.iter() {
-                    if let Err(error) = self.apply(update, logger).await {
+                    if let Err(error) = self.apply(update, logger, download_path).await {
                         failed_updates.push(error);
                     };
                 }
@@ -129,8 +135,9 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<(), SoftwareError> {
-        let downloader = Self::download_from_url(module, url, logger).await?;
+        let downloader = Self::download_from_url(module, url, logger, download_path).await?;
         let result = self.install(module, logger).await;
         Self::cleanup_downloaded_artefacts(downloader, logger).await?;
 
@@ -141,8 +148,9 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<Downloader, SoftwareError> {
-        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+        let downloader = Downloader::new(&module.name, &module.version, &download_path);
 
         logger
             .write_all(

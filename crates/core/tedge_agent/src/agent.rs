@@ -24,8 +24,8 @@ use tracing::{debug, error, info, instrument};
 
 use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
+    DownloadPathDefaultSetting, MqttPortSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
 
 #[cfg(not(test))]
@@ -48,6 +48,7 @@ pub struct SmAgentConfig {
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
     config_location: TEdgeConfigLocation,
+    pub download_dir: PathBuf,
 }
 
 impl Default for SmAgentConfig {
@@ -85,6 +86,8 @@ impl Default for SmAgentConfig {
 
         let config_location = TEdgeConfigLocation::from_default_system_location();
 
+        let download_dir = PathBuf::from("/tmp");
+
         Self {
             errors_topic,
             mqtt_client_config,
@@ -98,6 +101,7 @@ impl Default for SmAgentConfig {
             sm_home,
             log_dir,
             config_location,
+            download_dir,
         }
     }
 }
@@ -116,10 +120,15 @@ impl SmAgentConfig {
             .tedge_config_root_path()
             .to_path_buf();
 
+        let tedge_download_dir = tedge_config
+            .query_string(DownloadPathDefaultSetting)?
+            .into();
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_client_config(mqtt_config)
-            .with_config_location(tedge_config_location))
+            .with_config_location(tedge_config_location)
+            .with_download_directory(tedge_download_dir))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -136,6 +145,13 @@ impl SmAgentConfig {
     pub fn with_config_location(self, config_location: TEdgeConfigLocation) -> Self {
         Self {
             config_location,
+            ..self
+        }
+    }
+
+    pub fn with_download_directory(self, download_dir: PathBuf) -> Self {
+        Self {
+            download_dir,
             ..self
         }
     }
@@ -382,7 +398,11 @@ impl SmAgent {
             .new_log_file(LogKind::SoftwareUpdate)
             .await?;
 
-        let response = plugins.lock().unwrap().process(&request, log_file).await; // `unwrap` should be safe here as we only access data.
+        let response = plugins
+            .lock()
+            .unwrap()
+            .process(&request, log_file, &self.config.download_dir)
+            .await; // `unwrap` should be safe here as we only access data.
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))

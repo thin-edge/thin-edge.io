@@ -262,3 +262,17 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
 
     type Value = String;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct DownloadPathDefaultSetting;
+
+impl ConfigSetting for DownloadPathDefaultSetting {
+    const KEY: &'static str = "download.path"; // NOTE: do we want tmp.path instead?
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default download path to be used for downloads on the device",
+        "Example: /tmp"
+    );
+
+    type Value = FilePath;
+}
