@@ -37,6 +37,7 @@ set -e
 mv __pysys_junit_xml pysys_junit_xml_apt
 
 sudo cp ../../plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
+sudo chmod +x /etc/tedge/sm-plugins/docker
 
 set +e
 pysys.py run --record -v DEBUG 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
