@@ -5,6 +5,7 @@ mod tests {
     use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;
 
@@ -34,8 +35,10 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[test_case("abc",  "1.23"  ; "when version present")]
+    #[test_case("abc", "" ; "when no version")]
     #[tokio::test]
-    async fn plugin_get_command_list() {
+    async fn plugin_get_command_list(module_name: &str, version: &str) {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
         let path = get_dummy_plugin_tmp_path();
@@ -46,14 +49,26 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = "abc\t1.0";
+        let mut content = String::new();
+        let mut module_version: Option<String> = None;
+        if !module_name.is_empty() && !version.is_empty() {
+            content.push_str(module_name);
+            content.push_str("\t");
+            content.push_str(version);
+            module_version = Some(version.into());
+        }
+        if !module_name.is_empty() && version.is_empty() {
+            content.push_str(module_name);
+            module_version = None;
+        }
+
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
         let module = SoftwareModule {
             module_type: Some("test".into()),
-            name: "abc".into(),
-            version: Some("1.0".into()),
+            name: module_name.into(),
+            version: module_version,
             url: None,
             file_path: None,
         };

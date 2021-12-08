@@ -1790,6 +1790,7 @@ dependencies = [
  "structopt",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
  "tracing",
