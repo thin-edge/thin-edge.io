@@ -9,7 +9,7 @@ env:
 
 jobs:
   generate-report:
-    runs-on: [self-hosted, Linux, ARM, onsite]
+    runs-on: Ubuntu-20.04
 
     steps:
 
