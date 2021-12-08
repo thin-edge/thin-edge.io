@@ -8,7 +8,7 @@ from retry import retry
 
 
 ERROR_MESSAGES = [
-    f"Error: in line 1000.",
+    "Error: in line 1000.",
     "Error: No such file or directory: /home/some/file",
     "Error: Connection timed out. OS error 111.",
     "Error: Is MQTT running?",

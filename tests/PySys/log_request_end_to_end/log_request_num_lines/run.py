@@ -4,7 +4,7 @@ import os
 import subprocess
 import requests
 from retry import retry
-from create_test_logs import create_example_logs
+from test_log_generator import create_example_logs
 
 """
 Validate end to end behaviour for the log request operation.
@@ -55,8 +55,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
          # remove if there are any old files
         rm_logs = self.startProcess(
             command=self.sudo,
-            arguments=["rm", "-rf", "/tmp/sw_logs",
-                       ],
+            arguments=["rm", "-rf", "/tmp/sw_logs"],
             stdouterr="rm_logs",
         )
 
@@ -65,8 +64,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
         
         move_logs = self.startProcess(
             command=self.sudo,
-            arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/",
-                       ],
+            arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/"],
             stdouterr="move_logs",
         )
 
@@ -85,15 +83,13 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     def cleanup_logs(self):
         rm_logs = self.startProcess(
             command=self.sudo,
-            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*",
-                       ],
+            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*"],
             stdouterr="rm_logs",
         )
 
         rm_tmp_logs = self.startProcess(
             command=self.sudo,
-            arguments=["rm", "-rf", "/tmp/sw_logs",
-                       ],
+            arguments=["rm", "-rf", "/tmp/sw_logs"],
             stdouterr="rm_tmp_logs",
         )
         
