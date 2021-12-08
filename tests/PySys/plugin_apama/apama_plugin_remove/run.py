@@ -24,7 +24,7 @@ class ApamaPluginRemoveTest(ApamaPlugin):
         # Use apama plugin `remove` command to remove the project, if one is installed already.
         self.startProcess(
             command=self.sudo,
-            arguments=[self.apama_plugin, "remove", "project"],
+            arguments=[self.apama_plugin, "remove", "QuickStart::project"],
             stdouterr="plugin_remove"
         )
 
