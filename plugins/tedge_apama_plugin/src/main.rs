@@ -49,7 +49,6 @@ const APAMA_ENV_EXE: &str = "/opt/softwareag/Apama/bin/apama_env";
 const TEDGE_APAMA_PROJECT_DIR: &str = "/etc/tedge/apama/project";
 const TMP_APAMA_PROJECT_DIR: &str = "/tmp/tedge_apama_project";
 const DEFAULT_APAMA_PROJECT_NAME: &str = "unnamed";
-const APAMA_PROJECT_DESCRIPTOR_FILE: &str = "/etc/tedge/apama/project/.project";
 
 const ENGINE_INJECT_CMD: &str = "engine_inject";
 const ENGINE_INSPECT_CMD: &str = "engine_inspect";
@@ -76,7 +75,7 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
         PluginOp::List => {
             if tedge_apama_project_path.exists() {
                 // Print the project name
-                println!("{}::project\t", get_project_name()?);
+                println!("{}::project\t", get_project_name(tedge_apama_project_path));
 
                 // Print the installed monitors
                 for monitor in get_installed_monitors()? {
@@ -114,15 +113,22 @@ fn run(operation: PluginOp) -> Result<(), InternalError> {
     }
 }
 
-fn get_project_name() -> Result<String, InternalError> {
-    let xml_content = fs::read_to_string(APAMA_PROJECT_DESCRIPTOR_FILE).unwrap();
-    let root = roxmltree::Document::parse(xml_content.as_str())?;
-    let name_node = root.descendants().find(|node| node.has_tag_name("name"));
-    let name = name_node
-        .and_then(|node| node.first_child())
-        .and_then(|node| node.text())
-        .unwrap_or(DEFAULT_APAMA_PROJECT_NAME);
-    Ok(name.into())
+fn get_project_name(tedge_apama_project_path: &Path) -> String {
+    let tedge_apama_project_descriptor_path = tedge_apama_project_path.join(".project");
+    if tedge_apama_project_descriptor_path.exists() {
+        if let Ok(xml_content) = fs::read_to_string(tedge_apama_project_descriptor_path) {
+            if let Ok(root) = roxmltree::Document::parse(xml_content.as_str()) {
+                return root
+                    .descendants()
+                    .find(|node| node.has_tag_name("name"))
+                    .and_then(|node| node.first_child())
+                    .and_then(|node| node.text())
+                    .map(str::to_string)
+                    .unwrap_or(DEFAULT_APAMA_PROJECT_NAME.into());
+            }
+        }
+    }
+    DEFAULT_APAMA_PROJECT_NAME.into()
 }
 
 fn apama_module_from_string(module: &str) -> Result<ApamaModule, InternalError> {
@@ -297,5 +303,46 @@ fn main() {
             eprintln!("ERROR: {}", err);
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use crate::get_project_name;
+
+    #[test]
+    fn get_project_name_project_descriptor_xml() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_dir_path = temp_dir.path();
+        let project_descriptor_path = project_dir_path.join(".project");
+
+        fs::write(
+            project_descriptor_path.clone(),
+            r#"<projectDescription><name>quickstart-project</name></projectDescription>"#,
+        )
+        .unwrap();
+        let contents = fs::read_to_string(project_descriptor_path.clone()).unwrap();
+        println!("{:?}", contents);
+        assert_eq!(get_project_name(project_dir_path), "quickstart-project");
+    }
+
+    #[test]
+    fn get_project_name_empty_project() {
+        let temp_dir = TempDir::new().unwrap();
+        assert_eq!(get_project_name(temp_dir.path()), "unnamed");
+    }
+
+    #[test]
+    fn get_project_name_invalid_project_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_dir_path = temp_dir.path();
+        let project_descriptor_path = project_dir_path.join(".project");
+
+        fs::write(project_descriptor_path.clone(), "not an xml").unwrap();
+        assert_eq!(get_project_name(project_dir_path), "unnamed");
     }
 }
