@@ -11,7 +11,7 @@
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
-    - [Supported Operations in Cumulocity IoT](./tutorials/supported-operations.md)
+    - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
