@@ -419,6 +419,7 @@ impl Plugin for ExternalPluginCommand {
         if output.status.success() {
             let mut software_list = Vec::new();
             let mut rdr = ReaderBuilder::new()
+                .flexible(true)
                 .has_headers(false)
                 .delimiter(b'\t')
                 .from_reader(output.stdout.as_slice());
