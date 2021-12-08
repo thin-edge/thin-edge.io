@@ -86,7 +86,7 @@ class Cumulocity(object):
         return header
 
     def trigger_log_request(self, log_file_request_payload, device_id):
-        url = f"https://{self.c8y_url}/devicecontrol/operations"
+        url = f"{self.c8y_url}/devicecontrol/operations"
         log_file_request_payload = {
             "deviceId": device_id,
             "description": "Log file request",
@@ -107,7 +107,7 @@ class Cumulocity(object):
     def retrieve_log_file(self, operation_id):
         """Check if log received"""
 
-        url = f"https://{self.c8y_url}/devicecontrol/operations/{operation_id}"
+        url = f"{self.c8y_url}/devicecontrol/operations/{operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
 

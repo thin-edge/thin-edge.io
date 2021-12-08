@@ -20,6 +20,7 @@
 	<pythonpath value="${testRootDir}/plugin_docker" />
 	<pythonpath value="${testRootDir}/plugin_apama" />
 	<pythonpath value="${testRootDir}/software_management_end_to_end" />
+	<pythonpath value="${testRootDir}/log_request_end_to_end" />
 
 	<writers>
 		<writer classname="pysys.writer.testoutput.TestOutputArchiveWriter">
