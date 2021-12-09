@@ -83,14 +83,10 @@ impl Converter for CumulocityConverter {
         let ops = Operations::try_new("/etc/tedge/operations")?;
         let ops = ops.get_operations_list("c8y");
 
-        if !ops.is_empty() {
-            let ops_msg = SmartRestSetSupportedOperations::new(&ops);
-            let topic = Topic::new_unchecked("c8y/s/us");
-            let msg = Message::new(&topic, ops_msg.to_smartrest()?);
-            Ok(vec![msg])
-        } else {
-            Ok(Vec::new())
-        }
+        let ops_msg = SmartRestSetSupportedOperations::new(&ops);
+        let topic = Topic::new_unchecked("c8y/s/us");
+        let msg = Message::new(&topic, ops_msg.to_smartrest()?);
+        Ok(vec![msg])
     }
 }
 
