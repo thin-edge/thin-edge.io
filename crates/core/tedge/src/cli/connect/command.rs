@@ -125,7 +125,7 @@ impl Command for ConnectCommand {
             Ok(DeviceStatus::AlreadyExists) => {}
             Ok(DeviceStatus::MightBeNew) | Ok(DeviceStatus::Unknown) => {
                 if let Cloud::C8y = self.cloud {
-                    println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
+                    println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation.\n");
                     restart_mosquitto(
                         &bridge_config,
                         self.service_manager.as_ref(),
