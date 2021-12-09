@@ -5,6 +5,7 @@ Requires=tedge-mapper-sm-c8y.service
 
 [Service]
 User=tedge-agent
+RuntimeDirectory=tedge_agent
 ExecStart=/usr/bin/tedge_agent
 Restart=on-failure
 RestartPreventExitStatus=255
