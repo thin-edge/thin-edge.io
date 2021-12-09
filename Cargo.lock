@@ -2615,6 +2615,7 @@ dependencies = [
  "json_sm",
  "mockall",
  "mqtt_client",
+ "mqtt_tests",
  "once_cell",
  "plugin_sm",
  "predicates 2.1.0",

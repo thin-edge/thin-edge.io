@@ -558,8 +558,18 @@ async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    use mqtt_client::{publish, Client, Message, MqttClient, Topic, TopicFilter};
+    use mqtt_tests::publish;
+    use std::time::Duration;
+
+    use tokio::time::sleep;
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
+    const TIMEOUT: Duration = Duration::from_millis(1000);
 
     #[ignore]
     #[tokio::test]
@@ -590,5 +600,51 @@ mod tests {
         let () = std::fs::remove_file(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).unwrap();
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn tedge_agent_test_RENAME_LATER() {
+        // Create a config file in a temporary directory.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let content = format!(
+            r#"
+        [download]
+        path='{}'
+        "#,
+            temp_dir.path().to_str().unwrap()
+        );
+
+        let mut file =
+            File::create(format!("{}/tedge.toml", temp_dir.path().to_str().unwrap())).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let tedge_config_location =
+            tedge_config::TEdgeConfigLocation::from_custom_root(temp_dir.path());
+
+        let agent = SmAgent::try_new(
+            "tedge_agent_test",
+            SmAgentConfig::try_new(tedge_config_location).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            &agent.config.download_dir.to_str().unwrap(),
+            &temp_dir.path().to_str().unwrap()
+        );
+
+        // make a mqqt request download?
+        let broker = mqtt_tests::test_mqtt_broker();
+        let topic = "tedge/commands/req/software/update";
+        let payload = String::from(
+            r#"
+'{"id": "1234", "updateList": [{"type": "apt", "modules": [{"name": "rolldice", "action": "install", "url": "https://solo.latest.stage.c8y.io/inventory/managedObjects/9200"}]}]}'
+            "#,
+        );
+
+        //mosquitto_pub -t 'tedge/commands/req/software/update' -m '{"id": "1234", "updateList": [{"type": "apt", "modules": [{"name": "rolldice", "action": "install", "url": "https://solo.latest.stage.c8y.io/inventory/managedObjects/9200"}]}]}'
+        //
+
+        publish(broker.port, topic, &payload);
+        sleep(TIMEOUT).await; // because `publish()` might return before the pub ack
     }
 }
