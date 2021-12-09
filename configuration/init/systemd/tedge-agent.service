@@ -4,6 +4,7 @@ After=syslog.target network.target mosquitto.service
 
 [Service]
 User=tedge-agent
+RuntimeDirectory=tedge_agent
 ExecStart=/usr/bin/tedge_agent
 Restart=on-failure
 RestartPreventExitStatus=255

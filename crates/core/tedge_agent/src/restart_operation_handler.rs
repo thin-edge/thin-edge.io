@@ -4,7 +4,7 @@ pub mod restart_operation {
     use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
     use time::OffsetDateTime;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
     /// creates an empty file in /run

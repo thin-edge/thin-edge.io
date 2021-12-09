@@ -539,9 +539,8 @@ async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
 
-    #[ignore]
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
         assert_eq!(INIT_COMMAND, "echo");
