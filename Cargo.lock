@@ -1787,6 +1787,7 @@ dependencies = [
  "json_sm",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_utils",
  "tempfile",

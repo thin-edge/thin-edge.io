@@ -4,12 +4,13 @@ mod tests {
     use assert_matches::assert_matches;
     use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
+    use serial_test::serial;
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
-    use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_prepare() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -23,6 +24,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_finalize() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -35,10 +37,10 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
-    #[test_case("abc",  "1.23"  ; "when version present")]
-    #[test_case("abc", "" ; "when no version")]
+    
     #[tokio::test]
-    async fn plugin_get_command_list(module_name: &str, version: &str) {
+    #[serial]   
+    async fn plugin_get_command_list_with_version() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
         let path = get_dummy_plugin_tmp_path();
@@ -49,26 +51,14 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let mut content = String::new();
-        let mut module_version: Option<String> = None;
-        if !module_name.is_empty() && !version.is_empty() {
-            content.push_str(module_name);
-            content.push_str("\t");
-            content.push_str(version);
-            module_version = Some(version.into());
-        }
-        if !module_name.is_empty() && version.is_empty() {
-            content.push_str(module_name);
-            module_version = None;
-        }
-
+        let content = "abc\t1.23";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
         let module = SoftwareModule {
             module_type: Some("test".into()),
-            name: module_name.into(),
-            version: module_version,
+            name:"abc".into(),
+            version:Some("1.23".into()),
             url: None,
             file_path: None,
         };
@@ -84,6 +74,42 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]   
+    async fn plugin_get_command_list_without_version() {
+        // Prepare dummy plugin with .0 which will give specific exit code ==0.
+        let (plugin, _plugin_path) = get_dummy_plugin("test");
+        let path = get_dummy_plugin_tmp_path();
+
+        let mut file = tempfile::Builder::new()
+            .suffix(".0")
+            .tempfile_in(path)
+            .unwrap();
+
+        // Add content of the expected stdout to the dummy plugin.
+        let content = "abc";
+        let _a = file.write_all(content.as_bytes()).unwrap();
+
+        // Create expected response.
+        let module = SoftwareModule {
+            module_type: Some("test".into()),
+            name:"abc".into(),
+            version:None,
+            url: None,
+            file_path: None,
+        };
+        let expected_response = vec![module];
+
+        // Call plugin via API.
+        let mut logger = dev_null().await;
+        let res = plugin.list(&mut logger).await;
+
+        // Expect Ok as plugin should exit with code 0.
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), expected_response);
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn plugin_get_command_install() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -116,6 +142,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_remove() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -148,6 +175,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_call_name_and_path() {
         let dummy_plugin_path = get_dummy_plugin_path();
         let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
@@ -156,6 +184,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
         let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
@@ -175,6 +204,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_both_different() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
@@ -205,6 +235,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_default() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
@@ -226,6 +257,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_update_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -264,6 +296,7 @@ mod tests {
 
     // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
     #[tokio::test]
+    #[serial]
     async fn plugin_command_update_list_fallback() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");

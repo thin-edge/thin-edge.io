@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
+use serde::Deserialize;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -193,6 +194,13 @@ pub trait Plugin {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ModuleInfo {
+    name: String,
+    #[serde(default)]
+    version: Option<String>,
 }
 
 #[derive(Debug)]
@@ -419,22 +427,20 @@ impl Plugin for ExternalPluginCommand {
         if output.status.success() {
             let mut software_list = Vec::new();
             let mut rdr = ReaderBuilder::new()
-                .flexible(true)
                 .has_headers(false)
                 .delimiter(b'\t')
+                .flexible(true)
                 .from_reader(output.stdout.as_slice());
-
             for module in rdr.deserialize() {
-                let (name, version): (String, Option<String>) = module?;
+                let minfo: ModuleInfo = module?;
                 software_list.push(SoftwareModule {
-                    name,
-                    version,
+                    name: minfo.name,
+                    version: minfo.version,
                     module_type: Some(self.name.clone()),
                     file_path: None,
                     url: None,
                 });
             }
-
             Ok(software_list)
         } else {
             Err(SoftwareError::Plugin {
