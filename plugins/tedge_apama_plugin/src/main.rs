@@ -308,7 +308,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, File};
 
     use tempfile::TempDir;
 
@@ -321,17 +321,27 @@ mod tests {
         let project_descriptor_path = project_dir_path.join(".project");
 
         fs::write(
-            project_descriptor_path.clone(),
+            project_descriptor_path.as_path(),
             r#"<projectDescription><name>quickstart-project</name></projectDescription>"#,
         )
-        .unwrap();
-        let contents = fs::read_to_string(project_descriptor_path.clone()).unwrap();
-        println!("{:?}", contents);
+        .expect("Failed to create project descriptor xml file");
+
         assert_eq!(get_project_name(project_dir_path), "quickstart-project");
     }
 
     #[test]
     fn get_project_name_empty_project() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_dir_path = temp_dir.path();
+        let project_descriptor_path = project_dir_path.join(".project");
+        File::create(project_descriptor_path.as_path())
+            .expect("Failed to create empty project descriptor xml file");
+
+        assert_eq!(get_project_name(temp_dir.path()), "unnamed");
+    }
+
+    #[test]
+    fn get_project_name_empty_project_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         assert_eq!(get_project_name(temp_dir.path()), "unnamed");
     }
