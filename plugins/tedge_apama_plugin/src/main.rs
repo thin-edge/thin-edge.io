@@ -177,6 +177,7 @@ fn install_project(project_archive_path: &Path) -> Result<(), InternalError> {
     println!("Installation of new project successful");
 
     restart_apama_service()?;
+    wait_for_apama_correlator_ready()?;
 
     Ok(())
 }
@@ -185,6 +186,13 @@ fn restart_apama_service() -> Result<(), InternalError> {
     println!("Restarting apama to load the new project");
     run_cmd("service", "apama restart")?;
     println!("Restart of apama service successful");
+    Ok(())
+}
+
+fn wait_for_apama_correlator_ready() -> Result<(), InternalError> {
+    println!("Waiting for apama correator to be ready for upto 10 seconds");
+    run_cmd(APAMA_ENV_EXE, "engine_management --waitFor 10")?;
+    println!("Apama correator is ready");
     Ok(())
 }
 
