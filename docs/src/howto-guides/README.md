@@ -14,3 +14,4 @@
 12. [How to connect an external device?](./013_connect_external_device.md)
 13. [How to access the logs on the device?](./014_thin_edge_logs.md)
 14. [How to install thin-edge.io on any Linux OS (no deb support)?](./015_installation_without_deb_support.md)
+15. [How to manage apama software artefatcs with apama plugin?](./016_apama_software_management_plugin.md)
