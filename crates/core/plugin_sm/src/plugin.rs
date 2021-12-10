@@ -431,6 +431,7 @@ impl Plugin for ExternalPluginCommand {
                 .delimiter(b'\t')
                 .flexible(true)
                 .from_reader(output.stdout.as_slice());
+
             for module in rdr.deserialize() {
                 let minfo: ModuleInfo = module?;
                 software_list.push(SoftwareModule {

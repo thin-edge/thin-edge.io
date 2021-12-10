@@ -37,9 +37,8 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
-    
     #[tokio::test]
-    #[serial]   
+    #[serial]
     async fn plugin_get_command_list_with_version() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -51,14 +50,14 @@ mod tests {
             .unwrap();
 
         // Add content of the expected stdout to the dummy plugin.
-        let content = "abc\t1.23";
+        let content = "abc\t1.0";
         let _a = file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
         let module = SoftwareModule {
             module_type: Some("test".into()),
-            name:"abc".into(),
-            version:Some("1.23".into()),
+            name: "abc".into(),
+            version: Some("1.0".into()),
             url: None,
             file_path: None,
         };
@@ -92,8 +91,8 @@ mod tests {
         // Create expected response.
         let module = SoftwareModule {
             module_type: Some("test".into()),
-            name:"abc".into(),
-            version:None,
+            name: "abc".into(),
+            version: None,
             url: None,
             file_path: None,
         };
