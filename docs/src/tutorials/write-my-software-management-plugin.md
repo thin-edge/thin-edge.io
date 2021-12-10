@@ -113,7 +113,7 @@ Rules:
   This name is the name that has been used to install it and that needs to be used to remove it.
   - **version**: the version currently installed.
   This is a string that can only be interpreted in the context of the plugin.
-  
+  >Note: If the version is not present for a module, then list can return only the module name without trailing tabulation.
 Given that your plugin is named `docker`, then the Software Management Agent calls
 
 ```shell
@@ -138,6 +138,7 @@ In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
 
 A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
+If there is no version field then only module name will be returned.
 In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
 ```shell
