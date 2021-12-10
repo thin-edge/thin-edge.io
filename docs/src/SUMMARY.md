@@ -11,7 +11,7 @@
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
-    - [Supported Operations in Cumulocity IoT](./tutorials/supported-operations.md)
+    - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
@@ -28,6 +28,7 @@
     - [How to connect an external device?](./howto-guides/013_connect_external_device.md)
     - [How to access the logs on the device?](./howto-guides/014_thin_edge_logs.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
+    - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)

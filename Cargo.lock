@@ -2639,6 +2639,7 @@ version = "0.5.0"
 dependencies = [
  "roxmltree",
  "structopt",
+ "tempfile",
  "thiserror",
  "zip",
 ]
