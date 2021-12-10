@@ -17,13 +17,19 @@
 use async_trait::async_trait;
 use mockall::automock;
 pub use rumqttc::QoS;
-use rumqttc::{Event, Incoming, Outgoing, Packet, Publish, Request, StateError};
-use std::collections::HashMap;
+use rumqttc::{
+    ConnectReturnCode, ConnectionError, Event, Incoming, Outgoing, Packet, Publish, Request,
+    StateError,
+};
 use std::sync::{
     atomic::{AtomicIsize, Ordering},
     Arc,
 };
-use tokio::sync::{broadcast, Notify};
+use std::{collections::HashMap, time::Duration};
+use tokio::{
+    sync::{broadcast, Notify},
+    time::sleep,
+};
 
 #[automock]
 #[async_trait]
@@ -207,8 +213,26 @@ impl Client {
             mqtt_options.set_max_packet_size(packet_size, packet_size);
         }
 
-        let (mqtt_client, eventloop) =
+        let (mqtt_client, mut eventloop) =
             rumqttc::AsyncClient::new(mqtt_options, config.queue_capacity);
+
+        loop {
+            match eventloop.poll().await {
+                Ok(Event::Incoming(Packet::ConnAck(ack)))
+                    if ack.code == ConnectReturnCode::Success =>
+                {
+                    break
+                }
+
+                Err(err) => {
+                    eprintln!("ERROR: {}", err);
+                    Self::pause_on_error(err).await;
+                }
+
+                _ => {}
+            }
+        }
+
         let requests_tx = eventloop.requests_tx.clone();
         let (message_sender, _) = broadcast::channel(config.queue_capacity);
         let (error_sender, _) = broadcast::channel(config.queue_capacity);
@@ -231,6 +255,24 @@ impl Client {
             requests_tx,
             inflight,
         })
+    }
+
+    async fn pause_on_error(err: ConnectionError) {
+        let delay = match &err {
+            rumqttc::ConnectionError::Io(_) => true,
+            rumqttc::ConnectionError::MqttState(state_error)
+                if matches!(state_error, StateError::Io(_)) =>
+            {
+                true
+            }
+            rumqttc::ConnectionError::MqttState(_) => true,
+            rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
+            _ => false,
+        };
+
+        if delay {
+            sleep(Duration::from_secs(1)).await;
+        }
     }
 
     /// Returns the name used by the MQTT client.
