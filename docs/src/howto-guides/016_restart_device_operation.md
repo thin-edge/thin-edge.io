@@ -1,4 +1,4 @@
-# How restart your thin-edge device
+# How to restart your thin-edge.io device
 
 If your device is running thin-edge.io, you can restart it from the cloud. This guide shows how to trigger a restart operation from different cloud providers.
 
