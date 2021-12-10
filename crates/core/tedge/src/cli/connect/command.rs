@@ -131,6 +131,14 @@ impl Command for ConnectCommand {
                         self.service_manager.as_ref(),
                         &self.config_location,
                     )?;
+
+                    println!(
+                        "Awaiting mosquitto to start. This may take up to {} seconds.\n",
+                        MOSQUITTO_RESTART_TIMEOUT_SECONDS
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(
+                        MOSQUITTO_RESTART_TIMEOUT_SECONDS,
+                    ));
                 }
             }
             Err(_) => {
