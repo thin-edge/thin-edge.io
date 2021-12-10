@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]   
+    #[serial]
     async fn plugin_get_command_list_without_version() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
