@@ -62,7 +62,7 @@ junit2html --summary-matrix "$OUT".xml "$OUT"_A.xml "$OUT"_B.xml "$OUT"_C.xml "$
 
 # Build report matrix
 
-junit2html --report-matrix "$OUT"-matrix.html "$OUT".xml "$OUT"_A.xml "$OUT"_B.xml "$OUT"_C.xml "$OUT"_D.xml
+junit2html --report-matrix report-matrix.html "$OUT".xml "$OUT"_A.xml "$OUT"_B.xml "$OUT"_C.xml "$OUT"_D.xml
 
 # Zip everything
 

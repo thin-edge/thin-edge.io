@@ -35,6 +35,6 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: system-test-report-matrix_${{ github.run_number }}
-        path: ci/report/system-test-report-matrix.html
+        path: ci/report/report-matrix.html
 
 
