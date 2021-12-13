@@ -19,7 +19,9 @@ class DockerPlugin(BaseTest):
     def setup(self):
         if self.myPlatform != 'container':
             self.skipTest(
-                'Testing the docker plugin is not supported on this platform')
+                "Testing the docker plugin is not supported on this platform." +
+                "To run it, all the test with -XmyPlatform='container'")
+
         if not os.path.exists("/etc/tedge/sm-plugins/docker"):
             raise SystemError("Docker plugin missing")
 
@@ -105,7 +107,7 @@ class DockerPlugin(BaseTest):
 
     def docker_pull_with_cleanup(self, image_name, image_version=None):
         """
-        Use `docker pull` pull an image from docker registry 
+        Use `docker pull` pull an image from docker registry
         with a cleanup function registered to cleanup the image after the test run
         """
         self.docker_pull(image_name, image_version)
