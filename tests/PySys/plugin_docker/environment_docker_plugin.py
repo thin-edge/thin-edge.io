@@ -1,3 +1,4 @@
+import os.path
 import pysys
 from pysys.basetest import BaseTest
 
@@ -19,6 +20,8 @@ class DockerPlugin(BaseTest):
         if self.myPlatform != 'container':
             self.skipTest(
                 'Testing the docker plugin is not supported on this platform')
+        if not os.path.exists("/etc/tedge/sm-plugins/docker"):
+            raise SystemError("Docker plugin missing")
 
         # Register routines to cleanup containers and images added during test
         self.addCleanupFunction(self.cleanup_images)
