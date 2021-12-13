@@ -264,7 +264,6 @@ def main():
     parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
     parser.add_argument("-u", "--user", help="C8y username")
     parser.add_argument("-t", "--tenant", help="C8y tenant")
-    parser.add_argument("-pass", "--password", help="C8y Password")
     parser.add_argument("-id", "--id", help="Device ID for C8y")
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument(
@@ -282,7 +281,6 @@ def main():
     verbose = args.verbose
     user = args.user
     tenant = args.tenant
-    password = args.password
     device_id = args.id
     publish_amount = args.size
     timeslot = args.slot

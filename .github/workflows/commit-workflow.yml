@@ -12,15 +12,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  extract:
-    name: Extract
-    runs-on: Ubuntu-20.04
-    steps:
-      - name: Extract
-        run:  python3 -c 'import os; print(" ".join(os.environ["IOTHUBNAME"]))'
-        env:
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
   cargo-fmt:
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
@@ -160,4 +151,3 @@ jobs:
         with:
           command: msrv
           args: --minimum 1.54.0
-
