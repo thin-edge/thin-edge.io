@@ -17,7 +17,8 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Generate Report
-      run:  bash ./ci/report/build.sh
+      #run:  bash ./ci/report/build.sh
+      run:  bash ./ci/report/buildall.sh
       continue-on-error: false
       env:
         THEGHTOKEN: ${{secrets.GITHUB_TOKEN}}
