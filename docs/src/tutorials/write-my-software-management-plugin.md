@@ -138,7 +138,7 @@ In most cases, the output of the `list` command is multi-lines.
 The line separator should be `\n`.
 
 A plugin must return a CSV line per software module, using a tabulation `\t` as separator.
-If there is no version field then only module name will be returned.
+If there is no version field then only the module name will be returned.
 In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
 ```shell

@@ -1,6 +1,6 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
-use csv::ReaderBuilder;
+use csv::{Reader, ReaderBuilder};
 use download::Downloader;
 use json_sm::*;
 use serde::Deserialize;
@@ -196,6 +196,7 @@ pub trait Plugin {
     }
 }
 
+// This struct is used for deserializing the list of modules that are returned by a plugin.
 #[derive(Debug, Deserialize)]
 struct ModuleInfo {
     name: String,
@@ -425,24 +426,12 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            let mut software_list = Vec::new();
             let mut rdr = ReaderBuilder::new()
                 .has_headers(false)
                 .delimiter(b'\t')
                 .flexible(true)
                 .from_reader(output.stdout.as_slice());
-
-            for module in rdr.deserialize() {
-                let minfo: ModuleInfo = module?;
-                software_list.push(SoftwareModule {
-                    name: minfo.name,
-                    version: minfo.version,
-                    module_type: Some(self.name.clone()),
-                    file_path: None,
-                    url: None,
-                });
-            }
-            Ok(software_list)
+            Ok(deserialize_module_info(self.name.clone(), &mut rdr)?)
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
@@ -473,4 +462,22 @@ impl Plugin for ExternalPluginCommand {
             })
         }
     }
+}
+
+pub fn deserialize_module_info(
+    module_type: String,
+    records: &mut Reader<&[u8]>,
+) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    let mut software_list = Vec::new();
+    for module in records.deserialize() {
+        let minfo: ModuleInfo = module?;
+        software_list.push(SoftwareModule {
+            name: minfo.name,
+            version: minfo.version,
+            module_type: Some(module_type.clone()),
+            file_path: None,
+            url: None,
+        });
+    }
+    Ok(software_list)
 }

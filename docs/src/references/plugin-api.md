@@ -76,7 +76,7 @@ Contract:
 * If an error status is returned, the executable is removed from the list of plugins.
 * The list is returned using [CSV with tabulations as separators](https://en.wikipedia.org/wiki/Tab-separated_values).
   Each line has two values separated by a tab: the name of the module then the version of that module.
-  If the version is not present for a module, then the line will contain only the module name without trailing tabulation.
+  If there is no version for a module, then the trailing tabulation is not required and be skipped.
 ### The `prepare` command
 
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands

@@ -2,10 +2,12 @@
 mod tests {
 
     use assert_matches::assert_matches;
+    use csv::ReaderBuilder;
     use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
-    use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
+    use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;
 
@@ -35,6 +37,37 @@ mod tests {
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no more checks to be done.
         assert_eq!(res, Ok(()));
+    }
+
+    #[test_case("abc", Some("1.0")  ; "with version")]
+    #[test_case("abc",None  ; "without version")]
+    fn desrialize_plugin_result(module_name: &str, version: Option<&str>) {
+        let mut data = String::from(module_name);
+        match version {
+            Some(v) => {
+                data.push_str("\t");
+                data.push_str(v)
+            }
+            None => {}
+        }
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(b'\t')
+            .flexible(true)
+            .from_reader(data.as_bytes());
+
+        let mut expected_software_list = Vec::new();
+
+        expected_software_list.push(SoftwareModule {
+            name: module_name.into(),
+            version: version.map(|s| s.to_string()),
+            module_type: Some("test".into()),
+            file_path: None,
+            url: None,
+        });
+
+        let software_list = deserialize_module_info("test".into(), &mut rdr).unwrap();
+        assert_eq!(expected_software_list, software_list);
     }
 
     #[tokio::test]
