@@ -20,7 +20,7 @@ It communicates with the dedicated IoT cloud platform and the **Tedge Agent**.
 The **Tedge Agent** addresses cloud-agnostic software management operations e.g. listing current installed software list, software update, software removal.
 Also, the Tedge Agent calls an **SM Plugin(s)** to execute an action defined by a received operation.
 
-The key point is that the Tedge Agent is always generic in cloud platforms and software types.
+The key points are that the **Tedge Agent** is always generic in cloud platforms and software types, and **Cloud Mapper** handles cloud-specific actions.
 
 ### Software Management Plugin
 
