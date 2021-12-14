@@ -1,6 +1,6 @@
 use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
-use csv::{Reader, ReaderBuilder};
+use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
 use serde::Deserialize;
@@ -426,12 +426,10 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            let mut rdr = ReaderBuilder::new()
-                .has_headers(false)
-                .delimiter(b'\t')
-                .flexible(true)
-                .from_reader(output.stdout.as_slice());
-            Ok(deserialize_module_info(self.name.clone(), &mut rdr)?)
+            Ok(deserialize_module_info(
+                self.name.clone(),
+                output.stdout.as_slice(),
+            )?)
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
@@ -466,8 +464,13 @@ impl Plugin for ExternalPluginCommand {
 
 pub fn deserialize_module_info(
     module_type: String,
-    records: &mut Reader<&[u8]>,
+    output: impl std::io::Read,
 ) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    let mut records = ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .flexible(true)
+        .from_reader(output);
     let mut software_list = Vec::new();
     for module in records.deserialize() {
         let minfo: ModuleInfo = module?;

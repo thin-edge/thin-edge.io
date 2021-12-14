@@ -20,7 +20,6 @@ url = "2.2"
 [dev-dependencies]
 anyhow = "1.0"
 assert_matches = "1.5"
-csv = "1.1"
 structopt = "0.3"
 serial_test = "0.5.1"
 tempfile = "3.2"

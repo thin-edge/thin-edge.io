@@ -2,7 +2,6 @@
 mod tests {
 
     use assert_matches::assert_matches;
-    use csv::ReaderBuilder;
     use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;
@@ -50,11 +49,6 @@ mod tests {
             }
             None => {}
         }
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .delimiter(b'\t')
-            .flexible(true)
-            .from_reader(data.as_bytes());
 
         let mut expected_software_list = Vec::new();
 
@@ -66,7 +60,7 @@ mod tests {
             url: None,
         });
 
-        let software_list = deserialize_module_info("test".into(), &mut rdr).unwrap();
+        let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
     }
 
