@@ -24,5 +24,5 @@ This is an optional feature, and the components are free to also use cloud speci
 3. The mapper processes are responsible for translating the canonical data format into cloud specific messages and vice versa.
 
 
-![Overview](./thin-edge-overview.png)
+![Overview](./images/thin-edge-overview.png)
 
