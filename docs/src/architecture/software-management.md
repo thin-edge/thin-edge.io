@@ -5,7 +5,7 @@ Software Management operates end to end from a cloud down to the OS of your devi
 
 ## Software management components
 
-Software Management uses following the 3 components to perform software operations:
+Software Management uses the following 3 components to perform software operations:
 **Cloud Mapper**, **Agent**, and **Software Management Plugin**.
 
 ![Software management components](./images/software-management.png)
@@ -17,9 +17,8 @@ It communicates with the dedicated IoT cloud platform and the **Tedge Agent**.
 
 ### Tedge Agent
 
-The **Tedge Agent** addresses cloud-agnostic software management operations along with the **Cloud Mapper**,
-e.g. listing current installed software list, software update, software removal.
-Also, the Tedge Agent calls the **SM Plugin(s)** to execute an action defined by a received operation.
+The **Tedge Agent** addresses cloud-agnostic software management operations e.g. listing current installed software list, software update, software removal.
+Also, the Tedge Agent calls an **SM Plugin(s)** to execute an action defined by a received operation.
 
 The key point is that the Tedge Agent is always generic in cloud platforms and software types.
 
