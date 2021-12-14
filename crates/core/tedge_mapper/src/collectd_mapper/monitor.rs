@@ -94,11 +94,15 @@ impl DeviceMonitor {
         let mut collectd_messages = input_mqtt_client.subscribe(input_topic).await?;
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
-                match CollectdMessage::parse_from(&message) {
+                let messages = CollectdMessage::parse_from(&message);
+
+                match messages {
                     Ok(collectd_message) => {
-                        let batch_input = BatchDriverInput::Event(collectd_message);
-                        if let Err(err) = msg_send.send(batch_input).await {
-                            error!("Error while processing a collectd message: {}", err);
+                        for msg in collectd_message {
+                            let batch_input = BatchDriverInput::Event(msg);
+                            if let Err(err) = msg_send.send(batch_input).await {
+                                error!("Error while processing a collectd message: {}", err);
+                            }
                         }
                     }
                     Err(err) => {
@@ -106,6 +110,7 @@ impl DeviceMonitor {
                     }
                 }
             }
+
             // The MQTT connection has been closed by the process itself.
             info!("Stop batching");
             let eof = BatchDriverInput::Flush;
