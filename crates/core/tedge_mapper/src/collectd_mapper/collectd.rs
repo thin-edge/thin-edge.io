@@ -219,6 +219,31 @@ mod tests {
     }
 
     #[test]
+    fn collectd_message_parsing_multi_valued_measurement() {
+        let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
+        let mqtt_message = Message::new(&topic, "123456789:32.5:45.2");
+
+        let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
+
+        assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
+        assert_eq!(collectd_message.index(0).metric_key, "value_1");
+        assert_eq!(
+            collectd_message.index(0).timestamp,
+            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
+        );
+        assert_eq!(collectd_message.index(0).metric_value, 32.5);
+
+
+        assert_eq!(collectd_message.index(1).metric_group_key, "temperature");
+        assert_eq!(collectd_message.index(1).metric_key, "value_2");
+        assert_eq!(
+            collectd_message.index(1).timestamp,
+            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
+        );
+        assert_eq!(collectd_message.index(1).metric_value, 45.2);
+    }
+
+    #[test]
     fn collectd_null_terminated_message_parsing() {
         let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
         let mqtt_message = Message::new(&topic, "123456789.125:32.5\u{0}");
