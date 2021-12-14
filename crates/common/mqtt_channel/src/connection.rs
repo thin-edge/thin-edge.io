@@ -18,7 +18,6 @@ pub struct Connection {
 }
 
 impl Connection {
-
     // The stream of events received from this MQTT connected and forwarded to the client
     pub fn input_event_stream(&self) -> &(impl Stream<Item = Message> + Unpin) {
         &self.received

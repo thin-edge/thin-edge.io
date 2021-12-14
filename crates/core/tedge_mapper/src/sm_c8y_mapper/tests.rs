@@ -247,10 +247,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     mqtt_tests::assert_received(
         &mut responses,
         TEST_TIMEOUT_MS,
-        vec![
-            "118,software-management\n",
-            "500\n",
-        ],
+        vec!["118,software-management\n", "500\n"],
     )
     .await;
 
@@ -380,9 +377,13 @@ async fn get_jwt_token_full_run() {
 
     // An JwtAuthHttpProxy ...
     let mqtt_config = mqtt_channel::Config::default().with_port(broker.port);
-    let mqtt_client = Connection::connect("JWT-Requester-Test", &mqtt_config, TopicFilter::new_unchecked("c8y/s/dat"))
-        .await
-        .unwrap();
+    let mqtt_client = Connection::connect(
+        "JWT-Requester-Test",
+        &mqtt_config,
+        TopicFilter::new_unchecked("c8y/s/dat"),
+    )
+    .await
+    .unwrap();
     let http_client = reqwest::ClientBuilder::new().build().unwrap();
     let mut http_proxy =
         JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");

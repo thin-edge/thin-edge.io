@@ -76,7 +76,7 @@ impl Mapper {
     async fn process_messages(&mut self) -> Result<(), MqttError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
-            let _ =self.output.send(init_message).await;
+            let _ = self.output.send(init_message).await;
         }
 
         while let Some(message) = &mut self.input.next().await {

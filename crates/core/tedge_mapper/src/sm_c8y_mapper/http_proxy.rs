@@ -6,7 +6,7 @@ use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use chrono::{DateTime, Local};
-use mqtt_channel::{Connection, Topic, TopicFilter, SinkExt, StreamExt };
+use mqtt_channel::{Connection, SinkExt, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
@@ -28,8 +28,10 @@ pub trait C8YHttpProxy {
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError>;
 
-    async fn upload_log_binary(&mut self, log_content: &str)
-        -> Result<String, SMCumulocityMapperError>;
+    async fn upload_log_binary(
+        &mut self,
+        log_content: &str,
+    ) -> Result<String, SMCumulocityMapperError>;
 }
 
 /// Define a C8y endpoint
@@ -257,13 +259,18 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .send(mqtt_channel::Message::new(
                 &Topic::new_unchecked("c8y/s/uat"),
                 "".to_string(),
-            )).await?;
-        let token_smartrest =
-            match tokio::time::timeout(Duration::from_secs(10), self.mqtt_con.received.next()).await {
-                Ok(Some(msg)) => msg.payload_str()?.to_string(),
-                Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
-                Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
-            };
+            ))
+            .await?;
+        let token_smartrest = match tokio::time::timeout(
+            Duration::from_secs(10),
+            self.mqtt_con.received.next(),
+        )
+        .await
+        {
+            Ok(Some(msg)) => msg.payload_str()?.to_string(),
+            Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
+            Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
+        };
 
         Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
     }

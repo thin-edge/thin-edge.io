@@ -97,9 +97,7 @@ where
         Ok(Self { client, http_proxy, operations })
     }
 
-    pub async fn run(
-        &mut self,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn run(&mut self) -> Result<(), anyhow::Error> {
         info!("Initialisation");
         let () = self.http_proxy.init().await?;
 
@@ -160,9 +158,7 @@ where
     }
 
     #[instrument(skip(self), name = "main-loop")]
-    async fn subscribe_messages_runtime(
-        &mut self,
-    ) -> Result<(), SMCumulocityMapperError> {
+    async fn subscribe_messages_runtime(&mut self) -> Result<(), SMCumulocityMapperError> {
         while let Some(message) = self.client.received.next().await {
             let request_topic = message.topic.clone().try_into()?;
             match request_topic {
@@ -326,8 +322,8 @@ where
         let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
         )
-            .with_response_parameter(binary_upload_event_url)
-            .to_smartrest()?;
+        .with_response_parameter(binary_upload_event_url)
+        .to_smartrest()?;
 
         let () = self.publish(&topic, smartrest_set_operation_status).await?;
         Ok(())
@@ -645,7 +641,7 @@ mod tests {
         let smartrest_obj = SmartRestLogRequest::from_smartrest(
             "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
         )
-            .unwrap();
+        .unwrap();
 
         let temp_dir = tempfile::tempdir().unwrap();
         // creating the files
