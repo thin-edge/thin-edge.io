@@ -1431,6 +1431,7 @@ dependencies = [
  "rand",
  "rumqttc",
  "serde",
+ "serial_test",
  "thiserror",
  "tokio",
  "tokio-test",

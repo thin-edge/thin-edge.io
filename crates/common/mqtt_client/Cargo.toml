@@ -22,6 +22,7 @@ log = "0.4"
 rand = "0.8"
 serde = "1.0"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
+serial_test = "0.5"
 tokio-test = "0.4"
 
 [features]
