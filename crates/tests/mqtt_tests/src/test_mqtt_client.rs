@@ -98,6 +98,7 @@ where
 
     loop {
         if let Ok(message) = con.next_topic_payload().await {
+            dbg!(&message);
             for (topic, response) in func(message).iter() {
                 let _ = con.publish(topic, QoS::AtLeastOnce, response).await;
             }

@@ -15,7 +15,11 @@ pub enum SMCumulocityMapperError {
     FromElapsed(#[from] tokio::time::error::Elapsed),
 
     #[error(transparent)]
-    FromMqttClient(#[from] mqtt_client::MqttClientError),
+    FromMqttClient(#[from] mqtt_channel::MqttError),
+
+    // TODO Remove this error case
+    #[error(transparent)]
+    FromSendChannel(#[from] futures::channel::mpsc::SendError),
 
     #[error(transparent)]
     FromReqwest(#[from] reqwest::Error),

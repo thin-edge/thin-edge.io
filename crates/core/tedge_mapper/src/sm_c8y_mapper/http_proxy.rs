@@ -6,7 +6,7 @@ use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use chrono::{DateTime, Local};
-use mqtt_client::{Client, MqttClient, Topic};
+use mqtt_channel::{Connection, Topic, TopicFilter, SinkExt, StreamExt };
 use reqwest::Url;
 use std::time::Duration;
 use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
@@ -21,14 +21,14 @@ pub trait C8YHttpProxy {
 
     fn url_is_in_my_tenant_domain(&self, url: &str) -> bool;
 
-    async fn get_jwt_token(&self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
+    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
 
     async fn send_software_list_http(
-        &self,
+        &mut self,
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError>;
 
-    async fn upload_log_binary(&self, log_content: &str)
+    async fn upload_log_binary(&mut self, log_content: &str)
         -> Result<String, SMCumulocityMapperError>;
 }
 
@@ -40,6 +40,7 @@ pub struct C8yEndPoint {
 }
 
 impl C8yEndPoint {
+    #[cfg(test)]
     fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
@@ -116,14 +117,14 @@ impl C8yEndPoint {
 /// - Keep the connection info to c8y and the internal Id of the device
 /// - Handle JWT requests
 pub struct JwtAuthHttpProxy {
-    mqtt_con: Client,
+    mqtt_con: mqtt_channel::Connection,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
 }
 
 impl JwtAuthHttpProxy {
     pub fn new(
-        mqtt_con: Client,
+        mqtt_con: mqtt_channel::Connection,
         http_con: reqwest::Client,
         c8y_host: &str,
         device_id: &str,
@@ -139,13 +140,19 @@ impl JwtAuthHttpProxy {
         }
     }
 
-    pub fn try_new(
-        mqtt_con: Client,
+    pub async fn try_new(
         tedge_config: &TEdgeConfig,
     ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
         let http_con = reqwest::ClientBuilder::new().build()?;
+
+        // FIXME let mqtt_port = tedge_config.query_string(MqttPortSetting)?.into();
+        // FIXME let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port).with_clean_session(true);
+        let mqtt_config = mqtt_channel::Config::default().with_clean_session(true);
+        let topic = TopicFilter::new("c8y/s/dat")?;
+        let mqtt_con = Connection::connect("JWT-Requester", &mqtt_config, topic).await?;
+
         Ok(JwtAuthHttpProxy::new(
             mqtt_con, http_con, &c8y_host, &device_id,
         ))
@@ -197,7 +204,7 @@ impl JwtAuthHttpProxy {
     }
 
     async fn get_event_id(
-        &self,
+        &mut self,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
@@ -243,22 +250,16 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         Ok(())
     }
 
-    async fn get_jwt_token(&self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        let mut subscriber = self
-            .mqtt_con
-            .subscribe(Topic::new("c8y/s/dat")?.filter())
-            .await?;
-
+    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
         let () = self
             .mqtt_con
-            .publish(mqtt_client::Message::new(
-                &Topic::new("c8y/s/uat")?,
+            .published
+            .send(mqtt_channel::Message::new(
+                &Topic::new_unchecked("c8y/s/uat"),
                 "".to_string(),
-            ))
-            .await?;
-
+            )).await?;
         let token_smartrest =
-            match tokio::time::timeout(Duration::from_secs(10), subscriber.next()).await {
+            match tokio::time::timeout(Duration::from_secs(10), self.mqtt_con.received.next()).await {
                 Ok(Some(msg)) => msg.payload_str()?.to_string(),
                 Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
                 Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
@@ -268,7 +269,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     }
 
     async fn send_software_list_http(
-        &self,
+        &mut self,
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         let url = self.end_point.get_url_for_sw_list();
@@ -288,7 +289,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     }
 
     async fn upload_log_binary(
-        &self,
+        &mut self,
         log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;

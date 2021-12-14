@@ -42,9 +42,9 @@ impl Config {
     }
 
     /// Set the clean_session flag
-    pub fn clean_session(self) -> Self {
+    pub fn with_clean_session(self, flag: bool) -> Self {
         Self {
-            clean_session: true,
+            clean_session: flag,
             ..self
         }
     }

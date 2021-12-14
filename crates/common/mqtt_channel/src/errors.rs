@@ -15,6 +15,10 @@ pub enum MqttError {
         input_excerpt: String,
         from: std::str::Utf8Error,
     },
+
+    // TODO Remove this error case
+    #[error(transparent)]
+    FromSendChannel(#[from] futures::channel::mpsc::SendError),
 }
 
 impl MqttError {

@@ -1,5 +1,5 @@
 use agent_interface::{error::*, topic::ResponseTopic};
-use mqtt_client::{MqttClientError, Topic};
+use mqtt_channel::{MqttError, Topic};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +18,7 @@ impl C8yTopic {
         }
     }
 
-    pub fn to_topic(&self) -> Result<Topic, MqttClientError> {
+    pub fn to_topic(&self) -> Result<Topic, MqttError> {
         Ok(Topic::new(self.as_str())?)
     }
 }

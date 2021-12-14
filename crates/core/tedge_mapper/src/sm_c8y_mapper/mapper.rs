@@ -27,7 +27,7 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset};
 use download::{Auth, DownloadInfo};
-use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
+use mqtt_channel::{Connection, MqttError, SinkExt, StreamExt, TopicFilter, Topic};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -43,22 +43,30 @@ impl CumulocitySoftwareManagementMapper {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn subscriptions(operations: &Operations) -> Result<TopicFilter, anyhow::Error> {
+        let mut topic_filter = TopicFilter::new(ResponseTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(ResponseTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(C8yTopic::SmartRestRequest.as_str())?;
+        topic_filter.add(ResponseTopic::RestartResponse.as_str())?;
+
+        for topic in operations.topics_for_operations() {
+            topic_filter.add(&topic)?
+        }
+
+        Ok(topic_filter)
+    }
 }
 
 #[async_trait]
 impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-        let mqtt_config = mqtt_client::Config::default();
-        let mqtt_client = Client::connect("SM-C8Y-Mapper", &mqtt_config).await?;
-        let mqtt_jwt_client = Client::connect("JWT-Requester", &mqtt_config).await?;
-
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let http_proxy = JwtAuthHttpProxy::try_new(mqtt_jwt_client, &tedge_config)?;
-        let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
+        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
+        let mut sm_mapper = CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
 
-        let messages = sm_mapper.subscribe().await?;
-        let () = sm_mapper.run(messages).await?;
+        let () = sm_mapper.run().await?;
 
         Ok(())
     }
@@ -68,7 +76,7 @@ pub struct CumulocitySoftwareManagement<Proxy>
 where
     Proxy: C8YHttpProxy,
 {
-    pub client: Client,
+    client: Connection,
     http_proxy: Proxy,
     operations: Operations,
 }
@@ -77,31 +85,20 @@ impl<Proxy> CumulocitySoftwareManagement<Proxy>
 where
     Proxy: C8YHttpProxy,
 {
-    pub fn new(client: Client, http_proxy: Proxy, operations: Operations) -> Self {
-        Self {
-            client,
-            http_proxy,
-            operations,
-        }
+    pub fn new(client: Connection, http_proxy: Proxy, operations: Operations) -> Self {
+        Self { client, http_proxy, operations }
     }
 
-    pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error> {
-        let mut topic_filter = TopicFilter::new(ResponseTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(ResponseTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(C8yTopic::SmartRestRequest.as_str())?;
-        topic_filter.add(ResponseTopic::RestartResponse.as_str())?;
+    pub async fn try_new(tedge_config: &TEdgeConfig, http_proxy: Proxy, operations: Operations) -> Result<Self, anyhow::Error> {
+        let mqtt_config = crate::mapper::mqtt_config(&tedge_config)?;
+        let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
+        let client = Connection::connect("SM-C8Y-Mapper", &mqtt_config, mqtt_topic).await?;
 
-        for topic in self.operations.topics_for_operations() {
-            topic_filter.add(&topic)?
-        }
-
-        let messages = self.client.subscribe(topic_filter).await?;
-        Ok(messages)
+        Ok(Self { client, http_proxy, operations })
     }
 
     pub async fn run(
         &mut self,
-        mut messages: Box<dyn MqttMessageStream>,
     ) -> Result<(), anyhow::Error> {
         info!("Initialisation");
         let () = self.http_proxy.init().await?;
@@ -111,7 +108,7 @@ where
         let () = self.publish_get_pending_operations().await?;
         let () = self.ask_software_list().await?;
 
-        while let Err(err) = self.subscribe_messages_runtime(&mut messages).await {
+        while let Err(err) = self.subscribe_messages_runtime().await {
             if let SMCumulocityMapperError::FromSmartRestDeserializer(
                 SmartRestDeserializerError::InvalidParameter { operation, .. },
             ) = &err
@@ -133,7 +130,7 @@ where
         Ok(())
     }
 
-    async fn process_smartrest(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
+    async fn process_smartrest(&mut self, payload: &str) -> Result<(), SMCumulocityMapperError> {
         let message_id: &str = &payload[..3];
         match message_id {
             "528" => {
@@ -162,12 +159,11 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self, messages), name = "main-loop")]
+    #[instrument(skip(self), name = "main-loop")]
     async fn subscribe_messages_runtime(
-        &self,
-        messages: &mut Box<dyn MqttMessageStream>,
+        &mut self,
     ) -> Result<(), SMCumulocityMapperError> {
-        while let Some(message) = messages.next().await {
+        while let Some(message) = self.client.received.next().await {
             let request_topic = message.topic.clone().try_into()?;
             match request_topic {
                 MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse) => {
@@ -197,7 +193,7 @@ where
     }
 
     #[instrument(skip(self), name = "software-list")]
-    async fn ask_software_list(&self) -> Result<(), SMCumulocityMapperError> {
+    async fn ask_software_list(&mut self) -> Result<(), SMCumulocityMapperError> {
         let request = SoftwareListRequest::new();
         let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
         let json_list_request = request.to_json()?;
@@ -208,7 +204,7 @@ where
 
     #[instrument(skip(self), name = "software-update")]
     async fn validate_and_publish_software_list(
-        &self,
+        &mut self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareListResponse::from_json(json_response)?;
@@ -228,14 +224,14 @@ where
         Ok(())
     }
 
-    async fn publish_supported_log_types(&self) -> Result<(), SMCumulocityMapperError> {
+    async fn publish_supported_log_types(&mut self) -> Result<(), SMCumulocityMapperError> {
         let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
     }
 
-    async fn publish_get_pending_operations(&self) -> Result<(), SMCumulocityMapperError> {
+    async fn publish_get_pending_operations(&mut self) -> Result<(), SMCumulocityMapperError> {
         let data = SmartRestGetPendingOperations::default();
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let payload = data.to_smartrest()?;
@@ -244,7 +240,7 @@ where
     }
 
     async fn publish_operation_status(
-        &self,
+        &mut self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
@@ -278,7 +274,7 @@ where
     }
 
     async fn publish_restart_operation_status(
-        &self,
+        &mut self,
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = RestartOperationResponse::from_json(json_response)?;
@@ -312,7 +308,7 @@ where
         Ok(())
     }
 
-    async fn set_log_file_request_executing(&self) -> Result<(), SMCumulocityMapperError> {
+    async fn set_log_file_request_executing(&mut self) -> Result<(), SMCumulocityMapperError> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status =
             SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
@@ -323,7 +319,7 @@ where
     }
 
     async fn set_log_file_request_done(
-        &self,
+        &mut self,
         binary_upload_event_url: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
@@ -337,7 +333,7 @@ where
         Ok(())
     }
 
-    async fn forward_log_request(&self, payload: &str) -> Result<(), SMCumulocityMapperError> {
+    async fn forward_log_request(&mut self, payload: &str) -> Result<(), SMCumulocityMapperError> {
         // retrieve smartrest object from payload
         let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
 
@@ -364,7 +360,7 @@ where
     }
 
     async fn forward_software_request(
-        &self,
+        &mut self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
@@ -401,7 +397,7 @@ where
     }
 
     async fn forward_restart_request(
-        &self,
+        &mut self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
@@ -413,16 +409,17 @@ where
         Ok(())
     }
 
-    async fn publish(&self, topic: &Topic, payload: String) -> Result<(), MqttClientError> {
+    async fn publish(&mut self, topic: &Topic, payload: String) -> Result<(), MqttError> {
         let () = self
             .client
-            .publish(mqtt_client::Message::new(topic, payload))
+            .published
+            .send(mqtt_channel::Message::new(topic, payload))
             .await?;
         Ok(())
     }
 
     async fn send_software_list_http(
-        &self,
+        &mut self,
         json_response: &SoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         let c8y_software_list: C8yUpdateSoftwareListResponse = json_response.into();

@@ -1,9 +1,9 @@
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
-use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
+use crate::sm_c8y_mapper::mapper::{CumulocitySoftwareManagement, CumulocitySoftwareManagementMapper};
 use crate::{operations::Operations, sm_c8y_mapper::error::SMCumulocityMapperError};
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
-use mqtt_client::Client;
+use mqtt_channel::{Connection, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
@@ -14,7 +14,6 @@ use tokio::task::JoinHandle;
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
@@ -40,7 +39,6 @@ async fn mapper_publishes_a_software_list_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
@@ -61,7 +59,6 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -104,7 +101,6 @@ async fn mapper_publishes_software_update_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
@@ -170,7 +166,6 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
@@ -225,8 +220,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
+#[tokio::test]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
@@ -254,7 +248,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
         &mut responses,
         TEST_TIMEOUT_MS,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
             "118,software-management\n",
             "500\n",
         ],
@@ -317,25 +310,15 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Restart SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await?;
 
-    // FIXME. Uncommenting this makes the test pass
-    //        Meaning the mapper misses the message that has been sent when it was down.
-    // let _ = broker.publish(
-    //     "tedge/commands/res/software/update",
-    //     &remove_whitespace(json_response),
-    // )
-    // .await
-    // .unwrap();
-
     // Validate that the mapper process the response and forward it on 'c8y/s/us'
     // Expect init messages followed by a 503 (success)
     mqtt_tests::assert_received(
         &mut responses,
         TEST_TIMEOUT_MS * 5,
         vec![
-            "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n",
             "118,software-management\n",
             "500\n",
-            "503,c8y_SoftwareUpdate\n",
+            "503,c8y_SoftwareUpdate,\n",
         ],
     )
     .await;
@@ -345,7 +328,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -383,7 +365,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial]
 async fn get_jwt_token_full_run() {
     // Given a background process that publish JWT tokens on demand.
@@ -397,12 +379,12 @@ async fn get_jwt_token_full_run() {
     });
 
     // An JwtAuthHttpProxy ...
-    let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
-    let mqtt_client = Client::connect("JWT-Requester-Test", &mqtt_config)
+    let mqtt_config = mqtt_channel::Config::default().with_port(broker.port);
+    let mqtt_client = Connection::connect("JWT-Requester-Test", &mqtt_config, TopicFilter::new_unchecked("c8y/s/dat"))
         .await
         .unwrap();
     let http_client = reqwest::ClientBuilder::new().build().unwrap();
-    let http_proxy =
+    let mut http_proxy =
         JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
 
     // ... fetches and returns these JWT tokens.
@@ -450,17 +432,16 @@ fn remove_whitespace(s: &str) -> String {
 }
 
 async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
-    let mqtt_config = mqtt_client::Config::default().with_port(mqtt_port);
-
-    let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
-    let http_proxy = FakeC8YHttpProxy {};
-
     let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port);
+    let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
+    let mqtt_client = Connection::connect("SM-C8Y-Mapper-Test", &mqtt_config, mqtt_topic).await?;
+
+    let http_proxy = FakeC8YHttpProxy {};
     let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
-    let messages = sm_mapper.subscribe().await?;
 
     let mapper_task = tokio::spawn(async move {
-        let _ = sm_mapper.run(messages).await;
+        let _ = sm_mapper.run().await;
     });
     Ok(mapper_task)
 }
@@ -481,19 +462,19 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         true
     }
 
-    async fn get_jwt_token(&self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
         Ok(SmartRestJwtResponse::try_new("71,fake-token")?)
     }
 
     async fn send_software_list_http(
-        &self,
+        &mut self,
         _c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         Ok(())
     }
 
     async fn upload_log_binary(
-        &self,
+        &mut self,
         _log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
