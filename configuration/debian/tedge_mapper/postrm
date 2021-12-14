@@ -1,9 +1,36 @@
 #!/bin/sh
 set -e
 
-### Remove user tedge-mapper
-if getent passwd tedge-mapper >/dev/null; then
-    deluser --quiet --system tedge-mapper
-fi
+remove_tedge_mapper_user() {
+    if getent passwd tedge-mapper >/dev/null; then
+        pkill -u tedge-mapper || true
+        deluser --quiet --system tedge-mapper
+    fi
+}
+
+purge_operations() {
+    if [ -d "/etc/tedge/operations" ]; then
+        rm -rf /etc/tedge/operations
+    fi
+}
+
+case "$1" in
+    purge)
+        remove_tedge_mapper_user
+        purge_operations
+    ;;
+
+    remove)
+        remove_tedge_mapper_user
+    ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+
+    *)
+        echo "tedge postrm called with unknown argument \`$1\`" >&2
+        exit 1
+    ;;
+esac
 
 #DEBHELPER#

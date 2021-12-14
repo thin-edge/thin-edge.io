@@ -1,4 +1,6 @@
 import json
+import base64
+import re
 from pysys.constants import FAILED
 import requests
 from pysys.basetest import BaseTest
@@ -22,16 +24,20 @@ class Cumulocity(object):
     username = ""
     password = ""
     auth = ""
+    timeout_req = ""
 
-    def __init__(self, c8y_url, tenant_id, username, password):
+    def __init__(self, c8y_url, tenant_id, username, password, log):
         self.c8y_url = c8y_url
         self.tenant_id = tenant_id
         self.username = username
         self.password = password
+        self.timeout_req = 60  # seconds, got timeout with 60s
+        self.log = log
 
         self.auth = ('%s/%s' % (self.tenant_id, self.username), self.password)
 
     def request(self, method, url_path, **kwargs) -> requests.Response:
+
         return requests.request(method, self.c8y_url + url_path, auth=self.auth, **kwargs)
 
     def get_all_devices(self) -> requests.Response:
@@ -53,7 +59,7 @@ class Cumulocity(object):
         params = {
             "fragmentType": "c8y_IsDevice",
             "type": type,
-            "pageSize":100,
+            "pageSize": 100,
         }
         res = requests.get(
             url=self.c8y_url + "/inventory/managedObjects", params=params, auth=self.auth)
@@ -68,6 +74,89 @@ class Cumulocity(object):
             if device_id in device['name']:
                 return device
         return None
+
+    def get_header(self):
+        auth = bytes(
+            f"{self.tenant_id}/{self.username}:{self.password}", "utf-8")
+        header = {
+            b"Authorization": b"Basic " + base64.b64encode(auth),
+            b"content-type": b"application/json",
+            b"Accept": b"application/json",
+        }
+        return header
+
+    def trigger_log_request(self, log_file_request_payload, device_id):
+        url = f"{self.c8y_url}/devicecontrol/operations"
+        log_file_request_payload = {
+            "deviceId": device_id,
+            "description": "Log file request",
+            "c8y_LogfileRequest": log_file_request_payload,
+        }
+        req = requests.post(
+            url, json=log_file_request_payload, headers=self.get_header(), timeout=self.timeout_req
+        )
+        jresponse = json.loads(req.text)
+
+        operation_id = jresponse.get("id")
+
+        if not operation_id:
+            raise SystemError("field id is missing in response")
+
+        return operation_id
+
+    def retrieve_log_file(self, operation_id):
+        """Check if log received"""
+
+        url = f"{self.c8y_url}/devicecontrol/operations/{operation_id}"
+        req = requests.get(url, headers=self.get_header(),
+                           timeout=self.timeout_req)
+
+        req.raise_for_status()
+
+        jresponse = json.loads(req.text)
+        ret = ""
+
+        log_response = jresponse.get("c8y_LogfileRequest")
+        # check if the response contains the logfile
+        log_file = log_response.get("file")
+        self.log.info("log response %s", log_file)
+        if log_file != None:
+            ret = log_file
+        return ret
+
+    def get_child_device_of_thin_edge_device_by_name(self, thin_edge_device_id: str, child_device_id: str):
+        self.device_fragment = self.get_thin_edge_device_by_name(
+            thin_edge_device_id)
+        internal_id = self.device_fragment['id']
+        child_devices = self.to_json_response(requests.get(
+            url="{}/inventory/managedObjects/{}/childDevices".format(self.c8y_url, internal_id), auth=self.auth))
+        for child_device in child_devices['references']:
+            if child_device_id in child_device['managedObject']['name']:
+                return child_device['managedObject']
+
+        return None
+
+    def get_last_measurements_from_device(self, device_internal_id: str):
+        return self.get_last_n_measurements_from_device(
+            device_internal_id=device_internal_id, target_size=1)[0]
+
+    def get_last_n_measurements_from_device(self, device_internal_id: int, target_size: int):
+        params = {
+            "source": device_internal_id,
+            "pageSize": target_size,
+            "dateFrom": "1970-01-01",
+            "revert": True
+        }
+        res = requests.get(
+            url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
+        measurements_json = self.to_json_response(res)
+        return measurements_json['measurements']
+
+    def delete_managed_object_by_internal_id(self, internal_id: str):
+        res = requests.delete(
+            url="{}/inventory/managedObjects/{}".format(self.c8y_url, internal_id), auth=self.auth)
+        if res.status_code != 204 or res.status_code != 404:
+            res.raise_for_status()
 
 
 class EnvironmentC8y(BaseTest):
@@ -136,7 +225,7 @@ class EnvironmentC8y(BaseTest):
         )
 
         self.cumulocity = Cumulocity(
-            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass)
+            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass, self.log)
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")

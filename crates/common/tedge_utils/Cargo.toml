@@ -1,0 +1,26 @@
+[package]
+name = "tedge_utils"
+version = "0.5.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "tedge_utils provide utilities for thin-edge.io components"
+
+[features]
+# No features on by default
+default = []
+logging = ["tracing", "tracing-subscriber"]
+
+[dependencies]
+anyhow = "1.0"
+futures = "0.3"
+tempfile = "3.2"
+thiserror = "1.0"
+tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
+tracing = { version = "0.1", features = [], optional = true }
+tracing-subscriber = { version = "0.2", optional = true }
+
+[dev-dependencies]
+assert_matches = "1.5"
+
+

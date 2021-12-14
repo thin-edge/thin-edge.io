@@ -1,0 +1,65 @@
+[package]
+name = "tedge_mapper"
+version = "0.5.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "tedge_mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
+
+[package.metadata.deb]
+depends = "tedge"
+maintainer-scripts = "configuration/debian/tedge_mapper"
+assets = [
+    ["../../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
+    ["../../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
+    ["../../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
+    ["../../../configuration/init/systemd/tedge-mapper-sm-c8y.service", "/lib/systemd/system/tedge-mapper-sm-c8y.service", "644"],
+    ["../../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],
+    ["target/release/tedge_mapper", "/usr/bin/tedge_mapper", "755"],
+]
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "../../../configuration/init/systemd"
+enable = false
+start = false
+stop-on-upgrade = false
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+batcher = { path = "../../common/batcher" }
+c8y_smartrest = { path = "../c8y_smartrest" }
+c8y_translator = { path = "../c8y_translator" }
+chrono = "0.4"
+clock = { path = "../../common/clock" }
+csv = "1.1"
+flockfile = { path = "../../common/flockfile" }
+futures = "0.3"
+json_sm = { path = "../json_sm"}
+mockall = "0.10"
+mqtt_client = { path = "../../common/mqtt_client" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3"
+tedge_config = { path = "../../common/tedge_config" }
+tedge_users = { path = "../../common/tedge_users" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+thin_edge_json = { path = "../thin_edge_json" }
+thiserror = "1.0"
+tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+assert_matches = "1.5"
+assert-json-diff = "2.0"
+serde = "1.0"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+serde_json = "1.0"
+serial_test = "0.5"
+tempfile = "3.2"
+test-case = "1.2"
+tokio-test = "0.4"
+
+[features]
+integration-test = []

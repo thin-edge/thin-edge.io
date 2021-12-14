@@ -11,6 +11,7 @@
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
+    - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
 
 ## How-to guides
 - [How-to Guides](howto-guides/README.md)
@@ -20,14 +21,14 @@
     - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
     - [How to test the cloud connection?](./howto-guides/007_test_connection.md)
     - [How to configure the local mqtt port](./howto-guides/008_config_local_mqtt_port.md)
-    - [How to trouble shoot device monitoring](./howto-guides/009_touble_shooting_monitoring.md)
+    - [How to trouble shoot device monitoring](./howto-guides/009_trouble_shooting_monitoring.md)
     - [How to add self-signed certificate root to trusted certificates list?](./howto-guides/010_add_self_signed_trusted.md)
     - [How to retrieve JWT token from Cumulocity?](./howto-guides/011_retrieve_jwt_token_from_cumulocity.md)
     - [How to install and enable software management?](./howto-guides/012_install_and_enable_software_management.md)
     - [How to connect an external device?](./howto-guides/013_connect_external_device.md)
     - [How to access the logs on the device?](./howto-guides/014_thin_edge_logs.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
-
+    - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
 
 ## Reference guides
 - [Reference Guides](references/README.md)

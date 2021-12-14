@@ -1,0 +1,18 @@
+[package]
+name = "tedge_config"
+version = "0.5.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+
+[dependencies]
+certificate = { path = "../certificate" }
+serde = { version = "1.0", features = ["derive"] }
+tedge_utils = { path = "../tedge_utils" }
+tempfile = "3.2"
+thiserror = "1.0"
+toml = "0.5"
+url = "2.2"
+
+[dev-dependencies]
+assert_matches = "1.5"
+tempfile = "3.2"
