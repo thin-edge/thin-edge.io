@@ -76,7 +76,7 @@ class PySysTest(SoftwareManagement):
     def setup(self):
 
         if self.fakeplugin != "fakeplugin":
-            self.skipTest("Testing the fake plugin is not supported on this platform"+\
+            self.skipTest("Testing the fake plugin is not enabled."+\
                     "Use parameter -Xfakeplugin=fakeplugin to enable it")
 
         super().setup()
