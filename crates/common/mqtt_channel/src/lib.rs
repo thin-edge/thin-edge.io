@@ -15,3 +15,5 @@ pub use topics::*;
 pub use futures::{
     channel::mpsc::UnboundedReceiver, channel::mpsc::UnboundedSender, SinkExt, StreamExt,
 };
+
+pub use rumqttc::QoS;

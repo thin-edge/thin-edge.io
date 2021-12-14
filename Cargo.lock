@@ -2727,7 +2727,6 @@ dependencies = [
  "futures",
  "mockall",
  "mqtt_channel",
- "mqtt_client",
  "mqtt_tests",
  "reqwest",
  "serde",
