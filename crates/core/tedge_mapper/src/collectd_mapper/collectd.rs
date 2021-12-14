@@ -69,13 +69,15 @@ impl CollectdMessage {
         let collectd_payload = CollectdPayload::parse_from(payload)
             .map_err(|err| CollectdError::InvalidMeasurementPayload(topic.into(), err))?;
 
-        let mut collectd_mssages: Vec<CollectdMessage> =
-            Vec::with_capacity(collectd_payload.metric_values.len());
+        let num_measurements = collectd_payload.metric_values.len();
+        let mut collectd_mssages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
         let mut i = 1;
         for m in collectd_payload.metric_values.iter() {
             let mut metric_key = collectd_topic.metric_key.to_string();
-            metric_key += "_";
-            metric_key += &i.to_string();
+            if num_measurements > 1 {
+                metric_key += "_";
+                metric_key += &i.to_string();
+            }
             collectd_mssages.push(CollectdMessage {
                 metric_group_key: collectd_topic.metric_group_key.to_string(),
                 metric_key,
@@ -210,7 +212,7 @@ mod tests {
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
         assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value_1");
+        assert_eq!(collectd_message.index(0).metric_key, "value");
         assert_eq!(
             collectd_message.index(0).timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
@@ -233,7 +235,6 @@ mod tests {
         );
         assert_eq!(collectd_message.index(0).metric_value, 32.5);
 
-
         assert_eq!(collectd_message.index(1).metric_group_key, "temperature");
         assert_eq!(collectd_message.index(1).metric_key, "value_2");
         assert_eq!(
@@ -251,7 +252,7 @@ mod tests {
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
         assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value_1");
+        assert_eq!(collectd_message.index(0).metric_key, "value");
         assert_eq!(
             collectd_message.index(0).timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125)
@@ -319,11 +320,6 @@ mod tests {
     fn valid_collectd_multivalue_metric() {
         let payload = "123456789:1234:5678";
         let result = CollectdPayload::parse_from(payload).unwrap();
-
-        let expected_result = CollectdPayload {
-            timestamp: 123456789.0,
-            metric_values: vec![123.1, 5678.0],
-        };
 
         assert_eq!(result.timestamp, 123456789.0);
         assert_eq!(result.metric_values, vec![1234.0, 5678.0]);
