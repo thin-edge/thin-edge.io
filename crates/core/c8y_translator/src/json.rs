@@ -16,6 +16,7 @@
 use crate::serializer;
 use chrono::prelude::*;
 use clock::{Clock, WallClock};
+use serde_json;
 use thin_edge_json::parser::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -25,9 +26,15 @@ pub enum CumulocityJsonError {
 
     #[error(transparent)]
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError),
+
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::error::Error),
+
+    #[error("Unsupported alarm severity in topic: {0}")]
+    UnsupportedAlarmSeverity(String),
 }
 
-/// Converts from thin-edge Json to c8y_json
+/// Converts from thin-edge measurement JSON to C8Y measurement JSON
 pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;

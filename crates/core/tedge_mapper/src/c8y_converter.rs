@@ -2,7 +2,7 @@ use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use crate::{converter::*, operations::Operations};
 use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
-use c8y_translator::json;
+use c8y_translator::{json, smartrest};
 use mqtt_client::{Message, Topic};
 use std::collections::HashSet;
 
@@ -19,7 +19,10 @@ impl CumulocityConverter {
         let mut topic_fiter = make_valid_topic_filter_or_panic("tedge/measurements");
         let () = topic_fiter
             .add("tedge/measurements/+")
-            .expect("invalid topic filter");
+            .expect("invalid measurement topic filter");
+        let () = topic_fiter
+            .add("tedge/alarms/+/+")
+            .expect("invalid alarm topic filter");
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_fiter,
@@ -34,18 +37,11 @@ impl CumulocityConverter {
             mapper_config,
         }
     }
-}
 
-impl Converter for CumulocityConverter {
-    type Error = ConversionError;
-
-    fn get_mapper_config(&self) -> &MapperConfig {
-        &self.mapper_config
-    }
-
-    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let () = self.size_threshold.validate(input.payload_str()?)?;
-
+    fn try_convert_measurement(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
         let mut vec: Vec<Message> = Vec::new();
 
         let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
@@ -77,6 +73,51 @@ impl Converter for CumulocityConverter {
             }
         }
         Ok(vec)
+    }
+
+    /// [1, 2, 3] = iter1
+    /// [4, 5, 6] = iter2
+    /// iter1.zip(iter2) => [(1, 4), (2, 5), (3, 6))]
+    fn try_convert_alarm(&self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+        let c8y_alarm_topic = Topic::new_unchecked("c8y/s/us");
+        let mut vec: Vec<Message> = Vec::new();
+
+        let topic_name = input.topic.name.as_str();
+        let topic_split: Vec<&str> = topic_name.split('/').collect();
+        if topic_split.len() == 4 {
+            let alarm_name = topic_split[3];
+            let alarm_severity = topic_split[2];
+
+            let c8y_json_payload = smartrest::from_thin_edge_alarm_json(
+                alarm_name,
+                alarm_severity,
+                input.payload_str()?,
+            )?;
+            vec.push(Message::new(&c8y_alarm_topic, c8y_json_payload));
+        } else {
+            return Err(ConversionError::UnsupportedTopic(topic_name.into()));
+        }
+
+        Ok(vec)
+    }
+}
+
+impl Converter for CumulocityConverter {
+    type Error = ConversionError;
+
+    fn get_mapper_config(&self) -> &MapperConfig {
+        &self.mapper_config
+    }
+
+    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+        let () = self.size_threshold.validate(input.payload_str()?)?;
+        if input.topic.name.starts_with("tedge/measurement") {
+            self.try_convert_measurement(input)
+        } else if input.topic.name.starts_with("tedge/alarms") {
+            self.try_convert_alarm(input)
+        } else {
+            return Ok(vec![]);
+        }
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
