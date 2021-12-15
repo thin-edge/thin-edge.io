@@ -71,18 +71,20 @@ impl CollectdMessage {
 
         let num_measurements = collectd_payload.metric_values.len();
         let mut collectd_mssages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
-        let mut i = 1;
-        for m in collectd_payload.metric_values.iter() {
+        let mut i:u8 = 1;
+        for value in collectd_payload.metric_values.iter() {
             let mut metric_key = collectd_topic.metric_key.to_string();
+            // If there are multiple values, then create unique keys
             if num_measurements > 1 {
                 metric_key += "_";
+                metric_key += "val";
                 metric_key += &i.to_string();
             }
             collectd_mssages.push(CollectdMessage {
                 metric_group_key: collectd_topic.metric_group_key.to_string(),
                 metric_key,
                 timestamp: collectd_payload.timestamp(),
-                metric_value: *m,
+                metric_value: *value,
             });
             i = i + 1;
         }
@@ -228,7 +230,7 @@ mod tests {
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
         assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value_1");
+        assert_eq!(collectd_message.index(0).metric_key, "value_val1");
         assert_eq!(
             collectd_message.index(0).timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
@@ -236,7 +238,7 @@ mod tests {
         assert_eq!(collectd_message.index(0).metric_value, 32.5);
 
         assert_eq!(collectd_message.index(1).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(1).metric_key, "value_2");
+        assert_eq!(collectd_message.index(1).metric_key, "value_val2");
         assert_eq!(
             collectd_message.index(1).timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
