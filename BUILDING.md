@@ -2,7 +2,7 @@
 
 ## Requirements
 
-You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully). 
+You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully).
 
 Our recommended setup and required tools are:
 
@@ -149,8 +149,8 @@ All resulting packages are going to be in: `./target/debian/` directory:
 ```shell
 $ ls ./target/debian -l
 total 2948
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.1.0_amd64.deb
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.1.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.5.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.5.0_amd64.deb
 ```
 
 ## Cross compiling

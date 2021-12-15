@@ -22,5 +22,4 @@
 	  <requirement id=""/>
 	</requirements>
   </traceability>
-  <skipped reason="Disabled, see https://github.com/thin-edge/thin-edge.io/issues/655"/>
 </pysystest>

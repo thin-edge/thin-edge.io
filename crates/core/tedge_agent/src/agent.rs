@@ -563,13 +563,14 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
-    use mqtt_client::{publish, Client, Message, MqttClient, Topic, TopicFilter};
+    use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
     use mqtt_tests::publish;
+    use std::fs;
     use std::time::Duration;
 
     use tokio::time::sleep;
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent_restart";
-    const TIMEOUT: Duration = Duration::from_millis(1000);
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     #[ignore]
     #[tokio::test]
@@ -609,9 +610,9 @@ mod tests {
         let content = format!(
             r#"
         [download]
-        path='{}'
+        path='/mypath'
         "#,
-            temp_dir.path().to_str().unwrap()
+            //&temp_dir.path().to_str().unwrap()
         );
 
         let mut file =
@@ -621,7 +622,7 @@ mod tests {
         let tedge_config_location =
             tedge_config::TEdgeConfigLocation::from_custom_root(temp_dir.path());
 
-        let agent = SmAgent::try_new(
+        let mut agent = SmAgent::try_new(
             "tedge_agent_test",
             SmAgentConfig::try_new(tedge_config_location).unwrap(),
         )
@@ -629,7 +630,7 @@ mod tests {
 
         assert_eq!(
             &agent.config.download_dir.to_str().unwrap(),
-            &temp_dir.path().to_str().unwrap()
+            &"/mypath" //&temp_dir.path().to_str().unwrap()
         );
 
         // make a mqqt request download?
@@ -641,10 +642,14 @@ mod tests {
             "#,
         );
 
-        //mosquitto_pub -t 'tedge/commands/req/software/update' -m '{"id": "1234", "updateList": [{"type": "apt", "modules": [{"name": "rolldice", "action": "install", "url": "https://solo.latest.stage.c8y.io/inventory/managedObjects/9200"}]}]}'
-        //
+        let () = agent.start().await.unwrap();
 
-        publish(broker.port, topic, &payload);
-        sleep(TIMEOUT).await; // because `publish()` might return before the pub ack
+        let () = publish(broker.port, topic, &payload).await.unwrap();
+        sleep(TIMEOUT).await;
+
+        let paths = fs::read_dir("/mypath").unwrap();
+        for path in paths {
+            dbg!("PATH", path);
+        }
     }
 }
