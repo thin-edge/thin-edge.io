@@ -71,10 +71,10 @@ impl CollectdMessage {
 
         let num_measurements = collectd_payload.metric_values.len();
         let mut collectd_mssages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
-        let mut i:u8 = 1;
+        let mut i: u8 = 1;
         for value in collectd_payload.metric_values.iter() {
             let mut metric_key = collectd_topic.metric_key.to_string();
-            // If there are multiple values, then create unique keys
+            // If there are multiple values, then create unique keys metric_key_val1, metric_key_val2 etc.
             if num_measurements > 1 {
                 metric_key += "_";
                 metric_key += "val";
@@ -140,7 +140,6 @@ pub enum CollectdPayloadError {
 impl CollectdPayload {
     fn parse_from(payload: &str) -> Result<Self, CollectdPayloadError> {
         let msg: Vec<&str> = payload.split(':').collect();
-        dbg!(&msg);
         let mut msg_iter = msg.iter();
 
         if msg.len() <= 1 {
@@ -157,9 +156,10 @@ impl CollectdPayload {
             CollectdPayloadError::InvalidMeasurementTimestamp(timestamp.to_string())
         })?;
 
-        let mut metric_values: Vec<f64> = Vec::with_capacity(msg.len());
+        let num_values = msg.len();
+        let mut metric_values: Vec<f64> = Vec::with_capacity(num_values);
 
-        for _i in 1..msg.len() {
+        for _ in 1..msg.len() {
             let value = *msg_iter.next().ok_or_else(|| {
                 CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
             })?;

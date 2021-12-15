@@ -94,9 +94,7 @@ impl DeviceMonitor {
         let mut collectd_messages = input_mqtt_client.subscribe(input_topic).await?;
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
-                let messages = CollectdMessage::parse_from(&message);
-
-                match messages {
+                match CollectdMessage::parse_from(&message) {
                     Ok(collectd_message) => {
                         for msg in collectd_message {
                             let batch_input = BatchDriverInput::Event(msg);
