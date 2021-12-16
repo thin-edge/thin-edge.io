@@ -35,17 +35,6 @@ pub struct Mapper {
 }
 
 impl Mapper {
-    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
-        info!("Running");
-        let errors_handle = self.subscribe_errors();
-        let messages_handle = self.subscribe_messages();
-        messages_handle.await?;
-        errors_handle
-            .await
-            .map_err(|_| MqttClientError::JoinError)?;
-        Ok(())
-    }
-
     pub fn new(
         client: mqtt_client::Client,
         converter: Box<dyn Converter<Error = ConversionError>>,
@@ -56,6 +45,17 @@ impl Mapper {
             converter,
             _flock,
         }
+    }
+
+    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
+        info!("Running");
+        let errors_handle = self.subscribe_errors();
+        let messages_handle = self.subscribe_messages();
+        messages_handle.await?;
+        errors_handle
+            .await
+            .map_err(|_| MqttClientError::JoinError)?;
+        Ok(())
     }
 
     #[instrument(skip(self), name = "errors")]
@@ -70,6 +70,11 @@ impl Mapper {
 
     #[instrument(skip(self), name = "messages")]
     async fn subscribe_messages(&mut self) -> Result<(), MqttClientError> {
+        let init_messages = self.converter.init_messages();
+        for init_message in init_messages.into_iter() {
+            self.client.publish(init_message).await?
+        }
+
         let mut messages = self
             .client
             .subscribe(self.converter.get_in_topic_filter().clone())

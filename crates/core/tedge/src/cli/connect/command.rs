@@ -116,7 +116,6 @@ impl Command for ConnectCommand {
 
         new_bridge(
             &bridge_config,
-            &self.cloud,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
             &self.config_location,
@@ -126,18 +125,39 @@ impl Command for ConnectCommand {
             Ok(DeviceStatus::AlreadyExists) => {}
             Ok(DeviceStatus::MightBeNew) | Ok(DeviceStatus::Unknown) => {
                 if let Cloud::C8y = self.cloud {
-                    println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation");
+                    println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation.\n");
                     restart_mosquitto(
                         &bridge_config,
                         self.service_manager.as_ref(),
                         &self.config_location,
                     )?;
+
+                    println!(
+                        "Awaiting mosquitto to start. This may take up to {} seconds.\n",
+                        MOSQUITTO_RESTART_TIMEOUT_SECONDS
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(
+                        MOSQUITTO_RESTART_TIMEOUT_SECONDS,
+                    ));
                 }
             }
             Err(_) => {
                 println!(
                     "Warning: Bridge has been configured, but {} connection check failed.\n",
                     self.cloud.as_str()
+                );
+            }
+        }
+
+        if bridge_config.use_mapper {
+            println!("Checking if tedge-mapper is installed.\n");
+
+            if which("tedge_mapper").is_err() {
+                println!("Warning: tedge_mapper is not installed.\n");
+            } else {
+                self.service_manager.as_ref().start_and_enable_service(
+                    self.cloud.dependent_mapper_service(),
+                    std::io::stdout(),
                 );
             }
         }
@@ -404,7 +424,6 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
 
 fn new_bridge(
     bridge_config: &BridgeConfig,
-    cloud: &Cloud,
     common_mosquitto_config: &CommonMosquittoConfig,
     service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
@@ -458,17 +477,6 @@ fn new_bridge(
     }
 
     println!("Successfully created bridge connection!\n");
-
-    if bridge_config.use_mapper {
-        println!("Checking if tedge-mapper is installed.\n");
-
-        if which("tedge_mapper").is_err() {
-            println!("Warning: tedge_mapper is not installed.\n");
-        } else {
-            service_manager
-                .start_and_enable_service(cloud.dependent_mapper_service(), std::io::stdout());
-        }
-    }
 
     Ok(())
 }

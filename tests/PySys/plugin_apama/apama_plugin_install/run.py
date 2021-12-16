@@ -21,11 +21,20 @@ class ApamaPluginInstallTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "install",
-                       "project", "--file", self.project.apama_input_dir + "/quickstart.zip"],
+                       "QuickStart::project", "--file", self.project.apama_input_dir + "/quickstart.zip"],
             stdouterr="plugin_install"
         )
         self.wait_till_correlator_ready()
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "list"],
+            stdouterr="plugin_list_after_install"
+        )
 
     def validate(self):
         self.assert_project_installed()
         self.assert_monitor_installed("TedgeDemoMonitor")
+        self.assertGrep("plugin_list_after_install.out",
+                        "tedge-demo-test::project")
+        self.assertGrep("plugin_list_after_install.out",
+                        "TedgeDemoMonitor::mon")

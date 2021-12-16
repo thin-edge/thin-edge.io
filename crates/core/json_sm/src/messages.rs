@@ -505,6 +505,12 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub enum RestartOperation {
+    Request(RestartOperationRequest),
+    Response(RestartOperationResponse),
+}
+
 /// Message payload definition for restart operation request.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -552,6 +558,10 @@ impl RestartOperationResponse {
 
     pub fn topic_name() -> &'static str {
         "tedge/commands/res/control/restart"
+    }
+
+    pub fn status(&self) -> OperationStatus {
+        self.status
     }
 }
 

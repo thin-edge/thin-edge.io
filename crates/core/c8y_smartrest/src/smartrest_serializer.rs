@@ -9,6 +9,7 @@ type SmartRest = String;
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
     C8yLogFileRequest,
+    C8yRestartRequest,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -16,6 +17,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
         match op {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
+            CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
         }
     }
 }
@@ -39,7 +41,7 @@ impl Default for SmartRestSetSupportedLogType {
     fn default() -> Self {
         Self {
             message_id: "118",
-            supported_operations: vec!["software-management".into()],
+            supported_operations: vec!["software-management"],
         }
     }
 }
@@ -47,24 +49,25 @@ impl Default for SmartRestSetSupportedLogType {
 impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedLogType {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct SmartRestSetSupportedOperations {
+pub struct SmartRestSetSupportedOperations<'a> {
     pub message_id: &'static str,
-    pub supported_operations: Vec<&'static str>,
+    pub supported_operations: Vec<&'a str>,
 }
 
-impl Default for SmartRestSetSupportedOperations {
-    fn default() -> Self {
+impl<'a> SmartRestSetSupportedOperations<'a> {
+    pub fn new(supported_operations: &[&'a str]) -> Self {
         Self {
             message_id: "114",
-            supported_operations: vec![
-                CumulocitySupportedOperations::C8ySoftwareUpdate.into(),
-                CumulocitySupportedOperations::C8yLogFileRequest.into(),
-            ],
+            supported_operations: supported_operations.into(),
         }
+    }
+
+    pub fn add_operation(&mut self, operation: &'a str) {
+        self.supported_operations.push(operation);
     }
 }
 
-impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations {}
+impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations<'a> {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestSoftwareModuleItem {
@@ -160,7 +163,7 @@ pub struct SmartRestSetOperationToFailed {
 }
 
 impl SmartRestSetOperationToFailed {
-    fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
+    pub fn new(operation: CumulocitySupportedOperations, reason: String) -> Self {
         Self {
             message_id: "502",
             operation: operation.into(),
@@ -209,9 +212,10 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_supported_operations() {
-        let smartrest = SmartRestSetSupportedOperations::default()
-            .to_smartrest()
-            .unwrap();
+        let smartrest =
+            SmartRestSetSupportedOperations::new(&["c8y_SoftwareUpdate", "c8y_LogfileRequest"])
+                .to_smartrest()
+                .unwrap();
         assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest\n");
     }
 
