@@ -8,7 +8,7 @@ Software Management operates end to end from a cloud down to the OS of your devi
 Software Management uses the following 3 components to perform software operations:
 **Cloud Mapper**, **Agent**, and **Software Management Plugin**.
 
-![Software management components](./images/software-management.png)
+You can find the diagrams which explain how those 3 components interact with each other from [Software Management Agent Specification](https://thin-edge.github.io/thin-edge.io-specs/software-management/sm-agent.html).
 
 ### Cloud Mapper
 
