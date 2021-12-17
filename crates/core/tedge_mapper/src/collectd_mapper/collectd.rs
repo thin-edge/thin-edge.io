@@ -71,14 +71,12 @@ impl CollectdMessage {
 
         let num_measurements = collectd_payload.metric_values.len();
         let mut collectd_mssages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
-        let mut i: u8 = 1;
-        for value in collectd_payload.metric_values.iter() {
+
+        for (i, value) in collectd_payload.metric_values.iter().enumerate() {
             let mut metric_key = collectd_topic.metric_key.to_string();
             // If there are multiple values, then create unique keys metric_key_val1, metric_key_val2 etc.
             if num_measurements > 1 {
-                metric_key += "_";
-                metric_key += "val";
-                metric_key += &i.to_string();
+                metric_key = format!("{}_val{}", metric_key, i + 1);
             }
             collectd_mssages.push(CollectdMessage {
                 metric_group_key: collectd_topic.metric_group_key.to_string(),
@@ -86,7 +84,6 @@ impl CollectdMessage {
                 timestamp: collectd_payload.timestamp(),
                 metric_value: *value,
             });
-            i = i + 1;
         }
         Ok(collectd_mssages)
     }
@@ -213,13 +210,20 @@ mod tests {
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
-        assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value");
+        let CollectdMessage {
+            metric_group_key,
+            metric_key,
+            timestamp,
+            metric_value,
+        } = collectd_message.index(0);
+        assert_eq!(metric_group_key, "temperature");
+
+        assert_eq!(metric_key, "value");
         assert_eq!(
-            collectd_message.index(0).timestamp,
+            *timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
         );
-        assert_eq!(collectd_message.index(0).metric_value, 32.5);
+        assert_eq!(*metric_value, 32.5);
     }
 
     #[test]
@@ -229,6 +233,21 @@ mod tests {
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
+        let CollectdMessage {
+            metric_group_key,
+            metric_key,
+            timestamp,
+            metric_value,
+        } = collectd_message.index(0);
+        assert_eq!(metric_group_key, "temperature");
+
+        assert_eq!(metric_key, "value_val1");
+        assert_eq!(
+            *timestamp,
+            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
+        );
+
+        assert_eq!(*metric_value, 32.5);
         assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
         assert_eq!(collectd_message.index(0).metric_key, "value_val1");
         assert_eq!(
@@ -237,13 +256,20 @@ mod tests {
         );
         assert_eq!(collectd_message.index(0).metric_value, 32.5);
 
-        assert_eq!(collectd_message.index(1).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(1).metric_key, "value_val2");
+        let CollectdMessage {
+            metric_group_key,
+            metric_key,
+            timestamp,
+            metric_value,
+        } = collectd_message.index(1);
+
+        assert_eq!(metric_group_key, "temperature");
+        assert_eq!(metric_key, "value_val2");
         assert_eq!(
-            collectd_message.index(1).timestamp,
+            *timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
         );
-        assert_eq!(collectd_message.index(1).metric_value, 45.2);
+        assert_eq!(*metric_value, 45.2);
     }
 
     #[test]
@@ -253,13 +279,20 @@ mod tests {
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
-        assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value");
+        let CollectdMessage {
+            metric_group_key,
+            metric_key,
+            timestamp,
+            metric_value,
+        } = collectd_message.index(0);
+
+        assert_eq!(metric_group_key, "temperature");
+        assert_eq!(metric_key, "value");
         assert_eq!(
-            collectd_message.index(0).timestamp,
+            *timestamp,
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125)
         );
-        assert_eq!(collectd_message.index(0).metric_value, 32.5);
+        assert_eq!(*metric_value, 32.5);
     }
 
     #[test]
