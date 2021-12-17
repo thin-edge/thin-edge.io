@@ -137,33 +137,26 @@ pub enum CollectdPayloadError {
 impl CollectdPayload {
     fn parse_from(payload: &str) -> Result<Self, CollectdPayloadError> {
         let msg: Vec<&str> = payload.split(':').collect();
-        let mut msg_iter = msg.iter();
+        let vec_len = msg.len();
 
-        if msg.len() <= 1 {
+        if vec_len <= 1 {
             return Err(CollectdPayloadError::InvalidMeasurementPayloadFormat(
                 payload.to_string(),
             ));
         }
 
-        let timestamp = *msg_iter.next().ok_or_else(|| {
-            CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
+        // First element is always the timestamp
+        let timestamp = msg[0].parse::<f64>().map_err(|_err| {
+            CollectdPayloadError::InvalidMeasurementTimestamp(msg[0].to_string())
         })?;
 
-        let timestamp = timestamp.parse::<f64>().map_err(|_err| {
-            CollectdPayloadError::InvalidMeasurementTimestamp(timestamp.to_string())
-        })?;
+        let mut metric_values: Vec<f64> = Vec::with_capacity(vec_len-1);
 
-        let num_values = msg.len();
-        let mut metric_values: Vec<f64> = Vec::with_capacity(num_values);
-
-        for _ in 1..msg.len() {
-            let value = *msg_iter.next().ok_or_else(|| {
-                CollectdPayloadError::InvalidMeasurementPayloadFormat(payload.to_string())
+        // Process the values
+        for i in 1..vec_len {
+            let value = msg[i].parse::<f64>().map_err(|_err| {
+                CollectdPayloadError::InvalidMeasurementValue(msg[i].to_string())
             })?;
-
-            let value = value
-                .parse::<f64>()
-                .map_err(|_err| CollectdPayloadError::InvalidMeasurementValue(value.to_string()))?;
 
             metric_values.push(value);
         }
