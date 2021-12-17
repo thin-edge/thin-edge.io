@@ -40,5 +40,11 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
-pysys.py run -v DEBUG
+
+set +e
+pysys.py run --record -v DEBUG
+set -e
+
 deactivate
+
+mv __pysys_junit_xml pysys_junit_xml_all
