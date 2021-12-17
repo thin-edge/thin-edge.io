@@ -150,7 +150,7 @@ impl CollectdPayload {
             CollectdPayloadError::InvalidMeasurementTimestamp(msg[0].to_string())
         })?;
 
-        let mut metric_values: Vec<f64> = Vec::with_capacity(vec_len-1);
+        let mut metric_values: Vec<f64> = Vec::with_capacity(vec_len - 1);
 
         // Process the values
         for i in 1..vec_len {
