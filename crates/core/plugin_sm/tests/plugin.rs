@@ -64,6 +64,24 @@ mod tests {
         assert_eq!(expected_software_list, software_list);
     }
 
+    #[test]
+    fn desrialize_plugin_result_with_trailing_tab() {
+        let data = "abc\t";
+
+        let mut expected_software_list = Vec::new();
+
+        expected_software_list.push(SoftwareModule {
+            name: "abc".into(),
+            version: None,
+            module_type: Some("test".into()),
+            file_path: None,
+            url: None,
+        });
+
+        let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
+        assert_eq!(expected_software_list, software_list);
+    }
+
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_list_with_version() {

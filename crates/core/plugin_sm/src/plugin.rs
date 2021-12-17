@@ -464,13 +464,13 @@ impl Plugin for ExternalPluginCommand {
 
 pub fn deserialize_module_info(
     module_type: String,
-    output: impl std::io::Read,
+    input: impl std::io::Read,
 ) -> Result<Vec<SoftwareModule>, SoftwareError> {
     let mut records = ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
         .flexible(true)
-        .from_reader(output);
+        .from_reader(input);
     let mut software_list = Vec::new();
     for module in records.deserialize() {
         let minfo: ModuleInfo = module?;
