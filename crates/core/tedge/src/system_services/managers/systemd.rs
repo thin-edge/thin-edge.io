@@ -54,7 +54,7 @@ impl SystemServiceManager for SystemdServiceManager {
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
                 cmd: SystemCtlCmd::Stop.as_str(),
-                hint: "Lacking permissions.",
+                hint: "Lacking permissions. (stopping)",
             }
             .into()),
             SYSTEMCTL_ERROR_SERVICE_NOT_LOADED => Err(SystemdError::ServiceNotLoaded {
@@ -77,7 +77,8 @@ impl SystemServiceManager for SystemdServiceManager {
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
                 cmd: SystemCtlCmd::Restart.as_str(),
-                hint: "Lacking permissions or service's process exited with error code.",
+                hint:
+                    "Lacking permissions or service's process exited with error code. (restarting)",
             }
             .into()),
             SYSTEMCTL_ERROR_SERVICE_NOT_FOUND => Err(SystemdError::ServiceNotFound {
@@ -95,7 +96,7 @@ impl SystemServiceManager for SystemdServiceManager {
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
                 cmd: SystemCtlCmd::Enable.as_str(),
-                hint: "Lacking permissions.",
+                hint: "Lacking permissions. (enabling)",
             }
             .into()),
             code => Err(SystemdError::UnhandledReturnCode { code }.into()),
@@ -109,7 +110,7 @@ impl SystemServiceManager for SystemdServiceManager {
             SYSTEMCTL_ERROR_GENERIC => Err(SystemdError::UnspecificError {
                 service: service_name,
                 cmd: SystemCtlCmd::Disable.as_str(),
-                hint: "Lacking permissions.",
+                hint: "Lacking permissions. (disabling)",
             }
             .into()),
             code => Err(SystemdError::UnhandledReturnCode { code }.into()),
