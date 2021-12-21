@@ -240,15 +240,6 @@ mod tests {
             Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
         );
 
-        assert_eq!(*metric_value, 32.5);
-        assert_eq!(collectd_message.index(0).metric_group_key, "temperature");
-        assert_eq!(collectd_message.index(0).metric_key, "value_val1");
-        assert_eq!(
-            collectd_message.index(0).timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
-        );
-        assert_eq!(collectd_message.index(0).metric_value, 32.5);
-
         let CollectdMessage {
             metric_group_key,
             metric_key,
