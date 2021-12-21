@@ -13,6 +13,15 @@ pub enum SmartRestSerializerError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::error::Error),
+
+    #[error(transparent)]
+    TimeFormatError(#[from] time::error::Format),
+
+    #[error("Unsupported alarm severity in topic: {0}")]
+    UnsupportedAlarmSeverity(String),
 }
 
 #[derive(thiserror::Error, Debug)]

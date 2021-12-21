@@ -328,7 +328,9 @@ dependencies = [
  "serde",
  "serde_json",
  "test-case",
+ "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]

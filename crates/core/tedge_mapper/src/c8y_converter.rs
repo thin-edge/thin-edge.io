@@ -1,8 +1,9 @@
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use crate::{converter::*, operations::Operations};
+use c8y_smartrest::alarm;
 use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
-use c8y_translator::{json, smartrest};
+use c8y_translator::json;
 use mqtt_client::{Message, Topic};
 use std::collections::HashSet;
 use thin_edge_json::alarm::ThinEdgeAlarm;
@@ -81,7 +82,7 @@ impl CumulocityConverter {
         let mut vec: Vec<Message> = Vec::new();
 
         let tedge_alarm = ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-        let smartrest_alarm = smartrest::from_thin_edge_alarm_json(tedge_alarm)?;
+        let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
         vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
 
         Ok(vec)

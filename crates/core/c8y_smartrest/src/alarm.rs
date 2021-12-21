@@ -1,10 +1,10 @@
 use thin_edge_json::alarm::{AlarmSeverity, ThinEdgeAlarm};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-use crate::json::CumulocityJsonError;
+use crate::error::SmartRestSerializerError;
 
 /// Converts from thin-edge alarm to C8Y alarm SmartREST message
-pub fn from_thin_edge_alarm_json(alarm: ThinEdgeAlarm) -> Result<String, CumulocityJsonError> {
+pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializerError> {
     match alarm.data {
         None => Ok(format!("306,{}", alarm.name)),
         Some(alarm_data) => {
@@ -100,7 +100,7 @@ mod tests {
         ;"clear alarm translation"
     )]
     fn check_alarm_translation(alarm: ThinEdgeAlarm, expected_smartrest_msg: &str) {
-        let result = from_thin_edge_alarm_json(alarm);
+        let result = serialize_alarm(alarm);
 
         assert_eq!(result.unwrap(), expected_smartrest_msg);
     }
@@ -124,7 +124,7 @@ mod tests {
             }),
         };
 
-        let smartrest_message = from_thin_edge_alarm_json(alarm).unwrap();
+        let smartrest_message = serialize_alarm(alarm).unwrap();
         let mut reader = csv::Reader::from_reader(smartrest_message.as_bytes());
         for result in reader.deserialize() {
             let smartrest_alarm: SmartRestAlarm = result.unwrap();
