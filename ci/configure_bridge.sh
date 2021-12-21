@@ -3,7 +3,8 @@ set -e
 
 echo "Configuring Bridge"
 
-URL=thin-edge-io.eu-latest.cumulocity.com
+# Squelch the https:// from the url
+URL=$(echo $C8YURL | cut -c 9- - )
 
 sudo tedge cert remove
 
