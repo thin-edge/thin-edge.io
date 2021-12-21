@@ -25,6 +25,9 @@ sudo cp plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins
 
 sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
 
+sudo chmod +x /etc/tedge/sm-plugins/docker
+sudo chmod +x /etc/tedge/sm-plugins/fruits
+
 sudo tedge config set software.plugin.default apt
 
 sudo mkdir -p /tmp/.tedge_dummy_plugin/
