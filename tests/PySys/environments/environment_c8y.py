@@ -17,6 +17,9 @@ service mosquitto and service tedge-mapper.
 class Cumulocity(object):
     """Class to retrieve information about Cumulocity.
     TODO : Review if we download enough data -> pageSize
+    TODO : Documentation and test for all of these functions
+    TODO : Extract as separate package
+    TODO : Make this more bulletproof
     """
 
     c8y_url = ""
@@ -69,7 +72,15 @@ class Cumulocity(object):
         return self.get_all_devices_by_type("thin-edge.io")
 
     def get_thin_edge_device_by_name(self, device_id: str):
+        """
+        TODO: Update : What is returned here ? Its the json data structure from C8y -
+        Do we call this device fragment ?
+        Hint: Device_id is the name of the device
+        """
+
+        # Hint this will fail, when the device does not have the type set "thin-edge.io" in C8y
         json_response = self.get_all_devices_by_type("thin-edge.io")
+
         for device in json_response['managedObjects']:
             if device_id in device['name']:
                 return device
