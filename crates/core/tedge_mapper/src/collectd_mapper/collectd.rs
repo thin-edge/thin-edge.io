@@ -345,6 +345,17 @@ mod tests {
     }
 
     #[test]
+    fn invalid_collectd_metric_multi_value() {
+        let payload = "123456789:96.6:abc";
+        let result = CollectdPayload::parse_from(payload);
+
+        assert_matches!(
+            result,
+            Err(CollectdPayloadError::InvalidMeasurementValue(_))
+        );
+    }
+
+    #[test]
     fn valid_collectd_multivalue_metric() {
         let payload = "123456789:1234:5678";
         let result = CollectdPayload::parse_from(payload).unwrap();
