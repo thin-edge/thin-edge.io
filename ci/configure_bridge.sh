@@ -3,7 +3,7 @@ set -e
 
 echo "Configuring Bridge"
 
-$URL=thin-edge-io.eu-latest.cumulocity.com
+URL=thin-edge-io.eu-latest.cumulocity.com
 
 sudo tedge cert remove
 
