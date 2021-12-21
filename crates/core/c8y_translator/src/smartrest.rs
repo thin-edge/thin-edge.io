@@ -15,7 +15,7 @@ pub fn from_thin_edge_alarm_json(alarm: ThinEdgeAlarm) -> Result<String, Cumuloc
                 AlarmSeverity::Warning => 304,
             };
 
-            let current_timestamp = OffsetDateTime::now_local()?;
+            let current_timestamp = OffsetDateTime::now_utc();
 
             let smartrest_message = format!(
                 "{},{},{},{}",
@@ -37,6 +37,7 @@ pub fn from_thin_edge_alarm_json(alarm: ThinEdgeAlarm) -> Result<String, Cumuloc
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use serde::Deserialize;
     use test_case::test_case;
     use thin_edge_json::alarm::ThinEdgeAlarmData;
     use time::macros::datetime;
@@ -80,7 +81,7 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
+            severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
                 message: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
@@ -104,24 +105,33 @@ mod tests {
         assert_eq!(result.unwrap(), expected_smartrest_msg);
     }
 
-    // #[derive(Debug, Deserialize)]
-    // struct SmartRestAlarm {
-    //     pub code: i32,
-    //     pub name: String,
-    //     pub message: Option<String>,
-    //     pub time: Option<OffsetDateTime>,
-    // }
+    #[derive(Debug, Deserialize)]
+    struct SmartRestAlarm {
+        pub code: i32,
+        pub name: String,
+        pub message: Option<String>,
+        pub time: Option<OffsetDateTime>,
+    }
 
-    // #[test]
-    // fn alarm_translation_empty_json_payload_generates_timestamp() {
-    //     let smartrest_message = from_thin_edge_alarm_json(alarm).unwrap();
-    //     let mut reader = csv::Reader::from_reader(smartrest_message.as_bytes());
-    //     for result in reader.deserialize() {
-    //         let smartrest_alarm: SmartRestAlarm = result.unwrap();
-    //         assert_eq!(smartrest_alarm.code, 301);
-    //         assert_eq!(smartrest_alarm.name, "empty_alarm".to_string());
-    //         assert_eq!(smartrest_alarm.message, None);
-    //         assert_matches!(smartrest_alarm.time, Some(_))
-    //     }
-    // }
+    #[test]
+    fn alarm_translation_empty_json_payload_generates_timestamp() {
+        let alarm = ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Warning,
+            data: Some(ThinEdgeAlarmData {
+                message: Some("I raised it".into()),
+                time: None,
+            }),
+        };
+
+        let smartrest_message = from_thin_edge_alarm_json(alarm).unwrap();
+        let mut reader = csv::Reader::from_reader(smartrest_message.as_bytes());
+        for result in reader.deserialize() {
+            let smartrest_alarm: SmartRestAlarm = result.unwrap();
+            assert_eq!(smartrest_alarm.code, 301);
+            assert_eq!(smartrest_alarm.name, "empty_alarm".to_string());
+            assert_eq!(smartrest_alarm.message, None);
+            assert_matches!(smartrest_alarm.time, Some(_))
+        }
+    }
 }

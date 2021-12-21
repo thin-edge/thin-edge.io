@@ -33,9 +33,6 @@ pub enum CumulocityJsonError {
     #[error(transparent)]
     TimeFormatError(#[from] time::error::Format),
 
-    #[error(transparent)]
-    TimeIndeterminateOffsetError(#[from] time::error::IndeterminateOffset),
-
     #[error("Unsupported alarm severity in topic: {0}")]
     UnsupportedAlarmSeverity(String),
 }
