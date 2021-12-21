@@ -33,6 +33,9 @@ pub enum ConversionError {
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
+    FromThinEdgeJsonDeserialization(#[from] thin_edge_json::alarm::ThinEdgeJsonDeserializerError),
+
+    #[error(transparent)]
     FromThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]

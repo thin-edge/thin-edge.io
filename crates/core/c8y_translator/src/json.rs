@@ -30,6 +30,12 @@ pub enum CumulocityJsonError {
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::error::Error),
 
+    #[error(transparent)]
+    TimeFormatError(#[from] time::error::Format),
+
+    #[error(transparent)]
+    TimeIndeterminateOffsetError(#[from] time::error::IndeterminateOffset),
+
     #[error("Unsupported alarm severity in topic: {0}")]
     UnsupportedAlarmSeverity(String),
 }

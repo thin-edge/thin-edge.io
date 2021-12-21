@@ -5,6 +5,7 @@ use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSuppo
 use c8y_translator::{json, smartrest};
 use mqtt_client::{Message, Topic};
 use std::collections::HashSet;
+use thin_edge_json::alarm::ThinEdgeAlarm;
 
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 
@@ -75,28 +76,13 @@ impl CumulocityConverter {
         Ok(vec)
     }
 
-    /// [1, 2, 3] = iter1
-    /// [4, 5, 6] = iter2
-    /// iter1.zip(iter2) => [(1, 4), (2, 5), (3, 6))]
     fn try_convert_alarm(&self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let c8y_alarm_topic = Topic::new_unchecked("c8y/s/us");
+        let c8y_alarm_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
         let mut vec: Vec<Message> = Vec::new();
 
-        let topic_name = input.topic.name.as_str();
-        let topic_split: Vec<&str> = topic_name.split('/').collect();
-        if topic_split.len() == 4 {
-            let alarm_name = topic_split[3];
-            let alarm_severity = topic_split[2];
-
-            let c8y_json_payload = smartrest::from_thin_edge_alarm_json(
-                alarm_name,
-                alarm_severity,
-                input.payload_str()?,
-            )?;
-            vec.push(Message::new(&c8y_alarm_topic, c8y_json_payload));
-        } else {
-            return Err(ConversionError::UnsupportedTopic(topic_name.into()));
-        }
+        let tedge_alarm = ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+        let smartrest_alarm = smartrest::from_thin_edge_alarm_json(tedge_alarm)?;
+        vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
 
         Ok(vec)
     }
@@ -116,7 +102,7 @@ impl Converter for CumulocityConverter {
         } else if input.topic.name.starts_with("tedge/alarms") {
             self.try_convert_alarm(input)
         } else {
-            return Ok(vec![]);
+            return Err(ConversionError::UnsupportedTopic(input.topic.name.clone()));
         }
     }
 
