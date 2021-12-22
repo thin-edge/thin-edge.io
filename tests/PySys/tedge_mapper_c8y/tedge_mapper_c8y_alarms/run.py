@@ -59,8 +59,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/alarms/minor/temperature_low",
-                       '{"message":"temperature low"}'],
+                       "tedge/alarms/minor/temperature_low", ""],
             environs=os.environ
         )
 
