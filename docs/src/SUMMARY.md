@@ -40,7 +40,9 @@
     - [The Bridged Topics](./references/bridged-topics.md)
     - [The Software Management Plugin API](./references/plugin-api.md)
 
-- [Reference](references/README.md)
+  - [Building](./BUILDING.md)
+
+- [Command Line Reference](references/README.md)
   - [The `tedge` command](./references/tedge.md)
   - [The `tedge config` command](./references/tedge-config.md)
   - [The `tedge cert` command](./references/tedge-cert.md)
