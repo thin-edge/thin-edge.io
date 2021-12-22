@@ -96,9 +96,11 @@ impl DeviceMonitor {
             while let Some(message) = collectd_messages.next().await {
                 match CollectdMessage::parse_from(&message) {
                     Ok(collectd_message) => {
-                        let batch_input = BatchDriverInput::Event(collectd_message);
-                        if let Err(err) = msg_send.send(batch_input).await {
-                            error!("Error while processing a collectd message: {}", err);
+                        for msg in collectd_message {
+                            let batch_input = BatchDriverInput::Event(msg);
+                            if let Err(err) = msg_send.send(batch_input).await {
+                                error!("Error while processing a collectd message: {}", err);
+                            }
                         }
                     }
                     Err(err) => {
@@ -106,6 +108,7 @@ impl DeviceMonitor {
                     }
                 }
             }
+
             // The MQTT connection has been closed by the process itself.
             info!("Stop batching");
             let eof = BatchDriverInput::Flush;

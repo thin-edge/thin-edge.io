@@ -21,4 +21,7 @@ url = "2.2"
 anyhow = "1.0"
 assert_matches = "1.5"
 structopt = "0.3"
+serial_test = "0.5.1"
 tempfile = "3.2"
+test-case = "1.2.1"
+
