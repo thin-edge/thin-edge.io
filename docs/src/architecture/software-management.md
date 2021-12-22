@@ -5,45 +5,30 @@ Software Management operates end to end from a cloud down to the OS of your devi
 
 ## Software management components
 
-Software Management uses following components to perform software operations:
+Software Management uses the following 3 components to perform software operations:
+**Cloud Mapper**, **Agent**, and **Software Management Plugin**.
+
+You can find the diagrams which explain how those 3 components interact with each other from [Software Management Agent Specification](https://thin-edge.github.io/thin-edge.io-specs/software-management/sm-agent.html).
 
 ### Cloud Mapper
 
-TBD
+The **Cloud Mapper** converts from/to cloud-specific format to/from cloud-agnostic format.
+It communicates with the dedicated IoT cloud platform and the **Tedge Agent**.
 
 ### Tedge Agent
 
-TBD
+The **Tedge Agent** addresses cloud-agnostic software management operations e.g. listing current installed software list, software update, software removal.
+Also, the Tedge Agent calls an **SM Plugin(s)** to execute an action defined by a received operation.
 
-### Software Manager Plugin
+The key points are that the **Tedge Agent** is always generic in cloud platforms and software types, and **Cloud Mapper** handles cloud-specific actions.
 
-TBD
+### Software Management Plugin
 
-## Installation
+The **Software Management Plugin** is dedicated to defining the behaviour of software actions (list, update, remove) per software type (apt, docker, etc.)
 
-### tegde_agent
-
-`tedge_agent` is distributed as debian package and can be installed with following command:
-
-```shell
-sudo dpkg -i tedge_agent
-```
-
-The installation will add `systemd` service `tedge-agent.service` and new user specific to the agent (`tedge-agent`).
-As some of the operations may require `root` permissions or `sudo` access it is advised that the tedge-agent user is added to the `sudo` group which will allow it to execute elevated commands.
-
-You can do with following command:
-
-```shell
-sudo usermod -aG sudo tedge-agent
-```
-
-To start the agent you can do:
-
-```shell
-sudo systemctl restart tedge-agent
-```
-
-#### Plugins
-
-SM Plugins should be stored in `/etc/tedge/sm-plugins` directory.
+## Related documents
+1. [How to install and enable software management?](../howto-guides/012_install_and_enable_software_management.md)
+2. [Manage my device software](../tutorials/software-management.md)
+3. [Write my software management plugin](../tutorials/write-my-software-management-plugin.md)
+4. [The Software Management Plugin API](../references/plugin-api.md)
+5. [Software Management Specification](https://github.com/thin-edge/thin-edge.io-specs/tree/main/src/software-management)
