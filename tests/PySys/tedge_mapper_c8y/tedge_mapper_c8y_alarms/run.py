@@ -23,9 +23,8 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/alarms/warn/temperature_high",
+                       "tedge/alarms/warning/temperature_high",
                        '{"message":"temperature is high", "time":"2021-12-15T15:22:06.464247777+05:30"}'],
-            stdouterr="tedge_pub",
             environs=os.environ
         )
 
@@ -35,40 +34,58 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             arguments=["mqtt", "pub",
                        "tedge/alarms/major/temperature_very_high",
                        '{"message":"temperature is very high"}'],
-            stdouterr="tedge_pub",
             environs=os.environ
         )
 
-        # Publish one temperature_high alarm with "MAJOR" severity to thin-edge device
+        # Publish one temperature_high alarm with "CRITICAL" severity to thin-edge device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/alarms/critical/temperature_dangerous",
                        '{"message":"temperature is dangerously high"}'],
-            stdouterr="tedge_pub",
+            environs=os.environ
+        )
+
+        # Publish one temperature_high alarm with "MINOR" severity to thin-edge device
+        self.startProcess(
+            command=self.tedge,
+            arguments=["mqtt", "pub",
+                       "tedge/alarms/minor/temperature_low",
+                       '{"message":"temperature low"}'],
+            environs=os.environ
+        )
+
+        # Clear the last "MINOR" alarm
+        self.startProcess(
+            command=self.tedge,
+            arguments=["mqtt", "pub",
+                       "tedge/alarms/minor/temperature_low",
+                       '{"message":"temperature low"}'],
             environs=os.environ
         )
 
         # Waiting for the mapped measurement message to reach the Cloud
-        time.sleep(1)
+        time.sleep(5)
 
     def validate(self):
+        # Even though this call retrieves the last 3 alarms,
+        # the last minor alarm won't be included as it's already cleared
         alarms = self.cumulocity.get_last_n_alarms_from_device(
-            self.project.device, 3)
+            self.project.deviceid, 3)
 
         # Validate the last 3 measurements of thin-edge-child device
         self.validate_alarm(
-            alarms[0], "temperature_dangerous", "temperature is dangerously high")
+            alarms[0], "temperature_dangerous", "CRITICAL", "temperature is dangerously high")
         self.validate_alarm(
-            alarms[1], "temperature_very_high", "temperature is very high")
+            alarms[1], "temperature_very_high", "MAJOR", "temperature is very high")
         self.validate_alarm(
-            alarms[2], "temperature_high", "temperature is high", "2021-12-15T15:22:06.464247777+00:30")
+            alarms[2], "temperature_high", "WARNING", "temperature is high", "2021-12-15T15:22:06.464247777+00:30")
 
     def validate_alarm(self, alarm_json,
                        expected_alarm_type,
-                       expected_alarm_text,
-                       expected_alarm_time=None,
-                       expected_alarm_severity=None):
+                       expected_alarm_severity,
+                       expected_alarm_text=None,
+                       expected_alarm_time=None):
         self.log.info(json.dumps(alarm_json, indent=4))
         self.assertThat('actual == expected',
                         actual=alarm_json['type'], expected=expected_alarm_type)

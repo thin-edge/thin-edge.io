@@ -2,7 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate that alarms sent to tedge/alarms topic
+			Validate that alarms sent to tedge/alarms topic \
 			gets mapped as alarms in Cumulocity.
 		</title>
 		<purpose>
