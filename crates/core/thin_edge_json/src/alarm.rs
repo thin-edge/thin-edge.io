@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
-use serde::{Deserialize, Deserializer};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use serde::Deserialize;
+use time::OffsetDateTime;
 
 /// In-memory representation of ThinEdge JSON alarm.
 #[derive(Debug, Deserialize, PartialEq)]
@@ -24,20 +24,8 @@ pub enum AlarmSeverity {
 pub struct ThinEdgeAlarmData {
     pub message: Option<String>,
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_iso8601_timestamp")]
+    #[serde(deserialize_with = "clock::deserialize_iso8601_timestamp")]
     pub time: Option<OffsetDateTime>,
-}
-
-fn deserialize_iso8601_timestamp<'de, D>(
-    deserializer: D,
-) -> Result<Option<OffsetDateTime>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let timestamp = String::deserialize(deserializer)?;
-    OffsetDateTime::parse(timestamp.as_str(), &Rfc3339)
-        .map_err(serde::de::Error::custom)
-        .map(|val| Some(val))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -76,7 +64,14 @@ impl ThinEdgeAlarm {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
         if topic_split.len() == 4 {
             let alarm_name = topic_split[3];
+            if alarm_name.is_empty() {
+                return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+                    mqtt_topic.into(),
+                ));
+            }
+
             let alarm_severity = topic_split[2];
+
             let alarm_data = if mqtt_payload.is_empty() {
                 None
             } else {
@@ -172,6 +167,36 @@ mod tests {
             ThinEdgeAlarm::try_from(alarm_topic, alarm_payload.to_string().as_str()).unwrap();
 
         assert_eq!(alarm, expected_alarm);
+    }
+
+    #[test]
+    fn alarm_translation_empty_alarm_name() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms/critical/", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
+        );
+    }
+
+    #[test]
+    fn alarm_translation_empty_severity() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms//some_alarm", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(_))
+        );
+    }
+
+    #[test]
+    fn alarm_translation_empty_severity_and_name() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms//", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
+        );
     }
 
     #[test]

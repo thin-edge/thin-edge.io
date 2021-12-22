@@ -18,7 +18,7 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializ
             let current_timestamp = OffsetDateTime::now_utc();
 
             let smartrest_message = format!(
-                "{},{},{},{}",
+                "{},{},\"{}\",{}",
                 smartrest_code,
                 alarm.name,
                 alarm_data.message.unwrap_or_default(),
@@ -51,7 +51,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "301,temperature_alarm,I raised it,2021-04-23T19:00:00+05:00"
+        "301,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"critical alarm translation"
     )]
     #[test_case(
@@ -63,7 +63,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "302,temperature_alarm,I raised it,2021-04-23T19:00:00+05:00"
+        "302,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"major alarm translation"
     )]
     #[test_case(
@@ -75,7 +75,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "303,temperature_alarm,,2021-04-23T19:00:00+05:00"
+        "303,temperature_alarm,\"\",2021-04-23T19:00:00+05:00"
         ;"minor alarm translation without message"
     )]
     #[test_case(
@@ -83,12 +83,12 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                message: Some("I, raised, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "304,temperature_alarm,I raised it,2021-04-23T19:00:00+05:00"
-        ;"warning alarm translation"
+        "304,temperature_alarm,\"I, raised, it\",2021-04-23T19:00:00+05:00"
+        ;"warning alarm translation with commas in message"
     )]
     #[test_case(
         ThinEdgeAlarm {
