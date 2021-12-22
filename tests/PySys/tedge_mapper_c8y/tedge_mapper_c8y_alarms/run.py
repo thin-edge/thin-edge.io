@@ -64,7 +64,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         )
 
         # Waiting for the mapped measurement message to reach the Cloud
-        time.sleep(5)
+        time.sleep(1)
 
     def validate(self):
         # Even though this call retrieves the last 3 alarms,

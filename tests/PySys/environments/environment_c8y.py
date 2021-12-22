@@ -136,7 +136,7 @@ class Cumulocity(object):
 
         return None
 
-    def get_last_measurement_from_device(self, device_internal_id: int):
+    def get_last_measurements_from_device(self, device_internal_id: str):
         return self.get_last_n_measurements_from_device(
             device_internal_id=device_internal_id, target_size=1)[0]
 
@@ -160,8 +160,11 @@ class Cumulocity(object):
         params = {
             "source": device_internal_id,
         }
+        payload = {
+            "status": "CLEARED"
+        }
         res = requests.put(
-            url=self.c8y_url + "/alarm/alarms", params=params, auth=self.auth)
+            url=self.c8y_url + "/alarm/alarms", params=params, json=payload, auth=self.auth)
         res.raise_for_status()
 
     def delete_managed_object_by_internal_id(self, internal_id: str):
