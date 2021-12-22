@@ -5,14 +5,11 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
-time = { version = "0.3", features = ["formatting", "macros"] }
-chrono = { version = "0.4", features = ["serde"] }
+chrono = "0.4"
 clock = { path = "../../common/clock" }
 json-writer = { path = "../../common/json_writer" }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
@@ -21,8 +18,8 @@ assert-json-diff = "2.0"
 criterion = "0.3"
 pretty_assertions = "1.0"
 proptest = "1.0"
+serde_json = "1.0"
 test-case = "1.2"
-csv = "1.1"
 
 [features]
 # use: #[cfg(feature="integration-test")]
