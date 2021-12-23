@@ -38,7 +38,8 @@ jobs:
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
-        path: ./target
+        with:
+          path: ./target
 
 
 #      # Runs a single command using the runners shell
