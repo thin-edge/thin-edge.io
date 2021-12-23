@@ -34,6 +34,10 @@ jobs:
           echo "CLONED REPO"
           ls -l target
 
+      # Make changes to pull request here
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
 
 
 #      # Runs a single command using the runners shell
