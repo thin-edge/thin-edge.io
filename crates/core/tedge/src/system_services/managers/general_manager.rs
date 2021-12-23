@@ -48,7 +48,6 @@ impl SystemServiceManager for GeneralServiceManager {
     fn stop_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
         let config = replace_with_service_name(&self.system_config.stop, service)?;
         let exec_command = ExecCommand::try_new(config)?;
-        dbg!(&exec_command.to_string());
         self.run_service_command_as_root(exec_command)?
             .must_succeed()
     }
@@ -56,7 +55,6 @@ impl SystemServiceManager for GeneralServiceManager {
     fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
         let config = replace_with_service_name(&self.system_config.restart, service)?;
         let exec_command = ExecCommand::try_new(config)?;
-        dbg!(&exec_command.to_string());
         self.run_service_command_as_root(exec_command)?
             .must_succeed()
     }
@@ -64,7 +62,6 @@ impl SystemServiceManager for GeneralServiceManager {
     fn enable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
         let config = replace_with_service_name(&self.system_config.enable, service)?;
         let exec_command = ExecCommand::try_new(config)?;
-        dbg!(&exec_command.to_string());
         self.run_service_command_as_root(exec_command)?
             .must_succeed()
     }
@@ -72,7 +69,6 @@ impl SystemServiceManager for GeneralServiceManager {
     fn disable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
         let config = replace_with_service_name(&self.system_config.disable, service)?;
         let exec_command = ExecCommand::try_new(config)?;
-        dbg!(&exec_command.to_string());
         self.run_service_command_as_root(exec_command)?
             .must_succeed()
     }
@@ -80,7 +76,6 @@ impl SystemServiceManager for GeneralServiceManager {
     fn is_service_running(&self, service: SystemService) -> Result<bool, SystemServiceError> {
         let config = replace_with_service_name(&self.system_config.is_active, service)?;
         let exec_command = ExecCommand::try_new(config)?;
-        dbg!(&exec_command.to_string());
         self.run_service_command_as_root(exec_command)
             .map(|status| status.success())
     }
