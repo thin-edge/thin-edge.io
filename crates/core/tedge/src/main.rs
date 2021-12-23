@@ -16,6 +16,7 @@ mod system_services;
 type ConfigError = crate::error::TEdgeError;
 
 use command::{BuildCommand, BuildContext};
+use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     let user_manager = UserManager::new();
@@ -35,8 +36,11 @@ fn main() -> anyhow::Result<()> {
 
     let build_context = BuildContext {
         config_repository,
-        config_location: tedge_config_location,
-        service_manager: service_manager(user_manager.clone()),
+        config_location: tedge_config_location.clone(),
+        service_manager: service_manager(
+            user_manager.clone(),
+            tedge_config_location.tedge_config_root_path,
+        )?,
         user_manager,
     };
 
@@ -49,14 +53,12 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| format!("failed to {}", cmd.description()))
 }
 
-fn service_manager(user_manager: UserManager) -> Arc<dyn SystemServiceManager> {
-    if cfg!(feature = "openrc") {
-        Arc::new(OpenRcServiceManager::new(user_manager))
-    } else if cfg!(target_os = "linux") {
-        Arc::new(SystemdServiceManager::new(user_manager))
-    } else if cfg!(target_os = "freebsd") {
-        Arc::new(BsdServiceManager::new(user_manager))
-    } else {
-        Arc::new(NullSystemServiceManager)
-    }
+fn service_manager(
+    user_manager: UserManager,
+    config_root: PathBuf,
+) -> Result<Arc<dyn SystemServiceManager>, SystemConfigError> {
+    Ok(Arc::new(GeneralServiceManager::try_new(
+        user_manager,
+        config_root,
+    )?))
 }
