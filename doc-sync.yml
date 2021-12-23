@@ -25,19 +25,21 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       
-      - name: Clone GuillaumeFalourd/poc-github-actions PUBLIC repository
+      - name: Clone SoftwareAG/c8y-docs PUBLIC repository
         uses: GuillaumeFalourd/clone-github-repo-action@v1
         with:
-          owner: 'GuillaumeFalourd'
-          repository: 'poc-github-actions'
+          owner: 'SoftwareAG'
+          repository: 'c8y-docs'
       
       - name: Access cloned repository content
         run: |
           echo "ROOT"
+          mkdir target
           ls -l
+          cp -R c8y-docs/content/thin-edge* target
           echo "CLONED REPO"
-          cd poc-github-actions
-          ls -l
+          ls -l target
+
 
 
 #      # Runs a single command using the runners shell
