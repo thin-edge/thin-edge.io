@@ -30,14 +30,22 @@ jobs:
         with:
           owner: 'GuillaumeFalourd'
           repository: 'poc-github-actions'
-
-
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      
+      - name: Access cloned repository content
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          echo "ROOT"
+          ls -l
+          echo "CLONED REPO"
+          cd poc-github-actions
+          ls -l
+
+
+#      # Runs a single command using the runners shell
+#      - name: Run a one-line script
+#        run: echo Hello, world!
+#
+#      # Runs a set of commands using the runners shell
+#      - name: Run a multi-line script
+#        run: |
+#          echo Add other actions to build,
+#          echo test, and deploy your project.
