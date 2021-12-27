@@ -30,8 +30,8 @@ jobs:
           version: latest
 
       - run: |
-        cd doc
-        mdbook build
+          cd doc
+          mdbook build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
