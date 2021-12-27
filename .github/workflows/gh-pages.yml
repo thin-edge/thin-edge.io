@@ -30,7 +30,8 @@ jobs:
           version: latest
 
       - run: |
-          cd doc
+          ls -l
+          cd docs
           mdbook build
 
       - name: Deploy
