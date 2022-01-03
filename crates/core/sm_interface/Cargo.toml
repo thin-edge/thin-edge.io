@@ -1,10 +1,10 @@
 [package]
-name = "json_sm"
+name = "sm_interface"
 version = "0.5.0"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 license = "Apache-2.0"
-description = "json_sm defines the thin-edge json extension for software management"
+description = "sm_interface defines the thin-edge json extension and mqtt topics for software management"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

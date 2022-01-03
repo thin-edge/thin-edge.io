@@ -9,7 +9,7 @@ thin_edge_json = { path = "../thin_edge_json" }
 time = { version = "0.3", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 csv = "1.1"
-json_sm = { path = "../json_sm" }
+sm_interface = { path = "../sm_interface" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 

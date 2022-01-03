@@ -324,9 +324,9 @@ dependencies = [
  "assert_matches",
  "chrono",
  "csv",
- "json_sm",
  "serde",
  "serde_json",
+ "sm_interface",
  "test-case",
  "thin_edge_json",
  "thiserror",
@@ -697,12 +697,12 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "backoff",
- "json_sm",
  "log",
  "mockito",
  "nix",
  "regex",
  "reqwest",
+ "sm_interface",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -1232,19 +1232,6 @@ name = "json-writer"
 version = "0.5.0"
 dependencies = [
  "anyhow",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "json_sm"
-version = "0.5.0"
-dependencies = [
- "csv",
- "mqtt_client",
- "nanoid",
- "regex",
- "serde",
  "serde_json",
  "thiserror",
 ]
@@ -1789,10 +1776,10 @@ dependencies = [
  "async-trait",
  "csv",
  "download",
- "json_sm",
  "serde",
  "serde_json",
  "serial_test",
+ "sm_interface",
  "structopt",
  "tedge_utils",
  "tempfile",
@@ -2497,6 +2484,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9def91fd1e018fe007022791f865d0ccc9b3a0d5001e01aabb8b40e46000afb5"
 
 [[package]]
+name = "sm_interface"
+version = "0.5.0"
+dependencies = [
+ "csv",
+ "mqtt_client",
+ "nanoid",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2619,7 +2619,6 @@ dependencies = [
  "chrono",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
  "once_cell",
@@ -2628,6 +2627,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "sm_interface",
  "structopt",
  "tedge_config",
  "tedge_utils",
@@ -2705,7 +2705,6 @@ dependencies = [
  "csv",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
  "mqtt_tests",
@@ -2713,6 +2712,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "sm_interface",
  "structopt",
  "tedge_config",
  "tedge_users",

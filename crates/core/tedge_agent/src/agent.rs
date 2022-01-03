@@ -8,7 +8,7 @@ use crate::{
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 
-use json_sm::{
+use sm_interface::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,

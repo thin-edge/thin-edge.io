@@ -1,4 +1,4 @@
-use json_sm::{
+use sm_interface::{
     DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
 use serde::{Deserialize, Serialize};

@@ -1,6 +1,6 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
-use json_sm::DownloadInfo;
+use sm_interface::DownloadInfo;
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
@@ -49,7 +49,7 @@ impl Downloader {
         };
 
         let mut response = retry(backoff, || async {
-            let client = if let Some(json_sm::Auth::Bearer(token)) = &url.auth {
+            let client = if let Some(sm_interface::Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
                 reqwest::Client::new().get(url.url())
@@ -146,7 +146,7 @@ mod tests {
 
     use super::Downloader;
     use anyhow::bail;
-    use json_sm::{Auth, DownloadInfo};
+    use sm_interface::{Auth, DownloadInfo};
     use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;

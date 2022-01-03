@@ -1,6 +1,6 @@
 use anyhow::Result;
 use download::Downloader;
-use json_sm::DownloadInfo;
+use sm_interface::DownloadInfo;
 
 /// This example shows how to use the `downlaoder`.
 #[tokio::main]

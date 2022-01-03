@@ -2,7 +2,7 @@ use crate::logged_command::LoggedCommand;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
-use json_sm::*;
+use sm_interface::*;
 use serde::Deserialize;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;

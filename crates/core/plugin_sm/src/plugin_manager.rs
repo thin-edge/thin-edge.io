@@ -1,6 +1,6 @@
 use crate::plugin::{Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
-use json_sm::{
+use sm_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse, DEFAULT,
 };

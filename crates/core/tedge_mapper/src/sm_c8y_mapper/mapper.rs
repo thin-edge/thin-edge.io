@@ -16,7 +16,7 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset};
 
-use json_sm::{
+use sm_interface::{
     topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
