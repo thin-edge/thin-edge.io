@@ -65,9 +65,6 @@ mod tests {
 
     #[test]
     fn read_system_config_file() -> anyhow::Result<()> {
-        let (_dir, config_root_path) = create_temp_tedge_config(toml_conf)?;
-        let config = SystemConfig::try_new(config_root_path)?;
-
         let toml_conf = r#"
             name = "systemd"
             is_available = ["/bin/systemctl", "--version"]
@@ -78,6 +75,9 @@ mod tests {
             is_active = ["/bin/systemctl", "is-active", "{}"]
         "#;
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
+
+        let (_dir, config_root_path) = create_temp_tedge_config(toml_conf)?;
+        let config = SystemConfig::try_new(config_root_path)?;
 
         assert_eq!(config, expected_config);
 
