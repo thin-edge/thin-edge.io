@@ -76,6 +76,9 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
 
         self.child_device_json = self.cumulocity.get_child_device_of_thin_edge_device_by_name(
             self.project.device, "thin-edge-child")
+        if self.child_device_json == None:
+            self.log.error("Warning, the child device is None")
+
         self.other_child_device_json = self.cumulocity.get_child_device_of_thin_edge_device_by_name(
             self.project.device, "other-thin-edge-child")
 

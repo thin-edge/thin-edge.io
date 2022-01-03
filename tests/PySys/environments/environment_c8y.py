@@ -143,6 +143,9 @@ class Cumulocity(object):
             url="{}/inventory/managedObjects/{}/childDevices".format(self.c8y_url, internal_id), auth=self.auth))
         for child_device in child_devices['references']:
             if child_device_id in child_device['managedObject']['name']:
+                if child_device['managedObject'] == None:
+                    print("Oh no it is None")
+                    print(f"Cannot find {child_device_id}")
                 return child_device['managedObject']
 
         return None
