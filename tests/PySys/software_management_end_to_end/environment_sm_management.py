@@ -356,6 +356,9 @@ class SoftwareManagement(EnvironmentC8y):
                     # Invalidate the old operation
                     self.operation_id = None
                     break
+                elif current_status == "FAILED":
+                    self.log.error("Stopping as the operation has failed")
+                    raise SystemError("The operation has failed")
 
             else:
 
