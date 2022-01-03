@@ -36,8 +36,8 @@ impl SystemConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::io::Write;
+    use tempfile::TempDir;
 
     #[test]
     fn deserialize_system_config() {
@@ -51,7 +51,8 @@ mod tests {
             disable =  ["/bin/systemctl", "disable", "{}"]
             is_active = ["/bin/systemctl", "is-active", "{}"]
         "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(config.name, "systemd");
         assert_eq!(config.is_available, vec!["/bin/systemctl", "--version"]);

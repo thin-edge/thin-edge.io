@@ -35,9 +35,7 @@ impl SystemServiceManager for GeneralServiceManager {
     fn check_operational(&self) -> Result<(), SystemServiceError> {
         let exec_command = ExecCommand::try_new(self.system_config.is_available.clone())?;
 
-        dbg!(&exec_command.to_string());
-
-        match exec_command.to_command().status() {
+        match exec_command.build_command().status() {
             Ok(status) if status.success() => Ok(()),
             _ => Err(SystemServiceError::ServiceManagerUnavailable(
                 self.name().to_string(),
@@ -100,7 +98,7 @@ impl ExecCommand {
         }
     }
 
-    fn to_command(&self) -> std::process::Command {
+    fn build_command(&self) -> std::process::Command {
         CommandBuilder::new(&self.exec)
             .args(&self.args)
             .silent()
@@ -110,25 +108,31 @@ impl ExecCommand {
 
 impl fmt::Display for ExecCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.exec, self.args.iter().format(" "))
+        if self.args.is_empty() {
+            write!(f, "{}", self.exec)
+        } else {
+            write!(f, "{} {}", self.exec, self.args.iter().format(" "))
+        }
     }
 }
 
-// I want to improve this
 fn replace_with_service_name(
     input_args: &[String],
     service: SystemService,
 ) -> Result<Vec<String>, SystemConfigError> {
-    let placeholder_index =
-        input_args
-            .iter()
-            .position(|s| s == "{}")
-            .ok_or(SystemConfigError::InvalidSyntax {
-                reason: "A placeholder '{}' is missing.".to_string(),
-            })?;
+    if !input_args.iter().any(|s| s == "{}") {
+        return Err(SystemConfigError::InvalidSyntax {
+            reason: "A placeholder '{}' is missing.".to_string(),
+        });
+    }
 
     let mut args = input_args.to_owned();
-    args[placeholder_index] = SystemService::as_service_name(service).to_string();
+    for item in args.iter_mut() {
+        if item == "{}" {
+            *item = SystemService::as_service_name(service).to_string();
+        }
+    }
+
     Ok(args)
 }
 
@@ -140,7 +144,7 @@ impl GeneralServiceManager {
         let _root_guard = self.user_manager.become_user(ROOT_USER);
 
         exec_command
-            .to_command()
+            .build_command()
             .status()
             .map_err(Into::into)
             .map(|status| ServiceCommandExitStatus {
@@ -175,24 +179,28 @@ impl ServiceCommandExitStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::system_services::SystemConfigError::InvalidSyntax;
     use assert_matches::*;
     use test_case::test_case;
 
-    // if 'bin, {}, start, {}`? Error? Replace?
+    #[test_case(
+    vec!["bin".to_string(), "{}".to_string(), "arg2".to_string()],
+    vec!["bin".to_string(), "mosquitto".to_string(), "arg2".to_string()]
+    ;"one placeholder")]
+    #[test_case(
+    vec!["bin".to_string(), "{}".to_string(), "{}".to_string()],
+    vec!["bin".to_string(), "mosquitto".to_string(), "mosquitto".to_string()]
+    ;"several placeholders")]
+    fn replace_placeholder_with_service(input: Vec<String>, expected_output: Vec<String>) {
+        let replaced_config = replace_with_service_name(&input, SystemService::Mosquitto).unwrap();
+        assert_eq!(replaced_config, expected_output)
+    }
+
     #[test]
-    fn replace_placeholder_with_service() {
-        let raw_config = vec!["bin".to_string(), "{}".to_string(), "arg2".to_string()];
-        let replaced_config =
-            replace_with_service_name(&raw_config, SystemService::Mosquitto).unwrap();
-        assert_eq!(
-            replaced_config,
-            vec![
-                "bin".to_string(),
-                "mosquitto".to_string(),
-                "arg2".to_string()
-            ]
-        )
+    fn fail_to_replace_placeholder_with_service() {
+        let input = vec!["bin".to_string(), "arg1".to_string(), "arg2".to_string()];
+        let system_config_error =
+            replace_with_service_name(&input, SystemService::Mosquitto).unwrap_err();
+        assert_matches!(system_config_error, SystemConfigError::InvalidSyntax { .. })
     }
 
     #[test_case(
@@ -201,14 +209,14 @@ mod tests {
         exec: "bin".to_string(),
         args: vec!["arg1".to_string(), "arg2".to_string()]
     }
-    ;"several arguments")]
+    ;"with arguments")]
     #[test_case(
     vec!["bin".to_string()],
     ExecCommand {
         exec: "bin".to_string(),
         args: vec![]
     }
-    ;"one argument")]
+    ;"only executable")]
     fn build_exec_command(config: Vec<String>, expected: ExecCommand) {
         let exec_command = ExecCommand::try_new(config).unwrap();
         assert_eq!(exec_command, expected);
@@ -217,29 +225,44 @@ mod tests {
     #[test]
     fn fail_to_build_exec_command() {
         let config = vec![];
-        let error = ExecCommand::try_new(config).unwrap_err();
-        assert_matches!(error, InvalidSyntax { .. });
+        let system_config_error = ExecCommand::try_new(config).unwrap_err();
+        assert_matches!(system_config_error, SystemConfigError::InvalidSyntax { .. });
     }
 
-    #[test]
-    fn construct_command() {
-        let exec_command = ExecCommand {
-            exec: "bin".to_string(),
-            args: vec!["arg1".to_string(), "arg2".to_string()],
-        };
-        let command = exec_command.to_command();
-        assert_eq!(
-            format!("{:?}", command),
-            r#""bin" "arg1" "arg2""#.to_string()
-        );
+    #[test_case(
+    ExecCommand {
+        exec: "bin".to_string(),
+        args: vec!["arg1".to_string(), "arg2".to_string()]
+    },
+    r#""bin" "arg1" "arg2""#
+    ;"with arguments")]
+    #[test_case(
+    ExecCommand {
+        exec: "bin".to_string(),
+        args: vec![]
+    },
+    r#""bin""#
+    ;"only executable")]
+    fn construct_command(exec_command: ExecCommand, expected: &str) {
+        let command = exec_command.build_command();
+        assert_eq!(format!("{:?}", command), expected);
     }
 
-    #[test]
-    fn print_exec_command() {
-        let exec_command = ExecCommand {
-            exec: "bin".to_string(),
-            args: vec!["arg1".to_string(), "arg2".to_string()],
-        };
-        assert_eq!(exec_command.to_string(), "bin arg1 arg2")
+    #[test_case(
+    ExecCommand {
+        exec: "bin".to_string(),
+        args: vec!["arg1".to_string(), "arg2".to_string()]
+    },
+    "bin arg1 arg2"
+    ;"with arguments")]
+    #[test_case(
+    ExecCommand {
+        exec: "bin".to_string(),
+        args: vec![]
+    },
+    "bin"
+    ;"only executable")]
+    fn print_exec_command(exec_command: ExecCommand, expected: &str) {
+        assert_eq!(exec_command.to_string(), expected)
     }
 }
