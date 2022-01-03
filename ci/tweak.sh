@@ -5,7 +5,7 @@ echo "Tweak Mosquitto configuration"
 # Rpi at Mythic Beasts
 if [ -f  /lib/systemd/system/mosquitto.service ]; then
     echo "This is a hosted Pi"
-    SERVICEFILE=/usr/lib/systemd/system/mosquitto.service
+    SERVICEFILE=/lib/systemd/system/mosquitto.service
 fi
 
 # Regular Rpi and Debian
