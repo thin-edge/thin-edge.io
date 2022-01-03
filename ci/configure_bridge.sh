@@ -32,5 +32,5 @@ cat /etc/mosquitto/mosquitto.conf
 
 # Later: export C8YDEVICEID=$(cat ~/C8YDEVICEID)
 C8YDEVICEID=$(cat ~/C8YDEVICEID)
-echo "The current device ID is " $C8YDEVICEID
+echo "The current device ID is (read from home directory): " $C8YDEVICEID
 
