@@ -2,9 +2,9 @@
 mod tests {
 
     use assert_matches::assert_matches;
-    use sm_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;
+    use sm_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
     use test_case::test_case;
     use tokio::fs::File;

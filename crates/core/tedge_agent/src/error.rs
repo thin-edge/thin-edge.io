@@ -1,6 +1,6 @@
 use flockfile::FlockfileError;
-use sm_interface::SoftwareError;
 use mqtt_client::MqttClientError;
+use sm_interface::SoftwareError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]

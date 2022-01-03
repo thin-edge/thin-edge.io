@@ -1,10 +1,10 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
-use sm_interface::DownloadInfo;
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
 };
+use sm_interface::DownloadInfo;
 use std::{
     fs::File,
     io::Write,
@@ -146,9 +146,9 @@ mod tests {
 
     use super::Downloader;
     use anyhow::bail;
-    use sm_interface::{Auth, DownloadInfo};
     use mockito::mock;
     use nix::sys::statvfs;
+    use sm_interface::{Auth, DownloadInfo};
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use tempfile::{NamedTempFile, TempDir};

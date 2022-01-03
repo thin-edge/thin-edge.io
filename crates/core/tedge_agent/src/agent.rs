@@ -8,13 +8,13 @@ use crate::{
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 
+use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
+use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use sm_interface::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
-use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
-use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
     fmt::Debug,
     path::PathBuf,

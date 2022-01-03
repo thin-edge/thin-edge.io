@@ -16,12 +16,12 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset};
 
+use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
+use serde::{Deserialize, Serialize};
 use sm_interface::{
     topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
-use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
-use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;

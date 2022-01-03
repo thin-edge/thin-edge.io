@@ -1,7 +1,6 @@
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 use sm_interface::topic::TopicError;
 
-
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {
     #[error("Invalid MQTT Message.")]
