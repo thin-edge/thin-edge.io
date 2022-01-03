@@ -9,6 +9,7 @@ enum TestJoinError {
     ElapseTime,
 }
 
+#[ignore]
 #[tokio::test]
 // This checks the mqtt packets are within the limit or not
 async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
@@ -35,6 +36,7 @@ async fn packet_size_within_limit() -> Result<(), anyhow::Error> {
     }
 }
 
+#[ignore]
 #[tokio::test]
 // This checks the mqtt packet size that exceeds the limit
 async fn packet_size_exceeds_limit() -> Result<(), anyhow::Error> {

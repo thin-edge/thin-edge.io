@@ -1241,6 +1241,7 @@ name = "json_sm"
 version = "0.5.0"
 dependencies = [
  "csv",
+ "mqtt_client",
  "nanoid",
  "regex",
  "serde",

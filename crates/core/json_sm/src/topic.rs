@@ -1,9 +1,14 @@
-use crate::sm_c8y_mapper::error::MapperTopicError;
 use mqtt_client::{MqttClientError, Topic};
 use std::convert::{TryFrom, TryInto};
 
+#[derive(thiserror::Error, Debug)]
+pub enum TopicError {
+    #[error("Topic {topic} is unknown.")]
+    UnknownTopic { topic: String },
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum IncomingTopic {
+pub enum IncomingTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
     SmartRestRequest,
@@ -11,7 +16,7 @@ pub(crate) enum IncomingTopic {
 }
 
 impl IncomingTopic {
-    pub(crate) fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::SoftwareListResponse => r#"tedge/commands/res/software/list"#,
             Self::SoftwareUpdateResponse => r#"tedge/commands/res/software/update"#,
@@ -22,7 +27,7 @@ impl IncomingTopic {
 }
 
 impl TryFrom<String> for IncomingTopic {
-    type Error = MapperTopicError;
+    type Error = TopicError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
@@ -30,7 +35,7 @@ impl TryFrom<String> for IncomingTopic {
             r#"tedge/commands/res/software/update"# => Ok(IncomingTopic::SoftwareUpdateResponse),
             r#"c8y/s/ds"# => Ok(IncomingTopic::SmartRestRequest),
             r#"tedge/commands/res/control/restart"# => Ok(IncomingTopic::RestartResponse),
-            err => Err(MapperTopicError::UnknownTopic {
+            err => Err(TopicError::UnknownTopic {
                 topic: err.to_string(),
             }),
         }
@@ -38,7 +43,7 @@ impl TryFrom<String> for IncomingTopic {
 }
 
 impl TryFrom<&str> for IncomingTopic {
-    type Error = MapperTopicError;
+    type Error = TopicError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_from(value.to_string())
@@ -46,7 +51,7 @@ impl TryFrom<&str> for IncomingTopic {
 }
 
 impl TryFrom<Topic> for IncomingTopic {
-    type Error = MapperTopicError;
+    type Error = TopicError;
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
         value.name.try_into()
@@ -54,7 +59,7 @@ impl TryFrom<Topic> for IncomingTopic {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum OutgoingTopic {
+pub enum OutgoingTopic {
     SoftwareListRequest,
     SoftwareUpdateRequest,
     SmartRestResponse,
@@ -62,7 +67,7 @@ pub(crate) enum OutgoingTopic {
 }
 
 impl OutgoingTopic {
-    pub(crate) fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::SoftwareListRequest => r#"tedge/commands/req/software/list"#,
             Self::SoftwareUpdateRequest => r#"tedge/commands/req/software/update"#,
@@ -71,7 +76,7 @@ impl OutgoingTopic {
         }
     }
 
-    pub(crate) fn to_topic(&self) -> Result<Topic, MqttClientError> {
+    pub fn to_topic(&self) -> Result<Topic, MqttClientError> {
         match self {
             Self::SoftwareListRequest => Topic::new(Self::SoftwareListRequest.as_str()),
             Self::SoftwareUpdateRequest => Topic::new(Self::SoftwareUpdateRequest.as_str()),
@@ -107,7 +112,7 @@ mod tests {
         assert_eq!(update, IncomingTopic::SoftwareUpdateResponse);
         let c8y: IncomingTopic = "c8y/s/ds".try_into().unwrap();
         assert_eq!(c8y, IncomingTopic::SmartRestRequest);
-        let error: Result<IncomingTopic, MapperTopicError> = "test".try_into();
+        let error: Result<IncomingTopic, TopicError> = "test".try_into();
         assert!(error.is_err());
     }
 
@@ -125,7 +130,7 @@ mod tests {
         assert_eq!(update, IncomingTopic::SoftwareUpdateResponse);
         let c8y: IncomingTopic = Topic::new("c8y/s/ds").unwrap().try_into().unwrap();
         assert_eq!(c8y, IncomingTopic::SmartRestRequest);
-        let error: Result<IncomingTopic, MapperTopicError> = Topic::new("test").unwrap().try_into();
+        let error: Result<IncomingTopic, TopicError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
     }
 

@@ -10,6 +10,7 @@ description = "json_sm defines the thin-edge json extension for software managem
 
 [dependencies]
 csv = "1.1"
+mqtt_client = { path = "../../common/mqtt_client" }
 nanoid = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

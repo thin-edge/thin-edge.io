@@ -1,6 +1,7 @@
 mod error;
 mod messages;
 mod software;
+pub mod topic;
 
 pub use error::*;
 pub use messages::{
