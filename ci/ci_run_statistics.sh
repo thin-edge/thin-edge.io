@@ -37,7 +37,7 @@ dpkg -s mosquitto-clients
 
 sudo cp ./configuration/contrib/collectd/collectd_analytics.conf /etc/collectd/collectd.conf
 sudo cp ./configuration/contrib/collectd/collect_tedge.sh ~/
-chmod +x ~/collect_tedge.sh
+sudo chmod +x ~/collect_tedge.sh
 sudo systemctl restart collectd
 
 # Run all PySys tests
