@@ -8,6 +8,15 @@ from pysys.basetest import BaseTest
 """
 Validate the tedge-mapper-sm-c8y does not loose last message from tedge-agent when it fails and comes back
 
+TODO: Update this descripton
+
+Pradeep:
+This actually to test the stability of the sm mapper.
+It will start get the request for updating the software, passes the request to agent and then dies.
+Meanwhile the agent process the request and sends the response back to the broker, the message stays there till the mapper comes back again.
+Once the mapper comes back/restarts the response will be received and forwarded that to the c8y
+
+
 Given a configured system
 When `rolldice` package is installed
 when a subscriber is started as `sudo tedge mqtt sub 'c8y/s/us'`
@@ -57,10 +66,16 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             stdouterr="tedge_pub",           
         )
 
+        # Delete and now we wait, so there is a time depencency
+
         self.addCleanupFunction(self.smcleanup)
 
     def execute(self):
-        time.sleep(2)
+        self.log.info("Waiting for 10s")
+        time.sleep(10)
+
+        #import pdb; pdb.set_trace()
+
         self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "stop", "tedge-mapper-sm-c8y.service"],
@@ -75,6 +90,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         )
 
         # check if the agent has completed the operation
+        self.log.info("Delaying for 15s until we check if the agent has completed the operation")
         time.sleep(15)
        
         self.startProcess(
@@ -85,6 +101,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
 
         # wait for the sm mapper to process and publish result to cloud
         # and subscriber to capture the output and log it.
+        self.log.info("Delaying for 30s")
         time.sleep(30)
 
         # Stop the subscriber
@@ -108,6 +125,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         )
 
     def setup_mosquitto(self):
+        raise SystemError("Make sure, nobody calls me ... ")
         self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "stop", "mosquitto.service"],
