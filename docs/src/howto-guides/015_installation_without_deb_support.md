@@ -12,7 +12,7 @@ Out of the box `thin-edge.io` uses deb packages for an automated installation ([
 
 The prebuilt binaries can be obtained from `thin-edge.io` [repository releases](https://github.com/thin-edge/thin-edge.io/releases).
 
-By default `thin-edge.io` is built with 3 architectures in mind: `amd64 (x86_64)`, `arm64 (aarch64)` and `armhf` with gnulibc bindings, so if you are looking to install `thin-edge.io` on a different platform you have to build your own binaries from source which you can do easily if you follow the [Building `thin-edge.io`](../../../BUILDING.md) guide.
+By default `thin-edge.io` is built with 3 architectures in mind: `amd64 (x86_64)`, `arm64 (aarch64)` and `armhf` with gnulibc bindings, so if you are looking to install `thin-edge.io` on a different platform you have to build your own binaries from source which you can do easily if you follow the [Building `thin-edge.io`](./../BUILDING.md) guide.
 
 > Note: By default `thin-edge.io` is built with `GNU libc`, but it is possible to use `musl` instead.
 
@@ -63,10 +63,6 @@ If you have built the binaries from source you should install them on the target
 
 `thin-edge.io` relies on certain system configuration and systemd process management, when installing from deb package all of that is setup automatically but with manual installation a set of steps has to be performed.
 
-On most Linux distribution it should suffice to execute them as `root` to do the setup, but in some cases (eg, your system uses `useradd` instead of `adduser` package) more detailed instructions are documented:
-
-* [tedge](../../../configuration/debian/tedge/postinst)
-* [tedge-agent](../../../configuration/debian/tedge_agent/postinst)
-* [tedge-mapper](../../../configuration/debian/tedge_mapper/postinst)
+On most Linux distribution it should suffice to execute them as `root` to do the setup, but in some cases (eg, your system uses `useradd` instead of `adduser` package) more detailed instructions are documented in the script files, you can find them under "/configuration/debian/" and subfolders.
 
 After following steps for all the components installed `thin-edge.io` should be operational.

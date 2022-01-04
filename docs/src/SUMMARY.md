@@ -1,5 +1,7 @@
 # Summary
 
+- [Summary](./SUMMARY.md)
+
 - [Introduction](001_overview.md)
 
 - [User Documentation](user_doc.md)
@@ -27,6 +29,7 @@
     - [How to access the logs on the device?](./howto-guides/014_thin_edge_logs.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
     - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
+    - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)
@@ -35,6 +38,8 @@
     - [Software Management](./architecture/software-management.md)
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
+
+  - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
 
   - [APIs](api.md)
     - [The Bridged Topics](./references/bridged-topics.md)
