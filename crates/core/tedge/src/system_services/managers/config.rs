@@ -26,7 +26,7 @@ impl Default for SystemConfig {
             stop: vec!["/bin/systemctl".into(), "stop".into(), "{}".into()],
             enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
             disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
-            is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()]
+            is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()],
         }
     }
 }
