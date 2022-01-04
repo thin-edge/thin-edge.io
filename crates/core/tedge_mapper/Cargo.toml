@@ -25,6 +25,7 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
+agent_mapper_interface = { path = "../agent_mapper_interface"}
 anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
@@ -35,7 +36,6 @@ clock = { path = "../../common/clock" }
 csv = "1.1"
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-agent_mapper_interface = { path = "../agent_mapper_interface"}
 mockall = "0.10"
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }

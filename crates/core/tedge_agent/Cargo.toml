@@ -21,12 +21,12 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
+agent_mapper_interface = { path = "../agent_mapper_interface" }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-agent_mapper_interface = { path = "../agent_mapper_interface" }
 mockall = "0.10"
 mqtt_client = { path = "../../common/mqtt_client" }
 plugin_sm = { path = "../plugin_sm" }

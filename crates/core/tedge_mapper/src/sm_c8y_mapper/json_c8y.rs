@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use agent_mapper_interface::{
     DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
+use serde::{Deserialize, Serialize};
 
 const EMPTY_STRING: &str = "";
 

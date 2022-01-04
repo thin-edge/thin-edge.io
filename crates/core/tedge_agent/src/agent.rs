@@ -1,3 +1,4 @@
+use crate::operation_logs::{LogKind, OperationLogs};
 use crate::{
     error::AgentError,
     restart_operation_handler::restart_operation,
@@ -6,27 +7,24 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
-
-use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
-use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use agent_mapper_interface::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
+use flockfile::{check_another_instance_is_not_running, Flockfile};
+use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
+use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
     fmt::Debug,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use tracing::{debug, error, info, instrument};
-
-use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation,
 };
+use tracing::{debug, error, info, instrument};
 
 #[cfg(not(test))]
 const INIT_COMMAND: &'static str = "init";

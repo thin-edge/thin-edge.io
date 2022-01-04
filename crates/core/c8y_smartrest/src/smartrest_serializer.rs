@@ -1,7 +1,7 @@
 use crate::error::SmartRestSerializerError;
+use agent_mapper_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
 use serde::{Deserialize, Serialize, Serializer};
-use agent_mapper_interface::{OperationStatus, SoftwareUpdateResponse};
 
 type SmartRest = String;
 

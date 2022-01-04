@@ -1,5 +1,5 @@
-use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 use agent_mapper_interface::topic::TopicError;
+use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {

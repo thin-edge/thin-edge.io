@@ -5,10 +5,10 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
+agent_mapper_interface = { path = "../agent_mapper_interface" }
 async-trait = "0.1"
 csv = "1.1"
 download = { path = "../../common/download" }
-agent_mapper_interface = { path = "../agent_mapper_interface" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_utils = { path = "../../common/tedge_utils" }

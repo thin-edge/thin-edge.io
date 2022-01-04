@@ -2,6 +2,10 @@ use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse};
+use agent_mapper_interface::{
+    topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
+};
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRestartRequest};
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -18,10 +22,6 @@ use chrono::{DateTime, FixedOffset};
 
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
-use agent_mapper_interface::{
-    topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
-};
 use std::convert::TryInto;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;

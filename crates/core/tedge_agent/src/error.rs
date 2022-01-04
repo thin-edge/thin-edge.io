@@ -1,6 +1,6 @@
+use agent_mapper_interface::SoftwareError;
 use flockfile::FlockfileError;
 use mqtt_client::MqttClientError;
-use agent_mapper_interface::SoftwareError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]

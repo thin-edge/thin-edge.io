@@ -1,9 +1,9 @@
 use crate::logged_command::LoggedCommand;
+use agent_mapper_interface::*;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use serde::Deserialize;
-use agent_mapper_interface::*;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};

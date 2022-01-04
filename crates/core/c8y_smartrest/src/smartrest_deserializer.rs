@@ -1,9 +1,11 @@
 use crate::error::SmartRestDeserializerError;
+use agent_mapper_interface::{
+    DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest,
+};
 use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use agent_mapper_interface::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug)]
@@ -290,9 +292,9 @@ impl SmartRestJwtResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_mapper_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
-    use agent_mapper_interface::*;
     use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.

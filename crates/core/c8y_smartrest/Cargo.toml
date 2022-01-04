@@ -5,11 +5,11 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 [dependencies]
+agent_mapper_interface = { path = "../agent_mapper_interface" }
 thin_edge_json = { path = "../thin_edge_json" }
 time = { version = "0.3", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 csv = "1.1"
-agent_mapper_interface = { path = "../agent_mapper_interface" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 

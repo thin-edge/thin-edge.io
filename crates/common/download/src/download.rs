@@ -1,10 +1,11 @@
 use crate::error::DownloadError;
+use agent_mapper_interface::DownloadInfo;
 use backoff::{future::retry, ExponentialBackoff};
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
 };
-use agent_mapper_interface::DownloadInfo;
+
 use std::{
     fs::File,
     io::Write,
@@ -145,10 +146,10 @@ mod tests {
     use crate::DownloadError;
 
     use super::Downloader;
+    use agent_mapper_interface::{Auth, DownloadInfo};
     use anyhow::bail;
     use mockito::mock;
     use nix::sys::statvfs;
-    use agent_mapper_interface::{Auth, DownloadInfo};
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use tempfile::{NamedTempFile, TempDir};
