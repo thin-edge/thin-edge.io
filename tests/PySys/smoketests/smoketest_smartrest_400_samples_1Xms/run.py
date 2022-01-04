@@ -22,5 +22,5 @@ class SmoketestSmartRest400Samples1Xms(Environment_roundtrip_c8y):
         super().setup()
         self.samples = "400"
         self.delay = "15"
-        self.timeslot = "45" # Temporarily increased to run at mythic beasts
+        self.timeslot = "60" # Temporarily increased to run at mythic beasts
         self.style = "REST"
