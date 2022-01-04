@@ -3,7 +3,6 @@
 
 use crate::system_services::*;
 use anyhow::Context;
-use std::sync::Arc;
 use structopt::StructOpt;
 use tedge_users::UserManager;
 use tedge_utils::paths::{home_dir, PathsError};
@@ -16,7 +15,6 @@ mod system_services;
 type ConfigError = crate::error::TEdgeError;
 
 use command::{BuildCommand, BuildContext};
-use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     let user_manager = UserManager::new();
@@ -36,11 +34,7 @@ fn main() -> anyhow::Result<()> {
 
     let build_context = BuildContext {
         config_repository,
-        config_location: tedge_config_location.clone(),
-        service_manager: service_manager(
-            user_manager.clone(),
-            tedge_config_location.tedge_config_root_path,
-        )?,
+        config_location: tedge_config_location,
         user_manager,
     };
 
@@ -51,14 +45,4 @@ fn main() -> anyhow::Result<()> {
 
     cmd.execute()
         .with_context(|| format!("failed to {}", cmd.description()))
-}
-
-fn service_manager(
-    user_manager: UserManager,
-    config_root: PathBuf,
-) -> Result<Arc<dyn SystemServiceManager>, SystemConfigError> {
-    Ok(Arc::new(GeneralServiceManager::try_new(
-        user_manager,
-        config_root,
-    )?))
 }

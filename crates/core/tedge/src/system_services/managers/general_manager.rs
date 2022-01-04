@@ -19,7 +19,7 @@ impl GeneralServiceManager {
         user_manager: UserManager,
         config_root: PathBuf,
     ) -> Result<Self, SystemConfigError> {
-        let system_config = SystemConfig::try_new(config_root)?;
+        let system_config = SystemConfig::new(config_root);
         Ok(Self {
             user_manager,
             system_config,
@@ -35,7 +35,7 @@ impl SystemServiceManager for GeneralServiceManager {
     fn check_operational(&self) -> Result<(), SystemServiceError> {
         let exec_command = ExecCommand::try_new(self.system_config.is_available.clone())?;
 
-        match exec_command.build_command().status() {
+        match exec_command.to_command().status() {
             Ok(status) if status.success() => Ok(()),
             _ => Err(SystemServiceError::ServiceManagerUnavailable(
                 self.name().to_string(),
@@ -98,7 +98,7 @@ impl ExecCommand {
         }
     }
 
-    fn build_command(&self) -> std::process::Command {
+    fn to_command(&self) -> std::process::Command {
         CommandBuilder::new(&self.exec)
             .args(&self.args)
             .silent()
@@ -144,7 +144,7 @@ impl GeneralServiceManager {
         let _root_guard = self.user_manager.become_user(ROOT_USER);
 
         exec_command
-            .build_command()
+            .to_command()
             .status()
             .map_err(Into::into)
             .map(|status| ServiceCommandExitStatus {
@@ -244,7 +244,7 @@ mod tests {
     r#""bin""#
     ;"only executable")]
     fn construct_command(exec_command: ExecCommand, expected: &str) {
-        let command = exec_command.build_command();
+        let command = exec_command.to_command();
         assert_eq!(format!("{:?}", command), expected);
     }
 

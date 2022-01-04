@@ -1,6 +1,11 @@
 use crate::command::{BuildCommand, BuildContext, Command};
+use crate::system_services::{SystemConfigError, SystemServiceManager};
+use crate::GeneralServiceManager;
+use std::path::PathBuf;
+use std::sync::Arc;
 use structopt::clap;
 use structopt::StructOpt;
+use tedge_users::UserManager;
 
 mod certificate;
 mod config;
@@ -47,4 +52,14 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
         }
     }
+}
+
+pub(crate) fn service_manager(
+    user_manager: UserManager,
+    config_root: PathBuf,
+) -> Result<Arc<dyn SystemServiceManager>, SystemConfigError> {
+    Ok(Arc::new(GeneralServiceManager::try_new(
+        user_manager,
+        config_root,
+    )?))
 }

@@ -1,3 +1,5 @@
+use crate::system_services;
+
 #[derive(thiserror::Error, Debug)]
 pub enum TEdgeError {
     #[error("TOML parse error")]
@@ -20,4 +22,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromRumqttClient(#[from] rumqttc::ClientError),
+
+    #[error(transparent)]
+    FromSystemConfig(#[from] system_services::SystemConfigError),
 }

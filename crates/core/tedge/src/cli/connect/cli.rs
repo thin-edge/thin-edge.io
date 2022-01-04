@@ -1,4 +1,5 @@
 use crate::cli::connect::*;
+use crate::cli::service_manager;
 use crate::command::{BuildCommand, BuildContext, Command};
 use structopt::StructOpt;
 
@@ -27,20 +28,26 @@ impl BuildCommand for TEdgeConnectOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(match self {
             TEdgeConnectOpt::C8y { is_test_connection } => ConnectCommand {
-                config_location: context.config_location,
+                config_location: context.config_location.clone(),
                 config_repository: context.config_repository,
                 cloud: Cloud::C8y,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
-                service_manager: context.service_manager.clone(),
+                service_manager: service_manager(
+                    context.user_manager.clone(),
+                    context.config_location.tedge_config_root_path,
+                )?,
             },
             TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
-                config_location: context.config_location,
+                config_location: context.config_location.clone(),
                 config_repository: context.config_repository,
                 cloud: Cloud::Azure,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
-                service_manager: context.service_manager.clone(),
+                service_manager: service_manager(
+                    context.user_manager.clone(),
+                    context.config_location.tedge_config_root_path,
+                )?,
             },
         }
         .into_boxed())

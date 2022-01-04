@@ -17,7 +17,31 @@ pub struct SystemConfig {
     pub is_active: Vec<String>,
 }
 
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            name: "systemd".to_string(),
+            is_available: vec!["/bin/systemctl".into(), "--version".into()],
+            restart: vec!["/bin/systemctl".into(), "restart".into(), "{}".into()],
+            stop: vec!["/bin/systemctl".into(), "stop".into(), "{}".into()],
+            enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
+            disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
+            is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()]
+        }
+    }
+}
+
 impl SystemConfig {
+    pub fn new(config_root: PathBuf) -> Self {
+        match Self::try_new(config_root) {
+            Ok(config) => config,
+            Err(err) => {
+                eprintln!("{:?}", err);
+                Self::default()
+            }
+        }
+    }
+
     pub fn try_new(config_root: PathBuf) -> Result<Self, SystemConfigError> {
         let config_path = config_root.join(SERVICE_CONFIG_FILE);
 
@@ -77,7 +101,7 @@ mod tests {
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
 
         let (_dir, config_root_path) = create_temp_tedge_config(toml_conf)?;
-        let config = SystemConfig::try_new(config_root_path)?;
+        let config = SystemConfig::new(config_root_path);
 
         assert_eq!(config, expected_config);
 
