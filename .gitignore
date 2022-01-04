@@ -24,3 +24,8 @@ tests/PySys/*.log
 **/__pycache__
 tests/PySys/**/Output/
 **/*venv*
+tests/PySys/__pysys_junit_xml/*
+tests/PySys/__pysys_testsummary_*
+tests/PySys/__pysys_output_archives/*
+tests/PySys/pysys_junit_xml_all/*
+tests/PySys/pysys_junit_xml_sm*
