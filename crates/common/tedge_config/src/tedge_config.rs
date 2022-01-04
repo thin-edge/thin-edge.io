@@ -456,13 +456,12 @@ where
 
 impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
     fn query(&self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<FilePath> {
-        self.data
+        Ok(self
+            .data
             .download
             .path
             .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: SoftwarePluginDefaultSetting::KEY,
-            })
+            .unwrap_or_else(|| self.config_defaults.default_download_path.clone()))
     }
 
     fn update(
