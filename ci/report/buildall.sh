@@ -63,7 +63,21 @@ source ~/env-pysys/bin/activate
 
 OUT="ci_system-test-report"
 
-for X in "" "_A" "_B" "_C" "_D"
+
+# This is for the runner onsite at Michael
+for X in ""
+    do
+    echo "Processing: $X"
+    FILES="ci_system-test-workflow$X/PySys/pysys_junit_xml_all/*.xml"
+    FILES+=" ci_system-test-workflow$X/PySys/pysys_junit_xml_apt/*.xml"
+    FILES+=" ci_system-test-workflow$X/PySys/pysys_junit_xml_docker/*.xml"
+    FILES+=" ci_system-test-workflow$X/PySys/pysys_junit_xml_sm/*.xml"
+    FILES+=" ci_system-test-workflow$X/PySys/pysys_junit_xml_analytics/*.xml"
+    junitparser merge $FILES $OUT$X.xml
+    junit2html $OUT$X.xml
+done
+
+for X in "_A" "_B" "_C" "_D"
     do
     echo "Processing: $X"
     FILES="ci_system-test-workflow$X/PySys/pysys_junit_xml_all/*.xml"
@@ -73,6 +87,8 @@ for X in "" "_A" "_B" "_C" "_D"
     junitparser merge $FILES $OUT$X.xml
     junit2html $OUT$X.xml
 done
+
+
 
 SAGOUT="sag_system-test-report"
 
