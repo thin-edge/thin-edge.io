@@ -3,7 +3,7 @@ use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use sm_interface::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use agent_mapper_interface::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug)]
@@ -292,7 +292,7 @@ mod tests {
     use super::*;
     use assert_json_diff::*;
     use serde_json::json;
-    use sm_interface::*;
+    use agent_mapper_interface::*;
     use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.

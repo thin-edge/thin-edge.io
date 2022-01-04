@@ -1,4 +1,4 @@
-use sm_interface::SoftwareUpdateResponse;
+use agent_mapper_interface::SoftwareUpdateResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {

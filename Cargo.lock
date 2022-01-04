@@ -18,6 +18,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "agent_mapper_interface"
+version = "0.5.0"
+dependencies = [
+ "csv",
+ "mqtt_client",
+ "nanoid",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,13 +333,13 @@ dependencies = [
 name = "c8y_smartrest"
 version = "0.5.0"
 dependencies = [
+ "agent_mapper_interface",
  "assert-json-diff",
  "assert_matches",
  "chrono",
  "csv",
  "serde",
  "serde_json",
- "sm_interface",
  "test-case",
  "thin_edge_json",
  "thiserror",
@@ -695,6 +708,7 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "download"
 version = "0.5.0"
 dependencies = [
+ "agent_mapper_interface",
  "anyhow",
  "backoff",
  "log",
@@ -702,7 +716,6 @@ dependencies = [
  "nix",
  "regex",
  "reqwest",
- "sm_interface",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -1771,6 +1784,7 @@ dependencies = [
 name = "plugin_sm"
 version = "0.5.0"
 dependencies = [
+ "agent_mapper_interface",
  "anyhow",
  "assert_matches",
  "async-trait",
@@ -1779,7 +1793,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "sm_interface",
  "structopt",
  "tedge_utils",
  "tempfile",
@@ -2484,19 +2497,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9def91fd1e018fe007022791f865d0ccc9b3a0d5001e01aabb8b40e46000afb5"
 
 [[package]]
-name = "sm_interface"
-version = "0.5.0"
-dependencies = [
- "csv",
- "mqtt_client",
- "nanoid",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2613,6 +2613,7 @@ dependencies = [
 name = "tedge_agent"
 version = "0.5.0"
 dependencies = [
+ "agent_mapper_interface",
  "anyhow",
  "assert_cmd",
  "async-trait",
@@ -2627,7 +2628,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "sm_interface",
  "structopt",
  "tedge_config",
  "tedge_utils",
@@ -2693,6 +2693,7 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.5.0"
 dependencies = [
+ "agent_mapper_interface",
  "anyhow",
  "assert-json-diff",
  "assert_matches",
@@ -2712,7 +2713,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "sm_interface",
  "structopt",
  "tedge_config",
  "tedge_users",

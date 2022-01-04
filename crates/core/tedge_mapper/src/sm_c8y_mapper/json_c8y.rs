@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sm_interface::{
+use agent_mapper_interface::{
     DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
 

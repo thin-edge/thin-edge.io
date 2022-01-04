@@ -26,7 +26,7 @@ async-trait = "0.1"
 chrono = "0.4"
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-sm_interface = { path = "../sm_interface" }
+agent_mapper_interface = { path = "../agent_mapper_interface" }
 mockall = "0.10"
 mqtt_client = { path = "../../common/mqtt_client" }
 plugin_sm = { path = "../plugin_sm" }

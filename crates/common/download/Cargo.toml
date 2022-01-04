@@ -8,7 +8,7 @@ description = "download_manager"
 
 [dependencies]
 backoff = { version = "0.3", features = ["tokio"] }
-sm_interface = { path = "../../core/sm_interface" }
+agent_mapper_interface = { path = "../../core/agent_mapper_interface" }
 log = "0.4"
 nix = "0.23"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }

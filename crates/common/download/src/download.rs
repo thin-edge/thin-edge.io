@@ -4,7 +4,7 @@ use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
 };
-use sm_interface::DownloadInfo;
+use agent_mapper_interface::DownloadInfo;
 use std::{
     fs::File,
     io::Write,
@@ -49,7 +49,7 @@ impl Downloader {
         };
 
         let mut response = retry(backoff, || async {
-            let client = if let Some(sm_interface::Auth::Bearer(token)) = &url.auth {
+            let client = if let Some(agent_mapper_interface::Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
                 reqwest::Client::new().get(url.url())
@@ -148,7 +148,7 @@ mod tests {
     use anyhow::bail;
     use mockito::mock;
     use nix::sys::statvfs;
-    use sm_interface::{Auth, DownloadInfo};
+    use agent_mapper_interface::{Auth, DownloadInfo};
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use tempfile::{NamedTempFile, TempDir};

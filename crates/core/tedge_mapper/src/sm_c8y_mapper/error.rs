@@ -1,5 +1,5 @@
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
-use sm_interface::topic::TopicError;
+use agent_mapper_interface::topic::TopicError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {
@@ -10,7 +10,7 @@ pub enum SMCumulocityMapperError {
     InvalidTopicError(#[from] TopicError),
 
     #[error(transparent)]
-    InvalidThinEdgeJson(#[from] sm_interface::SoftwareError),
+    InvalidThinEdgeJson(#[from] agent_mapper_interface::SoftwareError),
 
     #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),

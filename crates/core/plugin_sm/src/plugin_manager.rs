@@ -1,6 +1,6 @@
 use crate::plugin::{Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
-use sm_interface::{
+use agent_mapper_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse, DEFAULT,
 };

@@ -18,7 +18,7 @@ use chrono::{DateTime, FixedOffset};
 
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
-use sm_interface::{
+use agent_mapper_interface::{
     topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };

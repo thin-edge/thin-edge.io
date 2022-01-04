@@ -1,6 +1,6 @@
 use anyhow::Result;
 use download::Downloader;
-use sm_interface::DownloadInfo;
+use agent_mapper_interface::DownloadInfo;
 
 /// This example shows how to use the `downlaoder`.
 #[tokio::main]
