@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
 
+    use agent_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use assert_matches::assert_matches;
-    use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;
     use std::{fs, io::Write, path::PathBuf, str::FromStr};

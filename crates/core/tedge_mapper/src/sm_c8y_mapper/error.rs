@@ -1,10 +1,5 @@
+use agent_interface::error::TopicError;
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
-
-#[derive(thiserror::Error, Debug)]
-pub enum MapperTopicError {
-    #[error("Topic {topic} is unknown.")]
-    UnknownTopic { topic: String },
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {
@@ -12,10 +7,10 @@ pub enum SMCumulocityMapperError {
     InvalidMqttMessage,
 
     #[error(transparent)]
-    InvalidTopicError(#[from] MapperTopicError),
+    InvalidTopicError(#[from] TopicError),
 
     #[error(transparent)]
-    InvalidThinEdgeJson(#[from] json_sm::SoftwareError),
+    InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
 
     #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),

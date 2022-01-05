@@ -1,10 +1,11 @@
 use crate::error::DownloadError;
+//use agent_interface::DownloadInfo;
 use backoff::{future::retry, ExponentialBackoff};
-use json_sm::DownloadInfo;
 use nix::{
     fcntl::{fallocate, FallocateFlags},
     sys::statvfs,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::Write,
@@ -12,6 +13,54 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct DownloadInfo {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<Auth>,
+}
+
+impl From<&str> for DownloadInfo {
+    fn from(url: &str) -> Self {
+        Self::new(url)
+    }
+}
+
+impl DownloadInfo {
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.into(),
+            auth: None,
+        }
+    }
+
+    pub fn with_auth(self, auth: Auth) -> Self {
+        Self {
+            auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn url(&self) -> &str {
+        self.url.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum Auth {
+    Bearer(String),
+}
+
+impl Auth {
+    pub fn new_bearer(token: &str) -> Self {
+        Self::Bearer(token.into())
+    }
+}
 
 #[derive(Debug)]
 pub struct Downloader {
@@ -49,7 +98,7 @@ impl Downloader {
         };
 
         let mut response = retry(backoff, || async {
-            let client = if let Some(json_sm::Auth::Bearer(token)) = &url.auth {
+            let client = if let Some(Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
                 reqwest::Client::new().get(url.url())
@@ -144,9 +193,9 @@ fn create_file_and_try_pre_allocate_space(
 mod tests {
     use crate::DownloadError;
 
-    use super::Downloader;
+    use super::*;
+    //use agent_interface::{Auth, DownloadInfo};
     use anyhow::bail;
-    use json_sm::{Auth, DownloadInfo};
     use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
