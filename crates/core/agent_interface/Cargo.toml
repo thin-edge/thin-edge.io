@@ -4,7 +4,7 @@ version = "0.5.0"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 license = "Apache-2.0"
-description = "agent_interface defines the mqtt topics and thin-edge json extension for software management and restart operations "
+description = "agent_interface defines all the mqtt topics and messages to be used to invoke the agent."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

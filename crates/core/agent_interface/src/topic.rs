@@ -8,14 +8,14 @@ pub enum TopicError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IncomingTopic {
+pub enum RequestTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
     SmartRestRequest,
     RestartResponse,
 }
 
-impl IncomingTopic {
+impl RequestTopic {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::SoftwareListResponse => r#"tedge/commands/res/software/list"#,
@@ -26,15 +26,15 @@ impl IncomingTopic {
     }
 }
 
-impl TryFrom<String> for IncomingTopic {
+impl TryFrom<String> for RequestTopic {
     type Error = TopicError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
-            r#"tedge/commands/res/software/list"# => Ok(IncomingTopic::SoftwareListResponse),
-            r#"tedge/commands/res/software/update"# => Ok(IncomingTopic::SoftwareUpdateResponse),
-            r#"c8y/s/ds"# => Ok(IncomingTopic::SmartRestRequest),
-            r#"tedge/commands/res/control/restart"# => Ok(IncomingTopic::RestartResponse),
+            r#"tedge/commands/res/software/list"# => Ok(RequestTopic::SoftwareListResponse),
+            r#"tedge/commands/res/software/update"# => Ok(RequestTopic::SoftwareUpdateResponse),
+            r#"c8y/s/ds"# => Ok(RequestTopic::SmartRestRequest),
+            r#"tedge/commands/res/control/restart"# => Ok(RequestTopic::RestartResponse),
             err => Err(TopicError::UnknownTopic {
                 topic: err.to_string(),
             }),
@@ -42,7 +42,7 @@ impl TryFrom<String> for IncomingTopic {
     }
 }
 
-impl TryFrom<&str> for IncomingTopic {
+impl TryFrom<&str> for RequestTopic {
     type Error = TopicError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -50,7 +50,7 @@ impl TryFrom<&str> for IncomingTopic {
     }
 }
 
-impl TryFrom<Topic> for IncomingTopic {
+impl TryFrom<Topic> for RequestTopic {
     type Error = TopicError;
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
@@ -59,14 +59,14 @@ impl TryFrom<Topic> for IncomingTopic {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum OutgoingTopic {
+pub enum ResponseTopic {
     SoftwareListRequest,
     SoftwareUpdateRequest,
     SmartRestResponse,
     RestartRequest,
 }
 
-impl OutgoingTopic {
+impl ResponseTopic {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::SoftwareListRequest => r#"tedge/commands/req/software/list"#,
@@ -94,71 +94,71 @@ mod tests {
     #[test]
     fn convert_incoming_topic_to_str() {
         assert_eq!(
-            IncomingTopic::SoftwareListResponse.as_str(),
+            RequestTopic::SoftwareListResponse.as_str(),
             "tedge/commands/res/software/list"
         );
         assert_eq!(
-            IncomingTopic::SoftwareUpdateResponse.as_str(),
+            RequestTopic::SoftwareUpdateResponse.as_str(),
             "tedge/commands/res/software/update"
         );
-        assert_eq!(IncomingTopic::SmartRestRequest.as_str(), "c8y/s/ds");
+        assert_eq!(RequestTopic::SmartRestRequest.as_str(), "c8y/s/ds");
     }
 
     #[test]
     fn convert_str_into_incoming_topic() {
-        let list: IncomingTopic = "tedge/commands/res/software/list".try_into().unwrap();
-        assert_eq!(list, IncomingTopic::SoftwareListResponse);
-        let update: IncomingTopic = "tedge/commands/res/software/update".try_into().unwrap();
-        assert_eq!(update, IncomingTopic::SoftwareUpdateResponse);
-        let c8y: IncomingTopic = "c8y/s/ds".try_into().unwrap();
-        assert_eq!(c8y, IncomingTopic::SmartRestRequest);
-        let error: Result<IncomingTopic, TopicError> = "test".try_into();
+        let list: RequestTopic = "tedge/commands/res/software/list".try_into().unwrap();
+        assert_eq!(list, RequestTopic::SoftwareListResponse);
+        let update: RequestTopic = "tedge/commands/res/software/update".try_into().unwrap();
+        assert_eq!(update, RequestTopic::SoftwareUpdateResponse);
+        let c8y: RequestTopic = "c8y/s/ds".try_into().unwrap();
+        assert_eq!(c8y, RequestTopic::SmartRestRequest);
+        let error: Result<RequestTopic, TopicError> = "test".try_into();
         assert!(error.is_err());
     }
 
     #[test]
     fn convert_topic_into_incoming_topic() {
-        let list: IncomingTopic = Topic::new("tedge/commands/res/software/list")
+        let list: RequestTopic = Topic::new("tedge/commands/res/software/list")
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(list, IncomingTopic::SoftwareListResponse);
-        let update: IncomingTopic = Topic::new("tedge/commands/res/software/update")
+        assert_eq!(list, RequestTopic::SoftwareListResponse);
+        let update: RequestTopic = Topic::new("tedge/commands/res/software/update")
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(update, IncomingTopic::SoftwareUpdateResponse);
-        let c8y: IncomingTopic = Topic::new("c8y/s/ds").unwrap().try_into().unwrap();
-        assert_eq!(c8y, IncomingTopic::SmartRestRequest);
-        let error: Result<IncomingTopic, TopicError> = Topic::new("test").unwrap().try_into();
+        assert_eq!(update, RequestTopic::SoftwareUpdateResponse);
+        let c8y: RequestTopic = Topic::new("c8y/s/ds").unwrap().try_into().unwrap();
+        assert_eq!(c8y, RequestTopic::SmartRestRequest);
+        let error: Result<RequestTopic, TopicError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
     }
 
     #[test]
     fn convert_outgoing_topic_to_str() {
         assert_eq!(
-            OutgoingTopic::SoftwareListRequest.as_str(),
+            ResponseTopic::SoftwareListRequest.as_str(),
             "tedge/commands/req/software/list"
         );
         assert_eq!(
-            OutgoingTopic::SoftwareUpdateRequest.as_str(),
+            ResponseTopic::SoftwareUpdateRequest.as_str(),
             "tedge/commands/req/software/update"
         );
-        assert_eq!(OutgoingTopic::SmartRestResponse.as_str(), "c8y/s/us");
+        assert_eq!(ResponseTopic::SmartRestResponse.as_str(), "c8y/s/us");
     }
 
     #[test]
     fn convert_outgoing_topic_to_topic() {
         assert_eq!(
-            OutgoingTopic::SoftwareListRequest.to_topic().unwrap(),
+            ResponseTopic::SoftwareListRequest.to_topic().unwrap(),
             Topic::new("tedge/commands/req/software/list").unwrap()
         );
         assert_eq!(
-            OutgoingTopic::SoftwareUpdateRequest.to_topic().unwrap(),
+            ResponseTopic::SoftwareUpdateRequest.to_topic().unwrap(),
             Topic::new("tedge/commands/req/software/update").unwrap()
         );
         assert_eq!(
-            OutgoingTopic::SmartRestResponse.to_topic().unwrap(),
+            ResponseTopic::SmartRestResponse.to_topic().unwrap(),
             Topic::new("c8y/s/us").unwrap()
         );
     }
