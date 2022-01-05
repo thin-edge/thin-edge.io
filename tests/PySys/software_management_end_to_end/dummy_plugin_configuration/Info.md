@@ -19,12 +19,12 @@ When executed via the software management agent, this path will be used:
 
 ## Emulation of fruits
 
-The current trick is just to use a static configuration to emulate a funcional
-plugin that lets us install and deinstall fruits.
+The current trick is just to use a static configuration to emulate a functional
+plugin that lets us install and de-install fruits.
 Right now, the apt plugin only cares about the returned text on the list command.
 So we just insert a static list and base tests on that.
 
-Note that even when a package is deinstalled it will still appear in the list
+Note that even when a package is de-installed it will still appear in the list
 as the response is static.
 
 **Usage:**
@@ -33,9 +33,15 @@ Copy the dummy plugin to this path:
 
     /etc/tedge/sm-plugins/fruits
 
-Copy file list-valid.0 to the following place:
+    sudo cp target/debug/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+
+Copy file list-valid.0 to the following place to use it as a plugin:
 
     /tmp/.tedge_dummy_plugin/list-valid.0
+
+    $ sudo cp tests/PySys/software-management-end-to-end/dummy-plugin-configuration/list-valid.0 /tmp/.tedge_dummy_plugin/list-valid.0
+
+Otherwise, the file needs to be in the current directory under ´.tedge_dummy_plugin/list-valid.0´.
 
 Manual invocation e.g.:
 

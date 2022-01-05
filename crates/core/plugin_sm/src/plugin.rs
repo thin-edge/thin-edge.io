@@ -4,6 +4,7 @@ use csv::ReaderBuilder;
 use download::Downloader;
 use json_sm::*;
 use std::path::Path;
+use serde::Deserialize;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -201,6 +202,14 @@ pub trait Plugin {
         }
         Ok(())
     }
+}
+
+// This struct is used for deserializing the list of modules that are returned by a plugin.
+#[derive(Debug, Deserialize)]
+struct ModuleInfo {
+    name: String,
+    #[serde(default)]
+    version: Option<String>,
 }
 
 #[derive(Debug)]
@@ -425,24 +434,10 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            let mut software_list = Vec::new();
-            let mut rdr = ReaderBuilder::new()
-                .has_headers(false)
-                .delimiter(b'\t')
-                .from_reader(output.stdout.as_slice());
-
-            for module in rdr.deserialize() {
-                let (name, version): (String, Option<String>) = module?;
-                software_list.push(SoftwareModule {
-                    name,
-                    version,
-                    module_type: Some(self.name.clone()),
-                    file_path: None,
-                    url: None,
-                });
-            }
-
-            Ok(software_list)
+            Ok(deserialize_module_info(
+                self.name.clone(),
+                output.stdout.as_slice(),
+            )?)
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
@@ -473,4 +468,27 @@ impl Plugin for ExternalPluginCommand {
             })
         }
     }
+}
+
+pub fn deserialize_module_info(
+    module_type: String,
+    input: impl std::io::Read,
+) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    let mut records = ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .flexible(true)
+        .from_reader(input);
+    let mut software_list = Vec::new();
+    for module in records.deserialize() {
+        let minfo: ModuleInfo = module?;
+        software_list.push(SoftwareModule {
+            name: minfo.name,
+            version: minfo.version,
+            module_type: Some(module_type.clone()),
+            file_path: None,
+            url: None,
+        });
+    }
+    Ok(software_list)
 }

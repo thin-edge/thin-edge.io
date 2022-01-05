@@ -27,7 +27,7 @@ pub enum CumulocityJsonError {
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError),
 }
 
-/// Converts from thin-edge Json to c8y_json
+/// Converts from thin-edge measurement JSON to C8Y measurement JSON
 pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
     let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;

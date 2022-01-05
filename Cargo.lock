@@ -328,7 +328,9 @@ dependencies = [
  "serde",
  "serde_json",
  "test-case",
+ "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -434,6 +436,8 @@ version = "0.5.0"
 dependencies = [
  "chrono",
  "mockall",
+ "serde",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -1787,9 +1791,11 @@ dependencies = [
  "json_sm",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
  "tracing",
@@ -2798,6 +2804,7 @@ name = "thin_edge_json"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "chrono",
  "clock",
  "criterion",
@@ -2807,7 +2814,9 @@ dependencies = [
  "serde",
  "serde_json",
  "stats_alloc",
+ "test-case",
  "thiserror",
+ "time 0.3.5",
  "walkdir",
 ]
 
@@ -2858,7 +2867,15 @@ checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
 dependencies = [
  "itoa",
  "libc",
+ "serde",
+ "time-macros",
 ]
+
+[[package]]
+name = "time-macros"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
 
 [[package]]
 name = "tinytemplate"
