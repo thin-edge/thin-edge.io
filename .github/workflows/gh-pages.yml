@@ -24,10 +24,10 @@ jobs:
           crate: mdbook-toc
           version: latest
 
-#      - uses: actions-rs/install@v0.1
-#        with:
-#          crate: mdbook-mermaid
-#          version: latest
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-mermaid
+          version: latest
 
       - run: |
           ls -l
