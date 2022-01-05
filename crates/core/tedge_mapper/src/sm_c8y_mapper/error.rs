@@ -1,4 +1,4 @@
-use agent_mapper_interface::topic::TopicError;
+use agent_interface::topic::TopicError;
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
 #[derive(thiserror::Error, Debug)]
@@ -10,7 +10,7 @@ pub enum SMCumulocityMapperError {
     InvalidTopicError(#[from] TopicError),
 
     #[error(transparent)]
-    InvalidThinEdgeJson(#[from] agent_mapper_interface::SoftwareError),
+    InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
 
     #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),

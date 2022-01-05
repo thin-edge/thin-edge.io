@@ -1,5 +1,5 @@
 use crate::error::SmartRestDeserializerError;
-use agent_mapper_interface::{
+use agent_interface::{
     DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest,
 };
 use chrono::{DateTime, FixedOffset};
@@ -292,7 +292,7 @@ impl SmartRestJwtResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_mapper_interface::*;
+    use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
     use test_case::test_case;

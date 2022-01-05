@@ -2,7 +2,7 @@ use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse};
-use agent_mapper_interface::{
+use agent_interface::{
     topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };

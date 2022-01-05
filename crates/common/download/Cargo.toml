@@ -7,7 +7,7 @@ license = "Apache-2.0"
 description = "download_manager"
 
 [dependencies]
-agent_mapper_interface = { path = "../../core/agent_mapper_interface" }
+agent_interface = { path = "../../core/agent_interface" }
 backoff = { version = "0.3", features = ["tokio"] }
 log = "0.4"
 nix = "0.23"

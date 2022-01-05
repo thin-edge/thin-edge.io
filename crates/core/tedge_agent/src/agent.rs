@@ -7,7 +7,7 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use agent_mapper_interface::{
+use agent_interface::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,

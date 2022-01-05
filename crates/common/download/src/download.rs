@@ -1,5 +1,5 @@
 use crate::error::DownloadError;
-use agent_mapper_interface::DownloadInfo;
+use agent_interface::DownloadInfo;
 use backoff::{future::retry, ExponentialBackoff};
 use nix::{
     fcntl::{fallocate, FallocateFlags},
@@ -50,7 +50,7 @@ impl Downloader {
         };
 
         let mut response = retry(backoff, || async {
-            let client = if let Some(agent_mapper_interface::Auth::Bearer(token)) = &url.auth {
+            let client = if let Some(agent_interface::Auth::Bearer(token)) = &url.auth {
                 reqwest::Client::new().get(url.url()).bearer_auth(token)
             } else {
                 reqwest::Client::new().get(url.url())
@@ -146,7 +146,7 @@ mod tests {
     use crate::DownloadError;
 
     use super::Downloader;
-    use agent_mapper_interface::{Auth, DownloadInfo};
+    use agent_interface::{Auth, DownloadInfo};
     use anyhow::bail;
     use mockito::mock;
     use nix::sys::statvfs;

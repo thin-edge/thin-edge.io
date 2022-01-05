@@ -25,7 +25,7 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
-agent_mapper_interface = { path = "../agent_mapper_interface"}
+agent_interface = { path = "../agent_interface"}
 anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }

@@ -1,5 +1,5 @@
 use crate::error::SmartRestSerializerError;
-use agent_mapper_interface::{OperationStatus, SoftwareUpdateResponse};
+use agent_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -208,7 +208,7 @@ fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSeria
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_mapper_interface::*;
+    use agent_interface::*;
 
     #[test]
     fn serialize_smartrest_supported_operations() {

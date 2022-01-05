@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use agent_mapper_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
+    use agent_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use assert_matches::assert_matches;
     use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;

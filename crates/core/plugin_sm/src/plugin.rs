@@ -1,5 +1,5 @@
 use crate::logged_command::LoggedCommand;
-use agent_mapper_interface::*;
+use agent_interface::*;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;

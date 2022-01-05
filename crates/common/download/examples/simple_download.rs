@@ -1,4 +1,4 @@
-use agent_mapper_interface::DownloadInfo;
+use agent_interface::DownloadInfo;
 use anyhow::Result;
 use download::Downloader;
 
