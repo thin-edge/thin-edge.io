@@ -72,10 +72,10 @@ where
     }
 
     pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error> {
-        let mut topic_filter = TopicFilter::new(RequestTopic::SoftwareListResponse.as_str())?;
-        topic_filter.add(RequestTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(RequestTopic::SmartRestRequest.as_str())?;
-        topic_filter.add(RequestTopic::RestartResponse.as_str())?;
+        let mut topic_filter = TopicFilter::new(ResponseTopic::SoftwareListResponse.as_str())?;
+        topic_filter.add(ResponseTopic::SoftwareUpdateResponse.as_str())?;
+        topic_filter.add(ResponseTopic::SmartRestRequest.as_str())?;
+        topic_filter.add(ResponseTopic::RestartResponse.as_str())?;
         let messages = self.client.subscribe(topic_filter).await?;
 
         Ok(messages)
@@ -98,7 +98,7 @@ where
                 SmartRestDeserializerError::InvalidParameter { operation, .. },
             ) = &err
             {
-                let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+                let topic = RequestTopic::SmartRestResponse.to_topic()?;
                 // publish the operation status as `executing`
                 let () = self.publish(&topic, format!("501,{}", operation)).await?;
                 // publish the operation status as `failed`
@@ -146,24 +146,24 @@ where
 
             let request_topic = message.topic.clone().try_into()?;
             match request_topic {
-                RequestTopic::SoftwareListResponse => {
+                ResponseTopic::SoftwareListResponse => {
                     debug!("Software list");
                     let () = self
                         .validate_and_publish_software_list(message.payload_str()?)
                         .await?;
                 }
-                RequestTopic::SoftwareUpdateResponse => {
+                ResponseTopic::SoftwareUpdateResponse => {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
-                RequestTopic::RestartResponse => {
+                ResponseTopic::RestartResponse => {
                     let () = self
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                RequestTopic::SmartRestRequest => {
+                ResponseTopic::SmartRestRequest => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
@@ -175,7 +175,7 @@ where
     #[instrument(skip(self), name = "software-list")]
     async fn ask_software_list(&self) -> Result<(), SMCumulocityMapperError> {
         let request = SoftwareListRequest::new();
-        let topic = ResponseTopic::SoftwareListRequest.to_topic()?;
+        let topic = RequestTopic::SoftwareListRequest.to_topic()?;
         let json_list_request = request.to_json()?;
         let () = self.publish(&topic, json_list_request).await?;
 
@@ -206,14 +206,14 @@ where
 
     async fn publish_supported_log_types(&self) -> Result<(), SMCumulocityMapperError> {
         let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
     }
 
     async fn publish_get_pending_operations(&self) -> Result<(), SMCumulocityMapperError> {
         let data = SmartRestGetPendingOperations::default();
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
         let payload = data.to_smartrest()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
@@ -224,7 +224,7 @@ where
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
         match response.status() {
             OperationStatus::Executing => {
                 let smartrest_set_operation_status =
@@ -258,7 +258,7 @@ where
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = RestartOperationResponse::from_json(json_response)?;
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
 
         match response.status() {
             OperationStatus::Executing => {
@@ -289,7 +289,7 @@ where
     }
 
     async fn set_log_file_request_executing(&self) -> Result<(), SMCumulocityMapperError> {
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status =
             SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
                 .to_smartrest()?;
@@ -302,7 +302,7 @@ where
         &self,
         binary_upload_event_url: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = ResponseTopic::SmartRestResponse.to_topic()?;
+        let topic = RequestTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
         )
@@ -343,7 +343,7 @@ where
         &self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = ResponseTopic::SoftwareUpdateRequest.to_topic()?;
+        let topic = RequestTopic::SoftwareUpdateRequest.to_topic()?;
         let update_software = SmartRestUpdateSoftware::new();
         let mut software_update_request = update_software
             .from_smartrest(smartrest)?
@@ -380,7 +380,7 @@ where
         &self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = ResponseTopic::RestartRequest.to_topic()?;
+        let topic = RequestTopic::RestartRequest.to_topic()?;
         let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
 
         let request = RestartOperationRequest::new();
