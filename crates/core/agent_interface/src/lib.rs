@@ -1,4 +1,4 @@
-mod error;
+pub mod error;
 mod messages;
 mod software;
 pub mod topic;

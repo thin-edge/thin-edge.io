@@ -1,12 +1,6 @@
+use crate::error::TopicError;
 use mqtt_client::{MqttClientError, Topic};
 use std::convert::{TryFrom, TryInto};
-
-#[derive(thiserror::Error, Debug)]
-pub enum TopicError {
-    #[error("Topic {topic} is unknown.")]
-    UnknownTopic { topic: String },
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequestTopic {
     SoftwareListResponse,
