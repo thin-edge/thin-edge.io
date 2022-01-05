@@ -6,7 +6,7 @@ use tokio::time::Duration;
 #[derive(Debug)]
 enum TestJoinError {
     TestMqttClientError(MqttClientError),
-    ElapseTime,
+    ElapseTime,    
 }
 
 #[tokio::test]
