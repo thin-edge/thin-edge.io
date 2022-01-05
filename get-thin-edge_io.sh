@@ -72,7 +72,7 @@ fi
 echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
 if [ -z "$VERSION" ]; then
-    VERSION=0.5.0
+    VERSION=0.5.1
 
     echo "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
     echo "To install a particular version use this script with the version as an argument."
