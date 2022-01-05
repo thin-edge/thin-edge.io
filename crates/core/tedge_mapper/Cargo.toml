@@ -34,6 +34,7 @@ c8y_translator = { path = "../c8y_translator" }
 chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"
+download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 mockall = "0.10"

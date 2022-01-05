@@ -3,11 +3,12 @@ mod messages;
 mod software;
 pub mod topic;
 
+pub use download::*;
 pub use error::*;
 pub use messages::{
-    control_filter_topic, software_filter_topic, Auth, DownloadInfo, Jsonify, OperationStatus,
-    RestartOperationRequest, RestartOperationResponse, SoftwareListRequest, SoftwareListResponse,
-    SoftwareRequestResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
+    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareRequestResponse,
+    SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 pub use software::*;
 

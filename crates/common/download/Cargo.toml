@@ -7,11 +7,12 @@ license = "Apache-2.0"
 description = "download_manager"
 
 [dependencies]
-agent_interface = { path = "../../core/agent_interface" }
 backoff = { version = "0.3", features = ["tokio"] }
 log = "0.4"
 nix = "0.23"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tedge_utils = { path = "../tedge_utils" }
 tempfile = "3.2"
 thiserror = "1.0"

@@ -1,5 +1,5 @@
-use agent_interface::DownloadInfo;
 use anyhow::Result;
+use download::DownloadInfo;
 use download::Downloader;
 
 /// This example shows how to use the `downlaoder`.

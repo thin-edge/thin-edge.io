@@ -3,8 +3,8 @@ use crate::mapper::mqtt_config;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse};
 use agent_interface::{
-    topic::*, Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
+    topic::*, Jsonify, OperationStatus, RestartOperationRequest, RestartOperationResponse,
+    SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRestartRequest};
@@ -19,7 +19,7 @@ use c8y_smartrest::{
     },
 };
 use chrono::{DateTime, FixedOffset};
-
+use download::{Auth, DownloadInfo};
 use mqtt_client::{Client, MqttClient, MqttClientError, MqttMessageStream, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;

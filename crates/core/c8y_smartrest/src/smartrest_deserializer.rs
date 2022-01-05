@@ -1,7 +1,5 @@
 use crate::error::SmartRestDeserializerError;
-use agent_interface::{
-    DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest,
-};
+use agent_interface::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use serde::de::Error;

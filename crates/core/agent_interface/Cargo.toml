@@ -10,6 +10,7 @@ description = "agent_interface defines all the mqtt topics and messages to be us
 
 [dependencies]
 csv = "1.1"
+download = { path = "../../common/download" }
 mqtt_client = { path = "../../common/mqtt_client" }
 nanoid = "0.4"
 serde = { version = "1.0", features = ["derive"] }

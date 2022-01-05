@@ -22,6 +22,7 @@ name = "agent_interface"
 version = "0.5.0"
 dependencies = [
  "csv",
+ "download",
  "mqtt_client",
  "nanoid",
  "regex",
@@ -708,7 +709,6 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 name = "download"
 version = "0.5.0"
 dependencies = [
- "agent_interface",
  "anyhow",
  "backoff",
  "log",
@@ -716,6 +716,8 @@ dependencies = [
  "nix",
  "regex",
  "reqwest",
+ "serde",
+ "serde_json",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -2704,6 +2706,7 @@ dependencies = [
  "chrono",
  "clock",
  "csv",
+ "download",
  "flockfile",
  "futures",
  "mockall",
