@@ -339,6 +339,7 @@ dependencies = [
  "assert_matches",
  "chrono",
  "csv",
+ "download",
  "serde",
  "serde_json",
  "test-case",

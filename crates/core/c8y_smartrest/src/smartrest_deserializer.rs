@@ -1,7 +1,8 @@
 use crate::error::SmartRestDeserializerError;
-use agent_interface::{DownloadInfo, SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
+use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
+use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};

@@ -1,5 +1,4 @@
 use crate::error::DownloadError;
-//use agent_interface::DownloadInfo;
 use backoff::{future::retry, ExponentialBackoff};
 use nix::{
     fcntl::{fallocate, FallocateFlags},
@@ -194,7 +193,6 @@ mod tests {
     use crate::DownloadError;
 
     use super::*;
-    //use agent_interface::{Auth, DownloadInfo};
     use anyhow::bail;
     use mockito::mock;
     use nix::sys::statvfs;

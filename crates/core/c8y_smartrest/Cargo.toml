@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 agent_interface = { path = "../agent_interface" }
+download = { path = "../../common/download" }
 thin_edge_json = { path = "../thin_edge_json" }
 time = { version = "0.3", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
