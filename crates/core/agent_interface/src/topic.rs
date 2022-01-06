@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-   fn convert_outgoing_topic_to_str() {
+    fn convert_outgoing_topic_to_str() {
         assert_eq!(
             RequestTopic::SoftwareListRequest.as_str(),
             "tedge/commands/req/software/list"
