@@ -354,7 +354,10 @@ mod tests {
             "test/dummy.toml".to_string(),
         )
         .unwrap_err();
-        assert_matches!(system_config_error, SystemServiceError::SystemConfigInvalidSyntax { .. });
+        assert_matches!(
+            system_config_error,
+            SystemServiceError::SystemConfigInvalidSyntax { .. }
+        );
     }
 
     #[test_case(

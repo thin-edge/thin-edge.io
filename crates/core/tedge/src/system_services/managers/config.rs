@@ -91,12 +91,18 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.init.name, "systemd");
-        assert_eq!(config.init.is_available, vec!["/bin/systemctl", "--version"]);
+        assert_eq!(
+            config.init.is_available,
+            vec!["/bin/systemctl", "--version"]
+        );
         assert_eq!(config.init.restart, vec!["/bin/systemctl", "restart", "{}"]);
         assert_eq!(config.init.stop, vec!["/bin/systemctl", "stop", "{}"]);
         assert_eq!(config.init.enable, vec!["/bin/systemctl", "enable", "{}"]);
         assert_eq!(config.init.disable, vec!["/bin/systemctl", "disable", "{}"]);
-        assert_eq!(config.init.is_active, vec!["/bin/systemctl", "is-active", "{}"]);
+        assert_eq!(
+            config.init.is_active,
+            vec!["/bin/systemctl", "is-active", "{}"]
+        );
     }
 
     #[test]
