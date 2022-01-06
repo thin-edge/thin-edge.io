@@ -1,5 +1,6 @@
 use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
+use crate::sm_c8y_mapper::c8ytopic::*;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse};
 use agent_interface::{
@@ -74,7 +75,7 @@ where
     pub async fn subscribe(&self) -> Result<Box<dyn MqttMessageStream>, anyhow::Error> {
         let mut topic_filter = TopicFilter::new(ResponseTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(ResponseTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(ResponseTopic::SmartRestRequest.as_str())?;
+        topic_filter.add(C8yTopic::SmartRestRequest.as_str())?;
         topic_filter.add(ResponseTopic::RestartResponse.as_str())?;
         let messages = self.client.subscribe(topic_filter).await?;
 
@@ -98,7 +99,7 @@ where
                 SmartRestDeserializerError::InvalidParameter { operation, .. },
             ) = &err
             {
-                let topic = RequestTopic::SmartRestResponse.to_topic()?;
+                let topic = C8yTopic::SmartRestResponse.to_topic()?;
                 // publish the operation status as `executing`
                 let () = self.publish(&topic, format!("501,{}", operation)).await?;
                 // publish the operation status as `failed`
@@ -144,29 +145,30 @@ where
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
 
-            let request_topic = message.topic.clone().try_into()?;
-            match request_topic {
-                ResponseTopic::SoftwareListResponse => {
+            let request_topic = message.topic.clone();
+            match request_topic.name.as_str() {
+                r#"tedge/commands/res/software/list"# => {
                     debug!("Software list");
                     let () = self
                         .validate_and_publish_software_list(message.payload_str()?)
                         .await?;
                 }
-                ResponseTopic::SoftwareUpdateResponse => {
+                r#"tedge/commands/res/software/update"# => {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
-                ResponseTopic::RestartResponse => {
+                r#"tedge/commands/res/control/restart"# => {
                     let () = self
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                ResponseTopic::SmartRestRequest => {
+                r#"c8y/s/ds"# => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
+                _ => {},
             }
         }
         Ok(())
@@ -206,14 +208,14 @@ where
 
     async fn publish_supported_log_types(&self) -> Result<(), SMCumulocityMapperError> {
         let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
     }
 
     async fn publish_get_pending_operations(&self) -> Result<(), SMCumulocityMapperError> {
         let data = SmartRestGetPendingOperations::default();
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let payload = data.to_smartrest()?;
         let () = self.publish(&topic, payload).await?;
         Ok(())
@@ -224,7 +226,7 @@ where
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = SoftwareUpdateResponse::from_json(json_response)?;
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
         match response.status() {
             OperationStatus::Executing => {
                 let smartrest_set_operation_status =
@@ -258,7 +260,7 @@ where
         json_response: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let response = RestartOperationResponse::from_json(json_response)?;
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
 
         match response.status() {
             OperationStatus::Executing => {
@@ -289,7 +291,7 @@ where
     }
 
     async fn set_log_file_request_executing(&self) -> Result<(), SMCumulocityMapperError> {
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status =
             SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
                 .to_smartrest()?;
@@ -302,7 +304,7 @@ where
         &self,
         binary_upload_event_url: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = RequestTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
         let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
         )
