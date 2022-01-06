@@ -80,7 +80,7 @@ mod tests {
     use std::convert::TryInto;
 
     #[test]
-    fn convert_incoming_topic_to_str() {
+    fn convert_response_topic_to_str() {
         assert_eq!(
             ResponseTopic::SoftwareListResponse.as_str(),
             "tedge/commands/res/software/list"
@@ -92,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_str_into_incoming_topic() {
+    fn convert_str_into_response_topic() {
         let list: ResponseTopic = "tedge/commands/res/software/list".try_into().unwrap();
         assert_eq!(list, ResponseTopic::SoftwareListResponse);
         let update: ResponseTopic = "tedge/commands/res/software/update".try_into().unwrap();
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_topic_into_incoming_topic() {
+    fn convert_topic_into_response_topic() {
         let list: ResponseTopic = Topic::new("tedge/commands/res/software/list")
             .unwrap()
             .try_into()
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_outgoing_topic_to_str() {
+    fn convert_request_topic_to_str() {
         assert_eq!(
             RequestTopic::SoftwareListRequest.as_str(),
             "tedge/commands/req/software/list"
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_outgoing_topic_to_topic() {
+    fn convert_request_topic_to_topic() {
         assert_eq!(
             RequestTopic::SoftwareListRequest.to_topic().unwrap(),
             Topic::new("tedge/commands/req/software/list").unwrap()
