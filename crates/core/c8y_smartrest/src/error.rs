@@ -13,6 +13,9 @@ pub enum SmartRestSerializerError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromTimeFormatError(#[from] time::error::Format),
 }
 
 #[derive(thiserror::Error, Debug)]
