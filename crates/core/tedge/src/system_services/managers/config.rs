@@ -1,13 +1,18 @@
-use crate::system_services::SystemConfigError::{ConfigFileNotFound, InvalidSyntax};
 use crate::system_services::*;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 
-const SERVICE_CONFIG_FILE: &str = "system.toml";
+pub const SERVICE_CONFIG_FILE: &str = "system.toml";
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct SystemConfig {
+    pub(crate) init: InitConfig,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct InitConfig {
     pub name: String,
     pub is_available: Vec<String>,
     pub restart: Vec<String>,
@@ -17,7 +22,7 @@ pub struct SystemConfig {
     pub is_active: Vec<String>,
 }
 
-impl Default for SystemConfig {
+impl Default for InitConfig {
     fn default() -> Self {
         Self {
             name: "systemd".to_string(),
@@ -31,29 +36,35 @@ impl Default for SystemConfig {
     }
 }
 
-impl SystemConfig {
-    pub fn new(config_root: PathBuf) -> Self {
-        match Self::try_new(config_root) {
-            Ok(config) => config,
-            Err(err) => {
-                eprintln!("{:?}", err);
-                Self::default()
-            }
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            init: InitConfig::default(),
         }
     }
+}
 
-    pub fn try_new(config_root: PathBuf) -> Result<Self, SystemConfigError> {
+impl SystemConfig {
+    pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
         let config_path = config_root.join(SERVICE_CONFIG_FILE);
+        let config_path_str = config_path.to_str().unwrap(); // always config_path exists
 
-        let contents =
-            fs::read_to_string(config_path.clone()).map_err(|_| ConfigFileNotFound(config_path))?;
-
-        let config: SystemConfig =
-            toml::from_str(contents.as_str()).map_err(|e| InvalidSyntax {
-                reason: format!("{}", e),
-            })?;
-
-        Ok(config)
+        match fs::read_to_string(config_path.clone()) {
+            Ok(contents) => {
+                let contents = contents;
+                let config: SystemConfig = toml::from_str(contents.as_str()).map_err(|e| {
+                    SystemServiceError::SystemConfigInvalidToml {
+                        path: config_path_str.to_string(),
+                        reason: format!("{}", e),
+                    }
+                })?;
+                Ok(config)
+            }
+            Err(_) => {
+                println!("The system config file '{}' doesn't exist. Use '/bin/systemctl' as a service manager.\n", config_path_str);
+                Ok(Self::default())
+            }
+        }
     }
 }
 
@@ -67,6 +78,7 @@ mod tests {
     fn deserialize_system_config() {
         let config: SystemConfig = toml::from_str(
             r#"
+            [init]
             name = "systemd"
             is_available = ["/bin/systemctl", "--version"]
             restart = ["/bin/systemctl", "restart", "{}"]
@@ -78,18 +90,19 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(config.name, "systemd");
-        assert_eq!(config.is_available, vec!["/bin/systemctl", "--version"]);
-        assert_eq!(config.restart, vec!["/bin/systemctl", "restart", "{}"]);
-        assert_eq!(config.stop, vec!["/bin/systemctl", "stop", "{}"]);
-        assert_eq!(config.enable, vec!["/bin/systemctl", "enable", "{}"]);
-        assert_eq!(config.disable, vec!["/bin/systemctl", "disable", "{}"]);
-        assert_eq!(config.is_active, vec!["/bin/systemctl", "is-active", "{}"]);
+        assert_eq!(config.init.name, "systemd");
+        assert_eq!(config.init.is_available, vec!["/bin/systemctl", "--version"]);
+        assert_eq!(config.init.restart, vec!["/bin/systemctl", "restart", "{}"]);
+        assert_eq!(config.init.stop, vec!["/bin/systemctl", "stop", "{}"]);
+        assert_eq!(config.init.enable, vec!["/bin/systemctl", "enable", "{}"]);
+        assert_eq!(config.init.disable, vec!["/bin/systemctl", "disable", "{}"]);
+        assert_eq!(config.init.is_active, vec!["/bin/systemctl", "is-active", "{}"]);
     }
 
     #[test]
     fn read_system_config_file() -> anyhow::Result<()> {
         let toml_conf = r#"
+            [init]
             name = "systemd"
             is_available = ["/bin/systemctl", "--version"]
             restart = ["/bin/systemctl", "restart", "{}"]
@@ -101,7 +114,7 @@ mod tests {
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
 
         let (_dir, config_root_path) = create_temp_tedge_config(toml_conf)?;
-        let config = SystemConfig::new(config_root_path);
+        let config = SystemConfig::try_new(config_root_path).unwrap();
 
         assert_eq!(config, expected_config);
 

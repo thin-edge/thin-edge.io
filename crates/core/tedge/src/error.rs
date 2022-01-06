@@ -24,5 +24,5 @@ pub enum TEdgeError {
     FromRumqttClient(#[from] rumqttc::ClientError),
 
     #[error(transparent)]
-    FromSystemConfig(#[from] system_services::SystemConfigError),
+    FromSystemServiceError(#[from] system_services::SystemServiceError),
 }

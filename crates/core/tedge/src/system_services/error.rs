@@ -1,26 +1,34 @@
 #[derive(thiserror::Error, Debug)]
 pub enum SystemServiceError {
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-
     #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
-    ServiceCommandFailed {
+    ServiceCommandFailedWithCode { service_command: String, code: i32 },
+
+    #[error("Service command <{service_command:?}> terminated by a signal.")]
+    ServiceCommandFailedBySignal { service_command: String },
+
+    #[error(
+        "Service command <{service_command:?}> not found.\n\
+    Check '{path}' file."
+    )]
+    ServiceCommandNotFound {
         service_command: String,
-        code: Option<i32>,
+        path: String,
     },
 
-    #[error("Service Manager: '{0}' is not available on the system or elevated permissions have not been granted.")]
-    ServiceManagerUnavailable(String),
+    #[error("Failed to execute '{cmd}' to check the service manager availability.\n\
+     Service manager '{name}' is not available on the system or elevated permissions have not been granted.")]
+    ServiceManagerUnavailable { cmd: String, name: String },
 
-    #[error(transparent)]
-    FromSystemConfig(#[from] SystemConfigError),
-}
+    #[error("Toml syntax error in the system config file '{path}': {reason}")]
+    SystemConfigInvalidToml { path: String, reason: String },
 
-#[derive(thiserror::Error, Debug)]
-pub enum SystemConfigError {
-    #[error("System config file not found: {0}")]
-    ConfigFileNotFound(std::path::PathBuf),
-
-    #[error("Invalid syntax in the system config file: {reason}")]
-    InvalidSyntax { reason: String },
+    #[error(
+        "Syntax error in the system config file for '{cmd}': {reason}\n\
+    Check '{path}' file."
+    )]
+    SystemConfigInvalidSyntax {
+        reason: String,
+        cmd: String,
+        path: String,
+    },
 }

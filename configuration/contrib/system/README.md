@@ -6,6 +6,7 @@ The file configures which system manager executes which command to do some actio
 The format of the file is:
 
 ```toml
+[init]
 name = "systemd"
 is_available = ["/bin/systemctl", "--version"]
 restart = ["/bin/systemctl", "restart", "{}"]
@@ -24,7 +25,7 @@ For example,
 restart = ["/bin/systemctl", "restart", "{}"]
 ```
 
-will be interpreted to
+will be interpreted as
 
 ```shell
 /bin/systemctl restart mosquitto

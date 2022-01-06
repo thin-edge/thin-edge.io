@@ -2581,7 +2581,6 @@ dependencies = [
  "chrono",
  "futures",
  "hyper",
- "itertools",
  "mockito",
  "pem",
  "predicates 2.1.0",

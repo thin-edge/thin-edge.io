@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
-use crate::system_services::*;
 use anyhow::Context;
 use structopt::StructOpt;
 use tedge_users::UserManager;

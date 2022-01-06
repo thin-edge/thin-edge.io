@@ -1,3 +1,4 @@
+[init]
 name = "systemd"
 is_available = ["/bin/systemctl", "--version"]
 restart = ["/bin/systemctl", "restart", "{}"]

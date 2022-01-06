@@ -18,7 +18,6 @@ certificate = { path = "../../common/certificate" }
 chrono = "0.4"
 futures = "0.3"
 hyper = { version = "0.14", default-features = false }
-itertools = "0.10"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls", "stream"] }
 rpassword = "5.0"
 rumqttc = "0.10"

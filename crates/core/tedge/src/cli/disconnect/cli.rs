@@ -1,6 +1,6 @@
 use crate::cli::disconnect::disconnect_bridge::*;
-use crate::cli::service_manager;
 use crate::command::*;
+use crate::system_services::service_manager;
 use structopt::StructOpt;
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";

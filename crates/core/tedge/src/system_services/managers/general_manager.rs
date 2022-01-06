@@ -1,8 +1,7 @@
 use crate::system_services::{
-    CommandBuilder, SystemConfig, SystemConfigError, SystemService, SystemServiceError,
-    SystemServiceManager,
+    CommandBuilder, InitConfig, SystemConfig, SystemService, SystemServiceError,
+    SystemServiceManager, SERVICE_CONFIG_FILE,
 };
-use itertools::Itertools;
 use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitStatus;
@@ -11,70 +10,73 @@ use tedge_users::{UserManager, ROOT_USER};
 #[derive(Debug)]
 pub struct GeneralServiceManager {
     user_manager: UserManager,
-    system_config: SystemConfig,
+    init_config: InitConfig,
+    config_path: String,
 }
 
 impl GeneralServiceManager {
     pub fn try_new(
         user_manager: UserManager,
         config_root: PathBuf,
-    ) -> Result<Self, SystemConfigError> {
-        let system_config = SystemConfig::new(config_root);
+    ) -> Result<Self, SystemServiceError> {
+        let init_config = SystemConfig::try_new(config_root.clone())?.init;
+        let config_path = config_root
+            .join(SERVICE_CONFIG_FILE)
+            .to_str()
+            .unwrap()
+            .to_string(); // Path always exists
         Ok(Self {
             user_manager,
-            system_config,
+            init_config,
+            config_path,
         })
     }
 }
 
 impl SystemServiceManager for GeneralServiceManager {
     fn name(&self) -> &str {
-        &self.system_config.name
+        &self.init_config.name
     }
 
     fn check_operational(&self) -> Result<(), SystemServiceError> {
-        let exec_command = ExecCommand::try_new(self.system_config.is_available.clone())?;
+        let exec_command = ServiceCommand::CheckManager.try_exec_command(&self)?;
 
         match exec_command.to_command().status() {
             Ok(status) if status.success() => Ok(()),
-            _ => Err(SystemServiceError::ServiceManagerUnavailable(
-                self.name().to_string(),
-            )),
+            _ => Err(SystemServiceError::ServiceManagerUnavailable {
+                cmd: exec_command.to_string(),
+                name: self.name().to_string(),
+            }),
         }
     }
 
     fn stop_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let config = replace_with_service_name(&self.system_config.stop, service)?;
-        let exec_command = ExecCommand::try_new(config)?;
-        self.run_service_command_as_root(exec_command)?
+        let exec_command = ServiceCommand::Stop(service).try_exec_command(&self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let config = replace_with_service_name(&self.system_config.restart, service)?;
-        let exec_command = ExecCommand::try_new(config)?;
-        self.run_service_command_as_root(exec_command)?
+        let exec_command = ServiceCommand::Restart(service).try_exec_command(&self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn enable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let config = replace_with_service_name(&self.system_config.enable, service)?;
-        let exec_command = ExecCommand::try_new(config)?;
-        self.run_service_command_as_root(exec_command)?
+        let exec_command = ServiceCommand::Enable(service).try_exec_command(&self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn disable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let config = replace_with_service_name(&self.system_config.disable, service)?;
-        let exec_command = ExecCommand::try_new(config)?;
-        self.run_service_command_as_root(exec_command)?
+        let exec_command = ServiceCommand::Disable(service).try_exec_command(&self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn is_service_running(&self, service: SystemService) -> Result<bool, SystemServiceError> {
-        let config = replace_with_service_name(&self.system_config.is_active, service)?;
-        let exec_command = ExecCommand::try_new(config)?;
-        self.run_service_command_as_root(exec_command)
+        let exec_command = ServiceCommand::IsActive(service).try_exec_command(&self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .map(|status| status.success())
     }
 }
@@ -86,16 +88,33 @@ struct ExecCommand {
 }
 
 impl ExecCommand {
-    fn try_new(config: Vec<String>) -> Result<Self, SystemConfigError> {
+    fn try_new(
+        config: Vec<String>,
+        cmd: ServiceCommand,
+        config_path: String,
+    ) -> Result<Self, SystemServiceError> {
         match config.split_first() {
             Some((exec, args)) => Ok(Self {
                 exec: exec.to_string(),
                 args: args.to_vec(),
             }),
-            None => Err(SystemConfigError::InvalidSyntax {
+            None => Err(SystemServiceError::SystemConfigInvalidSyntax {
                 reason: "Requires 1 or more arguments.".to_string(),
+                cmd: cmd.to_string(),
+                path: config_path,
             }),
         }
+    }
+
+    fn try_new_with_placeholder(
+        config: Vec<String>,
+        service_cmd: ServiceCommand,
+        config_path: String,
+        service: SystemService,
+    ) -> Result<Self, SystemServiceError> {
+        let replaced =
+            replace_with_service_name(&config, service_cmd, config_path.as_str(), service)?;
+        Self::try_new(replaced, service_cmd, config_path)
     }
 
     fn to_command(&self) -> std::process::Command {
@@ -111,18 +130,26 @@ impl fmt::Display for ExecCommand {
         if self.args.is_empty() {
             write!(f, "{}", self.exec)
         } else {
-            write!(f, "{} {}", self.exec, self.args.iter().format(" "))
+            let mut s = self.exec.to_owned();
+            for arg in &self.args {
+                s = format!("{} {}", s, arg);
+            }
+            write!(f, "{}", s)
         }
     }
 }
 
 fn replace_with_service_name(
     input_args: &[String],
+    service_cmd: ServiceCommand,
+    config_path: &str,
     service: SystemService,
-) -> Result<Vec<String>, SystemConfigError> {
+) -> Result<Vec<String>, SystemServiceError> {
     if !input_args.iter().any(|s| s == "{}") {
-        return Err(SystemConfigError::InvalidSyntax {
+        return Err(SystemServiceError::SystemConfigInvalidSyntax {
             reason: "A placeholder '{}' is missing.".to_string(),
+            cmd: service_cmd.to_string(),
+            path: config_path.to_string(),
         });
     }
 
@@ -136,17 +163,88 @@ fn replace_with_service_name(
     Ok(args)
 }
 
+#[derive(Debug, Copy, Clone)]
+enum ServiceCommand {
+    CheckManager,
+    Stop(SystemService),
+    Restart(SystemService),
+    Enable(SystemService),
+    Disable(SystemService),
+    IsActive(SystemService),
+}
+
+impl ServiceCommand {
+    fn to_string(&self) -> String {
+        match self {
+            Self::CheckManager => "is_available".to_string(),
+            Self::Stop(_service) => "restart".to_string(),
+            Self::Restart(_service) => "stop".to_string(),
+            Self::Enable(_service) => "enable".to_string(),
+            Self::Disable(_service) => "disable".to_string(),
+            Self::IsActive(_service) => "is_active".to_string(),
+        }
+    }
+
+    fn try_exec_command(
+        &self,
+        service_manager: &GeneralServiceManager,
+    ) -> Result<ExecCommand, SystemServiceError> {
+        let config_path = service_manager.config_path.clone();
+        match self {
+            Self::CheckManager => ExecCommand::try_new(
+                service_manager.init_config.is_available.clone(),
+                ServiceCommand::CheckManager,
+                config_path,
+            ),
+            Self::Stop(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.stop.clone(),
+                ServiceCommand::Stop(service.clone()),
+                config_path,
+                service.clone(),
+            ),
+            Self::Restart(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.restart.clone(),
+                ServiceCommand::Restart(service.clone()),
+                config_path,
+                service.clone(),
+            ),
+            Self::Enable(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.enable.clone(),
+                ServiceCommand::Enable(service.clone()),
+                config_path,
+                service.clone(),
+            ),
+            Self::Disable(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.enable.clone(),
+                ServiceCommand::Disable(service.clone()),
+                config_path,
+                service.clone(),
+            ),
+            Self::IsActive(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.is_active.clone(),
+                ServiceCommand::IsActive(service.clone()),
+                config_path,
+                service.clone(),
+            ),
+        }
+    }
+}
+
 impl GeneralServiceManager {
     fn run_service_command_as_root(
         &self,
         exec_command: ExecCommand,
+        config_path: &str,
     ) -> Result<ServiceCommandExitStatus, SystemServiceError> {
         let _root_guard = self.user_manager.become_user(ROOT_USER);
 
         exec_command
             .to_command()
             .status()
-            .map_err(Into::into)
+            .map_err(|_| SystemServiceError::ServiceCommandNotFound {
+                service_command: exec_command.to_string(),
+                path: config_path.to_string(),
+            })
             .map(|status| ServiceCommandExitStatus {
                 status,
                 service_command: exec_command.to_string(),
@@ -154,6 +252,7 @@ impl GeneralServiceManager {
     }
 }
 
+#[derive(Debug)]
 struct ServiceCommandExitStatus {
     status: ExitStatus,
     service_command: String,
@@ -164,10 +263,15 @@ impl ServiceCommandExitStatus {
         if self.status.success() {
             Ok(())
         } else {
-            Err(SystemServiceError::ServiceCommandFailed {
-                service_command: self.service_command,
-                code: self.status.code(),
-            })
+            match self.status.code() {
+                Some(code) => Err(SystemServiceError::ServiceCommandFailedWithCode {
+                    service_command: self.service_command,
+                    code,
+                }),
+                None => Err(SystemServiceError::ServiceCommandFailedBySignal {
+                    service_command: self.service_command,
+                }),
+            }
         }
     }
 
@@ -191,16 +295,30 @@ mod tests {
     vec!["bin".to_string(), "mosquitto".to_string(), "mosquitto".to_string()]
     ;"several placeholders")]
     fn replace_placeholder_with_service(input: Vec<String>, expected_output: Vec<String>) {
-        let replaced_config = replace_with_service_name(&input, SystemService::Mosquitto).unwrap();
+        let replaced_config = replace_with_service_name(
+            &input,
+            ServiceCommand::Stop(SystemService::Mosquitto),
+            "/dummy/path.toml",
+            SystemService::Mosquitto,
+        )
+        .unwrap();
         assert_eq!(replaced_config, expected_output)
     }
 
     #[test]
     fn fail_to_replace_placeholder_with_service() {
         let input = vec!["bin".to_string(), "arg1".to_string(), "arg2".to_string()];
-        let system_config_error =
-            replace_with_service_name(&input, SystemService::Mosquitto).unwrap_err();
-        assert_matches!(system_config_error, SystemConfigError::InvalidSyntax { .. })
+        let system_config_error = replace_with_service_name(
+            &input,
+            ServiceCommand::Stop(SystemService::Mosquitto),
+            "dummy/path.toml",
+            SystemService::Mosquitto,
+        )
+        .unwrap_err();
+        assert_matches!(
+            system_config_error,
+            SystemServiceError::SystemConfigInvalidSyntax { .. }
+        )
     }
 
     #[test_case(
@@ -218,15 +336,25 @@ mod tests {
     }
     ;"only executable")]
     fn build_exec_command(config: Vec<String>, expected: ExecCommand) {
-        let exec_command = ExecCommand::try_new(config).unwrap();
+        let exec_command = ExecCommand::try_new(
+            config,
+            ServiceCommand::Stop(SystemService::Mosquitto),
+            "test/dummy.toml".to_string(),
+        )
+        .unwrap();
         assert_eq!(exec_command, expected);
     }
 
     #[test]
     fn fail_to_build_exec_command() {
         let config = vec![];
-        let system_config_error = ExecCommand::try_new(config).unwrap_err();
-        assert_matches!(system_config_error, SystemConfigError::InvalidSyntax { .. });
+        let system_config_error = ExecCommand::try_new(
+            config,
+            ServiceCommand::Stop(SystemService::Mosquitto),
+            "test/dummy.toml".to_string(),
+        )
+        .unwrap_err();
+        assert_matches!(system_config_error, SystemServiceError::SystemConfigInvalidSyntax { .. });
     }
 
     #[test_case(

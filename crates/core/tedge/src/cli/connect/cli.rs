@@ -1,6 +1,6 @@
 use crate::cli::connect::*;
-use crate::cli::service_manager;
 use crate::command::{BuildCommand, BuildContext, Command};
+use crate::system_services::service_manager;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug, PartialEq)]
