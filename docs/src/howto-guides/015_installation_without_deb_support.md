@@ -63,6 +63,10 @@ If you have built the binaries from source you should install them on the target
 
 `thin-edge.io` relies on certain system configuration and systemd process management, when installing from deb package all of that is setup automatically but with manual installation a set of steps has to be performed.
 
-On most Linux distribution it should suffice to execute them as `root` to do the setup, but in some cases (eg, your system uses `useradd` instead of `adduser` package) more detailed instructions are documented in the script files, you can find them under "/configuration/debian/" and subfolders.
+On most Linux distribution it should suffice to execute them as `root` to do the setup, but in some cases (eg, your system uses `useradd` instead of `adduser` package) more detailed instructions are documented:
+
+* [tedge](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge/postinst)
+* [tedge-agent](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge_agent/postinst)
+* [tedge-mapper](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge_mapper/postinst)
 
 After following steps for all the components installed `thin-edge.io` should be operational.
