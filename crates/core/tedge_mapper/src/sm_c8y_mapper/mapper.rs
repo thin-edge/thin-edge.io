@@ -1,7 +1,7 @@
 use crate::component::TEdgeComponent;
 use crate::mapper::mqtt_config;
-use crate::sm_c8y_mapper::c8ytopic::*;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use crate::sm_c8y_mapper::topic::*;
 use crate::sm_c8y_mapper::{error::*, json_c8y::C8yUpdateSoftwareListResponse};
 use agent_interface::{
     topic::*, Jsonify, OperationStatus, RestartOperationRequest, RestartOperationResponse,
@@ -145,44 +145,31 @@ where
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
 
-            let request_topic = message.topic.clone();
-            let topic_name = request_topic.name.as_str();
-            dbg!(&topic_name);
-            match topic_name {
-                r#"tedge/commands/res/software/list"# => {
+            let request_topic = message.topic.clone().try_into()?;
+            debug!("request topic {:?}", request_topic);
+            match request_topic {
+                MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse) => {
                     debug!("Software list");
                     let () = self
                         .validate_and_publish_software_list(message.payload_str()?)
                         .await?;
                 }
-                r#"tedge/commands/res/software/update"# => {
+                MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareUpdateResponse) => {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
-                r#"tedge/commands/res/control/restart"# => {
+                MapperSubscribeTopic::ResponseTopic(ResponseTopic::RestartResponse) => {
                     let () = self
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                r#"c8y/s/ds"# => {
+                MapperSubscribeTopic::SmartRestRequest => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
-                _ => {
-                    dbg!("unknown topics............");
-                }
             }
-
-            // let request_topic = message.topic.clone().try_into()?;
-            // match request_topic {
-            //     C8yTopic::SmartRestRequest => {
-            //         debug!("Cumulocity");
-            //         let () = self.process_smartrest(message.payload_str()?).await?;
-            //     }
-            //     _ => {}
-            // }
         }
         Ok(())
     }

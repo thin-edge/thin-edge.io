@@ -1,4 +1,4 @@
-use agent_interface::error::*;
+use agent_interface::{error::*, topic::ResponseTopic};
 use mqtt_client::{MqttClientError, Topic};
 use std::convert::{TryFrom, TryInto};
 
@@ -46,6 +46,50 @@ impl TryFrom<&str> for C8yTopic {
 }
 
 impl TryFrom<Topic> for C8yTopic {
+    type Error = TopicError;
+
+    fn try_from(value: Topic) -> Result<Self, Self::Error> {
+        value.name.try_into()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MapperSubscribeTopic {
+    SmartRestRequest,
+    ResponseTopic(ResponseTopic),
+}
+
+impl TryFrom<String> for MapperSubscribeTopic {
+    type Error = TopicError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            r#"c8y/s/ds"# => Ok(MapperSubscribeTopic::SmartRestRequest),
+            r#"tedge/commands/res/software/list"# => Ok(MapperSubscribeTopic::ResponseTopic(
+                ResponseTopic::SoftwareListResponse,
+            )),
+            r#"tedge/commands/res/software/update"# => Ok(MapperSubscribeTopic::ResponseTopic(
+                ResponseTopic::SoftwareUpdateResponse,
+            )),
+            r#"tedge/commands/res/control/restart"# => Ok(MapperSubscribeTopic::ResponseTopic(
+                ResponseTopic::RestartResponse,
+            )),
+            err => Err(TopicError::UnknownTopic {
+                topic: err.to_string(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&str> for MapperSubscribeTopic {
+    type Error = TopicError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string())
+    }
+}
+
+impl TryFrom<Topic> for MapperSubscribeTopic {
     type Error = TopicError;
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
