@@ -53,80 +53,35 @@ impl TryFrom<Topic> for C8yTopic {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::convert::TryInto;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryInto;
 
-//     #[test]
-//     fn convert_incoming_topic_to_str() {
-//         assert_eq!(
-//             RequestTopic::SoftwareListResponse.as_str(),
-//             "tedge/commands/res/software/list"
-//         );
-//         assert_eq!(
-//             RequestTopic::SoftwareUpdateResponse.as_str(),
-//             "tedge/commands/res/software/update"
-//         );
-//         assert_eq!(RequestTopic::SmartRestRequest.as_str(), "c8y/s/ds");
-//     }
+    #[test]
+    fn convert_c8y_topic_to_str() {
+        assert_eq!(C8yTopic::SmartRestRequest.as_str(), "c8y/s/ds");
+        assert_eq!(C8yTopic::SmartRestResponse.as_str(), "c8y/s/us");
+    }
 
-//     #[test]
-//     fn convert_str_into_incoming_topic() {
-//         let list: RequestTopic = "tedge/commands/res/software/list".try_into().unwrap();
-//         assert_eq!(list, RequestTopic::SoftwareListResponse);
-//         let update: RequestTopic = "tedge/commands/res/software/update".try_into().unwrap();
-//         assert_eq!(update, RequestTopic::SoftwareUpdateResponse);
-//         let c8y: RequestTopic = "c8y/s/ds".try_into().unwrap();
-//         assert_eq!(c8y, RequestTopic::SmartRestRequest);
-//         let error: Result<RequestTopic, TopicError> = "test".try_into();
-//         assert!(error.is_err());
-//     }
+    #[test]
+    fn convert_str_into_c8y_topic() {
+        let c8y_req: C8yTopic = "c8y/s/ds".try_into().unwrap();
+        assert_eq!(c8y_req, C8yTopic::SmartRestRequest);
+        let c8y_resp: C8yTopic = "c8y/s/us".try_into().unwrap();
+        assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
+        let error: Result<C8yTopic, TopicError> = "test".try_into();
+        assert!(error.is_err());
+    }
 
-//     #[test]
-//     fn convert_topic_into_incoming_topic() {
-//         let list: RequestTopic = Topic::new("tedge/commands/res/software/list")
-//             .unwrap()
-//             .try_into()
-//             .unwrap();
-//         assert_eq!(list, RequestTopic::SoftwareListResponse);
-//         let update: RequestTopic = Topic::new("tedge/commands/res/software/update")
-//             .unwrap()
-//             .try_into()
-//             .unwrap();
-//         assert_eq!(update, RequestTopic::SoftwareUpdateResponse);
-//         let c8y: RequestTopic = Topic::new("c8y/s/ds").unwrap().try_into().unwrap();
-//         assert_eq!(c8y, RequestTopic::SmartRestRequest);
-//         let error: Result<RequestTopic, TopicError> = Topic::new("test").unwrap().try_into();
-//         assert!(error.is_err());
-//     }
+    #[test]
+    fn convert_topic_into_c8y_topic() {
+        let c8y_req: C8yTopic = Topic::new("c8y/s/ds").unwrap().try_into().unwrap();
+        assert_eq!(c8y_req, C8yTopic::SmartRestRequest);
 
-//     #[test]
-//     fn convert_outgoing_topic_to_str() {
-//         assert_eq!(
-//             ResponseTopic::SoftwareListRequest.as_str(),
-//             "tedge/commands/req/software/list"
-//         );
-//         assert_eq!(
-//             ResponseTopic::SoftwareUpdateRequest.as_str(),
-//             "tedge/commands/req/software/update"
-//         );
-//         assert_eq!(ResponseTopic::SmartRestResponse.as_str(), "c8y/s/us");
-//     }
-
-//     #[test]
-//     fn convert_outgoing_topic_to_topic() {
-//         assert_eq!(
-//             ResponseTopic::SoftwareListRequest.to_topic().unwrap(),
-//             Topic::new("tedge/commands/req/software/list").unwrap()
-//         );
-//         assert_eq!(
-//             ResponseTopic::SoftwareUpdateRequest.to_topic().unwrap(),
-//             Topic::new("tedge/commands/req/software/update").unwrap()
-//         );
-//         assert_eq!(
-//             ResponseTopic::SmartRestResponse.to_topic().unwrap(),
-//             Topic::new("c8y/s/us").unwrap()
-//         );
-//     }
-// }
+        let c8y_resp: C8yTopic = Topic::new("c8y/s/us").unwrap().try_into().unwrap();
+        assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
+        let error: Result<C8yTopic, TopicError> = Topic::new("test").unwrap().try_into();
+        assert!(error.is_err());
+    }
+}
