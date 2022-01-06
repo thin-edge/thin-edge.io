@@ -145,26 +145,30 @@ where
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
 
-            let request_topic = message.topic.clone();
-            match request_topic.name.as_str() {
-                r#"tedge/commands/res/software/list"# => {
+            let request_topic = message.topic.clone().try_into()?;
+            match request_topic {
+                ResponseTopic::SoftwareListResponse => {
                     debug!("Software list");
                     let () = self
                         .validate_and_publish_software_list(message.payload_str()?)
                         .await?;
                 }
-                r#"tedge/commands/res/software/update"# => {
+                ResponseTopic::SoftwareUpdateResponse => {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
-                r#"tedge/commands/res/control/restart"# => {
+                ResponseTopic::RestartResponse => {
                     let () = self
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                r#"c8y/s/ds"# => {
+            }
+
+            let request_topic = message.topic.clone().try_into()?;
+            match request_topic {
+                C8yTopic::SmartRestRequest => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
