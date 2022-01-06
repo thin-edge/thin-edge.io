@@ -145,35 +145,44 @@ where
             debug!("Topic {:?}", message.topic.name);
             debug!("Mapping {:?}", message.payload_str());
 
-            let request_topic = message.topic.clone().try_into()?;
-            match request_topic {
-                ResponseTopic::SoftwareListResponse => {
+            let request_topic = message.topic.clone();
+            let topic_name = request_topic.name.as_str();
+            dbg!(&topic_name);
+            match topic_name {
+                r#"tedge/commands/res/software/list"# => {
                     debug!("Software list");
                     let () = self
                         .validate_and_publish_software_list(message.payload_str()?)
                         .await?;
                 }
-                ResponseTopic::SoftwareUpdateResponse => {
+                r#"tedge/commands/res/software/update"# => {
                     debug!("Software update");
                     let () = self
                         .publish_operation_status(message.payload_str()?)
                         .await?;
                 }
-                ResponseTopic::RestartResponse => {
+                r#"tedge/commands/res/control/restart"# => {
                     let () = self
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-            }
-
-            let request_topic = message.topic.clone().try_into()?;
-            match request_topic {
-                C8yTopic::SmartRestRequest => {
+                r#"c8y/s/ds"# => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
-                _ => {}
+                _ => {
+                    dbg!("unknown topics............");
+                }
             }
+
+            // let request_topic = message.topic.clone().try_into()?;
+            // match request_topic {
+            //     C8yTopic::SmartRestRequest => {
+            //         debug!("Cumulocity");
+            //         let () = self.process_smartrest(message.payload_str()?).await?;
+            //     }
+            //     _ => {}
+            // }
         }
         Ok(())
     }

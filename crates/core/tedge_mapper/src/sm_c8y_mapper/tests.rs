@@ -11,7 +11,7 @@ use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 use tokio::task::JoinHandle;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 #[tokio::test]
 #[serial]
@@ -94,6 +94,7 @@ async fn mapper_publishes_software_update_request() {
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
+    dbg!(&msg);
     assert!(&msg.contains("{\"id\":\""));
     assert!(&msg.contains(&remove_whitespace(expected_update_list)));
     sm_mapper.unwrap().abort();
