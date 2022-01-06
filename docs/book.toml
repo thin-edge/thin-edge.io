@@ -8,7 +8,6 @@ src = "src"
 [output.html.fold]
     enable = true
 
-# FIX: the link check prevents some pages to be generated
 [output.linkcheck]
 # Should we check links on the internet? Enabling this option adds a
 # non-negligible performance impact
