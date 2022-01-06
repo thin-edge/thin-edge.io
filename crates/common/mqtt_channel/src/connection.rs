@@ -51,6 +51,7 @@ impl Connection {
     fn mqtt_options(name: &str, config: &Config) -> rumqttc::MqttOptions {
         let mut mqtt_options = rumqttc::MqttOptions::new(name, &config.host, config.port);
         mqtt_options.set_clean_session(config.clean_session);
+        mqtt_options.set_max_packet_size(config.max_packet_size, config.max_packet_size);
 
         mqtt_options
     }

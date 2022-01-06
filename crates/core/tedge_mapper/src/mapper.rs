@@ -32,7 +32,9 @@ pub async fn create_mapper<'a>(
 pub(crate) fn mqtt_config(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
-    Ok(mqtt_channel::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
+    Ok(mqtt_channel::Config::default()
+        .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_max_packet_size(10 * 1024 * 1024))
 }
 
 pub struct Mapper {

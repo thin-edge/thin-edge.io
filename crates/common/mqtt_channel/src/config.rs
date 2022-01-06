@@ -12,7 +12,13 @@ pub struct Config {
     /// Capacity of the internal message queues
     ///
     /// Default: `1024`.
+    ///
     pub queue_capacity: usize,
+
+    /// Maximum size for a message payload
+    ///
+    /// Default: `8 * 1024`.
+    pub max_packet_size: usize,
 }
 
 /// By default a client connects the local MQTT broker.
@@ -23,6 +29,7 @@ impl Default for Config {
             port: 1883,
             clean_session: false,
             queue_capacity: 1024,
+            max_packet_size: 8 * 1024,
         }
     }
 }
@@ -53,6 +60,14 @@ impl Config {
     pub fn with_queue_capacity(self, queue_capacity: usize) -> Self {
         Self {
             queue_capacity,
+            ..self
+        }
+    }
+
+    /// Set the maximum size for a message payload
+    pub fn with_max_packet_size(self, max_packet_size: usize) -> Self {
+        Self {
+            max_packet_size,
             ..self
         }
     }
