@@ -18,27 +18,55 @@ pub struct Connection {
 }
 
 impl Connection {
-    // The stream of events received from this MQTT connected and forwarded to the client
+    /// The stream of events received from this MQTT connected and forwarded to the client
     pub fn input_event_stream(&self) -> &(impl Stream<Item = Message> + Unpin) {
         &self.received
     }
 
-    // The stream of actions sent by the client to this MQTT connection
+    /// The stream of actions sent by the client to this MQTT connection
     pub fn output_action_stream(&self) -> &(impl Sink<Message> + Unpin) {
         &self.published
     }
 
+    /// Establish a connection to the MQTT broker defined by the given `config`.
+    ///
+    /// This connection is associated to an MQTT session with the given `name` and `subscription`.
+    ///
+    /// Reusing the same session name on each connection allows a client
+    /// to have its subscription persisted by the broker
+    /// so messages sent while the client is disconnected are received on re-connection.
+    ///
+    /// The connection will only receive messages published on the subscription topics.
+    ///
+    /// ```no_run
+    /// # use mqtt_channel::{Config, Connection, Topic, MqttError};
+    /// # use std::convert::TryInto;
+    ///
+    /// # #[tokio::main]
+    /// # async fn connect() -> Result<Connection, MqttError> {
+    ///     // A client can subscribe to many topics
+    ///     let topics = vec![
+    ///         "/a/first/topic",
+    ///         "/a/second/topic",
+    ///         "/a/+/pattern", // one can use + pattern
+    ///         "/any/#",       // one can use # pattern
+    ///     ]
+    ///     .try_into()
+    ///     .expect("a list of topic filters");
+    ///
+    ///     Connection::connect("test", &Config::default(), topics).await
+    /// # }
     pub async fn connect(
         name: &str,
         config: &Config,
-        topic: TopicFilter,
+        subscription: TopicFilter,
     ) -> Result<Connection, MqttError> {
         let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let init_message_sender = received_sender.clone();
 
         let (mqtt_client, event_loop) =
-            Connection::open(name, config, topic, init_message_sender).await?;
+            Connection::open(name, config, subscription, init_message_sender).await?;
         tokio::spawn(Connection::receiver_loop(event_loop, received_sender));
         tokio::spawn(Connection::sender_loop(mqtt_client, published_receiver));
 

@@ -16,6 +16,9 @@ pub enum MqttError {
         from: std::str::Utf8Error,
     },
 
+    #[error("The connection has been closed and no more messages can be published/received")]
+    ClosedConnection,
+
     // TODO Remove this error case
     #[error(transparent)]
     FromSendChannel(#[from] futures::channel::mpsc::SendError),

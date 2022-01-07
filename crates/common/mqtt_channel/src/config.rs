@@ -1,7 +1,14 @@
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// MQTT host to connect to
+    ///
+    /// Default: "localhost"
     pub host: String,
+
+    /// MQTT port to connect to
+    ///
+    /// Default: 1883
     pub port: u16,
 
     /// Clean the MQTT session upon connect if set to `true`.
@@ -41,6 +48,11 @@ impl Config {
             port,
             ..Config::default()
         }
+    }
+
+    /// Set a custom host
+    pub fn with_host(self, host: impl Into<String>) -> Self {
+        Self { host: host.into(), ..self }
     }
 
     /// Set a custom port
