@@ -11,3 +11,4 @@ mod command;
 mod common_mosquitto_config;
 mod error;
 mod jwt_token;
+mod c8y_direct_connection;

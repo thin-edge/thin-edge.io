@@ -1,6 +1,8 @@
 use crate::{
     cli::connect::jwt_token::*, cli::connect::*, command::Command, system_services::*, ConfigError,
 };
+use c8y_direct_connection::*;
+use futures::FutureExt;
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use std::path::{Path, PathBuf};
@@ -428,6 +430,7 @@ fn new_bridge(
     service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
+    c8y_direct_connection::create_device_with_direct_connection();
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 
