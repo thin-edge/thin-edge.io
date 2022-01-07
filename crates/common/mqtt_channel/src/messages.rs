@@ -44,7 +44,7 @@ impl Message {
         std::str::from_utf8(bytes).map_err(|err| MqttError::new_invalid_utf8_payload(bytes, err))
     }
 
-    /// The bytes of the payload (expect any trailing null char)
+    /// The bytes of the payload (except any trailing null char)
     pub fn payload_bytes(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
