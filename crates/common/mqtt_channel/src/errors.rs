@@ -16,10 +16,14 @@ pub enum MqttError {
         from: std::str::Utf8Error,
     },
 
-    #[error("The read channel of the connection has been closed and no more messages can be received")]
+    #[error(
+        "The read channel of the connection has been closed and no more messages can be received"
+    )]
     ReadOnClosedConnection,
 
-    #[error("The send channel of the connection has been closed and no more messages can be published")]
+    #[error(
+        "The send channel of the connection has been closed and no more messages can be published"
+    )]
     SendOnClosedConnection,
 }
 

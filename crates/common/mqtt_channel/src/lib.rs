@@ -28,6 +28,7 @@
 //! ```
 #![forbid(unsafe_code)]
 
+mod channel;
 mod config;
 mod connection;
 mod errors;
@@ -36,6 +37,7 @@ mod topics;
 
 mod tests;
 
+pub use channel::*;
 pub use config::*;
 pub use connection::*;
 pub use errors::*;

@@ -1,7 +1,6 @@
-use crate::{Config, Message, MqttError, TopicFilter};
+use crate::{Config, Message, MqttError, PubChannel, SubChannel, TopicFilter};
 use futures::channel::mpsc;
-use futures::{Sink, SinkExt};
-use futures::{Stream, StreamExt};
+use futures::{SinkExt, StreamExt};
 use rumqttc::{
     AsyncClient, ConnectionError, Event, EventLoop, Incoming, Outgoing, Packet, StateError,
 };
@@ -19,12 +18,12 @@ pub struct Connection {
 
 impl Connection {
     /// The stream of events received from this MQTT connected and forwarded to the client
-    pub fn input_event_stream(&self) -> &(impl Stream<Item = Message> + Unpin) {
+    pub fn sub_channel(&self) -> &impl SubChannel {
         &self.received
     }
 
     /// The stream of actions sent by the client to this MQTT connection
-    pub fn output_action_stream(&self) -> &(impl Sink<Message> + Unpin) {
+    pub fn pub_channel(&self) -> &impl PubChannel {
         &self.published
     }
 

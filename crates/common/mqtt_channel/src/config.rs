@@ -52,7 +52,10 @@ impl Config {
 
     /// Set a custom host
     pub fn with_host(self, host: impl Into<String>) -> Self {
-        Self { host: host.into(), ..self }
+        Self {
+            host: host.into(),
+            ..self
+        }
     }
 
     /// Set a custom port

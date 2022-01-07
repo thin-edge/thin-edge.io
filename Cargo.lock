@@ -1426,6 +1426,7 @@ name = "mqtt_channel"
 version = "0.4.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "mqtt_tests",
  "rumqttc",
