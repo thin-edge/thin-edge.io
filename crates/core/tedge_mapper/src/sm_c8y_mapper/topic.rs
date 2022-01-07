@@ -61,18 +61,13 @@ pub enum MapperSubscribeTopic {
 
 impl TryFrom<String> for MapperSubscribeTopic {
     type Error = TopicError;
-
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
             r#"c8y/s/ds"# => Ok(MapperSubscribeTopic::SmartRestRequest),
-            r#"tedge/commands/res/software/list"# => Ok(MapperSubscribeTopic::ResponseTopic(
-                ResponseTopic::SoftwareListResponse,
-            )),
-            r#"tedge/commands/res/software/update"# => Ok(MapperSubscribeTopic::ResponseTopic(
-                ResponseTopic::SoftwareUpdateResponse,
-            )),
-            r#"tedge/commands/res/control/restart"# => Ok(MapperSubscribeTopic::ResponseTopic(
-                ResponseTopic::RestartResponse,
+            r#"tedge/commands/res/software/list"#
+            | r#"tedge/commands/res/software/update"#
+            | r#"tedge/commands/res/control/restart"# => Ok(MapperSubscribeTopic::ResponseTopic(
+                ResponseTopic::try_from(value)?,
             )),
             err => Err(TopicError::UnknownTopic {
                 topic: err.to_string(),

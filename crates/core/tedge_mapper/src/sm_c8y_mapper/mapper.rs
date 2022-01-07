@@ -142,11 +142,7 @@ where
         messages: &mut Box<dyn MqttMessageStream>,
     ) -> Result<(), SMCumulocityMapperError> {
         while let Some(message) = messages.next().await {
-            debug!("Topic {:?}", message.topic.name);
-            debug!("Mapping {:?}", message.payload_str());
-
             let request_topic = message.topic.clone().try_into()?;
-            debug!("request topic {:?}", request_topic);
             match request_topic {
                 MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse) => {
                     debug!("Software list");

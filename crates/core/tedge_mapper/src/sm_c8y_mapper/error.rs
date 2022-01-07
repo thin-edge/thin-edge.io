@@ -1,4 +1,3 @@
-use agent_interface::error::*;
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
 #[derive(thiserror::Error, Debug)]
@@ -7,7 +6,7 @@ pub enum SMCumulocityMapperError {
     InvalidMqttMessage,
 
     #[error(transparent)]
-    InvalidTopicError(#[from] TopicError),
+    InvalidTopicError(#[from] agent_interface::TopicError),
 
     #[error(transparent)]
     InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),

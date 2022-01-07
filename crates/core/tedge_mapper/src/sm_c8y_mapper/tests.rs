@@ -11,7 +11,7 @@ use std::{io::Write, time::Duration};
 use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
 use tokio::task::JoinHandle;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
 #[tokio::test]
 #[serial]
