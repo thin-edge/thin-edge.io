@@ -32,12 +32,7 @@ pub fn create_device_with_direct_connection() {
         let key_chain: Vec<rustls_0_19::PrivateKey> = pkcs8_private_keys(&mut key_reader).unwrap();
         //dbg!(&key_chain);
         let key = key_chain.first().unwrap().clone();
-        // Get the first key. Error if it's not valid
-        // let key = match key_chain.first().unwrap()[0] {
-        //     Some(k) => k.clone(),
-        //     None => return Err(LocalError::NoValidCertInChain),
-        // };
-
+        
         let f = File::open("/etc/tedge/device-certs/tedge-certificate.pem").unwrap();
         let mut cert_reader = BufReader::new(f);
         let cert_chain: Vec<rustls_0_19::Certificate> = certs(&mut cert_reader).unwrap();
@@ -53,7 +48,8 @@ pub fn create_device_with_direct_connection() {
     for (i, notification) in connection.iter().enumerate() {
         match notification.unwrap(){
            Event::Incoming(Incoming::Publish(p)) => {
-                println!("Topic: {}, Payload: {:?}", p.topic, p.payload)
+                println!("Topic: {}, Payload: {:?}", p.topic, p.payload);
+                break;
             }
             Event::Incoming(i) => {
                 println!("Incoming = {:?}", i);
@@ -69,8 +65,7 @@ pub fn create_device_with_direct_connection() {
 
 fn requests(client: &mut Client) {
     client.subscribe("s/e", QoS::AtMostOnce).unwrap();
-    client.subscribe("s/ds", QoS::AtMostOnce).unwrap();
-
+   
     let payload: String = String::from("100,directcon,thin-edge.io");
     client
         .publish("s/us", QoS::ExactlyOnce, false, payload.as_bytes())
