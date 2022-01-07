@@ -16,12 +16,11 @@ pub enum MqttError {
         from: std::str::Utf8Error,
     },
 
-    #[error("The connection has been closed and no more messages can be published/received")]
-    ClosedConnection,
+    #[error("The read channel of the connection has been closed and no more messages can be received")]
+    ReadOnClosedConnection,
 
-    // TODO Remove this error case
-    #[error(transparent)]
-    FromSendChannel(#[from] futures::channel::mpsc::SendError),
+    #[error("The send channel of the connection has been closed and no more messages can be published")]
+    SendOnClosedConnection,
 }
 
 impl MqttError {
@@ -42,5 +41,11 @@ impl MqttError {
             .filter(|c| !c.is_whitespace())
             .take(len)
             .collect()
+    }
+}
+
+impl From<futures::channel::mpsc::SendError> for MqttError {
+    fn from(_: futures::channel::mpsc::SendError) -> Self {
+        MqttError::SendOnClosedConnection
     }
 }

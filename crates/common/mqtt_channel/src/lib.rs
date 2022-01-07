@@ -19,7 +19,7 @@
 //!     published_messages.send(Message::new(&output_topic, "hello mqtt")).await?;
 //!
 //!     // Messages are received from the subscriptions on the received channel
-//!     let message = received_messages.next().await.ok_or(MqttError::ClosedConnection)?;
+//!     let message = received_messages.next().await.ok_or(MqttError::ReadOnClosedConnection)?;
 //!     println!("{}", message.payload_str()?);
 //!
 //!     // The connection is closed on drop
