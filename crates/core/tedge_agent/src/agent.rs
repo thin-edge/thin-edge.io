@@ -13,9 +13,10 @@ use agent_interface::{
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
+use mqtt_channel::{Connection, Message, Sink, SinkExt, Stream, StreamExt, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
+    convert::TryInto,
     fmt::Debug,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -35,7 +36,7 @@ const INIT_COMMAND: &'static str = "echo";
 #[derive(Debug)]
 pub struct SmAgentConfig {
     pub errors_topic: Topic,
-    pub mqtt_client_config: mqtt_client::Config,
+    pub mqtt_config: mqtt_channel::Config,
     pub request_topic_list: Topic,
     pub request_topic_update: Topic,
     pub request_topics: TopicFilter,
@@ -53,11 +54,10 @@ impl Default for SmAgentConfig {
     fn default() -> Self {
         let errors_topic = Topic::new("tedge/errors").expect("Invalid topic");
 
-        let mqtt_client_config = mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024);
+        let mqtt_config = mqtt_channel::Config::default();
 
-        let mut request_topics = TopicFilter::new(software_filter_topic()).expect("Invalid topic");
-        let () = request_topics
-            .add(control_filter_topic())
+        let request_topics = vec![software_filter_topic(), control_filter_topic()]
+            .try_into()
             .expect("Invalid topic filter");
 
         let request_topic_list =
@@ -88,7 +88,7 @@ impl Default for SmAgentConfig {
 
         Self {
             errors_topic,
-            mqtt_client_config,
+            mqtt_config,
             request_topic_list,
             request_topic_update,
             request_topics,
@@ -110,8 +110,9 @@ impl SmAgentConfig {
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
 
-        let mqtt_config =
-            mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into());
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(tedge_config.query(MqttPortSetting)?.into())
+            .with_max_packet_size(10 * 1024 * 1024);
 
         let tedge_config_path = config_repository
             .get_config_location()
@@ -122,7 +123,7 @@ impl SmAgentConfig {
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
-            .with_mqtt_client_config(mqtt_config)
+            .with_mqtt_config(mqtt_config)
             .with_config_location(tedge_config_location)
             .with_download_directory(tedge_download_dir))
     }
@@ -131,9 +132,9 @@ impl SmAgentConfig {
         Self { sm_home, ..self }
     }
 
-    pub fn with_mqtt_client_config(self, mqtt_client_config: Config) -> Self {
+    pub fn with_mqtt_config(self, mqtt_config: mqtt_channel::Config) -> Self {
         Self {
-            mqtt_client_config,
+            mqtt_config,
             ..self
         }
     }
@@ -183,8 +184,12 @@ impl SmAgent {
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
-        let mqtt = Client::connect(self.name.as_str(), &self.config.mqtt_client_config).await?;
-        let mut operations = mqtt.subscribe(self.config.request_topics.clone()).await?;
+        let mut mqtt = Connection::connect(
+            self.name.as_str(),
+            &self.config.mqtt_config,
+            self.config.request_topics.clone(),
+        )
+        .await?;
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),
@@ -198,17 +203,18 @@ impl SmAgent {
             return Err(AgentError::NoPlugins);
         }
 
-        let mut errors = mqtt.subscribe_errors();
-        tokio::spawn(async move {
-            while let Some(error) = errors.next().await {
-                error!("{}", error);
-            }
-        });
+        // TODO add support for error in mqtt_channel
+        // let mut errors = mqtt.subscribe_errors();
+        // tokio::spawn(async move {
+        //     while let Some(error) = errors.next().await {
+        //         error!("{}", error);
+        //     }
+        // });
 
-        let () = self.process_pending_operation(&mqtt).await?;
+        let () = self.process_pending_operation(&mut mqtt.published).await?;
 
         while let Err(error) = self
-            .process_subscribed_messages(&mqtt, &mut operations, &plugins)
+            .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
             .await
         {
             error!("{}", error);
@@ -219,17 +225,17 @@ impl SmAgent {
 
     async fn process_subscribed_messages(
         &mut self,
-        mqtt: &Client,
-        operations: &mut Box<dyn MqttMessageStream>,
+        requests: &mut (impl Stream<Item = Message> + Unpin),
+        responses: &mut (impl Sink<Message> + Unpin),
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
-        while let Some(message) = operations.next().await {
+        while let Some(message) = requests.next().await {
             debug!("Request {:?}", message);
             match &message.topic {
                 topic if topic == &self.config.request_topic_list => {
                     let _success = self
                         .handle_software_list_request(
-                            mqtt,
+                            responses,
                             plugins.clone(),
                             &self.config.response_topic_list,
                             &message,
@@ -249,7 +255,7 @@ impl SmAgent {
 
                     let _success = self
                         .handle_software_update_request(
-                            mqtt,
+                            responses,
                             plugins.clone(),
                             &self.config.response_topic_update,
                             &message,
@@ -261,9 +267,11 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_restart => {
-                    let request = self.match_restart_operation_payload(mqtt, &message).await?;
+                    let request = self
+                        .match_restart_operation_payload(responses, &message)
+                        .await?;
                     if let Err(error) = self
-                        .handle_restart_operation(mqtt, &self.config.response_topic_restart)
+                        .handle_restart_operation(responses, &self.config.response_topic_restart)
                         .await
                     {
                         error!("{}", error);
@@ -271,12 +279,12 @@ impl SmAgent {
                         self.persistance_store.clear().await?;
                         let status = OperationStatus::Failed;
                         let response = RestartOperationResponse::new(&request).with_status(status);
-                        let () = mqtt
-                            .publish(Message::new(
+                        let _ = responses
+                            .send(Message::new(
                                 &self.config.response_topic_restart,
                                 response.to_bytes()?,
                             ))
-                            .await?;
+                            .await;
                     }
                 }
 
@@ -289,12 +297,12 @@ impl SmAgent {
 
     async fn handle_software_list_request(
         &self,
-        mqtt: &Client,
+        responses: &mut (impl Sink<Message> + Unpin),
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
-        let request = match SoftwareListRequest::from_slice(message.payload_trimmed()) {
+        let request = match SoftwareListRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
                 let () = self
                     .persistance_store
@@ -309,12 +317,12 @@ impl SmAgent {
 
             Err(error) => {
                 debug!("Parsing error: {}", error);
-                let _ = mqtt
-                    .publish(Message::new(
+                let _ = responses
+                    .send(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
                     ))
-                    .await?;
+                    .await;
 
                 return Err(SoftwareError::ParseError {
                     reason: "Parsing Error".into(),
@@ -324,12 +332,12 @@ impl SmAgent {
         };
         let executing_response = SoftwareListResponse::new(&request);
 
-        let _ = mqtt
-            .publish(Message::new(
+        let _ = responses
+            .send(Message::new(
                 &self.config.response_topic_list,
                 executing_response.to_bytes()?,
             ))
-            .await?;
+            .await;
 
         let log_file = self
             .operation_logs
@@ -337,9 +345,9 @@ impl SmAgent {
             .await?;
         let response = plugins.lock().unwrap().list(&request, log_file).await; // `unwrap` should be safe here as we only access data.
 
-        let _ = mqtt
-            .publish(Message::new(response_topic, response.to_bytes()?))
-            .await?;
+        let _ = responses
+            .send(Message::new(response_topic, response.to_bytes()?))
+            .await;
 
         let _state: State = self.persistance_store.clear().await?;
 
@@ -348,32 +356,32 @@ impl SmAgent {
 
     async fn handle_software_update_request(
         &self,
-        mqtt: &Client,
+        responses: &mut (impl Sink<Message> + Unpin),
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
-        let request = match SoftwareUpdateRequest::from_slice(message.payload_trimmed()) {
+        let request = match SoftwareUpdateRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
-                let () = self
+                let _ = self
                     .persistance_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
                     })
-                    .await?;
+                    .await;
 
                 request
             }
 
             Err(error) => {
                 error!("Parsing error: {}", error);
-                let _ = mqtt
-                    .publish(Message::new(
+                let _ = responses
+                    .send(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
                     ))
-                    .await?;
+                    .await;
 
                 return Err(SoftwareError::ParseError {
                     reason: "Parsing failed".into(),
@@ -383,9 +391,9 @@ impl SmAgent {
         };
 
         let executing_response = SoftwareUpdateResponse::new(&request);
-        let _ = mqtt
-            .publish(Message::new(response_topic, executing_response.to_bytes()?))
-            .await?;
+        let _ = responses
+            .send(Message::new(response_topic, executing_response.to_bytes()?))
+            .await;
 
         let log_file = self
             .operation_logs
@@ -398,9 +406,9 @@ impl SmAgent {
             .process(&request, log_file, &self.config.download_dir)
             .await; // `unwrap` should be safe here as we only access data.
 
-        let _ = mqtt
-            .publish(Message::new(response_topic, response.to_bytes()?))
-            .await?;
+        let _ = responses
+            .send(Message::new(response_topic, response.to_bytes()?))
+            .await;
 
         let _state = self.persistance_store.clear().await?;
 
@@ -409,10 +417,10 @@ impl SmAgent {
 
     async fn match_restart_operation_payload(
         &self,
-        mqtt: &Client,
+        responses: &mut (impl Sink<Message> + Unpin),
         message: &Message,
     ) -> Result<RestartOperationRequest, AgentError> {
-        let request = match RestartOperationRequest::from_slice(message.payload_trimmed()) {
+        let request = match RestartOperationRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
                 let () = self
                     .persistance_store
@@ -426,12 +434,12 @@ impl SmAgent {
 
             Err(error) => {
                 error!("Parsing error: {}", error);
-                let _ = mqtt
-                    .publish(Message::new(
+                let _ = responses
+                    .send(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
                     ))
-                    .await?;
+                    .await;
 
                 return Err(SoftwareError::ParseError {
                     reason: "Parsing failed".into(),
@@ -444,7 +452,7 @@ impl SmAgent {
 
     async fn handle_restart_operation(
         &self,
-        mqtt: &Client,
+        responses: &mut (impl Sink<Message> + Unpin),
         topic: &Topic,
     ) -> Result<(), AgentError> {
         self.persistance_store
@@ -453,9 +461,9 @@ impl SmAgent {
 
         // update status to executing.
         let executing_response = RestartOperationResponse::new(&RestartOperationRequest::new());
-        let _ = mqtt
-            .publish(Message::new(&topic, executing_response.to_bytes()?))
-            .await?;
+        let _ = responses
+            .send(Message::new(&topic, executing_response.to_bytes()?))
+            .await;
         let () = restart_operation::create_slash_run_file()?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
@@ -478,7 +486,10 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn process_pending_operation(&self, mqtt: &Client) -> Result<(), AgentError> {
+    async fn process_pending_operation(
+        &self,
+        responses: &mut (impl Sink<Message> + Unpin),
+    ) -> Result<(), AgentError> {
         let state: Result<State, _> = self.persistance_store.load().await;
         let mut status = OperationStatus::Failed;
 
@@ -522,9 +533,9 @@ impl SmAgent {
 
             let response = SoftwareRequestResponse::new(&id, status);
 
-            let () = mqtt
-                .publish(Message::new(topic, response.to_bytes()?))
-                .await?;
+            let _ = responses
+                .send(Message::new(topic, response.to_bytes()?))
+                .await;
         }
 
         Ok(())
@@ -569,15 +580,11 @@ mod tests {
         .unwrap();
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-        let mqtt = Client::connect(
-            "sm-agent-test",
-            &mqtt_client::Config::default().with_packet_size(10 * 1024 * 1024),
-        )
-        .await?;
+        let (_, mut output_stream) = mqtt_tests::recorder();
         let response_topic_restart =
             Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
         let () = agent
-            .handle_restart_operation(&mqtt, &response_topic_restart)
+            .handle_restart_operation(&mut output_stream, &response_topic_restart)
             .await?;
         assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
 
