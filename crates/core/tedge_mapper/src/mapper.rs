@@ -5,7 +5,7 @@ use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, UnboundedReceiver, UnboundedSender,
 };
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 pub async fn create_mapper<'a>(
     app_name: &'a str,
@@ -21,6 +21,8 @@ pub async fn create_mapper<'a>(
         mapper_config.in_topic_filter.clone().into(),
     )
     .await?;
+
+    Mapper::subscribe_errors(mqtt_client.errors);
 
     Ok(Mapper::new(
         mqtt_client.received,
@@ -44,13 +46,6 @@ pub struct Mapper {
 }
 
 impl Mapper {
-    pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
-        info!("Running");
-        let messages_handle = self.process_messages();
-        messages_handle.await?;
-        Ok(())
-    }
-
     pub fn new(
         input: UnboundedReceiver<Message>,
         output: UnboundedSender<Message>,
@@ -63,16 +58,21 @@ impl Mapper {
         }
     }
 
-    // TODO add support for error in mqtt_channel
-    // #[instrument(skip(self), name = "errors")]
-    // fn subscribe_errors(&self) -> JoinHandle<()> {
-    //     let mut errors = self.client.subscribe_errors();
-    //     tokio::spawn(async move {
-    //         while let Some(error) = errors.next().await {
-    //             error!("{}", error);
-    //         }
-    //     })
-    // }
+    pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
+        info!("Running");
+        self.process_messages().await?;
+        Ok(())
+    }
+
+
+    #[instrument(skip(errors), name = "errors")]
+    fn subscribe_errors(mut errors: UnboundedReceiver<MqttError>) {
+        tokio::spawn(async move {
+            while let Some(error) = errors.next().await {
+                error!("{}", error);
+            }
+        });
+    }
 
     #[instrument(skip(self), name = "messages")]
     async fn process_messages(&mut self) -> Result<(), MqttError> {

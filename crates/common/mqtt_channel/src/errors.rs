@@ -10,6 +10,9 @@ pub enum MqttError {
     #[error("MQTT client error: {0}")]
     ClientError(#[from] rumqttc::ClientError),
 
+    #[error("MQTT connection error: {0}")]
+    ConnectionError(#[from] rumqttc::ConnectionError),
+
     #[error("Invalid UTF8 payload: {from}: {input_excerpt}...")]
     InvalidUtf8Payload {
         input_excerpt: String,

@@ -1,4 +1,4 @@
-use crate::{Config, Message, MqttError, PubChannel, SubChannel, TopicFilter};
+use crate::{Config, Message, MqttError, PubChannel, SubChannel, ErrChannel, TopicFilter};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use rumqttc::{
@@ -14,10 +14,13 @@ pub struct Connection {
 
     /// The channel of the output messages to be published on this connection.
     pub published: mpsc::UnboundedSender<Message>,
+
+    /// The channel of the error messages received by this connection.
+    pub errors: mpsc::UnboundedReceiver<MqttError>,
 }
 
 impl Connection {
-    /// The stream of events received from this MQTT connected and forwarded to the client
+    /// The stream of events received from this MQTT connection and forwarded to the client
     pub fn sub_channel(&self) -> &impl SubChannel {
         &self.received
     }
@@ -25,6 +28,11 @@ impl Connection {
     /// The stream of actions sent by the client to this MQTT connection
     pub fn pub_channel(&self) -> &impl PubChannel {
         &self.published
+    }
+
+    /// The stream of errors received from this MQTT connection and forwarded to the client
+    pub fn err_channel(&self) -> &impl ErrChannel {
+        &self.errors
     }
 
     /// Establish a connection to the MQTT broker defined by the given `config`.
@@ -62,16 +70,31 @@ impl Connection {
     ) -> Result<Connection, MqttError> {
         let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
-        let init_message_sender = received_sender.clone();
+        let (error_sender, error_receiver) = mpsc::unbounded();
 
-        let (mqtt_client, event_loop) =
-            Connection::open(name, config, subscription, init_message_sender).await?;
-        tokio::spawn(Connection::receiver_loop(event_loop, received_sender));
-        tokio::spawn(Connection::sender_loop(mqtt_client, published_receiver));
+        let (mqtt_client, event_loop) = Connection::open(
+            name,
+            config,
+            subscription,
+            received_sender.clone(),
+            error_sender.clone(),
+        )
+        .await?;
+        tokio::spawn(Connection::receiver_loop(
+            event_loop,
+            received_sender,
+            error_sender.clone(),
+        ));
+        tokio::spawn(Connection::sender_loop(
+            mqtt_client,
+            published_receiver,
+            error_sender,
+        ));
 
         Ok(Connection {
             received: received_receiver,
             published: published_sender,
+            errors: error_receiver,
         })
     }
 
@@ -88,6 +111,7 @@ impl Connection {
         config: &Config,
         topic: TopicFilter,
         mut message_sender: mpsc::UnboundedSender<Message>,
+        mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
         let mqtt_options = Connection::mqtt_options(name, config);
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
@@ -112,12 +136,17 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     // Messages can be received before a sub ack
+                    // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = message_sender.send(msg.into()).await;
                 }
 
                 Err(err) => {
-                    eprintln!("ERROR: {}", err);
-                    Connection::pause_on_error(err).await;
+                    let delay = Connection::pause_on_error(&err);
+
+                    // Errors on send are ignored: it just means the client has closed the receiving channel.
+                    let _ = error_sender.send(err.into()).await;
+
+                    if delay { Connection::do_pause().await; }
                 }
                 _ => (),
             }
@@ -129,10 +158,13 @@ impl Connection {
     async fn receiver_loop(
         mut event_loop: EventLoop,
         mut message_sender: mpsc::UnboundedSender<Message>,
+        mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) {
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
+                    // Errors on send are ignored: it just means the client has closed the receiving channel.
+                    // One has to continue the loop though, because rumqttc relies on this polling.
                     let _ = message_sender.send(msg.into()).await;
                 }
 
@@ -143,8 +175,12 @@ impl Connection {
                 }
 
                 Err(err) => {
-                    eprintln!("ERROR: {}", err);
-                    Connection::pause_on_error(err).await;
+                    let delay = Connection::pause_on_error(&err);
+
+                    // Errors on send are ignored: it just means the client has closed the receiving channel.
+                    let _ = error_sender.send(err.into()).await;
+
+                    if delay { Connection::do_pause().await; }
                 }
                 _ => (),
             }
@@ -156,6 +192,7 @@ impl Connection {
     async fn sender_loop(
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<Message>,
+        mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) {
         loop {
             match messages_receiver.next().await {
@@ -170,7 +207,7 @@ impl Connection {
                         .publish(message.topic, message.qos, message.retain, payload)
                         .await
                     {
-                        eprintln!("ERROR: Fail to publish a message: {}", err);
+                        let _ = error_sender.send(err.into()).await;
                     }
                 }
             }
@@ -178,21 +215,18 @@ impl Connection {
         let _ = mqtt_client.disconnect().await;
     }
 
-    async fn pause_on_error(err: ConnectionError) {
-        let delay = match &err {
+    fn pause_on_error(err: &ConnectionError) -> bool {
+        match &err {
             rumqttc::ConnectionError::Io(_) => true,
             rumqttc::ConnectionError::MqttState(state_error)
-                if matches!(state_error, StateError::Io(_)) =>
-            {
-                true
-            }
+            if matches!(state_error, StateError::Io(_)) => true,
             rumqttc::ConnectionError::MqttState(_) => true,
             rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
             _ => false,
-        };
-
-        if delay {
-            sleep(Duration::from_secs(1)).await;
         }
+    }
+
+    async fn do_pause() {
+        sleep(Duration::from_secs(1)).await;
     }
 }
