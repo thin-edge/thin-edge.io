@@ -9,7 +9,7 @@ use super::{BridgeConfig, ConnectError};
 pub fn create_device_with_direct_connection(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
-    const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
+    const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     let address = bridge_config.address.clone();
     let host: Vec<&str> = address.split(":").collect();
 
@@ -37,12 +37,12 @@ pub fn create_device_with_direct_connection(
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
     let device_id = bridge_config.remote_clientid.clone();
-    thread::spawn(move || requests(&mut client, &device_id));
+    thread::spawn(move || publish_device_create_reqests(&mut client, &device_id));
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Incoming::Publish(response))) => {
-                if response.payload == REGISTRATION_ERROR {
+                if response.payload == DEVICE_ALREADY_EXISTS {
                     break;
                 }
             }
@@ -52,7 +52,7 @@ pub fn create_device_with_direct_connection(
     Ok(())
 }
 
-fn requests(client: &mut Client, device_id: &str) -> Result<(), ConnectError> {
+fn publish_device_create_reqests(client: &mut Client, device_id: &str) -> Result<(), ConnectError> {
     const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "s/us";
     const DEVICE_TYPE: &str = "thin-edge.io";
     client.subscribe("s/e", QoS::AtMostOnce).unwrap();
