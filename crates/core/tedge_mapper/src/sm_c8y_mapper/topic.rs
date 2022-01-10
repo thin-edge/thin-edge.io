@@ -55,23 +55,26 @@ impl TryFrom<Topic> for C8yTopic {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MapperSubscribeTopic {
-    SmartRestRequest,
+    C8yTopic(C8yTopic),
     ResponseTopic(ResponseTopic),
 }
 
 impl TryFrom<String> for MapperSubscribeTopic {
     type Error = TopicError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            r#"c8y/s/ds"# => Ok(MapperSubscribeTopic::SmartRestRequest),
-            r#"tedge/commands/res/software/list"#
-            | r#"tedge/commands/res/software/update"#
-            | r#"tedge/commands/res/control/restart"# => Ok(MapperSubscribeTopic::ResponseTopic(
-                ResponseTopic::try_from(value)?,
-            )),
-            err => Err(TopicError::UnknownTopic {
-                topic: err.to_string(),
-            }),
+        let result = ResponseTopic::try_from(value.clone());
+        match result {
+            Ok(response_topic) => {
+                return Ok(MapperSubscribeTopic::ResponseTopic(response_topic));
+            }
+            Err(_err) => match C8yTopic::try_from(value) {
+                Ok(smart_rest_request) => {
+                    return Ok(MapperSubscribeTopic::C8yTopic(smart_rest_request))
+                }
+                Err(err) => {
+                    return Err(err);
+                }
+            },
         }
     }
 }

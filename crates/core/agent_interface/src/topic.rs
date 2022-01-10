@@ -1,6 +1,5 @@
 use crate::error::TopicError;
-use mqtt_client::{MqttClientError, Topic};
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResponseTopic {
     SoftwareListResponse,
@@ -41,14 +40,6 @@ impl TryFrom<&str> for ResponseTopic {
     }
 }
 
-impl TryFrom<Topic> for ResponseTopic {
-    type Error = TopicError;
-
-    fn try_from(value: Topic) -> Result<Self, Self::Error> {
-        value.name.try_into()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequestTopic {
     SoftwareListRequest,
@@ -62,14 +53,6 @@ impl RequestTopic {
             Self::SoftwareListRequest => r#"tedge/commands/req/software/list"#,
             Self::SoftwareUpdateRequest => r#"tedge/commands/req/software/update"#,
             Self::RestartRequest => r#"tedge/commands/req/control/restart"#,
-        }
-    }
-
-    pub fn to_topic(&self) -> Result<Topic, MqttClientError> {
-        match self {
-            Self::SoftwareListRequest => Topic::new(Self::SoftwareListRequest.as_str()),
-            Self::SoftwareUpdateRequest => Topic::new(Self::SoftwareUpdateRequest.as_str()),
-            Self::RestartRequest => Topic::new(Self::RestartRequest.as_str()),
         }
     }
 }
@@ -103,20 +86,6 @@ mod tests {
     }
 
     #[test]
-    fn convert_topic_into_response_topic() {
-        let list: ResponseTopic = Topic::new("tedge/commands/res/software/list")
-            .unwrap()
-            .try_into()
-            .unwrap();
-        assert_eq!(list, ResponseTopic::SoftwareListResponse);
-        let update: ResponseTopic = Topic::new("tedge/commands/res/software/update")
-            .unwrap()
-            .try_into()
-            .unwrap();
-        assert_eq!(update, ResponseTopic::SoftwareUpdateResponse);
-    }
-
-    #[test]
     fn convert_request_topic_to_str() {
         assert_eq!(
             RequestTopic::SoftwareListRequest.as_str(),
@@ -125,18 +94,6 @@ mod tests {
         assert_eq!(
             RequestTopic::SoftwareUpdateRequest.as_str(),
             "tedge/commands/req/software/update"
-        );
-    }
-
-    #[test]
-    fn convert_request_topic_to_topic() {
-        assert_eq!(
-            RequestTopic::SoftwareListRequest.to_topic().unwrap(),
-            Topic::new("tedge/commands/req/software/list").unwrap()
-        );
-        assert_eq!(
-            RequestTopic::SoftwareUpdateRequest.to_topic().unwrap(),
-            Topic::new("tedge/commands/req/software/update").unwrap()
         );
     }
 }

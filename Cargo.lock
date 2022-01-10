@@ -23,7 +23,6 @@ version = "0.5.1"
 dependencies = [
  "csv",
  "download",
- "mqtt_client",
  "nanoid",
  "regex",
  "serde",

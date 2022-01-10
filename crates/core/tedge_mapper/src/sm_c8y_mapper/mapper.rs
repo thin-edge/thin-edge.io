@@ -161,9 +161,12 @@ where
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                MapperSubscribeTopic::SmartRestRequest => {
+                MapperSubscribeTopic::C8yTopic(C8yTopic::SmartRestRequest) => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
+                }
+                _ => {
+                    eprintln!("Invalid MapperSubscriberTopic");
                 }
             }
         }
@@ -173,7 +176,7 @@ where
     #[instrument(skip(self), name = "software-list")]
     async fn ask_software_list(&self) -> Result<(), SMCumulocityMapperError> {
         let request = SoftwareListRequest::new();
-        let topic = RequestTopic::SoftwareListRequest.to_topic()?;
+        let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
         let json_list_request = request.to_json()?;
         let () = self.publish(&topic, json_list_request).await?;
 
@@ -341,7 +344,7 @@ where
         &self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = RequestTopic::SoftwareUpdateRequest.to_topic()?;
+        let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
         let update_software = SmartRestUpdateSoftware::new();
         let mut software_update_request = update_software
             .from_smartrest(smartrest)?
@@ -378,7 +381,7 @@ where
         &self,
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
-        let topic = RequestTopic::RestartRequest.to_topic()?;
+        let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
         let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
 
         let request = RestartOperationRequest::new();
