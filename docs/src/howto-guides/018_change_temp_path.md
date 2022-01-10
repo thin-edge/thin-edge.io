@@ -5,7 +5,7 @@ The `tedge` command can be used to change the temp path. By default the director
 To change the temp path, run:
 
 ```shell
-tedge config set tmp.path /path/to/directory
+sudo tedge config set tmp.path /path/to/directory
 ```
 
 Note that the directory must be available to `tedge-agent` user and `tedge-agent` group.
