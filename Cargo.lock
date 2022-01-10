@@ -2655,6 +2655,7 @@ dependencies = [
  "futures",
  "hyper",
  "mockito",
+ "mqtt_client",
  "pem",
  "predicates 2.1.0",
  "reqwest",

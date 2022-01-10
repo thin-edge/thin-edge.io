@@ -39,15 +39,14 @@ pub fn create_device_with_direct_connection(
     let device_id = bridge_config.remote_clientid.clone();
     thread::spawn(move || requests(&mut client, &device_id));
 
-    for (_i, notification) in connection.iter().enumerate() {
-        match notification.unwrap() {
-            Event::Incoming(Incoming::Publish(response)) => {
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Incoming::Publish(response))) => {
                 if response.payload == REGISTRATION_ERROR {
                     break;
                 }
             }
-            Event::Incoming(_i) => {}
-            Event::Outgoing(_o) => {}
+            _ => {}
         }
     }
     Ok(())
