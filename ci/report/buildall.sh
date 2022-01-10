@@ -47,6 +47,16 @@ for i in $WORKFLOWS;
     unzip -q -o -d ci_${i/.yml/} ci_${i/.yml/.zip};
 done
 
+# Doublecheck if our result folders are there
+FOLDERS="ci_system-test-workflow ci_system-test-workflow_A ci_system-test-workflow_B ci_system-test-workflow_C ci_system-test-workflow_D"
+for FOLDER in $FOLDERS; do
+    if [ ! -d $FOLDER ]; then
+        echo "Folder missing: " $FOLDER
+    fi
+done
+
+# Workflow selection for official repository
+
 WORKFLOWS="system-test-workflow.yml"
 WORKFLOWS+=" system-test-offsite.yml"
 
@@ -58,13 +68,22 @@ for i in $WORKFLOWS;
 done
 
 
+# Doublecheck if our result folders are there
+FOLDERS="sag_system-test-workflow sag_system-test-offsite"
+for FOLDER in $FOLDERS; do
+    if [ ! -d $FOLDER ]; then
+        echo "Folder missing: " $FOLDER
+    fi
+done
+
 # Postprocess results
+
 source ~/env-pysys/bin/activate
 
 OUT="ci_system-test-report"
 
 
-# This is for the runner onsite at Michael
+# Postporcess results for the onsite runner onsite at Michael
 for X in ""
     do
     echo "Processing: $X"
@@ -77,6 +96,7 @@ for X in ""
     junit2html $OUT$X.xml
 done
 
+# Postporcess results for the offsite runners from Michael
 for X in "_A" "_B" "_C" "_D"
     do
     echo "Processing: $X"
@@ -88,10 +108,9 @@ for X in "_A" "_B" "_C" "_D"
     junit2html $OUT$X.xml
 done
 
-
-
 SAGOUT="sag_system-test-report"
 
+# Postporcess results for the ocal runner onsite at Rina
 for X in "workflow"
     do
     echo "Processing: $X"
@@ -100,6 +119,7 @@ for X in "workflow"
     junit2html $SAGOUT"_"$X.xml
 done
 
+# Postporcess results for the official runners offsite
 for X in "offsite"
     do
     echo "Processing: $X"
@@ -110,7 +130,6 @@ for X in "offsite"
     junitparser merge $FILES $SAGOUT"_"$X.xml
     junit2html $SAGOUT"_"$X.xml
 done
-
 
 
 XMLFILES=$OUT".xml "$OUT"_A.xml "$OUT"_B.xml "$OUT"_C.xml "$OUT"_D.xml "$SAGOUT"_offsite.xml "$SAGOUT"_workflow.xml"
