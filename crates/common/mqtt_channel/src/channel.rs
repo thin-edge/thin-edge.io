@@ -1,9 +1,9 @@
 use crate::Message;
 use crate::MqttError;
 use async_trait::async_trait;
+use futures::channel::mpsc;
 use futures::{Sink, SinkExt};
 use futures::{Stream, StreamExt};
-use futures::channel::mpsc;
 
 #[async_trait]
 pub trait SubChannel: StreamExt<Item = Message> + Unpin + Send {}
@@ -20,9 +20,7 @@ pub trait PubChannel: SinkExt<Message> + Unpin + Send {
 }
 
 #[async_trait]
-impl SubChannel for mpsc::UnboundedReceiver<Message> {
-}
+impl SubChannel for mpsc::UnboundedReceiver<Message> {}
 
 #[async_trait]
-impl PubChannel for mpsc::UnboundedSender<Message> {
-}
+impl PubChannel for mpsc::UnboundedSender<Message> {}
