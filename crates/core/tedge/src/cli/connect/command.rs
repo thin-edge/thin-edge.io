@@ -445,7 +445,7 @@ fn new_bridge(
     let () = bridge_config.validate()?;
 
     println!("Create the device.\n");
-    c8y_direct_connection::create_device_with_direct_connection(bridge_config)?;
+    let () = c8y_direct_connection::create_device_with_direct_connection(bridge_config)?;
 
     println!("Saving configuration for requested bridge.\n");
     if let Err(err) =

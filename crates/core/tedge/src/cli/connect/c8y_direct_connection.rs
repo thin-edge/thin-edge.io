@@ -9,6 +9,7 @@ use super::{BridgeConfig, ConnectError};
 pub fn create_device_with_direct_connection(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
+    const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
     let address = bridge_config.address.clone();
     let host: Vec<&str> = address.split(":").collect();
 
@@ -20,33 +21,30 @@ pub fn create_device_with_direct_connection(
     // Use rustls-native-certs to load root certificates from the operating system.
     client_config.root_store =
         rustls_native_certs::load_native_certs().expect("Failed to load platform certificates.");
-    if client_config.root_store.is_empty() {
-        dbg!("store is empty");
-    } else {
-        let f = File::open(bridge_config.bridge_keyfile.clone())?;
-        let mut key_reader = BufReader::new(f);
-        let key_chain: Vec<rustls_0_19::PrivateKey> = pkcs8_private_keys(&mut key_reader).unwrap();
-        //dbg!(&key_chain);
-        let key = key_chain.first().unwrap().clone();
 
-        let f = File::open(bridge_config.bridge_certfile.clone())?;
-        let mut cert_reader = BufReader::new(f);
-        let cert_chain: Vec<rustls_0_19::Certificate> = certs(&mut cert_reader).unwrap();
+    let f = File::open(bridge_config.bridge_keyfile.clone())?;
+    let mut key_reader = BufReader::new(f);
+    let key_chain: Vec<rustls_0_19::PrivateKey> = pkcs8_private_keys(&mut key_reader).unwrap();
+    let key = key_chain.first().unwrap().clone();
 
-        let _ = client_config.set_single_client_cert(cert_chain, key);
-    }
+    let f = File::open(bridge_config.bridge_certfile.clone())?;
+    let mut cert_reader = BufReader::new(f);
+    let cert_chain: Vec<rustls_0_19::Certificate> = certs(&mut cert_reader).unwrap();
+
+    let _ = client_config.set_single_client_cert(cert_chain, key);
 
     mqtt_options.set_transport(Transport::tls_with_config(client_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
-    thread::spawn(move || requests(&mut client));
+    let device_id = bridge_config.remote_clientid.clone();
+    thread::spawn(move || requests(&mut client, &device_id));
 
     for (_i, notification) in connection.iter().enumerate() {
         match notification.unwrap() {
-            Event::Incoming(Incoming::Publish(_p)) => {
-                // println!("Topic: {}, Payload: {:?}", p.topic, p.payload);
-                // Validate the string (41,100,Device already existing) before breaking
-                break;
+            Event::Incoming(Incoming::Publish(response)) => {
+                if response.payload == REGISTRATION_ERROR {
+                    break;
+                }
             }
             Event::Incoming(_i) => {}
             Event::Outgoing(_o) => {}
@@ -55,16 +53,32 @@ pub fn create_device_with_direct_connection(
     Ok(())
 }
 
-fn requests(client: &mut Client) -> Result<(), ConnectError> {
+fn requests(client: &mut Client, device_id: &str) -> Result<(), ConnectError> {
+    const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "s/us";
+    const DEVICE_TYPE: &str = "thin-edge.io";
     client.subscribe("s/e", QoS::AtMostOnce).unwrap();
 
-    let payload: String = String::from("100,directcon,thin-edge.io");
-    client.publish("s/us", QoS::ExactlyOnce, false, payload.as_bytes())?;
+    let mut payload: String = String::from("100,");
+    payload += device_id;
+    payload += ",";
+    payload += DEVICE_TYPE;
+
+    client.publish(
+        C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM,
+        QoS::ExactlyOnce,
+        false,
+        payload.as_bytes(),
+    )?;
 
     // Sleep a while before sending another device create request to check the device already created or not.
     thread::sleep(Duration::from_secs(3));
 
-    client.publish("s/us", QoS::ExactlyOnce, false, payload.as_bytes())?;
+    client.publish(
+        C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM,
+        QoS::ExactlyOnce,
+        false,
+        payload.as_bytes(),
+    )?;
 
     Ok(())
 }
