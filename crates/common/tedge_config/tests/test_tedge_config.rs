@@ -100,7 +100,7 @@ path = "/some/value"
     );
 
     assert_eq!(
-        config.query(DownloadPathDefaultSetting)?,
+        config.query(TmpPathDefaultSetting)?,
         FilePath::from("/some/value")
     );
     Ok(())

@@ -55,7 +55,7 @@ impl ConfigKey {
             config_key!(MqttExternalCertfileSetting),
             config_key!(MqttExternalKeyfileSetting),
             config_key!(SoftwarePluginDefaultSetting),
-            config_key!(DownloadPathDefaultSetting),
+            config_key!(TmpPathDefaultSetting),
         ]
     }
 }

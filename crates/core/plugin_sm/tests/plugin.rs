@@ -362,6 +362,7 @@ mod tests {
         };
 
         let mut logger = dev_null().await;
+        let download = PathBuf::from("/tmp");
         // Call plugin update-list via API.
         let errors = plugin
             .apply_all(
@@ -370,6 +371,7 @@ mod tests {
                     SoftwareModuleUpdate::Remove { module: module2 },
                 ],
                 &mut logger,
+                &download,
             )
             .await;
 

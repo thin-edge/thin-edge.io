@@ -454,8 +454,8 @@ where
     }
 }
 
-impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
-    fn query(&self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<FilePath> {
+impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
             .tmp
@@ -466,14 +466,14 @@ impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
 
     fn update(
         &mut self,
-        _setting: DownloadPathDefaultSetting,
+        _setting: TmpPathDefaultSetting,
         value: FilePath,
     ) -> ConfigSettingResult<()> {
         self.data.tmp.path = Some(value);
         Ok(())
     }
 
-    fn unset(&mut self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<()> {
+    fn unset(&mut self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<()> {
         self.data.tmp.path = None;
         Ok(())
     }

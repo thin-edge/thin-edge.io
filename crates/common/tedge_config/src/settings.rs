@@ -264,9 +264,9 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct DownloadPathDefaultSetting;
+pub struct TmpPathDefaultSetting;
 
-impl ConfigSetting for DownloadPathDefaultSetting {
+impl ConfigSetting for TmpPathDefaultSetting {
     const KEY: &'static str = "tmp.path";
 
     const DESCRIPTION: &'static str = concat!(
