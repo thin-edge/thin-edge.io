@@ -57,5 +57,4 @@ mod tests {
         let _ignore_error = std::fs::remove_file("/run/lock/tedge_agent.lock");
         panic!("Agent failed to stop.")
     }
-
 }

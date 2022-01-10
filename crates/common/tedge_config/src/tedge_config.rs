@@ -458,10 +458,10 @@ impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
     fn query(&self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
             .data
-            .download
+            .tmp
             .path
             .clone()
-            .unwrap_or_else(|| self.config_defaults.default_download_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
     }
 
     fn update(
@@ -469,12 +469,12 @@ impl ConfigSettingAccessor<DownloadPathDefaultSetting> for TEdgeConfig {
         _setting: DownloadPathDefaultSetting,
         value: FilePath,
     ) -> ConfigSettingResult<()> {
-        self.data.download.path = Some(value);
+        self.data.tmp.path = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: DownloadPathDefaultSetting) -> ConfigSettingResult<()> {
-        self.data.download.path = None;
+        self.data.tmp.path = None;
         Ok(())
     }
 }
