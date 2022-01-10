@@ -42,7 +42,6 @@ pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
 set +e
-#pysys.py run --exclude "publish_sawmill_record_statistics*" --record -v DEBUG
 pysys.py run --exclude analytics --record -v DEBUG
 set -e
 
