@@ -47,11 +47,10 @@ impl Default for SystemConfig {
 impl SystemConfig {
     pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
         let config_path = config_root.join(SERVICE_CONFIG_FILE);
-        let config_path_str = config_path.to_str().unwrap(); // always config_path exists
+        let config_path_str = config_path.to_str().unwrap_or(SERVICE_CONFIG_FILE);
 
         match fs::read_to_string(config_path.clone()) {
             Ok(contents) => {
-                let contents = contents;
                 let config: SystemConfig = toml::from_str(contents.as_str()).map_err(|e| {
                     SystemServiceError::SystemConfigInvalidToml {
                         path: config_path_str.to_string(),
@@ -119,7 +118,7 @@ mod tests {
         "#;
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
 
-        let (_dir, config_root_path) = create_temp_tedge_config(toml_conf)?;
+        let (_dir, config_root_path) = create_temp_system_config(toml_conf)?;
         let config = SystemConfig::try_new(config_root_path).unwrap();
 
         assert_eq!(config, expected_config);
@@ -128,7 +127,7 @@ mod tests {
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.
-    fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
+    fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
         let temp_dir = TempDir::new()?;
         let config_root = temp_dir.path().to_path_buf();
         let config_file_path = config_root.join(SERVICE_CONFIG_FILE);

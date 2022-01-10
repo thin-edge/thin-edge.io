@@ -23,8 +23,8 @@ impl GeneralServiceManager {
         let config_path = config_root
             .join(SERVICE_CONFIG_FILE)
             .to_str()
-            .unwrap()
-            .to_string(); // Path always exists
+            .unwrap_or(SERVICE_CONFIG_FILE)
+            .to_string();
         Ok(Self {
             user_manager,
             init_config,
