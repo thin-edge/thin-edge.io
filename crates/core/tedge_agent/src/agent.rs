@@ -24,8 +24,8 @@ use tracing::{debug, error, info, instrument};
 
 use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
-    TmpPathDefaultSetting, MqttPortSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
+    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathDefaultSetting,
 };
 
 #[cfg(not(test))]
@@ -120,9 +120,7 @@ impl SmAgentConfig {
             .tedge_config_root_path()
             .to_path_buf();
 
-        let tedge_download_dir = tedge_config
-            .query_string(TmpPathDefaultSetting)?
-            .into();
+        let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
