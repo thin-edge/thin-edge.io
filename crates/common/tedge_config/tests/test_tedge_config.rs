@@ -31,7 +31,7 @@ external_capath = "ca.pem"
 external_certfile = "cert.pem"
 external_keyfile = "key.pem"
 
-[download]
+[tmp]
 path = "/some/value"
 "#;
 
