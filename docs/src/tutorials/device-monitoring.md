@@ -168,4 +168,4 @@ If your device is not connected yet see:
 
 ## Trouble shooting
 
-See here for [how to trouble shoot device monitoring?](../howto-guides/009_touble_shooting_monitoring.md)
+See here for [how to trouble shoot device monitoring?](../howto-guides/009_trouble_shooting_monitoring.md)
