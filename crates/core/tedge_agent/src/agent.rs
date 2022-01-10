@@ -195,8 +195,6 @@ impl SmAgent {
 
         let () = self.process_pending_operation(&mqtt).await?;
 
-        // * Maybe it would be nice if mapper/registry responds
-        let () = publish_capabilities(&mqtt).await?;
         while let Err(error) = self
             .process_subscribed_messages(&mqtt, &mut operations, &plugins)
             .await
@@ -524,16 +522,6 @@ fn get_default_plugin(
     let tedge_config = config_repository.load()?;
 
     Ok(tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?)
-}
-
-async fn publish_capabilities(mqtt: &Client) -> Result<(), AgentError> {
-    mqtt.publish(Message::new(&Topic::new("tedge/capabilities/software/list")?, "").retain())
-        .await?;
-
-    mqtt.publish(Message::new(&Topic::new("tedge/capabilities/software/update")?, "").retain())
-        .await?;
-
-    Ok(())
 }
 
 #[cfg(test)]
