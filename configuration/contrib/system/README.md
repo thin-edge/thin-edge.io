@@ -1,7 +1,7 @@
 # System Configuration File
 
 To support multiple system and service manager, `tedge` requires the `/etc/tedge/system.toml` file.
-The file configures which system manager executes which command to do some actions. 
+The file contains configurations about the system manager and the supported actions.
 
 The format of the file is:
 
