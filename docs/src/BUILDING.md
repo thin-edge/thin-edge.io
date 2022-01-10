@@ -16,7 +16,7 @@ Following packages are required:
 * curl
 * gcc
 
-A list of our test platforms can be found [here](docs/src/supported-platforms.md).
+A list of our test platforms can be found [here](./supported-platforms.md).
 
 ## Get the code
 
