@@ -71,8 +71,8 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         self.addCleanupFunction(self.smcleanup)
 
     def execute(self):
-        self.log.info("Waiting for 10s")
-        time.sleep(10)
+        self.log.info("Waiting for 20s")
+        time.sleep(20)
 
         #import pdb; pdb.set_trace()
 
