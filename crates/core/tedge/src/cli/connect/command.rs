@@ -71,9 +71,13 @@ impl Command for ConnectCommand {
 
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
+            let cloud = br_config.cloud_name.clone();
             if self.check_if_bridge_exists(br_config) {
                 return match self.check_connection(&config) {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {
+                        println!("Connection check to {} cloud is successfull.\n", cloud);
+                        Ok(())
+                    }
                     Err(err) => Err(err.into()),
                 };
             } else {
