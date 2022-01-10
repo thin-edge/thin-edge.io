@@ -39,7 +39,7 @@ impl SystemServiceManager for GeneralServiceManager {
     }
 
     fn check_operational(&self) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::CheckManager.try_exec_command(&self)?;
+        let exec_command = ServiceCommand::CheckManager.try_exec_command(self)?;
 
         match exec_command.to_command().status() {
             Ok(status) if status.success() => Ok(()),
@@ -51,31 +51,31 @@ impl SystemServiceManager for GeneralServiceManager {
     }
 
     fn stop_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Stop(service).try_exec_command(&self)?;
+        let exec_command = ServiceCommand::Stop(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Restart(service).try_exec_command(&self)?;
+        let exec_command = ServiceCommand::Restart(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn enable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Enable(service).try_exec_command(&self)?;
+        let exec_command = ServiceCommand::Enable(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn disable_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Disable(service).try_exec_command(&self)?;
+        let exec_command = ServiceCommand::Disable(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())?
             .must_succeed()
     }
 
     fn is_service_running(&self, service: SystemService) -> Result<bool, SystemServiceError> {
-        let exec_command = ServiceCommand::IsActive(service).try_exec_command(&self)?;
+        let exec_command = ServiceCommand::IsActive(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .map(|status| status.success())
     }
@@ -174,17 +174,6 @@ enum ServiceCommand {
 }
 
 impl ServiceCommand {
-    fn to_string(&self) -> String {
-        match self {
-            Self::CheckManager => "is_available".to_string(),
-            Self::Stop(_service) => "restart".to_string(),
-            Self::Restart(_service) => "stop".to_string(),
-            Self::Enable(_service) => "enable".to_string(),
-            Self::Disable(_service) => "disable".to_string(),
-            Self::IsActive(_service) => "is_active".to_string(),
-        }
-    }
-
     fn try_exec_command(
         &self,
         service_manager: &GeneralServiceManager,
@@ -198,34 +187,47 @@ impl ServiceCommand {
             ),
             Self::Stop(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.stop.clone(),
-                ServiceCommand::Stop(service.clone()),
+                ServiceCommand::Stop(*service),
                 config_path,
-                service.clone(),
+                *service,
             ),
             Self::Restart(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.restart.clone(),
-                ServiceCommand::Restart(service.clone()),
+                ServiceCommand::Restart(*service),
                 config_path,
-                service.clone(),
+                *service,
             ),
             Self::Enable(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.enable.clone(),
-                ServiceCommand::Enable(service.clone()),
+                ServiceCommand::Enable(*service),
                 config_path,
-                service.clone(),
+                *service,
             ),
             Self::Disable(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.enable.clone(),
-                ServiceCommand::Disable(service.clone()),
+                ServiceCommand::Disable(*service),
                 config_path,
-                service.clone(),
+                *service,
             ),
             Self::IsActive(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.is_active.clone(),
-                ServiceCommand::IsActive(service.clone()),
+                ServiceCommand::IsActive(*service),
                 config_path,
-                service.clone(),
+                *service,
             ),
+        }
+    }
+}
+
+impl fmt::Display for ServiceCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::CheckManager => write!(f, "is_available"),
+            Self::Stop(_service) => write!(f, "restart"),
+            Self::Restart(_service) => write!(f, "stop"),
+            Self::Enable(_service) => write!(f, "enable"),
+            Self::Disable(_service) => write!(f, "disable"),
+            Self::IsActive(_service) => write!(f, "is_active"),
         }
     }
 }
