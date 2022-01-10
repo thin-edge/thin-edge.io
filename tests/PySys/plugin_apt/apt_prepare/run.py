@@ -35,7 +35,9 @@ class AptPluginPrepare(AptPlugin):
         # N=150 : Took 123s to update at mythic beasts (Why???)
         # N=200 : Took 160s to update at mythic beasts in august(Why???)
         # N=300 : Took 250s to update at mythic beasts in october(Why???)
-        self.assertThat("(new +300) >= now", new=self.mtime_new, now=self.now)
+        # 311 observed in the wild
+        # TODO Why does it sometimes take so long?
+        self.assertThat("(new +350) >= now", new=self.mtime_new, now=self.now)
 
     def cleanup_prepare(self):
         pass
