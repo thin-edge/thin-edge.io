@@ -1,12 +1,12 @@
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct PluginCli {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operation: PluginOp,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 pub enum PluginOp {
     /// List all the installed modules
     List,
@@ -47,7 +47,7 @@ impl InternalError {
 
 fn main() {
     // Emulate plugin's API.
-    let apt = PluginCli::from_args();
+    let apt = PluginCli::parse();
 
     match apt.operation {
         PluginOp::List

@@ -2,7 +2,7 @@
 #![deny(clippy::mem_forget)]
 
 use anyhow::Context;
-use structopt::StructOpt;
+use clap::Parser;
 use tedge_users::UserManager;
 use tedge_utils::paths::{home_dir, PathsError};
 
@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
 
     let _user_guard = user_manager.become_user(tedge_users::TEDGE_USER)?;
 
-    let opt = cli::Opt::from_args();
+    let opt = cli::Opt::parse();
 
     let tedge_config_location = if tedge_users::UserManager::running_as_root() {
         tedge_config::TEdgeConfigLocation::from_default_system_location()
