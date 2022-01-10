@@ -204,7 +204,7 @@ impl ServiceCommand {
                 *service,
             ),
             Self::Disable(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.enable.clone(),
+                service_manager.init_config.disable.clone(),
                 ServiceCommand::Disable(*service),
                 config_path,
                 *service,
@@ -223,8 +223,8 @@ impl fmt::Display for ServiceCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::CheckManager => write!(f, "is_available"),
-            Self::Stop(_service) => write!(f, "restart"),
-            Self::Restart(_service) => write!(f, "stop"),
+            Self::Stop(_service) => write!(f, "stop"),
+            Self::Restart(_service) => write!(f, "restart"),
             Self::Enable(_service) => write!(f, "enable"),
             Self::Disable(_service) => write!(f, "disable"),
             Self::IsActive(_service) => write!(f, "is_active"),
