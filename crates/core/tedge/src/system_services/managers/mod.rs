@@ -1,6 +1,4 @@
-mod bsd;
-mod null;
-mod openrc;
-mod systemd;
+mod config;
+mod general_manager;
 
-pub use self::{bsd::*, null::*, openrc::*, systemd::*};
+pub use self::{config::*, general_manager::*};
