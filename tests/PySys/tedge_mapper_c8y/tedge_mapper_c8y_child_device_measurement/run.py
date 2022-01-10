@@ -3,6 +3,7 @@ from environment_c8y import EnvironmentC8y
 import time
 import json
 import os
+import secrets
 
 """
 Validate measurements published to child devices
@@ -15,31 +16,41 @@ Then validate that these measurements are associated to the appropriate devices 
 class TedgeMapperC8yChildDevice(EnvironmentC8y):
     def setup(self):
         super().setup()
+
+        # Append some random string to avoid having childs with the same name
+        self.child_name = "te-child-" + secrets.token_hex(4)
+        self.other_child_name = "other-te-child-" + secrets.token_hex(4)
+
         child_device_fragment = self.cumulocity.get_child_device_of_thin_edge_device_by_name(
-            self.project.device, "thin-edge-child")
+            self.project.device, self.child_name)
         self.assertThat('actual == expected',
                         actual=child_device_fragment, expected=None)
         self.addCleanupFunction(self.test_cleanup)
 
     def execute(self):
+
+        # Pysys seems to print and record the environment it will also print passwords in the env
+        # Solution: only inject the variables we really need
+        environ={ 'HOME':os.environ.get('HOME')}
+
         # Publish one temperature measurement to thin-edge-child device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/measurements/thin-edge-child",
+                       "tedge/measurements/" + self.child_name,
                        '{"temperature": 12, "time": "2021-01-01T10:10:10.100+02:00"}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish another temperature measurement to thin-edge-child device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/measurements/thin-edge-child",
+                       "tedge/measurements/" + self.child_name,
                        '{"temperature": 11}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature measurement to the parent thin-edge device
@@ -49,35 +60,35 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements",
                        '{"temperature": 5}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature measurement to the other child device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/measurements/other-thin-edge-child",
+                       "tedge/measurements/" + self.other_child_name,
                        '{"temperature": 6}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish another temperature measurement to thin-edge-child device
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
-                       "tedge/measurements/thin-edge-child",
+                       "tedge/measurements/" + self.child_name,
                        '{"temperature": 10}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
         # Waiting for the mapped measurement message to reach the Cloud
         time.sleep(1)
 
         self.child_device_json = self.cumulocity.get_child_device_of_thin_edge_device_by_name(
-            self.project.device, "thin-edge-child")
+            self.project.device, self.child_name)
         self.other_child_device_json = self.cumulocity.get_child_device_of_thin_edge_device_by_name(
-            self.project.device, "other-thin-edge-child")
+            self.project.device, self.other_child_name)
 
     def validate(self):
         child_measurements = self.cumulocity.get_last_n_measurements_from_device(
