@@ -62,18 +62,11 @@ pub enum MapperSubscribeTopic {
 impl TryFrom<String> for MapperSubscribeTopic {
     type Error = TopicError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let result = ResponseTopic::try_from(value.clone());
-        match result {
-            Ok(response_topic) => {
-                return Ok(MapperSubscribeTopic::ResponseTopic(response_topic));
-            }
-            Err(_err) => match C8yTopic::try_from(value) {
-                Ok(smart_rest_request) => {
-                    return Ok(MapperSubscribeTopic::C8yTopic(smart_rest_request))
-                }
-                Err(err) => {
-                    return Err(err);
-                }
+        match ResponseTopic::try_from(value.clone()) {
+            Ok(response_topic) => Ok(MapperSubscribeTopic::ResponseTopic(response_topic)),
+            Err(_) => match C8yTopic::try_from(value) {
+                Ok(smart_rest_request) => Ok(MapperSubscribeTopic::C8yTopic(smart_rest_request)),
+                Err(err) => Err(err),
             },
         }
     }
