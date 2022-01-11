@@ -28,9 +28,15 @@ sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
 
+# Care about Cumulocity device ID
+
 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL > ~/C8YDEVICEID
 
-# Later: export C8YDEVICEID=$(cat ~/C8YDEVICEID)
 C8YDEVICEID=$(cat ~/C8YDEVICEID)
 echo "The current device ID is (read from home directory): " $C8YDEVICEID
+
+# For now, we create that file here:
+# TODO There is probably a beter solution, e.g. also for developer setups
+echo "export C8YDEVICEID=$(cat ~/C8YDEVICEID)" > ~/c8yenv.sh
+chmod +x ~/c8yenv.sh
 
