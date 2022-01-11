@@ -192,11 +192,11 @@ $ myplugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
 This command takes 1 mandatory argument and has 2 optional flags.
-- **NAME**: the name of the software module to be installed, e.g. `mosquitto`. [Mandatory]
+- **NAME**: the name of the software module to be installed, e.g. `mosquitto`. (Mandatory)
 - **VERSION**: the version to be installed. e.g. `1.5.7-1+deb10u1`.
   The version can be blank, so it's recommended to define the behaviour if a version is not provided. 
-  For example, always installs the "latest" version if a version is not provided. [Optional]
-- **FILE**: the path to the software to be installed. [Optional]
+  For example, always installs the "latest" version if a version is not provided. (Optional)
+- **FILE**: the path to the software to be installed. (Optional)
 
 The installation phase may fail due to the following reasons.
 An error must be reported if:
@@ -289,10 +289,10 @@ $ myplugin remove NAME [--module-version VERSION]
 
 This command takes 1 mandatory argument and 1 optional argument with a flag.
 
-- **NAME**: the name of the software module to be removed, e.g. `mosquitto`. [Mandatory]
+- **NAME**: the name of the software module to be removed, e.g. `mosquitto`. (Mandatory)
 - **VERSION**: the version to be installed. e.g. `1.5.7-1+deb10u1`.
   The version can be blank, so it's recommended to define the behaviour if a version is not provided.
-  For example, uninstall a software module regardless of its version if a version is not provided. [Optional]
+  For example, uninstall a software module regardless of its version if a version is not provided. (Optional)
 
 The uninstallation phase can be failed due to several reasons. An error must be reported if:
 - The module name is unknown.
@@ -404,6 +404,6 @@ That example exists immediately if one of the commands fails.
 You can also refer to:
 
 - the specification of the [Package Manager Plugin API](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
-- [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/sm/plugins/tedge_apt_plugin) written in Rust. 
+- [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/plugins/tedge_apt_plugin) written in Rust. 
 - [the example Docker plugin](https://github.com/thin-edge/thin-edge.io/blob/main/sm/plugins/tedge_docker_plugin/tedge_docker_plugin.sh) written in POSIX standard shell script.
   This plugin can install/remove docker containers using docker image tags. This plugin is **not** to be used in production without necessary enhancements. It is to be used only as a reference to write your own plugin.

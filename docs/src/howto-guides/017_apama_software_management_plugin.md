@@ -53,8 +53,8 @@ Once the software modules are added in the software repository, these can be ins
 
 Here are some test apama artefacts that you can use to test this plugin:
 
-1. Demo apama [project zip](../../../tests/PySys/plugin_apama/Input/quickstart.zip)
-2. Demo apama [monitor file](../../../tests/PySys/plugin_apama/Input/TedgeTestMonitor.mon)
+1. Demo apama [project zip](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_apama/Input/quickstart.zip)
+2. Demo apama [monitor file](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_apama/Input/TedgeTestMonitor.mon)
 
 Add these binaries as software packages in Cumulocity software repository by following the instructions in the previous section.
 Once added, this apama project can be installed on any target device.
