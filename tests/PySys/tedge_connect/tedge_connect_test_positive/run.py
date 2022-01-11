@@ -33,5 +33,11 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         self.assertGrep(
             "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
         )
+        try:
+            id = self.device_fragment['id']
+        except:
+            self.log.error("Cannot find id in device_fragment")
+            raise SystemError("Cannot find id in device_fragment")
+
         self.assertTrue(
             self.device_fragment['id'] != None, "thin-edge.io device with the given name exists")
