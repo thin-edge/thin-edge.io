@@ -13,6 +13,8 @@ sudo tedge disconnect c8y
 
 set -e
 
+. ~/c8yenv.sh
+
 # The bridge should be already configured
 # lets avoid to create a new certifiate here ()
 # ./ci/configure_bridge.sh

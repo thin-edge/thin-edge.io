@@ -16,6 +16,8 @@
 
 set -e
 
+. ~/c8yenv.sh
+
 cd $TEBASEDIR
 
 # Check if clients are installed

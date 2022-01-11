@@ -26,6 +26,7 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
+. ~/c8yenv.sh
 
 cd $TEBASEDIR
 
