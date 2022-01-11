@@ -1,4 +1,4 @@
-use crate::{Config, Message, MqttError, PubChannel, SubChannel, ErrChannel, TopicFilter};
+use crate::{Config, ErrChannel, Message, MqttError, PubChannel, SubChannel, TopicFilter};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use rumqttc::{
@@ -146,7 +146,9 @@ impl Connection {
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    if delay { Connection::do_pause().await; }
+                    if delay {
+                        Connection::do_pause().await;
+                    }
                 }
                 _ => (),
             }
@@ -180,7 +182,9 @@ impl Connection {
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    if delay { Connection::do_pause().await; }
+                    if delay {
+                        Connection::do_pause().await;
+                    }
                 }
                 _ => (),
             }
@@ -219,7 +223,10 @@ impl Connection {
         match &err {
             rumqttc::ConnectionError::Io(_) => true,
             rumqttc::ConnectionError::MqttState(state_error)
-            if matches!(state_error, StateError::Io(_)) => true,
+                if matches!(state_error, StateError::Io(_)) =>
+            {
+                true
+            }
             rumqttc::ConnectionError::MqttState(_) => true,
             rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
             _ => false,

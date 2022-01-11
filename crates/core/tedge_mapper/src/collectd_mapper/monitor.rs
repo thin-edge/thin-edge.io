@@ -141,20 +141,17 @@ impl DeviceMonitor {
             info!("Batching done");
         });
 
-        // TODO mqtt_channel must forward errors
-        // let mut errors = mqtt_client.subscribe_errors();
-        // let error_join_handle = tokio::task::spawn(async move {
-        //     while let Some(error) = errors.next().await {
-        //         error!("MQTT error: {}", error);
-        //     }
-        // });
+        let mut mqtt_errors = mqtt_client.errors;
+        let error_join_handle = tokio::task::spawn(async move {
+            while let Some(error) = mqtt_errors.next().await {
+                error!("MQTT error: {}", error);
+            }
+        });
 
         let _ = driver_join_handle.await;
         let _ = input_join_handle.await;
         let _ = output_join_handle.await;
-
-        // TODO mqtt_channel must forward errors
-        // let _ = error_join_handle.await;
+        let _ = error_join_handle.await;
 
         Ok(())
     }

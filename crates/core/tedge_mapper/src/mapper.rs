@@ -64,7 +64,6 @@ impl Mapper {
         Ok(())
     }
 
-
     #[instrument(skip(errors), name = "errors")]
     fn subscribe_errors(mut errors: UnboundedReceiver<MqttError>) {
         tokio::spawn(async move {

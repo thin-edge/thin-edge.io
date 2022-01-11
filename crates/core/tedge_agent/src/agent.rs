@@ -203,13 +203,12 @@ impl SmAgent {
             return Err(AgentError::NoPlugins);
         }
 
-        // TODO add support for error in mqtt_channel
-        // let mut errors = mqtt.subscribe_errors();
-        // tokio::spawn(async move {
-        //     while let Some(error) = errors.next().await {
-        //         error!("{}", error);
-        //     }
-        // });
+        let mut mqtt_errors = mqtt_client.errors;
+        tokio::spawn(async move {
+            while let Some(error) = mqtt_errors.next().await {
+                error!("{}", error);
+            }
+        });
 
         let () = self.process_pending_operation(&mut mqtt.published).await?;
 
