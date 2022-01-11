@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# This solution is far from perfect
+# TODO Make it more flexible
+# TODO Make it more obvious what is going on here
+# TODO Host this report somewhere
+# TODO Add an additional report to store the sources (run-id, date, runner)
+# TODO Decide on what to do if we have failures or skipped workflows
+
 set -e
 
 python3 -m venv ~/env-pysys
@@ -110,7 +117,7 @@ done
 
 SAGOUT="sag_system-test-report"
 
-# Postporcess results for the ocal runner onsite at Rina
+# Postporcess results for the local runner onsite at Rina
 for X in "workflow"
     do
     echo "Processing: $X"
@@ -131,6 +138,7 @@ for X in "offsite"
     junit2html $SAGOUT"_"$X.xml
 done
 
+# Create a combined report matrix from all report sources
 
 XMLFILES=$OUT".xml "$OUT"_A.xml "$OUT"_B.xml "$OUT"_C.xml "$OUT"_D.xml "$SAGOUT"_offsite.xml "$SAGOUT"_workflow.xml"
 
