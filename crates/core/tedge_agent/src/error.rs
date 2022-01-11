@@ -1,5 +1,5 @@
+use agent_interface::SoftwareError;
 use flockfile::FlockfileError;
-use json_sm::SoftwareError;
 use mqtt_client::MqttClientError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 

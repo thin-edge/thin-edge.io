@@ -18,6 +18,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "agent_interface"
+version = "0.5.1"
+dependencies = [
+ "csv",
+ "download",
+ "nanoid",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,11 +333,12 @@ dependencies = [
 name = "c8y_smartrest"
 version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "assert-json-diff",
  "assert_matches",
  "chrono",
  "csv",
- "json_sm",
+ "download",
  "serde",
  "serde_json",
  "test-case",
@@ -697,12 +711,13 @@ version = "0.5.1"
 dependencies = [
  "anyhow",
  "backoff",
- "json_sm",
  "log",
  "mockito",
  "nix",
  "regex",
  "reqwest",
+ "serde",
+ "serde_json",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -1232,18 +1247,6 @@ name = "json-writer"
 version = "0.5.1"
 dependencies = [
  "anyhow",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "json_sm"
-version = "0.5.1"
-dependencies = [
- "csv",
- "nanoid",
- "regex",
- "serde",
  "serde_json",
  "thiserror",
 ]
@@ -1783,12 +1786,12 @@ dependencies = [
 name = "plugin_sm"
 version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert_matches",
  "async-trait",
  "csv",
  "download",
- "json_sm",
  "serde",
  "serde_json",
  "serial_test",
@@ -2612,13 +2615,13 @@ dependencies = [
 name = "tedge_agent"
 version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert_cmd",
  "async-trait",
  "chrono",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
  "mqtt_tests",
@@ -2693,6 +2696,7 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert-json-diff",
  "assert_matches",
@@ -2703,9 +2707,9 @@ dependencies = [
  "chrono",
  "clock",
  "csv",
+ "download",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
  "mqtt_tests",

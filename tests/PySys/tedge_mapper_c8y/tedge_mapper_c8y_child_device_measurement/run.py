@@ -22,6 +22,11 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
         self.addCleanupFunction(self.test_cleanup)
 
     def execute(self):
+
+        # Pysys seems to print and record the environment it will also print passwords in the env
+        # Solution: only inject the variables we really need
+        environ={ 'HOME':os.environ.get('HOME')}
+
         # Publish one temperature measurement to thin-edge-child device
         self.startProcess(
             command=self.tedge,
@@ -29,7 +34,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements/thin-edge-child",
                        '{"temperature": 12, "time": "2021-01-01T10:10:10.100+02:00"}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish another temperature measurement to thin-edge-child device
@@ -39,7 +44,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements/thin-edge-child",
                        '{"temperature": 11}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature measurement to the parent thin-edge device
@@ -49,7 +54,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements",
                        '{"temperature": 5}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature measurement to the other child device
@@ -59,7 +64,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements/other-thin-edge-child",
                        '{"temperature": 6}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
 
         # Publish another temperature measurement to thin-edge-child device
@@ -69,7 +74,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
                        "tedge/measurements/thin-edge-child",
                        '{"temperature": 10}'],
             stdouterr="tedge_pub",
-            environs=os.environ
+            environs=environ
         )
         # Waiting for the mapped measurement message to reach the Cloud
         time.sleep(1)
