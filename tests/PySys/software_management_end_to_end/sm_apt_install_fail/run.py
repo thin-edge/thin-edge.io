@@ -21,7 +21,7 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        self.trigger_action("does_not_exist", "5446165", "::apt", "notanurl", "install")
+        self.trigger_action("does_not_exist", "5446165", "::apt", "", "install")
 
         self.wait_until_fail()
 

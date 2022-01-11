@@ -41,7 +41,7 @@ class PySysTest(SoftwareManagement):
     def execute(self):
 
         self.trigger_action(
-            "watermelon", self.get_pkgid("watermelon"), "::fruits", "notanurl", "install"
+            "watermelon", self.get_pkgid("watermelon"), "::fruits", "", "install"
         )
 
         self.wait_until_succcess()
@@ -50,7 +50,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("vanilla"))
 
         self.trigger_action(
-            "watermelon", self.get_pkgid("watermelon"), "::fruits", "notanurl", "delete"
+            "watermelon", self.get_pkgid("watermelon"), "::fruits", "", "delete"
         )
 
         self.wait_until_succcess()
@@ -58,3 +58,4 @@ class PySysTest(SoftwareManagement):
     def validate(self):
         # This is always false
         self.assertThat("False == value", value=self.check_is_installed("tomatoooo"))
+
