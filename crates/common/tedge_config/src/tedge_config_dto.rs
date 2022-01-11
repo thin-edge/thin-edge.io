@@ -96,5 +96,5 @@ pub(crate) struct SoftwareConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct PathConfigDto {
     #[serde(default)]
-    pub(crate) tmp_path: Option<FilePath>,
+    pub(crate) tmp: Option<FilePath>,
 }
