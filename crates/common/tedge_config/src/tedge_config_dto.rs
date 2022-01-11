@@ -95,6 +95,6 @@ pub(crate) struct SoftwareConfigDto {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PathConfigDto {
-    #[serde(default)]
-    pub(crate) tmp: Option<FilePath>,
+    #[serde(rename = "path")]
+    pub(crate) tmp_path: Option<FilePath>,
 }

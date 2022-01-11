@@ -459,7 +459,7 @@ impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
         Ok(self
             .data
             .tmp
-            .tmp
+            .tmp_path
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
     }
@@ -469,12 +469,12 @@ impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
         _setting: TmpPathDefaultSetting,
         value: FilePath,
     ) -> ConfigSettingResult<()> {
-        self.data.tmp.tmp = Some(value);
+        self.data.tmp.tmp_path = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<()> {
-        self.data.tmp.tmp = None;
+        self.data.tmp.tmp_path = None;
         Ok(())
     }
 }
