@@ -270,7 +270,7 @@ impl ConfigSetting for TmpPathDefaultSetting {
     const KEY: &'static str = "tmp.path";
 
     const DESCRIPTION: &'static str = concat!(
-        "The default download path to be used for downloads on the device",
+        "The default temporary path to be used for downloads on the device",
         "Example: /tmp"
     );
 

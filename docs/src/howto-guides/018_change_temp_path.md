@@ -23,3 +23,9 @@ sudo chown tedge-agent:tedge-agent ~/tedge_tmp_dir
 
 # reconnect to cloud.
 ```
+
+To revert the path back to its default value:
+
+```shell
+sudo tedge config unset tmp.path
+```

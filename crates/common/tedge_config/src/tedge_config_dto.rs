@@ -24,7 +24,7 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) software: SoftwareConfigDto,
 
     #[serde(default)]
-    pub(crate) tmp: TmpPathConfigDto,
+    pub(crate) tmp: PathConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -94,7 +94,7 @@ pub(crate) struct SoftwareConfigDto {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct TmpPathConfigDto {
+pub(crate) struct PathConfigDto {
     #[serde(default)]
-    pub(crate) path: Option<FilePath>,
+    pub(crate) tmp_path: Option<FilePath>,
 }

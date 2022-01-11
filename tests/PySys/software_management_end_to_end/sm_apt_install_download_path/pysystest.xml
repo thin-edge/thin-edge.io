@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Install package to download path 
+      <title>Install package to directory specified in tedge config set tmp.path
 </title>
 	<purpose><![CDATA[
 ]]>

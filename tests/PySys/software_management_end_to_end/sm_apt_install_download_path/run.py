@@ -4,6 +4,20 @@ from pysys.basetest import BaseTest
 from environment_sm_management import SoftwareManagement
 from retry import retry
 
+"""
+This test checks that the install action downloads the package (rolldice.deb) to the location
+specified by tedge config set tmp.path <some value>
+
+steps:
+
+    1. set tmp.path to /tedge_download_path_test
+    2. reconnect c8y
+    3. trigger donload
+    4. assert package downloads in /tedge_download_path_test
+    5. remove package
+    6. reset tmp.path to inital value
+"""
+
 
 @retry(Exception, tries=10, delay=.5)
 def assert_install_in_download_path(install_directory):
