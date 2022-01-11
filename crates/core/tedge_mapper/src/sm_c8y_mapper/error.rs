@@ -17,10 +17,6 @@ pub enum SMCumulocityMapperError {
     #[error(transparent)]
     FromMqttClient(#[from] mqtt_channel::MqttError),
 
-    // TODO Remove this error case
-    #[error(transparent)]
-    FromSendChannel(#[from] futures::channel::mpsc::SendError),
-
     #[error(transparent)]
     FromReqwest(#[from] reqwest::Error),
 

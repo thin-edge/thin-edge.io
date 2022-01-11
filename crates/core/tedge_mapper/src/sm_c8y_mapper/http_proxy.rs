@@ -6,10 +6,10 @@ use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use chrono::{DateTime, Local};
-use mqtt_channel::{Connection, SinkExt, StreamExt, Topic, TopicFilter};
+use mqtt_channel::{Connection, StreamExt, PubChannel, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
-use tedge_config::{C8yUrlSetting, ConfigSettingAccessorStringExt, DeviceIdSetting, TEdgeConfig};
+use tedge_config::{C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting, MqttPortSetting, TEdgeConfig};
 use tracing::{error, info, instrument};
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -149,11 +149,13 @@ impl JwtAuthHttpProxy {
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
         let http_con = reqwest::ClientBuilder::new().build()?;
 
-        // FIXME let mqtt_port = tedge_config.query_string(MqttPortSetting)?.into();
-        // FIXME let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port).with_clean_session(true);
-        let mqtt_config = mqtt_channel::Config::default().with_clean_session(true);
+        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port).with_clean_session(true);
         let topic = TopicFilter::new("c8y/s/dat")?;
-        let mqtt_con = Connection::connect("JWT-Requester", &mqtt_config, topic).await?;
+        let mut mqtt_con = Connection::connect("JWT-Requester", &mqtt_config, topic).await?;
+
+        // Ignore errors on this connection
+        let () = mqtt_con.errors.close();
 
         Ok(JwtAuthHttpProxy::new(
             mqtt_con, http_con, &c8y_host, &device_id,
@@ -256,7 +258,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         let () = self
             .mqtt_con
             .published
-            .send(mqtt_channel::Message::new(
+            .publish(mqtt_channel::Message::new(
                 &Topic::new_unchecked("c8y/s/uat"),
                 "".to_string(),
             ))
