@@ -1,0 +1,8 @@
+[init]
+name = "service(8)"
+is_available = ["/usr/sbin/service", "-l"]
+restart = ["/usr/sbin/service", "{}", "restart"]
+stop =  ["/usr/sbin/service", "{}", "stop"]
+enable =  ["/usr/sbin/service", "{}", "enable"]
+disable =  ["/usr/sbin/service", "{}", "forcedisable"]
+is_active = ["/usr/sbin/service", "{}", "status"]
