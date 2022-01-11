@@ -55,3 +55,5 @@
   - [The `tedge connect` command](./references/tedge-connect.md)
   - [The `tedge disconnect` command](./references/tedge-disconnect.md)
   - [The `tedge mqtt` command](./references/tedge-mqtt.md)
+  
+- [Configuration Reference](./references/system-config.md)
