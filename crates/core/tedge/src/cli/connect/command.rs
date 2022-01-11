@@ -230,12 +230,8 @@ where
     Ok(())
 }
 
-// Check the connection by using the response of the SmartREST template 100.
-// If getting the response '41,100,Device already existing', the connection is established.
-//
-// If the device is already registered, it can finish in the first try.
-// If the device is new, the device is going to be registered here and
-// the check can finish in the second try as there is no error response in the first try.
+// Check the connection by using the jwt token retrival over the mqtt.
+// If successfull in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";

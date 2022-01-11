@@ -43,4 +43,10 @@ pub enum ConnectError {
         "The JWT token received from Cumulocity is invalid.\nToken: {token}\nReason: {reason}"
     )]
     InvalidJWTToken { token: String, reason: String },
+
+    #[error("Could not parse private key")]
+    RumqttcPrivateKey,
+
+    #[error("Could not parse certificate")]
+    RumqttcCertificate,
 }
