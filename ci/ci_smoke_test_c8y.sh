@@ -19,6 +19,7 @@
 #    C8YDEVICEID
 #    EXAMPLEDIR
 
+# TODO Remove: Seems to be unused
 # a simple function to append lines to files if not already there
 appendtofile() {
     STRING=$1
@@ -32,13 +33,6 @@ appendtofile() {
 
 if [ -z $C8YDEVICE ]; then
     echo "Error: Please supply your device name as environment variable C8YDEVICE"
-    exit 1
-else
-    echo "Your device: HIDDEN"
-fi
-
-if [ -z $C8YDEVICEID ]; then
-    echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
     exit 1
 else
     echo "Your device: HIDDEN"
@@ -92,6 +86,17 @@ sudo tedge disconnect c8y
 set -e
 
 ./ci/configure_bridge.sh
+
+. ~/c8yenv.sh
+
+# after calling the script, the ID should be there
+if [ -z $C8YDEVICEID ]; then
+    echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
+    exit 1
+else
+    echo "Your device: HIDDEN"
+fi
+
 
 echo "Connect again"
 sudo tedge connect c8y
