@@ -63,7 +63,7 @@ impl DisconnectBridgeCommand {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         self.remove_bridge_config_file()?;
 
-        if let Err(SystemServiceError::ServiceManagerUnavailable(name)) =
+        if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
             self.service_manager.check_operational()
         {
             println!(

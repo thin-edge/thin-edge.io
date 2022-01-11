@@ -1,63 +1,34 @@
 #[derive(thiserror::Error, Debug)]
 pub enum SystemServiceError {
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
+    ServiceCommandFailedWithCode { service_command: String, code: i32 },
 
-    #[error(transparent)]
-    SystemdError(#[from] SystemdError),
+    #[error("Service command <{service_command:?}> terminated by a signal.")]
+    ServiceCommandFailedBySignal { service_command: String },
 
-    #[error(transparent)]
-    OpenRcServiceError(#[from] OpenRcServiceError),
-
-    #[error(transparent)]
-    BsdServiceError(#[from] BsdServiceError),
-
-    #[error("Unexpected value for exit status.")]
-    UnexpectedExitStatus,
-
-    #[error("Unsupported operation.")]
-    UnsupportedOperation,
-
-    #[error("Service Manager: '{0}' is not available on the system or elevated permissions have not been granted.")]
-    ServiceManagerUnavailable(String),
-}
-
-/// The error type used by the `SystemdServiceManager`
-#[derive(thiserror::Error, Debug)]
-pub enum SystemdError {
-    #[error("Systemd returned unspecific error for service {service} while performing {cmd} it.\nHint: {hint}")]
-    UnspecificError {
-        service: &'static str,
-        cmd: &'static str,
-        hint: &'static str,
+    #[error(
+        "Service command <{service_command:?}> not found.\n\
+    Check '{path}' file."
+    )]
+    ServiceCommandNotFound {
+        service_command: String,
+        path: String,
     },
 
-    #[error("Service {service} not found. Install {service} to use this command.")]
-    ServiceNotFound { service: &'static str },
+    #[error("Failed to execute '{cmd}' to check the service manager availability.\n\
+     Service manager '{name}' is not available on the system or elevated permissions have not been granted.")]
+    ServiceManagerUnavailable { cmd: String, name: String },
 
-    #[error("Service {service} not loaded.")]
-    ServiceNotLoaded { service: &'static str },
+    #[error("Toml syntax error in the system config file '{path}': {reason}")]
+    SystemConfigInvalidToml { path: String, reason: String },
 
-    #[error("Returned exit code: '{code:?}' for: systemd' is unhandled.")]
-    UnhandledReturnCode { code: i32 },
-}
-
-/// The error type used by the `OpenRcServiceManager`
-#[derive(thiserror::Error, Debug)]
-pub enum OpenRcServiceError {
-    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
-    ServiceCommandFailed {
-        service_command: String,
-        code: Option<i32>,
-    },
-}
-
-/// The error type used by the `BsdServiceManager`
-#[derive(thiserror::Error, Debug)]
-pub enum BsdServiceError {
-    #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
-    ServiceCommandFailed {
-        service_command: String,
-        code: Option<i32>,
+    #[error(
+        "Syntax error in the system config file for '{cmd}': {reason}\n\
+    Check '{path}' file."
+    )]
+    SystemConfigInvalidSyntax {
+        reason: String,
+        cmd: String,
+        path: String,
     },
 }

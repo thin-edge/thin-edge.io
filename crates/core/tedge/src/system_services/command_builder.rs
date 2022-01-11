@@ -13,8 +13,12 @@ impl CommandBuilder {
         }
     }
 
-    pub fn arg(mut self, arg: impl AsRef<OsStr>) -> CommandBuilder {
-        self.command.arg(arg);
+    pub fn args<I, S>(mut self, args: I) -> CommandBuilder
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.command.args(args);
         self
     }
 
