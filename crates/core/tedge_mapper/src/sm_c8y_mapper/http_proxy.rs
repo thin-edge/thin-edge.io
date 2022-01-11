@@ -6,10 +6,13 @@ use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use chrono::{DateTime, Local};
-use mqtt_channel::{Connection, StreamExt, PubChannel, Topic, TopicFilter};
+use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
-use tedge_config::{C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting, MqttPortSetting, TEdgeConfig};
+use tedge_config::{
+    C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
+    MqttPortSetting, TEdgeConfig,
+};
 use tracing::{error, info, instrument};
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -150,7 +153,9 @@ impl JwtAuthHttpProxy {
         let http_con = reqwest::ClientBuilder::new().build()?;
 
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port).with_clean_session(true);
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(mqtt_port)
+            .with_clean_session(true);
         let topic = TopicFilter::new("c8y/s/dat")?;
         let mut mqtt_con = Connection::connect("JWT-Requester", &mqtt_config, topic).await?;
 

@@ -396,36 +396,6 @@ async fn get_jwt_token_full_run() {
     assert_eq!(jwt_token.unwrap().token(), "1111");
 }
 
-fn create_tedge_config(mqtt_port: u16) -> TEdgeConfig {
-    // Create a config file in a temporary directory.
-    let temp_dir = tempfile::tempdir().unwrap();
-    let content = format!(
-        r#"
-        [mqtt]
-        port={}
-        [c8y]
-        url='test.c8y.com'
-        "#,
-        mqtt_port
-    );
-    let mut file = tempfile::NamedTempFile::new_in(&temp_dir).unwrap();
-    let _write_file = file.write_all(content.as_bytes()).unwrap();
-    let path_buf = temp_dir.path().join("test");
-    let _persist_file = file.persist(&path_buf);
-
-    // Create tedge_config.
-    let tedge_config_file_path = path_buf;
-    let tedge_config_root_path = tedge_config_file_path.parent().unwrap().to_owned();
-    let config_location = TEdgeConfigLocation {
-        tedge_config_root_path,
-        tedge_config_file_path,
-    };
-
-    tedge_config::TEdgeConfigRepository::new(config_location)
-        .load()
-        .unwrap()
-}
-
 fn remove_whitespace(s: &str) -> String {
     let mut s = String::from(s);
     s.retain(|c| !c.is_whitespace());

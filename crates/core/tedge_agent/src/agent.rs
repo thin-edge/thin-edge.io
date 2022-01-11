@@ -13,7 +13,7 @@ use agent_interface::{
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-use mqtt_channel::{Connection, Message, PubChannel, SubChannel, Topic, TopicFilter};
+use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
     convert::TryInto,
@@ -203,7 +203,7 @@ impl SmAgent {
             return Err(AgentError::NoPlugins);
         }
 
-        let mut mqtt_errors = mqtt_client.errors;
+        let mut mqtt_errors = mqtt.errors;
         tokio::spawn(async move {
             while let Some(error) = mqtt_errors.next().await {
                 error!("{}", error);
