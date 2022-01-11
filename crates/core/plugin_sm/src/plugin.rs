@@ -1,8 +1,8 @@
 use crate::logged_command::LoggedCommand;
+use agent_interface::*;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
-use json_sm::*;
 use serde::Deserialize;
 use std::path::Path;
 use std::{path::PathBuf, process::Output};
