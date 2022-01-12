@@ -262,11 +262,8 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 let token = String::from_utf8(response.payload.to_vec()).unwrap();
-
                 if token.contains("71") {
                     return Ok(DeviceStatus::AlreadyExists);
-                } else {
-                   break;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
@@ -280,7 +277,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             }
             Err(err) => {
                 eprintln!("ERROR: {:?}", err);
-                return Err(ConnectError::ConnectionCheckError);
+                break;
             }
             _ => {}
         }
