@@ -266,7 +266,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
                 if token.contains("71") {
                     return Ok(DeviceStatus::AlreadyExists);
                 } else {
-                    return Err(ConnectError::ConnectionCheckError);
+                   break;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
@@ -282,7 +282,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
                 eprintln!("ERROR: {:?}", err);
                 return Err(ConnectError::ConnectionCheckError);
             }
-            _ => {}
+            _ => {break;}
         }
     }
 

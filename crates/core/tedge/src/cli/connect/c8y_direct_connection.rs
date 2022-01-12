@@ -57,7 +57,7 @@ pub fn create_device_with_direct_connection(
                     break;
                 }
             }
-            _ => {}
+            _ => {break;}
         }
     }
     Ok(())
