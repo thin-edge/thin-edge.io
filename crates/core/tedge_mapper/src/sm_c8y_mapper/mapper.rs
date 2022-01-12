@@ -27,7 +27,7 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset};
 use download::{Auth, DownloadInfo};
-use mqtt_channel::{Connection, MqttError, SinkExt, StreamExt, TopicFilter, Topic};
+use mqtt_channel::{Connection, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

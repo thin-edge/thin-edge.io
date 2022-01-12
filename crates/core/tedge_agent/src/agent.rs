@@ -554,42 +554,32 @@ fn get_default_plugin(
 mod tests {
 
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
-
-    use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
-    use mqtt_tests::publish;
-    use std::fs;
-    use std::time::Duration;
-
-    use tokio::time::sleep;
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
-    const TIMEOUT: Duration = Duration::from_secs(10);
 
-    // #[ignore]
-    // #[tokio::test]
-    // async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
-    //     assert_eq!(INIT_COMMAND, "echo");
-    //     let tedge_config_location =
-    //         tedge_config::TEdgeConfigLocation::from_default_system_location();
-    //     let agent = SmAgent::try_new(
-    //         "tedge_agent_test",
-    //         SmAgentConfig::try_new(tedge_config_location).unwrap(),
-    //     )
-    //     .unwrap();
-    //
-    //     // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-    //     let (_, mut output_stream) = mqtt_tests::recorder();
-    //     let response_topic_restart =
-    //         Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
-    //     let () = agent
-    //         .handle_restart_operation(&mut output_stream, &response_topic_restart)
-    //         .await?;
-    //     assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
-    //
-    //     // removing the file
-    //     let () = std::fs::remove_file(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).unwrap();
-    //
-    //     Ok(())
-    // }
+    #[ignore]
+    #[tokio::test]
+    async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
+        assert_eq!(INIT_COMMAND, "echo");
+        let tedge_config_location =
+            tedge_config::TEdgeConfigLocation::from_default_system_location();
+        let agent = SmAgent::try_new(
+            "tedge_agent_test",
+            SmAgentConfig::try_new(tedge_config_location).unwrap(),
+        )
+        .unwrap();
+
+        // calling handle_restart_operation should create a file in /run/tedge_agent_restart
+        let (_, mut output_stream) = mqtt_tests::output_stream();
+        let response_topic_restart =
+            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+        let () = agent
+            .handle_restart_operation(&mut output_stream, &response_topic_restart)
+            .await?;
+        assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
+
+        // removing the file
+        let () = std::fs::remove_file(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).unwrap();
+
+        Ok(())
+    }
 }

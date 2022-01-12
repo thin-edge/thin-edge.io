@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use futures::{Sink, SinkExt, Stream, StreamExt};
+    use futures::{SinkExt, StreamExt};
     use serial_test::serial;
     use std::convert::TryInto;
     use std::time::Duration;
@@ -240,10 +240,7 @@ mod tests {
     #[serial]
     async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
         // Given an mqtt client
-        async fn run(
-            mut input: impl Stream<Item = Message> + Unpin,
-            mut output: impl Sink<Message> + Unpin,
-        ) {
+        async fn run(mut input: impl SubChannel, mut output: impl PubChannel) {
             let out_topic = Topic::new_unchecked("out/topic");
 
             while let Some(msg) = input.next().await {
@@ -269,10 +266,10 @@ mod tests {
             message("out/topic", "YET ANOTHER MESSAGE"),
         ];
 
-        let input_stream = mqtt_tests::MessageInputStream::new(input);
-        let (output, output_stream) = mqtt_tests::recorder();
-        tokio::spawn(async move { run(input_stream, output_stream).await });
-        assert_eq!(expected, output.await.unwrap());
+        let input_stream = mqtt_tests::input_stream(input).await;
+        let (output, output_sink) = mqtt_tests::output_stream();
+        tokio::spawn(async move { run(input_stream, output_sink).await });
+        assert_eq!(expected, output.collect().await);
 
         // This very same client can be tested with an MQTT broker
         let broker = mqtt_tests::test_mqtt_broker();
