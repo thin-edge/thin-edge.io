@@ -22,7 +22,7 @@ use std::{
 };
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathDefaultSetting,
 };
 use tracing::{debug, error, info, instrument};
 
@@ -46,6 +46,7 @@ pub struct SmAgentConfig {
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
     config_location: TEdgeConfigLocation,
+    pub download_dir: PathBuf,
 }
 
 impl Default for SmAgentConfig {
@@ -83,6 +84,8 @@ impl Default for SmAgentConfig {
 
         let config_location = TEdgeConfigLocation::from_default_system_location();
 
+        let download_dir = PathBuf::from("/tmp");
+
         Self {
             errors_topic,
             mqtt_client_config,
@@ -96,6 +99,7 @@ impl Default for SmAgentConfig {
             sm_home,
             log_dir,
             config_location,
+            download_dir,
         }
     }
 }
@@ -114,10 +118,13 @@ impl SmAgentConfig {
             .tedge_config_root_path()
             .to_path_buf();
 
+        let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_client_config(mqtt_config)
-            .with_config_location(tedge_config_location))
+            .with_config_location(tedge_config_location)
+            .with_download_directory(tedge_download_dir))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -134,6 +141,13 @@ impl SmAgentConfig {
     pub fn with_config_location(self, config_location: TEdgeConfigLocation) -> Self {
         Self {
             config_location,
+            ..self
+        }
+    }
+
+    pub fn with_download_directory(self, tmp_dir: PathBuf) -> Self {
+        Self {
+            download_dir: tmp_dir,
             ..self
         }
     }
@@ -378,7 +392,11 @@ impl SmAgent {
             .new_log_file(LogKind::SoftwareUpdate)
             .await?;
 
-        let response = plugins.lock().unwrap().process(&request, log_file).await; // `unwrap` should be safe here as we only access data.
+        let response = plugins
+            .lock()
+            .unwrap()
+            .process(&request, log_file, &self.config.download_dir)
+            .await; // `unwrap` should be safe here as we only access data.
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -524,8 +542,19 @@ fn get_default_plugin(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+    use mqtt_tests::publish;
+    use std::fs;
+    use std::time::Duration;
+
+    use tokio::time::sleep;
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     #[ignore]
     #[tokio::test]
