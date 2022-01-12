@@ -282,7 +282,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
                 eprintln!("ERROR: {:?}", err);
                 return Err(ConnectError::ConnectionCheckError);
             }
-            _ => {break;}
+            _ => {}
         }
     }
 
