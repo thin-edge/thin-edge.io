@@ -37,4 +37,9 @@ jobs:
         name: system-test-report-matrix_${{ github.run_number }}
         path: ci/report/report-matrix.html
 
-
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ci/report
