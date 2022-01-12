@@ -272,11 +272,11 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 println!("Local MQTT publish has timed out.");
-                return Err(ConnectError::ConnectionCheckError);
+                break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("ERROR: Disconnected");
-                return Err(ConnectError::ConnectionCheckError);
+                break;
             }
             Err(err) => {
                 eprintln!("ERROR: {:?}", err);
