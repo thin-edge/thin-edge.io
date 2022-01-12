@@ -3,11 +3,14 @@ use rumqttc::{
     self, certs, pkcs8_private_keys, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS,
     Transport,
 };
+
 use rustls_0_19::ClientConfig;
-use std::{fs::File, io::BufReader, thread, time::Duration};
+use std::{fs::File, io::BufReader};
+use tedge_users::UserManager;
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub fn create_device_with_direct_connection(
+    user_manager: UserManager,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
@@ -25,17 +28,7 @@ pub fn create_device_with_direct_connection(
     client_config.root_store =
         rustls_native_certs::load_native_certs().expect("Failed to load platform certificates.");
 
-    // Load the device key and certificates
-    let f = File::open(bridge_config.bridge_keyfile.clone())?;
-    let mut key_reader = BufReader::new(f);
-    let result = pkcs8_private_keys(&mut key_reader);
-    let key_chain: Vec<rustls_0_19::PrivateKey> = match result {
-        Ok(key) => key,
-        Err(_) => {
-            return Err(ConnectError::RumqttcPrivateKey);
-        }
-    };
-    let pvt_key = key_chain.first().unwrap().clone();
+    let pvt_key = read_pvt_key(user_manager, bridge_config.bridge_keyfile.clone())?;
 
     let f = File::open(bridge_config.bridge_certfile.clone())?;
     let mut cert_reader = BufReader::new(f);
@@ -115,4 +108,22 @@ fn publish_device_create_message(client: &mut Client, device_id: &str) -> Result
         payload.as_bytes(),
     )?;
     Ok(())
+}
+
+fn read_pvt_key(
+    user_manager: UserManager,
+    key_file: tedge_config::FilePath,
+) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
+    let f = File::open(key_file)?;
+    let mut key_reader = BufReader::new(f);
+    let result = pkcs8_private_keys(&mut key_reader);
+    let _user_guard = user_manager.become_user(tedge_users::ROOT_USER)?;
+    let key_chain: Vec<rustls_0_19::PrivateKey> = match result {
+        Ok(key) => key,
+        Err(_) => {
+            return Err(ConnectError::RumqttcPrivateKey);
+        }
+    };
+    Ok(key_chain.first().unwrap().clone())
 }

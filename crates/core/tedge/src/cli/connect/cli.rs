@@ -33,6 +33,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
                 service_manager: context.service_manager.clone(),
+                user_manager: context.user_manager,
             },
             TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
                 config_location: context.config_location,
@@ -41,6 +42,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
                 service_manager: context.service_manager.clone(),
+                user_manager: context.user_manager,
             },
         }
         .into_boxed())
