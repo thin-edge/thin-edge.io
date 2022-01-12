@@ -37,9 +37,10 @@
   - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
-    - [Software Management](./architecture/software-management.md)
+    - [Software Management](architecture/software-management.md)
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
+    - [Init System configuration](references/init-system-config.md)
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
 
@@ -56,5 +57,3 @@
   - [The `tedge connect` command](./references/tedge-connect.md)
   - [The `tedge disconnect` command](./references/tedge-disconnect.md)
   - [The `tedge mqtt` command](./references/tedge-mqtt.md)
-  
-- [Configuration Reference](./references/system-config.md)
