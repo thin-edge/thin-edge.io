@@ -1,3 +1,4 @@
+use crate::operation_logs::{LogKind, OperationLogs};
 use crate::{
     error::AgentError,
     restart_operation_handler::restart_operation,
@@ -6,13 +7,12 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
-
-use json_sm::{
+use agent_interface::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
+use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_client::{Client, Config, Message, MqttClient, MqttMessageStream, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{
@@ -20,13 +20,11 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use tracing::{debug, error, info, instrument};
-
-use crate::operation_logs::{LogKind, OperationLogs};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathDefaultSetting,
 };
+use tracing::{debug, error, info, instrument};
 
 #[cfg(not(test))]
 const INIT_COMMAND: &'static str = "init";
@@ -48,6 +46,7 @@ pub struct SmAgentConfig {
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
     config_location: TEdgeConfigLocation,
+    pub download_dir: PathBuf,
 }
 
 impl Default for SmAgentConfig {
@@ -85,6 +84,8 @@ impl Default for SmAgentConfig {
 
         let config_location = TEdgeConfigLocation::from_default_system_location();
 
+        let download_dir = PathBuf::from("/tmp");
+
         Self {
             errors_topic,
             mqtt_client_config,
@@ -98,6 +99,7 @@ impl Default for SmAgentConfig {
             sm_home,
             log_dir,
             config_location,
+            download_dir,
         }
     }
 }
@@ -116,10 +118,13 @@ impl SmAgentConfig {
             .tedge_config_root_path()
             .to_path_buf();
 
+        let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_client_config(mqtt_config)
-            .with_config_location(tedge_config_location))
+            .with_config_location(tedge_config_location)
+            .with_download_directory(tedge_download_dir))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -136,6 +141,13 @@ impl SmAgentConfig {
     pub fn with_config_location(self, config_location: TEdgeConfigLocation) -> Self {
         Self {
             config_location,
+            ..self
+        }
+    }
+
+    pub fn with_download_directory(self, tmp_dir: PathBuf) -> Self {
+        Self {
+            download_dir: tmp_dir,
             ..self
         }
     }
@@ -380,7 +392,11 @@ impl SmAgent {
             .new_log_file(LogKind::SoftwareUpdate)
             .await?;
 
-        let response = plugins.lock().unwrap().process(&request, log_file).await; // `unwrap` should be safe here as we only access data.
+        let response = plugins
+            .lock()
+            .unwrap()
+            .process(&request, log_file, &self.config.download_dir)
+            .await; // `unwrap` should be safe here as we only access data.
 
         let _ = mqtt
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -526,8 +542,19 @@ fn get_default_plugin(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    use mqtt_client::{Client, Message, MqttClient, Topic, TopicFilter};
+    use mqtt_tests::publish;
+    use std::fs;
+    use std::time::Duration;
+
+    use tokio::time::sleep;
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     #[ignore]
     #[tokio::test]

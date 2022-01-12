@@ -31,6 +31,7 @@
     - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
     - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
     - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
+    - [How to change temp path](./howto-guides/018_change_temp_path.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)

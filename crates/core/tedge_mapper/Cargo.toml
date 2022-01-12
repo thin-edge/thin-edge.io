@@ -25,6 +25,7 @@ start = false
 stop-on-upgrade = false
 
 [dependencies]
+agent_interface = { path = "../agent_interface"}
 anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
@@ -33,9 +34,9 @@ c8y_translator = { path = "../c8y_translator" }
 chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"
+download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-json_sm = { path = "../json_sm"}
 mockall = "0.10"
 mqtt_client = { path = "../../common/mqtt_client" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
