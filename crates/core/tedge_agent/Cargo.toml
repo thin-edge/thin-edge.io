@@ -1,0 +1,52 @@
+[package]
+name = "tedge_agent"
+version = "0.5.1"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "tedge_agent interacts with a Cloud Mapper and one or more Software Plugins"
+
+[package.metadata.deb]
+depends = "tedge_mapper"
+maintainer-scripts = "configuration/debian/tedge_agent"
+assets = [
+    ["../../../configuration/init/systemd/tedge-agent.service", "/lib/systemd/system/tedge-agent.service", "644"],
+    ["target/release/tedge_agent", "/usr/bin/tedge_agent", "755"],
+]
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "../../../configuration/init/systemd"
+enable = false
+start = false
+stop-on-upgrade = false
+
+[dependencies]
+agent_interface = { path = "../agent_interface" }
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = "0.4"
+flockfile = { path = "../../common/flockfile" }
+futures = "0.3"
+mockall = "0.10"
+mqtt_client = { path = "../../common/mqtt_client" }
+plugin_sm = { path = "../plugin_sm" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3"
+tedge_config = { path = "../../common/tedge_config" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+time = { version = "0.3", features = ["formatting"] }
+thiserror = "1.0"
+tokio = { version = "1.8", features = ["fs","process", "rt"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+anyhow = "1.0"
+assert_cmd = "2.0"
+once_cell = "1.8"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+predicates = "2.0"
+tempfile = "3.2"
+tokio-test = "0.4"
+serial_test = "0.5"

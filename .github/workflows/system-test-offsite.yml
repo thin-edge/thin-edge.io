@@ -52,7 +52,7 @@ jobs:
           path: /home/pi/examples
 
       - name: purge packages
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
         continue-on-error: true
 
       - name: install packages
@@ -86,7 +86,7 @@ jobs:
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - name: Run Smoke Test
-        run: ./ci/ci_smoke_test.sh
+        run: ./ci/ci_smoke_test_c8y.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}

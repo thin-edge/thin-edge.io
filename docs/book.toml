@@ -5,9 +5,24 @@ language = "en"
 multilingual = false
 src = "src"
 
-# FIX: the link check prevents some pages to be generated
-#[output.linkcheck]
-#follow-web-links = false
-#traverse-parent-directories = false
-#warning-policy = "warn"
+[output.html.fold]
+    enable = true
+
+[output.linkcheck]
+# Should we check links on the internet? Enabling this option adds a
+# non-negligible performance impact
+#follow-web-links = true
+
+# Are we allowed to link to files outside of the book's root directory? This
+# may help prevent linking to sensitive files (e.g. "../../../../etc/shadow")
+traverse-parent-directories = true
+
+# How should warnings be treated?
+#
+# - "warn" will emit warning messages
+# - "error" treats all warnings as errors, failing the linkcheck
+# - "ignore" will ignore warnings, suppressing diagnostic messages and allowing
+#   the linkcheck to continuing
+warning-policy = "warn"
+
 #exclude = [ 'README.md' ]

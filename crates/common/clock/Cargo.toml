@@ -1,0 +1,11 @@
+[package]
+name = "clock"
+version = "0.5.1"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2018"
+
+[dependencies]
+time = { version = "0.3", features = ["serde-human-readable"] }
+chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+mockall = "0.10"
