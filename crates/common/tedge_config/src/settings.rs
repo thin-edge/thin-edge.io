@@ -262,3 +262,17 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
 
     type Value = String;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct TmpPathDefaultSetting;
+
+impl ConfigSetting for TmpPathDefaultSetting {
+    const KEY: &'static str = "tmp.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default temporary path to be used for downloads on the device",
+        "Example: /tmp"
+    );
+
+    type Value = FilePath;
+}

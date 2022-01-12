@@ -4,6 +4,7 @@ use agent_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse, DEFAULT,
 };
+use std::path::Path;
 use std::{
     collections::HashMap,
     fs,
@@ -220,6 +221,7 @@ impl ExternalPlugins {
         &self,
         request: &SoftwareUpdateRequest,
         mut log_file: LogFile,
+        download_path: &Path,
     ) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
         let mut logger = log_file.buffer();
@@ -228,7 +230,7 @@ impl ExternalPlugins {
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates, &mut logger).await
+                plugin.apply_all(updates, &mut logger, &download_path).await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
