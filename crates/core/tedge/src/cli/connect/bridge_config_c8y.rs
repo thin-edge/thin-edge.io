@@ -65,6 +65,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"c/uc/# out 2 c8y/ """#.into(),
                 r#"s/dc/# in 2 c8y/ """#.into(),
                 // c8y JSON
+                r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
                 r#"measurement/measurements/create out 2 c8y/ """#.into(),
                 r#"error in 2 c8y/ """#.into(),
                 // c8y JWT token retrieval
