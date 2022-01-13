@@ -1,7 +1,6 @@
 use crate::converter::*;
 use crate::error::*;
 
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_client::{Client, MqttClient, MqttClientError};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tokio::task::JoinHandle;
@@ -12,14 +11,12 @@ pub async fn create_mapper<'a>(
     tedge_config: &'a TEdgeConfig,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
-    let flock = check_another_instance_is_not_running(app_name)?;
-
     info!("{} starting", app_name);
 
     let mqtt_config = mqtt_config(tedge_config)?;
     let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
 
-    Ok(Mapper::new(mqtt_client, converter, flock))
+    Ok(Mapper::new(mqtt_client, converter))
 }
 
 pub(crate) fn mqtt_config(
@@ -31,20 +28,14 @@ pub(crate) fn mqtt_config(
 pub struct Mapper {
     client: mqtt_client::Client,
     converter: Box<dyn Converter<Error = ConversionError>>,
-    _flock: Flockfile,
 }
 
 impl Mapper {
     pub fn new(
         client: mqtt_client::Client,
         converter: Box<dyn Converter<Error = ConversionError>>,
-        _flock: Flockfile,
     ) -> Self {
-        Self {
-            client,
-            converter,
-            _flock,
-        }
+        Self { client, converter }
     }
 
     pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
@@ -106,16 +97,12 @@ mod tests {
         // Given a mapper
         let name = "mapper_under_test";
 
-        let flock = check_another_instance_is_not_running(name)
-            .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
-
         let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
         let mqtt_client = Client::connect(name, &mqtt_config).await?;
 
         let mut mapper = Mapper {
             client: mqtt_client,
             converter: Box::new(UppercaseConverter::new()),
-            _flock: flock,
         };
 
         // Let's run the mapper in the background
