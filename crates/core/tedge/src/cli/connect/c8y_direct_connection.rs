@@ -106,18 +106,19 @@ fn read_pvt_key(
     user_manager: UserManager,
     key_file: tedge_config::FilePath,
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    // Become BROKER_USER to read the private key
     let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
     let f = File::open(key_file)?;
     let mut key_reader = BufReader::new(f);
     let result = pkcs8_private_keys(&mut key_reader);
+    // Switch back to root user
     let _user_guard = user_manager.become_user(tedge_users::ROOT_USER)?;
-    let key_chain: Vec<rustls_0_19::PrivateKey> = match result {
-        Ok(key) => key,
+    match result {
+        Ok(key) => Ok(key[0].clone()),
         Err(_) => {
             return Err(ConnectError::RumqttcPrivateKey);
         }
-    };
-    Ok(key_chain.first().unwrap().clone())
+    }
 }
 
 fn read_cert_chain(
