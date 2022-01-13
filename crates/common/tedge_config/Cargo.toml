@@ -3,6 +3,7 @@ name = "tedge_config"
 version = "0.5.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
+rust-version = "1.58"
 
 [dependencies]
 certificate = { path = "../certificate" }
