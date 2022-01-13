@@ -117,7 +117,7 @@ jobs:
         with:
           command: build
           args: --release
-          
+
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
@@ -208,4 +208,4 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.57.0
+          args: --minimum 1.58.0
