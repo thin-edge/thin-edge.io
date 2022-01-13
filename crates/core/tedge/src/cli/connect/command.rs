@@ -27,7 +27,6 @@ pub struct ConnectCommand {
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
-    pub user_manager: UserManager,
 }
 
 pub enum DeviceStatus {
@@ -122,7 +121,6 @@ impl Command for ConnectCommand {
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
-            self.user_manager.clone(),
             &self.config_location,
         )?;
 
@@ -371,13 +369,14 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
     service_manager: &dyn SystemServiceManager,
-    user_manager: UserManager,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 
-    if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
+    if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
+        &service_manager_result
+    {
         println!(
             "Warning: '{}' service manager is not available on the system.\n",
             name
@@ -391,8 +390,10 @@ fn new_bridge(
     let () = bridge_config.validate()?;
 
     println!("Create the device.\n");
-    let () =
-        c8y_direct_connection::create_device_with_direct_connection(user_manager, bridge_config)?;
+    let () = c8y_direct_connection::create_device_with_direct_connection(
+        service_manager.get_user_manager(),
+        bridge_config,
+    )?;
 
     println!("Saving configuration for requested bridge.\n");
     if let Err(err) =

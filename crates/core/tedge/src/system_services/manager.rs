@@ -1,11 +1,17 @@
 use crate::system_services::*;
 use std::fmt::Debug;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tedge_users::UserManager;
 
 /// Abstraction over the system-provided facility that manages starting, stopping as well as other
 /// service-related management functions of system services.
 pub trait SystemServiceManager: Debug {
     /// Returns the name of the system service manager facility (e.g. "systemd" or "openrc").
     fn name(&self) -> &str;
+
+    // Get user manager
+    fn get_user_manager(&self) -> UserManager;
 
     /// Checks whether the system service manager facility is available and operational.
     fn check_operational(&self) -> Result<(), SystemServiceError>;
@@ -37,4 +43,14 @@ pub trait SystemServiceManager: Debug {
             Ok(false)
         }
     }
+}
+
+pub fn service_manager(
+    user_manager: UserManager,
+    config_root: PathBuf,
+) -> Result<Arc<dyn SystemServiceManager>, SystemServiceError> {
+    Ok(Arc::new(GeneralServiceManager::try_new(
+        user_manager,
+        config_root,
+    )?))
 }
