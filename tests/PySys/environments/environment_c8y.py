@@ -86,7 +86,7 @@ class Cumulocity(object):
         return header
 
     def trigger_log_request(self, log_file_request_payload, device_id):
-        url = f"https://{self.c8y_url}/devicecontrol/operations"
+        url = f"{self.c8y_url}/devicecontrol/operations"
         log_file_request_payload = {
             "deviceId": device_id,
             "description": "Log file request",
@@ -107,7 +107,7 @@ class Cumulocity(object):
     def retrieve_log_file(self, operation_id):
         """Check if log received"""
 
-        url = f"https://{self.c8y_url}/devicecontrol/operations/{operation_id}"
+        url = f"{self.c8y_url}/devicecontrol/operations/{operation_id}"
         req = requests.get(url, headers=self.get_header(),
                            timeout=self.timeout_req)
 
@@ -151,6 +151,33 @@ class Cumulocity(object):
             url=self.c8y_url + "/measurement/measurements", params=params, auth=self.auth)
         measurements_json = self.to_json_response(res)
         return measurements_json['measurements']
+
+    def get_last_n_alarms_from_device(self, device_internal_id: int, target_size=2000, status="ACTIVE", date_from="1970-01-01"):
+        params = {
+            "source": device_internal_id,
+            "pageSize": target_size,
+            "dateFrom": "1970-01-01",
+            "status": status
+        }
+        res = requests.get(
+            url=self.c8y_url + "/alarm/alarms", params=params, auth=self.auth)
+        measurements_json = self.to_json_response(res)
+        return measurements_json['alarms']
+
+    def get_last_alarm_from_device(self, device_internal_id: int):
+        return self.get_last_n_alarms_from_device(
+            device_internal_id=device_internal_id, target_size=1)[0]
+
+    def clear_all_alarms_from_device(self, device_internal_id: int):
+        params = {
+            "source": device_internal_id,
+        }
+        payload = {
+            "status": "CLEARED"
+        }
+        res = requests.put(
+            url=self.c8y_url + "/alarm/alarms", params=params, json=payload, auth=self.auth)
+        res.raise_for_status()
 
     def delete_managed_object_by_internal_id(self, internal_id: str):
         res = requests.delete(

@@ -16,7 +16,7 @@ Following packages are required:
 * curl
 * gcc
 
-A list of our test platforms can be found [here](docs/src/supported-platforms.md).
+A list of our test platforms can be found [here](./supported-platforms.md).
 
 ## Get the code
 
@@ -149,8 +149,8 @@ All resulting packages are going to be in: `./target/debian/` directory:
 ```shell
 $ ls ./target/debian -l
 total 2948
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.1.0_amd64.deb
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.1.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.5.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.5.0_amd64.deb
 ```
 
 ## Cross compiling

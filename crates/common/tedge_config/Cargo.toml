@@ -1,6 +1,6 @@
 [package]
 name = "tedge_config"
-version = "0.4.3"
+version = "0.5.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 
@@ -14,5 +14,5 @@ toml = "0.5"
 url = "2.2"
 
 [dev-dependencies]
-assert_matches = "1.4"
+assert_matches = "1.5"
 tempfile = "3.2"

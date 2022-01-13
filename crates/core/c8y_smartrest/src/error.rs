@@ -1,4 +1,4 @@
-use json_sm::SoftwareUpdateResponse;
+use agent_interface::SoftwareUpdateResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
@@ -13,6 +13,9 @@ pub enum SmartRestSerializerError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromTimeFormatError(#[from] time::error::Format),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -32,4 +35,7 @@ pub enum SmartRestDeserializerError {
         parameter: String,
         hint: String,
     },
+
+    #[error("Empty request")]
+    EmptyRequest,
 }

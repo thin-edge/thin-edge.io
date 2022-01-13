@@ -1,0 +1,25 @@
+/**
+ * This event maps to JSON format e.g. {"number": 4}
+ */
+event Number {
+        integer number;
+}
+
+/**
+ * This monitor is an arbitrary demonstration how to connect Apama and thin-edge.io
+ * It subscribes to the mqtt topic demo/number and sends the number multiplied by 3 to mqtt topic tedge/measurements
+ */
+monitor TedgeTestMonitor {
+
+        action onload() {
+                log "Loaded monitor TedgeTestMonitor" at INFO;
+
+                monitor.subscribe("mqtt:demo/number");
+                log "Subscribed to demo/number" at INFO;
+
+                on all Number() as n {
+                        log "Message recieved, tripling the number and sending to tedge/measurements" at INFO;
+                        send Number(n.number * 3) to "mqtt:tedge/measurements";
+                }
+        }
+}

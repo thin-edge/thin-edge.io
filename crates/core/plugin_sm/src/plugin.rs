@@ -1,8 +1,10 @@
 use crate::logged_command::LoggedCommand;
+use agent_interface::*;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
-use json_sm::*;
+use serde::Deserialize;
+use std::path::Path;
 use std::{path::PathBuf, process::Output};
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -47,12 +49,16 @@ pub trait Plugin {
         &self,
         update: &SoftwareModuleUpdate,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
                 let module_url = module.url.clone();
                 match module_url {
-                    Some(url) => self.install_from_url(&mut module, &url, logger).await?,
+                    Some(url) => {
+                        self.install_from_url(&mut module, &url, logger, &download_path)
+                            .await?
+                    }
                     None => self.install(&module, logger).await?,
                 }
 
@@ -66,6 +72,7 @@ pub trait Plugin {
         &self,
         mut updates: Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
@@ -84,7 +91,7 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger).await {
+                match Self::download_from_url(module, &url, logger, &download_path).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;
@@ -99,7 +106,7 @@ pub trait Plugin {
             let outcome = self.update_list(&updates, logger).await;
             if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
                 for update in updates.iter() {
-                    if let Err(error) = self.apply(update, logger).await {
+                    if let Err(error) = self.apply(update, logger, download_path).await {
                         failed_updates.push(error);
                     };
                 }
@@ -129,8 +136,9 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<(), SoftwareError> {
-        let downloader = Self::download_from_url(module, url, logger).await?;
+        let downloader = Self::download_from_url(module, url, logger, download_path).await?;
         let result = self.install(module, logger).await;
         Self::cleanup_downloaded_artefacts(downloader, logger).await?;
 
@@ -141,8 +149,9 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
+        download_path: &Path,
     ) -> Result<Downloader, SoftwareError> {
-        let downloader = Downloader::new(&module.name, &module.version, "/tmp");
+        let downloader = Downloader::new(&module.name, &module.version, &download_path);
 
         logger
             .write_all(
@@ -193,6 +202,14 @@ pub trait Plugin {
         }
         Ok(())
     }
+}
+
+// This struct is used for deserializing the list of modules that are returned by a plugin.
+#[derive(Debug, Deserialize)]
+struct ModuleInfo {
+    name: String,
+    #[serde(default)]
+    version: Option<String>,
 }
 
 #[derive(Debug)]
@@ -417,24 +434,10 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            let mut software_list = Vec::new();
-            let mut rdr = ReaderBuilder::new()
-                .has_headers(false)
-                .delimiter(b'\t')
-                .from_reader(output.stdout.as_slice());
-
-            for module in rdr.deserialize() {
-                let (name, version): (String, Option<String>) = module?;
-                software_list.push(SoftwareModule {
-                    name,
-                    version,
-                    module_type: Some(self.name.clone()),
-                    file_path: None,
-                    url: None,
-                });
-            }
-
-            Ok(software_list)
+            Ok(deserialize_module_info(
+                self.name.clone(),
+                output.stdout.as_slice(),
+            )?)
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
@@ -465,4 +468,27 @@ impl Plugin for ExternalPluginCommand {
             })
         }
     }
+}
+
+pub fn deserialize_module_info(
+    module_type: String,
+    input: impl std::io::Read,
+) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    let mut records = ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .flexible(true)
+        .from_reader(input);
+    let mut software_list = Vec::new();
+    for module in records.deserialize() {
+        let minfo: ModuleInfo = module?;
+        software_list.push(SoftwareModule {
+            name: minfo.name,
+            version: minfo.version,
+            module_type: Some(module_type.clone()),
+            file_path: None,
+            url: None,
+        });
+    }
+    Ok(software_list)
 }

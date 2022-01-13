@@ -16,6 +16,7 @@ mod component;
 mod converter;
 mod error;
 mod mapper;
+mod operations;
 mod size_threshold;
 mod sm_c8y_mapper;
 

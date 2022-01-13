@@ -33,6 +33,9 @@ pub enum ConversionError {
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
+    FromThinEdgeJsonDeserialization(#[from] thin_edge_json::alarm::ThinEdgeJsonDeserializerError),
+
+    #[error(transparent)]
     FromThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]
@@ -43,4 +46,19 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromMqttClient(#[from] MqttClientError),
+
+    #[error(transparent)]
+    FromOperationsError(#[from] OperationsError),
+
+    #[error(transparent)]
+    FromSmartRestSerializerError(#[from] c8y_smartrest::error::SmartRestSerializerError),
+
+    #[error("Unsupported topic: {0}")]
+    UnsupportedTopic(String),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationsError {
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
 }

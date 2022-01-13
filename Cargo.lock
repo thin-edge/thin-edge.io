@@ -18,6 +18,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "agent_interface"
+version = "0.5.1"
+dependencies = [
+ "csv",
+ "download",
+ "nanoid",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -219,7 +232,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "tokio",
@@ -318,22 +331,25 @@ dependencies = [
 
 [[package]]
 name = "c8y_smartrest"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "assert-json-diff",
  "assert_matches",
  "chrono",
  "csv",
- "json_sm",
+ "download",
  "serde",
  "serde_json",
  "test-case",
+ "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
 name = "c8y_translator"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -373,7 +389,7 @@ checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
 
 [[package]]
 name = "certificate"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -430,10 +446,12 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "mockall",
+ "serde",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -689,16 +707,17 @@ checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
 name = "download"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "backoff",
- "json_sm",
  "log",
  "mockito",
  "nix",
  "regex",
  "reqwest",
+ "serde",
+ "serde_json",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -796,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1225,21 +1244,9 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "json-writer"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "json_sm"
-version = "0.4.3"
-dependencies = [
- "csv",
- "nanoid",
- "regex",
- "serde",
  "serde_json",
  "thiserror",
 ]
@@ -1416,7 +1423,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_client"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "async-log",
@@ -1438,7 +1445,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -1777,19 +1784,21 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert_matches",
  "async-trait",
  "csv",
  "download",
- "json_sm",
  "serde",
  "serde_json",
+ "serial_test",
  "structopt",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
  "tracing",
@@ -2157,6 +2166,15 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "921904a62e410e37e215c40381b7117f830d9d89ba60ab5236170541dd25646b"
+dependencies = [
+ "xmlparser",
 ]
 
 [[package]]
@@ -2562,11 +2580,12 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "base64",
  "certificate",
  "chrono",
  "futures",
@@ -2579,11 +2598,13 @@ dependencies = [
  "rumqttc",
  "rustls 0.20.2",
  "serde",
+ "serde_json",
  "structopt",
  "tedge_config",
  "tedge_users",
  "tedge_utils",
  "tempfile",
+ "test-case",
  "thiserror",
  "toml",
  "url",
@@ -2592,17 +2613,18 @@ dependencies = [
 
 [[package]]
 name = "tedge_agent"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert_cmd",
  "async-trait",
  "chrono",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
+ "mqtt_tests",
  "once_cell",
  "plugin_sm",
  "predicates 2.1.0",
@@ -2623,17 +2645,18 @@ dependencies = [
 
 [[package]]
 name = "tedge_apama_plugin"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
- "serde",
+ "roxmltree",
  "structopt",
+ "tempfile",
  "thiserror",
  "zip",
 ]
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "csv",
@@ -2649,7 +2672,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "assert_matches",
  "certificate",
@@ -2663,7 +2686,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "structopt",
  "thiserror",
@@ -2671,8 +2694,9 @@ dependencies = [
 
 [[package]]
 name = "tedge_mapper"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
+ "agent_interface",
  "anyhow",
  "assert-json-diff",
  "assert_matches",
@@ -2683,9 +2707,9 @@ dependencies = [
  "chrono",
  "clock",
  "csv",
+ "download",
  "flockfile",
  "futures",
- "json_sm",
  "mockall",
  "mqtt_client",
  "mqtt_tests",
@@ -2708,7 +2732,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_users"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "thiserror",
  "users",
@@ -2716,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2781,9 +2805,10 @@ dependencies = [
 
 [[package]]
 name = "thin_edge_json"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "chrono",
  "clock",
  "criterion",
@@ -2793,7 +2818,9 @@ dependencies = [
  "serde",
  "serde_json",
  "stats_alloc",
+ "test-case",
  "thiserror",
+ "time 0.3.5",
  "walkdir",
 ]
 
@@ -2844,7 +2871,15 @@ checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
 dependencies = [
  "itoa",
  "libc",
+ "serde",
+ "time-macros",
 ]
+
+[[package]]
+name = "time-macros"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
 
 [[package]]
 name = "tinytemplate"
@@ -3448,6 +3483,12 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
 ]
+
+[[package]]
+name = "xmlparser"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
 
 [[package]]
 name = "yasna"

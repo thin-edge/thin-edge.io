@@ -1,14 +1,17 @@
 #[cfg(test)]
 mod tests {
 
+    use agent_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use assert_matches::assert_matches;
-    use json_sm::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
-    use plugin_sm::plugin::{ExternalPluginCommand, Plugin};
+    use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
+    use serial_test::serial;
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_prepare() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -22,6 +25,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_finalize() {
         // Prepare dummy plugin.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -34,8 +38,53 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[test_case("abc", Some("1.0")  ; "with version")]
+    #[test_case("abc",None  ; "without version")]
+    fn desrialize_plugin_result(module_name: &str, version: Option<&str>) {
+        let mut data = String::from(module_name);
+        match version {
+            Some(v) => {
+                data.push_str("\t");
+                data.push_str(v)
+            }
+            None => {}
+        }
+
+        let mut expected_software_list = Vec::new();
+
+        expected_software_list.push(SoftwareModule {
+            name: module_name.into(),
+            version: version.map(|s| s.to_string()),
+            module_type: Some("test".into()),
+            file_path: None,
+            url: None,
+        });
+
+        let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
+        assert_eq!(expected_software_list, software_list);
+    }
+
+    #[test]
+    fn desrialize_plugin_result_with_trailing_tab() {
+        let data = "abc\t";
+
+        let mut expected_software_list = Vec::new();
+
+        expected_software_list.push(SoftwareModule {
+            name: "abc".into(),
+            version: None,
+            module_type: Some("test".into()),
+            file_path: None,
+            url: None,
+        });
+
+        let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
+        assert_eq!(expected_software_list, software_list);
+    }
+
     #[tokio::test]
-    async fn plugin_get_command_list() {
+    #[serial]
+    async fn plugin_get_command_list_with_version() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
         let path = get_dummy_plugin_tmp_path();
@@ -69,6 +118,42 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
+    async fn plugin_get_command_list_without_version() {
+        // Prepare dummy plugin with .0 which will give specific exit code ==0.
+        let (plugin, _plugin_path) = get_dummy_plugin("test");
+        let path = get_dummy_plugin_tmp_path();
+
+        let mut file = tempfile::Builder::new()
+            .suffix(".0")
+            .tempfile_in(path)
+            .unwrap();
+
+        // Add content of the expected stdout to the dummy plugin.
+        let content = "abc";
+        let _a = file.write_all(content.as_bytes()).unwrap();
+
+        // Create expected response.
+        let module = SoftwareModule {
+            module_type: Some("test".into()),
+            name: "abc".into(),
+            version: None,
+            url: None,
+            file_path: None,
+        };
+        let expected_response = vec![module];
+
+        // Call plugin via API.
+        let mut logger = dev_null().await;
+        let res = plugin.list(&mut logger).await;
+
+        // Expect Ok as plugin should exit with code 0.
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), expected_response);
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn plugin_get_command_install() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -101,6 +186,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_remove() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -133,6 +219,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_call_name_and_path() {
         let dummy_plugin_path = get_dummy_plugin_path();
         let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
@@ -141,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
         let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
@@ -160,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_both_different() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
@@ -190,6 +279,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn plugin_check_module_type_default() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
@@ -211,6 +301,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn plugin_get_command_update_list() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -249,6 +340,7 @@ mod tests {
 
     // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
     #[tokio::test]
+    #[serial]
     async fn plugin_command_update_list_fallback() {
         // Prepare dummy plugin with .0 which will give specific exit code ==0.
         let (plugin, _plugin_path) = get_dummy_plugin("test");
@@ -270,6 +362,7 @@ mod tests {
         };
 
         let mut logger = dev_null().await;
+        let download = PathBuf::from("/tmp");
         // Call plugin update-list via API.
         let errors = plugin
             .apply_all(
@@ -278,6 +371,7 @@ mod tests {
                     SoftwareModuleUpdate::Remove { module: module2 },
                 ],
                 &mut logger,
+                &download,
             )
             .await;
 
