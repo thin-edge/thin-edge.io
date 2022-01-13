@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_users::UserManager;
 use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 

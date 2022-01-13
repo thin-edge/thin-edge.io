@@ -29,16 +29,8 @@ pub fn create_device_with_direct_connection(
         rustls_native_certs::load_native_certs().expect("Failed to load platform certificates.");
 
     let pvt_key = read_pvt_key(user_manager, bridge_config.bridge_keyfile.clone())?;
+    let cert_chain = read_cert_chain(bridge_config.bridge_certfile.clone())?;
 
-    let f = File::open(bridge_config.bridge_certfile.clone())?;
-    let mut cert_reader = BufReader::new(f);
-    let result = certs(&mut cert_reader);
-    let cert_chain: Vec<rustls_0_19::Certificate> = match result {
-        Ok(cert) => cert,
-        Err(_) => {
-            return Err(ConnectError::RumqttcCertificate);
-        }
-    };
     let _ = client_config.set_single_client_cert(cert_chain, pvt_key);
 
     mqtt_options.set_transport(Transport::tls_with_config(client_config.into()));
@@ -126,4 +118,19 @@ fn read_pvt_key(
         }
     };
     Ok(key_chain.first().unwrap().clone())
+}
+
+fn read_cert_chain(
+    cert_file: tedge_config::FilePath,
+) -> Result<Vec<rustls_0_19::Certificate>, ConnectError> {
+    let f = File::open(cert_file)?;
+    let mut cert_reader = BufReader::new(f);
+    let result = certs(&mut cert_reader);
+    let cert_chain: Vec<rustls_0_19::Certificate> = match result {
+        Ok(cert) => cert,
+        Err(_) => {
+            return Err(ConnectError::RumqttcCertificate);
+        }
+    };
+    Ok(cert_chain)
 }
