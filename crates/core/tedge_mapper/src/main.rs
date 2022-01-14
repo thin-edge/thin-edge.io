@@ -10,6 +10,7 @@ use tedge_utils::paths::home_dir;
 mod az_converter;
 mod az_mapper;
 mod c8y_converter;
+mod c8y_fragments;
 mod c8y_mapper;
 mod collectd_mapper;
 mod component;
