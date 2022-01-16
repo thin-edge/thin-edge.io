@@ -9,6 +9,7 @@
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
+    - [Raise alarms](./tutorials/raise-alarm.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
@@ -30,15 +31,17 @@
     - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
     - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
     - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
-    - [How to use thin-edge.io with your preferred init system](./howto-guides/018_how_to_use_preferred_service_manager.md)
+    - [How to change temp path](./howto-guides/018_change_temp_path.md)
+    - [How to use thin-edge.io with your preferred init system](./howto-guides/019_how_to_use_preferred_service_manager.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
-    - [Software Management](./architecture/software-management.md)
+    - [Software Management](architecture/software-management.md)
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
+    - [Init System configuration](references/init-system-config.md)
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
 
@@ -55,5 +58,3 @@
   - [The `tedge connect` command](./references/tedge-connect.md)
   - [The `tedge disconnect` command](./references/tedge-disconnect.md)
   - [The `tedge mqtt` command](./references/tedge-mqtt.md)
-  
-- [Configuration Reference](./references/system-config.md)

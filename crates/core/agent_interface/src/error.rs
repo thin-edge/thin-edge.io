@@ -3,6 +3,12 @@ use csv;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(thiserror::Error, Debug)]
+pub enum TopicError {
+    #[error("Topic {topic} is unknown.")]
+    UnknownTopic { topic: String },
+}
+
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum SoftwareError {
     #[error("DownloadError error: {reason:?} for {url:?}")]

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::messages::DownloadInfo;
+use download::DownloadInfo;
 
 pub type SoftwareType = String;
 pub type SoftwareName = String;
