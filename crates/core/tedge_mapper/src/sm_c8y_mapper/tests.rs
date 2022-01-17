@@ -1,7 +1,7 @@
-use crate::sm_c8y_mapper::error::SMCumulocityMapperError;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
+use crate::{operations::Operations, sm_c8y_mapper::error::SMCumulocityMapperError};
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_client::Client;
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
@@ -448,7 +448,9 @@ async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error
 
     let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
     let http_proxy = FakeC8YHttpProxy {};
-    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy);
+
+    let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
     let messages = sm_mapper.subscribe().await?;
 
     let mapper_task = tokio::spawn(async move {

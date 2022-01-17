@@ -278,24 +278,6 @@ mod tests {
         }
     }
 
-    #[test_case(0, false)]
-    #[test_case(0, true)]
-    #[test_case(2, false)]
-    #[test_case(2, true)]
-    fn get_clouds_tests(clouds_count: usize, files: bool) {
-        let operations = TestOperations::builder().with_clouds(clouds_count);
-
-        if files {
-            operations.with_random_file_in_clouds_directory();
-        }
-
-        let operations = operations.build();
-
-        let clouds = get_clouds(operations.temp_dir()).unwrap();
-
-        assert_eq!(clouds.len(), clouds_count);
-    }
-
     #[test_case(0, 0)]
     #[test_case(1, 1)]
     #[test_case(1, 5)]
@@ -306,13 +288,9 @@ mod tests {
             .with_operations(ops_count)
             .build();
 
-        let operations = get_operations(test_operations.temp_dir()).unwrap();
+        let operations = get_operations(test_operations.temp_dir(), "").unwrap();
         dbg!(&operations);
 
-        assert_eq!(operations.len(), clouds_count);
-        assert_eq!(
-            operations.values().map(|ops| ops.len()).sum::<usize>(),
-            ops_count * clouds_count
-        );
+        assert_eq!(operations.operations.len(), ops_count);
     }
 }
