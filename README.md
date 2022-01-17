@@ -39,7 +39,7 @@
 * [Connect your device to Azure](docs/src/tutorials/connect-azure.md)
 * [How to build from source](./BUILDING.md)
 * [Have a look at some examples](https://github.com/thin-edge/thin-edge.io_examples)
-* [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/)
+* [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/html/)
 <br/>
 <br/>
 

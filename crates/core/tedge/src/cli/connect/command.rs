@@ -431,7 +431,9 @@ fn new_bridge(
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 
-    if let Err(SystemServiceError::ServiceManagerUnavailable(name)) = &service_manager_result {
+    if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
+        &service_manager_result
+    {
         println!(
             "Warning: '{}' service manager is not available on the system.\n",
             name
