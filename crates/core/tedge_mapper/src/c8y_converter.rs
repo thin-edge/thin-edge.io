@@ -152,16 +152,18 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
 }
 
 fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, ConversionError> {
-    let mut json = read_json_from_file(file_path)?;
-
     let agent_fragment = C8yAgentFragment::new();
     let json_fragment = agent_fragment.to_json()?;
 
-    json.as_object_mut()
-        .ok_or_else(|| return ConversionError::FromOptionToResultConversion)?
-        .insert("c8y_Agent".to_string(), json_fragment);
-
-    Ok(json)
+    match read_json_from_file(file_path) {
+        Ok(mut json) => {
+            json.as_object_mut()
+                .ok_or_else(|| return ConversionError::FromOptionToResultConversion)?
+                .insert("c8y_Agent".to_string(), json_fragment);
+            Ok(json)
+        }
+        Err(_) => Ok(json_fragment),
+    }
 }
 fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
     match topic.strip_prefix("tedge/measurements/").map(String::from) {
