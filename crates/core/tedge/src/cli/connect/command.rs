@@ -72,10 +72,10 @@ impl Command for ConnectCommand {
         let mut config = self.config_repository.load()?;
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
-            let cloud = br_config.cloud_name.clone();
-            if self.check_if_bridge_exists(br_config) {
+            if self.check_if_bridge_exists(&br_config) {
                 return match self.check_connection(&config) {
                     Ok(_) => {
+                        let cloud = br_config.cloud_name.clone();
                         println!("Connection check to {} cloud is successfull.\n", cloud);
                         Ok(())
                     }
@@ -208,12 +208,12 @@ impl ConnectCommand {
         }
     }
 
-    fn check_if_bridge_exists(&self, br_config: BridgeConfig) -> bool {
+    fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
         let bridge_conf_path = self
             .config_location
             .tedge_config_root_path
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-            .join(br_config.config_file);
+            .join(br_config.config_file.clone());
 
         Path::new(&bridge_conf_path).exists()
     }
