@@ -9,7 +9,7 @@ description = "tedge is the cli tool for thin-edge.io"
 
 [package.metadata.deb]
 depends = "mosquitto"
-maintainer-scripts = "configuration/debian/tedge"
+maintainer-scripts = "../../../configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0"

@@ -8,7 +8,7 @@ description = "tedge_agent interacts with a Cloud Mapper and one or more Softwar
 
 [package.metadata.deb]
 depends = "tedge_mapper"
-maintainer-scripts = "configuration/debian/tedge_agent"
+maintainer-scripts = "../../../configuration/debian/tedge_agent"
 assets = [
     ["../../../configuration/init/systemd/tedge-agent.service", "/lib/systemd/system/tedge-agent.service", "644"],
     ["target/release/tedge_agent", "/usr/bin/tedge_agent", "755"],

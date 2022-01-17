@@ -8,7 +8,7 @@ description = "tedge_mapper is the mapper that translates thin-edge.io data mode
 
 [package.metadata.deb]
 depends = "tedge"
-maintainer-scripts = "configuration/debian/tedge_mapper"
+maintainer-scripts = "../../../configuration/debian/tedge_mapper"
 assets = [
     ["../../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
     ["../../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
