@@ -15,7 +15,6 @@ pub fn create_device_with_direct_connection(
 ) -> Result<(), ConnectError> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
-    let mut device_create_try: usize = 0;
 
     let address = bridge_config.address.clone();
     let host: Vec<&str> = address.split(":").collect();
@@ -39,13 +38,11 @@ pub fn create_device_with_direct_connection(
 
     client.subscribe(DEVICE_CREATE_ERROR_TOPIC, QoS::AtLeastOnce)?;
 
+    let mut device_create_try: usize = 0;
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 publish_device_create_message(&mut client, &bridge_config.remote_clientid.clone())?;
-            }
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                break;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
@@ -64,7 +61,6 @@ pub fn create_device_with_direct_connection(
                     device_create_try += 1;
                 } else {
                     // No messages have been received for a while
-                    println!("Local MQTT publish has timed out.");
                     break;
                 }
             }
@@ -81,23 +77,18 @@ pub fn create_device_with_direct_connection(
     }
 
     // The request has not even been sent
-    println!("\nMake sure mosquitto is running.");
+    println!("No response from Cumulocity");
     Err(ConnectError::TimeoutElapsedError)
 }
 
 fn publish_device_create_message(client: &mut Client, device_id: &str) -> Result<(), ConnectError> {
     const DEVICE_CREATE_PUBLISH_TOPIC: &str = "s/us";
     const DEVICE_TYPE: &str = "thin-edge.io";
-    let mut payload: String = String::from("100,");
-    payload += device_id;
-    payload += ",";
-    payload += DEVICE_TYPE;
-
     client.publish(
         DEVICE_CREATE_PUBLISH_TOPIC,
         QoS::ExactlyOnce,
         false,
-        payload.as_bytes(),
+        format!("100,{},{}", device_id, DEVICE_TYPE).as_bytes(),
     )?;
     Ok(())
 }
@@ -111,8 +102,6 @@ fn read_pvt_key(
     let f = File::open(key_file)?;
     let mut key_reader = BufReader::new(f);
     let result = pkcs8_private_keys(&mut key_reader);
-    // Switch back to root user
-    let _user_guard = user_manager.become_user(tedge_users::ROOT_USER)?;
     match result {
         Ok(key) => Ok(key[0].clone()),
         Err(_) => {
