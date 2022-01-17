@@ -1,16 +1,16 @@
 #!/bin/sh
 
-set -e
+set -x
 
 ### Create a group "tedge-mapper" if not created before
 if ! getent group tedge-mapper >/dev/null; then
-    addgroup --quiet --system tedge-mapper
+    addgroup --system tedge-mapper
 fi
 
 ### Create a user "tedge-mapper" if not created before
 # Create user tedge-mapper with no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
 if ! getent passwd tedge-mapper >/dev/null; then
-    adduser --quiet --system --no-create-home --ingroup tedge-mapper --shell /usr/sbin/nologin tedge-mapper
+    adduser --system --no-create-home --ingroup tedge-mapper --shell /usr/sbin/nologin tedge-mapper
 fi
 
 ### Create supported cloud operations directories

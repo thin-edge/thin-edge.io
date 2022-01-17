@@ -1,10 +1,10 @@
 #!/bin/sh
-set -e
+set -x
 
 remove_tedge_agent_user() {
     if getent passwd tedge-agent >/dev/null; then
         pkill -u tedge-agent || true
-        deluser --quiet --system tedge-agent
+        deluser --system tedge-agent
     fi
 }
 

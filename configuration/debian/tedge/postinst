@@ -1,20 +1,20 @@
 #!/bin/sh
-set -e
+set -x
 
 ### Create groups
 # thin-edge.io compoments run within their own groups and users the following steps add new groups if they don't exist.
 if ! getent group tedge-users >/dev/null; then
-    addgroup --quiet tedge-users
+    addgroup tedge-users
 fi
 
 if ! getent group tedge >/dev/null; then
-    addgroup --quiet --system tedge
+    addgroup --system tedge
 fi
 
 ### Create users
 # Create user tedge with no additional info(--gecos "") no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
 if ! getent passwd tedge >/dev/null; then
-    adduser --quiet --system --gecos "" --no-create-home --disabled-login --shell /sbin/nologin --ingroup tedge tedge
+    adduser --system --gecos "" --no-create-home --disabled-login --shell /sbin/nologin --ingroup tedge tedge
 fi
 
 ### Create directories

@@ -1,9 +1,9 @@
 #!/bin/sh
-set -e
+set -x
 
 remove_user_tedge() {
     if getent passwd tedge > /dev/null; then
-        deluser --quiet --system tedge
+        deluser --system tedge
     fi
 }
 
