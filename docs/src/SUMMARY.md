@@ -9,6 +9,7 @@
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
+    - [Raise alarms](./tutorials/raise-alarm.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
@@ -36,9 +37,10 @@
   - [Architecture](architecture/README.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
-    - [Software Management](./architecture/software-management.md)
+    - [Software Management](architecture/software-management.md)
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
+    - [Init System configuration](references/init-system-config.md)
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
 
@@ -55,5 +57,3 @@
   - [The `tedge connect` command](./references/tedge-connect.md)
   - [The `tedge disconnect` command](./references/tedge-disconnect.md)
   - [The `tedge mqtt` command](./references/tedge-mqtt.md)
-  
-- [Configuration Reference](./references/system-config.md)
