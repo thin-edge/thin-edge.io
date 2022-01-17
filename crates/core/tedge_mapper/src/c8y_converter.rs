@@ -176,7 +176,13 @@ fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionErro
 
 #[cfg(test)]
 mod test {
+    use crate::tedge_config;
+
     use super::*;
+    use tedge_config::DeviceIdSetting;
+
+    use crate::c8y_converter::CumulocityConverter;
+    use tedge_config::ConfigSettingAccessor;
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
@@ -197,7 +203,13 @@ mod test {
 
     #[test]
     fn convert_thin_edge_json_with_child_id() {
-        let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
+        let tedge_config = tedge_config().unwrap();
+        let device_name = tedge_config.query(DeviceIdSetting).unwrap();
+
+        let mut converter = Box::new(CumulocityConverter::new(
+            SizeThreshold(16 * 1024),
+            device_name,
+        ));
         let in_topic = "tedge/measurements/child1";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
@@ -228,7 +240,13 @@ mod test {
 
     #[test]
     fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
-        let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
+        let tedge_config = tedge_config().unwrap();
+        let device_name = tedge_config.query(DeviceIdSetting).unwrap();
+
+        let mut converter = Box::new(CumulocityConverter::new(
+            SizeThreshold(16 * 1024),
+            device_name,
+        ));
         let in_topic = "tedge/measurements/child1";
         let in_invalid_payload = r#"{"temp": invalid}"#;
         let in_valid_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -264,7 +282,13 @@ mod test {
 
     #[test]
     fn convert_two_thin_edge_json_messages_given_different_child_id() {
-        let mut converter = Box::new(CumulocityConverter::new(SizeThreshold(16 * 1024)));
+        let tedge_config = tedge_config().unwrap();
+        let device_name = tedge_config.query(DeviceIdSetting).unwrap();
+
+        let mut converter = Box::new(CumulocityConverter::new(
+            SizeThreshold(16 * 1024),
+            device_name,
+        ));
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
         // First message from "child1"
@@ -315,7 +339,11 @@ mod test {
     #[test]
     fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(16 * 1024);
-        let converter = CumulocityConverter::new(size_threshold);
+
+        let tedge_config = tedge_config().unwrap();
+        let device_name = tedge_config.query(DeviceIdSetting)?;
+
+        let converter = CumulocityConverter::new(size_threshold, device_name);
         let buffer = create_packet(1024 * 20);
         let err = converter.size_threshold.validate(&buffer).unwrap_err();
         assert_eq!(
