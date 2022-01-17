@@ -37,6 +37,7 @@ impl BuildCommand for TEdgeConnectOpt {
                     context.user_manager.clone(),
                     context.config_location.tedge_config_root_path,
                 )?,
+                user_manager: context.user_manager,
             },
             TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
                 config_location: context.config_location.clone(),
@@ -48,6 +49,7 @@ impl BuildCommand for TEdgeConnectOpt {
                     context.user_manager.clone(),
                     context.config_location.tedge_config_root_path,
                 )?,
+                user_manager: context.user_manager,
             },
         }
         .into_boxed())

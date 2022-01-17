@@ -10,9 +10,6 @@ pub trait SystemServiceManager: Debug {
     /// Returns the name of the system service manager facility (e.g. "systemd" or "openrc").
     fn name(&self) -> &str;
 
-    // Get user manager
-    fn get_user_manager(&self) -> UserManager;
-
     /// Checks whether the system service manager facility is available and operational.
     fn check_operational(&self) -> Result<(), SystemServiceError>;
 

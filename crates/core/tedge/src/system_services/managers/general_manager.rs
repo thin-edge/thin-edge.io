@@ -38,10 +38,6 @@ impl SystemServiceManager for GeneralServiceManager {
         &self.init_config.name
     }
 
-    fn get_user_manager(&self) -> UserManager {
-        self.user_manager.clone()
-    }
-
     fn check_operational(&self) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::CheckManager.try_exec_command(self)?;
 
