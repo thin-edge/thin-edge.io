@@ -38,7 +38,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-deb
+          args: cargo-deb --version 1.29.0
 
       - name: Build tedge debian package
         uses: actions-rs/cargo@v1
@@ -147,7 +147,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-deb
+          args: cargo-deb --version 1.29.0
 
       - name: install cargo-strip
         uses: actions-rs/cargo@v1
