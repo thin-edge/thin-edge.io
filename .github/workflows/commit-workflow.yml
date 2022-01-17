@@ -131,7 +131,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           target: armv7-unknown-linux-gnueabihf
           override: true
 
@@ -160,7 +160,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           target: armv7-unknown-linux-gnueabihf
           override: true
 
