@@ -77,6 +77,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
@@ -109,6 +115,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -192,6 +204,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
