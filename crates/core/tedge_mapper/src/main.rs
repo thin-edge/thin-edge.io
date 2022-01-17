@@ -61,10 +61,10 @@ pub enum MapperName {
 impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MapperName::Az => write!(f, "{}", "Az"),
-            MapperName::C8y => write!(f, "{}", "C8y"),
-            MapperName::Collectd => write!(f, "{}", "Collectd"),
-            MapperName::SmC8y => write!(f, "{}", "SmC8y"),
+            MapperName::Az => write!(f, "{}", "tedge-mapper-az"),
+            MapperName::C8y => write!(f, "{}", "tedge-mapper-c8y"),
+            MapperName::Collectd => write!(f, "{}", "tedge-mapper-collectd"),
+            MapperName::SmC8y => write!(f, "{}", "sm-c8y-mapper"),
         }
     }
 }
