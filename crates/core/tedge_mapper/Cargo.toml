@@ -49,6 +49,7 @@ tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]

@@ -1,5 +1,7 @@
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
+use crate::operations::Operation;
+
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {
     #[error("Invalid MQTT Message.")]
@@ -43,4 +45,10 @@ pub enum SMCumulocityMapperError {
 
     #[error("Request timed out")]
     RequestTimeout,
+
+    #[error("Operation execution failed: {0}")]
+    ExecuteFailed(String),
+
+    #[error("An unknown operation template: {0}")]
+    UnknownOperation(String),
 }
