@@ -152,3 +152,10 @@ mosquitto_pub -t c8y/s/us -m 503,c8y_Command,"$OUTPUT"
 This simple example will execute the command `echo $1` and send the result back to the cloud.
 
 > Note: The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
+
+
+### List of currently supported operations parameters
+
+* `topic` - The topic on which the operation will be executed.
+* `on_message` - The SmartRest template on which the operation will be executed.
+* `command` - The command to execute.

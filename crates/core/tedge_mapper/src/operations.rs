@@ -15,23 +15,10 @@ use crate::error::OperationsError;
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct Exec {
-    // name: Option<OperationName>,
-    on_message: Option<String>,
     command: Option<String>,
-    // args: Option<Vec<String>>,
-    user: Option<String>,
+    on_message: Option<String>,
     topic: Option<String>,
-}
-
-impl Exec {
-    fn get_on_message(&self) -> Option<&str> {
-        self.on_message.as_deref()
-    }
-
-    /// Get a reference to the exec's command.
-    pub fn command(&self) -> Option<&String> {
-        self.command.as_ref()
-    }
+    user: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
