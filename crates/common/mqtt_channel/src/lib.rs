@@ -8,7 +8,8 @@
 //! async fn main () -> Result<(), MqttError>{
 //!     // A client subscribes to its topics on connect
 //!     let input_topic = "test/input/topic".try_into()?;
-//!     let mut con = Connection::connect("test_client", &Config::default(), input_topic).await?;
+//!     let config = Config::default().with_session_name("test_client").with_subscriptions(input_topic);
+//!     let mut con = Connection::new(&config).await?;
 //!
 //!     // The connection is materialized by two channels
 //!     let mut received_messages = con.received;

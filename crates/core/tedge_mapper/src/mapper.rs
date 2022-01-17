@@ -2,7 +2,8 @@ use crate::converter::*;
 use crate::error::*;
 
 use mqtt_channel::{
-    Connection, Message, MqttError, SinkExt, StreamExt, UnboundedReceiver, UnboundedSender,
+    Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
+    UnboundedSender,
 };
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tracing::{error, info, instrument};
@@ -15,11 +16,11 @@ pub async fn create_mapper<'a>(
     info!("{} starting", app_name);
 
     let mapper_config = converter.get_mapper_config();
-    let mqtt_client = Connection::connect(
+    let mqtt_client = Connection::new(&mqtt_config(
         app_name,
-        &mqtt_config(tedge_config)?,
+        tedge_config,
         mapper_config.in_topic_filter.clone().into(),
-    )
+    )?)
     .await?;
 
     Mapper::subscribe_errors(mqtt_client.errors);
@@ -32,10 +33,14 @@ pub async fn create_mapper<'a>(
 }
 
 pub(crate) fn mqtt_config(
+    name: &str,
     tedge_config: &TEdgeConfig,
+    topics: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
     Ok(mqtt_channel::Config::default()
         .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_session_name(name)
+        .with_subscriptions(topics)
         .with_max_packet_size(10 * 1024 * 1024))
 }
 
@@ -105,10 +110,11 @@ mod tests {
 
         // Given a mapper
         let name = "mapper_under_test";
-
-        let mqtt_config = mqtt_channel::Config::default().with_port(broker.port);
-        let mqtt_client =
-            Connection::connect(name, &mqtt_config, TopicFilter::new_unchecked("in_topic")).await?;
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(broker.port)
+            .with_session_name(name)
+            .with_subscriptions(TopicFilter::new_unchecked("in_topic"));
+        let mqtt_client = Connection::new(&mqtt_config).await?;
 
         let mut mapper = Mapper {
             input: mqtt_client.received,

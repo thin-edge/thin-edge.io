@@ -85,6 +85,13 @@ impl TopicFilter {
         }
     }
 
+    /// Add all the other topics to this one.
+    pub fn add_all(&mut self, other: TopicFilter) {
+        for pattern in other.patterns {
+            self.patterns.push(pattern)
+        }
+    }
+
     /// Check if the given topic matches this filter pattern.
     pub fn accept_topic(&self, topic: &Topic) -> bool {
         self.patterns

@@ -376,14 +376,11 @@ async fn get_jwt_token_full_run() {
     });
 
     // An JwtAuthHttpProxy ...
-    let mqtt_config = mqtt_channel::Config::default().with_port(broker.port);
-    let mqtt_client = Connection::connect(
-        "JWT-Requester-Test",
-        &mqtt_config,
-        TopicFilter::new_unchecked("c8y/s/dat"),
-    )
-    .await
-    .unwrap();
+    let mqtt_config = mqtt_channel::Config::default()
+        .with_port(broker.port)
+        .with_session_name("JWT-Requester-Test")
+        .with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat"));
+    let mqtt_client = Connection::new(&mqtt_config).await.unwrap();
     let http_client = reqwest::ClientBuilder::new().build().unwrap();
     let mut http_proxy =
         JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
@@ -404,10 +401,13 @@ fn remove_whitespace(s: &str) -> String {
 
 async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
     let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-    let mqtt_config = mqtt_channel::Config::default().with_port(mqtt_port);
     let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-    let mqtt_client = Connection::connect("SM-C8Y-Mapper-Test", &mqtt_config, mqtt_topic).await?;
+    let mqtt_config = mqtt_channel::Config::default()
+        .with_port(mqtt_port)
+        .with_session_name("SM-C8Y-Mapper-Test")
+        .with_subscriptions(mqtt_topic);
 
+    let mqtt_client = Connection::new(&mqtt_config).await?;
     let http_proxy = FakeC8YHttpProxy {};
     let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
 

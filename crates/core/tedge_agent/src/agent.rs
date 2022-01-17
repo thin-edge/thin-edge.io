@@ -157,23 +157,26 @@ impl SmAgentConfig {
 #[derive(Debug)]
 pub struct SmAgent {
     config: SmAgentConfig,
-    name: String,
     operation_logs: OperationLogs,
     persistance_store: AgentStateRepository,
     _flock: Flockfile,
 }
 
 impl SmAgent {
-    pub fn try_new(name: &str, config: SmAgentConfig) -> Result<Self, AgentError> {
+    pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
         let flock = check_another_instance_is_not_running(name)?;
         info!("{} starting", &name);
 
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
         let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
+        config.mqtt_config = config
+            .mqtt_config
+            .with_session_name(name)
+            .with_subscriptions(config.request_topics.clone());
+
         Ok(Self {
             config,
-            name: name.into(),
             operation_logs,
             persistance_store,
             _flock: flock,
@@ -184,12 +187,7 @@ impl SmAgent {
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
-        let mut mqtt = Connection::connect(
-            self.name.as_str(),
-            &self.config.mqtt_config,
-            self.config.request_topics.clone(),
-        )
-        .await?;
+        let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             self.config.sm_home.join("sm-plugins"),

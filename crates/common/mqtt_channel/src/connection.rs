@@ -1,4 +1,4 @@
-use crate::{Config, ErrChannel, Message, MqttError, PubChannel, SubChannel, TopicFilter};
+use crate::{Config, ErrChannel, Message, MqttError, PubChannel, SubChannel};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use rumqttc::{
@@ -61,25 +61,17 @@ impl Connection {
     ///     .try_into()
     ///     .expect("a list of topic filters");
     ///
-    ///     Connection::connect("test", &Config::default(), topics).await
+    ///     let config = Config::default().with_session_name("test").with_subscriptions(topics);
+    ///
+    ///     Connection::new(&config).await
     /// # }
-    pub async fn connect(
-        name: &str,
-        config: &Config,
-        subscription: TopicFilter,
-    ) -> Result<Connection, MqttError> {
+    pub async fn new(config: &Config) -> Result<Connection, MqttError> {
         let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
 
-        let (mqtt_client, event_loop) = Connection::open(
-            name,
-            config,
-            subscription,
-            received_sender.clone(),
-            error_sender.clone(),
-        )
-        .await?;
+        let (mqtt_client, event_loop) =
+            Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
         tokio::spawn(Connection::receiver_loop(
             event_loop,
             received_sender,
@@ -98,8 +90,15 @@ impl Connection {
         })
     }
 
-    fn mqtt_options(name: &str, config: &Config) -> rumqttc::MqttOptions {
-        let mut mqtt_options = rumqttc::MqttOptions::new(name, &config.host, config.port);
+    fn mqtt_options(config: &Config) -> rumqttc::MqttOptions {
+        let id = match &config.session_name {
+            None => std::iter::repeat_with(fastrand::lowercase)
+                .take(10)
+                .collect(),
+            Some(name) => name.clone(),
+        };
+
+        let mut mqtt_options = rumqttc::MqttOptions::new(id, &config.host, config.port);
         mqtt_options.set_clean_session(config.clean_session);
         mqtt_options.set_max_packet_size(config.max_packet_size, config.max_packet_size);
 
@@ -107,15 +106,14 @@ impl Connection {
     }
 
     async fn open(
-        name: &str,
         config: &Config,
-        topic: TopicFilter,
         mut message_sender: mpsc::UnboundedSender<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
-        let mqtt_options = Connection::mqtt_options(name, config);
+        let mqtt_options = Connection::mqtt_options(config);
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
+        let topic = &config.subscriptions;
         let qos = topic.qos;
 
         loop {

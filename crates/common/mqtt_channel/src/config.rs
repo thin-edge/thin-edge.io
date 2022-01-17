@@ -1,3 +1,5 @@
+use crate::TopicFilter;
+
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -10,6 +12,18 @@ pub struct Config {
     ///
     /// Default: 1883
     pub port: u16,
+
+    /// The session name to be use on connect
+    ///
+    /// If no session name is provided, a random one will be created on connect.
+    ///
+    /// Default: None
+    pub session_name: Option<String>,
+
+    /// The list of topics to subscribe to on connect
+    ///
+    /// Default: An empty topic list
+    pub subscriptions: TopicFilter,
 
     /// Clean the MQTT session upon connect if set to `true`.
     ///
@@ -34,6 +48,8 @@ impl Default for Config {
         Config {
             host: String::from("localhost"),
             port: 1883,
+            session_name: None,
+            subscriptions: TopicFilter::empty(),
             clean_session: false,
             queue_capacity: 1024,
             max_packet_size: 8 * 1024,
@@ -61,6 +77,22 @@ impl Config {
     /// Set a custom port
     pub fn with_port(self, port: u16) -> Self {
         Self { port, ..self }
+    }
+
+    /// Set the session name
+    pub fn with_session_name(self, name: impl Into<String>) -> Self {
+        Self {
+            session_name: Some(name.into()),
+            ..self
+        }
+    }
+
+    /// Add a list of topics to subscribe to on connect
+    ///
+    /// Can be called several times to subscribe to many topics.
+    pub fn with_subscriptions(mut self, topics: TopicFilter) -> Self {
+        self.subscriptions.add_all(topics);
+        self
     }
 
     /// Set the clean_session flag

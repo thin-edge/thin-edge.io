@@ -153,11 +153,13 @@ impl JwtAuthHttpProxy {
         let http_con = reqwest::ClientBuilder::new().build()?;
 
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let topic = TopicFilter::new("c8y/s/dat")?;
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(mqtt_port)
-            .with_clean_session(true);
-        let topic = TopicFilter::new("c8y/s/dat")?;
-        let mut mqtt_con = Connection::connect("JWT-Requester", &mqtt_config, topic).await?;
+            .with_clean_session(true)
+            .with_session_name("JWT-Requester")
+            .with_subscriptions(topic);
+        let mut mqtt_con = Connection::new(&mqtt_config).await?;
 
         // Ignore errors on this connection
         let () = mqtt_con.errors.close();

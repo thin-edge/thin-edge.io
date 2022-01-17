@@ -9,10 +9,10 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 [dependencies]
 async-trait = "0.1"
 futures = "0.3"
+fastrand = "1.6"
 rumqttc = "0.10"
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["rt", "time"] }
-
 
 [dev-dependencies]
 anyhow = "1.0"

@@ -17,7 +17,10 @@ mod tests {
 
         // A client subscribes to a topic on connect
         let topic = "test/topic";
-        let mut con = Connection::connect("test_client", &mqtt_config, topic.try_into()?).await?;
+        let mqtt_config = mqtt_config
+            .with_session_name("test_client")
+            .with_subscriptions(topic.try_into()?);
+        let mut con = Connection::new(&mqtt_config).await?;
 
         // Any messages published on that topic ...
         broker.publish(topic, "msg 1").await?;
@@ -79,8 +82,10 @@ mod tests {
         .try_into()
         .expect("a list of topic filters");
 
-        let con =
-            Connection::connect("client_subscribing_to_many_topics", &mqtt_config, topics).await?;
+        let mqtt_config = mqtt_config
+            .with_session_name("client_subscribing_to_many_topics")
+            .with_subscriptions(topics);
+        let con = Connection::new(&mqtt_config).await?;
 
         // The messages for these topics will all be received on the same message stream
         let mut messages = con.received;
@@ -125,10 +130,8 @@ mod tests {
         let mut all_messages = broker.messages_published_on("#").await;
 
         // A client that wish only publish messages doesn't have to subscribe to any topics
-        let topic = vec![]
-            .try_into()
-            .expect("a list of topics (possibly empty)");
-        let mut con = Connection::connect("publishing_messages", &mqtt_config, topic).await?;
+        let mqtt_config = mqtt_config.with_session_name("publishing_messages");
+        let mut con = Connection::new(&mqtt_config).await?;
 
         // Then all messages produced on the `con.published` channel
         con.published
@@ -164,7 +167,10 @@ mod tests {
         let out_topic = "mapper/output".try_into().expect("a valid topic name");
         let mut out_messages = broker.messages_published_on("mapper/output").await;
 
-        let con = Connection::connect("mapper", &mqtt_config, in_topic).await?;
+        let mqtt_config = mqtt_config
+            .with_session_name("mapper")
+            .with_subscriptions(in_topic);
+        let con = Connection::new(&mqtt_config).await?;
 
         // A message mapper can be implemented as
         // * a consumer of input messages
@@ -206,8 +212,11 @@ mod tests {
         // A client that connects with a well-known session name, subscribing to some topic.
         let session_name = "remember_me";
         let topic = "test/topic";
+        let mqtt_config = mqtt_config
+            .with_session_name(session_name)
+            .with_subscriptions(topic.try_into()?);
         {
-            let _con = Connection::connect(session_name, &mqtt_config, topic.try_into()?).await?;
+            let _con = Connection::new(&mqtt_config).await?;
 
             // A connection is disconnected on drop
         }
@@ -218,7 +227,7 @@ mod tests {
         broker.publish(topic, "3rd msg sent when down").await?;
 
         // ... will be received by the client once back with the same session name
-        let mut con = Connection::connect(session_name, &mqtt_config, topic.try_into()?).await?;
+        let mut con = Connection::new(&mqtt_config).await?;
 
         assert_eq!(
             MaybeMessage::Next(message(topic, "1st msg sent when down")),
@@ -277,7 +286,10 @@ mod tests {
         let mut out_messages = broker.messages_published_on("out/topic").await;
 
         let in_topic = "in/topic".try_into().expect("a valid topic filter");
-        let con = Connection::connect("mapper under test", &mqtt_config, in_topic).await?;
+        let mqtt_config = mqtt_config
+            .with_session_name("mapper under test")
+            .with_subscriptions(in_topic);
+        let con = Connection::new(&mqtt_config).await?;
         tokio::spawn(async move { run(con.received, con.published).await });
 
         broker.publish("in/topic", "msg 1, over MQTT").await?;

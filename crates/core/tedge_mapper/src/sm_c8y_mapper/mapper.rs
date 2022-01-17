@@ -90,9 +90,9 @@ where
     }
 
     pub async fn try_new(tedge_config: &TEdgeConfig, http_proxy: Proxy, operations: Operations) -> Result<Self, anyhow::Error> {
-        let mqtt_config = crate::mapper::mqtt_config(&tedge_config)?;
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-        let client = Connection::connect("SM-C8Y-Mapper", &mqtt_config, mqtt_topic).await?;
+        let mqtt_config = crate::mapper::mqtt_config("SM-C8Y-Mapper", &tedge_config, mqtt_topic)?;
+        let client = Connection::new(&mqtt_config).await?;
 
         Ok(Self { client, http_proxy, operations })
     }

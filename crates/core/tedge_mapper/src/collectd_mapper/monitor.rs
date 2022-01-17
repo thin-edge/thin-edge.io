@@ -62,18 +62,15 @@ impl DeviceMonitor {
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
+        let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
+            .with_qos(QoS::AtMostOnce);
         let mqtt_config = mqtt_channel::Config::new(
             self.device_monitor_config.host,
             self.device_monitor_config.port,
-        );
-        let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
-            .with_qos(QoS::AtMostOnce);
-        let mqtt_client = Connection::connect(
-            self.device_monitor_config.mqtt_client_id,
-            &mqtt_config,
-            input_topic,
         )
-        .await?;
+        .with_session_name(self.device_monitor_config.mqtt_client_id)
+        .with_subscriptions(input_topic);
+        let mqtt_client = Connection::new(&mqtt_config).await?;
 
         let batch_config = BatchConfigBuilder::new()
             .event_jitter(self.device_monitor_config.batching_window)
