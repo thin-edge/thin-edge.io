@@ -1,11 +1,16 @@
 use super::{BridgeConfig, ConnectError};
+
 use rumqttc::{
     self, certs, pkcs8_private_keys, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS,
     Transport,
 };
-
 use rustls_0_19::ClientConfig;
+
+use std::fs;
+use std::io::{Error, ErrorKind};
 use std::{fs::File, io::BufReader};
+use tedge_config::FilePath;
+
 use tedge_users::UserManager;
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
@@ -23,15 +28,17 @@ pub fn create_device_with_direct_connection(
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
     let mut client_config = ClientConfig::new();
-    // Use rustls-native-certs to load root certificates from the operating system.
-    client_config.root_store =
-        rustls_native_certs::load_native_certs().expect("Failed to load platform certificates.");
+    dbg!(bridge_config.bridge_root_cert_path.clone());
+
+    let _ = load_root_certs(
+        &mut client_config.root_store,
+        bridge_config.bridge_root_cert_path.clone(),
+    )?;
 
     let pvt_key = read_pvt_key(user_manager, bridge_config.bridge_keyfile.clone())?;
     let cert_chain = read_cert_chain(bridge_config.bridge_certfile.clone())?;
 
     let _ = client_config.set_single_client_cert(cert_chain, pvt_key);
-
     mqtt_options.set_transport(Transport::tls_with_config(client_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
@@ -90,6 +97,22 @@ fn publish_device_create_message(client: &mut Client, device_id: &str) -> Result
         false,
         format!("100,{},{}", device_id, DEVICE_TYPE).as_bytes(),
     )?;
+    Ok(())
+}
+
+fn load_root_certs(
+    root_store: &mut rustls_0_19::RootCertStore,
+    cert_dir: FilePath,
+) -> Result<(), ConnectError> {
+    for file_entry in fs::read_dir(cert_dir)? {
+        let file = file_entry?;
+        let f = File::open(file.path())?;
+        let mut rd = BufReader::new(f);
+        let _ = root_store
+            .add_pem_file(&mut rd)
+            .map(|_| ())
+            .map_err(|()| Error::new(ErrorKind::InvalidData, format!("could not load PEM file")));
+    }
     Ok(())
 }
 
