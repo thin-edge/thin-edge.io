@@ -50,6 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          toolchain: 1.58
           command: clippy
           args: --version
 
@@ -57,6 +58,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          toolchain: 1.58
           command: clippy
 
   cargo-test:
