@@ -32,7 +32,7 @@
     - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
     - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
     - [How to change temp path](./howto-guides/018_change_temp_path.md)
-    - [How to use thin-edge.io with your preferred init system](./howto-guides/019_how_to_use_preferred_service_manager.md)
+    - [How to use thin-edge.io with your preferred init system](./howto-guides/019_how_to_use_preferred_init_system.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)

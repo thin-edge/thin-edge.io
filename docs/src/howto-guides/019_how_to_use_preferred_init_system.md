@@ -2,8 +2,8 @@
 
 thin-edge.io works seamlessly with `systemd` on the CLI commands `tedge connect` and `tedge disconnect`.
 However, not all OS support `systemd`.
-You might want to use other init systems like `OpenRC`, `BSD`, `init.d` with thin-edge.io.
-For this demand, this guide explains how to give a custom init system configuration to thin-edge.io.
+You might want to use another init system like `OpenRC`, `BSD`, `init.d` with thin-edge.io.
+This guide explains how to configure thin-edge.io to use another init system.
 
 ## How to set a custom init system configuration
 
@@ -30,7 +30,7 @@ is_active = ["/sbin/rc-service", "{}", "status"]
 ```
 
 Then, adjust the values with your preferred init system.
-To get to know the rules of the configuration file, please refer to [Init System Configuration File](./../references/system-config.md).
+To get to know the rules of the configuration file, please refer to [Init System Configuration File](./../references/init-system-config.md).
 
 After you finish creating your own configuration file, it's good to limit the file permission to read-only.
 
@@ -38,12 +38,12 @@ After you finish creating your own configuration file, it's good to limit the fi
 sudo chmod 444 /etc/tedge/system.toml
 ```
 
-Now `tedge connect` and `tedge disconnect` use the init system that you specified!
+Now `tedge connect` and `tedge disconnect` will use the init system that you specified!
 
 ## Default settings
 
-If the custom configuration file `/etc/tedge/system.toml` is not placed,
+If the custom configuration file `/etc/tedge/system.toml` is not in place,
 `tedge connect` and `tedge disconnect` will use `/bin/systemctl` as the init system.
 
 ## Reference document
-- [Init System Configuration File](./../references/system-config.md)
+- [Init System Configuration File](./../references/init-system-config.md)
