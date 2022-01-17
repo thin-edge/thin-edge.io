@@ -28,9 +28,8 @@ pub fn create_device_with_direct_connection(
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
     let mut client_config = ClientConfig::new();
-    dbg!(bridge_config.bridge_root_cert_path.clone());
 
-    let _ = load_root_certs(
+    let () = load_root_certs(
         &mut client_config.root_store,
         bridge_config.bridge_root_cert_path.clone(),
     )?;
