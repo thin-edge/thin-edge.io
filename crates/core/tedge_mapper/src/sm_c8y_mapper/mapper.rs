@@ -187,7 +187,7 @@ where
                         .publish_restart_operation_status(message.payload_str()?)
                         .await?;
                 }
-                MapperSubscribeTopic::C8yTopic(C8yTopic::SmartRestRequest) => {
+                MapperSubscribeTopic::C8yTopic(_) => {
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
