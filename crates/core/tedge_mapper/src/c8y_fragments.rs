@@ -25,7 +25,7 @@ impl C8yAgentFragment {
         Ok(jsond)
     }
 }
-fn get_tedge_version() -> String {
+pub fn get_tedge_version() -> String {
     let process = Command::new("tedge")
         .arg("--version")
         .output()

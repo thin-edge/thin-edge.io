@@ -143,6 +143,12 @@ fn create_inventory_fragments_message(device_name: &str) -> Result<Message, Conv
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
+/// reads a json file to serde_json::Value
+///
+/// # Example
+/// ```
+/// let json_value = read_json_from_file("/path/to/a/file").unwrap();
+/// ```
 fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionError> {
     let mut file = File::open(Path::new(file_path))?;
     let mut data = String::new();
@@ -151,6 +157,7 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
     Ok(json)
 }
 
+/// gets a serde_json::Value of inventory
 fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, ConversionError> {
     let agent_fragment = C8yAgentFragment::new();
     let json_fragment = agent_fragment.to_json()?;
@@ -176,13 +183,15 @@ fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionErro
 
 #[cfg(test)]
 mod test {
-    use crate::tedge_config;
+    use crate::{c8y_fragments::get_tedge_version, tedge_config};
 
     use super::*;
     use tedge_config::DeviceIdSetting;
 
     use crate::c8y_converter::CumulocityConverter;
+    use std::{any, io::Write};
     use tedge_config::ConfigSettingAccessor;
+    use tempfile::tempdir;
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
@@ -361,5 +370,56 @@ mod test {
             buffer.push_str("Some data!");
         }
         buffer
+    }
+
+    #[test]
+    fn test_read_json_from_file() -> Result<(), anyhow::Error> {
+        let static_json = r#"{
+          "c8y_RequiredAvailability": {
+              "responseInterval": 1
+          },
+          "c8y_Firmware": {
+              "name": "test",
+              "version": "5.13.8-051308-generic",
+              "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
+          },
+          "c8y_Hardware": {
+              "model": "E14",
+              "revision": "000e",
+              "serialNumber": "00000000e2f5ad4d"
+          }
+        }"#;
+
+        let dir = tempdir()?;
+
+        let file_path = dir.path().join("test.json");
+        let mut file = File::create(file_path)?;
+        file.write_all(static_json.as_bytes())?;
+
+        let expected_json: serde_json::Value = serde_json::from_str(&static_json)?;
+
+        let actual_json = read_json_from_file(dir.path().join("test.json").to_str().unwrap())?;
+
+        assert_eq!(actual_json, expected_json);
+        Ok(())
+    }
+
+    #[test]
+    fn test_c8y_agent_fragment() -> Result<(), anyhow::Error> {
+        let static_json = &format!(
+            r#"{{
+            "name": "thin-edge.io",
+            "version": "{}"
+            }}"#,
+            get_tedge_version()
+        );
+
+        let expected_json: serde_json::Value = serde_json::from_str(&static_json)?;
+
+        let agent_fragment = C8yAgentFragment::new();
+        let actual_json = agent_fragment.to_json()?;
+
+        assert_eq!(actual_json, expected_json);
+        Ok(())
     }
 }
