@@ -1,8 +1,11 @@
+use std::fmt;
+
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
     component::TEdgeComponent, error::*,
 };
+use flockfile::check_another_instance_is_not_running;
 use structopt::*;
 use tedge_config::*;
 use tedge_utils::paths::home_dir;
@@ -55,14 +58,27 @@ pub enum MapperName {
     SmC8y,
 }
 
+impl fmt::Display for MapperName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MapperName::Az => write!(f, "{}", "tedge-mapper-az"),
+            MapperName::C8y => write!(f, "{}", "tedge-mapper-c8y"),
+            MapperName::Collectd => write!(f, "{}", "tedge-mapper-collectd"),
+            MapperName::SmC8y => write!(f, "{}", "sm-c8y-mapper"),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mapper = MapperOpt::from_args();
     tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
     let component = lookup_component(&mapper.name);
-
     let config = tedge_config()?;
+    // Run only one instance of a mapper
+    let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
+
     component.start(config).await
 }
 
