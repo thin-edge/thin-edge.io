@@ -31,7 +31,8 @@ class SMDockerInstallRemove(SoftwareManagement):
 
         if self.dockerplugin != "dockerplugin":
             self.skipTest(
-                "Testing the docker plugin is not supported on this platform")
+                "Testing the docker plugin is not supported on this platform" +
+                "To run it, all the test with -Xdockerplugin='dockerplugin'")
 
         setup_action = [
             {

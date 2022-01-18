@@ -9,7 +9,7 @@
   </description>
   <classification>
 	<groups inherit="true">
-	  <group></group>
+	  <group>analytics</group>
 	</groups>
 	<modes inherit="true">
 	</modes>
