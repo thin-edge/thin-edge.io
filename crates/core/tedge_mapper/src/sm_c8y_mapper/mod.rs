@@ -1,8 +1,8 @@
-mod error;
+pub mod error;
 mod http_proxy;
 mod json_c8y;
 pub mod mapper;
-mod topic;
+pub mod topic;
 
 #[cfg(test)]
 mod tests;

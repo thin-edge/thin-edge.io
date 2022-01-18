@@ -1,4 +1,4 @@
-use json_sm::SoftwareUpdateResponse;
+use agent_interface::SoftwareUpdateResponse;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {

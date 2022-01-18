@@ -20,12 +20,17 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
 
     def execute(self):
         # Publish one temperature_high alarm with "WARNING" severity to thin-edge device
+
+        # Pysys seems to print and record the environment it will also print passwords in the env
+        # Solution: only inject the variables we really need
+        environ={ 'HOME':os.environ.get('HOME')}
+
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/alarms/warning/temperature_high",
                        '{"message":"temperature is high", "time":"2021-12-15T15:22:06.464247777+05:30"}'],
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature_high alarm with "MAJOR" severity to thin-edge device
@@ -34,7 +39,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             arguments=["mqtt", "pub",
                        "tedge/alarms/major/temperature_very_high",
                        '{"message":"temperature is very high"}'],
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature_high alarm with "CRITICAL" severity to thin-edge device
@@ -43,7 +48,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             arguments=["mqtt", "pub",
                        "tedge/alarms/critical/temperature_dangerous",
                        '{"message":"temperature is dangerously high"}'],
-            environs=os.environ
+            environs=environ
         )
 
         # Publish one temperature_high alarm with "MINOR" severity to thin-edge device
@@ -52,7 +57,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             arguments=["mqtt", "pub",
                        "tedge/alarms/minor/temperature_low",
                        '{"message":"temperature low"}'],
-            environs=os.environ
+            environs=environ
         )
 
         # Clear the last "MINOR" alarm
@@ -60,7 +65,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub",
                        "tedge/alarms/minor/temperature_low", ""],
-            environs=os.environ
+            environs=environ
         )
 
         # Waiting for the mapped measurement message to reach the Cloud

@@ -1,6 +1,8 @@
-use json_sm::{
-    DownloadInfo, Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
+use agent_interface::{
+    Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
+
+use download::DownloadInfo;
 use serde::{Deserialize, Serialize};
 
 const EMPTY_STRING: &str = "";

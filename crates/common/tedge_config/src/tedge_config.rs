@@ -453,3 +453,28 @@ where
             .and_then(|value| self.update(setting, value))
     }
 }
+
+impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .tmp
+            .tmp_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: TmpPathDefaultSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.tmp.tmp_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<()> {
+        self.data.tmp.tmp_path = None;
+        Ok(())
+    }
+}
