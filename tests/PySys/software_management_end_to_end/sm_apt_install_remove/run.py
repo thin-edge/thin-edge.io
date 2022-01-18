@@ -29,7 +29,7 @@ class PySysTest(SoftwareManagement):
     def execute(self):
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), "::apt", "notanurl", "install"
+            "rolldice", self.get_pkgid("rolldice"), "::apt", "", "install"
         )
 
         self.wait_until_succcess()
@@ -37,7 +37,7 @@ class PySysTest(SoftwareManagement):
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), "::apt", "notanurl", "delete"
+            "rolldice", self.get_pkgid("rolldice"), "::apt", "", "delete"
         )
 
         self.wait_until_succcess()
