@@ -396,23 +396,4 @@ mod test {
         assert_eq!(actual_json, expected_json);
         Ok(())
     }
-
-    #[test]
-    fn test_c8y_agent_fragment() -> Result<(), anyhow::Error> {
-        let static_json = &format!(
-            r#"{{
-            "name": "thin-edge.io",
-            "version": "{}"
-            }}"#,
-            get_tedge_version()
-        );
-
-        let expected_json: serde_json::Value = serde_json::from_str(&static_json)?;
-
-        let agent_fragment = C8yAgentFragment::new();
-        let actual_json = agent_fragment.to_json()?;
-
-        assert_eq!(actual_json, expected_json);
-        Ok(())
-    }
 }
