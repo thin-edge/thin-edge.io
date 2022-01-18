@@ -58,3 +58,4 @@ class PySysTest(SoftwareManagement):
     def validate(self):
         # This is always false
         self.assertThat("False == value", value=self.check_is_installed("tomatoooo"))
+

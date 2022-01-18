@@ -31,12 +31,7 @@ class AptPluginPrepare(AptPlugin):
         # make sure that the timestamp has changed
         self.assertThat("old != new", old=self.mtime_old, new=self.mtime_new)
         # make sure the cache was updated in the last N seconds
-        # N=100 : Took 91s to update at mythic beasts
-        # N=150 : Took 123s to update at mythic beasts (Why???)
-        # N=200 : Took 160s to update at mythic beasts in august(Why???)
-        # N=300 : Took 250s to update at mythic beasts in october(Why???)
-        # 311 observed in the wild
-        # TODO Why does it sometimes take so long?
+        # See also https://cumulocity.atlassian.net/browse/CIT-664
         self.assertThat("(new +350) >= now", new=self.mtime_new, now=self.now)
 
     def cleanup_prepare(self):
