@@ -38,7 +38,7 @@ pub struct Config {
 
     /// Maximum size for a message payload
     ///
-    /// Default: `8 * 1024`.
+    /// Default: `1024 * 1024`.
     pub max_packet_size: usize,
 }
 
@@ -52,7 +52,7 @@ impl Default for Config {
             subscriptions: TopicFilter::empty(),
             clean_session: false,
             queue_capacity: 1024,
-            max_packet_size: 8 * 1024,
+            max_packet_size: 1024 * 1024,
         }
     }
 }
