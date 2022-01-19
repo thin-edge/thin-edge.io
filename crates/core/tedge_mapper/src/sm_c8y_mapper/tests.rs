@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
@@ -39,6 +40,7 @@ async fn mapper_publishes_a_software_list_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
@@ -59,6 +61,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -101,6 +104,7 @@ async fn mapper_publishes_software_update_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
@@ -166,6 +170,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
@@ -340,6 +345,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
