@@ -43,4 +43,10 @@ pub enum SMCumulocityMapperError {
 
     #[error("Request timed out")]
     RequestTimeout,
+
+    #[error("Operation execution failed: {0}")]
+    ExecuteFailed(String),
+
+    #[error("An unknown operation template: {0}")]
+    UnknownOperation(String),
 }
