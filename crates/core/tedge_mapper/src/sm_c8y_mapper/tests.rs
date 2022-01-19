@@ -9,13 +9,12 @@ use mqtt_channel::{Connection, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
 use serial_test::serial;
-use std::{io::Write, time::Duration};
-use tedge_config::{ConfigRepository, TEdgeConfig, TEdgeConfigLocation};
+use std::time::Duration;
 use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
@@ -40,7 +39,7 @@ async fn mapper_publishes_a_software_list_request() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
@@ -60,7 +59,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -102,7 +101,7 @@ async fn mapper_publishes_software_update_request() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
@@ -167,7 +166,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
@@ -326,7 +325,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 #[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -402,7 +401,7 @@ fn remove_whitespace(s: &str) -> String {
 }
 
 async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
-    let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let operations = Operations::new();
     let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
