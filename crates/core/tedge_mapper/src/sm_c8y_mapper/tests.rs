@@ -220,7 +220,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
