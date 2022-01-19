@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -84,11 +84,11 @@ impl Operations {
             .and_then(|index| self.operations.get(*index))
     }
 
-    pub fn topics_for_operations(&self) -> Vec<String> {
+    pub fn topics_for_operations(&self) -> HashSet<String> {
         self.operations
             .iter()
             .filter_map(|operation| operation.topic())
-            .collect::<Vec<String>>()
+            .collect::<HashSet<String>>()
     }
 }
 

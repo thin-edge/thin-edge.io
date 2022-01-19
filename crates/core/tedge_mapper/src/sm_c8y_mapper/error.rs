@@ -1,7 +1,5 @@
 use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
 
-use crate::operations::Operation;
-
 #[derive(thiserror::Error, Debug)]
 pub enum SMCumulocityMapperError {
     #[error("Invalid MQTT Message.")]

@@ -191,9 +191,6 @@ where
                     debug!("Cumulocity");
                     let () = self.process_smartrest(message.payload_str()?).await?;
                 }
-                _ => {
-                    eprintln!("Invalid MapperSubscriberTopic");
-                }
             }
         }
         Ok(())
