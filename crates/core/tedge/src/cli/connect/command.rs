@@ -392,9 +392,13 @@ fn new_bridge(
     println!("Validating the bridge certificates.\n");
     let () = bridge_config.validate()?;
 
-    println!("Create the device.\n");
-    let () =
-        c8y_direct_connection::create_device_with_direct_connection(user_manager, bridge_config)?;
+    if bridge_config.cloud_name.eq("c8y") {
+        println!("Creating the device in Cumulocity cloud.\n");
+        let () = c8y_direct_connection::create_device_with_direct_connection(
+            user_manager,
+            bridge_config,
+        )?;
+    }
 
     println!("Saving configuration for requested bridge.\n");
     if let Err(err) =
