@@ -1,4 +1,4 @@
-use mqtt_client::{Message, Topic, TopicFilter};
+use mqtt_channel::{Message, Topic, TopicFilter};
 use std::fmt::Display;
 use tracing::error;
 

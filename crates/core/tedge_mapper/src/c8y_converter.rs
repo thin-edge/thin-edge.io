@@ -4,7 +4,7 @@ use crate::{converter::*, operations::Operations};
 use c8y_smartrest::alarm;
 use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
 use c8y_translator::json;
-use mqtt_client::{Message, Topic};
+use mqtt_channel::{Message, Topic};
 use std::collections::HashSet;
 use thin_edge_json::alarm::ThinEdgeAlarm;
 
@@ -103,13 +103,14 @@ impl Converter for CumulocityConverter {
         } else if input.topic.name.starts_with("tedge/alarms") {
             self.try_convert_alarm(input)
         } else {
-            return Err(ConversionError::UnsupportedTopic(input.topic.name.clone()));
+            Err(ConversionError::UnsupportedTopic(input.topic.name.clone()))
         }
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
-        let ops = Operations::try_new("/etc/tedge/operations")?;
-        let ops = ops.get_operations_list("c8y");
+        let ops = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let ops = ops.get_operations_list();
+        let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
 
         let ops_msg = SmartRestSetSupportedOperations::new(&ops);
         let topic = Topic::new_unchecked("c8y/s/us");

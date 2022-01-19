@@ -10,13 +10,24 @@ IoT devices often do more than just send data to the cloud. They also do things 
 * reboot on demand
 * install or remove software
 
-These operations that are supported by [Cumulocity IoT](https://cumulocity.com/api/10.11.0/#section/Device-management-library) and other cloud providers.
+These operations are supported by [Cumulocity IoT](https://cumulocity.com/api/10.11.0/#section/Device-management-library) and other cloud providers.
 On `thin-edge.io` the support for one such operation can be added using the `thin-edge.io` Supported Operations API.
 
 ### `thin-edge.io` Supported Operations API
 
 The Supported Operations utilises the file system to add and remove operations. A special file placed in `/etc/tedge/operations` directory will indicate that an operation is supported.
 The specification for the operation files is described in `thin-edge.io` specifications repository[src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/main/src/supported-operations/README.md)
+
+Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
+
+## Custom Supported Operations
+
+`thin-edge.io` supports custom operations by using configuration files and plugin mechanism similar to what software management agent does.
+
+The main difference between custom operations and native operations is that custom operations are have to be defined in configuration files and provide their own implementation in a callable `plugin` executable.
+As per specification the configuration file needs to be a `toml` file which describes the operation.
+
+`thin-edge.io` stores the operations configuration files in the `/etc/tedge/operations/<cloud-provider>/` directory.
 
 ## `thin-edge.io` List of Supported Operations
 
@@ -95,3 +106,56 @@ To remove supported operation we can remove the file from `/etc/tedge/operations
 ```shell
 sudo rm /etc/tedge/operations/c8y/c8y_Restart
 ```
+
+## Working with custom operations
+
+We will use the `thin-edge.io` Supported Operations API to add custom operations. Our new operation is going to be capability to execute shell commands on the device.
+Let's create the operation configuration file:
+
+We need to tell `thin-edge.io` how to handle the operation and how to execute it.
+
+### Adding new custom operation
+
+In Cumulocity IoT we know that there is an operation call c8y_Command which allows us to send commands to the device and get the result back to the cloud, let's create the configuration file for our new operation:
+
+First we create a file with the name of the operation:
+
+```shell
+sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
+```
+
+> Note: the needs to be readable by `thin-edge.io` user - `tedge` - and should have permissions `644`.
+
+In this example we want `thin-edge.io` to pick up a message on specific topic and execute the command on the device, our topic is `c8y/s/ds`.
+We also know that the message we expect is going to use SmartRest template `511` and our plugin is located in `/etc/tedge/operations/command`.
+Then we need to add the configuration to the file (`/etc/tedge/operations/c8y/c8y_Command`):
+
+```toml
+[exec]
+  topic = "c8y/s/ds"
+  on_message = "511"
+  command = "/etc/tedge/operations/command"
+```
+
+And now the content of our command plugin:
+
+```shell
+#!/usr/bin/sh
+
+mosquitto_pub -t c8y/s/us -m 501,c8y_Command
+
+OUTPUT=$(echo $1)
+
+mosquitto_pub -t c8y/s/us -m 503,c8y_Command,"$OUTPUT"
+```
+
+This simple example will execute the command `echo $1` and send the result back to the cloud.
+
+> Note: The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
+
+
+### List of currently supported operations parameters
+
+* `topic` - The topic on which the operation will be executed.
+* `on_message` - The SmartRest template on which the operation will be executed.
+* `command` - The command to execute.
