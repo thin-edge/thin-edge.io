@@ -5,7 +5,7 @@ use crate::{converter::*, operations::Operations};
 use c8y_smartrest::alarm;
 use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
 use c8y_translator::json;
-use mqtt_client::{Message, Topic};
+use mqtt_channel::{Message, Topic};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
