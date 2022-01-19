@@ -11,9 +11,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use thin_edge_json::alarm::ThinEdgeAlarm;
+use tracing::error;
 
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/devices/info.json";
+const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/extras.json";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -125,8 +126,9 @@ impl Converter for CumulocityConverter {
 }
 
 fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
-    let ops = Operations::try_new("/etc/tedge/operations")?;
-    let ops = ops.get_operations_list("c8y");
+    let ops = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let ops = ops.get_operations_list();
+    let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
 
     let ops_msg = SmartRestSetSupportedOperations::new(&ops);
     let topic = Topic::new_unchecked("c8y/s/us");
@@ -169,7 +171,10 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
                 .insert("c8y_Agent".to_string(), json_fragment);
             Ok(json)
         }
-        Err(_) => Ok(json_fragment),
+        Err(err) => {
+            error!("{}", err);
+            Ok(json_fragment)
+        }
     }
 }
 fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
@@ -183,13 +188,9 @@ fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionErro
 
 #[cfg(test)]
 mod test {
-    use crate::c8y_fragments::get_tedge_version;
-
     use super::*;
 
     use crate::c8y_converter::CumulocityConverter;
-    use std::io::Write;
-    use tempfile::tempdir;
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
@@ -363,37 +364,5 @@ mod test {
             buffer.push_str("Some data!");
         }
         buffer
-    }
-
-    #[test]
-    fn test_read_json_from_file() -> Result<(), anyhow::Error> {
-        let static_json = r#"{
-          "c8y_RequiredAvailability": {
-              "responseInterval": 1
-          },
-          "c8y_Firmware": {
-              "name": "test",
-              "version": "5.13.8-051308-generic",
-              "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
-          },
-          "c8y_Hardware": {
-              "model": "E14",
-              "revision": "000e",
-              "serialNumber": "00000000e2f5ad4d"
-          }
-        }"#;
-
-        let dir = tempdir()?;
-
-        let file_path = dir.path().join("test.json");
-        let mut file = File::create(file_path)?;
-        file.write_all(static_json.as_bytes())?;
-
-        let expected_json: serde_json::Value = serde_json::from_str(&static_json)?;
-
-        let actual_json = read_json_from_file(dir.path().join("test.json").to_str().unwrap())?;
-
-        assert_eq!(actual_json, expected_json);
-        Ok(())
     }
 }

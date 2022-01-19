@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::process::Command;
 
 use crate::error::ConversionError;
+use tracing::error;
 
 // rename to c8y_agent_fragment.rs
 
@@ -26,11 +27,16 @@ impl C8yAgentFragment {
     }
 }
 pub fn get_tedge_version() -> String {
-    let process = Command::new("tedge")
-        .arg("--version")
-        .output()
-        .expect("failed to execute process");
+    let process = Command::new("tedge").arg("--version").output();
 
-    let string = String::from_utf8(process.stdout).unwrap();
-    string.split_whitespace().last().unwrap().trim().to_string()
+    match process {
+        Ok(process) => {
+            let string = String::from_utf8(process.stdout).unwrap();
+            string.split_whitespace().last().unwrap().trim().to_string()
+        }
+        Err(err) => {
+            error!("{}", err);
+            "0.0.0".to_string()
+        }
+    }
 }
