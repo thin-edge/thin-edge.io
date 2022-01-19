@@ -42,7 +42,7 @@ pip3 install -r tests/requirements.txt
 cd tests/PySys/
 
 set +e
-pysys.py run --record -v DEBUG
+pysys.py run --exclude analytics --record -v DEBUG
 set -e
 
 deactivate

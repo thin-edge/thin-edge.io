@@ -34,7 +34,7 @@ class PySysTest(SoftwareManagement):
             "rolldice",
             self.get_pkgid("rolldice"),
             self.get_pkg_version("rolldice"),
-            "notanurl",
+            "",
             "install",
         )
 
@@ -44,7 +44,7 @@ class PySysTest(SoftwareManagement):
 
         fake_version = "88::apt"  # does not exist in C8y
         self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), fake_version, "notanurl", "delete"
+            "rolldice", self.get_pkgid("rolldice"), fake_version, "", "delete"
         )
 
         self.wait_until_fail()
@@ -55,7 +55,7 @@ class PySysTest(SoftwareManagement):
             "rolldice",
             self.get_pkgid("rolldice"),
             self.get_pkg_version("rolldice"),
-            "notanurl",
+            "",
             "delete",
         )
 
