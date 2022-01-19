@@ -8,7 +8,7 @@ description = "tedge_mapper is the mapper that translates thin-edge.io data mode
 
 [package.metadata.deb]
 depends = "tedge"
-maintainer-scripts = "configuration/debian/tedge_mapper"
+maintainer-scripts = "../../../configuration/debian/tedge_mapper"
 assets = [
     ["../../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
     ["../../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
@@ -49,6 +49,7 @@ tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]

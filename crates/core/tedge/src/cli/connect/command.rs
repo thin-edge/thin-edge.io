@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
+use tedge_users::UserManager;
 use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
 pub(crate) const DEFAULT_HOST: &str = "localhost";
-const WAIT_FOR_CHECK_SECONDS: u64 = 10;
+const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -26,10 +27,10 @@ pub struct ConnectCommand {
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
+    pub user_manager: UserManager,
 }
 
 pub enum DeviceStatus {
-    MightBeNew,
     AlreadyExists,
     Unknown,
 }
@@ -69,12 +70,15 @@ impl Command for ConnectCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         let mut config = self.config_repository.load()?;
-
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
-            if self.check_if_bridge_exists(br_config) {
+            if self.check_if_bridge_exists(&br_config) {
                 return match self.check_connection(&config) {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {
+                        let cloud = br_config.cloud_name.clone();
+                        println!("Connection check to {} cloud is successfull.\n", cloud);
+                        Ok(())
+                    }
                     Err(err) => Err(err.into()),
                 };
             } else {
@@ -118,30 +122,15 @@ impl Command for ConnectCommand {
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
+            self.user_manager.clone(),
             &self.config_location,
         )?;
 
         match self.check_connection(&config) {
-            Ok(DeviceStatus::AlreadyExists) => {}
-            Ok(DeviceStatus::MightBeNew) | Ok(DeviceStatus::Unknown) => {
-                if let Cloud::C8y = self.cloud {
-                    println!("Restarting mosquitto to resubscribe to bridged inbound cloud topics after device creation.\n");
-                    restart_mosquitto(
-                        &bridge_config,
-                        self.service_manager.as_ref(),
-                        &self.config_location,
-                    )?;
-
-                    println!(
-                        "Awaiting mosquitto to start. This may take up to {} seconds.\n",
-                        MOSQUITTO_RESTART_TIMEOUT_SECONDS
-                    );
-                    std::thread::sleep(std::time::Duration::from_secs(
-                        MOSQUITTO_RESTART_TIMEOUT_SECONDS,
-                    ));
-                }
+            Ok(DeviceStatus::AlreadyExists) => {
+                println!("Connection check is successfull.\n");
             }
-            Err(_) => {
+            _ => {
                 println!(
                     "Warning: Bridge has been configured, but {} connection check failed.\n",
                     self.cloud.as_str()
@@ -208,23 +197,23 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
-        let device_id = config.query(DeviceIdSetting)?;
+
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port),
-            Cloud::C8y => check_device_status_c8y(port, device_id.as_str()),
+            Cloud::C8y => check_device_status_c8y(config),
         }
     }
 
-    fn check_if_bridge_exists(&self, br_config: BridgeConfig) -> bool {
+    fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
         let bridge_conf_path = self
             .config_location
             .tedge_config_root_path
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-            .join(br_config.config_file);
+            .join(br_config.config_file.clone());
 
         Path::new(&bridge_conf_path).exists()
     }
@@ -243,75 +232,30 @@ where
     Ok(())
 }
 
-// Check the connection by using the response of the SmartREST template 100.
-// If getting the response '41,100,Device already existing', the connection is established.
-//
-// If the device is already registered, it can finish in the first try.
-// If the device is new, the device is going to be registered here and
-// the check can finish in the second try as there is no error response in the first try.
-fn check_device_status_c8y(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
-    for i in 0..2 {
-        println!("Try {} / 2: Sending a message to Cumulocity. ", i + 1,);
-
-        match create_device(port, device_id) {
-            Ok(DeviceStatus::MightBeNew) => return Ok(DeviceStatus::MightBeNew),
-            Ok(DeviceStatus::AlreadyExists) => {
-                println!("Received expected response message, connection check is successful.\n",);
-                if i == 0 {
-                    // If the DeviceAlreadyExists response comes on the first attempt itself, the device definitely was created earlier
-                    return Ok(DeviceStatus::AlreadyExists);
-                } else {
-                    // If the DeviceAlreadyExists response comes on the second attempt only,
-                    // it may have been created on the first attempt or earlier.
-                    // The absence of the response on the first attempt can't be considered as definite proof of new device creation
-                    // due to the possibility of a DeviceAlreadyExists response from that first attempt getting lost in transit.
-                    // So, we could only say that the device might be new, but not entirely sure.
-                    return Ok(DeviceStatus::MightBeNew);
-                }
-            }
-            Ok(DeviceStatus::Unknown) => {
-                if i == 0 {
-                    println!("... No response. If the device is new, it's normal to get no response in the first try.");
-                } else {
-                    println!("... No response. ");
-                    return Err(ConnectError::ConnectionCheckError);
-                }
-            }
-            Err(err) => {
-                return Err(err);
-            }
-        }
-    }
-    Ok(DeviceStatus::MightBeNew)
-}
-
-fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectError> {
-    const C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM: &str = "c8y/s/us";
-    const C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM: &str = "c8y/s/e";
+// Check the connection by using the jwt token retrival over the mqtt.
+// If successfull in getting the jwt token '71,xxxxx', the connection is established.
+fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
+    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
+    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const CLIENT_ID: &str = "check_connection_c8y";
-    const REGISTRATION_ERROR: &[u8] = b"41,100,Device already existing";
-    const DEVICE_TYPE: &str = "thin-edge.io";
 
-    let registration_payload = format!("100,{},{}", device_id, DEVICE_TYPE);
-
-    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
+    let mut options = MqttOptions::new(
+        CLIENT_ID,
+        DEFAULT_HOST,
+        tedge_config.query(MqttPortSetting)?.into(),
+    );
     options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
     let mut acknowledged = false;
 
-    client.subscribe(C8Y_TOPIC_ERROR_MESSAGE_DOWNSTREAM, AtLeastOnce)?;
+    client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
-                client.publish(
-                    C8Y_TOPIC_BUILTIN_MESSAGE_UPSTREAM,
-                    AtLeastOnce,
-                    false,
-                    registration_payload.as_bytes(),
-                )?;
+                client.publish(C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM, AtLeastOnce, false, "")?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // The request has been sent
@@ -319,7 +263,8 @@ fn create_device(port: u16, device_id: &str) -> Result<DeviceStatus, ConnectErro
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
-                if response.payload == REGISTRATION_ERROR {
+                let token = String::from_utf8(response.payload.to_vec()).unwrap();
+                if token.contains("71") {
                     return Ok(DeviceStatus::AlreadyExists);
                 }
             }
@@ -426,6 +371,7 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
     service_manager: &dyn SystemServiceManager,
+    user_manager: UserManager,
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
@@ -445,6 +391,10 @@ fn new_bridge(
 
     println!("Validating the bridge certificates.\n");
     let () = bridge_config.validate()?;
+
+    println!("Create the device.\n");
+    let () =
+        c8y_direct_connection::create_device_with_direct_connection(user_manager, bridge_config)?;
 
     println!("Saving configuration for requested bridge.\n");
     if let Err(err) =

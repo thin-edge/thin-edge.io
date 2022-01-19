@@ -111,7 +111,7 @@ impl Converter for CumulocityConverter {
         } else if input.topic.name.starts_with("tedge/alarms") {
             self.try_convert_alarm(input)
         } else {
-            return Err(ConversionError::UnsupportedTopic(input.topic.name.clone()));
+            Err(ConversionError::UnsupportedTopic(input.topic.name.clone()))
         }
     }
 

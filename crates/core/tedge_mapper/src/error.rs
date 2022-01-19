@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::size_threshold::SizeThresholdExceeded;
 use mqtt_client::MqttClientError;
 use tedge_config::TEdgeConfigError;
@@ -70,4 +72,10 @@ pub enum ConversionError {
 pub enum OperationsError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
+
+    #[error("Cannot extract the operation name from the path: {0}")]
+    InvalidOperationName(PathBuf),
+
+    #[error("Error while parsing operation file: '{0}': {1}.")]
+    TomlError(PathBuf, #[source] toml::de::Error),
 }

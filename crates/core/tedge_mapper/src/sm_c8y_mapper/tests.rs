@@ -1,7 +1,7 @@
-use crate::sm_c8y_mapper::error::SMCumulocityMapperError;
 use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagement;
+use crate::{operations::Operations, sm_c8y_mapper::error::SMCumulocityMapperError};
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_client::Client;
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
@@ -13,7 +13,8 @@ use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
@@ -38,7 +39,8 @@ async fn mapper_publishes_a_software_list_request() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
@@ -58,7 +60,8 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -100,7 +103,8 @@ async fn mapper_publishes_software_update_request() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
@@ -165,7 +169,8 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
@@ -220,7 +225,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     sm_mapper.unwrap().abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore]
 #[serial]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
@@ -339,7 +344,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
 #[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
@@ -448,7 +454,9 @@ async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error
 
     let mqtt_client = Client::connect("SM-C8Y-Mapper-Test", &mqtt_config).await?;
     let http_proxy = FakeC8YHttpProxy {};
-    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy);
+
+    let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
     let messages = sm_mapper.subscribe().await?;
 
     let mapper_task = tokio::spawn(async move {

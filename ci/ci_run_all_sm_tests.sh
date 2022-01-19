@@ -23,7 +23,17 @@ dpkg -s mosquitto-clients
 
 sudo cp plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
 
-sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+# Assume that the pi user has a precompiled dummy plugin
+# use a standard path for the others
+if [ $(whoami) == "pi" ];
+  then
+    sudo cp /home/pi/tedge_dummy_plugin/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+  else
+    sudo cp $HOME/thin-edge.io/target/release/tedge_dummy_plugin /etc/tedge/sm-plugins/fruits
+fi
+
+sudo chmod +x /etc/tedge/sm-plugins/docker
+sudo chmod +x /etc/tedge/sm-plugins/fruits
 
 sudo tedge config set software.plugin.default apt
 
