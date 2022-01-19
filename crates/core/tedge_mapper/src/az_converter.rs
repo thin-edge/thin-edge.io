@@ -2,7 +2,7 @@ use crate::converter::*;
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use clock::Clock;
-use mqtt_client::Message;
+use mqtt_channel::Message;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
@@ -54,7 +54,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use chrono::{FixedOffset, TimeZone};
-    use mqtt_client::Topic;
+    use mqtt_channel::Topic;
     use serde_json::json;
 
     struct TestClock;
