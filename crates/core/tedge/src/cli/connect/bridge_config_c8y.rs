@@ -126,6 +126,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             r#"c/uc/# out 2 c8y/ """#.into(),
             r#"s/dc/# in 2 c8y/ """#.into(),
             // c8y JSON
+            r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
             // c8y JWT token retrieval
