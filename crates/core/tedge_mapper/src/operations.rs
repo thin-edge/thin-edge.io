@@ -14,7 +14,7 @@ use crate::error::OperationsError;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub struct Exec {
+pub struct OnMessageExec {
     command: Option<String>,
     on_message: Option<String>,
     topic: Option<String>,
@@ -26,15 +26,11 @@ pub struct Exec {
 pub struct Operation {
     #[serde(skip)]
     name: String,
-    exec: Option<Exec>,
+    exec: Option<OnMessageExec>,
 }
 
 impl Operation {
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    pub fn exec(&self) -> Option<&Exec> {
+    pub fn exec(&self) -> Option<&OnMessageExec> {
         self.exec.as_ref()
     }
 
@@ -134,112 +130,57 @@ mod tests {
     use test_case::test_case;
 
     // Structs for state change with the builder pattern
-    // Structs for Clouds
-    struct Clouds(Vec<PathBuf>);
-    struct NoClouds;
-
     // Structs for Operations
     struct Ops(Vec<PathBuf>);
     struct NoOps;
 
-    struct TestOperationsBuilder<C, O> {
+    struct TestOperationsBuilder<O> {
         temp_dir: tempfile::TempDir,
-        clouds: C,
         operations: O,
     }
 
-    impl TestOperationsBuilder<NoClouds, NoOps> {
+    impl TestOperationsBuilder<NoOps> {
         fn new() -> Self {
             Self {
                 temp_dir: tempfile::tempdir().unwrap(),
-                clouds: NoClouds,
                 operations: NoOps,
             }
         }
     }
 
-    impl<O> TestOperationsBuilder<NoClouds, O> {
-        fn with_clouds(self, clouds_count: usize) -> TestOperationsBuilder<Clouds, O> {
-            let Self {
-                temp_dir,
-                operations,
-                ..
-            } = self;
-
-            let mut clouds = Vec::new();
-            for i in 0..clouds_count {
-                let cloud = temp_dir.as_ref().join(format!("cloud{}", i));
-                fs::create_dir(&cloud).unwrap();
-                clouds.push(cloud);
-            }
-
-            TestOperationsBuilder {
-                temp_dir,
-                clouds: Clouds(clouds),
-                operations,
-            }
-        }
-    }
-
-    impl TestOperationsBuilder<Clouds, NoOps> {
-        fn with_operations(self, operations_count: usize) -> TestOperationsBuilder<Clouds, Ops> {
-            let Self {
-                temp_dir, clouds, ..
-            } = self;
+    impl TestOperationsBuilder<NoOps> {
+        fn with_operations(self, operations_count: usize) -> TestOperationsBuilder<Ops> {
+            let Self { temp_dir, .. } = self;
 
             let mut operations = Vec::new();
-            clouds.0.iter().for_each(|path| {
-                for i in 0..operations_count {
-                    let file_path = path.join(format!("operation{}", i));
-                    let mut file = fs::File::create(&file_path).unwrap();
-                    file.write_all(
-                        br#"[exec]
+            for i in 0..operations_count {
+                let file_path = temp_dir.path().join(format!("operation{}", i));
+                let mut file = fs::File::create(&file_path).unwrap();
+                file.write_all(
+                    br#"[exec]
                         command = "echo"
                         on_message = "511""#,
-                    )
-                    .unwrap();
-                    operations.push(file_path);
-                }
-            });
+                )
+                .unwrap();
+                operations.push(file_path);
+            }
 
             TestOperationsBuilder {
                 operations: Ops(operations),
                 temp_dir,
-                clouds,
-            }
-        }
-
-        fn build(self) -> TestOperations {
-            let Self {
-                temp_dir, clouds, ..
-            } = self;
-
-            TestOperations {
-                temp_dir,
-                clouds: clouds.0,
-                operations: Vec::new(),
             }
         }
     }
 
-    impl<C, O> TestOperationsBuilder<C, O> {
-        fn with_random_file_in_clouds_directory(&self) {
-            let path = self.temp_dir.as_ref().join("cloudfile");
-            fs::File::create(path).unwrap();
-        }
-    }
-
-    impl TestOperationsBuilder<Clouds, Ops> {
+    impl TestOperationsBuilder<Ops> {
         fn build(self) -> TestOperations {
             let Self {
                 temp_dir,
-                clouds,
                 operations,
             } = self;
 
             TestOperations {
                 temp_dir,
-                clouds: clouds.0,
                 operations: operations.0,
             }
         }
@@ -247,33 +188,24 @@ mod tests {
 
     struct TestOperations {
         temp_dir: tempfile::TempDir,
-        clouds: Vec<PathBuf>,
         operations: Vec<PathBuf>,
     }
 
     impl TestOperations {
-        fn builder() -> TestOperationsBuilder<NoClouds, NoOps> {
+        fn builder() -> TestOperationsBuilder<NoOps> {
             TestOperationsBuilder::new()
         }
 
         fn temp_dir(&self) -> &tempfile::TempDir {
             &self.temp_dir
         }
-
-        fn operations(&self) -> &Vec<PathBuf> {
-            &self.operations
-        }
     }
 
-    #[test_case(0, 0)]
-    #[test_case(1, 1)]
-    #[test_case(1, 5)]
-    #[test_case(2, 5)]
-    fn get_operations_all(clouds_count: usize, ops_count: usize) {
-        let test_operations = TestOperations::builder()
-            .with_clouds(clouds_count)
-            .with_operations(ops_count)
-            .build();
+    #[test_case(0)]
+    #[test_case(1)]
+    #[test_case(5)]
+    fn get_operations_all(ops_count: usize) {
+        let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
         let operations = get_operations(test_operations.temp_dir(), "").unwrap();
         dbg!(&operations);
