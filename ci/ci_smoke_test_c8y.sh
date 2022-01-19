@@ -93,6 +93,9 @@ set -e
 
 ./ci/configure_bridge.sh
 
+# wait for certificate to to reflect in the c8y cloud
+sleep 5
+
 echo "Connect again"
 sudo tedge connect c8y
 
