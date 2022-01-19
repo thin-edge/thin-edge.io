@@ -2728,6 +2728,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-test",
+ "toml",
  "tracing",
 ]
 

@@ -6,21 +6,20 @@ use std::convert::{TryFrom, TryInto};
 pub enum C8yTopic {
     SmartRestRequest,
     SmartRestResponse,
+    OperationTopic(String),
 }
 
 impl C8yTopic {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::SmartRestRequest => r#"c8y/s/ds"#,
             Self::SmartRestResponse => r#"c8y/s/us"#,
+            Self::OperationTopic(name) => name.as_str(),
         }
     }
 
     pub fn to_topic(&self) -> Result<Topic, MqttClientError> {
-        match self {
-            Self::SmartRestRequest => Topic::new(Self::SmartRestRequest.as_str()),
-            Self::SmartRestResponse => Topic::new(Self::SmartRestResponse.as_str()),
-        }
+        Ok(Topic::new(self.as_str())?)
     }
 }
 
@@ -31,9 +30,15 @@ impl TryFrom<String> for C8yTopic {
         match value.as_str() {
             r#"c8y/s/ds"# => Ok(C8yTopic::SmartRestRequest),
             r#"c8y/s/us"# => Ok(C8yTopic::SmartRestResponse),
-            err => Err(TopicError::UnknownTopic {
-                topic: err.to_string(),
-            }),
+            topic_name => {
+                if topic_name[..3].contains("c8y") {
+                    Ok(C8yTopic::OperationTopic(topic_name.to_string()))
+                } else {
+                    Err(TopicError::UnknownTopic {
+                        topic: topic_name.to_string(),
+                    })
+                }
+            }
         }
     }
 }
