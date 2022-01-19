@@ -64,7 +64,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
         let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
-        let mut sm_mapper = CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
+        let mut sm_mapper =
+            CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
 
         let () = sm_mapper.run().await?;
 
@@ -86,15 +87,27 @@ where
     Proxy: C8YHttpProxy,
 {
     pub fn new(client: Connection, http_proxy: Proxy, operations: Operations) -> Self {
-        Self { client, http_proxy, operations }
+        Self {
+            client,
+            http_proxy,
+            operations,
+        }
     }
 
-    pub async fn try_new(tedge_config: &TEdgeConfig, http_proxy: Proxy, operations: Operations) -> Result<Self, anyhow::Error> {
+    pub async fn try_new(
+        tedge_config: &TEdgeConfig,
+        http_proxy: Proxy,
+        operations: Operations,
+    ) -> Result<Self, anyhow::Error> {
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
         let mqtt_config = crate::mapper::mqtt_config("SM-C8Y-Mapper", &tedge_config, mqtt_topic)?;
         let client = Connection::new(&mqtt_config).await?;
 
-        Ok(Self { client, http_proxy, operations })
+        Ok(Self {
+            client,
+            http_proxy,
+            operations,
+        })
     }
 
     pub async fn run(&mut self) -> Result<(), anyhow::Error> {
