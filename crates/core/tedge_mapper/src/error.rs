@@ -64,8 +64,8 @@ pub enum ConversionError {
     #[error(transparent)]
     FromStdIo(#[from] std::io::Error),
 
-    #[error("Could not convert option of json to result of json")]
-    FromOptionToResultConversion,
+    #[error("Error converting json option")]
+    FromOptionError,
 }
 
 #[derive(Debug, thiserror::Error)]

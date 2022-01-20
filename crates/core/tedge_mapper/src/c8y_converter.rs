@@ -11,10 +11,13 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use thin_edge_json::alarm::ThinEdgeAlarm;
-use tracing::error;
+use tracing::info;
 
-const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
+const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/inventory.json";
+const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
+const SUPPORTED_OPERATIONS_DIRECTORY: &str = "/etc/tedge/operations";
+const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -117,21 +120,24 @@ impl Converter for CumulocityConverter {
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
-        let fragments_message = create_inventory_fragments_message(&self.device_name)?;
+        let inventory_fragments_message = create_inventory_fragments_message(&self.device_name)?;
 
         let supported_operations_message = create_supported_operations_fragments()?;
 
-        Ok(vec![supported_operations_message, fragments_message])
+        Ok(vec![
+            supported_operations_message,
+            inventory_fragments_message,
+        ])
     }
 }
 
 fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
-    let ops = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let ops = Operations::try_new(SUPPORTED_OPERATIONS_DIRECTORY, C8Y_CLOUD)?;
     let ops = ops.get_operations_list();
     let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
 
     let ops_msg = SmartRestSetSupportedOperations::new(&ops);
-    let topic = Topic::new_unchecked("c8y/s/us");
+    let topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
     Ok(Message::new(&topic, ops_msg.to_smartrest()?))
 }
 
@@ -139,8 +145,8 @@ fn create_inventory_fragments_message(device_name: &str) -> Result<Message, Conv
     let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
 
     let topic = Topic::new_unchecked(&format!(
-        "c8y/inventory/managedObjects/update/{}",
-        device_name
+        "{}/{}",
+        INVENTORY_MANAGED_OBJECTS_TOPIC, device_name
     ));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
@@ -167,12 +173,15 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
     match read_json_from_file(file_path) {
         Ok(mut json) => {
             json.as_object_mut()
-                .ok_or_else(|| return ConversionError::FromOptionToResultConversion)?
+                .ok_or_else(|| return ConversionError::FromOptionError)?
                 .insert("c8y_Agent".to_string(), json_fragment);
             Ok(json)
         }
-        Err(err) => {
-            error!("{}", err);
+        Err(_) => {
+            info!(
+                "Inventory fragments file not found at {}",
+                INVENTORY_FRAGMENTS_FILE_LOCATION
+            );
             Ok(json_fragment)
         }
     }
