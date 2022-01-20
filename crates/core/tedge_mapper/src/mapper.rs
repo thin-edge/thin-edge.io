@@ -1,10 +1,11 @@
 use crate::converter::*;
 use crate::error::*;
 
-use flockfile::{check_another_instance_is_not_running, Flockfile};
-use mqtt_client::{Client, MqttClient, MqttClientError};
+use mqtt_channel::{
+    Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
+    UnboundedSender,
+};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
-use tokio::task::JoinHandle;
 use tracing::{error, info, instrument};
 
 pub async fn create_mapper<'a>(
@@ -12,78 +13,82 @@ pub async fn create_mapper<'a>(
     tedge_config: &'a TEdgeConfig,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
-    let flock = check_another_instance_is_not_running(app_name)?;
-
     info!("{} starting", app_name);
 
-    let mqtt_config = mqtt_config(tedge_config)?;
-    let mqtt_client = Client::connect(app_name, &mqtt_config).await?;
+    let mapper_config = converter.get_mapper_config();
+    let mqtt_client = Connection::new(&mqtt_config(
+        app_name,
+        tedge_config,
+        mapper_config.in_topic_filter.clone().into(),
+    )?)
+    .await?;
 
-    Ok(Mapper::new(mqtt_client, converter, flock))
+    Mapper::subscribe_errors(mqtt_client.errors);
+
+    Ok(Mapper::new(
+        mqtt_client.received,
+        mqtt_client.published,
+        converter,
+    ))
 }
 
 pub(crate) fn mqtt_config(
+    name: &str,
     tedge_config: &TEdgeConfig,
-) -> Result<mqtt_client::Config, anyhow::Error> {
-    Ok(mqtt_client::Config::default().with_port(tedge_config.query(MqttPortSetting)?.into()))
+    topics: TopicFilter,
+) -> Result<mqtt_channel::Config, anyhow::Error> {
+    Ok(mqtt_channel::Config::default()
+        .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_session_name(name)
+        .with_subscriptions(topics)
+        .with_max_packet_size(10 * 1024 * 1024))
 }
 
 pub struct Mapper {
-    client: mqtt_client::Client,
+    input: UnboundedReceiver<Message>,
+    output: UnboundedSender<Message>,
     converter: Box<dyn Converter<Error = ConversionError>>,
-    _flock: Flockfile,
 }
 
 impl Mapper {
     pub fn new(
-        client: mqtt_client::Client,
+        input: UnboundedReceiver<Message>,
+        output: UnboundedSender<Message>,
         converter: Box<dyn Converter<Error = ConversionError>>,
-        _flock: Flockfile,
     ) -> Self {
         Self {
-            client,
+            input,
+            output,
             converter,
-            _flock,
         }
     }
 
-    pub(crate) async fn run(&mut self) -> Result<(), MqttClientError> {
+    pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
         info!("Running");
-        let errors_handle = self.subscribe_errors();
-        let messages_handle = self.subscribe_messages();
-        messages_handle.await?;
-        errors_handle
-            .await
-            .map_err(|_| MqttClientError::JoinError)?;
+        self.process_messages().await?;
         Ok(())
     }
 
-    #[instrument(skip(self), name = "errors")]
-    fn subscribe_errors(&self) -> JoinHandle<()> {
-        let mut errors = self.client.subscribe_errors();
+    #[instrument(skip(errors), name = "errors")]
+    fn subscribe_errors(mut errors: UnboundedReceiver<MqttError>) {
         tokio::spawn(async move {
             while let Some(error) = errors.next().await {
                 error!("{}", error);
             }
-        })
+        });
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn subscribe_messages(&mut self) -> Result<(), MqttClientError> {
+    async fn process_messages(&mut self) -> Result<(), MqttError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
-            self.client.publish(init_message).await?
+            let _ = self.output.send(init_message).await;
         }
 
-        let mut messages = self
-            .client
-            .subscribe(self.converter.get_in_topic_filter().clone())
-            .await?;
-
-        while let Some(message) = messages.next().await {
+        while let Some(message) = &mut self.input.next().await {
             let converted_messages = self.converter.convert(&message);
             for converted_message in converted_messages.into_iter() {
-                self.client.publish(converted_message).await?
+                let _ = self.output.send(converted_message).await;
             }
         }
         Ok(())
@@ -93,7 +98,7 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mqtt_client::{Message, Topic, TopicFilter};
+    use mqtt_channel::{Message, Topic, TopicFilter};
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -105,17 +110,16 @@ mod tests {
 
         // Given a mapper
         let name = "mapper_under_test";
-
-        let flock = check_another_instance_is_not_running(name)
-            .expect("Another mapper instance is locking /run/lock/mapper_under_test.lock");
-
-        let mqtt_config = mqtt_client::Config::default().with_port(broker.port);
-        let mqtt_client = Client::connect(name, &mqtt_config).await?;
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(broker.port)
+            .with_session_name(name)
+            .with_subscriptions(TopicFilter::new_unchecked("in_topic"));
+        let mqtt_client = Connection::new(&mqtt_config).await?;
 
         let mut mapper = Mapper {
-            client: mqtt_client,
+            input: mqtt_client.received,
+            output: mqtt_client.published,
             converter: Box::new(UppercaseConverter::new()),
-            _flock: flock,
         };
 
         // Let's run the mapper in the background

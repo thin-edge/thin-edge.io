@@ -9,12 +9,24 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 pub async fn messages_published_on(mqtt_port: u16, topic: &str) -> UnboundedReceiver<String> {
     let (sender, recv) = tokio::sync::mpsc::unbounded_channel();
 
+    // One can have a connection error if this is called just after the broker starts
+    // So try to subscribe again after a first error
     let mut con = TestCon::new(mqtt_port);
-
-    if let Err(err) = con.subscribe(topic, QoS::AtLeastOnce).await {
-        let msg = format!("Error: {:?}", err).to_string();
-        let _ = sender.send(msg);
-        return recv;
+    let mut retry = 1;
+    loop {
+        match con.subscribe(topic, QoS::AtLeastOnce).await {
+            Ok(()) => break,
+            Err(_) if retry > 0 => {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                retry -= 1;
+                continue;
+            }
+            Err(err) => {
+                let msg = format!("Error: {:?}", err).to_string();
+                let _ = sender.send(msg);
+                return recv;
+            }
+        }
     }
 
     tokio::spawn(async move {
@@ -86,6 +98,7 @@ where
 
     loop {
         if let Ok(message) = con.next_topic_payload().await {
+            dbg!(&message);
             for (topic, response) in func(message).iter() {
                 let _ = con.publish(topic, QoS::AtLeastOnce, response).await;
             }

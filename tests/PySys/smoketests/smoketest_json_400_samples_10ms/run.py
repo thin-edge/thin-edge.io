@@ -18,5 +18,5 @@ class SmoketestJson400Samples10ms(Environment_roundtrip_c8y):
         super().setup()
         self.samples = "400"
         self.delay = "10"
-        self.timeslot = "15"
+        self.timeslot = "20"
         self.style = "JSON"
