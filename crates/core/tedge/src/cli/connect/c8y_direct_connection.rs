@@ -1,9 +1,10 @@
 use super::{BridgeConfig, ConnectError};
 
 use rumqttc::{
-    self, certs, pkcs8_private_keys, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS,
-    Transport,
+    self, certs, pkcs8_private_keys, rsa_private_keys, Client, Event, Incoming, MqttOptions,
+    Outgoing, Packet, QoS, Transport,
 };
+
 use rustls_0_19::ClientConfig;
 
 use std::fs;
@@ -121,11 +122,42 @@ fn read_pvt_key(
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     // Become BROKER_USER to read the private key
     let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
-    let f = File::open(key_file)?;
+    match parse_pvt_key(key_file.clone()) {
+        Ok(key) => Ok(key),
+        Err(ConnectError::UnsupportedPvtKeyFormat) => match parse_pvt_rsa_key(key_file) {
+            Ok(key) => Ok(key),
+            Err(e) => Err(e),
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_pvt_key(
+    key_file: tedge_config::FilePath,
+) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    let f = File::open(key_file.clone())?;
     let mut key_reader = BufReader::new(f);
-    let result = pkcs8_private_keys(&mut key_reader);
-    match result {
-        Ok(key) => Ok(key[0].clone()),
+    match pkcs8_private_keys(&mut key_reader) {
+        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
+        Ok(_) => {
+            return Err(ConnectError::UnsupportedPvtKeyFormat);
+        }
+        Err(_) => {
+            return Err(ConnectError::RumqttcPrivateKey);
+        }
+    }
+}
+
+fn parse_pvt_rsa_key(
+    key_file: tedge_config::FilePath,
+) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    let f = File::open(key_file.clone())?;
+    let mut key_reader = BufReader::new(f);
+    match rsa_private_keys(&mut key_reader) {
+        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
+        Ok(_) => {
+            return Err(ConnectError::UnsupportedPvtKeyFormat);
+        }
         Err(_) => {
             return Err(ConnectError::RumqttcPrivateKey);
         }

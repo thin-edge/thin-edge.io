@@ -49,6 +49,9 @@ pub enum ConnectError {
     #[error("Could not parse private key")]
     RumqttcPrivateKey,
 
+    #[error("Unsupported key format")]
+    UnsupportedPvtKeyFormat,
+
     #[error("Could not parse certificate")]
     RumqttcCertificate,
 
