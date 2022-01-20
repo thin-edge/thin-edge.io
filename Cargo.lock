@@ -2361,7 +2361,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "log",
- "mqtt_client",
+ "mqtt_channel",
  "tokio",
 ]
 
