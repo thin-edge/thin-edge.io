@@ -37,8 +37,7 @@
 * [Install thin-edge.io on your device](docs/src/howto-guides/002_installation.md)
 * [Connect your device to Cumulocity](docs/src/tutorials/connect-c8y.md)
 * [Connect your device to Azure](docs/src/tutorials/connect-azure.md)
-* [How to build from source](./BUILDING.md)
-* [Have a look at some examples](https://github.com/thin-edge/thin-edge.io_examples)
+* [Find some projects that work together with thin-edge.io](https://github.com/thin-edge/thin-edge.io_examples)
 * [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/html/)
 <br/>
 <br/>
