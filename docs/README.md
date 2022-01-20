@@ -1,9 +1,9 @@
+# You can find the [thin-edge.io documentation here](https://thin-edge.github.io/thin-edge.io/html/).
+
 # Thin Edge Documentation: Writer Guidelines
 
-You can [read the documentation directly from the source](./src/SUMMARY.md).
-
 ## How to generate the documentation
-This book is generated using [`mdbook`](https://lib.rs/crates/mdbook).
+The documentation is generated using [`mdbook`](https://lib.rs/crates/mdbook).
 
 To generate the documentation from [source](https://github.com/thin-edge/thin-edge.io/tree/main/docs/src),
 you will have to run:

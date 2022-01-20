@@ -3,7 +3,7 @@ use tokio::sync::mpsc::error::SendError;
 #[derive(thiserror::Error, Debug)]
 pub enum DeviceMonitorError {
     #[error(transparent)]
-    FromMqttClient(#[from] mqtt_client::MqttClientError),
+    FromMqttClient(#[from] mqtt_channel::MqttError),
 
     #[error(transparent)]
     FromInvalidCollectdMeasurement(#[from] crate::collectd_mapper::collectd::CollectdError),

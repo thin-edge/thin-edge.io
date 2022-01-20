@@ -1,6 +1,6 @@
 use agent_interface::SoftwareError;
 use flockfile::FlockfileError;
-use mqtt_client::MqttClientError;
+use mqtt_channel::MqttError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]
@@ -12,7 +12,7 @@ pub enum AgentError {
     FromJoin(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
-    FromMqttClient(#[from] MqttClientError),
+    FromMqttClient(#[from] MqttError),
 
     #[error("Couldn't load plugins from /etc/tedge/sm-plugins")]
     NoPlugins,
