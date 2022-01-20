@@ -31,7 +31,7 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         super().validate()
         self.log.info("Validate")
         self.assertGrep(
-            "tedge_connect_c8y_test_positive.out", "connection check is successful.", contains=True
+            "tedge_connect_c8y_test_positive.out", "Connection check to c8y cloud is successful.", contains=True
         )
         try:
             id = self.device_fragment['id']
