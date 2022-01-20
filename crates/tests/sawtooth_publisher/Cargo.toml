@@ -1,0 +1,15 @@
+[package]
+name = "sawtooth_publisher"
+version = "0.5.2"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-log = "2.0"
+env_logger = "0.9"
+futures = "0.3"
+futures-timer = "3.0"
+log = "0.4"
+mqtt_client = { path = "../../common/mqtt_client" }
+tokio = { version = "1.12", features = ["sync", "macros"] }
