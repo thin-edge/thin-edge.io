@@ -66,6 +66,9 @@ pub enum ConversionError {
 
     #[error("Error converting json option")]
     FromOptionError,
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 #[derive(Debug, thiserror::Error)]

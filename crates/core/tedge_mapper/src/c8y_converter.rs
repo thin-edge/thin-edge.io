@@ -167,7 +167,7 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
 
 /// gets a serde_json::Value of inventory
 fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, ConversionError> {
-    let agent_fragment = C8yAgentFragment::new();
+    let agent_fragment = C8yAgentFragment::new()?;
     let json_fragment = agent_fragment.to_json()?;
 
     match read_json_from_file(file_path) {

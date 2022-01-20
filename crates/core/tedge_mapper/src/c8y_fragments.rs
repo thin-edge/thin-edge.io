@@ -13,11 +13,11 @@ pub struct C8yAgentFragment {
 }
 
 impl C8yAgentFragment {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, ConversionError> {
+        Ok(Self {
             name: "thin-edge.io".to_string(),
-            version: get_tedge_version(),
-        }
+            version: get_tedge_version()?,
+        })
     }
 
     pub fn to_json(&self) -> Result<serde_json::Value, ConversionError> {
@@ -26,17 +26,22 @@ impl C8yAgentFragment {
         Ok(jsond)
     }
 }
-pub fn get_tedge_version() -> String {
+pub fn get_tedge_version() -> Result<String, ConversionError> {
     let process = Command::new("tedge").arg("--version").output();
 
     match process {
         Ok(process) => {
-            let string = String::from_utf8(process.stdout).unwrap();
-            string.split_whitespace().last().unwrap().trim().to_string()
+            let string = String::from_utf8(process.stdout)?;
+            Ok(string
+                .split_whitespace()
+                .last()
+                .ok_or_else(|| ConversionError::FromOptionError)?
+                .trim()
+                .to_string())
         }
         Err(err) => {
             error!("{}", err);
-            "0.0.0".to_string()
+            Ok("0.0.0".to_string())
         }
     }
 }
