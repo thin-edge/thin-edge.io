@@ -9,8 +9,8 @@ For SmartREST the tedge is used to publish.
 
 
 Call example:
-./roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id>
-./roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/debug/examples/ -u <username> -t <tennant> -pass <pass> -id <id>
+./roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/debug/ -u <username> -t <tennant> -pass <pass> -id <id>
+./roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/debug/ -u <username> -t <tennant> -pass <pass> -id <id>
 """
 
 import argparse
