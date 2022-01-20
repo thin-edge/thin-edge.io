@@ -4,7 +4,9 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_channel::{Connection, Config, Message, MqttError, Topic, TopicFilter, PubChannel, SubChannel, ErrChannel};
+use mqtt_channel::{
+    Config, Connection, ErrChannel, Message, MqttError, PubChannel, SubChannel, Topic, TopicFilter,
+};
 use std::convert::TryFrom;
 use std::env;
 use std::io::Write;
@@ -32,8 +34,8 @@ This is a small and flexible publisher for deterministic test data.
 
 // sawtooth_publisher <wait_time_ms> <height> <iterations> <template>
 //
-// cargo run --example sawtooth_publisher 100 100 100 flux
-// cargo run --example sawtooth_publisher 1000 10 10 sawmill
+// cargo run sawtooth_publisher 100 100 100 flux
+// cargo run sawtooth_publisher 1000 10 10 sawmill
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +64,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logger();
 
     let name = "sawtooth_".to_string() + &process::id().to_string();
-    let config = Config::default().with_clean_session(true).with_session_name(name).with_subscriptions(c8y_err);
+    let config = Config::default()
+        .with_clean_session(true)
+        .with_session_name(name)
+        .with_subscriptions(c8y_err);
     let mqtt = Connection::new(&config).await?;
 
     let c8y_messages = mqtt.published;
@@ -72,9 +77,21 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     if template == "flux" {
-        tokio::spawn(publish_topic(c8y_messages, c8y_msg, wait, height, iterations));
+        tokio::spawn(publish_topic(
+            c8y_messages,
+            c8y_msg,
+            wait,
+            height,
+            iterations,
+        ));
     } else if template == "sawmill" {
-        tokio::spawn(publish_multi_topic(c8y_messages, c8y_msg, wait, height, iterations));
+        tokio::spawn(publish_multi_topic(
+            c8y_messages,
+            c8y_msg,
+            wait,
+            height,
+            iterations,
+        ));
     } else {
         println!("Wrong template");
         panic!("Exiting");
