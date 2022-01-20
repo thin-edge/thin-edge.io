@@ -19,7 +19,6 @@
 #    C8YDEVICEID
 #    EXAMPLEDIR
 
-# TODO Remove: Seems to be unused
 # a simple function to append lines to files if not already there
 appendtofile() {
     STRING=$1
@@ -97,6 +96,8 @@ else
     echo "Your device: HIDDEN"
 fi
 
+# wait for certificate to to reflect in the c8y cloud
+sleep 5
 
 echo "Connect again"
 sudo tedge connect c8y

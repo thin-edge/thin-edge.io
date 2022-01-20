@@ -15,7 +15,7 @@ pub enum SMCumulocityMapperError {
     FromElapsed(#[from] tokio::time::error::Elapsed),
 
     #[error(transparent)]
-    FromMqttClient(#[from] mqtt_client::MqttClientError),
+    FromMqttClient(#[from] mqtt_channel::MqttError),
 
     #[error(transparent)]
     FromReqwest(#[from] reqwest::Error),
@@ -43,4 +43,10 @@ pub enum SMCumulocityMapperError {
 
     #[error("Request timed out")]
     RequestTimeout,
+
+    #[error("Operation execution failed: {0}")]
+    ExecuteFailed(String),
+
+    #[error("An unknown operation template: {0}")]
+    UnknownOperation(String),
 }

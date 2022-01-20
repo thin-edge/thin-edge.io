@@ -1,12 +1,10 @@
-use mqtt_client::{Client, Message, MqttClient};
-use std::sync::Arc;
 use tracing::{error, info, instrument};
 
 use crate::collectd_mapper::batcher::MessageBatch;
 use crate::collectd_mapper::collectd::CollectdMessage;
 use crate::collectd_mapper::error::DeviceMonitorError;
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
-use mqtt_client::{QoS, Topic, TopicFilter};
+use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -64,14 +62,15 @@ impl DeviceMonitor {
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let mqtt_config = mqtt_client::Config::new(
+        let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
+            .with_qos(QoS::AtMostOnce);
+        let mqtt_config = mqtt_channel::Config::new(
             self.device_monitor_config.host,
             self.device_monitor_config.port,
         )
-        .queue_capacity(1024);
-        let mqtt_client: Arc<dyn MqttClient> = Arc::new(
-            Client::connect(self.device_monitor_config.mqtt_client_id, &mqtt_config).await?,
-        );
+        .with_session_name(self.device_monitor_config.mqtt_client_id)
+        .with_subscriptions(input_topic);
+        let mqtt_client = Connection::new(&mqtt_config).await?;
 
         let batch_config = BatchConfigBuilder::new()
             .event_jitter(self.device_monitor_config.batching_window)
@@ -88,10 +87,7 @@ impl DeviceMonitor {
             }
         });
 
-        let input_mqtt_client = mqtt_client.clone();
-        let input_topic =
-            TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?.qos(QoS::AtMostOnce);
-        let mut collectd_messages = input_mqtt_client.subscribe(input_topic).await?;
+        let mut collectd_messages = mqtt_client.received;
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
                 match CollectdMessage::parse_from(&message) {
@@ -115,8 +111,8 @@ impl DeviceMonitor {
             msg_send.send(eof).await
         });
 
-        let output_mqtt_client = mqtt_client.clone();
         let output_topic = Topic::new(self.device_monitor_config.mqtt_target_topic)?;
+        let mut output_messages = mqtt_client.published;
         let output_join_handle = tokio::task::spawn(async move {
             loop {
                 match batch_recv.recv().await {
@@ -127,7 +123,7 @@ impl DeviceMonitor {
                         match MessageBatch::thin_edge_json_bytes(messages) {
                             Ok(payload) => {
                                 let tedge_message = Message::new(&output_topic, payload);
-                                if let Err(err) = output_mqtt_client.publish(tedge_message).await {
+                                if let Err(err) = output_messages.send(tedge_message).await {
                                     error!("Error while sending a thin-edge json message: {}", err);
                                 }
                             }
@@ -142,9 +138,9 @@ impl DeviceMonitor {
             info!("Batching done");
         });
 
-        let mut errors = mqtt_client.subscribe_errors();
+        let mut mqtt_errors = mqtt_client.errors;
         let error_join_handle = tokio::task::spawn(async move {
-            while let Some(error) = errors.next().await {
+            while let Some(error) = mqtt_errors.next().await {
                 error!("MQTT error: {}", error);
             }
         });

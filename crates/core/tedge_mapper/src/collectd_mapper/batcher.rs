@@ -1,5 +1,5 @@
 use clock::Timestamp;
-use mqtt_client::Payload;
+use mqtt_channel::Payload;
 use thin_edge_json::{
     group::{MeasurementGroup, MeasurementGrouper},
     measurement::MeasurementVisitor,
