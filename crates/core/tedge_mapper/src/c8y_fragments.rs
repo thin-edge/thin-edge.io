@@ -20,6 +20,13 @@ impl C8yAgentFragment {
         })
     }
 
+    pub fn with_name(&self, name: &str) -> Result<Self, ConversionError> {
+        Ok(Self {
+            name: name.to_string(),
+            version: self.version.clone(),
+        })
+    }
+
     pub fn to_json(&self) -> Result<serde_json::Value, ConversionError> {
         let json_string = serde_json::to_string(&self)?;
         let jsond: serde_json::Value = serde_json::from_str(&json_string)?;

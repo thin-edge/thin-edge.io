@@ -142,7 +142,7 @@ fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
 }
 
 fn create_inventory_fragments_message(device_name: &str) -> Result<Message, ConversionError> {
-    let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
+    let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION, &device_name)?;
 
     let topic = Topic::new_unchecked(&format!(
         "{}/{}",
@@ -166,8 +166,11 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
 }
 
 /// gets a serde_json::Value of inventory
-fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, ConversionError> {
-    let agent_fragment = C8yAgentFragment::new()?;
+fn get_inventory_fragments(
+    file_path: &str,
+    device_name: &str,
+) -> Result<serde_json::Value, ConversionError> {
+    let agent_fragment = C8yAgentFragment::new()?.with_name(device_name)?;
     let json_fragment = agent_fragment.to_json()?;
 
     match read_json_from_file(file_path) {
