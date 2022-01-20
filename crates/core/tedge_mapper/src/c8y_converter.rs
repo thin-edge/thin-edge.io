@@ -14,7 +14,7 @@ use thin_edge_json::alarm::ThinEdgeAlarm;
 use tracing::error;
 
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/extras.json";
+const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/inventory.json";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
