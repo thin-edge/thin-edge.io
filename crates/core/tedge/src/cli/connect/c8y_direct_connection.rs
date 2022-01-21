@@ -178,3 +178,37 @@ fn read_cert_chain(
     };
     Ok(cert_chain)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn parse_privte_rsa_key() {
+        let key = concat!(
+            "-----BEGIN RSA PRIVATE KEY-----\n",
+            "MC4CAQ\n",
+            "-----END RSA PRIVATE KEY-----"
+        );
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let result = parse_pvt_rsa_key(temp_file.path().into()).unwrap();
+        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(result, pvt_key);
+    }
+    
+    #[test]
+    fn parse_privte_key() {
+        let key = concat! {
+        "-----BEGIN PRIVATE KEY-----\n",
+        "MC4CAQ\n",
+        "-----END PRIVATE KEY-----"};
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let result = parse_pvt_key(temp_file.path().into()).unwrap();
+        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(result, pvt_key);
+    }
+}
