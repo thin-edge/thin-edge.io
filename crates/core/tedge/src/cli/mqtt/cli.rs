@@ -21,6 +21,9 @@ pub enum TEdgeMqttCli {
         /// QoS level (0, 1, 2)
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
+        /// Retain flag
+        #[structopt(long = "retain")]
+        retain: bool,
     },
 
     /// Subscribe a MQTT topic.
@@ -46,6 +49,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic,
                     message,
                     qos,
+                    retain,
                 } => MqttPublishCommand {
                     host: DEFAULT_HOST.to_string(),
                     port: port.into(),
@@ -54,6 +58,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
                     disconnect_timeout: DISCONNECT_TIMEOUT,
+                    retain,
                 }
                 .into_boxed(),
                 TEdgeMqttCli::Sub {
