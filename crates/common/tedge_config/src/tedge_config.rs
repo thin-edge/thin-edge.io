@@ -33,6 +33,32 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<DeviceTypeSetting> for TEdgeConfig {
+    fn query(&self, _setting: DeviceTypeSetting) -> ConfigSettingResult<String> {
+        let device_type = self
+            .data
+            .device
+            .device_type
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_device_type.clone());
+        Ok(device_type)
+    }
+
+    fn update(
+        &mut self,
+        _setting: DeviceTypeSetting,
+        value: <DeviceTypeSetting as ConfigSetting>::Value,
+    ) -> ConfigSettingResult<()> {
+        self.data.device.device_type = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: DeviceTypeSetting) -> ConfigSettingResult<()> {
+        self.data.device.device_type = None;
+        Ok(())
+    }
+}
+
 fn device_id_read_only_error() -> ConfigSettingError {
     ConfigSettingError::ReadonlySetting {
         message: concat!(

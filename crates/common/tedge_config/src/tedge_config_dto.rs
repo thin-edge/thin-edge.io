@@ -44,6 +44,9 @@ pub(crate) struct DeviceConfigDto {
     /// Path where the device's certificate is stored.
     /// Defaults to $HOME/.tedge/tedge-certificate.crt
     pub(crate) cert_path: Option<FilePath>,
+
+    #[serde(rename = "type")]
+    pub(crate) device_type: Option<String>,
 }
 
 /// Represents the Cumulocity specific configurations defined in the
