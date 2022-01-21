@@ -2,22 +2,27 @@ use serde::Serialize;
 use std::process::Command;
 
 use crate::error::ConversionError;
-use tracing::error;
-
-// rename to c8y_agent_fragment.rs
+use tracing::warn;
 
 #[derive(Debug, Serialize)]
-pub struct C8yAgentFragment {
+pub struct C8yAgent {
     name: String,
     version: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct C8yAgentFragment {
+    #[serde(rename = "c8y_Agent")]
+    pub c8y_agent: C8yAgent,
+}
+
 impl C8yAgentFragment {
     pub fn new() -> Result<Self, ConversionError> {
-        Ok(Self {
+        let c8y_agent = C8yAgent {
             name: "thin-edge.io".to_string(),
             version: get_tedge_version()?,
-        })
+        };
+        Ok(Self { c8y_agent })
     }
 
     pub fn to_json(&self) -> Result<serde_json::Value, ConversionError> {
@@ -40,7 +45,7 @@ pub fn get_tedge_version() -> Result<String, ConversionError> {
                 .to_string())
         }
         Err(err) => {
-            error!("{}", err);
+            warn!("{}\ntedge version not found.", err);
             Ok("0.0.0".to_string())
         }
     }

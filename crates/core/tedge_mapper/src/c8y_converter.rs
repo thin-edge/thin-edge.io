@@ -174,7 +174,13 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
         Ok(mut json) => {
             json.as_object_mut()
                 .ok_or_else(|| return ConversionError::FromOptionError)?
-                .insert("c8y_Agent".to_string(), json_fragment);
+                .insert(
+                    "c8y_Agent".to_string(),
+                    json_fragment
+                        .get("c8y_Agent")
+                        .ok_or_else(|| return ConversionError::FromOptionError)?
+                        .to_owned(),
+                );
             Ok(json)
         }
         Err(_) => {
