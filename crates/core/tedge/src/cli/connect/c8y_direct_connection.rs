@@ -213,6 +213,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_supported_key() {
+        let user_manager = UserManager::new();
+        let key = concat!(
+            "-----BEGIN RSA PRIVATE KEY-----\n",
+            "MC4CAQ\n",
+            "-----END RSA PRIVATE KEY-----"
+        );
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let parsed_key = read_pvt_key(user_manager, temp_file.path().into()).unwrap();
+        let expected_pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(parsed_key, expected_pvt_key);
+    }
+
+    #[test]
     fn parse_unsupported_key() {
         let user_manager = UserManager::new();
         let key = concat!(
