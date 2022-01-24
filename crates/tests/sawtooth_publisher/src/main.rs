@@ -4,20 +4,18 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_client::{
-    Client, Config, Message, MqttClient, MqttClientError, MqttErrorStream, MqttMessageStream, Topic,
+use mqtt_channel::{
+    Config, Connection, ErrChannel, Message, MqttError, PubChannel, SubChannel, Topic, TopicFilter,
 };
 use std::convert::TryFrom;
 use std::env;
 use std::io::Write;
 use std::process;
 use std::time::{Duration, Instant};
-//use rumqttc::QoS;
 
 /*
 
 This is a small and flexible publisher for deterministic test data.
-Its based on the temperature publisher.
 
 - TODO: Improve code quality
 - TODO: Add different data types for JSON publishing
@@ -25,8 +23,6 @@ Its based on the temperature publisher.
 - TODO: Currently REST sending is disabled and JSON publishing is enabled
 - TODO: Add QoS selection
 */
-
-const C8Y_TEMPLATE_RESTART: &str = "510";
 
 // Templates:
 // https://cumulocity.com/guides/10.4.6/device-sdk/mqtt/
@@ -38,8 +34,8 @@ const C8Y_TEMPLATE_RESTART: &str = "510";
 
 // sawtooth_publisher <wait_time_ms> <height> <iterations> <template>
 //
-// cargo run --example sawtooth_publisher 100 100 100 flux
-// cargo run --example sawtooth_publisher 1000 10 10 sawmill
+// cargo run sawtooth_publisher 100 100 100 flux
+// cargo run sawtooth_publisher 1000 10 10 sawmill
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -63,31 +59,45 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         height * iterations
     );
     let c8y_msg = Topic::new("tedge/measurements")?;
-    let c8y_cmd = Topic::new("c8y/s/ds")?;
-    let c8y_err = Topic::new("c8y/s/e")?;
+    let c8y_err = TopicFilter::new("c8y/s/e")?;
 
     init_logger();
 
     let name = "sawtooth_".to_string() + &process::id().to_string();
-    let mqtt = Client::connect(&name, &Config::default()).await?;
+    let config = Config::default()
+        .with_clean_session(true)
+        .with_session_name(name)
+        .with_subscriptions(c8y_err);
+    let mqtt = Connection::new(&config).await?;
 
-    let commands = mqtt.subscribe(c8y_cmd.filter()).await?;
-    let c8y_errors = mqtt.subscribe(c8y_err.filter()).await?;
-    let errors = mqtt.subscribe_errors();
+    let c8y_messages = mqtt.published;
+    let c8y_errors = mqtt.received;
+    let errors = mqtt.errors;
 
     let start = Instant::now();
 
     if template == "flux" {
-        tokio::spawn(publish_topic(mqtt, c8y_msg, wait, height, iterations));
+        tokio::spawn(publish_topic(
+            c8y_messages,
+            c8y_msg,
+            wait,
+            height,
+            iterations,
+        ));
     } else if template == "sawmill" {
-        tokio::spawn(publish_multi_topic(mqtt, c8y_msg, wait, height, iterations));
+        tokio::spawn(publish_multi_topic(
+            c8y_messages,
+            c8y_msg,
+            wait,
+            height,
+            iterations,
+        ));
     } else {
         println!("Wrong template");
         panic!("Exiting");
     };
 
     select! {
-        _ = listen_command(commands).fuse() => (),
         _ = listen_c8y_error(c8y_errors).fuse() => (),
         _ = listen_error(errors).fuse() => (),
     }
@@ -112,12 +122,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn publish_topic(
-    mqtt: Client,
+    mut mqtt: impl PubChannel,
     c8y_msg: Topic,
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), MqttClientError> {
+) -> Result<(), MqttError> {
     info!("Publishing temperature measurements");
     println!();
     for iteration in 0..iterations {
@@ -134,17 +144,17 @@ async fn publish_topic(
     }
     println!();
 
-    mqtt.disconnect().await?;
+    let _ = mqtt.close().await;
     Ok(())
 }
 
 async fn publish_multi_topic(
-    mqtt: Client,
+    mut mqtt: impl PubChannel,
     c8y_msg: Topic,
     wait: i32,
     height: i32,
     iterations: i32,
-) -> Result<(), MqttClientError> {
+) -> Result<(), MqttError> {
     info!("Publishing temperature measurements");
     println!();
     let series_name = "\"Sawmill [S]\"";
@@ -174,23 +184,11 @@ async fn publish_multi_topic(
     }
     println!();
 
-    mqtt.disconnect().await?;
+    let _ = mqtt.close().await;
     Ok(())
 }
 
-async fn listen_command(mut messages: Box<dyn MqttMessageStream>) {
-    while let Some(message) = messages.next().await {
-        debug!("C8Y command: {:?}", message.payload_str());
-        if let Ok(cmd) = message.payload_str() {
-            if cmd.contains(C8Y_TEMPLATE_RESTART) {
-                info!("Stopping on remote request ... should be restarted by the daemon monitor.");
-                break;
-            }
-        }
-    }
-}
-
-async fn listen_c8y_error(mut messages: Box<dyn MqttMessageStream>) {
+async fn listen_c8y_error(mut messages: impl SubChannel) {
     let mut count: u32 = 0;
     while let Some(message) = messages.next().await {
         error!("C8Y error: {:?}", message.payload_str());
@@ -201,7 +199,7 @@ async fn listen_c8y_error(mut messages: Box<dyn MqttMessageStream>) {
     }
 }
 
-async fn listen_error(mut errors: Box<dyn MqttErrorStream>) {
+async fn listen_error(mut errors: impl ErrChannel) {
     let mut count: u32 = 0;
     while let Some(error) = errors.next().await {
         error!("System error: {}", error);
