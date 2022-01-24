@@ -49,7 +49,7 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: continuous_integration
-          name: examples_armv7-unknown-linux-gnueabihf
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: Stop collectd mapper
