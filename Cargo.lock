@@ -2691,7 +2691,6 @@ dependencies = [
 name = "tedge_config"
 version = "0.5.2"
 dependencies = [
- "anyhow",
  "assert_matches",
  "certificate",
  "serde",

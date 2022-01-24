@@ -21,7 +21,6 @@ impl TEdgeComponent for CumulocityMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(16 * 1024);
 
-        // TODO: refactor converter to take tedge_config as param (not doing now)
         let device_name = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
 
