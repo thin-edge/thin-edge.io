@@ -46,11 +46,8 @@ pub enum ConnectError {
     )]
     InvalidJWTToken { token: String, reason: String },
 
-    #[error("Could not parse private key")]
-    RumqttcPrivateKey,
-
-    #[error("Unsupported key format")]
-    UnsupportedPvtKeyFormat,
+    #[error("Fail to parse the private key")]
+    UnknownPrivateKeyFormat,
 
     #[error("Could not parse certificate")]
     RumqttcCertificate,

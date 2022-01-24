@@ -122,44 +122,31 @@ fn read_pvt_key(
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     // Become BROKER_USER to read the private key
     let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
-    match parse_pvt_key(key_file.clone()) {
-        Ok(key) => Ok(key),
-        Err(ConnectError::UnsupportedPvtKeyFormat) => match parse_pvt_rsa_key(key_file) {
-            Ok(key) => Ok(key),
-            Err(e) => Err(e),
-        },
-        Err(e) => Err(e),
-    }
+    parse_pkcs8_key(key_file.clone()).or_else(|_| parse_rsa_key(key_file))
 }
 
-fn parse_pvt_key(
+fn parse_pkcs8_key(
     key_file: tedge_config::FilePath,
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     let f = File::open(key_file.clone())?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
         Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        Ok(_) => {
-            return Err(ConnectError::UnsupportedPvtKeyFormat);
-        }
-        Err(_) => {
-            return Err(ConnectError::RumqttcPrivateKey);
+        _ => {
+            return Err(ConnectError::UnknownPrivateKeyFormat);
         }
     }
 }
 
-fn parse_pvt_rsa_key(
+fn parse_rsa_key(
     key_file: tedge_config::FilePath,
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     let f = File::open(key_file.clone())?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
         Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        Ok(_) => {
-            return Err(ConnectError::UnsupportedPvtKeyFormat);
-        }
-        Err(_) => {
-            return Err(ConnectError::RumqttcPrivateKey);
+        _ => {
+            return Err(ConnectError::UnknownPrivateKeyFormat);
         }
     }
 }
@@ -186,7 +173,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn parse_privte_rsa_key() {
+    fn parse_private_rsa_key() {
         let key = concat!(
             "-----BEGIN RSA PRIVATE KEY-----\n",
             "MC4CAQ\n",
@@ -194,20 +181,20 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_pvt_rsa_key(temp_file.path().into()).unwrap();
+        let result = parse_rsa_key(temp_file.path().into()).unwrap();
         let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(result, pvt_key);
     }
 
     #[test]
-    fn parse_privte_key() {
+    fn parse_private_pkcs8_key() {
         let key = concat! {
         "-----BEGIN PRIVATE KEY-----\n",
         "MC4CAQ\n",
         "-----END PRIVATE KEY-----"};
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_pvt_key(temp_file.path().into()).unwrap();
+        let result = parse_pkcs8_key(temp_file.path().into()).unwrap();
         let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(result, pvt_key);
     }
@@ -238,6 +225,6 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
         let err = read_pvt_key(user_manager, temp_file.path().into()).unwrap_err();
-        assert!(matches!(err, ConnectError::UnsupportedPvtKeyFormat));
+        assert!(matches!(err, ConnectError::UnknownPrivateKeyFormat));
     }
 }
