@@ -37,7 +37,7 @@ This is a small and flexible publisher for deterministic test data.
 // cargo run sawtooth_publisher 100 100 100 flux
 // cargo run sawtooth_publisher 1000 10 10 sawmill
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     // wait time, template, tooth-height,
