@@ -42,6 +42,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          components: rustfmt, clippy
+          override: true
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
@@ -50,6 +57,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          toolchain: 1.58
           command: clippy
           args: --version
 
@@ -57,6 +65,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          toolchain: 1.58
           command: clippy
 
   cargo-test:
@@ -67,6 +76,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -101,6 +116,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
@@ -117,7 +138,7 @@ jobs:
         with:
           command: build
           args: --release
-          
+
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
@@ -128,10 +149,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           target: armv7-unknown-linux-gnueabihf
           override: true
 
@@ -160,7 +180,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           target: armv7-unknown-linux-gnueabihf
           override: true
 
@@ -185,6 +205,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
@@ -208,4 +234,4 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.54.0
+          args: --minimum 1.58.0

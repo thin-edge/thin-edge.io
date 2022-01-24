@@ -57,6 +57,18 @@ pub enum ConversionError {
 
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    FromStdIo(#[from] std::io::Error),
+
+    #[error("Error converting json option")]
+    FromOptionError,
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 #[derive(Debug, thiserror::Error)]
