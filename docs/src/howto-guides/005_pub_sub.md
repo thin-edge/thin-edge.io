@@ -18,6 +18,15 @@ tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'
 tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }' --qos 2
 ```
 
+`tedge mqtt pub` supports publishing a MQTT message with retain flag:
+
+```shell
+tedge mqtt pub --retain --qos 1 tedge/alarms/critical/high_temperature '{"message": "Temperature is critical"}'
+```
+
+Note: By default the mqtt message will be published with retain flag set to false.
+
+
 ## Subscribe
 
 Command [`tedge mqtt sub`](../references/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
