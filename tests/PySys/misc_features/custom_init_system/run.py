@@ -16,8 +16,7 @@ Cleanup the system config file, the dummy init system executable, and the output
 
 class CustomInitSystem(BaseTest):
     def setup(self):
-        # self.tedge = "/usr/bin/tedge"
-        self.tedge = "/home/rina/thinedge/thin-edge-fork/target/debug/tedge"
+        self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.system_conf = "/etc/tedge/system.toml"
         self.dummy_init = "/etc/tedge/dummy_init.sh"
