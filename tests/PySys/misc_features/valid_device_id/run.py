@@ -73,7 +73,7 @@ class ValidateValidDeviceId(BaseTest):
             environs={"C8YPASS":self.project.c8ypass},
             command=self.sudo,
             arguments=["-E", self.tedge, "cert", "upload",
-                       "c8y", "--user", self.project.username],
+                       "c8y", "--user", self.project.c8yusername],
             stdouterr="cert_upload",
         )
 
