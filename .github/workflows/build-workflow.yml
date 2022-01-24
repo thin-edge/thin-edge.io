@@ -26,7 +26,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           override: true
 
       - name: Enable cache
@@ -134,7 +134,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.58
           target: ${{ matrix.target }}
           override: true
 
@@ -263,4 +263,3 @@ jobs:
         with:
           name: tedge_dummy_plugin_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/tedge_dummy_plugin
-

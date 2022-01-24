@@ -1,7 +1,8 @@
 [package]
 name = "tedge"
 version = "0.5.2"
-edition = "2018"
+edition = "2021"
+rust-version = "1.58"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
 readme = "README.md"

@@ -1,9 +1,10 @@
 use super::{BridgeConfig, ConnectError};
 
 use rumqttc::{
-    self, certs, pkcs8_private_keys, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS,
-    Transport,
+    self, certs, pkcs8_private_keys, rsa_private_keys, Client, Event, Incoming, MqttOptions,
+    Outgoing, Packet, QoS, Transport,
 };
+
 use rustls_0_19::ClientConfig;
 
 use std::fs;
@@ -121,13 +122,31 @@ fn read_pvt_key(
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     // Become BROKER_USER to read the private key
     let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
-    let f = File::open(key_file)?;
+    parse_pkcs8_key(key_file.clone()).or_else(|_| parse_rsa_key(key_file))
+}
+
+fn parse_pkcs8_key(
+    key_file: tedge_config::FilePath,
+) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
-    let result = pkcs8_private_keys(&mut key_reader);
-    match result {
-        Ok(key) => Ok(key[0].clone()),
-        Err(_) => {
-            return Err(ConnectError::RumqttcPrivateKey);
+    match pkcs8_private_keys(&mut key_reader) {
+        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
+        _ => {
+            return Err(ConnectError::UnknownPrivateKeyFormat);
+        }
+    }
+}
+
+fn parse_rsa_key(
+    key_file: tedge_config::FilePath,
+) -> Result<rustls_0_19::PrivateKey, ConnectError> {
+    let f = File::open(&key_file)?;
+    let mut key_reader = BufReader::new(f);
+    match rsa_private_keys(&mut key_reader) {
+        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
+        _ => {
+            return Err(ConnectError::UnknownPrivateKeyFormat);
         }
     }
 }
@@ -145,4 +164,67 @@ fn read_cert_chain(
         }
     };
     Ok(cert_chain)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn parse_private_rsa_key() {
+        let key = concat!(
+            "-----BEGIN RSA PRIVATE KEY-----\n",
+            "MC4CAQ\n",
+            "-----END RSA PRIVATE KEY-----"
+        );
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let result = parse_rsa_key(temp_file.path().into()).unwrap();
+        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(result, pvt_key);
+    }
+
+    #[test]
+    fn parse_private_pkcs8_key() {
+        let key = concat! {
+        "-----BEGIN PRIVATE KEY-----\n",
+        "MC4CAQ\n",
+        "-----END PRIVATE KEY-----"};
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let result = parse_pkcs8_key(temp_file.path().into()).unwrap();
+        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(result, pvt_key);
+    }
+
+    #[test]
+    fn parse_supported_key() {
+        let user_manager = UserManager::new();
+        let key = concat!(
+            "-----BEGIN RSA PRIVATE KEY-----\n",
+            "MC4CAQ\n",
+            "-----END RSA PRIVATE KEY-----"
+        );
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let parsed_key = read_pvt_key(user_manager, temp_file.path().into()).unwrap();
+        let expected_pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
+        assert_eq!(parsed_key, expected_pvt_key);
+    }
+
+    #[test]
+    fn parse_unsupported_key() {
+        let user_manager = UserManager::new();
+        let key = concat!(
+            "-----BEGIN DSA PRIVATE KEY-----\n",
+            "MC4CAQ\n",
+            "-----END DSA PRIVATE KEY-----"
+        );
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(key.as_bytes()).unwrap();
+        let err = read_pvt_key(user_manager, temp_file.path().into()).unwrap_err();
+        assert!(matches!(err, ConnectError::UnknownPrivateKeyFormat));
+    }
 }

@@ -4,7 +4,8 @@ name = "c8y_translator-fuzz"
 version = "0.0.0"
 authors = ["Automatically generated"]
 publish = false
-edition = "2018"
+edition = "2021"
+rust-version = "1.58"
 
 [package.metadata]
 cargo-fuzz = true

@@ -41,7 +41,7 @@ impl MeasurementVisitor for DummyVisitor {
 }
 
 fn parse_stream(input: &str) {
-    thin_edge_json::stream::parse_str(input, &mut DummyVisitor).unwrap();
+    thin_edge_json::parser::parse_str(input, &mut DummyVisitor).unwrap();
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
