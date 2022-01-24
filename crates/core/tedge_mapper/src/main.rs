@@ -3,12 +3,11 @@ use std::fmt;
 use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
     az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
-    component::TEdgeComponent, error::*,
+    component::TEdgeComponent,
 };
 use flockfile::check_another_instance_is_not_running;
 use structopt::*;
 use tedge_config::*;
-use tedge_utils::paths::home_dir;
 
 mod az_converter;
 mod az_mapper;
@@ -81,23 +80,4 @@ async fn main() -> anyhow::Result<()> {
     let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
 
     component.start(config).await
-}
-
-fn tedge_config() -> anyhow::Result<TEdgeConfig> {
-    let config_repository = config_repository()?;
-    Ok(config_repository.load()?)
-}
-
-fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
-    let tedge_config_location = if tedge_users::UserManager::running_as_root()
-        || tedge_users::UserManager::running_as("tedge-mapper")
-    {
-        tedge_config::TEdgeConfigLocation::from_default_system_location()
-    } else {
-        tedge_config::TEdgeConfigLocation::from_users_home_location(
-            home_dir().ok_or(MapperError::HomeDirNotFound)?,
-        )
-    };
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
-    Ok(config_repository)
 }

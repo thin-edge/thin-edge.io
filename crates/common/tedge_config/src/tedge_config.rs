@@ -1,6 +1,26 @@
 use crate::*;
 use certificate::{CertificateError, PemCertificate};
 use std::convert::{TryFrom, TryInto};
+use tedge_utils::paths::home_dir;
+
+pub fn tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
+    let config_repository = config_repository()?;
+    Ok(config_repository.load()?)
+}
+
+fn config_repository() -> Result<TEdgeConfigRepository, TEdgeConfigError> {
+    let tedge_config_location = if tedge_users::UserManager::running_as_root()
+        || tedge_users::UserManager::running_as("tedge-mapper")
+    {
+        tedge_config::TEdgeConfigLocation::from_default_system_location()
+    } else {
+        tedge_config::TEdgeConfigLocation::from_users_home_location(
+            home_dir().ok_or(TEdgeConfigError::HomeDirNotFound)?,
+        )
+    };
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
+    Ok(config_repository)
+}
 
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations

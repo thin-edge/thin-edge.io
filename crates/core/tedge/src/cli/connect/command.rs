@@ -394,9 +394,12 @@ fn new_bridge(
 
     if bridge_config.cloud_name.eq("c8y") {
         println!("Creating the device in Cumulocity cloud.\n");
+        let tedge_config = tedge_config()?;
+        let device_type = tedge_config.query(DeviceTypeSetting)?;
         let () = c8y_direct_connection::create_device_with_direct_connection(
             user_manager,
             bridge_config,
+            &device_type,
         )?;
     }
 
