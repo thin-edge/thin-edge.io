@@ -33,11 +33,7 @@ impl Command for MqttPublishCommand {
 fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
-    let mut retain_flag = false;
 
-    if cmd.retain {
-        retain_flag = true;
-    }
     let payload = cmd.message.as_bytes();
 
     let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
@@ -45,7 +41,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut acknowledged = false;
     let mut any_error = None;
 
-    client.publish(&cmd.topic, cmd.qos, retain_flag, payload)?;
+    client.publish(&cmd.topic, cmd.qos, cmd.retain, payload)?;
 
     for event in connection.iter() {
         match event {
