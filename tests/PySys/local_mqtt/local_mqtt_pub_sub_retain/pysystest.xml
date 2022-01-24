@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
   <description>
-	<title>Validate local publishing with retain flag and subscribe the message </title>
+	<title>Validate local publishing with retain flag</title>
 	<purpose><![CDATA[
 ]]>
 	</purpose>
