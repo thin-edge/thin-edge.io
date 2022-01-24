@@ -22,7 +22,7 @@ pub enum TEdgeMqttCli {
         #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
         /// Retain flag
-        #[structopt(long = "retain")]
+        #[structopt(short, long = "retain")]
         retain: bool,
     },
 
