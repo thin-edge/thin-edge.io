@@ -75,12 +75,12 @@ jobs:
           command: deb
           args: -p tedge_agent
 
-      - name: build examples for amd64
+      - name: build sawtooth-publisher for amd64
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args: --release --examples
+          args: --release -p sawtooth_publisher
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -89,12 +89,12 @@ jobs:
           name: debian-packages-amd64
           path: target/debian/*.deb
 
-      - name: upload amd64 examples as zip
+      - name: upload amd64 sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: examples_amd64
-          path: target/release/examples/sawtooth_publisher
+          name: sawtooth_publisher_amd64
+          path: target/release/sawtooth_publisher
 
       - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
@@ -222,16 +222,16 @@ jobs:
           command: deb
           args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
 
-      - name: build examples
+      - name: build sawtooth_publisher
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           use-cross: true
           command: build
-          args: --release --examples --target=${{ matrix.target }}
+          args: --release -p sawtooth_publisher --target=${{ matrix.target }}
 
       - name: Strip workaround sawtooth_publisher
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/examples/sawtooth_publisher
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/sawtooth_publisher
 
       - name: upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -240,12 +240,12 @@ jobs:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
-      - name: upload examples as zip
+      - name: upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
-          name: examples_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/examples/sawtooth_publisher
+          name: sawtooth_publisher_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/sawtooth_publisher
 
       - name: Build tedge_dummy_plugin
         uses: actions-rs/cargo@v1
