@@ -128,7 +128,7 @@ fn read_pvt_key(
 fn parse_pkcs8_key(
     key_file: tedge_config::FilePath,
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    let f = File::open(key_file.clone())?;
+    let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
         Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
@@ -141,7 +141,7 @@ fn parse_pkcs8_key(
 fn parse_rsa_key(
     key_file: tedge_config::FilePath,
 ) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    let f = File::open(key_file.clone())?;
+    let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
         Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
