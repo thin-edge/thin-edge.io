@@ -17,6 +17,13 @@ tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'
 ```shell
 tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }' --qos 2
 ```
+`tedge mqtt pub` supports publishing a MQTT message with retain flag:
+
+```shell
+tedge mqtt pub --retain 'tedge/measurements' '{ "temperature": 21.3 }'
+```
+Note: By default the mqtt message will be published with retain flag set to false.
+
 
 ## Subscribe
 
