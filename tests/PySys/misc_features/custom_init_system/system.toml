@@ -1,0 +1,8 @@
+[init]
+name = "test"
+is_available = ["/etc/tedge/dummy_init.sh", "is_available"]
+restart = ["/etc/tedge/dummy_init.sh", "restart", "{}"]
+stop =  ["/etc/tedge/dummy_init.sh", "stop", "{}"]
+enable =  ["/etc/tedge/dummy_init.sh", "enable", "{}"]
+disable =  ["/etc/tedge/dummy_init.sh", "disable", "{}"]
+is_active = ["/etc/tedge/dummy_init.sh", "is-active", "{}"]
