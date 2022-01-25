@@ -6,13 +6,11 @@ import time
 Validate local publishing with retain flag and subscribing:
 
 Given a configured system
-When we publish a message with retain flag to temperature sensor alaram topic (simulate set alaram)
-When we publish an empty message with retain flag to pressure sensor alarm topic (simulate clear alarm)
-When we start tedge sub in the background to subscribe to tempearture sensor alarm topic
-When we start tedge sub in the background to subscribe to pressure sensor alarm topic
-Then we kill both the subscribers
-Then we find the retained message in the output of temperature subscriber log
-And no message in the pressure sensor subscriber log
+When we publish two messages with retain flag on to test/alarms/temp_sensor
+When we start tedge sub in the background that subscribes to test/alarms/temp_sensor topic
+When we publish an empty message with retain flag on to test/alarms/temp_sensor
+Then we kill the subscriber
+Then we find the retained message in the output of the subscriber log
 """
 
 
@@ -20,21 +18,19 @@ class MqttPublishWithRetain(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
-
-        self.addCleanupFunction(self.retain_cleanup)
-
-    def execute(self):   
-
+      
+    def execute(self):
+        
         pub_to_set_alarm = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "tedge/alarms/temp_sensor", "set temp alaram"],
+            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 1"],
             stdouterr="pub_to_set_alarm",
         )
 
-        pub_to_clear_alarm = self.startProcess(
+        pub_to_set_alarm = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "tedge/alarms/pressure_sensor", ""],
-            stdouterr="pub_to_clear_alarm",
+            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 2"],
+            stdouterr="pub_to_set_alarm",
         )
        
         # wait some time before starting subscribers
@@ -42,16 +38,15 @@ class MqttPublishWithRetain(BaseTest):
 
         temp_sensor_sub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/alarms/temp_sensor"],
+            arguments=[self.tedge, "mqtt", "sub", "test/alarms/temp_sensor"],
             stdouterr="temp_sensor_sub",
             background=True,
         )
 
-        pres_sensor_sub = self.startProcess(
+        pub_to_clear_alarm = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "tedge/alarms/pressure_sensor"],
-            stdouterr="pres_sensor_sub",
-            background=True,
+            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", ""],
+            stdouterr="pub_to_clear_alarm",
         )
 
         # wait for a while before killing the subscribers
@@ -66,13 +61,5 @@ class MqttPublishWithRetain(BaseTest):
         )
      
     def validate(self):
-        self.assertGrep("temp_sensor_sub.out", "\[tedge/alarms/temp_sensor\] set temp alaram", contains=True)
-        self.assertGrep("pres_sensor_sub.out", "\[tedge/alarms/pressure_sensor\]", contains=False)
-
-    # clear retain message
-    def retain_cleanup(self):
-        pub_to_set_alarm = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "tedge/alarms/temp_sensor", ""],
-            stdouterr="pub_to_set_alarm",
-        )
+        self.assertGrep("temp_sensor_sub.out", "\[test/alarms/temp_sensor\] alarm msg 2", contains=True)
+        self.assertGrep("temp_sensor_sub.out", "\[test/alarms/temp_sensor\] ", contains=True)
