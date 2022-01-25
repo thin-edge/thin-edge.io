@@ -1,9 +1,14 @@
-import json
 import base64
+import json
 import re
-from pysys.constants import FAILED
 import requests
+
+import psutil
+
 from pysys.basetest import BaseTest
+from pysys.constants import FAILED
+
+from environment import TedgeEnvironment
 
 """
 Environment to manage automated connect and disconnect to c8y
@@ -199,8 +204,7 @@ class Cumulocity(object):
         if res.status_code != 204 or res.status_code != 404:
             res.raise_for_status()
 
-
-class EnvironmentC8y(BaseTest):
+class EnvironmentC8y(TedgeEnvironment):
     cumulocity: Cumulocity
 
     def setup(self):
@@ -236,6 +240,8 @@ class EnvironmentC8y(BaseTest):
             stdouterr="serv_mapper1",
             expectedExitStatus="==3",  # 3: disabled
         )
+
+        self.wait_if_restarting_mosquitto_too_fast()
 
         # Connect the bridge
         connect = self.startProcess(
@@ -291,6 +297,7 @@ class EnvironmentC8y(BaseTest):
     def myenvcleanup(self):
         self.log.debug("EnvironmentC8y Cleanup")
 
+        self.wait_if_restarting_mosquitto_too_fast()
         # Disconnect Bridge
         disconnect = self.startProcess(
             command=self.sudo,
@@ -305,3 +312,4 @@ class EnvironmentC8y(BaseTest):
             stdouterr="serv_mapper5",
             expectedExitStatus="==3",
         )
+
