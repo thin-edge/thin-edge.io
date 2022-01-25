@@ -1,9 +1,8 @@
 use crate::error::DownloadError;
 use backoff::{future::retry, ExponentialBackoff};
-use nix::{
-    fcntl::{fallocate, FallocateFlags},
-    sys::statvfs,
-};
+#[cfg(target_os = "linux")]
+use nix::fcntl::{fallocate, FallocateFlags};
+use nix::sys::statvfs;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -177,6 +176,7 @@ fn create_file_and_try_pre_allocate_space(
                 return Err(DownloadError::InsufficientSpace);
             }
             // Reserve diskspace
+            #[cfg(target_os = "linux")]
             let _ = fallocate(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
@@ -239,6 +239,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn downloader_download_with_content_length_larger_than_usable_disk_space(
     ) -> anyhow::Result<()> {

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::converter::*;
 use crate::error::*;
 
@@ -85,13 +87,33 @@ impl Mapper {
             let _ = self.output.send(init_message).await;
         }
 
-        while let Some(message) = &mut self.input.next().await {
-            let converted_messages = self.converter.convert(&message);
-            for converted_message in converted_messages.into_iter() {
-                let _ = self.output.send(converted_message).await;
+        let sync_window = Duration::from_secs(3);
+        let _ = tokio::time::timeout(sync_window, async {
+            while let Some(message) = self.input.next().await {
+                self.process_message(message).await;
             }
+        })
+        .await;
+
+        // Once the sync phase is complete, retrieve all sync messages from the converter and process them
+        let sync_messages = self.converter.sync_messages();
+        for message in sync_messages {
+            self.process_message(message).await;
         }
+
+        // Continue processing messages after the sync period
+        while let Some(message) = self.input.next().await {
+            self.process_message(message).await;
+        }
+
         Ok(())
+    }
+
+    async fn process_message(&mut self, message: Message) {
+        let converted_messages = self.converter.convert(&message);
+        for converted_message in converted_messages.into_iter() {
+            let _ = self.output.send(converted_message).await;
+        }
     }
 }
 

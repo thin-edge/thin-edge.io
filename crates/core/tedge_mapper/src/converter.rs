@@ -54,6 +54,10 @@ pub trait Converter: Send + Sync {
             }
         }
     }
+
+    fn sync_messages(&mut self) -> Vec<Message> {
+        vec![]
+    }
 }
 
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
