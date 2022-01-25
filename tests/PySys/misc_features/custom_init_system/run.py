@@ -1,5 +1,6 @@
 from pysys.basetest import BaseTest
 import os
+import filecmp
 
 """
 Validate tedge connect/disconnect use a given init system config
@@ -18,11 +19,14 @@ class CustomInitSystem(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
+
         self.system_conf = "/etc/tedge/system.toml"
         self.dummy_init = "/etc/tedge/dummy_init.sh"
-        self.dummy_init_output = "/etc/tedge/dummy_init.out"
+        self.dummy_init_output = "/tmp/dummy_init.out"
 
         test_dir = os.getcwd() + "/misc_features/custom_init_system"
+
+        self.expected_output = test_dir + "/expected_output.txt"
 
         # Copy system.toml file to /etc/tedge
         copy_system_config_file = self.startProcess(
@@ -46,7 +50,6 @@ class CustomInitSystem(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "connect", "c8y"],
             stdouterr="tedge_connect",
-            expectedExitStatus="==0",
         )
 
         # Run tedge disconnect
@@ -54,34 +57,37 @@ class CustomInitSystem(BaseTest):
             command=self.sudo,
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="tedge_disconnect",
-            expectedExitStatus="==0",
         )
 
     def validate(self):
-        # check there is no error
+        # Check there is no error
         self.assertGrep("tedge_connect.out", "Error", contains=False)
         self.assertGrep("tedge_disconnect.out", "Error", contains=False)
         self.assertGrep(self.dummy_init_output, "Error", contains=False)
+        # Check the output is the same as expected output
+        self.assertThat("True == value",
+                        value=filecmp.cmp(self.dummy_init_output, self.expected_output))
+
 
     def custom_cleanup(self):
         # Remove system.toml from /etc/tedge, otherwise other tests will use the config.
         remove_system_config_file = self.startProcess(
             command=self.sudo,
-            arguments=["rm", self.system_conf],
+            arguments=["rm", "-f", self.system_conf],
             stdouterr="remove_system_config",
         )
 
         # Copy dummy init system file to /etc/tedge
         copy_dummy_init_file = self.startProcess(
             command=self.sudo,
-            arguments=["rm", self.dummy_init],
+            arguments=["rm", "-f", self.dummy_init],
             stdouterr="remove_dummy_init",
         )
 
         # Remove the output from dummy_init
         copy_dummy_init_file = self.startProcess(
             command=self.sudo,
-            arguments=["rm", self.dummy_init_output],
+            arguments=["rm", "-f", self.dummy_init_output],
             stdouterr="remove_dummy_init_output",
         )
 
