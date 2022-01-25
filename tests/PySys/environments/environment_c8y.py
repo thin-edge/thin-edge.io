@@ -52,21 +52,11 @@ class EnvironmentC8y(TedgeEnvironment):
             expectedExitStatus="==3",  # 3: disabled
         )
 
-        self.wait_if_restarting_mosquitto_too_fast()
-
         # Connect the bridge
-        connect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="tedge_connect",
-        )
+        self.tedge_connect_c8y()
 
         # Test the bridge connection
-        connect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y", "--test"],
-            stdouterr="tedge_connect_test",
-        )
+        self.tedge_connect_c8y_test()
 
         # Check if mosquitto is running well
         serv_mosq = self.startProcess(
@@ -110,11 +100,7 @@ class EnvironmentC8y(TedgeEnvironment):
 
         self.wait_if_restarting_mosquitto_too_fast()
         # Disconnect Bridge
-        disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="tedge_disconnect",
-        )
+        self.tedge_disconnect_c8y()
 
         # Check if tedge-mapper is disabled
         serv_mosq = self.startProcess(
