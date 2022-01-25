@@ -1,6 +1,5 @@
 from pysys.basetest import BaseTest
 import os
-import filecmp
 
 """
 Validate tedge connect/disconnect use a given init system config
@@ -20,13 +19,14 @@ class CustomInitSystem(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
+        # system config file must be located in /etc/tedge
         self.system_conf = "/etc/tedge/system.toml"
-        self.dummy_init = "/etc/tedge/dummy_init.sh"
-        self.dummy_init_output = "/tmp/dummy_init.out"
+
+        self.tmp_dir = "/tmp/dummy_init"
+        self.dummy_init = self.tmp_dir + "/dummy_init.sh"
+        self.dummy_init_output = self.tmp_dir + "/dummy_init.out"
 
         test_dir = os.getcwd() + "/misc_features/custom_init_system"
-
-        self.expected_output = test_dir + "/expected_output.txt"
 
         # Copy system.toml file to /etc/tedge
         copy_system_config_file = self.startProcess(
@@ -35,10 +35,10 @@ class CustomInitSystem(BaseTest):
             stdouterr="copy_system_config",
         )
 
-        # Copy dummy init system file to /etc/tedge
-        copy_dummy_init_file = self.startProcess(
+        # Copy dummy init system file and directory to /tmp
+        copy_dummy_init = self.startProcess(
             command=self.sudo,
-            arguments=["cp", test_dir + "/dummy_init.sh", self.dummy_init],
+            arguments=["cp", "-rfP", test_dir + "/dummy_init", "/tmp"],
             stdouterr="copy_dummy_init",
         )
 
@@ -64,9 +64,30 @@ class CustomInitSystem(BaseTest):
         self.assertGrep("tedge_connect.out", "Error", contains=False)
         self.assertGrep("tedge_disconnect.out", "Error", contains=False)
         self.assertGrep(self.dummy_init_output, "Error", contains=False)
-        # Check the output is the same as expected output
-        self.assertThat("True == value",
-                        value=filecmp.cmp(self.dummy_init_output, self.expected_output))
+        self.assertGrep(self.dummy_init_output, "The system config file '/etc/tedge/system.toml' doesn't exist.", contains=False)
+
+        expected_output = [
+            "is_available",
+            "restart mosquitto",
+            "enable mosquitto",
+            "restart tedge-mapper-c8y",
+            "enable tedge-mapper-c8y",
+            "restart tedge-agent",
+            "enable tedge-agent",
+            "restart tedge-mapper-sm-c8y",
+            "enable tedge-mapper-sm-c8y",
+            "is-active mosquitto",
+            "stop tedge-mapper-c8y",
+            "disable tedge-mapper-c8y",
+            "stop tedge-mapper-sm-c8y",
+            "disable tedge-mapper-sm-c8y",
+            "stop tedge-agent",
+            "disable tedge-agent",
+        ]
+
+        # Check the output of init system contains all expected words
+        for word in expected_output:
+            self.assertGrep(self.dummy_init_output, word, contains=True)
 
 
     def custom_cleanup(self):
@@ -77,17 +98,10 @@ class CustomInitSystem(BaseTest):
             stdouterr="remove_system_config",
         )
 
-        # Copy dummy init system file to /etc/tedge
-        copy_dummy_init_file = self.startProcess(
+        # Remove dummy_init
+        remove_dummy_init = self.startProcess(
             command=self.sudo,
-            arguments=["rm", "-f", self.dummy_init],
+            arguments=["rm", "-rf", self.tmp_dir],
             stdouterr="remove_dummy_init",
-        )
-
-        # Remove the output from dummy_init
-        copy_dummy_init_file = self.startProcess(
-            command=self.sudo,
-            arguments=["rm", "-f", self.dummy_init_output],
-            stdouterr="remove_dummy_init_output",
         )
 
