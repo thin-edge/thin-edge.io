@@ -6,7 +6,7 @@ from pysys.basetest import BaseTest
 from pysys.constants import FAILED
 
 from cumulocity import Cumulocity
-from environment import TedgeEnvironment
+from environment_tedge import TedgeEnvironment
 
 
 class EnvironmentC8y(TedgeEnvironment):

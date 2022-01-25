@@ -3,7 +3,7 @@ import time
 import subprocess
 from pathlib import Path
 
-from pysys.basetest import BaseTest
+from environment_tedge import TedgeEnvironment
 
 """
 Validate the tedge-mapper-sm-c8y does not loose last message from tedge-agent when it fails and comes back
@@ -32,7 +32,7 @@ Then validate subscriber output for `503,c8y_SoftwareUpdate` for final result of
 Then test has passed
 """
 
-class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
+class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
     systemctl = "/usr/bin/systemctl"
     tedge = "/usr/bin/tedge"
     sudo = "/usr/bin/sudo"
@@ -41,11 +41,10 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
     rm = "/usr/bin/rm"
     def setup(self):
 
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="connect_c8y",
-        )
+        # Delete and now we wait, so there is a time depencency
+        self.addCleanupFunction(self.smcleanup)
+
+        self.tedge_connect_c8y()
 
         self.startProcess(
             command=self.sudo,
@@ -63,7 +62,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub", "c8y/s/ds", "528,tedge,rolldice,,,delete"],
-            stdouterr="tedge_pub",           
+            stdouterr="tedge_pub",
         )
 
         # Delete and now we wait, so there is a time depencency
@@ -115,14 +114,10 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
         self.log.info("Validate")
         self.assertGrep("tedge_sub.out", "501,c8y_SoftwareUpdate", contains=True)
         self.assertGrep("tedge_sub.out", "503,c8y_SoftwareUpdate", contains=True)
-    
+
     def smcleanup(self):
         self.log.info("Stop sm-mapper and agent")
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="connect_c8y",
-        )
+        self.tedge_disconnect_c8y()
 
     def setup_mosquitto(self):
         raise SystemError("Make sure, nobody calls me ... ")
@@ -140,4 +135,4 @@ class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
             command=self.sudo,
             arguments=[self.systemctl, "restart", "mosquitto.service"],
             stdouterr="restart_mosquitto",
-        )       
+        )

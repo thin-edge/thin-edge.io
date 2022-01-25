@@ -21,18 +21,14 @@ Now validate the services that use the mqtt port
 """
 
 
-class MqttPortChangeConnectionWorks(BaseTest):
+class MqttPortChangeConnectionWorks(TedgeEnvironment):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
         # disconnect from c8y cloud
-        disconnect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="disconnect_c8y",
-        )
 
+        self.tedge_disconnect_c8y()
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
@@ -43,18 +39,10 @@ class MqttPortChangeConnectionWorks(BaseTest):
 
     def execute(self):
         # connect to c8y cloud
-        connect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="connect_c8y",
-        )
+        self.tedge_connect_c8y()
 
         # check connection
-        connect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y", "--test"],
-            stdouterr="check_con_c8y",
-        )
+        self.tedge_connect_c8y_test()
 
         # subscribe for messages
         mqtt_sub = self.startProcess(
@@ -69,7 +57,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         # validate tedge mqtt pub/sub
         self.validate_tedge_mqtt()
         # validate c8y connection
-        self.assertGrep("check_con_c8y.out",
+        self.assertGrep("tedge_connect_c8y_test.out",
                         "connection check is successful", contains=True)
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
@@ -168,11 +156,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         # disconnect again
 
         # disconnect Bridge
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
+        self.tedge_disconnect_c8y()
 
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(
@@ -182,16 +166,7 @@ class MqttPortChangeConnectionWorks(BaseTest):
         )
 
         # connect Bridge
-        c8y_connect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="c8y_connect",
-        )
+        self.tedge_connect_c8y()
 
         # disconnect Bridge
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
-
+        self.tedge_disconnect_c8y()

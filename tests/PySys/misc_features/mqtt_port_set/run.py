@@ -1,8 +1,7 @@
 import sys
 import time
 
-from pysys.basetest import BaseTest
-
+from environment_tedge import TedgeEnvironment
 
 """
 Validate changing the mqtt port using the tedge command
@@ -13,7 +12,7 @@ When listed config using `tedge config list` the newly set port should be there.
 
 """
 
-class MqttPortSet(BaseTest):
+class MqttPortSet(TedgeEnvironment):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
@@ -37,7 +36,7 @@ class MqttPortSet(BaseTest):
 
         self.assertGrep(
             "tedge_get.out", "mqtt.port=8880", contains=True)
-        self.assertGrep("/etc/tedge/tedge.toml", "port = 8880", contains=True)    
+        self.assertGrep("/etc/tedge/tedge.toml", "port = 8880", contains=True)
 
     def mqtt_cleanup(self):
         # unset a new mqtt port, falls back to default port (1883)
@@ -48,15 +47,7 @@ class MqttPortSet(BaseTest):
         )
 
         # restart the tedge services
-        connect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="connect_c8y",
-        )
+        self.tedge_connect_c8y()
 
         # disconnect the tedge services
-        connect_c8y = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="disconnect_c8y",
-        )
+        self.tedge_disconnect_c8y()
