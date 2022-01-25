@@ -34,15 +34,12 @@ Cumulocity as well as a previously generated device certificate. The device
 needs to be able to connect to Cumulocity successfully.
 
 The test configuration is located in environment variables, which need to be
-set in in advance. Also compile the sawtooth_publisher, as it is used by some
-tests.
-
-    cargo build --example sawtooth_publisher
+set in in advance.
 
 These environment variables need to be exported in your shell:
 
     export TEBASEDIR=~/thin-edge.io/
-    export EXAMPLEDIR=$HOME/thin-edge.io/target/debug/examples
+    export EXAMPLEDIR=$HOME/thin-edge.io/target/debug
     export C8YUSERNAME= <your tenant>
     export C8YPASS= <your password>
     export C8YDEVICE= <dev name>
