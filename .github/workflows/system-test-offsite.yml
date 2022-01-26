@@ -48,7 +48,7 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: main
-          name: examples_armv7-unknown-linux-gnueabihf
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: purge packages
