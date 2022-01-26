@@ -205,7 +205,7 @@ class EnvironmentC8y(TedgeEnvironment):
 
     def setup(self):
         self.log.debug("EnvironmentC8y Setup")
-
+        super().setup()
         if self.project.c8yurl == "":
             self.abort(
                 FAILED, "Cumulocity tenant URL is not set. Set with the env variable C8YURL")
@@ -222,10 +222,6 @@ class EnvironmentC8y(TedgeEnvironment):
             self.abort(
                 FAILED, "Device ID is not set. Set with the env variable C8YDEVICEID")
 
-        self.tedge = "/usr/bin/tedge"
-        self.tedge_mapper_c8y = "tedge-mapper-c8y"
-        self.sudo = "/usr/bin/sudo"
-        self.systemctl = "/usr/bin/systemctl"
         self.log.info("EnvironmentC8y Setup")
         self.addCleanupFunction(self.myenvcleanup)
 

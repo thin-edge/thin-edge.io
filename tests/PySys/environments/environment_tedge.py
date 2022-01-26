@@ -6,11 +6,18 @@ from pysys.basetest import BaseTest
 
 class TedgeEnvironment(BaseTest):
 
+    def setup(self):
+        self.sudo = "/usr/bin/sudo"
+        self.tedge = "/usr/bin/tedge"
+        self.tedge_mapper_c8y = "tedge-mapper-c8y"
+        self.sudo = "/usr/bin/sudo"
+        self.systemctl = "/usr/bin/systemctl"
+
     def wait_if_restarting_mosquitto_too_fast(self):
         """Make sure we do not restart mosqiotto too fast
         Systemd will become suspicios when whe restart faster than 5 seconds
         """
-        minimum_time = 5
+        minimum_time = 10
         etimes = subprocess.check_output("/usr/bin/ps -o etimes $(pidof mosquitto)", shell=True)
         runtime = int(etimes.split()[1])
         if runtime <= minimum_time:
@@ -53,3 +60,4 @@ class TedgeEnvironment(BaseTest):
             stdouterr="tedge_connect_c8y_test",
             expectedExitStatus = expectedExitStatus,
         )
+        return connect_c8y

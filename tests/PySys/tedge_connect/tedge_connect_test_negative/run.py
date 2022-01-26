@@ -1,4 +1,4 @@
-from pysys.basetest import BaseTest
+from environment_tedge import TedgeEnvironment
 
 """
 Run connection test without being connected (negative case):
@@ -13,9 +13,6 @@ Then test has passed
 
 class TedgeConnectTestNegative(TedgeEnvironment):
     def execute(self):
-        tedge = "/usr/bin/tedge"
-        sudo = "/usr/bin/sudo"
-
 
         self.log.info("Execute `tedge connect c8y --test`")
         self.tedge_connect_c8y_test(expectedExitStatus="==1")
