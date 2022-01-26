@@ -1237,12 +1237,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
-
-[[package]]
 name = "json-writer"
 version = "0.5.2"
 dependencies = [
@@ -1423,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1434,28 +1428,6 @@ dependencies = [
  "serial_test",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "mqtt_client"
-version = "0.5.2"
-dependencies = [
- "anyhow",
- "async-log",
- "async-trait",
- "env_logger 0.9.0",
- "futures",
- "futures-timer",
- "json",
- "log",
- "mockall",
- "mqtt_tests",
- "rand",
- "rumqttc",
- "serde",
- "thiserror",
- "tokio",
- "tokio-test",
 ]
 
 [[package]]
@@ -2350,6 +2322,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "sawtooth_publisher"
+version = "0.5.2"
+dependencies = [
+ "async-log",
+ "env_logger 0.9.0",
+ "futures",
+ "futures-timer",
+ "log",
+ "mqtt_channel",
+ "tokio",
 ]
 
 [[package]]

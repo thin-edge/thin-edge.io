@@ -1,0 +1,8 @@
+[init]
+name = "test"
+is_available = ["/tmp/dummy_init/dummy_init.sh", "is_available"]
+restart = ["/tmp/dummy_init/dummy_init.sh", "restart", "{}"]
+stop =  ["/tmp/dummy_init/dummy_init.sh", "stop", "{}"]
+enable =  ["/tmp/dummy_init/dummy_init.sh", "enable", "{}"]
+disable =  ["/tmp/dummy_init/dummy_init.sh", "disable", "{}"]
+is_active = ["/tmp/dummy_init/dummy_init.sh", "is-active", "{}"]
