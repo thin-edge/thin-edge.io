@@ -130,7 +130,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: main
+          branch: continuous_integration
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
