@@ -82,8 +82,8 @@ class ValidateValidDeviceId(TedgeEnvironment):
 
     def validate(self):
         # validate the connection is successfull
-        self.assertGrep("c8y_connect.out", "successful", contains=True)
-        self.assertGrep("c8y_connect_test.out", "successful", contains=True)
+        self.assertGrep("tedge_connect_c8y.out", "successful", contains=True)
+        self.assertGrep("tedge_connect_c8y_test.out", "successful", contains=True)
 
     def device_id_cleanup(self):
 
