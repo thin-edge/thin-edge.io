@@ -54,7 +54,7 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
                 "-pub",
                 self.project.exampledir,
                 "-u",
-                self.project.username,
+                self.project.c8yusername,
                 "-t",
                 self.project.tenant,
                 "-id",
