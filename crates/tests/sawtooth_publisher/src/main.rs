@@ -37,7 +37,7 @@ This is a small and flexible publisher for deterministic test data.
 // cargo run sawtooth_publisher 100 100 100 flux
 // cargo run sawtooth_publisher 1000 10 10 sawmill
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     // wait time, template, tooth-height,
@@ -70,7 +70,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_subscriptions(c8y_err);
     let mqtt = Connection::new(&config).await?;
 
-    let c8y_messages = mqtt.published;
+    let mqtt_pub_channel = mqtt.published;
     let c8y_errors = mqtt.received;
     let errors = mqtt.errors;
 
@@ -78,7 +78,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if template == "flux" {
         tokio::spawn(publish_topic(
-            c8y_messages,
+            mqtt_pub_channel,
             c8y_msg,
             wait,
             height,
@@ -86,7 +86,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     } else if template == "sawmill" {
         tokio::spawn(publish_multi_topic(
-            c8y_messages,
+            mqtt_pub_channel,
             c8y_msg,
             wait,
             height,

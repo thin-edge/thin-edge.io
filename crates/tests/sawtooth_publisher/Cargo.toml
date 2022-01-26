@@ -12,5 +12,4 @@ futures = "0.3"
 futures-timer = "3.0"
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }
-tokio = { version = "1.12", features = ["rt-multi-thread", "sync", "macros"] }
-
+tokio = { version = "1.12", features = ["sync", "macros"] }
