@@ -31,7 +31,7 @@ class RestartBridge(EnvironmentC8y):
         super().validate()
         self.log.info("Validate")
         self.assertGrep(
-            "tedge_connect.out", "connection check is successful.", contains=True
+            "tedge_connect.out", "Connection check is successful.", contains=True
         )
         fail = "Warning: Bridge has been configured, but Cumulocity connection check failed."
         self.assertGrep("tedge_connect.out", fail, contains=False)
