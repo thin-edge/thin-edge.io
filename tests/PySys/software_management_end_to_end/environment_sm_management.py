@@ -128,7 +128,7 @@ class SoftwareManagement(EnvironmentC8y):
         self.addCleanupFunction(self.mysmcleanup)
 
         tenant = self.project.tenant
-        user = self.project.username
+        user = self.project.c8yusername
         password = self.project.c8ypass
 
         # TODO are we doing something wrong while requesting?
