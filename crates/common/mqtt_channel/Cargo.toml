@@ -1,0 +1,21 @@
+[package]
+name = "mqtt_channel"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.58"
+version = "0.5.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+futures = "0.3"
+fastrand = "1.6"
+rumqttc = "0.10"
+thiserror = "1.0"
+tokio = { version = "1.12", features = ["rt", "time"] }
+
+[dev-dependencies]
+anyhow = "1.0"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+serial_test = "0.5"

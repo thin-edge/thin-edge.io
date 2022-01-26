@@ -1,3 +1,5 @@
+use tedge_users::UserSwitchError;
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
@@ -43,4 +45,13 @@ pub enum ConnectError {
         "The JWT token received from Cumulocity is invalid.\nToken: {token}\nReason: {reason}"
     )]
     InvalidJWTToken { token: String, reason: String },
+
+    #[error("Fail to parse the private key")]
+    UnknownPrivateKeyFormat,
+
+    #[error("Could not parse certificate")]
+    RumqttcCertificate,
+
+    #[error(transparent)]
+    UserSwitchError(#[from] UserSwitchError),
 }

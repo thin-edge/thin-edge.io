@@ -1,6 +1,6 @@
 use batcher::Batchable;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use mqtt_client::Message;
+use mqtt_channel::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
 
 #[derive(Debug)]
@@ -63,7 +63,7 @@ impl CollectdMessage {
         };
 
         let payload = mqtt_message.payload_str().map_err(|_err| {
-            CollectdError::NonUTF8MeasurementPayload(mqtt_message.payload_raw().into())
+            CollectdError::NonUTF8MeasurementPayload(mqtt_message.payload_bytes().into())
         })?;
 
         let collectd_payload = CollectdPayload::parse_from(payload)
@@ -192,13 +192,13 @@ mod tests {
 
     use assert_matches::assert_matches;
     use chrono::TimeZone;
-    use mqtt_client::Topic;
+    use mqtt_channel::Topic;
 
     use super::*;
 
     #[test]
     fn collectd_message_parsing() {
-        let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
+        let topic = Topic::new_unchecked("collectd/localhost/temperature/value");
         let mqtt_message = Message::new(&topic, "123456789:32.5");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();

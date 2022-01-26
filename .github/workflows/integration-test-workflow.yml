@@ -77,6 +77,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58
+          override: true
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
@@ -175,7 +181,7 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: main
-          name: examples_armv7-unknown-linux-gnueabihf
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: chmod publisher

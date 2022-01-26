@@ -31,21 +31,22 @@ class SMDockerInstallRemove(SoftwareManagement):
 
         if self.dockerplugin != "dockerplugin":
             self.skipTest(
-                "Testing the docker plugin is not supported on this platform")
+                "Testing the docker plugin is not supported on this platform" +
+                "To run it, all the test with -Xdockerplugin='dockerplugin'")
 
         setup_action = [
             {
                 "action": "install",
                 "id": self.get_pkgid(self.image1_name),
                 "name": self.image1_name,
-                "url": " ",
+                "url": "",
                 "version": "::docker",
             },
             {
                 "action": "install",
                 "id": self.get_pkgid(self.image2_name),
                 "name": self.image2_name,
-                "url": " ",
+                "url": "",
                 "version": self.image2_version1,
             },
         ]
@@ -71,14 +72,14 @@ class SMDockerInstallRemove(SoftwareManagement):
                 "action": "install",
                 "id": self.get_pkgid(self.image2_name),
                 "name": self.image2_name,
-                "url": " ",
+                "url": "",
                 "version": self.image2_version2,
             },
             {
                 "action": "install",
                 "id": self.get_pkgid(self.image3_name),
                 "name": self.image3_name,
-                "url": " ",
+                "url": "",
                 "version": "::docker",
             },
         ]
@@ -102,21 +103,21 @@ class SMDockerInstallRemove(SoftwareManagement):
                 "action": "delete",
                 "id": self.get_pkgid(self.image2_name),
                 "name": self.image2_name,
-                "url": " ",
+                "url": "",
                 "version": self.image2_version2,
             },
             {
                 "action": "delete",
                 "id": self.get_pkgid(self.image3_name),
                 "name": self.image3_name,
-                "url": " ",
+                "url": "",
                 "version": "::docker",
             },
             {
                 "action": "delete",
                 "id": self.get_pkgid(self.image1_name),
                 "name": self.image1_name,
-                "url": " ",
+                "url": "",
                 "version": "::docker",
             },
         ]

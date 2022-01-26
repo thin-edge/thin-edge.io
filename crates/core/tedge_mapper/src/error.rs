@@ -1,12 +1,14 @@
+use std::path::PathBuf;
+
 use crate::size_threshold::SizeThresholdExceeded;
-use mqtt_client::MqttClientError;
+use mqtt_channel::MqttError;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {
     #[error(transparent)]
-    FromMqttClient(#[from] MqttClientError),
+    FromMqttClient(#[from] MqttError),
 
     #[error("Home directory is not found.")]
     HomeDirNotFound,
@@ -45,7 +47,7 @@ pub enum ConversionError {
     InvalidChildId { id: String },
 
     #[error(transparent)]
-    FromMqttClient(#[from] MqttClientError),
+    FromMqttClient(#[from] MqttError),
 
     #[error(transparent)]
     FromOperationsError(#[from] OperationsError),
@@ -55,10 +57,28 @@ pub enum ConversionError {
 
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    FromStdIo(#[from] std::io::Error),
+
+    #[error("Error converting json option")]
+    FromOptionError,
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationsError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
+
+    #[error("Cannot extract the operation name from the path: {0}")]
+    InvalidOperationName(PathBuf),
+
+    #[error("Error while parsing operation file: '{0}': {1}.")]
+    TomlError(PathBuf, #[source] toml::de::Error),
 }
