@@ -144,10 +144,7 @@ fn create_device_data_fragments(
     let device_data = C8yDeviceDataFragment::from_type(device_type)?;
     let ops_msg = device_data.to_json()?;
 
-    let topic = Topic::new_unchecked(&format!(
-        "{}/{}",
-        INVENTORY_MANAGED_OBJECTS_TOPIC, device_name
-    ));
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
@@ -164,10 +161,7 @@ fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
 fn create_inventory_fragments_message(device_name: &str) -> Result<Message, ConversionError> {
     let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
 
-    let topic = Topic::new_unchecked(&format!(
-        "{}/{}",
-        INVENTORY_MANAGED_OBJECTS_TOPIC, device_name
-    ));
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
