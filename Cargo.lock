@@ -2679,6 +2679,7 @@ dependencies = [
  "assert_matches",
  "certificate",
  "serde",
+ "tedge_users",
  "tedge_utils",
  "tempfile",
  "thiserror",

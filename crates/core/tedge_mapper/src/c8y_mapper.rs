@@ -3,7 +3,7 @@ use crate::component::TEdgeComponent;
 use crate::mapper::*;
 use crate::size_threshold::SizeThreshold;
 use async_trait::async_trait;
-use tedge_config::{ConfigSettingAccessor, DeviceIdSetting, TEdgeConfig};
+use tedge_config::{ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, TEdgeConfig};
 use tracing::{info_span, Instrument};
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
@@ -22,8 +22,13 @@ impl TEdgeComponent for CumulocityMapper {
         let size_threshold = SizeThreshold(16 * 1024);
 
         let device_name = tedge_config.query(DeviceIdSetting)?;
+        let device_type = tedge_config.query(DeviceTypeSetting)?;
 
-        let converter = Box::new(CumulocityConverter::new(size_threshold, device_name));
+        let converter = Box::new(CumulocityConverter::new(
+            size_threshold,
+            device_name,
+            device_type,
+        ));
 
         let mut mapper = create_mapper(CUMULOCITY_MAPPER_NAME, &tedge_config, converter).await?;
 

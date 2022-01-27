@@ -40,6 +40,7 @@ impl ConfigKey {
     pub fn list_all() -> Vec<ConfigKey> {
         vec![
             config_key!(DeviceIdSetting),
+            config_key!(DeviceTypeSetting),
             config_key!(DeviceKeyPathSetting),
             config_key!(DeviceCertPathSetting),
             config_key!(C8yUrlSetting),
