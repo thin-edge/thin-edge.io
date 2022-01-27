@@ -1,43 +1,14 @@
 /// Returns a substring of `s` starting at `line` and `column`. At most `max_chars` are returned.
 pub(crate) fn excerpt(s: &str, line: usize, column: usize, max_chars: usize) -> String {
-    let mut current_line = 1;
-    let mut chars = s.chars();
-
-    while current_line < line {
-        match chars.next() {
-            Some(ch) => {
-                if ch == '\n' {
-                    current_line += 1;
-                }
-            }
-            None => {
-                break;
-            }
-        }
-    }
-
-    // Seek forward. We cannot use `skip`, as we then can no longer call `as_str`.
-    let mut current_column = 1;
-    while current_column < column {
-        match chars.next() {
-            Some(_) => {
-                current_column += 1;
-            }
-            None => break,
-        }
-    }
-
-    // Don't use byte slicing for UTF-8 strings, e.g. `[..80]`, as this might panic in case of a
-    // wide-character at this position.
-    let mut excerpt = String::with_capacity(max_chars);
-    for _i in 1..=max_chars {
-        match chars.next() {
-            Some(ch) => excerpt.push(ch),
-            None => break,
-        }
-    }
-
-    excerpt
+    s.lines() // omits the newlines
+        .skip(line - 1)
+        .map(|line| {
+            line.chars().chain(std::iter::once('\n')) // adds the newlines again
+        })
+        .flatten()
+        .skip(column - 1)
+        .take(max_chars)
+        .collect()
 }
 
 #[test]
