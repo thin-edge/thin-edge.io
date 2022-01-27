@@ -71,7 +71,7 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
      
     def download_file_and_verify_error_messages(self, url):
         get_response = requests.get(url, auth=(
-            self.project.username, self.project.c8ypass), stream=False)
+            self.project.c8yusername, self.project.c8ypass), stream=False)
         nlines = get_response.content.decode('utf-8')
         return sum([1 if line.startswith("Error") else 0 for line in nlines.split("\n")]) == 25
 

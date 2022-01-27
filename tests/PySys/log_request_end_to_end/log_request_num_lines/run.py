@@ -70,7 +70,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
 
     def download_file_and_verify_number_of_lines(self, url):
         get_response = requests.get(url, auth=(
-            self.project.username, self.project.c8ypass), stream=False)
+            self.project.c8yusername, self.project.c8ypass), stream=False)
 
         nlines = len(get_response.content.decode('utf-8').split('\n')[:-1])
         self.log.info("nlines %s", nlines)
