@@ -167,6 +167,11 @@ To check that this message has been received by Cumulocity,
 navigate to "Device Management/Devices/All devices/\<your device id\>/Measurements".
 You should observe a "temperature measurement" graph with the new data point.
 
+## Configuring custom device data
+
+You can configure the device data panel in the Cumulocity UI to display information specific to your device.
+To do so, create an `inventory.json` json file under `/etc/tedge/device`.
+_Note_: that you must ensure that this file can be read by the `tedge-mapper` user group.
 
 ## Next Steps
 
