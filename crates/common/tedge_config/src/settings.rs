@@ -29,7 +29,7 @@ pub struct DeviceTypeSetting;
 impl ConfigSetting for DeviceTypeSetting {
     const KEY: &'static str = "device.type";
 
-    const DESCRIPTION: &'static str = concat!("The default device type. ", "Example: thin-edge.io");
+    const DESCRIPTION: &'static str = "The default device type. Example: thin-edge.io";
 
     type Value = String;
 }

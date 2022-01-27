@@ -91,7 +91,7 @@ fn test_from_tedge_config_location() {
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: FilePath::from("/tmp"),
-            default_device_type: DEFAULT_DEVICE_TYPE.into()
+            default_device_type: DEFAULT_DEVICE_TYPE.into(),
         }
     );
 }
