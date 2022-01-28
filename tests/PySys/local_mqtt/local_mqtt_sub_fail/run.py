@@ -1,6 +1,7 @@
 from pysys.basetest import BaseTest
 
 import time
+import os
 
 """
 Validate local subscribing while no mosquitto is running
@@ -17,6 +18,7 @@ class PySysTest(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
+        self.environ = { 'HOME':os.environ.get('HOME')}
 
         self.startProcess(
             command=self.sudo,
@@ -29,10 +31,11 @@ class PySysTest(BaseTest):
     def execute(self):
 
         pub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "atopic"],
+            command=self.tedge,
+            arguments=["mqtt", "sub", "atopic"],
             stdouterr="tedge_sub_fail",
             expectedExitStatus="==1",
+            environs=self.environ
         )
 
         # validate exit status with the expected status from calling startProcess
