@@ -32,7 +32,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !self.config_location.tedge_config_root_path.exists() {
-            let () = fs::create_dir(self.config_location.tedge_config_root_path())?;
+            let () = fs::create_dir_all(self.config_location.tedge_config_root_path())?;
         }
 
         let () = atomically_write_file_sync(
