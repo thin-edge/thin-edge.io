@@ -37,7 +37,7 @@ impl StateRepository for AgentStateRepository {
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !self.state_repo_root.exists() {
-            let () = fs::create_dir(&self.state_repo_root).await?;
+            let () = fs::create_dir_all(&self.state_repo_root).await?;
         }
 
         let mut temppath = self.state_repo_path.clone();
