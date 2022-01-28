@@ -26,7 +26,7 @@ class ValidateValidDeviceId(BaseTest):
             arguments=[self.tedge, "disconnect", "c8y"],
             stdouterr="c8y_disconnect",
         )
-        
+
         # create a custom certiticate directory for testing purpose
         create_cert_dir = self.startProcess(
             command=self.sudo,
@@ -40,7 +40,7 @@ class ValidateValidDeviceId(BaseTest):
             arguments=["chown", "mosquitto:mosquitto", "/tmp/test-device-certs"],
             stdouterr="change_owner_of_dir",
         )
-        
+
         # set the custom certificate path
         set_cert_path = self.startProcess(
             command=self.sudo,
@@ -73,9 +73,11 @@ class ValidateValidDeviceId(BaseTest):
             environs={"C8YPASS":self.project.c8ypass},
             command=self.sudo,
             arguments=["-E", self.tedge, "cert", "upload",
-                       "c8y", "--user", self.project.username],
+                       "c8y", "--user", self.project.c8yusername],
             stdouterr="cert_upload",
         )
+
+        time.sleep(1)
 
         # connect to the c8y cloud
         c8y_connect = self.startProcess(
@@ -97,7 +99,7 @@ class ValidateValidDeviceId(BaseTest):
         self.assertGrep("c8y_connect_test.out", "successful", contains=True)
 
     def device_id_cleanup(self):
-        
+
         # disconnect the test
         c8y_disconnect = self.startProcess(
             command=self.sudo,

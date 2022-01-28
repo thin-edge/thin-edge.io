@@ -23,6 +23,17 @@ impl ConfigSetting for DeviceIdSetting {
     type Value = String;
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct DeviceTypeSetting;
+
+impl ConfigSetting for DeviceTypeSetting {
+    const KEY: &'static str = "device.type";
+
+    const DESCRIPTION: &'static str = "The default device type. Example: thin-edge.io";
+
+    type Value = String;
+}
+
 ///
 /// Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem
 ///

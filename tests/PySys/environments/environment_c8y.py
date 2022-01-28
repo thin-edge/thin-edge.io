@@ -198,7 +198,7 @@ class EnvironmentC8y(BaseTest):
         if self.project.tenant == "":
             self.abort(
                 FAILED, "Cumulocity tenant ID is not set. Set with the env variable C8YTENANT")
-        if self.project.username == "":
+        if self.project.c8yusername == "":
             self.abort(
                 FAILED, "Cumulocity tenant username is not set. Set with the env variable C8YUSERNAME")
         if self.project.c8ypass == "":
@@ -252,7 +252,7 @@ class EnvironmentC8y(BaseTest):
         )
 
         self.cumulocity = Cumulocity(
-            self.project.c8yurl, self.project.tenant, self.project.username, self.project.c8ypass, self.log)
+            self.project.c8yurl, self.project.tenant, self.project.c8yusername, self.project.c8ypass, self.log)
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")

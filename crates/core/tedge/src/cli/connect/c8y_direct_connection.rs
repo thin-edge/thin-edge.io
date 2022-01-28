@@ -18,6 +18,7 @@ use tedge_users::UserManager;
 pub fn create_device_with_direct_connection(
     user_manager: UserManager,
     bridge_config: &BridgeConfig,
+    device_type: &str,
 ) -> Result<(), ConnectError> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
@@ -49,7 +50,11 @@ pub fn create_device_with_direct_connection(
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
-                publish_device_create_message(&mut client, &bridge_config.remote_clientid.clone())?;
+                publish_device_create_message(
+                    &mut client,
+                    &bridge_config.remote_clientid.clone(),
+                    &device_type,
+                )?;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
@@ -64,6 +69,7 @@ pub fn create_device_with_direct_connection(
                     publish_device_create_message(
                         &mut client,
                         &bridge_config.remote_clientid.clone(),
+                        &device_type,
                     )?;
                     device_create_try += 1;
                 } else {
@@ -88,14 +94,17 @@ pub fn create_device_with_direct_connection(
     Err(ConnectError::TimeoutElapsedError)
 }
 
-fn publish_device_create_message(client: &mut Client, device_id: &str) -> Result<(), ConnectError> {
+fn publish_device_create_message(
+    client: &mut Client,
+    device_id: &str,
+    device_type: &str,
+) -> Result<(), ConnectError> {
     const DEVICE_CREATE_PUBLISH_TOPIC: &str = "s/us";
-    const DEVICE_TYPE: &str = "thin-edge.io";
     client.publish(
         DEVICE_CREATE_PUBLISH_TOPIC,
         QoS::ExactlyOnce,
         false,
-        format!("100,{},{}", device_id, DEVICE_TYPE).as_bytes(),
+        format!("100,{},{}", device_id, device_type).as_bytes(),
     )?;
     Ok(())
 }

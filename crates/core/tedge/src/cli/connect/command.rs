@@ -118,12 +118,15 @@ impl Command for ConnectCommand {
             );
         self.config_repository.store(&config)?;
 
+        let device_type = config.query(DeviceTypeSetting)?;
+
         new_bridge(
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
             self.user_manager.clone(),
             &self.config_location,
+            &device_type,
         )?;
 
         match self.check_connection(&config) {
@@ -373,6 +376,7 @@ fn new_bridge(
     service_manager: &dyn SystemServiceManager,
     user_manager: UserManager,
     config_location: &TEdgeConfigLocation,
+    device_type: &str,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
@@ -397,6 +401,7 @@ fn new_bridge(
         let () = c8y_direct_connection::create_device_with_direct_connection(
             user_manager,
             bridge_config,
+            &device_type,
         )?;
     }
 

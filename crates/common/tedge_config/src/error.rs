@@ -17,4 +17,7 @@ pub enum TEdgeConfigError {
 
     #[error("Config file not found: {0}")]
     ConfigFileNotFound(std::path::PathBuf),
+
+    #[error("Home directory is not found.")]
+    HomeDirNotFound,
 }

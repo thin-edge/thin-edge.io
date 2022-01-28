@@ -6,6 +6,7 @@ use std::path::Path;
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_TMP_PATH: &str = "/tmp";
+const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
@@ -41,6 +42,9 @@ pub struct TEdgeConfigDefaults {
 
     /// Default tmp path
     pub default_tmp_path: FilePath,
+
+    /// Default device type
+    pub default_device_type: String,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -63,6 +67,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: tmp_path.into(),
+            default_device_type: DEFAULT_DEVICE_TYPE.into(),
         }
     }
 }
@@ -85,7 +90,8 @@ fn test_from_tedge_config_location() {
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
-            default_tmp_path: FilePath::from("/tmp")
+            default_tmp_path: FilePath::from("/tmp"),
+            default_device_type: DEFAULT_DEVICE_TYPE.into(),
         }
     );
 }
