@@ -21,7 +21,7 @@ pub struct AgentOpt {
     #[structopt(long)]
     pub debug: bool,
 
-    /// Initialize the mqtt topics and exit so that no messages are lost
+    /// Subscribe to the mqtt topics upfront and exit so that no messages are lost
     #[structopt(short, long)]
     pub init: bool,
 }

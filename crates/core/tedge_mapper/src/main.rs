@@ -49,6 +49,10 @@ pub struct MapperOpt {
     /// If on also reports DEBUG and TRACE
     #[structopt(long)]
     pub debug: bool,
+
+    /// Subscribe to the mqtt topics upfront and exit so that no messages are lost
+    #[structopt(short, long)]
+    pub init: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -80,7 +84,12 @@ async fn main() -> anyhow::Result<()> {
     // Run only one instance of a mapper
     let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
 
-    component.start(config).await
+    if mapper.init {
+        let mut mapper = CumulocitySoftwareManagementMapper::new();
+        mapper.init().await
+    } else {
+        component.start(config).await
+    }
 }
 
 fn tedge_config() -> anyhow::Result<TEdgeConfig> {

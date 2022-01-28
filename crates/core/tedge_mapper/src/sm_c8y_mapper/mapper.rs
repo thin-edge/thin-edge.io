@@ -27,7 +27,7 @@ use c8y_smartrest::{
 };
 use chrono::{DateTime, FixedOffset};
 use download::{Auth, DownloadInfo};
-use mqtt_channel::{Connection, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
+use mqtt_channel::{Config, Connection, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -55,6 +55,18 @@ impl CumulocitySoftwareManagementMapper {
         }
 
         Ok(topic_filter)
+    }
+
+    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
+        info!("Initializing tedge sm mapper");
+        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
+        let config = Config::default()
+            .with_session_name("SM-C8Y-Mapper")
+            .with_clean_session(false)
+            .with_subscriptions(mqtt_topic);
+        let _client = Connection::new(&config).await?;
+        Ok(())
     }
 }
 

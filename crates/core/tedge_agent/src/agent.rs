@@ -187,7 +187,7 @@ impl SmAgent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&mut self) -> Result<(), AgentError> {
-        dbg!("Initializing tedge agent");
+        info!("Initializing tedge agent");
 
         let request_topics = vec![software_filter_topic(), control_filter_topic()]
             .try_into()
@@ -197,7 +197,6 @@ impl SmAgent {
             .with_session_name("tedge_agent")
             .with_clean_session(false)
             .with_subscriptions(request_topics);
-            
 
         let _mqtt = Connection::new(&config).await?;
         Ok(())
