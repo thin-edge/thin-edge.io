@@ -1,6 +1,7 @@
 from pysys.basetest import BaseTest
 
 import time
+import os
 
 """
 Validate local publishing with retain flag and subscribing:
@@ -22,35 +23,40 @@ class MqttPublishWithRetain(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
-      
+        self.environ = { 'HOME':os.environ.get('HOME')}
+
     def execute(self):
         
         pub_to_set_alarm = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 1"],
+            command=self.tedge,
+            arguments=["mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 1"],
             stdouterr="pub_to_set_alarm",
+            environs=self.environ
         )
 
         pub_to_set_alarm = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 2"],
+            command=self.tedge,
+            arguments=["mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", "alarm msg 2"],
             stdouterr="pub_to_set_alarm",
+            environs=self.environ
         )
        
         # wait some time before starting subscribers
         time.sleep(1)
 
         temp_sensor_sub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "test/alarms/#"],
+            command=self.tedge,
+            arguments=["mqtt", "sub", "test/alarms/#"],
             stdouterr="temp_sensor_sub",
             background=True,
+            environs=self.environ
         )
 
         pub_to_clear_alarm = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", ""],
+            command=self.tedge,
+            arguments=["mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", ""],
             stdouterr="pub_to_clear_alarm",
+            environs=self.environ
         )
 
         # wait for a while before killing the subscribers
@@ -61,23 +67,25 @@ class MqttPublishWithRetain(BaseTest):
         kill = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
-            stdouterr="kill_out",
+            stdouterr="kill_out",           
         )
 
         # Publish an empty message and start the subscriber, Now the subscriber will not receive any 
         # message since it is an empty message.
 
         pub_to_clear_alarm = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", ""],
+            command=self.tedge,
+            arguments=["mqtt", "pub", "--retain", "--qos", "1", "test/alarms/temp_sensor", ""],
             stdouterr="pub_to_clear_alarm",
+            environs=self.environ
         )
 
         temp_sensor_empty_message = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "test/alarms/#"],
+            command=self.tedge,
+            arguments=["mqtt", "sub", "test/alarms/#"],
             stdouterr="temp_sensor_empty_message",
             background=True,
+            environs=self.environ
         )
 
          # wait for a while before killing the subscribers
@@ -89,6 +97,7 @@ class MqttPublishWithRetain(BaseTest):
             command=self.sudo,
             arguments=["killall", "tedge"],
             stdouterr="kill_out",
+            environs=self.environ 
         )
      
     def validate(self):
