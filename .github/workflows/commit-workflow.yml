@@ -45,7 +45,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           components: rustfmt, clippy
           override: true
 
@@ -57,7 +57,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           command: clippy
           args: --version
 
@@ -65,7 +65,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           command: clippy
 
   cargo-test:
@@ -80,7 +80,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           override: true
 
       - name: Enable cache
@@ -119,7 +119,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           override: true
 
       - name: Enable cache
@@ -151,7 +151,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           target: armv7-unknown-linux-gnueabihf
           override: true
 
@@ -180,7 +180,7 @@ jobs:
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           target: armv7-unknown-linux-gnueabihf
           override: true
 
@@ -208,7 +208,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.58.1
           override: true
 
       - name: Enable cache
@@ -234,4 +234,4 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.58.0
+          args: --minimum 1.58.1
