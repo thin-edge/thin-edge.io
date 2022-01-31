@@ -857,6 +857,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_mapper_timestamp: Flag(true),
         default_mqtt_port: Port(1883),
         default_tmp_path: FilePath::from("/tmp"),
+        default_device_type: String::from("test"),
     }
 }
 

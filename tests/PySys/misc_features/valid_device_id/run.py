@@ -1,5 +1,6 @@
+from pysys.basetest import BaseTest
+
 import time
-from environment_tedge import TedgeEnvironment
 
 """
 Validate certificate creation with valid characters and validate with cumulocity cloud

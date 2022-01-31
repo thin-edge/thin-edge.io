@@ -1,4 +1,4 @@
-use crate::c8y_fragments::C8yAgentFragment;
+use crate::c8y_fragments::{C8yAgentFragment, C8yDeviceDataFragment};
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use crate::{converter::*, operations::Operations};
@@ -24,10 +24,11 @@ pub struct CumulocityConverter {
     children: HashSet<String>,
     pub(crate) mapper_config: MapperConfig,
     device_name: String,
+    device_type: String,
 }
 
 impl CumulocityConverter {
-    pub fn new(size_threshold: SizeThreshold, device_name: String) -> Self {
+    pub fn new(size_threshold: SizeThreshold, device_name: String, device_type: String) -> Self {
         let mut topic_fiter = make_valid_topic_filter_or_panic("tedge/measurements");
         let () = topic_fiter
             .add("tedge/measurements/+")
@@ -49,6 +50,7 @@ impl CumulocityConverter {
             children,
             mapper_config,
             device_name,
+            device_type,
         }
     }
 
@@ -124,11 +126,26 @@ impl Converter for CumulocityConverter {
 
         let supported_operations_message = create_supported_operations_fragments()?;
 
+        let device_data_message =
+            create_device_data_fragments(&self.device_name, &self.device_type)?;
+
         Ok(vec![
             supported_operations_message,
+            device_data_message,
             inventory_fragments_message,
         ])
     }
+}
+
+fn create_device_data_fragments(
+    device_name: &str,
+    device_type: &str,
+) -> Result<Message, ConversionError> {
+    let device_data = C8yDeviceDataFragment::from_type(device_type)?;
+    let ops_msg = device_data.to_json()?;
+
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
+    Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
 fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
@@ -144,10 +161,7 @@ fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
 fn create_inventory_fragments_message(device_name: &str) -> Result<Message, ConversionError> {
     let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
 
-    let topic = Topic::new_unchecked(&format!(
-        "{}/{}",
-        INVENTORY_MANAGED_OBJECTS_TOPIC, device_name
-    ));
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
@@ -227,10 +241,12 @@ mod test {
     #[test]
     fn convert_thin_edge_json_with_child_id() {
         let device_name = String::from("test");
+        let device_type = String::from("test_type");
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
+            device_type,
         ));
         let in_topic = "tedge/measurements/child1";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -263,10 +279,12 @@ mod test {
     #[test]
     fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
         let device_name = String::from("test");
+        let device_type = String::from("test_type");
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
+            device_type,
         ));
         let in_topic = "tedge/measurements/child1";
         let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -304,10 +322,12 @@ mod test {
     #[test]
     fn convert_two_thin_edge_json_messages_given_different_child_id() {
         let device_name = String::from("test");
+        let device_type = String::from("test_type");
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
+            device_type,
         ));
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
@@ -358,10 +378,14 @@ mod test {
 
     #[test]
     fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
-        let size_threshold = SizeThreshold(16 * 1024);
         let device_name = String::from("test");
+        let device_type = String::from("test_type");
 
-        let converter = CumulocityConverter::new(size_threshold, device_name);
+        let converter = Box::new(CumulocityConverter::new(
+            SizeThreshold(16 * 1024),
+            device_name,
+            device_type,
+        ));
         let buffer = create_packet(1024 * 20);
         let err = converter.size_threshold.validate(&buffer).unwrap_err();
         assert_eq!(
