@@ -57,14 +57,23 @@ impl CumulocitySoftwareManagementMapper {
         Ok(topic_filter)
     }
 
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initializing tedge sm mapper");
+    pub async fn init_or_drop(&mut self, sub_or_unsub: bool) -> Result<(), anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-        let config = Config::default()
-            .with_session_name("SM-C8Y-Mapper")
-            .with_clean_session(false)
-            .with_subscriptions(mqtt_topic);
+        let config: Config;
+        if sub_or_unsub {
+            info!("De-Initializing tedge sm mapper");
+            config = Config::default()
+                .with_session_name("SM-C8Y-Mapper")
+                .with_clean_session(true)
+                .with_subscriptions(mqtt_topic);
+        } else {
+            info!("Initializing tedge sm mapper");
+            config = Config::default()
+                .with_session_name("SM-C8Y-Mapper")
+                .with_clean_session(false)
+                .with_subscriptions(mqtt_topic);
+        }
         let _client = Connection::new(&config).await?;
         Ok(())
     }

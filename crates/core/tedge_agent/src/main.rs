@@ -21,9 +21,13 @@ pub struct AgentOpt {
     #[structopt(long)]
     pub debug: bool,
 
-    /// Subscribe to the mqtt topics upfront and exit so that no messages are lost
+    /// Start the agent with clean session off, subscribe to the topics, so that no messages are lost
     #[structopt(short, long)]
     pub init: bool,
+
+    /// Start the agent with clean session on, drop the old connection and subscriptions
+    #[structopt(short, long)]
+    pub drop: bool,
 }
 
 #[tokio::main]
@@ -35,7 +39,9 @@ async fn main() -> Result<(), anyhow::Error> {
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
     if agent_opt.init {
-        agent.init().await?;
+        agent.init_or_drop(false).await?;
+    } else if agent_opt.drop {
+        agent.init_or_drop(true).await?;
     } else {
         tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
         agent.start().await?;

@@ -50,9 +50,13 @@ pub struct MapperOpt {
     #[structopt(long)]
     pub debug: bool,
 
-    /// Subscribe to the mqtt topics upfront and exit so that no messages are lost
+    /// Start the mapper with clean session off, subscribe to the topics, so that no messages are lost
     #[structopt(short, long)]
     pub init: bool,
+
+    /// Start the mapper with clean session on, drop the old connection and subscriptions
+    #[structopt(short, long)]
+    pub drop: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -86,7 +90,10 @@ async fn main() -> anyhow::Result<()> {
 
     if mapper.init {
         let mut mapper = CumulocitySoftwareManagementMapper::new();
-        mapper.init().await
+        mapper.init_or_drop(false).await
+    } else if mapper.drop {
+        let mut mapper = CumulocitySoftwareManagementMapper::new();
+        mapper.init_or_drop(true).await
     } else {
         component.start(config).await
     }
