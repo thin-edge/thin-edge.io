@@ -38,12 +38,12 @@ async fn main() -> Result<(), anyhow::Error> {
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
+    tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
     if agent_opt.init {
-        agent.init_or_drop(false).await?;
+        agent.init_session().await?;
     } else if agent_opt.drop {
-        agent.init_or_drop(true).await?;
+        agent.clear_session().await?;
     } else {
-        tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
         agent.start().await?;
     }
     Ok(())

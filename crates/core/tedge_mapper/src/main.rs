@@ -90,10 +90,10 @@ async fn main() -> anyhow::Result<()> {
 
     if mapper.init {
         let mut mapper = CumulocitySoftwareManagementMapper::new();
-        mapper.init_or_drop(false).await
+        mapper.init_session().await
     } else if mapper.drop {
         let mut mapper = CumulocitySoftwareManagementMapper::new();
-        mapper.init_or_drop(true).await
+        mapper.clear_session().await
     } else {
         component.start(config).await
     }

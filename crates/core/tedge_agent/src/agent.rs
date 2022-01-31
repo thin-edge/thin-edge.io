@@ -186,24 +186,26 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn init_or_drop(&mut self, sub_or_unsub: bool) -> Result<(), AgentError> {
+    pub async fn init_session(&mut self) -> Result<(), AgentError> {
         let request_topics = vec![software_filter_topic(), control_filter_topic()]
             .try_into()
             .expect("Invalid topic filter");
-        let config: Config;
-        if sub_or_unsub {
-            info!("De-initializing tedge agent");
-            config = Config::default()
-                .with_session_name("tedge_agent")
-                .with_clean_session(true)
-                .with_subscriptions(request_topics);
-        } else {
-            info!("Initializing tedge agent");
-            config = Config::default()
-                .with_session_name("tedge_agent")
-                .with_clean_session(false)
-                .with_subscriptions(request_topics);
-        }
+
+        info!("Initializing tedge agent session");
+        let config = Config::default()
+            .with_session_name("tedge_agent")
+            .with_clean_session(false)
+            .with_subscriptions(request_topics);
+        let _mqtt = Connection::new(&config).await?;
+        Ok(())
+    }
+    pub async fn clear_session(&mut self) -> Result<(), AgentError> {
+        info!("Cleaning the tedge agent session");
+
+        let config = Config::default()
+            .with_session_name("tedge_agent")
+            .with_clean_session(false);
+
         let _mqtt = Connection::new(&config).await?;
         Ok(())
     }
