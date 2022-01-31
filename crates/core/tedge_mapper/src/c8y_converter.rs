@@ -121,6 +121,7 @@ impl CumulocityConverter {
             self.pending_alarms_map
                 .insert(alarm_id.clone(), input.clone());
         } else {
+            //Regular conversion phase
             let tedge_alarm =
                 ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
             let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;

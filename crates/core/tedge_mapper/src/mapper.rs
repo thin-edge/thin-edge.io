@@ -12,7 +12,7 @@ use tracing::{error, info, instrument};
 
 pub async fn create_mapper<'a>(
     app_name: &'a str,
-    tedge_config: &'a TEdgeConfig,
+    mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
@@ -20,7 +20,7 @@ pub async fn create_mapper<'a>(
     let mapper_config = converter.get_mapper_config();
     let mqtt_client = Connection::new(&mqtt_config(
         app_name,
-        tedge_config,
+        mqtt_port,
         mapper_config.in_topic_filter.clone().into(),
     )?)
     .await?;
@@ -36,11 +36,11 @@ pub async fn create_mapper<'a>(
 
 pub(crate) fn mqtt_config(
     name: &str,
-    tedge_config: &TEdgeConfig,
+    port: u16,
     topics: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
     Ok(mqtt_channel::Config::default()
-        .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_port(port)
         .with_session_name(name)
         .with_subscriptions(topics)
         .with_max_packet_size(10 * 1024 * 1024))

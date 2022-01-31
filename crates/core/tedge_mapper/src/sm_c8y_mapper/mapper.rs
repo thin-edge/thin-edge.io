@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use std::{convert::TryInto, process::Stdio};
-use tedge_config::TEdgeConfig;
+use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tracing::{debug, error, info, instrument};
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
@@ -125,7 +125,9 @@ where
         operations: Operations,
     ) -> Result<Self, anyhow::Error> {
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-        let mqtt_config = crate::mapper::mqtt_config(SM_MAPPER, &tedge_config, mqtt_topic)?;
+        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+
+        let mqtt_config = crate::mapper::mqtt_config(SM_MAPPER, mqtt_port, mqtt_topic)?;
         let client = Connection::new(&mqtt_config).await?;
 
         Ok(Self {
