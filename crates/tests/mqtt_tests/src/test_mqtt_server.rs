@@ -6,6 +6,7 @@ use std::{
 
 use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
 use once_cell::sync::Lazy;
+use rumqttc::QoS;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 const MQTT_TEST_PORT: u16 = 55555;
@@ -27,7 +28,17 @@ impl MqttProcessHandler {
     }
 
     pub async fn publish(&self, topic: &str, payload: &str) -> Result<(), anyhow::Error> {
-        crate::test_mqtt_client::publish(self.port, topic, payload).await
+        crate::test_mqtt_client::publish(self.port, topic, payload, QoS::AtLeastOnce, false).await
+    }
+
+    pub async fn publish_with_opts(
+        &self,
+        topic: &str,
+        payload: &str,
+        qos: QoS,
+        retain: bool,
+    ) -> Result<(), anyhow::Error> {
+        crate::test_mqtt_client::publish(self.port, topic, payload, qos, retain).await
     }
 
     pub async fn messages_published_on(&self, topic: &str) -> UnboundedReceiver<String> {

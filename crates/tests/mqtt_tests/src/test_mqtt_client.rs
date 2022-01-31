@@ -54,10 +54,16 @@ pub async fn assert_received<T>(
 /// Publish a message
 ///
 /// Return only when the message has been acknowledged.
-pub async fn publish(mqtt_port: u16, topic: &str, payload: &str) -> Result<(), anyhow::Error> {
+pub async fn publish(
+    mqtt_port: u16,
+    topic: &str,
+    payload: &str,
+    qos: QoS,
+    retain: bool,
+) -> Result<(), anyhow::Error> {
     let mut con = TestCon::new(mqtt_port);
 
-    con.publish(topic, QoS::AtLeastOnce, payload).await
+    con.publish(topic, QoS::AtLeastOnce, false, payload).await
 }
 
 /// Publish the `pub_message` on the `pub_topic` only when ready to receive a message on `sub_topic`.
@@ -77,7 +83,7 @@ pub async fn wait_for_response_on_publish(
     let mut con = TestCon::new(mqtt_port);
 
     con.subscribe(sub_topic, QoS::AtLeastOnce).await.ok()?;
-    con.publish(pub_topic, QoS::AtLeastOnce, pub_message)
+    con.publish(pub_topic, QoS::AtLeastOnce, false, pub_message)
         .await
         .ok()?;
     match tokio::time::timeout(timeout, con.next_message()).await {
@@ -100,7 +106,7 @@ where
         if let Ok(message) = con.next_topic_payload().await {
             dbg!(&message);
             for (topic, response) in func(message).iter() {
-                let _ = con.publish(topic, QoS::AtLeastOnce, response).await;
+                let _ = con.publish(topic, QoS::AtLeastOnce, false, response).await;
             }
         }
     }
@@ -143,6 +149,7 @@ impl TestCon {
         &mut self,
         topic: &str,
         qos: QoS,
+        retain: bool,
         payload: &str,
     ) -> Result<(), anyhow::Error> {
         self.client.publish(topic, qos, false, payload).await?;
