@@ -5,6 +5,8 @@ import time
 from pysys.basetest import BaseTest
 
 class TedgeEnvironment(BaseTest):
+    """Class with helper and convenicence methods for testing tedge
+    """
 
     def setup(self):
         self.sudo = "/usr/bin/sudo"
@@ -26,8 +28,6 @@ class TedgeEnvironment(BaseTest):
             delay = minimum_time -runtime +1
             self.log.info(f"Delaying execution by {delay} seconds" )
             time.sleep( delay)
-
-
 
     def tedge_connect_c8y(self, expectedExitStatus="==0"):
 
