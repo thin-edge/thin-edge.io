@@ -17,7 +17,7 @@ class InvalidDeviceId(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
-        
+
         # create a custom certiticate directory for testing purpose
         create_cert_dir = self.startProcess(
             command=self.sudo,

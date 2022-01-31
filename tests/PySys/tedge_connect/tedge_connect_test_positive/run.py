@@ -19,11 +19,7 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         super().execute()
         self.systemctl = "/usr/bin/systemctl"
         self.log.info("Execute `tedge connect c8y --test`")
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y", "--test"],
-            stdouterr="tedge_connect_c8y_test_positive",
-        )
+        self.tedge_connect_c8y_test()
         self.device_fragment = self.cumulocity.get_thin_edge_device_by_name(
             self.project.device)
 
@@ -31,7 +27,7 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         super().validate()
         self.log.info("Validate")
         self.assertGrep(
-            "tedge_connect_c8y_test_positive.out", "Connection check to c8y cloud is successful.", contains=True
+            "tedge_connect_c8y_test.out", "Connection check to c8y cloud is successful.", contains=True
         )
         try:
             id = self.device_fragment['id']
@@ -40,4 +36,4 @@ class TedgeConnectTestPositive(EnvironmentC8y):
             raise SystemError("Cannot find id in device_fragment")
 
         self.assertTrue(
-            self.device_fragment['id'] != None, "thin-edge.io device with the given name exists")
+            id != None, "thin-edge.io device with the given name exists")

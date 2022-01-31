@@ -1,7 +1,7 @@
 import os
 import subprocess
-from pysys.basetest import BaseTest
 from environment_sm_management import SoftwareManagement
+from environment_tedge import TedgeEnvironment
 from retry import retry
 
 """
@@ -28,22 +28,15 @@ def assert_install_in_download_path(install_directory):
 
 
 
-class AptInstallWithDownloadPath(SoftwareManagement, BaseTest):
+class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
     SUDO = "/usr/bin/sudo"
     TEDGE = "/usr/bin/tedge"
     DOWNLOAD_DIR = "/tedge_download_path_test"
     CURRENT_DOWNLOAD_PATH = None
 
     def reconnect_c8y(self):
-        self.startProcess(
-            command=self.SUDO,
-            arguments=[self.TEDGE, "disconnect", "c8y"]
-        )
-
-        self.startProcess(
-            command=self.SUDO,
-            arguments=[self.TEDGE, "connect", "c8y"]
-        )
+        self.tedge_disconnect_c8y()
+        self.tedge_connect_c8y()
 
     def set_download_path(self, download_path):
         self.startProcess(

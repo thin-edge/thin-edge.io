@@ -9,7 +9,7 @@ from pysys.basetest import BaseTest
 from pysys.constants import FAILED
 
 from cumulocity import Cumulocity
-from environment import TedgeEnvironment
+from environment_tedge import TedgeEnvironment
 
 """
 Environment to manage automated connect and disconnect to c8y
