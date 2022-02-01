@@ -65,7 +65,7 @@ class AgentInitSession(BaseTest):
         sub_stop = self.startProcess(
             command=self.sudo,
             arguments=["killall", "tedge"],
-            stdouterr="agent_stop",
+            stdouterr="sub_stop",
         )
 
     def validate(self):
