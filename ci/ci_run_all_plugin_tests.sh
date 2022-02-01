@@ -33,7 +33,7 @@ cd tests/PySys/
 sudo tedge config set software.plugin.default apt
 
 set +e
-pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='container'
+pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='smcontainer'
 set -e
 
 mv __pysys_junit_xml pysys_junit_xml_apt
