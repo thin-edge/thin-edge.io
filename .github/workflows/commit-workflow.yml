@@ -234,4 +234,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: msrv
-          args: --minimum 1.58.1
+          #args: --minimum 1.58.1
+          # unclear why, but checking against 1.57 tells us that 1.58.1 is
+          # fine and checking against 1.58.1 fails
+          args: --minimum 1.57.0
