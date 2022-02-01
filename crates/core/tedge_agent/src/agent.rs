@@ -13,9 +13,7 @@ use agent_interface::{
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
-use mqtt_channel::{
-    Config, Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter,
-};
+use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
@@ -183,26 +181,19 @@ impl SmAgent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init_session(&mut self) -> Result<(), AgentError> {
-        let request_topics = vec![software_filter_topic(), control_filter_topic()]
-            .try_into()
-            .expect("Invalid topic filter");
-
-        info!("Initializing tedge agent session");
-        let config = Config::default()
-            .with_session_name("tedge_agent")
-            .with_clean_session(false)
-            .with_subscriptions(request_topics);
-        let _mqtt = Connection::new(&config).await?;
+        let mut mqtt_config = self.config.mqtt_config.clone();
+        mqtt_config.clean_session = false;
+        dbg!(&mqtt_config);
+        let _mqtt = Connection::new(&mqtt_config).await?;
         Ok(())
     }
+
+    #[instrument(skip(self), name = "sm-agent")]
     pub async fn clear_session(&mut self) -> Result<(), AgentError> {
         info!("Cleaning the tedge agent session");
-
-        let config = Config::default()
-            .with_session_name("tedge_agent")
-            .with_clean_session(false);
-
-        let _mqtt = Connection::new(&config).await?;
+        let mut mqtt_config = self.config.mqtt_config.clone();
+        mqtt_config.clean_session = true;
+        let _mqtt = Connection::new(&mqtt_config).await?;
         Ok(())
     }
 
