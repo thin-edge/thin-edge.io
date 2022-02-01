@@ -220,13 +220,13 @@ impl Converter for CumulocityConverter {
                 match self.pending_alarms_map.entry(alarm_id.clone()) {
                     // If an alarm that is present in c8y-internal/alarms topic is not present in tedge/alarms topic,
                     // it is assumed to have been cleared while the mapper process was down
-                    Entry::Vacant(entry) => {
+                    Entry::Vacant(_) => {
                         let topic = Topic::new_unchecked(
                             format!("{}{}", TEDGE_ALARMS_TOPIC, alarm_id).as_str(),
                         );
                         let message = Message::new(&topic, vec![]).with_retain();
                         // Recreate the clear alarm message and add it to the pending alarms list to be processed later
-                        entry.insert(message);
+                        sync_messages.push(message);
                     }
 
                     // If the payload of a message received from tedge/alarms is same as one received from c8y-internal/alarms,

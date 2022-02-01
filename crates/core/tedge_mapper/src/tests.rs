@@ -65,7 +65,7 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     // Expect converted temperature alarm message
     let msg = messages
         .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
+        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
     dbg!(&msg);
@@ -96,16 +96,25 @@ async fn mapper_syncs_pending_alarms_on_startup() {
         .unwrap();
 
     // Restart the C8Y Mapper
-    let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
+    let _ = start_c8y_mapper(broker.port).await.unwrap();
 
     // Expect SmartREST message 114 for supported operations on c8y/s/us topic
+    let msg = messages
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received after a second.");
+    dbg!(&msg);
+    assert!(&msg.contains("114"));
+
+    // Expect the previously missed clear temperature alarm message
     let msg = messages
         .recv()
         .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
     dbg!(&msg);
-    assert!(&msg.contains("114"));
+    assert!(&msg.contains("306,temperature_alarm"));
 
     // Expect the new pressure alarm message
     let msg = messages
@@ -115,15 +124,6 @@ async fn mapper_syncs_pending_alarms_on_startup() {
         .expect_or("No message received after a second.");
     dbg!(&msg);
     assert!(&msg.contains("301,pressure_alarm"));
-
-    // Expect clear temperature alarm message
-    let msg = messages
-        .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
-        .await
-        .expect_or("No message received after a second.");
-    dbg!(&msg);
-    assert!(&msg.contains("306,temperature_alarm"));
 }
 
 async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
