@@ -5,3 +5,5 @@ retry == 0.9.2
 junitparser == 2.2.0
 junit2html == 30.0.6
 psutil == 5.9.0
+c8y-api == 1.1.1
+
