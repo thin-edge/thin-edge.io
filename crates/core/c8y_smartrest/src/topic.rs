@@ -1,6 +1,13 @@
-use agent_interface::{error::*, topic::ResponseTopic};
-use mqtt_channel::{MqttError, Topic};
-use std::convert::{TryFrom, TryInto};
+use agent_interface::topic::ResponseTopic;
+use agent_interface::TopicError;
+use mqtt_channel::Topic;
+use mqtt_channel::{Message, MqttError};
+
+use crate::error::SMCumulocityMapperError;
+use crate::smartrest_serializer::{
+    CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
+    SmartRestSetOperationToSuccessful,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum C8yTopic {
@@ -91,6 +98,32 @@ impl TryFrom<Topic> for MapperSubscribeTopic {
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
         value.name.try_into()
     }
+}
+
+/// returns a c8y message specifying to set log status to executing.
+///
+/// example message: '501,c8y_LogfileRequest'
+pub async fn get_log_file_request_executing() -> Result<Message, SMCumulocityMapperError> {
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let smartrest_set_operation_status =
+        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
+            .to_smartrest()?;
+    Ok(Message::new(&topic, smartrest_set_operation_status))
+}
+
+/// returns a c8y message specifying to set log status to successful.
+///
+/// example message: '503,c8y_LogfileRequest,https://{c8y.url}/etc...'
+pub async fn get_log_file_request_done_message(
+    binary_upload_event_url: &str,
+) -> Result<Message, SMCumulocityMapperError> {
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let smartrest_set_operation_status =
+        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yLogFileRequest)
+            .with_response_parameter(binary_upload_event_url)
+            .to_smartrest()?;
+
+    Ok(Message::new(&topic, smartrest_set_operation_status))
 }
 
 #[cfg(test)]
