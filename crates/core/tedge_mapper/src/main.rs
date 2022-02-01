@@ -54,9 +54,11 @@ pub struct MapperOpt {
     #[structopt(short, long)]
     pub init: bool,
 
-    /// Start the mapper with clean session on, drop the old connection and subscriptions
+    /// Start the agent with clean session on, drop the previous session and subscriptions
+    ///
+    /// WARNING: All pending messages will be lost.
     #[structopt(short, long)]
-    pub drop: bool,
+    pub clear: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -91,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
     if mapper.init {
         let mut mapper = CumulocitySoftwareManagementMapper::new();
         mapper.init_session().await
-    } else if mapper.drop {
+    } else if mapper.clear {
         let mut mapper = CumulocitySoftwareManagementMapper::new();
         mapper.clear_session().await
     } else {

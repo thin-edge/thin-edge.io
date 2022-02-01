@@ -25,9 +25,11 @@ pub struct AgentOpt {
     #[structopt(short, long)]
     pub init: bool,
 
-    /// Start the agent with clean session on, drop the old connection and subscriptions
+    /// Start the agent with clean session on, drop the previous session and subscriptions
+    ///
+    /// WARNING: All pending messages will be lost.
     #[structopt(short, long)]
-    pub drop: bool,
+    pub clear: bool,
 }
 
 #[tokio::main]
@@ -41,7 +43,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
     if agent_opt.init {
         agent.init_session().await?;
-    } else if agent_opt.drop {
+    } else if agent_opt.clear {
         agent.clear_session().await?;
     } else {
         agent.start().await?;

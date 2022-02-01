@@ -46,7 +46,7 @@ class TedgeSMMapperInitSession(EnvironmentC8y):
         )
         mapper_drop = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge_mapper, "--drop", "sm-c8y"],
+            arguments=[self.tedge_mapper, "--clear", "sm-c8y"],
             stdouterr="mapper_drop",           
         )
         
