@@ -183,7 +183,6 @@ impl SmAgent {
     pub async fn init_session(&mut self) -> Result<(), AgentError> {
         let mut mqtt_config = self.config.mqtt_config.clone();
         mqtt_config.clean_session = false;
-        dbg!(&mqtt_config);
         let _mqtt = Connection::new(&mqtt_config).await?;
         Ok(())
     }
