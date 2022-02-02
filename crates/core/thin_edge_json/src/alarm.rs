@@ -84,9 +84,9 @@ impl ThinEdgeAlarm {
                 data: alarm_data,
             })
         } else {
-            return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
                 mqtt_topic.into(),
-            ));
+            ))
         }
     }
 }
