@@ -38,7 +38,7 @@ source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 
 # Delete the device
-./ci/delete_current_device_c8y.py
+python3 ./ci/delete_current_device_c8y.py
 
 # Connect and disconnect so that we can retrive a new device ID
 sudo tedge connect c8y
