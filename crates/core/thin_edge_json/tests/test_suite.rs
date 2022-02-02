@@ -10,7 +10,7 @@ fn it_rejects_invalid_thin_edge_json() -> anyhow::Result<()> {
         println!("Fixture: {:?}", fixture.path());
 
         let res: anyhow::Result<_> = {
-            let mut builder = thin_edge_json::builder::ThinEdgeJsonBuilder::new();
+            let mut builder = thin_edge_json::builder::ThinEdgeJsonBuilder::default();
             thin_edge_json::parser::parse_str(&input, &mut builder)
                 .map_err(Into::into)
                 .and_then(|_| builder.done().map_err(Into::into))

@@ -317,7 +317,7 @@ mod tests {
         "escaped\\": 123.0
     }"#;
 
-        let mut builder = ThinEdgeJsonBuilder::new();
+        let mut builder = ThinEdgeJsonBuilder::default();
 
         let () = parse_str(input, &mut builder)?;
 
@@ -350,7 +350,7 @@ mod tests {
 
         let input = "{\n\"time\" : null\n}";
 
-        let mut builder = ThinEdgeJsonBuilder::new();
+        let mut builder = ThinEdgeJsonBuilder::default();
 
         let res = parse_str(input, &mut builder);
 
