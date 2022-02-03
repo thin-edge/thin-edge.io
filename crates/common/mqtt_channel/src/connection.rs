@@ -90,27 +90,12 @@ impl Connection {
         })
     }
 
-    fn mqtt_options(config: &Config) -> rumqttc::MqttOptions {
-        let id = match &config.session_name {
-            None => std::iter::repeat_with(fastrand::lowercase)
-                .take(10)
-                .collect(),
-            Some(name) => name.clone(),
-        };
-
-        let mut mqtt_options = rumqttc::MqttOptions::new(id, &config.host, config.port);
-        mqtt_options.set_clean_session(config.clean_session);
-        mqtt_options.set_max_packet_size(config.max_packet_size, config.max_packet_size);
-
-        mqtt_options
-    }
-
     async fn open(
         config: &Config,
         mut message_sender: mpsc::UnboundedSender<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
-        let mqtt_options = Connection::mqtt_options(config);
+        let mqtt_options = config.mqtt_options();
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
         let topic = &config.subscriptions;
