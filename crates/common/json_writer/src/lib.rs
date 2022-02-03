@@ -21,6 +21,7 @@ pub enum JsonWriterError {
     InvalidF64Value { value: f64 },
 }
 
+#[cfg(test)]
 impl Default for JsonWriter {
     fn default() -> Self {
         Self {
