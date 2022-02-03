@@ -84,16 +84,17 @@ async fn mapper_syncs_pending_alarms_on_startup() {
         .await
         .unwrap();
 
+    // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     //Clear the existing alarm while the mapper is down
-    let _ = broker
-        .publish_with_opts(
-            "tedge/alarms/critical/temperature_alarm",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
+    // let _ = broker
+    //     .publish_with_opts(
+    //         "tedge/alarms/critical/temperature_alarm",
+    //         "",
+    //         mqtt_channel::QoS::AtLeastOnce,
+    //         true,
+    //     )
+    //     .await
+    //     .unwrap();
 
     // Restart the C8Y Mapper
     let _ = start_c8y_mapper(broker.port).await.unwrap();
@@ -107,14 +108,15 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     dbg!(&msg);
     assert!(&msg.contains("114"));
 
+    // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
-    let msg = messages
-        .recv()
-        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
-        .await
-        .expect_or("No message received after a second.");
-    dbg!(&msg);
-    assert!(&msg.contains("306,temperature_alarm"));
+    // let msg = messages
+    //     .recv()
+    //     .with_timeout(ALARM_SYNC_TIMEOUT_MS)
+    //     .await
+    //     .expect_or("No message received after a second.");
+    // dbg!(&msg);
+    // assert!(&msg.contains("306,temperature_alarm"));
 
     // Expect the new pressure alarm message
     let msg = messages
