@@ -16,19 +16,14 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
     let mqtt_options = config.mqtt_options();
     let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
-    let topic = &config.subscriptions;
-    let qos = topic.qos;
-
     loop {
         match event_loop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                if topic.patterns.is_empty() {
+                let subscriptions = config.subscriptions.filters();
+                if subscriptions.is_empty() {
                     break;
                 }
-
-                for pattern in topic.patterns.iter() {
-                    let () = mqtt_client.subscribe(pattern, qos).await?;
-                }
+                mqtt_client.subscribe_many(subscriptions).await?;
             }
 
             Ok(Event::Incoming(Packet::SubAck(_))) => {
