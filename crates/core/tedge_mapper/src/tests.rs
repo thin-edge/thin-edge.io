@@ -128,8 +128,13 @@ async fn mapper_syncs_pending_alarms_on_startup() {
 
 async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
     let device_name = "test-device".into();
+    let device_type = "test-device-type".into();
     let size_threshold = SizeThreshold(16 * 1024);
-    let converter = Box::new(CumulocityConverter::new(size_threshold, device_name));
+    let converter = Box::new(CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+    ));
 
     let mut mapper = create_mapper("c8y-mapper-test", mqtt_port, converter).await?;
 

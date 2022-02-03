@@ -29,9 +29,7 @@ pub struct CumulocityConverter {
     device_name: String,
     device_type: String,
 
-    syncing: bool,
-    pending_alarms_map: HashMap<String, Message>,
-    old_alarms_map: HashMap<String, Message>,
+    alarm_converter: AlarmConverter,
 }
 
 impl CumulocityConverter {
@@ -55,9 +53,10 @@ impl CumulocityConverter {
 
         let children: HashSet<String> = HashSet::new();
 
-        let pending_alarms_map = HashMap::new();
-        let old_alarms_map = HashMap::new();
-        let syncing = true;
+        let alarm_converter = AlarmConverter::Syncing {
+            old_alarms_map: HashMap::new(),
+            pending_alarms_map: HashMap::new(),
+        };
 
         CumulocityConverter {
             size_threshold,
@@ -65,9 +64,7 @@ impl CumulocityConverter {
             mapper_config,
             device_name,
             device_type,
-            syncing,
-            pending_alarms_map,
-            old_alarms_map,
+            alarm_converter,
         }
     }
 
@@ -107,56 +104,6 @@ impl CumulocityConverter {
         }
         Ok(vec)
     }
-
-    fn try_convert_alarm(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
-
-        if self.syncing {
-            let alarm_id = input
-                .topic
-                .name
-                .strip_prefix(TEDGE_ALARMS_TOPIC)
-                .expect("Expected tedge/alarms prefix")
-                .to_string();
-            self.pending_alarms_map
-                .insert(alarm_id.clone(), input.clone());
-        } else {
-            //Regular conversion phase
-            let tedge_alarm =
-                ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-            let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
-            let c8y_alarm_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-            vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
-
-            // Persist a copy of the alarm to an internal topic for reconciliation on next restart
-            let alarm_id = input
-                .topic
-                .name
-                .strip_prefix(TEDGE_ALARMS_TOPIC)
-                .expect("Expected tedge/alarms prefix")
-                .to_string();
-            let topic =
-                Topic::new_unchecked(format!("{}{}", INTERNAL_ALARMS_TOPIC, alarm_id).as_str());
-            let alarm_copy = Message::new(&topic, input.payload_bytes().to_owned()).with_retain();
-            vec.push(alarm_copy);
-        }
-
-        Ok(vec)
-    }
-
-    fn process_internal_alarm(&mut self, input: &Message) {
-        if self.syncing {
-            let alarm_id = input
-                .topic
-                .name
-                .strip_prefix(INTERNAL_ALARMS_TOPIC)
-                .expect("Expected c8y-internal/alarms prefix")
-                .to_string();
-            self.old_alarms_map.insert(alarm_id, input.clone());
-        } else {
-            // Ignore
-        }
-    }
 }
 
 impl Converter for CumulocityConverter {
@@ -171,9 +118,9 @@ impl Converter for CumulocityConverter {
         if input.topic.name.starts_with("tedge/measurement") {
             self.try_convert_measurement(input)
         } else if input.topic.name.starts_with(TEDGE_ALARMS_TOPIC) {
-            self.try_convert_alarm(input)
+            self.alarm_converter.try_convert_alarm(input)
         } else if input.topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
-            self.process_internal_alarm(input);
+            self.alarm_converter.process_internal_alarm(input);
             Ok(vec![])
         } else {
             Err(ConversionError::UnsupportedTopic(input.topic.name.clone()))
@@ -195,8 +142,86 @@ impl Converter for CumulocityConverter {
         ])
     }
 
+    fn sync_messages(&mut self) -> Vec<Message> {
+        let sync_messages: Vec<Message> = self.alarm_converter.sync();
+        self.alarm_converter = AlarmConverter::Synced;
+        sync_messages
+    }
+}
+
+enum AlarmConverter {
+    Syncing {
+        pending_alarms_map: HashMap<String, Message>,
+        old_alarms_map: HashMap<String, Message>,
+    },
+    Synced,
+}
+
+impl AlarmConverter {
+    fn try_convert_alarm(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+        let mut vec: Vec<Message> = Vec::new();
+
+        match self {
+            Self::Syncing {
+                pending_alarms_map,
+                old_alarms_map: _,
+            } => {
+                let alarm_id = input
+                    .topic
+                    .name
+                    .strip_prefix(TEDGE_ALARMS_TOPIC)
+                    .expect("Expected tedge/alarms prefix")
+                    .to_string();
+                pending_alarms_map.insert(alarm_id.clone(), input.clone());
+            }
+            Self::Synced => {
+                //Regular conversion phase
+                let tedge_alarm =
+                    ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+                let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
+                let c8y_alarm_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+                vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
+
+                // Persist a copy of the alarm to an internal topic for reconciliation on next restart
+                let alarm_id = input
+                    .topic
+                    .name
+                    .strip_prefix(TEDGE_ALARMS_TOPIC)
+                    .expect("Expected tedge/alarms prefix")
+                    .to_string();
+                let topic =
+                    Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
+                let alarm_copy =
+                    Message::new(&topic, input.payload_bytes().to_owned()).with_retain();
+                vec.push(alarm_copy);
+            }
+        }
+
+        Ok(vec)
+    }
+
+    fn process_internal_alarm(&mut self, input: &Message) {
+        match self {
+            Self::Syncing {
+                pending_alarms_map: _,
+                old_alarms_map,
+            } => {
+                let alarm_id = input
+                    .topic
+                    .name
+                    .strip_prefix(INTERNAL_ALARMS_TOPIC)
+                    .expect("Expected c8y-internal/alarms prefix")
+                    .to_string();
+                old_alarms_map.insert(alarm_id, input.clone());
+            }
+            Self::Synced => {
+                // Ignore
+            }
+        }
+    }
+
     /// Detect and sync any alarms that were raised/cleared while this mapper process was not running.
-    /// Reconciliation is done by maintaining an internal journal of all the alarms processed by this mapper,
+    /// For this syncing logic, converter maintains an internal journal of all the alarms processed by this mapper,
     /// which is compared against all the live alarms seen by the mapper on every startup.
     ///
     /// All the live alarms are received from tedge/alarms topic on startup.
@@ -209,39 +234,45 @@ impl Converter for CumulocityConverter {
     /// is one that was raised while the mapper process was down.
     /// An alarm present in both, if their payload is the same, is one that was already processed before the restart
     /// and hence can be ignored during reconcicilation.
-    fn sync_messages(&mut self) -> Vec<Message> {
-        self.syncing = false;
+    fn sync(&mut self) -> Vec<Message> {
         let mut sync_messages: Vec<Message> = Vec::new();
 
-        // Compare the differences between alarms in tedge/alarms topic to the ones in c8y-internal/alarms topic
-        self.old_alarms_map
-            .drain()
-            .for_each(|(alarm_id, old_message)| {
-                match self.pending_alarms_map.entry(alarm_id.clone()) {
-                    // If an alarm that is present in c8y-internal/alarms topic is not present in tedge/alarms topic,
-                    // it is assumed to have been cleared while the mapper process was down
-                    Entry::Vacant(_) => {
-                        let topic = Topic::new_unchecked(
-                            format!("{}{}", TEDGE_ALARMS_TOPIC, alarm_id).as_str(),
-                        );
-                        let message = Message::new(&topic, vec![]).with_retain();
-                        // Recreate the clear alarm message and add it to the pending alarms list to be processed later
-                        sync_messages.push(message);
-                    }
+        match self {
+            Self::Syncing {
+                pending_alarms_map,
+                old_alarms_map,
+            } => {
+                // Compare the differences between alarms in tedge/alarms topic to the ones in c8y-internal/alarms topic
+                old_alarms_map.drain().for_each(|(alarm_id, old_message)| {
+                    match pending_alarms_map.entry(alarm_id.clone()) {
+                        // If an alarm that is present in c8y-internal/alarms topic is not present in tedge/alarms topic,
+                        // it is assumed to have been cleared while the mapper process was down
+                        Entry::Vacant(_) => {
+                            let topic = Topic::new_unchecked(
+                                format!("{}{}", TEDGE_ALARMS_TOPIC, alarm_id).as_str(),
+                            );
+                            let message = Message::new(&topic, vec![]).with_retain();
+                            // Recreate the clear alarm message and add it to the pending alarms list to be processed later
+                            sync_messages.push(message);
+                        }
 
-                    // If the payload of a message received from tedge/alarms is same as one received from c8y-internal/alarms,
-                    // it is assumed to be one that was already processed earlier and hence removed from the pending alarms list.
-                    Entry::Occupied(entry) => {
-                        if entry.get().payload_bytes() == old_message.payload_bytes() {
-                            entry.remove();
+                        // If the payload of a message received from tedge/alarms is same as one received from c8y-internal/alarms,
+                        // it is assumed to be one that was already processed earlier and hence removed from the pending alarms list.
+                        Entry::Occupied(entry) => {
+                            if entry.get().payload_bytes() == old_message.payload_bytes() {
+                                entry.remove();
+                            }
                         }
                     }
-                }
-            });
+                });
 
-        // Once all the pending alarms are identified, process them
-        for (_key, message) in self.pending_alarms_map.drain() {
-            sync_messages.push(message);
+                pending_alarms_map
+                    .drain()
+                    .for_each(|(_key, message)| sync_messages.push(message));
+            }
+            Self::Synced => {
+                // Ignore
+            }
         }
 
         sync_messages
@@ -331,7 +362,6 @@ mod test {
     use super::*;
 
     use crate::c8y_converter::CumulocityConverter;
-    use serde_json::json;
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
@@ -521,8 +551,9 @@ mod test {
     fn test_sync_alarms() {
         let size_threshold = SizeThreshold(16 * 1024);
         let device_name = String::from("test");
+        let device_type = String::from("test_type");
 
-        let mut converter = CumulocityConverter::new(size_threshold, device_name);
+        let mut converter = CumulocityConverter::new(size_threshold, device_name, device_type);
 
         let alarm_topic = "tedge/alarms/critical/temperature_alarm";
         let alarm_payload = r#"{ "message": "Temperature very high" }"#;
@@ -539,14 +570,38 @@ mod test {
         // But non-alarms are converted immediately, even during the sync phase
         assert!(!converter.convert(&non_alarm_message).is_empty());
 
+        let internal_alarm_topic = "c8y-internal/alarms/major/pressure_alarm";
+        let internal_alarm_payload = r#"{ "message": "Temperature very high" }"#;
+        let internal_alarm_message = Message::new(
+            &Topic::new_unchecked(internal_alarm_topic),
+            internal_alarm_payload,
+        );
+
+        // During the sync phase, internal alarms are not converted, but only cached to be synced later
+        assert!(converter.convert(&internal_alarm_message).is_empty());
+
         // When sync phase is complete, all pending alarms are returned
         let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 1);
+        assert_eq!(sync_messages.len(), 2);
+
+        // The first message will be clear alarm message for pressure_alarm
         let alarm_message = sync_messages.get(0).unwrap();
+        assert_eq!(
+            alarm_message.topic.name,
+            "tedge/alarms/major/pressure_alarm"
+        );
+        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+
+        // The second message will be the temperature_alarm
+        let alarm_message = sync_messages.get(1).unwrap();
         assert_eq!(alarm_message.topic.name, alarm_topic);
+        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
 
         // After the sync phase, the conversion of both non-alarms as well as alarms are done immediately
         assert!(!converter.convert(&alarm_message).is_empty());
         assert!(!converter.convert(&non_alarm_message).is_empty());
+
+        // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
+        assert!(converter.convert(&internal_alarm_message).is_empty());
     }
 }

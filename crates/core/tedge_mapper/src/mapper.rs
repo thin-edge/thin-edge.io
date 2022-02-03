@@ -7,7 +7,6 @@ use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
-use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tracing::{error, info, instrument};
 
 pub async fn create_mapper<'a>(
