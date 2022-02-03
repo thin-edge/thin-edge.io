@@ -42,6 +42,8 @@ pub trait Converter: Send + Sync {
         Ok(vec![])
     }
 
+    /// This function will be the first method that's called on the converter after it's instantiated.
+    /// Return any initialization messages that must be processed before the converter starts converting regular messages.
     fn init_messages(&self) -> Vec<Message> {
         match self.try_init_messages() {
             Ok(messages) => messages,
@@ -55,6 +57,11 @@ pub trait Converter: Send + Sync {
         }
     }
 
+    /// This function will be the called after a brief period(sync window) after the converter starts converting messages.
+    /// This gives the converter an opportunity to process the messages received during the sync window and
+    /// produce any additional messages as "sync messages" as a result of this processing.
+    /// These sync messages will be processed by the mapper right after the sync window before it starts converting further messages.
+    /// Typically used to do some processing on all messages received on mapper startup and derive additional messages out of those.
     fn sync_messages(&mut self) -> Vec<Message> {
         vec![]
     }

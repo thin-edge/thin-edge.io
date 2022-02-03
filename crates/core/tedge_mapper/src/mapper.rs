@@ -9,6 +9,8 @@ use mqtt_channel::{
 };
 use tracing::{error, info, instrument};
 
+const SYNC_WINDOW: Duration = Duration::from_secs(3);
+
 pub async fn create_mapper<'a>(
     app_name: &'a str,
     mqtt_port: u16,
@@ -86,8 +88,8 @@ impl Mapper {
             let _ = self.output.send(init_message).await;
         }
 
-        let sync_window = Duration::from_secs(3);
-        let _ = tokio::time::timeout(sync_window, async {
+        // Start the sync phase here and process messages until the sync window times out
+        let _ = tokio::time::timeout(SYNC_WINDOW, async {
             while let Some(message) = self.input.next().await {
                 self.process_message(message).await;
             }

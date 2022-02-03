@@ -34,19 +34,17 @@ pub struct CumulocityConverter {
 
 impl CumulocityConverter {
     pub fn new(size_threshold: SizeThreshold, device_name: String, device_type: String) -> Self {
-        let mut topic_fiter = make_valid_topic_filter_or_panic("tedge/measurements");
-        let () = topic_fiter
-            .add("tedge/measurements/+")
-            .expect("invalid measurement topic filter");
-        let () = topic_fiter
-            .add("tedge/alarms/+/+")
-            .expect("invalid alarm topic filter");
-        let () = topic_fiter
-            .add("c8y-internal/alarms/+/+")
-            .expect("invalid alarm topic filter");
+        let topics = vec![
+            "tedge/measurements",
+            "tedge/measurements/+",
+            "tedge/alarms/+/+",
+            "c8y-internal/alarms/+/+",
+        ]
+        .try_into()
+        .expect("topics that mapper should subscribe to");
 
         let mapper_config = MapperConfig {
-            in_topic_filter: topic_fiter,
+            in_topic_filter: topics,
             out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
@@ -226,14 +224,14 @@ impl AlarmConverter {
     ///
     /// All the live alarms are received from tedge/alarms topic on startup.
     /// Similarly, all the previously processed alarms are received from c8y-internal/alarms topic.
-    /// Reconiciliation detects the difference between these two sets, which are the missed messages.
+    /// Sync detects the difference between these two sets, which are the missed messages.
     ///
     /// An alarm that is present in c8y-internal/alarms, but not in tedge/alarms topic
     /// is assumed to have been cleared while the mapper process was down.
     /// Similarly, an alarm that is present in tedge/alarms, but not in c8y-internal/alarms topic
     /// is one that was raised while the mapper process was down.
     /// An alarm present in both, if their payload is the same, is one that was already processed before the restart
-    /// and hence can be ignored during reconcicilation.
+    /// and hence can be ignored during sync.
     fn sync(&mut self) -> Vec<Message> {
         let mut sync_messages: Vec<Message> = Vec::new();
 
