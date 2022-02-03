@@ -121,7 +121,7 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     // Expect the new pressure alarm message
     let msg = messages
         .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
+        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
     dbg!(&msg);
