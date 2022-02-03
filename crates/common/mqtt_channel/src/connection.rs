@@ -202,7 +202,7 @@ impl Connection {
         let _ = mqtt_client.disconnect().await;
     }
 
-    fn pause_on_error(err: &ConnectionError) -> bool {
+    pub(crate) fn pause_on_error(err: &ConnectionError) -> bool {
         match &err {
             rumqttc::ConnectionError::Io(_) => true,
             rumqttc::ConnectionError::MqttState(state_error)
@@ -216,7 +216,7 @@ impl Connection {
         }
     }
 
-    async fn do_pause() {
+    pub(crate) async fn do_pause() {
         sleep(Duration::from_secs(1)).await;
     }
 }
