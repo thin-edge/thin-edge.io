@@ -63,7 +63,7 @@ pub async fn publish(
 ) -> Result<(), anyhow::Error> {
     let mut con = TestCon::new(mqtt_port);
 
-    con.publish(topic, QoS::AtLeastOnce, false, payload).await
+    con.publish(topic, qos, retain, payload).await
 }
 
 /// Publish the `pub_message` on the `pub_topic` only when ready to receive a message on `sub_topic`.
@@ -152,7 +152,7 @@ impl TestCon {
         retain: bool,
         payload: &str,
     ) -> Result<(), anyhow::Error> {
-        self.client.publish(topic, qos, false, payload).await?;
+        self.client.publish(topic, qos, retain, payload).await?;
 
         loop {
             match self.eventloop.poll().await {
