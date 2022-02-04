@@ -16,7 +16,7 @@ type ConfigError = crate::error::TEdgeError;
 use command::{BuildCommand, BuildContext};
 
 fn main() -> anyhow::Result<()> {
-    let user_manager = UserManager::new();
+    let user_manager = UserManager::default();
 
     let _user_guard = user_manager.become_user(tedge_users::TEDGE_USER)?;
 

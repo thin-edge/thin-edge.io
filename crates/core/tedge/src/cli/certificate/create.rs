@@ -99,7 +99,7 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            user_manager: UserManager::new(),
+            user_manager: UserManager::default(),
         };
 
         assert_matches!(
@@ -127,7 +127,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            user_manager: UserManager::new(),
+            user_manager: UserManager::default(),
         };
 
         assert!(cmd
@@ -149,7 +149,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            user_manager: UserManager::new(),
+            user_manager: UserManager::default(),
         };
 
         let cert_error = cmd
@@ -168,7 +168,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            user_manager: UserManager::new(),
+            user_manager: UserManager::default(),
         };
 
         let cert_error = cmd

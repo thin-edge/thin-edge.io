@@ -33,7 +33,7 @@ struct InnerUserManager {
     guard: Option<users::switch::SwitchUserGuard>,
 }
 
-impl UserManager {
+impl Default for UserManager {
     /// Create a `UserManager`.
     ///
     /// This function MUST be called only once.
@@ -41,7 +41,7 @@ impl UserManager {
     /// If you do so, one thread might be switched by another thread to some un-expected user.
     ///
     /// This struct is not `Send` and cannot be shared between thread.
-    pub fn new() -> UserManager {
+    fn default() -> UserManager {
         UserManager {
             inner: Rc::new(Mutex::new(InnerUserManager {
                 users: vec![],
@@ -49,7 +49,9 @@ impl UserManager {
             })),
         }
     }
+}
 
+impl UserManager {
     /// Check if the process has been launched using `sudo` or not.
     ///
     /// # Example
@@ -92,7 +94,7 @@ impl UserManager {
     ///
     /// ```
     /// # use tedge_users::UserManager;
-    /// let user_manager = UserManager::new();
+    /// let user_manager = UserManager::default();
     /// let _user_guard_1 = user_manager.become_user("user_1").expect("Fail to become user_1");
     /// // Running as user1
     /// {
