@@ -9,6 +9,13 @@ pub struct Address {
 }
 
 impl Address {
+    pub fn new(endpoint: EndpointKind) -> Address {
+        Self {
+            endpoint,
+            source: None,
+        }
+    }
+
     /// Get the original source of an `Address`
     pub fn origin(&self) -> &Address {
         if let Some(source) = self.source.as_ref() {
@@ -34,5 +41,3 @@ pub enum EndpointKind {
     /// A specific plugin
     Plugin { id: String },
 }
-
-
