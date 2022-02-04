@@ -8,7 +8,6 @@ use crate::{
     c8y_converter::CumulocityConverter, mapper::create_mapper, size_threshold::SizeThreshold,
 };
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(10000);
 const ALARM_SYNC_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
@@ -33,9 +32,9 @@ async fn mapper_publishes_supported_operations_smartrest_message_on_init() {
 
     let mut msg = messages
         .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
+        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
-        .expect_or("No message received after a second.");
+        .expect_or("No message received before timeout");
     dbg!(&msg);
 
     // The first message could be SmartREST 114 for supported operations
@@ -45,7 +44,7 @@ async fn mapper_publishes_supported_operations_smartrest_message_on_init() {
             .recv()
             .with_timeout(ALARM_SYNC_TIMEOUT_MS)
             .await
-            .expect_or("No message received after a second.");
+            .expect_or("No message received before timeout");
     }
 
     // Expect converted temperature alarm message
@@ -65,15 +64,6 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     // Start the C8Y Mapper
     let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
 
-    // Expect SmartREST message 114 for supported operations on c8y/s/us topic
-    let msg = messages
-        .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
-        .await
-        .expect_or("No message received after a second.");
-    dbg!(&msg);
-    assert!(&msg.contains("114"));
-
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm",
@@ -84,13 +74,25 @@ async fn mapper_syncs_pending_alarms_on_startup() {
         .await
         .unwrap();
 
-    // Expect converted temperature alarm message
-    let msg = messages
+    let mut msg = messages
         .recv()
         .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
-        .expect_or("No message received after a second.");
+        .expect_or("No message received before timeout");
     dbg!(&msg);
+
+    // The first message could be SmartREST 114 for supported operations
+    if msg.contains("114") {
+        // Fetch the next message which should be the alarm
+        msg = messages
+            .recv()
+            .with_timeout(ALARM_SYNC_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
+
+    // Expect converted temperature alarm message
     assert!(&msg.contains("301,temperature_alarm"));
 
     c8y_mapper.abort();
@@ -121,14 +123,23 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     // Restart the C8Y Mapper
     let _ = start_c8y_mapper(broker.port).await.unwrap();
 
-    // Expect SmartREST message 114 for supported operations on c8y/s/us topic
-    let msg = messages
+    let mut msg = messages
         .recv()
-        .with_timeout(TEST_TIMEOUT_MS)
+        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
-        .expect_or("No message received after a second.");
+        .expect_or("No message received before timeout");
     dbg!(&msg);
-    assert!(&msg.contains("114"));
+
+    // The first message could be SmartREST 114 for supported operations
+    if msg.contains("114") {
+        // Fetch the next message which should be the alarm
+        msg = messages
+            .recv()
+            .with_timeout(ALARM_SYNC_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
@@ -141,12 +152,6 @@ async fn mapper_syncs_pending_alarms_on_startup() {
     // assert!(&msg.contains("306,temperature_alarm"));
 
     // Expect the new pressure alarm message
-    let msg = messages
-        .recv()
-        .with_timeout(ALARM_SYNC_TIMEOUT_MS)
-        .await
-        .expect_or("No message received after a second.");
-    dbg!(&msg);
     assert!(&msg.contains("301,pressure_alarm"));
 }
 
