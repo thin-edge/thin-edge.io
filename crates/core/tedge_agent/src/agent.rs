@@ -15,16 +15,12 @@ use agent_interface::{
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
-use std::{
-    convert::TryInto,
-    fmt::Debug,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathDefaultSetting,
 };
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 
 #[cfg(not(test))]
@@ -184,6 +180,20 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
+    pub async fn init_session(&mut self) -> Result<(), AgentError> {
+        info!("Initializing the tedge agent session");
+        mqtt_channel::init_session(&self.config.mqtt_config).await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), name = "sm-agent")]
+    pub async fn clear_session(&mut self) -> Result<(), AgentError> {
+        info!("Cleaning the tedge agent session");
+        mqtt_channel::clear_session(&self.config.mqtt_config).await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), name = "sm-agent")]
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
@@ -195,8 +205,7 @@ impl SmAgent {
             Some("sudo".into()),
         )?));
 
-        if plugins.lock().unwrap().empty() {
-            // `unwrap` should be safe here as we only access data.
+        if plugins.lock().await.empty() {
             error!("Couldn't load plugins from /etc/tedge/sm-plugins");
             return Err(AgentError::NoPlugins);
         }
@@ -244,10 +253,10 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_update => {
-                    let () = plugins.lock().unwrap().load()?; // `unwrap` should be safe here as we only access data for write.
+                    let () = plugins.lock().await.load()?;
                     let () = plugins
                         .lock()
-                        .unwrap() // `unwrap` should be safe here as we only access data for write.
+                        .await
                         .update_default(&get_default_plugin(&self.config.config_location)?)?;
 
                     let _success = self
@@ -340,7 +349,7 @@ impl SmAgent {
             .operation_logs
             .new_log_file(LogKind::SoftwareList)
             .await?;
-        let response = plugins.lock().unwrap().list(&request, log_file).await; // `unwrap` should be safe here as we only access data.
+        let response = plugins.lock().await.list(&request, log_file).await;
 
         let () = responses
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -399,9 +408,9 @@ impl SmAgent {
 
         let response = plugins
             .lock()
-            .unwrap()
+            .await
             .process(&request, log_file, &self.config.download_dir)
-            .await; // `unwrap` should be safe here as we only access data.
+            .await;
 
         let () = responses
             .publish(Message::new(response_topic, response.to_bytes()?))
