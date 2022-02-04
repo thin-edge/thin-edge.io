@@ -44,7 +44,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
     /// passed configuration.
     fn verify_configuration(
         &self,
-        config: PluginConfiguration,
+        config: &PluginConfiguration,
     ) -> Result<(), PluginConfigurationError>;
 
     /// Instantiate a new instance of this plugin using the given configuration
