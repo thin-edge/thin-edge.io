@@ -24,6 +24,9 @@ mod operations;
 mod size_threshold;
 mod sm_c8y_mapper;
 
+#[cfg(test)]
+mod tests;
+
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),

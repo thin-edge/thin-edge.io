@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::converter::*;
 use crate::error::*;
 
@@ -5,12 +7,13 @@ use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
-use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tracing::{error, info, instrument};
+
+const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
 pub async fn create_mapper<'a>(
     app_name: &'a str,
-    tedge_config: &'a TEdgeConfig,
+    mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
@@ -18,7 +21,7 @@ pub async fn create_mapper<'a>(
     let mapper_config = converter.get_mapper_config();
     let mqtt_client = Connection::new(&mqtt_config(
         app_name,
-        tedge_config,
+        mqtt_port,
         mapper_config.in_topic_filter.clone().into(),
     )?)
     .await?;
@@ -34,11 +37,11 @@ pub async fn create_mapper<'a>(
 
 pub(crate) fn mqtt_config(
     name: &str,
-    tedge_config: &TEdgeConfig,
+    port: u16,
     topics: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
     Ok(mqtt_channel::Config::default()
-        .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_port(port)
         .with_session_name(name)
         .with_subscriptions(topics)
         .with_max_packet_size(10 * 1024 * 1024))
@@ -85,13 +88,33 @@ impl Mapper {
             let _ = self.output.send(init_message).await;
         }
 
-        while let Some(message) = &mut self.input.next().await {
-            let converted_messages = self.converter.convert(&message);
-            for converted_message in converted_messages.into_iter() {
-                let _ = self.output.send(converted_message).await;
+        // Start the sync phase here and process messages until the sync window times out
+        let _ = tokio::time::timeout(SYNC_WINDOW, async {
+            while let Some(message) = self.input.next().await {
+                self.process_message(message).await;
             }
+        })
+        .await;
+
+        // Once the sync phase is complete, retrieve all sync messages from the converter and process them
+        let sync_messages = self.converter.sync_messages();
+        for message in sync_messages {
+            self.process_message(message).await;
         }
+
+        // Continue processing messages after the sync period
+        while let Some(message) = self.input.next().await {
+            self.process_message(message).await;
+        }
+
         Ok(())
+    }
+
+    async fn process_message(&mut self, message: Message) {
+        let converted_messages = self.converter.convert(&message);
+        for converted_message in converted_messages.into_iter() {
+            let _ = self.output.send(converted_message).await;
+        }
     }
 }
 
