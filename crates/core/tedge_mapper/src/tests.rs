@@ -12,7 +12,7 @@ const ALARM_SYNC_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
 #[serial]
-async fn mapper_publishes_supported_operations_smartrest_message_on_init() {
+async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
@@ -51,12 +51,23 @@ async fn mapper_publishes_supported_operations_smartrest_message_on_init() {
     dbg!(&msg);
     assert!(msg.contains("301,temperature_alarm"));
 
+    //Clear the previously published alarm
+    let _ = broker
+        .publish_with_opts(
+            "tedge/alarms/critical/temperature_alarm",
+            "",
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
     c8y_mapper.abort();
 }
 
 #[tokio::test]
 #[serial]
-async fn mapper_syncs_pending_alarms_on_startup() {
+async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
@@ -153,6 +164,8 @@ async fn mapper_syncs_pending_alarms_on_startup() {
 
     // Expect the new pressure alarm message
     assert!(&msg.contains("301,pressure_alarm"));
+
+    c8y_mapper.abort();
 }
 
 async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
