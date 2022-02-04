@@ -21,8 +21,10 @@ impl Comms {
         Self { sender }
     }
 
-    pub async fn send(&self, msg: CoreMessage) -> Result<(), ()> {
-        todo!("Send this message: {:?}", msg)
+    pub async fn send<T: Into<CoreMessage>>(&self, msg: T) -> Result<(), PluginError> {
+        self.sender.send(msg.into()).await?;
+
+        Ok(())
     }
 }
 
