@@ -140,7 +140,7 @@ fn parse_pkcs8_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => Ok(key[0].clone()),
+        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
         _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
@@ -151,7 +151,7 @@ fn parse_rsa_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => Ok(key[0].clone()),
+        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
         _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
