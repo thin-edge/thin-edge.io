@@ -28,7 +28,13 @@ class AgentInitSession(BaseTest):
             stdouterr="remove_lock",           
         )    
 
-    def execute(self):        
+    def execute(self):
+        agent_clear = self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge_agent, "--clear"],
+            stdouterr="agent_clear",
+        )
+
         agent_init = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge_agent, "--init"],
@@ -69,5 +75,5 @@ class AgentInitSession(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("sub_resp.out", "executing", contains=True)
+        self.assertGrep("sub_resp.out", "Ld3KgqpcLDlrYH6sfpG7w", contains=True)
         

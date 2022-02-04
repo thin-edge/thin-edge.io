@@ -36,6 +36,7 @@ use tedge_config::TEdgeConfig;
 use tracing::{debug, error, info, instrument};
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
+const SM_MAPPER: &str = "SM-C8Y-Mapper";
 
 pub struct CumulocitySoftwareManagementMapper {}
 
@@ -63,7 +64,7 @@ impl CumulocitySoftwareManagementMapper {
 
         info!("Initialize tedge sm mapper session");
         let config = Config::default()
-            .with_session_name("SM-C8Y-Mapper")
+            .with_session_name(SM_MAPPER)
             .with_clean_session(false)
             .with_subscriptions(mqtt_topic);
 
@@ -74,7 +75,7 @@ impl CumulocitySoftwareManagementMapper {
     pub async fn clear_session(&mut self) -> Result<(), anyhow::Error> {
         info!("Clear tedge sm mapper session");
         let config = Config::default()
-            .with_session_name("SM-C8Y-Mapper")
+            .with_session_name(SM_MAPPER)
             .with_clean_session(true);
 
         let _client = Connection::new(&config).await?;
@@ -124,7 +125,7 @@ where
         operations: Operations,
     ) -> Result<Self, anyhow::Error> {
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-        let mqtt_config = crate::mapper::mqtt_config("SM-C8Y-Mapper", &tedge_config, mqtt_topic)?;
+        let mqtt_config = crate::mapper::mqtt_config(SM_MAPPER, &tedge_config, mqtt_topic)?;
         let client = Connection::new(&mqtt_config).await?;
 
         Ok(Self {
