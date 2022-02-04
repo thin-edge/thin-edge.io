@@ -5,7 +5,7 @@ pub struct PluginConfigurationError {
 }
 
 impl PluginConfigurationError {
-    pub fn new(span: (usize, usize), kind: PluginConfigurationErrorKind) -> Self {
+    pub const fn new(span: (usize, usize), kind: PluginConfigurationErrorKind) -> Self {
         Self {
             span: Some(span),
             kind,
