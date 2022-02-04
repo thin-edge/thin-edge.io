@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct PluginConfigurationError {
     pub kind: PluginConfigurationErrorKind,
     pub span: Option<(usize, usize)>,
