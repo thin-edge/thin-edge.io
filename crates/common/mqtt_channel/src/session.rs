@@ -31,9 +31,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                let delay = Connection::pause_on_error(&err);
-
-                if delay {
+                if Connection::pause_on_error(&err) {
                     Connection::do_pause().await;
                 }
             }
@@ -73,9 +71,7 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                let delay = Connection::pause_on_error(&err);
-
-                if delay {
+                if Connection::pause_on_error(&err) {
                     Connection::do_pause().await;
                 }
             }

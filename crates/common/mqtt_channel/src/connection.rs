@@ -119,12 +119,12 @@ impl Connection {
                 }
 
                 Err(err) => {
-                    let delay = Connection::pause_on_error(&err);
+                    let should_delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    if delay {
+                    if should_delay {
                         Connection::do_pause().await;
                     }
                 }
