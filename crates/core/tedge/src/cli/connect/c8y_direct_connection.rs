@@ -24,7 +24,7 @@ pub fn create_device_with_direct_connection(
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
 
     let address = bridge_config.address.clone();
-    let host: Vec<&str> = address.split(":").collect();
+    let host: Vec<&str> = address.split(':').collect();
 
     let mut mqtt_options = MqttOptions::new(bridge_config.remote_clientid.clone(), host[0], 8883);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
