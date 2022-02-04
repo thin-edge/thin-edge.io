@@ -14,7 +14,7 @@ pub struct Comms {
 }
 
 impl Comms {
-    pub fn new(sender: tokio::sync::mpsc::Sender<CoreMessage>) -> Self {
+    pub const fn new(sender: tokio::sync::mpsc::Sender<CoreMessage>) -> Self {
         Self { sender }
     }
 
