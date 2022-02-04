@@ -22,8 +22,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
     let _ = broker
         .publish_with_opts(
-            "tedge/alarms/critical/temperature_alarm",
-            r#"{ "message": "Temperature very high" }"#,
+            "tedge/alarms/major/temperature_alarm",
+            r#"{ "message": "Temperature high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -49,12 +49,12 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
     // Expect converted temperature alarm message
     dbg!(&msg);
-    assert!(msg.contains("301,temperature_alarm"));
+    assert!(msg.contains("302,temperature_alarm"));
 
     //Clear the previously published alarm
     let _ = broker
         .publish_with_opts(
-            "tedge/alarms/critical/temperature_alarm",
+            "tedge/alarms/major/temperature_alarm",
             "",
             mqtt_channel::QoS::AtLeastOnce,
             true,
