@@ -53,7 +53,7 @@ pub fn create_device_with_direct_connection(
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
-                    &device_type,
+                    device_type,
                 )?;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
@@ -69,7 +69,7 @@ pub fn create_device_with_direct_connection(
                     publish_device_create_message(
                         &mut client,
                         &bridge_config.remote_clientid.clone(),
-                        &device_type,
+                        device_type,
                     )?;
                     device_create_try += 1;
                 } else {

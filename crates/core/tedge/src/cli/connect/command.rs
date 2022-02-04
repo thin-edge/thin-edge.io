@@ -407,7 +407,7 @@ fn new_bridge(
         let () = c8y_direct_connection::create_device_with_direct_connection(
             user_manager,
             bridge_config,
-            &device_type,
+            device_type,
         )?;
     }
 
