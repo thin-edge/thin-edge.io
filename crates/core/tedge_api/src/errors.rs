@@ -1,7 +1,7 @@
 #[derive(Debug)]
 pub struct PluginConfigurationError {
-    pub kind: PluginConfigurationErrorKind,
-    pub span: Option<(usize, usize)>,
+    kind: PluginConfigurationErrorKind,
+    span: Option<(usize, usize)>,
 }
 
 impl PluginConfigurationError {
@@ -10,6 +10,16 @@ impl PluginConfigurationError {
             span: Some(span),
             kind,
         }
+    }
+
+    /// Get a reference to the plugin configuration error's kind.
+    pub fn kind(&self) -> &PluginConfigurationErrorKind {
+        &self.kind
+    }
+
+    /// Get the plugin configuration error's span.
+    pub fn span(&self) -> Option<(usize, usize)> {
+        self.span
     }
 }
 
