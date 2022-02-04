@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use tedge_api::{
     address::EndpointKind,
+    errors::PluginInstantationError,
     messages::{CoreMessageKind, PluginMessageKind},
     plugins::Comms,
     Address, CoreMessage, Plugin, PluginBuilder, PluginConfiguration, PluginError, PluginMessage,
@@ -24,8 +25,8 @@ impl PluginBuilder for HeartbeatServiceBuilder {
         &self,
         _config: PluginConfiguration,
         tedge_comms: tedge_api::plugins::Comms,
-    ) -> Box<dyn Plugin + 'static> {
-        Box::new(HeartbeatService::new(tedge_comms))
+    ) -> Result<Box<dyn Plugin>, PluginInstantationError> {
+        Ok(Box::new(HeartbeatService::new(tedge_comms)))
     }
 }
 
@@ -77,7 +78,7 @@ async fn main() {
 
     let config = toml::from_str("").unwrap();
 
-    let mut heartbeat = hsb.instantiate(config, comms);
+    let mut heartbeat = hsb.instantiate(config, comms).unwrap();
 
     heartbeat.setup().await.unwrap();
 
