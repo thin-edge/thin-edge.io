@@ -116,7 +116,7 @@ impl TopicFilter {
             .iter()
             .map(|path| SubscribeFilter {
                 path: path.clone(),
-                qos: qos.clone(),
+                qos,
             })
             .collect()
     }
