@@ -305,4 +305,128 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn creating_a_session() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        // Given an MQTT config with a well-known session name
+        let session_name = "my-session-name";
+        let topic = "my/topic";
+        let mqtt_config = mqtt_config
+            .with_session_name(session_name)
+            .with_subscriptions(topic.try_into()?);
+
+        // This config can be created to initialize an MQTT session
+        init_session(&mqtt_config).await?;
+
+        // Any messages published on that topic
+        broker
+            .publish(topic, "1st msg sent before a first connection")
+            .await?;
+        broker
+            .publish(topic, "2nd msg sent before a first connection")
+            .await?;
+        broker
+            .publish(topic, "3rd msg sent before a first connection")
+            .await?;
+
+        // Will be received by the client with the same session name even for its first connection
+        let mut con = Connection::new(&mqtt_config).await?;
+
+        assert_eq!(
+            MaybeMessage::Next(message(topic, "1st msg sent before a first connection")),
+            next_message(&mut con.received).await
+        );
+        assert_eq!(
+            MaybeMessage::Next(message(topic, "2nd msg sent before a first connection")),
+            next_message(&mut con.received).await
+        );
+        assert_eq!(
+            MaybeMessage::Next(message(topic, "3rd msg sent before a first connection")),
+            next_message(&mut con.received).await
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn a_session_must_have_a_name() {
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        let result = init_session(&mqtt_config).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid session"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn a_named_session_must_not_set_clean_session() {
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default()
+            .with_port(broker.port)
+            .with_session_name("useless name")
+            .with_clean_session(true);
+
+        let result = init_session(&mqtt_config).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid session"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn cleaning_a_session() -> Result<(), anyhow::Error> {
+        // Given an MQTT broker
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        // Given an MQTT config with a well-known session name
+        let session_name = "a-session-name";
+        let topic = "a/topic";
+        let mqtt_config = mqtt_config
+            .with_session_name(session_name)
+            .with_subscriptions(topic.try_into()?);
+
+        // The session being initialized
+        init_session(&mqtt_config).await?;
+
+        // And some messages published
+        broker
+            .publish(topic, "A fst msg published before clean")
+            .await?;
+        broker
+            .publish(topic, "A 2nd msg published before clean")
+            .await?;
+
+        // If we clean the session
+        clear_session(&mqtt_config).await?;
+
+        // And publish more messages
+        broker
+            .publish(topic, "A 3nd msg published after clean")
+            .await?;
+
+        // Then no messages will be received by the client with the same session name
+        let mut con = Connection::new(&mqtt_config).await?;
+
+        assert_eq!(MaybeMessage::Timeout, next_message(&mut con.received).await);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn to_be_cleared_a_session_must_have_a_name() {
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        let result = clear_session(&mqtt_config).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid session"));
+    }
 }

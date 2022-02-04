@@ -1,4 +1,5 @@
 from pysys.basetest import BaseTest
+import os
 
 """
 Validate local publishing while no mosquitto is running
@@ -16,6 +17,7 @@ class PySysTest(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
+        self.environ = { 'HOME':os.environ.get('HOME')}
 
         self.startProcess(
             command=self.sudo,
@@ -28,10 +30,11 @@ class PySysTest(BaseTest):
     def execute(self):
 
         pub = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--qos", "2", "atopic", "amessage"],
+            command=self.tedge,
+            arguments=["mqtt", "pub", "--qos", "2", "atopic", "amessage"],
             stdouterr="tedge_pub_fail",
             expectedExitStatus="==1",
+            environs=self.environ
         )
 
         # validate exit status with the expected status from calling startProcess
