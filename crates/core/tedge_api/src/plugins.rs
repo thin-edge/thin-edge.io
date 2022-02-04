@@ -124,13 +124,13 @@ pub trait PluginBuilder: Sync + Send + 'static {
 #[async_trait]
 pub trait Plugin: Sync + Send {
     /// The plugin can set itself up here
-    async fn setup(&self);
+    async fn setup(&mut self);
 
     /// Handle a message specific to this plugin
     async fn handle_message(&self, message: PluginMessage);
 
     /// Gracefully handle shutdown
-    async fn shutdown(&self);
+    async fn shutdown(&mut self);
 }
 
 #[cfg(test)]
