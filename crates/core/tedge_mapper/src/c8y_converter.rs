@@ -51,10 +51,7 @@ impl CumulocityConverter {
 
         let children: HashSet<String> = HashSet::new();
 
-        let alarm_converter = AlarmConverter::Syncing {
-            old_alarms_map: HashMap::new(),
-            pending_alarms_map: HashMap::new(),
-        };
+        let alarm_converter = AlarmConverter::new();
 
         CumulocityConverter {
             size_threshold,
@@ -156,6 +153,13 @@ enum AlarmConverter {
 }
 
 impl AlarmConverter {
+    fn new() -> Self {
+        AlarmConverter::Syncing {
+            old_alarms_map: HashMap::new(),
+            pending_alarms_map: HashMap::new(),
+        }
+    }
+
     fn try_convert_alarm(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let mut vec: Vec<Message> = Vec::new();
 
