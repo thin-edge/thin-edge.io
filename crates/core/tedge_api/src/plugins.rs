@@ -6,7 +6,10 @@
 
 use async_trait::async_trait;
 
-use crate::errors::{PluginConfigurationError, PluginError};
+use crate::{
+    errors::{PluginConfigurationError, PluginError},
+    messages::{CoreMessage, PluginMessage},
+};
 
 #[derive(Clone)]
 pub struct Comms {
@@ -21,74 +24,6 @@ impl Comms {
     pub async fn send(&self, msg: CoreMessage) -> Result<(), ()> {
         todo!("Send this message: {:?}", msg)
     }
-}
-
-/// An address which could be either a target or source of messages
-///
-/// Nesting addresses allows to disambiguated between different kind of
-/// sources and the way they have arrived here.
-#[derive(Debug, Clone)]
-pub struct Address {
-    endpoint: EndpointKind,
-    source: Option<Box<Address>>,
-}
-
-impl Address {
-    /// Get the original source of an `Address`
-    pub fn origin(&self) -> &Address {
-        if let Some(source) = self.source.as_ref() {
-            source.origin()
-        } else {
-            self
-        }
-    }
-
-    pub fn add_new_step(&self, endpoint: EndpointKind) -> Self {
-        Self {
-            endpoint,
-            source: Some(Box::new(self.clone())),
-        }
-    }
-}
-
-/// What kind of endpoint is it
-#[derive(Debug, Clone)]
-pub enum EndpointKind {
-    /// The `tedge` core
-    Core,
-    /// A specific plugin
-    Plugin { id: String },
-}
-
-/// A message to be received by the `tedge` core component
-///
-/// It will be internally routed according to its destination
-#[derive(Debug)]
-pub struct CoreMessage {
-    destination: Address,
-    content: CoreMessageKind,
-}
-
-#[derive(Debug)]
-pub enum CoreMessageKind {
-    SendGenericMessage { message: Vec<u8> },
-    SignalPluginState { state: String },
-    // etc...
-}
-
-/// A message to be handled by a plugin
-#[derive(Debug)]
-pub struct PluginMessage {
-    origin: Address,
-    content: PluginMessageKind,
-}
-
-#[derive(Debug)]
-pub enum PluginMessageKind {
-    /// The plugin is being asked if it is currently able to respond
-    /// to requests. It is meant to reply with `CoreMessageKind` stating
-    /// its status.
-    CheckReadyness,
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
