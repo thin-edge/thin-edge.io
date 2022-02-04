@@ -1,0 +1,48 @@
+name: update-tedge-reference-documents
+
+on:
+  # trigger manually
+  workflow_dispatch:
+  # runs automatically on 00:00 UTC on 1st of every month
+  schedule:
+  - cron: "0 0 1 * *"
+     
+jobs:
+    build-tedge-create-ref-docs:
+      runs-on: Ubuntu-20.04
+      
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v2
+        - run: |
+           git config --global user.email "info@thin-edge.io"
+           git config --global user.name "Versioneer"
+           
+        - name: enable toolchain via github action
+          # https://github.com/actions-rs/toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: 1.58
+            override: true
+
+        - name: Enable cache
+          # https://github.com/marketplace/actions/rust-cache
+          uses: Swatinem/rust-cache@v1
+        
+        - name: Build tedge
+          uses: actions-rs/cargo@v1
+          # https://github.com/marketplace/actions/rust-cargo
+          with:
+            command: build
+            args: --release -p tedge
+     
+        - name: run the update script
+          run: ./docs/gen-ref-docs.sh
+        - name: Create Pull Request
+          uses: peter-evans/create-pull-request@v3
+          with:
+            commit-message: Create tedge cli reference docs
+            delete-branch: true
+            title: Create tedge reference docs
+            body: Create tedge reference docs
+            reviewers: itsyitsy  
