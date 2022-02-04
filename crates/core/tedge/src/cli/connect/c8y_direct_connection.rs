@@ -117,10 +117,12 @@ fn load_root_certs(
         let file = file_entry?;
         let f = File::open(file.path())?;
         let mut rd = BufReader::new(f);
-        let _ = root_store
-            .add_pem_file(&mut rd)
-            .map(|_| ())
-            .map_err(|()| Error::new(ErrorKind::InvalidData, format!("could not load PEM file")));
+        let _ = root_store.add_pem_file(&mut rd).map(|_| ()).map_err(|()| {
+            Error::new(
+                ErrorKind::InvalidData,
+                "could not load PEM file".to_string(),
+            )
+        });
     }
     Ok(())
 }
