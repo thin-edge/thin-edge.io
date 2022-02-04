@@ -23,13 +23,6 @@ impl Comms {
     }
 }
 
-#[derive(Debug)]
-pub enum CoreMessageKind {
-    SendGenericMessage { message: Vec<u8> },
-    SignalPluginState { state: String },
-    // etc...
-}
-
 /// An address which could be either a target or source of messages
 ///
 /// Nesting addresses allows to disambiguated between different kind of
@@ -77,11 +70,10 @@ pub struct CoreMessage {
 }
 
 #[derive(Debug)]
-pub enum PluginMessageKind {
-    /// The plugin is being asked if it is currently able to respond
-    /// to requests. It is meant to reply with `CoreMessageKind` stating
-    /// its status.
-    CheckReadyness,
+pub enum CoreMessageKind {
+    SendGenericMessage { message: Vec<u8> },
+    SignalPluginState { state: String },
+    // etc...
 }
 
 /// A message to be handled by a plugin
@@ -89,6 +81,14 @@ pub enum PluginMessageKind {
 pub struct PluginMessage {
     origin: Address,
     content: PluginMessageKind,
+}
+
+#[derive(Debug)]
+pub enum PluginMessageKind {
+    /// The plugin is being asked if it is currently able to respond
+    /// to requests. It is meant to reply with `CoreMessageKind` stating
+    /// its status.
+    CheckReadyness,
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
