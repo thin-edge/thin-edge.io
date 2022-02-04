@@ -281,7 +281,6 @@ impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
             .mqtt
             .external_port
             .map(Port)
-            .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: MqttExternalPortSetting::KEY,
             })
