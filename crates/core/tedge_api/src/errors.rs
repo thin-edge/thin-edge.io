@@ -34,6 +34,33 @@ impl From<PluginConfigurationErrorKind> for PluginConfigurationError {
 #[derive(Error, Debug)]
 pub enum PluginConfigurationErrorKind {}
 
+
+#[derive(Debug)]
+pub struct PluginInstantationError {
+    kind: PluginInstantationErrorKind,
+}
+
+impl PluginInstantationError {
+    pub const fn new(kind: PluginInstantationErrorKind) -> Self {
+        Self { kind }
+    }
+
+    /// Get a reference to the plugin configuration error's kind.
+    pub fn kind(&self) -> &PluginInstantationErrorKind {
+        &self.kind
+    }
+}
+
+impl From<PluginInstantationErrorKind> for PluginInstantationError {
+    fn from(kind: PluginInstantationErrorKind) -> Self {
+        Self { kind }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum PluginInstantationErrorKind {}
+
+
 #[derive(Error, Debug)]
 #[error("An error occured while interacting with this plugin")]
 pub enum PluginError {

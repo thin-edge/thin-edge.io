@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 
 use crate::{
-    errors::{PluginConfigurationError, PluginError},
+    errors::{PluginConfigurationError, PluginInstantationError, PluginError},
     messages::{CoreMessage, PluginMessage},
 };
 
@@ -54,7 +54,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
         &self,
         config: PluginConfiguration,
         tedge_comms: Comms,
-    ) -> Box<dyn Plugin + 'static>;
+    ) -> Result<Box<dyn Plugin + 'static>, PluginInstantationError>;
 }
 
 /// A functionality extension to ThinEdge
