@@ -31,3 +31,28 @@ impl From<PluginConfigurationErrorKind> for PluginConfigurationError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PluginConfigurationErrorKind {}
+
+#[derive(Debug)]
+pub struct PluginError {
+    kind: PluginErrorKind,
+}
+
+impl PluginError {
+    pub const fn new(kind: PluginErrorKind) -> Self {
+        Self { kind }
+    }
+
+    /// Get a reference to the plugin error's kind.
+    pub fn kind(&self) -> &PluginErrorKind {
+        &self.kind
+    }
+}
+
+impl From<PluginErrorKind> for PluginError {
+    fn from(kind: PluginErrorKind) -> Self {
+        Self { kind }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum PluginErrorKind {}

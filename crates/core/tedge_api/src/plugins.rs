@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 
-use crate::errors::PluginConfigurationError;
+use crate::errors::{PluginConfigurationError, PluginError};
 
 #[derive(Clone)]
 pub struct Comms {
@@ -124,13 +124,13 @@ pub trait PluginBuilder: Sync + Send + 'static {
 #[async_trait]
 pub trait Plugin: Sync + Send {
     /// The plugin can set itself up here
-    async fn setup(&mut self);
+    async fn setup(&mut self) -> Result<(), PluginError>;
 
     /// Handle a message specific to this plugin
-    async fn handle_message(&self, message: PluginMessage);
+    async fn handle_message(&self, message: PluginMessage) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
-    async fn shutdown(&mut self);
+    async fn shutdown(&mut self) -> Result<(), PluginError>;
 }
 
 #[cfg(test)]
