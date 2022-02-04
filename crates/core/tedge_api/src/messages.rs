@@ -6,7 +6,23 @@ use crate::address::Address;
 #[derive(Debug)]
 pub struct CoreMessage {
     destination: Address,
-    content: CoreMessageKind,
+    kind: CoreMessageKind,
+}
+
+impl CoreMessage {
+    pub fn new(destination: Address, kind: CoreMessageKind) -> Self {
+        Self { destination, kind }
+    }
+
+    /// Get a reference to the core message's kind.
+    pub fn kind(&self) -> &CoreMessageKind {
+        &self.kind
+    }
+
+    /// Get a reference to the core message's destination.
+    pub fn destination(&self) -> &Address {
+        &self.destination
+    }
 }
 
 #[derive(Debug)]
@@ -20,7 +36,23 @@ pub enum CoreMessageKind {
 #[derive(Debug)]
 pub struct PluginMessage {
     origin: Address,
-    content: PluginMessageKind,
+    kind: PluginMessageKind,
+}
+
+impl PluginMessage {
+    pub fn new(origin: Address, kind: PluginMessageKind) -> Self {
+        Self { origin, kind }
+    }
+
+    /// Get a reference to the plugin message's kind.
+    pub fn kind(&self) -> &PluginMessageKind {
+        &self.kind
+    }
+
+    /// Get a reference to the plugin message's origin.
+    pub fn origin(&self) -> &Address {
+        &self.origin
+    }
 }
 
 #[derive(Debug)]
