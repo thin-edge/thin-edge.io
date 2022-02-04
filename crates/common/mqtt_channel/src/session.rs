@@ -1,13 +1,16 @@
 use crate::{Config, Connection, MqttError};
 use rumqttc::{AsyncClient, Event, Packet};
 
-/// Create a session using the `config.session_name`
+/// Create a persistent session on the MQTT server `config.host`.
 ///
-/// The config can be used to connect later using `Connection::new(config)`.
-/// All the messages that have been published meantime with `QoS > 1`
-/// on the `config.subscriptions` topics will be received by the new connection.
+/// The session is named after the `config.session_name`
+/// subscribing to all the topics given by the `config.subscriptions`.
 ///
-/// `mqtt_channel::init_session(&config) consumes no messages.
+/// A new `Connection` created with a config with the same session name,
+/// will receive all the messages published meantime on the subscribed topics.
+///
+/// This function can be called multiple times with the same session name,
+/// since it consumes no messages.
 pub async fn init_session(config: &Config) -> Result<(), MqttError> {
     if config.clean_session || config.session_name.is_none() {
         return Err(MqttError::InvalidSessionConfig);
@@ -42,10 +45,16 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
     Ok(())
 }
 
-/// Clear any session named as `config.session_name`
+/// Clear a persistent session on the MQTT server `config.host`.
 ///
-/// The config can be used to connect later using `Connection::new(config)`.
-/// No messages that have been published meantime will be received by the new connection.
+/// The session named after the `config.session_name` is cleared
+/// unsubscribing to all the topics given by the `config.subscriptions`.
+///
+/// All the messages persisted for that session all cleared.
+/// and no more messages will be stored till the session is re-created.
+///
+/// A new `Connection` created with a config with the same session name,
+/// will receive no messages that have been published meantime.
 pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
     if config.session_name.is_none() {
         return Err(MqttError::InvalidSessionConfig);
