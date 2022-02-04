@@ -29,5 +29,5 @@ where
     let timestamp = String::deserialize(deserializer)?;
     OffsetDateTime::parse(timestamp.as_str(), &Rfc3339)
         .map_err(serde::de::Error::custom)
-        .map(|val| Some(val))
+        .map(Some)
 }
