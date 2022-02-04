@@ -15,7 +15,7 @@ impl PluginBuilder for HeartbeatServiceBuilder {
 
     fn verify_configuration(
         &self,
-        _config: PluginConfiguration,
+        _config: &PluginConfiguration,
     ) -> Result<(), tedge_api::errors::PluginConfigurationError> {
         Ok(())
     }
