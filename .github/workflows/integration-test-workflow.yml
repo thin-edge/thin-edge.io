@@ -207,6 +207,18 @@ jobs:
       - name: Tweak things
         run: ./ci/tweak.sh
 
+      - name: Configure Bridge
+        run: ./ci/configure_bridge.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
       - name: Run smoke test for Cumulocity
         run: ./ci/ci_smoke_test_c8y.sh
         env:

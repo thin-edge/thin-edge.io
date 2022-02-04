@@ -75,16 +75,6 @@ fi
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
-echo "Disconnect old bridge"
-
-# Disconnect - may fail if not there
-sudo tedge disconnect c8y
-
-# From now on exit if a command exits with a non-zero status.
-# Commands above are allowed to fail
-set -e
-
-./ci/configure_bridge.sh
 
 . ~/c8yenv.sh
 
@@ -96,8 +86,6 @@ else
     echo "Your device: HIDDEN"
 fi
 
-# wait for certificate to to reflect in the c8y cloud
-sleep 5
 
 echo "Connect again"
 sudo tedge connect c8y
