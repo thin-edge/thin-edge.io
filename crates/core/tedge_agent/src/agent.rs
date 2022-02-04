@@ -181,18 +181,15 @@ impl SmAgent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init_session(&mut self) -> Result<(), AgentError> {
-        let mut mqtt_config = self.config.mqtt_config.clone();
-        mqtt_config.clean_session = false;
-        let _mqtt = Connection::new(&mqtt_config).await?;
+        info!("Initializing the tedge agent session");
+        mqtt_channel::init_session(&self.config.mqtt_config).await?;
         Ok(())
     }
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn clear_session(&mut self) -> Result<(), AgentError> {
         info!("Cleaning the tedge agent session");
-        let mut mqtt_config = self.config.mqtt_config.clone();
-        mqtt_config.clean_session = true;
-        let _mqtt = Connection::new(&mqtt_config).await?;
+        mqtt_channel::clear_session(&self.config.mqtt_config).await?;
         Ok(())
     }
 

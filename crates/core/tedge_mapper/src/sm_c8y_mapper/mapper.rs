@@ -59,26 +59,26 @@ impl CumulocitySoftwareManagementMapper {
     }
 
     pub async fn init_session(&mut self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge sm mapper session");
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
         let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-
-        info!("Initialize tedge sm mapper session");
         let config = Config::default()
             .with_session_name(SM_MAPPER)
             .with_clean_session(false)
             .with_subscriptions(mqtt_topic);
-
-        let _client = Connection::new(&config).await?;
+        mqtt_channel::init_session(&config).await?;
         Ok(())
     }
 
     pub async fn clear_session(&mut self) -> Result<(), anyhow::Error> {
         info!("Clear tedge sm mapper session");
+        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
         let config = Config::default()
             .with_session_name(SM_MAPPER)
-            .with_clean_session(true);
-
-        let _client = Connection::new(&config).await?;
+            .with_clean_session(true)
+            .with_subscriptions(mqtt_topic);
+        mqtt_channel::clear_session(&config).await?;
         Ok(())
     }
 }
