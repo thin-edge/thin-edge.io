@@ -42,6 +42,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
         }
     }
 
+    let _ = mqtt_client.disconnect().await;
     Ok(())
 }
 
@@ -88,5 +89,6 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
         }
     }
 
+    let _ = mqtt_client.disconnect().await;
     Ok(())
 }
