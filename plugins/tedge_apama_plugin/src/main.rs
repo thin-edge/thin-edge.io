@@ -213,7 +213,7 @@ fn delete_project() -> Result<(), InternalError> {
     let result = fs::remove_dir_all(TEDGE_APAMA_PROJECT_DIR);
     if let Err(err) = result {
         if err.kind() != ErrorKind::NotFound {
-            return Err(err)?;
+            return Err(InternalError::from(err));
         }
     }
     println!("Removal of existing project successful");
