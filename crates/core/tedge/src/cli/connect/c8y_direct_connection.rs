@@ -140,10 +140,8 @@ fn parse_pkcs8_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        _ => {
-            return Err(ConnectError::UnknownPrivateKeyFormat);
-        }
+        Ok(key) if key.len() > 0 => Ok(key[0].clone()),
+        _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
 
@@ -153,10 +151,8 @@ fn parse_rsa_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        _ => {
-            return Err(ConnectError::UnknownPrivateKeyFormat);
-        }
+        Ok(key) if key.len() > 0 => Ok(key[0].clone()),
+        _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
 
@@ -165,14 +161,7 @@ fn read_cert_chain(
 ) -> Result<Vec<rustls_0_19::Certificate>, ConnectError> {
     let f = File::open(cert_file)?;
     let mut cert_reader = BufReader::new(f);
-    let result = certs(&mut cert_reader);
-    let cert_chain: Vec<rustls_0_19::Certificate> = match result {
-        Ok(cert) => cert,
-        Err(_) => {
-            return Err(ConnectError::RumqttcCertificate);
-        }
-    };
-    Ok(cert_chain)
+    certs(&mut cert_reader).map_err(|_| ConnectError::RumqttcCertificate)
 }
 
 #[cfg(test)]
