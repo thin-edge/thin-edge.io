@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 
@@ -18,7 +19,16 @@ class TedgeEnvironment(BaseTest):
         Systemd will become suspicios when whe restart faster than 5 seconds
         """
         minimum_time = 10
-        etimes = subprocess.check_output("/usr/bin/ps -o etimes $(pidof mosquitto)", shell=True)
+
+        if os.path.exists('/usr/bin/ps'):
+            path_ps = '/usr/bin/ps'
+        elif os.path.exists('/bin/ps'):
+            # the place where mythic beasts has the ps
+            path_ps = '/bin/ps'
+        else:
+            raise SystemError('Cannot find ps')
+
+        etimes = subprocess.check_output(f"{path_ps} -o etimes $(pidof mosquitto)", shell=True)
         runtime = int(etimes.split()[1])
         if runtime <= minimum_time:
             self.log.info(f"Restarting mosquitto too fast in the last {minimum_time} seconds. It was only up for {runtime} seconds" )
