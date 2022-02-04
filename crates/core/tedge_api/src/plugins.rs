@@ -30,11 +30,11 @@ pub enum CoreMessageKind {
     // etc...
 }
 
-#[derive(Debug, Clone)]
 /// An address which could be either a target or source of messages
 ///
 /// Nesting addresses allows to disambiguated between different kind of
 /// sources and the way they have arrived here.
+#[derive(Debug, Clone)]
 pub struct Address {
     endpoint: EndpointKind,
     source: Option<Box<Address>>,
@@ -58,8 +58,8 @@ impl Address {
     }
 }
 
-#[derive(Debug, Clone)]
 /// What kind of endpoint is it
+#[derive(Debug, Clone)]
 pub enum EndpointKind {
     /// The `tedge` core
     Core,
@@ -67,10 +67,10 @@ pub enum EndpointKind {
     Plugin { id: String },
 }
 
-#[derive(Debug)]
 /// A message to be received by the `tedge` core component
 ///
 /// It will be internally routed according to its destination
+#[derive(Debug)]
 pub struct CoreMessage {
     destination: Address,
     content: CoreMessageKind,
@@ -84,8 +84,8 @@ pub enum PluginMessageKind {
     CheckReadyness,
 }
 
-#[derive(Debug)]
 /// A message to be handled by a plugin
+#[derive(Debug)]
 pub struct PluginMessage {
     origin: Address,
     content: PluginMessageKind,
