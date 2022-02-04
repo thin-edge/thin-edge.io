@@ -21,14 +21,36 @@ async fn mapper_publishes_supported_operations_smartrest_message_on_init() {
     // Start the C8Y Mapper
     let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
 
-    // Expect SmartREST message 114 for supported operations on c8y/s/us topic
-    let msg = messages
+    let _ = broker
+        .publish_with_opts(
+            "tedge/alarms/critical/temperature_alarm",
+            r#"{ "message": "Temperature very high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let mut msg = messages
         .recv()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
     dbg!(&msg);
-    assert!(&msg.contains("114"));
+
+    // The first message could be SmartREST 114 for supported operations
+    if msg.contains("114") {
+        // Fetch the next message which should be the alarm
+        msg = messages
+            .recv()
+            .with_timeout(ALARM_SYNC_TIMEOUT_MS)
+            .await
+            .expect_or("No message received after a second.");
+    }
+
+    // Expect converted temperature alarm message
+    dbg!(&msg);
+    assert!(msg.contains("301,temperature_alarm"));
 
     c8y_mapper.abort();
 }
