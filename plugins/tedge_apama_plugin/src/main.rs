@@ -124,7 +124,7 @@ fn get_project_name(tedge_apama_project_path: &Path) -> String {
                     .and_then(|node| node.first_child())
                     .and_then(|node| node.text())
                     .map(str::to_string)
-                    .unwrap_or(DEFAULT_APAMA_PROJECT_NAME.into());
+                    .unwrap_or_else(|| DEFAULT_APAMA_PROJECT_NAME.into());
             }
         }
     }
