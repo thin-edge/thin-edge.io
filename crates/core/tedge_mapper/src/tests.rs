@@ -8,7 +8,7 @@ use crate::{
     c8y_converter::CumulocityConverter, mapper::create_mapper, size_threshold::SizeThreshold,
 };
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(10000);
 const ALARM_SYNC_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
