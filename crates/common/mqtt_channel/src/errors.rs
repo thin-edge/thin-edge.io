@@ -7,6 +7,9 @@ pub enum MqttError {
     #[error("Invalid topic filter: {pattern:?}")]
     InvalidFilter { pattern: String },
 
+    #[error("Invalid session: a session name must be provided")]
+    InvalidSessionConfig,
+
     #[error("MQTT client error: {0}")]
     ClientError(#[from] rumqttc::ClientError),
 

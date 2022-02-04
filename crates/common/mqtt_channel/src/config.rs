@@ -118,4 +118,20 @@ impl Config {
             ..self
         }
     }
+
+    /// Wrap this config into an internal set of options for `rumqttc`.
+    pub(crate) fn mqtt_options(&self) -> rumqttc::MqttOptions {
+        let id = match &self.session_name {
+            None => std::iter::repeat_with(fastrand::lowercase)
+                .take(10)
+                .collect(),
+            Some(name) => name.clone(),
+        };
+
+        let mut mqtt_options = rumqttc::MqttOptions::new(id, &self.host, self.port);
+        mqtt_options.set_clean_session(self.clean_session);
+        mqtt_options.set_max_packet_size(self.max_packet_size, self.max_packet_size);
+
+        mqtt_options
+    }
 }
