@@ -7,7 +7,7 @@ pub enum MqttError {
     #[error("Invalid topic filter: {pattern:?}")]
     InvalidFilter { pattern: String },
 
-    #[error("Invalid session: a session name must be provided and the clean session unset")]
+    #[error("Invalid session: a session name must be provided")]
     InvalidSessionConfig,
 
     #[error("MQTT client error: {0}")]
