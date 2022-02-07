@@ -26,8 +26,9 @@ class TedgeConnectTestSMServices(EnvironmentC8y):
         super().validate()
         self.log.info("Validate")
 
-        # Validate if the Software management services are getting started and enabled properly on "tedge disconnect c8y"
-        # EnvironmentC8y captures the log messages in tedge_connect.out
+        # Validate if the Software management services are getting started and
+        # enabled properly on "tedge connect c8y".
+        # Hint: EnvironmentTedge captures the log messages in tedge_connect.out
         self.assertGrep(
             "tedge_connect_c8y.out", "tedge-agent service successfully started and enabled!", contains=True
         )
