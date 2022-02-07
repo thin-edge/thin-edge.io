@@ -28,7 +28,7 @@ pub trait Plugin {
 
     async fn update_list(
         &self,
-        modules: &Vec<SoftwareModuleUpdate>,
+        modules: &[SoftwareModuleUpdate],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
 
@@ -358,7 +358,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn update_list(
         &self,
-        updates: &Vec<SoftwareModuleUpdate>,
+        updates: &[SoftwareModuleUpdate],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
         let mut command = self.command(UPDATE_LIST, None)?;
