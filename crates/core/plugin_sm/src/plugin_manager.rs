@@ -226,7 +226,7 @@ impl ExternalPlugins {
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates, logger, &download_path).await
+                plugin.apply_all(updates, logger, download_path).await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
