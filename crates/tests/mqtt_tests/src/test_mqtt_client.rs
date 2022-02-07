@@ -23,7 +23,7 @@ pub async fn messages_published_on(mqtt_port: u16, topic: &str) -> UnboundedRece
                 continue;
             }
             Err(err) => {
-                let msg = format!("Error: {:?}", err).to_string();
+                let msg = format!("Error: {:?}", err);
                 let _ = sender.send(msg);
                 return recv;
             }
@@ -180,7 +180,7 @@ impl TestCon {
                     }
                 }
                 Err(err) => {
-                    let msg = format!("Error: {:?}", err).to_string();
+                    let msg = format!("Error: {:?}", err);
                     let _ = sender.send(msg).await;
                     break;
                 }
