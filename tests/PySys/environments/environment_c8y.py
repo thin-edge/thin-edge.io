@@ -102,7 +102,6 @@ class EnvironmentC8y(TedgeEnvironment):
     def myenvcleanup(self):
         self.log.debug("EnvironmentC8y Cleanup")
 
-        self.wait_if_restarting_mosquitto_too_fast()
         # Disconnect Bridge
         self.tedge_disconnect_c8y()
 
