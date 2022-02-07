@@ -9,7 +9,6 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Debug)]
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
-    pub(crate) config_location: TEdgeConfigLocation,
     pub(crate) config_defaults: TEdgeConfigDefaults,
 }
 

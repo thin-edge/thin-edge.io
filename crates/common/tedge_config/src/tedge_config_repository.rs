@@ -96,7 +96,6 @@ impl TEdgeConfigRepository {
     fn make_tedge_config(&self, data: TEdgeConfigDto) -> Result<TEdgeConfig, TEdgeConfigError> {
         Ok(TEdgeConfig {
             data,
-            config_location: self.config_location.clone(),
             config_defaults: self.config_defaults.clone(),
         })
     }
