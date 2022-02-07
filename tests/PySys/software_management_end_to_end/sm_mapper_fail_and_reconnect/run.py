@@ -32,7 +32,6 @@ class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
     rm = "/usr/bin/rm"
     def setup(self):
 
-        # Delete and now we wait, so there is a time depencency
         self.addCleanupFunction(self.smcleanup)
 
         self.tedge_connect_c8y()
