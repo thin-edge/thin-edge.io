@@ -198,7 +198,7 @@ impl ExternalPlugins {
         let mut error_count = 0;
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list(&mut logger).await {
+            match plugin.list(logger).await {
                 Ok(software_list) => response.add_modules(software_type, software_list),
                 Err(_) => {
                     error_count += 1;
