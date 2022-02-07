@@ -230,7 +230,7 @@ where
 
     #[instrument(skip(self), name = "software-list")]
     async fn ask_software_list(&mut self) -> Result<(), SMCumulocityMapperError> {
-        let request = SoftwareListRequest::new();
+        let request = SoftwareListRequest::default();
         let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
         let json_list_request = request.to_json()?;
         let () = self.publish(&topic, json_list_request).await?;

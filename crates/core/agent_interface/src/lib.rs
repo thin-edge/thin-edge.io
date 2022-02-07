@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_request_with_generated_id() {
-        let request = SoftwareListRequest::new();
+        let request = SoftwareListRequest::default();
         let generated_id = request.id;
 
         // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn creating_a_software_update_request_with_generated_id() {
-        let request = SoftwareUpdateRequest::new();
+        let request = SoftwareUpdateRequest::default();
         let generated_id = request.id;
 
         // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
