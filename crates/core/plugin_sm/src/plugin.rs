@@ -91,7 +91,7 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger, &download_path).await {
+                match Self::download_from_url(module, &url, logger, download_path).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;
