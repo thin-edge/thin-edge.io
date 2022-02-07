@@ -16,6 +16,9 @@ pub enum MqttError {
     #[error("MQTT connection error: {0}")]
     ConnectionError(#[from] rumqttc::ConnectionError),
 
+    #[error("MQTT connection rejected: {0:?}")]
+    ConnectionRejected(rumqttc::ConnectReturnCode),
+
     #[error("Invalid UTF8 payload: {from}: {input_excerpt}...")]
     InvalidUtf8Payload {
         input_excerpt: String,
@@ -34,6 +37,13 @@ pub enum MqttError {
 }
 
 impl MqttError {
+    pub fn maybe_connection_error(ack: &rumqttc::ConnectReturnCode) -> Option<MqttError> {
+        match ack {
+            rumqttc::ConnectReturnCode::Success => None,
+            err => Some(MqttError::ConnectionRejected(*err)),
+        }
+    }
+
     pub fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> MqttError {
         const EXCERPT_LEN: usize = 80;
         let index = from.valid_up_to();

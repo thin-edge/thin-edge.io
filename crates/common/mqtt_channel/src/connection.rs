@@ -100,7 +100,10 @@ impl Connection {
 
         loop {
             match event_loop.poll().await {
-                Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                Ok(Event::Incoming(Packet::ConnAck(ack))) => {
+                    if let Some(err) = MqttError::maybe_connection_error(&ack.code) {
+                        return Err(err);
+                    };
                     let subscriptions = config.subscriptions.filters();
                     if subscriptions.is_empty() {
                         break;
