@@ -258,20 +258,22 @@ pub struct SmartRestJwtResponse {
     token: JwtToken,
 }
 
-impl SmartRestJwtResponse {
-    pub fn new() -> Self {
+impl Default for SmartRestJwtResponse {
+    fn default() -> Self {
         Self {
             id: 71,
             token: "".into(),
         }
     }
+}
 
+impl SmartRestJwtResponse {
     pub fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut csv = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(to_parse.as_bytes());
 
-        let mut jwt = Self::new();
+        let mut jwt = Self::default();
         for result in csv.deserialize() {
             jwt = result.unwrap();
         }
@@ -309,7 +311,7 @@ mod tests {
 
     #[test]
     fn jwt_token_create_new() {
-        let jwt = SmartRestJwtResponse::new();
+        let jwt = SmartRestJwtResponse::default();
 
         assert!(jwt.token.is_empty());
     }
