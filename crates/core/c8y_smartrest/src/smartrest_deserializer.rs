@@ -71,7 +71,7 @@ impl SmartRestUpdateSoftware {
     }
 
     pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-        let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
+        let request = self.map_to_software_update_request(SoftwareUpdateRequest::default())?;
         Ok(request)
     }
 

@@ -71,15 +71,17 @@ pub struct SoftwareUpdateRequest {
 
 impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
-impl SoftwareUpdateRequest {
-    pub fn new() -> SoftwareUpdateRequest {
+impl Default for SoftwareUpdateRequest {
+    fn default() -> SoftwareUpdateRequest {
         let id = nanoid!();
         SoftwareUpdateRequest {
             id,
             update_list: vec![],
         }
     }
+}
 
+impl SoftwareUpdateRequest {
     pub fn new_with_id(id: &str) -> SoftwareUpdateRequest {
         SoftwareUpdateRequest {
             id: id.to_string(),
