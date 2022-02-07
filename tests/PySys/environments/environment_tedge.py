@@ -1,6 +1,6 @@
+import os
 import subprocess
 import time
-
 
 from pysys.basetest import BaseTest
 
@@ -23,8 +23,19 @@ class TedgeEnvironment(BaseTest):
         # Ideally we would expect 5 seconds here, but only waiting
         # for 10 makes the issue diappear
         minimum_time = 10
+
+        # Make sure we use the right path for ps, there seems to be an
+        # issue with injecting PATH in pysys, so we use an absolute path for now
+        if os.path.exists("/usr/bin/ps"):
+            path_ps = "/usr/bin/ps"
+        elif os.path.exists("/bin/ps"):
+            # the place where mythic beasts has the ps
+            path_ps = "/bin/ps"
+        else:
+            raise SystemError("Cannot find ps")
+
         etimes = subprocess.check_output(
-            "/usr/bin/ps -o etimes $(pidof mosquitto)", shell=True
+            f"{path_ps} -o etimes $(pidof mosquitto)", shell=True
         )
         runtime = int(etimes.split()[1])
         if runtime <= minimum_time:
