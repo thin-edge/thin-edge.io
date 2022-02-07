@@ -223,11 +223,11 @@ impl SmartRestLogRequest {
             .flexible(true)
             .from_reader(smartrest.as_bytes());
 
-        match rdr.deserialize().next() {
-            Some(Ok(record)) => Ok(record),
-            Some(Err(err)) => Err(err)?,
-            None => panic!("empty request"),
-        }
+        rdr.deserialize()
+            .next()
+            .ok_or_else(|| panic!("empty request"))
+            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
+            .map_err(SmartRestDeserializerError::from)
     }
 }
 
@@ -244,11 +244,10 @@ impl SmartRestRestartRequest {
             .flexible(true)
             .from_reader(smartrest.as_bytes());
 
-        match rdr.deserialize().next() {
-            Some(Ok(record)) => Ok(record),
-            Some(Err(err)) => Err(err)?,
-            None => Err(SmartRestDeserializerError::EmptyRequest),
-        }
+        rdr.deserialize()
+            .next()
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
+            .map_err(SmartRestDeserializerError::from)
     }
 }
 
