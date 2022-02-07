@@ -67,16 +67,6 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
     loop {
         match event_loop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                let subscriptions = config.subscriptions.filters();
-                if subscriptions.is_empty() {
-                    break;
-                }
-                for s in subscriptions.iter() {
-                    mqtt_client.unsubscribe(&s.path).await?;
-                }
-            }
-
-            Ok(Event::Incoming(Packet::UnsubAck(_))) => {
                 break;
             }
 

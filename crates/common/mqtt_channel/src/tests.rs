@@ -403,8 +403,15 @@ mod tests {
             .publish(topic, "A 2nd msg published before clean")
             .await?;
 
-        // If we clean the session
-        clear_session(&mqtt_config).await?;
+        // Then we clean the session
+        {
+            // One just needs a config with the same session name.
+            // Subscriptions can be given - but this not required: any previous subscriptions will be cleared.
+            let mqtt_config = Config::default()
+                .with_port(broker.port)
+                .with_session_name(session_name);
+            clear_session(&mqtt_config).await?;
+        }
 
         // And publish more messages
         broker
