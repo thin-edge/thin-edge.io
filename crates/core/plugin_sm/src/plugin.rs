@@ -56,7 +56,7 @@ pub trait Plugin {
                 let module_url = module.url.clone();
                 match module_url {
                     Some(url) => {
-                        self.install_from_url(&mut module, &url, logger, &download_path)
+                        self.install_from_url(&mut module, &url, logger, download_path)
                             .await?
                     }
                     None => self.install(&module, logger).await?,
