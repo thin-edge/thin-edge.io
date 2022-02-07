@@ -478,12 +478,14 @@ pub struct RestartOperationRequest {
 
 impl<'a> Jsonify<'a> for RestartOperationRequest {}
 
-impl RestartOperationRequest {
-    pub fn new() -> RestartOperationRequest {
+impl Default for RestartOperationRequest {
+    fn default() -> RestartOperationRequest {
         let id = nanoid!();
         RestartOperationRequest { id }
     }
+}
 
+impl RestartOperationRequest {
     pub fn new_with_id(id: &str) -> RestartOperationRequest {
         RestartOperationRequest { id: id.to_string() }
     }

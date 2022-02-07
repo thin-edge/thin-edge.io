@@ -439,7 +439,7 @@ where
         let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
         let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
 
-        let request = RestartOperationRequest::new();
+        let request = RestartOperationRequest::default();
         let () = self.publish(&topic, request.to_json()?).await?;
 
         Ok(())
