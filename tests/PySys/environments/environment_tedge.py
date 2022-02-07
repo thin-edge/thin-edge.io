@@ -20,6 +20,8 @@ class TedgeEnvironment(BaseTest):
         Systemd will become suspicious when mosquitto is restarted more
         freqeuntly than 5 seconds.
         """
+        # Ideally we would expect 5 seconds here, but only waiting
+        # for 10 makes the issue diappear
         minimum_time = 10
         etimes = subprocess.check_output(
             "/usr/bin/ps -o etimes $(pidof mosquitto)", shell=True
