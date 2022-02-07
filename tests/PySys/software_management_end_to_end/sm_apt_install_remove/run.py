@@ -16,6 +16,7 @@ Then it is not installed
 import json
 import requests
 import time
+import subprocess
 import sys
 
 from environment_sm_management import SoftwareManagement
@@ -24,6 +25,10 @@ from environment_sm_management import SoftwareManagement
 class PySysTest(SoftwareManagement):
     def setup(self):
         super().setup()
+        if self.check_is_installed("rolldice"):
+            self.remove_package_apt("rolldice")
+            self.assertThat("0 == value", value=proc.return_value)
+
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
     def execute(self):

@@ -1,4 +1,7 @@
-
+import base64
+import json
+import re
+import requests
 
 import psutil
 
@@ -8,6 +11,9 @@ from pysys.constants import FAILED
 from cumulocity import Cumulocity
 from environment_tedge import TedgeEnvironment
 
+"""
+Environment to manage automated connects and disconnects to c8y
+"""
 
 class EnvironmentC8y(TedgeEnvironment):
     """
@@ -17,6 +23,8 @@ class EnvironmentC8y(TedgeEnvironment):
     disconnect to Cumulocity. Additional checks are made for the status of
     service mosquitto and service tedge-mapper.
     """
+
+    cumulocity: Cumulocity
 
     def setup(self):
         self.log.debug("EnvironmentC8y Setup")
@@ -94,7 +102,6 @@ class EnvironmentC8y(TedgeEnvironment):
     def myenvcleanup(self):
         self.log.debug("EnvironmentC8y Cleanup")
 
-        self.wait_if_restarting_mosquitto_too_fast()
         # Disconnect Bridge
         self.tedge_disconnect_c8y()
 

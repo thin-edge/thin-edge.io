@@ -407,6 +407,13 @@ class SoftwareManagement(EnvironmentC8y):
                 break
         return ret
 
+    def remove_package_apt(name):
+        """Remove a package with apt
+        """
+        assert isinstance(name, str)
+        proc = subprocess.run(["/usr/bin/sudo", "apt", "-y", "remove", name])
+        proc.check_returncode()
+
     def get_pkg_version(self, pkg):
         """ "Use apt-cache madison to derive a package version from
         the apt cache even when it is not installed.
