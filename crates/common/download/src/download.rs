@@ -63,7 +63,6 @@ impl Auth {
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
-    download_target: PathBuf,
 }
 
 impl Downloader {
@@ -74,15 +73,9 @@ impl Downloader {
             filename.push_str(version.as_str());
         }
 
-        let mut download_target = PathBuf::new().join(&target_dir_path).join(&filename);
-        download_target.set_extension("tmp");
-
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
 
-        Self {
-            target_filename,
-            download_target,
-        }
+        Self { target_filename }
     }
 
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
