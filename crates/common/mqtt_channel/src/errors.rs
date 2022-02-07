@@ -19,6 +19,10 @@ pub enum MqttError {
     #[error("MQTT connection rejected: {0:?}")]
     ConnectionRejected(rumqttc::ConnectReturnCode),
 
+    #[error("MQTT subscription failure")]
+    // The MQTT specs are mysterious on the possible cause of such a failure
+    SubscriptionFailure,
+
     #[error("Invalid UTF8 payload: {from}: {input_excerpt}...")]
     InvalidUtf8Payload {
         input_excerpt: String,
@@ -37,11 +41,20 @@ pub enum MqttError {
 }
 
 impl MqttError {
-    pub fn maybe_connection_error(ack: &rumqttc::ConnectReturnCode) -> Option<MqttError> {
-        match ack {
+    pub fn maybe_connection_error(ack: &rumqttc::ConnAck) -> Option<MqttError> {
+        match ack.code {
             rumqttc::ConnectReturnCode::Success => None,
-            err => Some(MqttError::ConnectionRejected(*err)),
+            err => Some(MqttError::ConnectionRejected(err)),
         }
+    }
+
+    pub fn maybe_subscription_error(ack: &rumqttc::SubAck) -> Option<MqttError> {
+        for code in ack.return_codes.iter() {
+            if let rumqttc::SubscribeReasonCode::Failure = code {
+                return Some(MqttError::SubscriptionFailure);
+            }
+        }
+        None
     }
 
     pub fn new_invalid_utf8_payload(bytes: &[u8], from: std::str::Utf8Error) -> MqttError {

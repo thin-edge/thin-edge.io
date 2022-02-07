@@ -22,7 +22,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
     loop {
         match event_loop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(ack))) => {
-                if let Some(err) = MqttError::maybe_connection_error(&ack.code) {
+                if let Some(err) = MqttError::maybe_connection_error(&ack) {
                     return Err(err);
                 };
                 let subscriptions = config.subscriptions.filters();
@@ -71,7 +71,7 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
     loop {
         match event_loop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(ack))) => {
-                if let Some(err) = MqttError::maybe_connection_error(&ack.code) {
+                if let Some(err) = MqttError::maybe_connection_error(&ack) {
                     return Err(err);
                 };
                 break;

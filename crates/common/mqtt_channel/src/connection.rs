@@ -101,7 +101,7 @@ impl Connection {
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
-                    if let Some(err) = MqttError::maybe_connection_error(&ack.code) {
+                    if let Some(err) = MqttError::maybe_connection_error(&ack) {
                         return Err(err);
                     };
                     let subscriptions = config.subscriptions.filters();
@@ -111,7 +111,10 @@ impl Connection {
                     mqtt_client.subscribe_many(subscriptions).await?;
                 }
 
-                Ok(Event::Incoming(Packet::SubAck(_))) => {
+                Ok(Event::Incoming(Packet::SubAck(ack))) => {
+                    if let Some(err) = MqttError::maybe_subscription_error(&ack) {
+                        return Err(err);
+                    };
                     break;
                 }
 
