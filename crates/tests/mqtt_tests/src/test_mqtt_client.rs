@@ -163,7 +163,7 @@ impl TestCon {
                     let msg = std::str::from_utf8(&response.payload)
                         .unwrap_or("Error: non-utf8-payload")
                         .to_string();
-                    if let Err(_) = sender.send(msg).await {
+                    if sender.send(msg).await.is_err() {
                         break;
                     }
                 }
