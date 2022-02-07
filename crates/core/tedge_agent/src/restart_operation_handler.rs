@@ -73,7 +73,7 @@ pub mod restart_operation {
         buf_reader.read_to_string(&mut buffer)?;
 
         // system uptime is the first value of the /proc/uptime file content
-        let maybe_uptime = buffer.split(' ').nth(0);
+        let maybe_uptime = buffer.split(' ').next();
 
         if let Some(uptime) = maybe_uptime {
             match uptime.parse::<f64>() {
