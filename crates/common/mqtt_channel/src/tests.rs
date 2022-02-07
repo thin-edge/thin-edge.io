@@ -446,10 +446,10 @@ mod tests {
         let topic = TopicFilter::new_unchecked("test/topic");
         let mqtt_config = mqtt_config.with_subscriptions(topic);
 
-        if let Err(MqttError::SubscriptionFailure) = Connection::new(&mqtt_config).await {
-            // For some unknown reason, the test MQTT server rejects any subscription on `test/#` topics
-        } else {
-            panic!("The MQTT subscription is expected to fail");
-        }
+        // For some unknown reason, the test MQTT server rejects any subscription on `test/#` topics
+        assert!(matches!(
+            Connection::new(&mqtt_config).await,
+            Err(MqttError::SubscriptionFailure)
+        ));
     }
 }
