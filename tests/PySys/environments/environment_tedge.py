@@ -15,9 +15,10 @@ class TedgeEnvironment(BaseTest):
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
 
-    def wait_if_restarting_mosquitto_too_fast(self):
-        """Make sure we do not restart mosqiotto too fast
-        Systemd will become suspicios when whe restart faster than 5 seconds
+    def wait_if_restarting_mosquitto_too_frequently(self):
+        """Make sure we do not restart mosqiotto too frequently
+        Systemd will become suspicious when mosquitto is restarted more
+        freqeuntly than 5 seconds.
         """
         minimum_time = 10
         etimes = subprocess.check_output(
@@ -26,7 +27,7 @@ class TedgeEnvironment(BaseTest):
         runtime = int(etimes.split()[1])
         if runtime <= minimum_time:
             self.log.info(
-                f"Restarting mosquitto too fast in the last {minimum_time} seconds. It was only up for {runtime} seconds"
+                f"Restarting mosquitto too frequently in the last {minimum_time} seconds. It was only up for {runtime} seconds"
             )
             # Derive additional delay time and add one safety second
             delay = minimum_time - runtime + 1
@@ -35,7 +36,7 @@ class TedgeEnvironment(BaseTest):
 
     def tedge_connect_c8y(self, expectedExitStatus="==0"):
 
-        self.wait_if_restarting_mosquitto_too_fast()
+        self.wait_if_restarting_mosquitto_too_frequently()
 
         connect = self.startProcess(
             command=self.sudo,
@@ -47,7 +48,7 @@ class TedgeEnvironment(BaseTest):
 
     def tedge_disconnect_c8y(self, expectedExitStatus="==0"):
 
-        self.wait_if_restarting_mosquitto_too_fast()
+        self.wait_if_restarting_mosquitto_too_frequently()
 
         connect = self.startProcess(
             command=self.sudo,
