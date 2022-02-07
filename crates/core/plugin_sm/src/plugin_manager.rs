@@ -194,7 +194,7 @@ impl ExternalPlugins {
         mut log_file: LogFile,
     ) -> SoftwareListResponse {
         let mut response = SoftwareListResponse::new(request);
-        let mut logger = log_file.buffer();
+        let logger = log_file.buffer();
         let mut error_count = 0;
 
         for (software_type, plugin) in self.plugin_map.iter() {
