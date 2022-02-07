@@ -41,4 +41,6 @@ if command -v systemctl >/dev/null; then
     fi
 fi
 
+# Initialize the agent
+tedge_agent --init
 #DEBHELPER#

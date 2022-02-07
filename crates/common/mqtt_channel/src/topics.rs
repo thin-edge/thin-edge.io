@@ -1,6 +1,6 @@
 use crate::errors::MqttError;
 use crate::Message;
-use rumqttc::QoS;
+use rumqttc::{QoS, SubscribeFilter};
 use std::convert::TryInto;
 
 /// An MQTT topic
@@ -107,6 +107,18 @@ impl TopicFilter {
     /// A clone topic filter with the given QoS
     pub fn with_qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
+    }
+
+    /// The list of `SubscribeFilter` expected by `mqttc`
+    pub(crate) fn filters(&self) -> Vec<SubscribeFilter> {
+        let qos = self.qos;
+        self.patterns
+            .iter()
+            .map(|path| SubscribeFilter {
+                path: path.clone(),
+                qos,
+            })
+            .collect()
     }
 }
 
