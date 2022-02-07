@@ -9,6 +9,7 @@ use crate::{
     c8y_converter::CumulocityConverter, mapper::create_mapper, size_threshold::SizeThreshold,
 };
 
+const MESSAGE_TIMEOUT_MS: Duration = Duration::from_millis(1000);
 const ALARM_SYNC_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
@@ -165,6 +166,50 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 
     // Expect the new pressure alarm message
     assert!(&msg.contains("301,pressure_alarm"));
+
+    c8y_mapper.abort();
+}
+
+#[tokio::test]
+#[serial]
+async fn c8y_mapper_event_mapping_to_smartrest() {
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+    // Start the C8Y Mapper
+    let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
+
+    let _ = broker
+        .publish_with_opts(
+            "tedge/events/click_event",
+            r#"{ "message": "Detected one click" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            false,
+        )
+        .await
+        .unwrap();
+
+    let mut msg = messages
+        .recv()
+        .with_timeout(MESSAGE_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    // The first message could be SmartREST 114 for supported operations
+    if msg.contains("114") {
+        // Fetch the next message which should be the event message
+        msg = messages
+            .recv()
+            .with_timeout(MESSAGE_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+    }
+
+    // Expect converted click event message
+    dbg!(&msg);
+    assert!(msg.contains(r#"400,click_event,"Detected one click","#));
 
     c8y_mapper.abort();
 }

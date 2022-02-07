@@ -2,8 +2,8 @@ use crate::c8y_fragments::{C8yAgentFragment, C8yDeviceDataFragment};
 use crate::error::*;
 use crate::size_threshold::SizeThreshold;
 use crate::{converter::*, operations::Operations};
-use c8y_smartrest::alarm;
 use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
+use c8y_smartrest::{alarm, event};
 use c8y_translator::json;
 use mqtt_channel::{Message, Topic};
 use std::collections::hash_map::Entry;
@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use thin_edge_json::alarm::ThinEdgeAlarm;
+use thin_edge_json::event::ThinEdgeEvent;
 use tracing::info;
 
 const C8Y_CLOUD: &str = "c8y";
@@ -22,6 +23,7 @@ const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_MEASUREMENTS_TOPIC: &str = "tedge/measurements";
+const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -40,6 +42,7 @@ impl CumulocityConverter {
             "tedge/measurements/+",
             "tedge/alarms/+/+",
             "c8y-internal/alarms/+/+",
+            "tedge/events/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
@@ -100,6 +103,17 @@ impl CumulocityConverter {
         }
         Ok(vec)
     }
+
+    fn try_convert_event(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+        let mut vec: Vec<Message> = Vec::new();
+
+        let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+        let smartrest_alarm = event::serialize_event(tedge_event)?;
+        let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+        vec.push(Message::new(&smartrest_topic, smartrest_alarm));
+
+        Ok(vec)
+    }
 }
 
 impl Converter for CumulocityConverter {
@@ -119,6 +133,8 @@ impl Converter for CumulocityConverter {
         } else if input.topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
             self.alarm_converter.process_internal_alarm(input);
             Ok(vec![])
+        } else if input.topic.name.starts_with(TEDGE_EVENTS_TOPIC) {
+            self.try_convert_event(input)
         } else {
             Err(ConversionError::UnsupportedTopic(input.topic.name.clone()))
         }

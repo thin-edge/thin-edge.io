@@ -4,6 +4,7 @@
 pub mod alarm;
 pub mod builder;
 pub mod data;
+pub mod event;
 pub mod group;
 pub mod measurement;
 pub mod parser;
