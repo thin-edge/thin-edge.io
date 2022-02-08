@@ -8,6 +8,7 @@ use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use mqtt_channel::{Connection, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
+use mqtt_tests::StreamExt;
 use serial_test::serial;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -29,7 +30,7 @@ async fn mapper_publishes_a_software_list_request() {
 
     // Expect on `tedge/commands/req/software/list` a software list request.
     let msg = messages
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
@@ -91,7 +92,7 @@ async fn mapper_publishes_software_update_request() {
 
     // Expect thin-edge json message on `tedge/commands/req/software/update` with expected payload.
     let msg = messages
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
@@ -134,7 +135,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Expect `501` smartrest message on `c8y/s/us`.
     let msg = messages
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
@@ -157,7 +158,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let msg = messages
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
@@ -209,7 +210,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
     // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     let msg = messages
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");
@@ -272,7 +273,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Wait for the request being published by the mapper on `tedge/commands/req/software/update`.
     let msg = requests
-        .recv()
+        .next()
         .with_timeout(TEST_TIMEOUT_MS)
         .await
         .expect_or("No message received after a second.");

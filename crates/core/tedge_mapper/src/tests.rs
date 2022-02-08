@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
+use mqtt_tests::StreamExt;
 use serial_test::serial;
 use tokio::task::JoinHandle;
 
@@ -31,7 +32,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
         .unwrap();
 
     let mut msg = messages
-        .recv()
+        .next()
         .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received before timeout");
@@ -41,7 +42,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     if msg.contains("114") {
         // Fetch the next message which should be the alarm
         msg = messages
-            .recv()
+            .next()
             .with_timeout(ALARM_SYNC_TIMEOUT_MS)
             .await
             .expect_or("No message received before timeout");
@@ -86,7 +87,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
         .unwrap();
 
     let mut msg = messages
-        .recv()
+        .next()
         .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received before timeout");
@@ -96,7 +97,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     if msg.contains("114") {
         // Fetch the next message which should be the alarm
         msg = messages
-            .recv()
+            .next()
             .with_timeout(ALARM_SYNC_TIMEOUT_MS)
             .await
             .expect_or("No message received before timeout");
@@ -135,7 +136,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let _ = start_c8y_mapper(broker.port).await.unwrap();
 
     let mut msg = messages
-        .recv()
+        .next()
         .with_timeout(ALARM_SYNC_TIMEOUT_MS)
         .await
         .expect_or("No message received before timeout");
@@ -145,7 +146,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     if msg.contains("114") {
         // Fetch the next message which should be the alarm
         msg = messages
-            .recv()
+            .next()
             .with_timeout(ALARM_SYNC_TIMEOUT_MS)
             .await
             .expect_or("No message received before timeout");
@@ -155,7 +156,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
     // let msg = messages
-    //     .recv()
+    //     .next()
     //     .with_timeout(ALARM_SYNC_TIMEOUT_MS)
     //     .await
     //     .expect_or("No message received after a second.");
