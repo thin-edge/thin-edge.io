@@ -3,13 +3,15 @@ set -e
 
 echo "Configuring Bridge"
 
+URL=$(echo $C8YURL | cut -c 9- - )
+
 sudo tedge cert remove
 
 sudo tedge cert create --device-id=$C8YDEVICE
 
 sudo tedge cert show
 
-sudo tedge config set c8y.url thin-edge-io.eu-latest.cumulocity.com
+sudo tedge config set c8y.url $URL
 
 sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
