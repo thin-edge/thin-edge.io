@@ -32,8 +32,6 @@ cd $TEBASEDIR
 # Check if clients are installed
 dpkg -s mosquitto-clients
 
-./ci/configure_bridge.sh
-
 # Run all PySys tests
 
 python3 -m venv ~/env-pysys
