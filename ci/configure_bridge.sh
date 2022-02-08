@@ -1,4 +1,11 @@
 
+echo "Disconnect old bridge"
+
+# Disconnect - may fail if not there
+sudo tedge disconnect c8y
+
+# From now on exit if a command exits with a non-zero status.
+# Commands above are allowed to fail
 set -e
 
 echo "Configuring Bridge"
