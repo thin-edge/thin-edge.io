@@ -16,7 +16,6 @@
 #    C8YUSERNAME
 #    C8YTENANT
 #    C8YPASS
-#    C8YDEVICEID
 #    EXAMPLEDIR
 
 # a simple function to append lines to files if not already there
@@ -75,8 +74,7 @@ fi
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
-
-. ~/c8yenv.sh
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL)
 
 # after calling the script, the ID should be there
 if [ -z $C8YDEVICEID ]; then

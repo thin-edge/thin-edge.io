@@ -58,12 +58,8 @@ deactivate
 sleep 2
 
 # Retrieve the Cumulocity device ID
-./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL > ~/C8YDEVICEID
 
-C8YDEVICEID=$(cat ~/C8YDEVICEID)
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL)
+
 echo "The current device ID is (read from home directory): " $C8YDEVICEID
-
-# For now, we create that file here:
-echo "export C8YDEVICEID=$(cat ~/C8YDEVICEID)" > ~/c8yenv.sh
-chmod +x ~/c8yenv.sh
 

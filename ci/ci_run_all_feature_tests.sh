@@ -8,7 +8,6 @@
 # C8YUSERNAME : Cumolocity username
 # C8YTENANT : Cumolocity tenant
 # C8YDEVICE : The device name
-# C8YDEVICEID : The device ID in Cumolocity
 # TIMEZONE : Your timezone (temporary)
 # TEBASEDIR : Base directory for the Thin-Edge repo
 # EXAMPLEDIR : The direcory of the sawtooth example
