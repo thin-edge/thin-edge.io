@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use tedge_api::{
     address::EndpointKind,
-    errors::PluginInstantationError,
     messages::{CoreMessageKind, PluginMessageKind},
     plugins::Comms,
     Address, CoreMessage, Plugin, PluginBuilder, PluginConfiguration, PluginError, PluginMessage,
@@ -17,33 +16,40 @@ impl PluginBuilder for HeartbeatServiceBuilder {
     fn verify_configuration(
         &self,
         _config: &PluginConfiguration,
-    ) -> Result<(), tedge_api::errors::PluginConfigurationError> {
+    ) -> Result<(), tedge_api::errors::PluginError> {
         Ok(())
     }
 
     fn instantiate(
         &self,
-        _config: PluginConfiguration,
+        config: PluginConfiguration,
         tedge_comms: tedge_api::plugins::Comms,
-    ) -> Result<Box<dyn Plugin>, PluginInstantationError> {
-        Ok(Box::new(HeartbeatService::new(tedge_comms)))
+    ) -> Result<Box<dyn Plugin>, PluginError> {
+        let hb_config: HeartbeatConfig = toml::Value::try_into(config.into_inner())?;
+        Ok(Box::new(HeartbeatService::new(tedge_comms, hb_config)))
     }
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct HeartbeatConfig {
+    interval: u64,
 }
 
 struct HeartbeatService {
     comms: tedge_api::plugins::Comms,
+    config: HeartbeatConfig,
 }
 
 impl HeartbeatService {
-    fn new(comms: tedge_api::plugins::Comms) -> Self {
-        Self { comms }
+    fn new(comms: tedge_api::plugins::Comms, config: HeartbeatConfig) -> Self {
+        Self { comms, config }
     }
 }
 
 #[async_trait]
 impl Plugin for HeartbeatService {
     async fn setup(&mut self) -> Result<(), PluginError> {
-        println!("Setting up heartbeat service!");
+        println!("Setting up heartbeat service with interval: {}!", self.config.interval);
         Ok(())
     }
 
@@ -76,7 +82,12 @@ async fn main() {
 
     let comms = Comms::new(sender);
 
-    let config = toml::from_str("").unwrap();
+    let config = toml::from_str(
+        r#"
+    interval = 200
+    "#,
+    )
+    .unwrap();
 
     let mut heartbeat = hsb.instantiate(config, comms).unwrap();
 
