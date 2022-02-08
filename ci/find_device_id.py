@@ -82,6 +82,8 @@ def main():
     url = args.url
     verbose = args.verbose
 
+    url = url.removeprefix('https://')
+
     try:
         password = os.environ["C8YPASS"]
     except KeyError:
