@@ -42,7 +42,7 @@ pip3 install -r tests/requirements.txt
 
 # Delete the device (ignore error)
 set +e
-python3 ./ci/delete_current_device_c8y.py
+python3 ./ci/delete_current_device_c8y.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL
 set -e
 
 # Give Cumolocity time to process the cert deletion
