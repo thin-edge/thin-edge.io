@@ -1,4 +1,4 @@
-from pysys.basetest import BaseTest
+from environment_tedge import TedgeEnvironment
 
 """
 Run connection test without being connected (negative case):
@@ -11,21 +11,14 @@ Then test has passed
 """
 
 
-class TedgeConnectTestNegative(BaseTest):
+class TedgeConnectTestNegative(TedgeEnvironment):
     def execute(self):
-        tedge = "/usr/bin/tedge"
-        sudo = "/usr/bin/sudo"
 
         self.log.info("Execute `tedge connect c8y --test`")
-        self.startProcess(
-            command=sudo,
-            arguments=[tedge, "connect", "c8y", "--test"],
-            stdouterr="tedge_connect_c8y_test_negative",
-            expectedExitStatus="==1",
-        )
+        self.tedge_connect_c8y_test(expectedExitStatus="==1")
 
     def validate(self):
         self.log.info("Validate")
         fail = "Error: failed to test connection to Cumulocity cloud."
-        self.assertGrep("tedge_connect_c8y_test_negative.err", fail, contains=True)
+        self.assertGrep("tedge_connect_c8y_test.err", fail, contains=True)
 

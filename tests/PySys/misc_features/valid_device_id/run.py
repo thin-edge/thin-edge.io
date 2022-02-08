@@ -1,6 +1,5 @@
-from pysys.basetest import BaseTest
-
 import time
+from environment_tedge import TedgeEnvironment
 
 """
 Validate certificate creation with valid characters and validate with cumulocity cloud
@@ -15,17 +14,13 @@ Cleanup the Certificate and Key path and delete the temporary directory
 """
 
 
-class ValidateValidDeviceId(BaseTest):
+class ValidateValidDeviceId(TedgeEnvironment):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
         # disconnect the device from cloud
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
+        self.tedge_disconnect_c8y()
 
         # create a custom certiticate directory for testing purpose
         create_cert_dir = self.startProcess(
@@ -80,32 +75,20 @@ class ValidateValidDeviceId(BaseTest):
         time.sleep(1)
 
         # connect to the c8y cloud
-        c8y_connect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="c8y_connect",
-        )
+        self.tedge_connect_c8y()
 
         # test connect to the c8y cloud
-        c8y_connect_test = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y", "--test"],
-            stdouterr="c8y_connect_test",
-        )
+        self.tedge_connect_c8y_test()
 
     def validate(self):
         # validate the connection is successfull
-        self.assertGrep("c8y_connect.out", "successful", contains=True)
-        self.assertGrep("c8y_connect_test.out", "successful", contains=True)
+        self.assertGrep("tedge_connect_c8y.out", "successful", contains=True)
+        self.assertGrep("tedge_connect_c8y_test.out", "successful", contains=True)
 
     def device_id_cleanup(self):
 
         # disconnect the test
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
+        self.tedge_disconnect_c8y()
 
         # unset the device certificate path
         unset_cert_path = self.startProcess(

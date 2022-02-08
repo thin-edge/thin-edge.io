@@ -2,6 +2,8 @@ from pysys.basetest import BaseTest
 
 import time
 
+from environment_tedge import TedgeEnvironment
+
 """
 Validate retrieved JWT Token from cumulocity cloud
 
@@ -14,28 +16,20 @@ Cleanup the Certificate and Key path and delete the temporary directory
 """
 
 
-class ValidateJWTTokenRetrieval(BaseTest):
+class ValidateJWTTokenRetrieval(TedgeEnvironment):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
         # disconnect the device from cloud
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
-                
+        self.tedge_disconnect_c8y()
+
         self.addCleanupFunction(self.jwt_token_cleanup)
 
     def execute(self):
         # connect the device to cloud
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "connect", "c8y"],
-            stdouterr="c8y_connect",
-        )
-        
+        self.tedge_connect_c8y()
+
         # Subscribe for the jwt token response topic
         resp_jwt_token = self.startProcess(
             command=self.sudo,
@@ -64,12 +58,8 @@ class ValidateJWTTokenRetrieval(BaseTest):
     def validate(self):
         # validate the correct response/token is received
         self.assertGrep("resp_jwt.out", "\[c8y/s/dat\] 71,", contains=True)
-        
-    def jwt_token_cleanup(self):        
+
+    def jwt_token_cleanup(self):
         # disconnect the test
-        c8y_disconnect = self.startProcess(
-            command=self.sudo,
-            arguments=[self.tedge, "disconnect", "c8y"],
-            stdouterr="c8y_disconnect",
-        )
-     
+        self.tedge_disconnect_c8y()
+
