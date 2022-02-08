@@ -46,12 +46,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let agent_opt = AgentOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
 
+    let name = "tedge_agent";
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir);
-    let mut agent = agent::SmAgent::try_new(
-        "tedge_agent",
-        SmAgentConfig::try_new(tedge_config_location)?,
-    )?;
+    let agent_config = SmAgentConfig::try_new(tedge_config_location)?;
+    let _flock = flockfile::check_another_instance_is_not_running(name, &agent_config.run_dir)?;
+
+    let mut agent = agent::SmAgent::try_new(name, agent_config)?;
+
     if agent_opt.init {
         agent.init().await?;
     } else if agent_opt.clear {

@@ -13,7 +13,6 @@ use agent_interface::{
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use serde_json::json;
@@ -199,12 +198,10 @@ pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
     persistance_store: AgentStateRepository,
-    _flock: Flockfile,
 }
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
-        let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
         info!("{} starting", &name);
 
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
@@ -219,7 +216,6 @@ impl SmAgent {
             config,
             operation_logs,
             persistance_store,
-            _flock: flock,
         })
     }
 
