@@ -1,10 +1,10 @@
 #!/bin/sh
-set -x
+set -e
 
 remove_tedge_mapper_user() {
     if getent passwd tedge-mapper >/dev/null; then
         pkill -u tedge-mapper || true
-        deluser --system tedge-mapper
+        deluser --quiet --system tedge-mapper
     fi
 }
 
