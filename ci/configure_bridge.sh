@@ -34,3 +34,32 @@ sudo tedge config list
 sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
+
+# for now, abuse the pysys-env to make the c8y api available
+python3 -m venv ~/env-pysys
+source ~/env-pysys/bin/activate
+pip3 install -r tests/requirements.txt
+
+# Delete the device (ignore error)
+set +e
+python3 ./ci/delete_current_device_c8y.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL
+set -e
+
+# Give Cumolocity time to process the cert deletion
+sleep 2
+
+# Connect and disconnect so that we can retrive a new device ID
+sudo tedge connect c8y
+sudo tedge disconnect c8y
+
+# Give Cumolocity time to process the cert deletion
+sleep 2
+
+# Retrieve the Cumulocity device ID
+
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+
+echo "The current device ID is (read from home directory): " $C8YDEVICEID
+
+deactivate
+
