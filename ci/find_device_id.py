@@ -82,7 +82,8 @@ def main():
     url = args.url
     verbose = args.verbose
 
-    url = url.removeprefix('https://')
+    # url = url.removeprefix('https://') Python 3.9 :)
+    url.replace("https://","") # Also works with Python 3.7
 
     try:
         password = os.environ["C8YPASS"]
