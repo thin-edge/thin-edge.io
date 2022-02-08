@@ -116,4 +116,4 @@ class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
             command=self.sudo,
             arguments=[self.systemctl, "restart", "mosquitto.service"],
             stdouterr="restart_mosquitto",
-        )       
+        )
