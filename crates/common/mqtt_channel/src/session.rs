@@ -21,7 +21,10 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
 
     loop {
         match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+            Ok(Event::Incoming(Packet::ConnAck(ack))) => {
+                if let Some(err) = MqttError::maybe_connection_error(&ack) {
+                    return Err(err);
+                };
                 let subscriptions = config.subscriptions.filters();
                 if subscriptions.is_empty() {
                     break;
@@ -42,6 +45,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
         }
     }
 
+    // Errors on disconnect are ignored, since having no impact on the session
     let _ = mqtt_client.disconnect().await;
     Ok(())
 }
@@ -66,17 +70,10 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
 
     loop {
         match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                let subscriptions = config.subscriptions.filters();
-                if subscriptions.is_empty() {
-                    break;
-                }
-                for s in subscriptions.iter() {
-                    mqtt_client.unsubscribe(&s.path).await?;
-                }
-            }
-
-            Ok(Event::Incoming(Packet::UnsubAck(_))) => {
+            Ok(Event::Incoming(Packet::ConnAck(ack))) => {
+                if let Some(err) = MqttError::maybe_connection_error(&ack) {
+                    return Err(err);
+                };
                 break;
             }
 
@@ -89,6 +86,7 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
         }
     }
 
+    // Errors on disconnect are ignored, since having no impact on the session
     let _ = mqtt_client.disconnect().await;
     Ok(())
 }

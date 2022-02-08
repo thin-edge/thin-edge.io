@@ -16,7 +16,7 @@ mod tests {
         let mqtt_config = Config::default().with_port(broker.port);
 
         // A client subscribes to a topic on connect
-        let topic = "test/topic";
+        let topic = "a/test/topic";
         let mqtt_config = mqtt_config
             .with_session_name("test_client")
             .with_subscriptions(topic.try_into()?);
@@ -211,7 +211,7 @@ mod tests {
 
         // A client that connects with a well-known session name, subscribing to some topic.
         let session_name = "remember_me";
-        let topic = "test/topic";
+        let topic = "my/nice/topic";
         let mqtt_config = mqtt_config
             .with_session_name(session_name)
             .with_subscriptions(topic.try_into()?);
@@ -403,8 +403,15 @@ mod tests {
             .publish(topic, "A 2nd msg published before clean")
             .await?;
 
-        // If we clean the session
-        clear_session(&mqtt_config).await?;
+        // Then we clean the session
+        {
+            // One just needs a config with the same session name.
+            // Subscriptions can be given - but this not required: any previous subscriptions will be cleared.
+            let mqtt_config = Config::default()
+                .with_port(broker.port)
+                .with_session_name(session_name);
+            clear_session(&mqtt_config).await?;
+        }
 
         // And publish more messages
         broker
@@ -428,5 +435,21 @@ mod tests {
         let result = clear_session(&mqtt_config).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Invalid session"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn subscription_failures() {
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = Config::default().with_port(broker.port);
+
+        let topic = TopicFilter::new_unchecked("test/topic");
+        let mqtt_config = mqtt_config.with_subscriptions(topic);
+
+        // For some unknown reason, the test MQTT server rejects any subscription on `test/#` topics
+        assert!(matches!(
+            Connection::new(&mqtt_config).await,
+            Err(MqttError::SubscriptionFailure)
+        ));
     }
 }

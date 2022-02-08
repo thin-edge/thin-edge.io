@@ -1,13 +1,14 @@
 use crate::with_timeout::WithTimeout;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures::{SinkExt, StreamExt};
 use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
 use std::time::Duration;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 /// Returns the stream of messages received on a specific topic.
 ///
 /// To ease testing, the errors are returned as messages.
 pub async fn messages_published_on(mqtt_port: u16, topic: &str) -> UnboundedReceiver<String> {
-    let (sender, recv) = tokio::sync::mpsc::unbounded_channel();
+    let (mut sender, recv) = futures::channel::mpsc::unbounded();
 
     // One can have a connection error if this is called just after the broker starts
     // So try to subscribe again after a first error
@@ -46,7 +47,7 @@ pub async fn assert_received<T>(
     T::Item: ToString,
 {
     for expected_msg in expected.into_iter() {
-        let actual_msg = messages.recv().with_timeout(timeout).await;
+        let actual_msg = messages.next().with_timeout(timeout).await;
         assert_eq!(actual_msg, Ok(Some(expected_msg.to_string())));
     }
 }
@@ -167,20 +168,20 @@ impl TestCon {
         }
     }
 
-    pub async fn forward_received_messages(&mut self, sender: UnboundedSender<String>) {
+    pub async fn forward_received_messages(&mut self, mut sender: UnboundedSender<String>) {
         loop {
             match self.eventloop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(response))) => {
                     let msg = std::str::from_utf8(&response.payload)
                         .unwrap_or("Error: non-utf8-payload")
                         .to_string();
-                    if let Err(_) = sender.send(msg) {
+                    if let Err(_) = sender.send(msg).await {
                         break;
                     }
                 }
                 Err(err) => {
                     let msg = format!("Error: {:?}", err).to_string();
-                    let _ = sender.send(msg);
+                    let _ = sender.send(msg).await;
                     break;
                 }
                 _ => {}
