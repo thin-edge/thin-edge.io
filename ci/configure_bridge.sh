@@ -11,7 +11,6 @@ set -e
 
 echo "Configuring Bridge"
 
-# Squelch the https:// from the url
 URL=$(echo $C8YURL | cut -c 9- - )
 
 sudo tedge cert remove
@@ -59,7 +58,7 @@ sleep 2
 
 # Retrieve the Cumulocity device ID
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL)
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 echo "The current device ID is (read from home directory): " $C8YDEVICEID
 

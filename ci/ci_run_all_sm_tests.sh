@@ -15,7 +15,7 @@
 
 set -e
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL)
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 cd $TEBASEDIR
 

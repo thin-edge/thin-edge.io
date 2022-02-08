@@ -74,7 +74,7 @@ fi
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $URL)
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 # after calling the script, the ID should be there
 if [ -z $C8YDEVICEID ]; then
