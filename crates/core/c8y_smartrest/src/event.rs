@@ -29,6 +29,7 @@ pub fn serialize_event(event: ThinEdgeEvent) -> Result<String, SmartRestSerializ
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use csv::Error;
     use serde::Deserialize;
     use test_case::test_case;
     use thin_edge_json::event::ThinEdgeEventData;
@@ -38,11 +39,11 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("I raised it".into()),
+                message: Some("Someone clicked".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "400,click_event,\"I raised it\",2021-04-23T19:00:00+05:00"
+        "400,click_event,\"Someone clicked\",2021-04-23T19:00:00+05:00"
         ;"event translation"
     )]
     #[test_case(
@@ -60,11 +61,11 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("I, raised, it".into()),
+                message: Some("Someone, clicked, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
-        "400,click_event,\"I, raised, it\",2021-04-23T19:00:00+05:00"
+        "400,click_event,\"Someone, clicked, it\",2021-04-23T19:00:00+05:00"
         ;"event translation with commas in message"
     )]
     fn check_event_translation(event: ThinEdgeEvent, expected_smartrest_msg: &str) {
@@ -78,27 +79,31 @@ mod tests {
         pub code: i32,
         pub name: String,
         pub message: Option<String>,
-        pub time: Option<OffsetDateTime>,
+        pub time: Option<String>,
     }
 
     #[test]
     fn event_translation_empty_json_payload_generates_timestamp() {
         let event = ThinEdgeEvent {
-            name: "click_event".into(),
+            name: "empty_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("I raised it".into()),
+                message: None,
                 time: None,
             }),
         };
 
         let smartrest_message = serialize_event(event).unwrap();
-        let mut reader = csv::Reader::from_reader(smartrest_message.as_bytes());
-        for result in reader.deserialize() {
-            let smartrest_event: SmartRestEvent = result.unwrap();
-            assert_eq!(smartrest_event.code, 301);
-            assert_eq!(smartrest_event.name, "empty_event".to_string());
-            assert_eq!(smartrest_event.message, None);
-            assert_matches!(smartrest_event.time, Some(_))
-        }
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(smartrest_message.as_bytes());
+        let mut iter = reader.deserialize();
+        let result = iter.next();
+
+        assert!(result.is_some());
+        let smartrest_event: SmartRestEvent = result.unwrap().unwrap();
+        assert_eq!(smartrest_event.code, 400);
+        assert_eq!(smartrest_event.name, "empty_event".to_string());
+        assert_eq!(smartrest_event.message, None);
+        assert_matches!(smartrest_event.time, Some(_))
     }
 }

@@ -70,13 +70,13 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "I raised it",
+            "message": "Someone clicked",
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("I raised it".into()),
+                message: Some("Someone clicked".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         };
@@ -85,12 +85,12 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "I raised it",
+            "message": "Someone clicked",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("I raised it".into()),
+                message: Some("Someone clicked".into()),
                 time: None,
             }),
         };
