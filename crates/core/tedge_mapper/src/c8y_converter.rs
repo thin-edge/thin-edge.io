@@ -21,6 +21,7 @@ const SUPPORTED_OPERATIONS_DIRECTORY: &str = "/etc/tedge/operations";
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
+const TEDGE_MEASUREMENTS_TOPIC: &str = "tedge/measurements";
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -110,7 +111,8 @@ impl Converter for CumulocityConverter {
 
     fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let () = self.size_threshold.validate(input.payload_str()?)?;
-        if input.topic.name.starts_with("tedge/measurement") {
+
+        if input.topic.name.starts_with(TEDGE_MEASUREMENTS_TOPIC) {
             self.try_convert_measurement(input)
         } else if input.topic.name.starts_with(TEDGE_ALARMS_TOPIC) {
             self.alarm_converter.try_convert_alarm(input)
