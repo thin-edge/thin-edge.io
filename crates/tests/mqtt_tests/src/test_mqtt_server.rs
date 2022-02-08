@@ -4,10 +4,10 @@ use std::{
     time::Duration,
 };
 
+use futures::channel::mpsc::UnboundedReceiver;
 use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
 use once_cell::sync::Lazy;
 use rumqttc::QoS;
-use tokio::sync::mpsc::UnboundedReceiver;
 
 const MQTT_TEST_PORT: u16 = 55555;
 
