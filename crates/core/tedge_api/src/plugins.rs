@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 
 use crate::{
-    errors::{PluginConfigurationError, PluginInstantationError, PluginError},
+    errors::PluginError,
     messages::{CoreMessage, PluginMessage},
 };
 
@@ -33,7 +33,7 @@ impl Comms {
 /// It is important that configuration errors are communicated precisely
 /// and concisely. Reporting the span is not a must, but greatly helps users
 /// in diagnostics of errors as well as sources of configuration.
-pub type PluginConfiguration = toml::Spanned<toml::value::Table>;
+pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 
 /// A plugin builder for a given plugin
 pub trait PluginBuilder: Sync + Send + 'static {
@@ -42,10 +42,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
 
     /// This may be called anytime to verify whether a plugin could be instantiated with the
     /// passed configuration.
-    fn verify_configuration(
-        &self,
-        config: &PluginConfiguration,
-    ) -> Result<(), PluginConfigurationError>;
+    fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
 
     /// Instantiate a new instance of this plugin using the given configuration
     ///
@@ -54,7 +51,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
         &self,
         config: PluginConfiguration,
         tedge_comms: Comms,
-    ) -> Result<Box<dyn Plugin + 'static>, PluginInstantationError>;
+    ) -> Result<Box<dyn Plugin + 'static>, PluginError>;
 }
 
 /// A functionality extension to ThinEdge

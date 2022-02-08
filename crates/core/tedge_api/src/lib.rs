@@ -7,7 +7,7 @@ pub mod address;
 pub use address::Address;
 
 pub mod errors;
-pub use errors::{PluginConfigurationError, PluginError};
+pub use errors::PluginError;
 
 pub mod messages;
 pub use messages::{CoreMessage, PluginMessage};
