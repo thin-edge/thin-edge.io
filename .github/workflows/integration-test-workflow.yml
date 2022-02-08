@@ -204,9 +204,6 @@ jobs:
       - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
-      - name: Tweak things
-        run: ./ci/tweak.sh
-
       - name: Configure Bridge
         run: ./ci/configure_bridge.sh
         env:
