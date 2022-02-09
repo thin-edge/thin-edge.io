@@ -1,4 +1,4 @@
-use crate::mapping::error::ConversionError;
+use crate::core::error::ConversionError;
 use serde::Serialize;
 use std::process::Command;
 use tracing::warn;

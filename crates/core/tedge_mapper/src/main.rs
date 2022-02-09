@@ -4,7 +4,7 @@ use crate::{
     az::mapper::AzureMapper,
     c8y::mapper::CumulocityMapper,
     collectd::mapper::CollectdMapper,
-    mapping::{component::TEdgeComponent, error::MapperError},
+    core::{component::TEdgeComponent, error::MapperError},
 };
 
 use flockfile::check_another_instance_is_not_running;
@@ -15,10 +15,7 @@ use tedge_utils::paths::home_dir;
 mod az;
 mod c8y;
 mod collectd;
-mod mapping;
-
-#[cfg(test)]
-mod tests;
+mod core;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {

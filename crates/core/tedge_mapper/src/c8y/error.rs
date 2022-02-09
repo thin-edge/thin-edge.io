@@ -4,9 +4,6 @@ use c8y_smartrest::error::{
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityMapperError {
-    #[error("Invalid MQTT Message.")]
-    InvalidMqttMessage,
-
     #[error(transparent)]
     InvalidTopicError(#[from] agent_interface::TopicError),
 
@@ -40,17 +37,8 @@ pub enum CumulocityMapperError {
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
 
-    #[error("Invalid date in file name: {0}")]
-    InvalidDateInFileName(String),
-
-    #[error("Invalid path. Not UTF-8.")]
-    InvalidUtf8Path,
-
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
-
-    #[error("Request timed out")]
-    RequestTimeout,
 
     #[error("Operation execution failed: {0}")]
     ExecuteFailed(String),

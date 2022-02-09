@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::mapping::{converter::*, error::*};
+use crate::core::{converter::*, error::*};
 
 use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,

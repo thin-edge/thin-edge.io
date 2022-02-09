@@ -1,6 +1,6 @@
 use crate::{
     collectd::monitor::{DeviceMonitor, DeviceMonitorConfig},
-    mapping::component::TEdgeComponent,
+    core::component::TEdgeComponent,
 };
 use async_trait::async_trait;
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};

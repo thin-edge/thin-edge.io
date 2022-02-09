@@ -1,7 +1,7 @@
-use crate::mapping::size_threshold::SizeThresholdExceeded;
+use crate::{c8y::error::CumulocityMapperError, core::size_threshold::SizeThresholdExceeded};
 
+use c8y_smartrest::error::OperationsError;
 use mqtt_channel::MqttError;
-use std::path::PathBuf;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
@@ -30,6 +30,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromCumulocityJsonError(#[from] c8y_translator::json::CumulocityJsonError),
+
+    #[error(transparent)]
+    FromCumulocityCumulocityMapperError(#[from] CumulocityMapperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
@@ -76,16 +79,4 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum OperationsError {
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
-
-    #[error("Cannot extract the operation name from the path: {0}")]
-    InvalidOperationName(PathBuf),
-
-    #[error("Error while parsing operation file: '{0}': {1}.")]
-    TomlError(PathBuf, #[source] toml::de::Error),
 }

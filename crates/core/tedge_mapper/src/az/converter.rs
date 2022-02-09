@@ -1,4 +1,4 @@
-use crate::mapping::{converter::*, error::*, size_threshold::SizeThreshold};
+use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 
 use async_trait::async_trait;
 use clock::Clock;
@@ -52,7 +52,7 @@ impl Converter for AzureConverter {
 mod tests {
     use crate::{
         az::converter::AzureConverter,
-        mapping::{
+        core::{
             converter::*,
             error::ConversionError,
             size_threshold::{SizeThreshold, SizeThresholdExceeded},

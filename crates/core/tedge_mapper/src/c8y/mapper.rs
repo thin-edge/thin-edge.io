@@ -1,14 +1,12 @@
 use crate::{
     c8y::converter::CumulocityConverter,
-    mapping::{
-        component::TEdgeComponent, mapper::create_mapper, operations::Operations,
-        size_threshold::SizeThreshold,
-    },
+    core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
 };
 
 use agent_interface::topic::ResponseTopic;
 use async_trait::async_trait;
 use c8y_api::http_proxy::JwtAuthHttpProxy;
+use c8y_smartrest::operations::Operations;
 use mqtt_channel::{Config, TopicFilter};
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttPortSetting, TEdgeConfig,
