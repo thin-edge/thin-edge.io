@@ -1,43 +1,81 @@
-use crate::c8y_fragments::{C8yAgentFragment, C8yDeviceDataFragment};
-use crate::error::*;
-use crate::size_threshold::SizeThreshold;
-use crate::{converter::*, operations::Operations};
-use c8y_smartrest::smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations};
-use c8y_smartrest::{alarm, event};
+use crate::mapping::{
+    converter::*, error::*, operations::Operations, size_threshold::SizeThreshold,
+};
+use agent_interface::{
+    topic::{RequestTopic, ResponseTopic},
+    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
+};
+use async_trait::async_trait;
+use c8y_api::{http_proxy::C8YHttpProxy, json_c8y::C8yUpdateSoftwareListResponse};
+use c8y_smartrest::{
+    alarm,
+    error::SmartRestDeserializerError,
+    event::serialize_event,
+    smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
+    smartrest_serializer::{
+        CumulocitySupportedOperations, SmartRestGetPendingOperations, SmartRestSerializer,
+        SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
+        SmartRestSetOperationToSuccessful, SmartRestSetSupportedLogType,
+        SmartRestSetSupportedOperations,
+    },
+};
 use c8y_translator::json;
-use mqtt_channel::{Message, Topic};
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
-use thin_edge_json::alarm::ThinEdgeAlarm;
-use thin_edge_json::event::ThinEdgeEvent;
-use tracing::info;
+use mqtt_channel::{Message, Topic, TopicFilter};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    fs::File,
+    io::Read,
+    path::Path,
+    process::Stdio,
+};
+use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
+use tracing::{debug, info, log::error};
+
+use super::{
+    error::CumulocityMapperError,
+    fragments::{C8yAgentFragment, C8yDeviceDataFragment},
+    mapper::CumulocityMapper,
+    topic::{C8yTopic, MapperSubscribeTopic},
+};
 
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/inventory.json";
-const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "/etc/tedge/operations";
+const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_MEASUREMENTS_TOPIC: &str = "tedge/measurements";
 const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 
-pub struct CumulocityConverter {
+#[derive(Debug)]
+pub struct CumulocityConverter<Proxy>
+where
+    Proxy: C8YHttpProxy,
+{
     pub(crate) size_threshold: SizeThreshold,
     children: HashSet<String>,
     pub(crate) mapper_config: MapperConfig,
     device_name: String,
     device_type: String,
-
     alarm_converter: AlarmConverter,
+    operations: Operations,
+    http_proxy: Proxy,
 }
 
-impl CumulocityConverter {
-    pub fn new(size_threshold: SizeThreshold, device_name: String, device_type: String) -> Self {
-        let topics = vec![
+impl<Proxy> CumulocityConverter<Proxy>
+where
+    Proxy: C8YHttpProxy,
+{
+    pub fn new(
+        size_threshold: SizeThreshold,
+        device_name: String,
+        device_type: String,
+        operations: Operations,
+        http_proxy: Proxy,
+    ) -> Self {
+        let mut topic_filter: TopicFilter = vec![
             "tedge/measurements",
             "tedge/measurements/+",
             "tedge/alarms/+/+",
@@ -47,15 +85,17 @@ impl CumulocityConverter {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+
         let mapper_config = MapperConfig {
-            in_topic_filter: topics,
+            in_topic_filter: topic_filter,
             out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
 
-        let children: HashSet<String> = HashSet::new();
-
         let alarm_converter = AlarmConverter::new();
+
+        let children: HashSet<String> = HashSet::new();
 
         CumulocityConverter {
             size_threshold,
@@ -64,6 +104,8 @@ impl CumulocityConverter {
             device_name,
             device_type,
             alarm_converter,
+            operations,
+            http_proxy,
         }
     }
 
@@ -84,7 +126,7 @@ impl CumulocityConverter {
                     self.children.insert(child_id.clone());
                     vec.push(Message::new(
                         &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                        format!("101,{},{},thin-edge.io-child", child_id, child_id),
+                        format!("101,{child_id},{child_id},thin-edge.io-child"),
                     ));
                 }
 
@@ -106,49 +148,118 @@ impl CumulocityConverter {
 
     fn try_convert_event(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-        let smartrest_alarm = event::serialize_event(tedge_event)?;
+        let smartrest_alarm = serialize_event(tedge_event)?;
         let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
 
         Ok(vec![Message::new(&smartrest_topic, smartrest_alarm)])
     }
 }
 
-impl Converter for CumulocityConverter {
+#[async_trait]
+impl<Proxy> Converter for CumulocityConverter<Proxy>
+where
+    Proxy: C8YHttpProxy,
+{
     type Error = ConversionError;
 
     fn get_mapper_config(&self) -> &MapperConfig {
         &self.mapper_config
     }
+    async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
+        let () = self.size_threshold.validate(message.payload_str()?)?;
 
-    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let () = self.size_threshold.validate(input.payload_str()?)?;
+        match &message.topic {
+            topic if topic.name.starts_with("tedge/measurements") => {
+                self.try_convert_measurement(message)
+            }
+            topic if topic.name.starts_with("tedge/alarms") => {
+                self.alarm_converter.try_convert_alarm(message)
+            }
+            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
+                self.alarm_converter.process_internal_alarm(message);
+                Ok(vec![])
+            }
+            topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => self.try_convert_event(message),
+            topic => match topic.clone().try_into() {
+                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
+                    debug!("Software list");
+                    Ok(validate_and_publish_software_list(
+                        message.payload_str()?,
+                        &mut self.http_proxy,
+                    )
+                    .await
+                    .unwrap())
+                }
+                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareUpdateResponse)) => {
+                    debug!("Software update");
+                    Ok(
+                        publish_operation_status(message.payload_str()?, &mut self.http_proxy)
+                            .await
+                            .unwrap(),
+                    )
+                }
+                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::RestartResponse)) => {
+                    Ok(publish_restart_operation_status(message.payload_str()?)
+                        .await
+                        .unwrap())
+                }
+                Ok(MapperSubscribeTopic::C8yTopic(_)) => {
+                    debug!("Cumulocity");
+                    match process_smartrest(
+                        message.payload_str()?,
+                        &self.operations,
+                        &mut self.http_proxy,
+                    )
+                    .await
+                    {
+                        Err(
+                            ref err @ CumulocityMapperError::FromSmartRestDeserializer(
+                                SmartRestDeserializerError::InvalidParameter {
+                                    ref operation, ..
+                                },
+                            ),
+                        ) => {
+                            let topic = C8yTopic::SmartRestResponse.to_topic()?;
+                            let msg1 = Message::new(&topic, format!("501,{}", operation));
+                            let msg2 = Message::new(
+                                &topic,
+                                format!("502,{},\"{}\"", operation, &err.to_string()),
+                            );
+                            error!("{}", err);
+                            return Ok(vec![msg1, msg2]);
+                        }
 
-        if input.topic.name.starts_with(TEDGE_MEASUREMENTS_TOPIC) {
-            self.try_convert_measurement(input)
-        } else if input.topic.name.starts_with(TEDGE_ALARMS_TOPIC) {
-            self.alarm_converter.try_convert_alarm(input)
-        } else if input.topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
-            self.alarm_converter.process_internal_alarm(input);
-            Ok(vec![])
-        } else if input.topic.name.starts_with(TEDGE_EVENTS_TOPIC) {
-            self.try_convert_event(input)
-        } else {
-            Err(ConversionError::UnsupportedTopic(input.topic.name.clone()))
+                        Err(err) => {
+                            error!("{}", err);
+                            Ok(vec![])
+                        }
+
+                        Ok(msgs) => Ok(msgs),
+                    }
+                }
+                _ => Err(ConversionError::UnsupportedTopic(
+                    message.topic.name.clone(),
+                )),
+            },
         }
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
         let inventory_fragments_message = create_inventory_fragments_message(&self.device_name)?;
-
-        let supported_operations_message = create_supported_operations_fragments()?;
-
+        let supported_operations_message = create_supported_operations_fragments_message()?;
         let device_data_message =
             create_device_data_fragments(&self.device_name, &self.device_type)?;
+        let supported_log_types_message = create_supported_log_types_message()?;
+        let pending_operations_message = create_get_pending_operations_message()?;
+        let software_list_message = create_get_software_list_message()?;
 
         Ok(vec![
+            inventory_fragments_message,
             supported_operations_message,
             device_data_message,
-            inventory_fragments_message,
+            supported_log_types_message,
+            pending_operations_message,
+            software_list_message,
         ])
     }
 
@@ -159,6 +270,7 @@ impl Converter for CumulocityConverter {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum AlarmConverter {
     Syncing {
         pending_alarms_map: HashMap<String, Message>,
@@ -295,7 +407,6 @@ impl AlarmConverter {
         sync_messages
     }
 }
-
 fn create_device_data_fragments(
     device_name: &str,
     device_type: &str,
@@ -307,7 +418,27 @@ fn create_device_data_fragments(
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
-fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
+fn create_get_software_list_message() -> Result<Message, ConversionError> {
+    let request = SoftwareListRequest::default();
+    let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
+    let payload = request.to_json().unwrap();
+    Ok(Message::new(&topic, payload))
+}
+
+fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
+    let data = SmartRestGetPendingOperations::default();
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let payload = data.to_smartrest()?;
+    Ok(Message::new(&topic, payload))
+}
+
+fn create_supported_log_types_message() -> Result<Message, ConversionError> {
+    let payload = SmartRestSetSupportedLogType::default().to_smartrest()?;
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    Ok(Message::new(&topic, payload))
+}
+
+fn create_supported_operations_fragments_message() -> Result<Message, ConversionError> {
     let ops = Operations::try_new(SUPPORTED_OPERATIONS_DIRECTORY, C8Y_CLOUD)?;
     let ops = ops.get_operations_list();
     let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
@@ -320,8 +451,180 @@ fn create_supported_operations_fragments() -> Result<Message, ConversionError> {
 fn create_inventory_fragments_message(device_name: &str) -> Result<Message, ConversionError> {
     let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
 
-    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}"));
     Ok(Message::new(&topic, ops_msg.to_string()))
+}
+
+async fn publish_restart_operation_status(
+    json_response: &str,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let response = RestartOperationResponse::from_json(json_response)?;
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+
+    match response.status() {
+        OperationStatus::Executing => {
+            let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
+                CumulocitySupportedOperations::C8yRestartRequest,
+            )
+            .to_smartrest()?;
+
+            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+        }
+        OperationStatus::Successful => {
+            let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
+                CumulocitySupportedOperations::C8yRestartRequest,
+            )
+            .to_smartrest()?;
+            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+        }
+        OperationStatus::Failed => {
+            let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                CumulocitySupportedOperations::C8yRestartRequest,
+                "Restart Failed".into(),
+            )
+            .to_smartrest()?;
+            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+        }
+    }
+}
+
+async fn publish_operation_status(
+    json_response: &str,
+    http_proxy: &mut impl C8YHttpProxy,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let response = SoftwareUpdateResponse::from_json(json_response)?;
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    match response.status() {
+        OperationStatus::Executing => {
+            let smartrest_set_operation_status =
+                SmartRestSetOperationToExecuting::from_thin_edge_json(response)?.to_smartrest()?;
+            Ok(vec![Message::new(&topic, smartrest_set_operation_status)])
+        }
+        OperationStatus::Successful => {
+            let smartrest_set_operation =
+                SmartRestSetOperationToSuccessful::from_thin_edge_json(response)?.to_smartrest()?;
+
+            validate_and_publish_software_list(json_response, http_proxy).await?;
+            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+        }
+        OperationStatus::Failed => {
+            let smartrest_set_operation =
+                SmartRestSetOperationToFailed::from_thin_edge_json(response)?.to_smartrest()?;
+            validate_and_publish_software_list(json_response, http_proxy).await?;
+            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+        }
+    }
+}
+
+async fn validate_and_publish_software_list(
+    payload: &str,
+    http_proxy: &mut impl C8YHttpProxy,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let response = &SoftwareListResponse::from_json(payload)?;
+
+    match response.status() {
+        OperationStatus::Successful => {
+            let c8y_software_list: C8yUpdateSoftwareListResponse = response.into();
+            http_proxy
+                .send_software_list_http(&c8y_software_list)
+                .await?;
+        }
+
+        OperationStatus::Failed => {
+            error!("Received a failed software response: {}", payload);
+        }
+
+        OperationStatus::Executing => {} // C8Y doesn't expect any message to be published
+    }
+
+    Ok(vec![])
+}
+
+async fn execute_operation(payload: &str, command: &str) -> Result<(), CumulocityMapperError> {
+    let command = command.to_owned();
+    let payload = payload.to_string();
+
+    let _handle = tokio::spawn(async move {
+        let mut child = tokio::process::Command::new(command)
+            .args(&[payload])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| CumulocityMapperError::ExecuteFailed(e.to_string()))
+            .unwrap();
+
+        child.wait().await
+    });
+
+    Ok(())
+}
+
+async fn process_smartrest(
+    payload: &str,
+    operations: &Operations,
+    http_proxy: &mut impl C8YHttpProxy,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let message_id: &str = &payload[..3];
+    match message_id {
+        "528" => forward_software_request(payload, http_proxy).await,
+        // "522" => forward_log_request(payload).await,
+        "510" => forward_restart_request(payload),
+        template => match operations.matching_smartrest_template(template) {
+            Some(operation) => {
+                if let Some(command) = operation.command() {
+                    execute_operation(payload, command.as_str()).await?;
+                }
+                Ok(vec![])
+            }
+            None => Err(CumulocityMapperError::UnknownOperation(
+                template.to_string(),
+            )),
+        },
+    }
+}
+
+async fn forward_software_request(
+    smartrest: &str,
+    http_proxy: &mut impl C8YHttpProxy,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
+    let update_software = SmartRestUpdateSoftware::new();
+    let mut software_update_request = update_software
+        .from_smartrest(smartrest)?
+        .to_thin_edge_json()?;
+
+    let token = http_proxy.get_jwt_token().await?;
+
+    software_update_request
+        .update_list
+        .iter_mut()
+        .for_each(|modules| {
+            modules.modules.iter_mut().for_each(|module| {
+                if let Some(url) = &module.url {
+                    if http_proxy.url_is_in_my_tenant_domain(url.url()) {
+                        module.url = module.url.as_ref().map(|s| {
+                            DownloadInfo::new(&s.url).with_auth(Auth::new_bearer(&token.token()))
+                        });
+                    } else {
+                        module.url = module.url.as_ref().map(|s| DownloadInfo::new(&s.url));
+                    }
+                }
+            });
+        });
+
+    Ok(vec![Message::new(
+        &topic,
+        software_update_request.to_json().unwrap(),
+    )])
+}
+
+fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
+    let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
+    let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
+
+    let request = RestartOperationRequest::default();
+    Ok(vec![Message::new(&topic, request.to_json()?)])
 }
 
 /// reads a json file to serde_json::Value
@@ -346,12 +649,12 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
     match read_json_from_file(file_path) {
         Ok(mut json) => {
             json.as_object_mut()
-                .ok_or_else(|| return ConversionError::FromOptionError)?
+                .ok_or(ConversionError::FromOptionError)?
                 .insert(
                     "c8y_Agent".to_string(),
                     json_fragment
                         .get("c8y_Agent")
-                        .ok_or_else(|| return ConversionError::FromOptionError)?
+                        .ok_or(ConversionError::FromOptionError)?
                         .to_owned(),
                 );
             Ok(json)
@@ -378,7 +681,7 @@ fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionErro
 mod test {
     use super::*;
 
-    use crate::c8y_converter::CumulocityConverter;
+    use c8y_api::http_proxy::FakeC8YHttpProxy;
     use test_case::test_case;
 
     #[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
@@ -397,16 +700,21 @@ mod test {
         }
     }
 
-    #[test]
-    fn convert_thin_edge_json_with_child_id() {
+    #[tokio::test]
+    async fn convert_thin_edge_json_with_child_id() {
         let device_name = String::from("test");
-        let device_type = String::from("test_type");
+        let device_type = String::from("test");
+        let operations = Operations::new();
+        let http_proxy = FakeC8YHttpProxy {};
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
             device_type,
+            operations,
+            http_proxy,
         ));
+
         let in_topic = "tedge/measurements/child1";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
@@ -421,7 +729,7 @@ mod test {
         );
 
         // Test the first output messages contains SmartREST and C8Y JSON.
-        let out_first_messages = converter.convert(&in_message);
+        let out_first_messages = converter.convert(&in_message).await;
         assert_eq!(
             out_first_messages,
             vec![
@@ -431,20 +739,25 @@ mod test {
         );
 
         // Test the second output messages doesn't contain SmartREST child device creation.
-        let out_second_messages = converter.convert(&in_message);
-        assert_eq!(out_second_messages, vec![expected_c8y_json_message.clone()]);
+        let out_second_messages = converter.convert(&in_message).await;
+        assert_eq!(out_second_messages, vec![expected_c8y_json_message]);
     }
 
-    #[test]
-    fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
+    #[tokio::test]
+    async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
         let device_name = String::from("test");
-        let device_type = String::from("test_type");
+        let device_type = String::from("test");
+        let operations = Operations::new();
+        let http_proxy = FakeC8YHttpProxy {};
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
             device_type,
+            operations,
+            http_proxy,
         ));
+
         let in_topic = "tedge/measurements/child1";
         let in_invalid_payload = r#"{"temp": invalid}"#;
         let in_valid_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -452,7 +765,7 @@ mod test {
         let in_second_message = Message::new(&Topic::new_unchecked(in_topic), in_valid_payload);
 
         // First convert invalid Thin Edge JSON message.
-        let out_first_messages = converter.convert(&in_first_message);
+        let out_first_messages = converter.convert(&in_first_message).await;
         let expected_error_message = Message::new(
             &Topic::new_unchecked("tedge/errors"),
             r#"Invalid JSON: expected value at line 1 column 10: `invalid}`"#,
@@ -460,7 +773,7 @@ mod test {
         assert_eq!(out_first_messages, vec![expected_error_message]);
 
         // Second convert valid Thin Edge JSON message.
-        let out_second_messages = converter.convert(&in_second_message);
+        let out_second_messages = converter.convert(&in_second_message).await;
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
             "101,child1,child1,thin-edge.io-child",
@@ -471,22 +784,23 @@ mod test {
         );
         assert_eq!(
             out_second_messages,
-            vec![
-                expected_smart_rest_message,
-                expected_c8y_json_message.clone()
-            ]
+            vec![expected_smart_rest_message, expected_c8y_json_message]
         );
     }
 
-    #[test]
-    fn convert_two_thin_edge_json_messages_given_different_child_id() {
+    #[tokio::test]
+    async fn convert_two_thin_edge_json_messages_given_different_child_id() {
         let device_name = String::from("test");
-        let device_type = String::from("test_type");
+        let device_type = String::from("test");
+        let operations = Operations::new();
+        let http_proxy = FakeC8YHttpProxy {};
 
         let mut converter = Box::new(CumulocityConverter::new(
             SizeThreshold(16 * 1024),
             device_name,
             device_type,
+            operations,
+            http_proxy,
         ));
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
@@ -495,7 +809,7 @@ mod test {
             &Topic::new_unchecked("tedge/measurements/child1"),
             in_payload,
         );
-        let out_first_messages = converter.convert(&in_first_message);
+        let out_first_messages = converter.convert(&in_first_message).await;
         let expected_first_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
             "101,child1,child1,thin-edge.io-child",
@@ -517,7 +831,7 @@ mod test {
             &Topic::new_unchecked("tedge/measurements/child2"),
             in_payload,
         );
-        let out_second_messages = converter.convert(&in_second_message);
+        let out_second_messages = converter.convert(&in_second_message).await;
         let expected_second_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
             "101,child2,child2,thin-edge.io-child",
@@ -537,14 +851,19 @@ mod test {
 
     #[test]
     fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
+        let size_threshold = SizeThreshold(16 * 1024);
         let device_name = String::from("test");
-        let device_type = String::from("test_type");
+        let device_type = String::from("test");
+        let operations = Operations::new();
+        let http_proxy = FakeC8YHttpProxy {};
 
-        let converter = Box::new(CumulocityConverter::new(
-            SizeThreshold(16 * 1024),
+        let converter = CumulocityConverter::new(
+            size_threshold,
             device_name,
             device_type,
-        ));
+            operations,
+            http_proxy,
+        );
         let buffer = create_packet(1024 * 20);
         let err = converter.size_threshold.validate(&buffer).unwrap_err();
         assert_eq!(
@@ -562,63 +881,5 @@ mod test {
             buffer.push_str("Some data!");
         }
         buffer
-    }
-
-    #[test]
-    fn test_sync_alarms() {
-        let size_threshold = SizeThreshold(16 * 1024);
-        let device_name = String::from("test");
-        let device_type = String::from("test_type");
-
-        let mut converter = CumulocityConverter::new(size_threshold, device_name, device_type);
-
-        let alarm_topic = "tedge/alarms/critical/temperature_alarm";
-        let alarm_payload = r#"{ "message": "Temperature very high" }"#;
-        let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
-
-        // During the sync phase, alarms are not converted immediately, but only cached to be synced later
-        assert!(converter.convert(&alarm_message).is_empty());
-
-        let non_alarm_topic = "tedge/measurements";
-        let non_alarm_payload = r#"{"temp": 1}"#;
-        let non_alarm_message =
-            Message::new(&Topic::new_unchecked(non_alarm_topic), non_alarm_payload);
-
-        // But non-alarms are converted immediately, even during the sync phase
-        assert!(!converter.convert(&non_alarm_message).is_empty());
-
-        let internal_alarm_topic = "c8y-internal/alarms/major/pressure_alarm";
-        let internal_alarm_payload = r#"{ "message": "Temperature very high" }"#;
-        let internal_alarm_message = Message::new(
-            &Topic::new_unchecked(internal_alarm_topic),
-            internal_alarm_payload,
-        );
-
-        // During the sync phase, internal alarms are not converted, but only cached to be synced later
-        assert!(converter.convert(&internal_alarm_message).is_empty());
-
-        // When sync phase is complete, all pending alarms are returned
-        let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 2);
-
-        // The first message will be clear alarm message for pressure_alarm
-        let alarm_message = sync_messages.get(0).unwrap();
-        assert_eq!(
-            alarm_message.topic.name,
-            "tedge/alarms/major/pressure_alarm"
-        );
-        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
-
-        // The second message will be the temperature_alarm
-        let alarm_message = sync_messages.get(1).unwrap();
-        assert_eq!(alarm_message.topic.name, alarm_topic);
-        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
-
-        // After the sync phase, the conversion of both non-alarms as well as alarms are done immediately
-        assert!(!converter.convert(&alarm_message).is_empty());
-        assert!(!converter.convert(&non_alarm_message).is_empty());
-
-        // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
-        assert!(converter.convert(&internal_alarm_message).is_empty());
     }
 }

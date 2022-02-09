@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use std::fmt::Display;
 use tracing::error;
@@ -9,6 +10,7 @@ pub struct MapperConfig {
     pub errors_topic: Topic,
 }
 
+#[async_trait]
 pub trait Converter: Send + Sync {
     type Error: Display;
 
@@ -18,10 +20,10 @@ pub trait Converter: Send + Sync {
         &self.get_mapper_config().in_topic_filter
     }
 
-    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
 
-    fn convert(&mut self, input: &Message) -> Vec<Message> {
-        let messages_or_err = self.try_convert(input);
+    async fn convert(&mut self, input: &Message) -> Vec<Message> {
+        let messages_or_err = self.try_convert(input).await;
         self.wrap_error(messages_or_err)
     }
 

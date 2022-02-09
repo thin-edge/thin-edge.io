@@ -1,6 +1,6 @@
-use crate::converter::*;
-use crate::error::*;
-use crate::size_threshold::SizeThreshold;
+use crate::mapping::{converter::*, error::*, size_threshold::SizeThreshold};
+
+use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::Message;
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
@@ -28,6 +28,7 @@ impl AzureConverter {
     }
 }
 
+#[async_trait]
 impl Converter for AzureConverter {
     type Error = ConversionError;
 
@@ -35,7 +36,7 @@ impl Converter for AzureConverter {
         &self.mapper_config
     }
 
-    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
         let input = input.payload_str()?;
         let () = self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
@@ -49,11 +50,19 @@ impl Converter for AzureConverter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::size_threshold::SizeThresholdExceeded;
+    use crate::{
+        az::converter::AzureConverter,
+        mapping::{
+            converter::*,
+            error::ConversionError,
+            size_threshold::{SizeThreshold, SizeThresholdExceeded},
+        },
+    };
+
     use assert_json_diff::*;
     use assert_matches::*;
-    use mqtt_channel::Topic;
+    use clock::Clock;
+    use mqtt_channel::{Message, Topic};
     use serde_json::json;
     use time::macros::datetime;
 
@@ -65,13 +74,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn converting_invalid_json_is_invalid() {
+    #[tokio::test]
+    async fn converting_invalid_json_is_invalid() {
         let mut converter =
             AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
         let input = "This is not Thin Edge JSON";
-        let result = converter.try_convert(&new_tedge_message(input));
+        let result = converter.try_convert(&new_tedge_message(input)).await;
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
@@ -84,8 +93,8 @@ mod tests {
         messages.pop().unwrap().payload_str().unwrap().to_string()
     }
 
-    #[test]
-    fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
+    #[tokio::test]
+    async fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
         let mut converter =
             AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
@@ -98,7 +107,7 @@ mod tests {
             "temperature": 23.0
         });
 
-        let output = converter.convert(&new_tedge_message(input));
+        let output = converter.convert(&new_tedge_message(input)).await;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
@@ -107,9 +116,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
-    {
+    #[tokio::test]
+    async fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false(
+    ) {
         let mut converter =
             AzureConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
 
@@ -123,7 +132,7 @@ mod tests {
             "temperature": 23.0
         });
 
-        let output = converter.convert(&new_tedge_message(input));
+        let output = converter.convert(&new_tedge_message(input)).await;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
@@ -132,9 +141,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
-    {
+    #[tokio::test]
+    async fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
+    ) {
         let mut converter =
             AzureConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
 
@@ -148,7 +157,7 @@ mod tests {
             "temperature": 23.0
         });
 
-        let output = converter.convert(&new_tedge_message(input));
+        let output = converter.convert(&new_tedge_message(input)).await;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
@@ -157,8 +166,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
+    #[tokio::test]
+    async fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
         let mut converter =
             AzureConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
@@ -172,7 +181,7 @@ mod tests {
             "time": "2021-04-08T00:00:00+05:00"
         });
 
-        let output = converter.convert(&new_tedge_message(input));
+        let output = converter.convert(&new_tedge_message(input)).await;
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
@@ -181,12 +190,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn exceeding_threshold_returns_error() {
+    #[tokio::test]
+    async fn exceeding_threshold_returns_error() {
         let mut converter = AzureConverter::new(false, Box::new(TestClock), SizeThreshold(1));
 
         let input = "ABC";
-        let result = converter.try_convert(&new_tedge_message(input));
+        let result = converter.try_convert(&new_tedge_message(input)).await;
 
         assert_matches!(
             result,

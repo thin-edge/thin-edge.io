@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use crate::mapping::size_threshold::SizeThresholdExceeded;
 
-use crate::size_threshold::SizeThresholdExceeded;
 use mqtt_channel::MqttError;
+use std::path::PathBuf;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 

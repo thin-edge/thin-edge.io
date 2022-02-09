@@ -1,7 +1,9 @@
-use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
+use c8y_smartrest::error::{
+    SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
+};
 
 #[derive(thiserror::Error, Debug)]
-pub enum SMCumulocityMapperError {
+pub enum CumulocityMapperError {
     #[error("Invalid MQTT Message.")]
     InvalidMqttMessage,
 
@@ -25,6 +27,9 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
+
+    #[error(transparent)]
+    FromSmCumulocityMapperError(#[from] SMCumulocityMapperError),
 
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),

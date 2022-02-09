@@ -1,12 +1,8 @@
-use crate::sm_c8y_mapper::mapper::{
-    CumulocitySoftwareManagement, CumulocitySoftwareManagementMapper,
+use crate::mapping::{
+    mapper::create_mapper, operations::Operations, size_threshold::SizeThreshold,
 };
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
-use c8y_smartrest::{
-    error::SMCumulocityMapperError, operations::Operations,
-    smartrest_deserializer::SmartRestJwtResponse,
-};
+
+use c8y_api::http_proxy::{C8YHttpProxy, FakeC8YHttpProxy, JwtAuthHttpProxy};
 use mqtt_channel::{Connection, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};
@@ -15,7 +11,9 @@ use serial_test::serial;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(1000);
+use super::converter::CumulocityConverter;
+
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
 #[serial]
@@ -52,6 +50,22 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     // Start SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await;
 
+    let mut msg = messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    while !msg.contains("114") {
+        msg = messages
+            .next()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
+
     // Expect both 114 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     mqtt_tests::assert_received(
         &mut messages,
@@ -77,7 +91,7 @@ async fn mapper_publishes_software_update_request() {
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(&broker).await;
+    let _ = publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -115,14 +129,23 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await;
-    let _ = publish_a_fake_jwt_token(&broker).await;
+    let _ = publish_a_fake_jwt_token(broker).await;
 
-    mqtt_tests::assert_received(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        vec!["118,software-management\n", "500\n"],
-    )
-    .await;
+    let mut msg = messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    while !msg.contains("500") {
+        msg = messages
+            .next()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -177,13 +200,23 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await;
-    let _ = publish_a_fake_jwt_token(&broker).await;
-    mqtt_tests::assert_received(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        vec!["118,software-management\n", "500\n"],
-    )
-    .await;
+    let _ = publish_a_fake_jwt_token(broker).await;
+
+    let mut msg = messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    while !msg.contains("500") {
+        msg = messages
+            .next()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
 
     // The agent publish an error
     let json_response = r#"
@@ -248,17 +281,26 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Start SM Mapper
     let sm_mapper = start_sm_mapper(broker.port).await?;
-    mqtt_tests::assert_received(
-        &mut responses,
-        TEST_TIMEOUT_MS,
-        vec!["118,software-management\n", "500\n"],
-    )
-    .await;
 
+    let mut msg = responses
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    while !msg.contains("500") {
+        msg = responses
+            .next()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(&broker).await;
+    let _ = publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -343,14 +385,24 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     let _sm_mapper = start_sm_mapper(broker.port).await;
-    mqtt_tests::assert_received(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        vec!["118,software-management\n", "500\n"],
-    )
-    .await;
 
-    // Prepare and publish a c8_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
+    let mut msg = messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .expect_or("No message received before timeout");
+    dbg!(&msg);
+
+    while !msg.contains("500") {
+        msg = messages
+            .next()
+            .with_timeout(TEST_TIMEOUT_MS)
+            .await
+            .expect_or("No message received before timeout");
+        dbg!(&msg);
+    }
+
+    // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
     let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
 
@@ -403,55 +455,56 @@ fn remove_whitespace(s: &str) -> String {
     s
 }
 
-async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
-    let operations = Operations::new();
-    let mqtt_topic = CumulocitySoftwareManagementMapper::subscriptions(&operations)?;
-    let mqtt_config = mqtt_channel::Config::default()
-        .with_port(mqtt_port)
-        .with_session_name("SM-C8Y-Mapper-Test")
-        .with_subscriptions(mqtt_topic);
+// async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
+//     let operations = Operations::new();
+//     let mqtt_topic = CumulocityMapper::subscriptions(&operations)?;
+//     let mqtt_config = mqtt_channel::Config::default()
+//         .with_port(mqtt_port)
+//         .with_session_name("SM-C8Y-Mapper-Test")
+//         .with_subscriptions(mqtt_topic);
 
-    let mqtt_client = Connection::new(&mqtt_config).await?;
+//     let mqtt_client = Connection::new(&mqtt_config).await?;
+//     let http_proxy = FakeC8YHttpProxy {};
+//     let device_name = "test-device".into();
+//     let device_type = "test-device-type".into();
+//     let size_threshold = SizeThreshold(16 * 1024);
+//     let mut mapper = CumulocityConverter::new(
+//         size_threshold,
+//         device_name,
+//         device_type,
+//         operations,
+//         http_proxy,
+//     );
+
+//     let mapper_task = tokio::spawn(async move {
+//         let _ = mapper.run().await;
+//     });
+//     Ok(mapper_task)
+// }
+
+async fn start_sm_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
+    let device_name = "test-device".into();
+    let device_type = "test-device-type".into();
+    let size_threshold = SizeThreshold(16 * 1024);
+    let operations = Operations::new();
     let http_proxy = FakeC8YHttpProxy {};
-    let mut sm_mapper = CumulocitySoftwareManagement::new(mqtt_client, http_proxy, operations);
+
+    let converter = Box::new(CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    ));
+
+    let mut mapper = create_mapper("c8y-mapper-test", mqtt_port, converter).await?;
 
     let mapper_task = tokio::spawn(async move {
-        let _ = sm_mapper.run().await;
+        let _ = mapper.run().await;
     });
     Ok(mapper_task)
 }
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
     let _ = broker.publish("c8y/s/dat", "71,1111").await.unwrap();
-}
-
-struct FakeC8YHttpProxy {}
-
-#[async_trait::async_trait]
-impl C8YHttpProxy for FakeC8YHttpProxy {
-    async fn init(&mut self) -> Result<(), SMCumulocityMapperError> {
-        Ok(())
-    }
-
-    fn url_is_in_my_tenant_domain(&self, _url: &str) -> bool {
-        true
-    }
-
-    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        Ok(SmartRestJwtResponse::try_new("71,fake-token")?)
-    }
-
-    async fn send_software_list_http(
-        &mut self,
-        _c8y_software_list: &C8yUpdateSoftwareListResponse,
-    ) -> Result<(), SMCumulocityMapperError> {
-        Ok(())
-    }
-
-    async fn upload_log_binary(
-        &mut self,
-        _log_content: &str,
-    ) -> Result<String, SMCumulocityMapperError> {
-        Ok("fake/upload/url".into())
-    }
 }
