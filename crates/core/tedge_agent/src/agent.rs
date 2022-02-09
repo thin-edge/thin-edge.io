@@ -7,8 +7,9 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
+use agent_interface::request::AgentRequest;
 use agent_interface::{
-    control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
+    control_filter_topic, health_check_topic_filter, software_filter_topic, Jsonify, OperationStatus,
     RestartOperationRequest, RestartOperationResponse, SoftwareListRequest,
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
@@ -40,7 +41,6 @@ const INIT_COMMAND: &str = "echo";
 pub struct SmAgentConfig {
     pub errors_topic: Topic,
     pub mqtt_config: mqtt_channel::Config,
-    pub request_topics_health: TopicFilter,
     pub request_topic_list: Topic,
     pub request_topic_update: Topic,
     pub request_topics: TopicFilter,
@@ -66,10 +66,7 @@ impl Default for SmAgentConfig {
             .try_into()
             .expect("Invalid topic filter");
 
-        let request_topics_health: TopicFilter = health_check_topics()
-            .try_into()
-            .expect("Invalid topic filter");
-        request_topics.add_all(request_topics_health.clone());
+        request_topics.add_all(health_check_topic_filter());
 
         let response_topic_health = Topic::new_unchecked("tedge/health/tedge-agent");
 
@@ -104,7 +101,6 @@ impl Default for SmAgentConfig {
         Self {
             errors_topic,
             mqtt_config,
-            request_topics_health,
             request_topic_list,
             request_topic_update,
             request_topics,
@@ -289,26 +285,25 @@ impl SmAgent {
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
         while let Some(message) = requests.next().await {
-            debug!("Request {:?}", message);
-            match &message.topic {
-                topic if self.config.request_topics_health.accept_topic(topic) => {
+            match message.try_into() {
+                Ok(AgentRequest::HealthCheck) => {
                     let health_status = json!({
                         "status": "up",
                         "pid": process::id()
                     })
-                    .to_string();
+                        .to_string();
                     let health_message =
                         Message::new(&self.config.response_topic_health, health_status);
                     let _ = responses.publish(health_message).await;
                 }
 
-                topic if topic == &self.config.request_topic_list => {
+                Ok(AgentRequest::SoftwareList(request)) => {
                     let _success = self
                         .handle_software_list_request(
                             responses,
                             plugins.clone(),
                             &self.config.response_topic_list,
-                            &message,
+                            request,
                         )
                         .await
                         .map_err(|err| {
@@ -316,7 +311,7 @@ impl SmAgent {
                         });
                 }
 
-                topic if topic == &self.config.request_topic_update => {
+                Ok(AgentRequest::SoftwareUpdate(request)) => {
                     let () = plugins.lock().await.load()?;
                     let () = plugins
                         .lock()
@@ -328,7 +323,7 @@ impl SmAgent {
                             responses,
                             plugins.clone(),
                             &self.config.response_topic_update,
-                            &message,
+                            request,
                         )
                         .await
                         .map_err(|err| {
@@ -336,9 +331,15 @@ impl SmAgent {
                         });
                 }
 
-                topic if topic == &self.config.request_topic_restart => {
-                    let request = self
-                        .match_restart_operation_payload(responses, &message)
+                Ok(AgentRequest::DeviceRestart(request)) => {
+                    let () = self
+                        .persistance_store
+                        .store(&State {
+                            operation_id: Some(request.id.clone()),
+                            operation: Some(StateStatus::Restart(
+                                RestartOperationStatus::Restarting,
+                            )),
+                        })
                         .await?;
                     if let Err(error) = self
                         .handle_restart_operation(responses, &self.config.response_topic_restart)
@@ -358,7 +359,15 @@ impl SmAgent {
                     }
                 }
 
-                _ => error!("Unknown operation. Discarded."),
+                Err(error) => {
+                    debug!("Protocol error: {}", error);
+                    let () = responses
+                        .publish(Message::new(
+                            &self.config.errors_topic,
+                            format!("{}", error),
+                        ))
+                        .await?;
+                }
             }
         }
 
@@ -370,33 +379,16 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
-        message: &Message,
+        request: SoftwareListRequest,
     ) -> Result<(), AgentError> {
-        let request = match SoftwareListRequest::from_slice(message.payload_bytes()) {
-            Ok(request) => {
-                let () = self
-                    .persistance_store
-                    .store(&State {
-                        operation_id: Some(request.id.clone()),
-                        operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
-                    })
-                    .await?;
+        let () = self
+            .persistance_store
+            .store(&State {
+                operation_id: Some(request.id.clone()),
+                operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
+            })
+            .await?;
 
-                request
-            }
-
-            Err(error) => {
-                debug!("Parsing error: {}", error);
-                let () = responses
-                    .publish(Message::new(
-                        &self.config.errors_topic,
-                        format!("{}", error),
-                    ))
-                    .await?;
-
-                return Err(error.into());
-            }
-        };
         let mut executing_response = SoftwareListResponse::new(&request);
 
         let () = responses
@@ -433,33 +425,15 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
-        message: &Message,
+        request: SoftwareUpdateRequest,
     ) -> Result<(), AgentError> {
-        let request = match SoftwareUpdateRequest::from_slice(message.payload_bytes()) {
-            Ok(request) => {
-                let _ = self
-                    .persistance_store
-                    .store(&State {
-                        operation_id: Some(request.id.clone()),
-                        operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
-                    })
-                    .await;
-
-                request
-            }
-
-            Err(error) => {
-                error!("Parsing error: {}", error);
-                let () = responses
-                    .publish(Message::new(
-                        &self.config.errors_topic,
-                        format!("{}", error),
-                    ))
-                    .await?;
-
-                return Err(error.into());
-            }
-        };
+        let _ = self
+            .persistance_store
+            .store(&State {
+                operation_id: Some(request.id.clone()),
+                operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
+            })
+            .await;
 
         let mut executing_response = SoftwareUpdateResponse::new(&request);
         let () = responses
@@ -492,38 +466,6 @@ impl SmAgent {
         let _state = self.persistance_store.clear().await?;
 
         Ok(())
-    }
-
-    async fn match_restart_operation_payload(
-        &self,
-        responses: &mut impl PubChannel,
-        message: &Message,
-    ) -> Result<RestartOperationRequest, AgentError> {
-        let request = match RestartOperationRequest::from_slice(message.payload_bytes()) {
-            Ok(request) => {
-                let () = self
-                    .persistance_store
-                    .store(&State {
-                        operation_id: Some(request.id.clone()),
-                        operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
-                    })
-                    .await?;
-                request
-            }
-
-            Err(error) => {
-                error!("Parsing error: {}", error);
-                let () = responses
-                    .publish(Message::new(
-                        &self.config.errors_topic,
-                        format!("{}", error),
-                    ))
-                    .await?;
-
-                return Err(error.into());
-            }
-        };
-        Ok(request)
     }
 
     async fn handle_restart_operation(

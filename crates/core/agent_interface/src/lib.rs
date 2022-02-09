@@ -1,12 +1,13 @@
 pub mod error;
 mod messages;
+pub mod request;
 mod software;
 pub mod topic;
 
 pub use download::*;
 pub use error::*;
 pub use messages::{
-    control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
+    control_filter_topic, health_check_topic_filter, software_filter_topic, Jsonify, OperationStatus,
     RestartOperationRequest, RestartOperationResponse, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
