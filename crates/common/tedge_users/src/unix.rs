@@ -100,7 +100,7 @@ impl UserManager {
     ///
     /// ```
     /// # use tedge_users::UserManager;
-    /// let user_manager = UserManager::new();
+    /// let user_manager = UserManager::new().expect("Only one asking for UserManager");
     /// let _user_guard_1 = user_manager.become_user("user_1").expect("Fail to become user_1");
     /// // Running as user1
     /// {
@@ -229,5 +229,17 @@ pub struct UserGuard {
 impl Drop for UserGuard {
     fn drop(&mut self) {
         self.user_manager.drop_guard();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::UserManager;
+
+    #[test]
+    fn check_user_manager_instantiate_once() {
+        let _um = UserManager::new().unwrap();
+
+        assert!(UserManager::new().is_none());
     }
 }

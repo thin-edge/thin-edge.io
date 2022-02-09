@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn parse_supported_key() {
-        let user_manager = UserManager::new();
+        let user_manager = UserManager::new().expect("To get a Usermanager");
         let key = concat!(
             "-----BEGIN RSA PRIVATE KEY-----\n",
             "MC4CAQ\n",
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn parse_unsupported_key() {
-        let user_manager = UserManager::new();
+        let user_manager = UserManager::new().expect("To get a Usermanager");
         let key = concat!(
             "-----BEGIN DSA PRIVATE KEY-----\n",
             "MC4CAQ\n",
