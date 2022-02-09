@@ -1,5 +1,6 @@
 use std::fmt;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 /// The `UserManager` allows the process to switch from one unix user to another.
@@ -28,6 +29,8 @@ impl fmt::Debug for UserManager {
     }
 }
 
+static UNIQUE_USER_MANAGER: AtomicBool = AtomicBool::new(true);
+
 struct InnerUserManager {
     users: Vec<String>,
     guard: Option<users::switch::SwitchUserGuard>,
@@ -36,17 +39,22 @@ struct InnerUserManager {
 impl UserManager {
     /// Create a `UserManager`.
     ///
-    /// This function MUST be called only once.
-    /// But be warned, the compiler will not prevent you to call it twice.
-    /// If you do so, one thread might be switched by another thread to some un-expected user.
+    /// This function only returns a `UserManager` the first time it is called. After which it will
+    /// return `None` for the rest of the time.
     ///
     /// This struct is not `Send` and cannot be shared between thread.
-    pub fn new() -> UserManager {
-        UserManager {
-            inner: Rc::new(Mutex::new(InnerUserManager {
-                users: vec![],
-                guard: None,
-            })),
+    pub fn new() -> Option<UserManager> {
+        if let Ok(true) =
+            UNIQUE_USER_MANAGER.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        {
+            Some(UserManager {
+                inner: Rc::new(Mutex::new(InnerUserManager {
+                    users: vec![],
+                    guard: None,
+                })),
+            })
+        } else {
+            None
         }
     }
 
