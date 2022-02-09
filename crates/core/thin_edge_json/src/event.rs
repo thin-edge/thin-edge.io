@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use time::OffsetDateTime;
 
+use self::error::ThinEdgeJsonDeserializerError;
+
 /// In-memory representation of ThinEdge JSON event.
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeEvent {
@@ -17,16 +19,18 @@ pub struct ThinEdgeEventData {
     pub time: Option<OffsetDateTime>,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ThinEdgeJsonDeserializerError {
-    #[error("Unsupported topic: {0}")]
-    UnsupportedTopic(String),
+pub mod error {
+    #[derive(thiserror::Error, Debug)]
+    pub enum ThinEdgeJsonDeserializerError {
+        #[error("Unsupported topic: {0}")]
+        UnsupportedTopic(String),
 
-    #[error("Event name can not be empty")]
-    EmptyEventName,
+        #[error("Event name can not be empty")]
+        EmptyEventName,
 
-    #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::error::Error),
+        #[error(transparent)]
+        SerdeJsonError(#[from] serde_json::error::Error),
+    }
 }
 
 impl ThinEdgeEvent {
@@ -52,9 +56,9 @@ impl ThinEdgeEvent {
                 data: event_data,
             })
         } else {
-            return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
                 mqtt_topic.into(),
-            ));
+            ))
         }
     }
 }

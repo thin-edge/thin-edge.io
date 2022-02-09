@@ -3,15 +3,17 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::error::SmartRestSerializerError;
 
+const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
+
 /// Converts from thin-edge event to C8Y event SmartREST message
 pub fn serialize_event(event: ThinEdgeEvent) -> Result<String, SmartRestSerializerError> {
     match event.data {
-        None => Ok(format!("400,{},", event.name)),
+        None => Ok(format!("{CREATE_EVENT_SMARTREST_CODE},{}", event.name)),
         Some(event_data) => {
             let current_timestamp = OffsetDateTime::now_utc();
 
             let smartrest_message = format!(
-                "400,{},\"{}\",{}",
+                "{CREATE_EVENT_SMARTREST_CODE},{},\"{}\",{}",
                 event.name,
                 event_data.message.unwrap_or_default(),
                 event_data.time.map_or_else(
@@ -28,8 +30,8 @@ pub fn serialize_event(event: ThinEdgeEvent) -> Result<String, SmartRestSerializ
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use assert_matches::assert_matches;
-    use csv::Error;
     use serde::Deserialize;
     use test_case::test_case;
     use thin_edge_json::event::ThinEdgeEventData;
@@ -83,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn event_translation_empty_json_payload_generates_timestamp() {
+    fn event_translation_empty_json_payload_generates_timestamp() -> Result<()> {
         let event = ThinEdgeEvent {
             name: "empty_event".into(),
             data: Some(ThinEdgeEventData {
@@ -92,7 +94,7 @@ mod tests {
             }),
         };
 
-        let smartrest_message = serialize_event(event).unwrap();
+        let smartrest_message = serialize_event(event)?;
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(smartrest_message.as_bytes());
@@ -100,10 +102,12 @@ mod tests {
         let result = iter.next();
 
         assert!(result.is_some());
-        let smartrest_event: SmartRestEvent = result.unwrap().unwrap();
+        let smartrest_event: SmartRestEvent = result.expect("One entry expected")?;
         assert_eq!(smartrest_event.code, 400);
         assert_eq!(smartrest_event.name, "empty_event".to_string());
         assert_eq!(smartrest_event.message, None);
-        assert_matches!(smartrest_event.time, Some(_))
+        assert_matches!(smartrest_event.time, Some(_));
+
+        Ok(())
     }
 }

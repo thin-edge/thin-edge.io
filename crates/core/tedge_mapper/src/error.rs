@@ -41,7 +41,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromThinEdgeJsonEventDeserialization(
-        #[from] thin_edge_json::event::ThinEdgeJsonDeserializerError,
+        #[from] thin_edge_json::event::error::ThinEdgeJsonDeserializerError,
     ),
 
     #[error(transparent)]

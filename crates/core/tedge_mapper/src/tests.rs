@@ -191,7 +191,7 @@ async fn c8y_mapper_event_mapping_to_smartrest() {
         .unwrap();
 
     let mut msg = messages
-        .recv()
+        .next()
         .with_timeout(MESSAGE_TIMEOUT_MS)
         .await
         .expect_or("No message received before timeout");
@@ -201,7 +201,7 @@ async fn c8y_mapper_event_mapping_to_smartrest() {
     if msg.contains("114") {
         // Fetch the next message which should be the event message
         msg = messages
-            .recv()
+            .next()
             .with_timeout(MESSAGE_TIMEOUT_MS)
             .await
             .expect_or("No message received before timeout");

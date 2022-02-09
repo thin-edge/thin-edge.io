@@ -105,14 +105,11 @@ impl CumulocityConverter {
     }
 
     fn try_convert_event(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
-
         let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
         let smartrest_alarm = event::serialize_event(tedge_event)?;
         let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-        vec.push(Message::new(&smartrest_topic, smartrest_alarm));
 
-        Ok(vec)
+        Ok(vec![Message::new(&smartrest_topic, smartrest_alarm)])
     }
 }
 
