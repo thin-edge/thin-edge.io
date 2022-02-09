@@ -25,7 +25,7 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 cd $TEBASEDIR
 
