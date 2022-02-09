@@ -334,6 +334,7 @@ name = "c8y_smartrest"
 version = "0.5.2"
 dependencies = [
  "agent_interface",
+ "anyhow",
  "assert-json-diff",
  "assert_matches",
  "chrono",

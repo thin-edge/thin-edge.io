@@ -16,6 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
 [dev-dependencies]
+anyhow = "1.0"
 assert_matches = "1.5"
 assert-json-diff = "2.0"
 serde_json = "1.0"
