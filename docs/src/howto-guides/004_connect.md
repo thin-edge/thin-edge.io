@@ -89,12 +89,6 @@ Starting tedge-agent service.
 Persisting tedge-agent on reboot.
 
 tedge-agent service successfully started and enabled!
-
-Starting tedge-mapper-sm-c8y service.
-
-Persisting tedge-mapper-sm-c8y on reboot.
-
-tedge-mapper-sm-c8y service successfully started and enabled!
 ```
 
 ### Errors
@@ -170,7 +164,7 @@ tedge-mapper service successfully started and enabled!
 Sending packets to check connection. This may take up to 10 seconds.
 
 Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, it's normal to get no response in the first try.
-Try 2 / 2: Sending a message to Cumulocity. ... No response. 
+Try 2 / 2: Sending a message to Cumulocity. ... No response.
 Warning: Bridge has been configured, but Cumulocity connection check failed.
 ```
 

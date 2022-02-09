@@ -22,3 +22,6 @@ tests/PySys/**/*.err
 **/__pycache__
 tests/PySys/**/Output/
 **/*venv*
+
+# Other files
+Makefile.toml
