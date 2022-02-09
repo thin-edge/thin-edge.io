@@ -35,10 +35,9 @@ sudo -E tedge cert upload c8y --user $C8YUSERNAME
 
 cat /etc/mosquitto/mosquitto.conf
 
-# for now, abuse the pysys-env to make the c8y api available
-python3 -m venv ~/env-pysys
-source ~/env-pysys/bin/activate
-pip3 install -r tests/requirements.txt
+python3 -m venv ~/env-c8y-api
+source ~/env-c8y-api/bin/activate
+pip3 install c8y-api
 
 # Delete the device (ignore error)
 set +e
