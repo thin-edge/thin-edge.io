@@ -1,4 +1,4 @@
-use crate::{error::SoftwareError, software::*};
+use crate::{error::SoftwareError, software::*, ApiError};
 use download::DownloadInfo;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
@@ -8,19 +8,19 @@ pub trait Jsonify<'a>
 where
     Self: Deserialize<'a> + Serialize + Sized,
 {
-    fn from_json(json_str: &'a str) -> Result<Self, SoftwareError> {
+    fn from_json(json_str: &'a str) -> Result<Self, ApiError> {
         Ok(serde_json::from_str(json_str)?)
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, SoftwareError> {
+    fn from_slice(bytes: &'a [u8]) -> Result<Self, ApiError> {
         Ok(serde_json::from_slice(bytes)?)
     }
 
-    fn to_json(&self) -> Result<String, SoftwareError> {
+    fn to_json(&self) -> Result<String, ApiError> {
         Ok(serde_json::to_string(self)?)
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, SoftwareError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, ApiError> {
         Ok(serde_json::to_vec(self)?)
     }
 }

@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub enum ApiError {
     #[error("Topic {topic} is unknown.")]
     UnknownTopic { topic: String },
+
+    #[error("JSON parse error: {reason:?}")]
+    ParseError { reason: String },
 }
 
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -31,9 +34,6 @@ pub enum SoftwareError {
         software_type: SoftwareType,
         reason: String,
     },
-
-    #[error("JSON parse error: {reason:?}")]
-    ParseError { reason: String },
 
     #[error("Plugin error for {software_type:?}, reason: {reason:?}")]
     Plugin {
@@ -94,9 +94,9 @@ pub enum SoftwareError {
     FromCSV { reason: String },
 }
 
-impl From<serde_json::Error> for SoftwareError {
+impl From<serde_json::Error> for ApiError {
     fn from(err: serde_json::Error) -> Self {
-        SoftwareError::ParseError {
+        ApiError::ParseError {
             reason: format!("{}", err),
         }
     }

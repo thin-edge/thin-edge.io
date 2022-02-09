@@ -9,7 +9,7 @@ use crate::{
 };
 use agent_interface::{
     control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
-    RestartOperationRequest, RestartOperationResponse, SoftwareError, SoftwareListRequest,
+    RestartOperationRequest, RestartOperationResponse, SoftwareListRequest,
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
@@ -394,10 +394,7 @@ impl SmAgent {
                     ))
                     .await?;
 
-                return Err(SoftwareError::ParseError {
-                    reason: "Parsing Error".into(),
-                }
-                .into());
+                return Err(error.into());
             }
         };
         let mut executing_response = SoftwareListResponse::new(&request);
@@ -460,10 +457,7 @@ impl SmAgent {
                     ))
                     .await?;
 
-                return Err(SoftwareError::ParseError {
-                    reason: "Parsing failed".into(),
-                }
-                .into());
+                return Err(error.into());
             }
         };
 
@@ -526,10 +520,7 @@ impl SmAgent {
                     ))
                     .await?;
 
-                return Err(SoftwareError::ParseError {
-                    reason: "Parsing failed".into(),
-                }
-                .into());
+                return Err(error.into());
             }
         };
         Ok(request)

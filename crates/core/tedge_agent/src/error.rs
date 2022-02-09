@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use agent_interface::SoftwareError;
+use agent_interface::{ApiError, SoftwareError};
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
@@ -25,6 +25,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromSoftware(#[from] SoftwareError),
+
+    #[error(transparent)]
+    FromAPI(#[from] ApiError),
 
     #[error(transparent)]
     FromState(#[from] StateError),
