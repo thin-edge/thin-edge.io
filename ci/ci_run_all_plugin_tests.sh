@@ -15,8 +15,6 @@
 
 set -e
 
-export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
-
 cd $TEBASEDIR
 
 # Check if clients are installed
@@ -27,6 +25,8 @@ dpkg -s mosquitto-clients
 python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+
 cd tests/PySys/
 
 sudo tedge config set software.plugin.default apt

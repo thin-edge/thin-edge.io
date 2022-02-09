@@ -25,8 +25,6 @@ sudo tedge disconnect c8y
 # Commands above are allowed to fail
 set -e
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
-
 cd $TEBASEDIR
 
 # Check if clients are installed
@@ -48,6 +46,7 @@ source ~/env-pysys/bin/activate
 # We kind of like to avoid that for other systems
 pip3 install -r tests/requirements_rrdtool.txt
 cd tests/PySys/
+export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 set +e
 pysys.py run --record -v DEBUG --include analytics

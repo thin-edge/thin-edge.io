@@ -15,7 +15,6 @@
 
 set -e
 
-export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 cd $TEBASEDIR
 
@@ -48,6 +47,8 @@ python3 -m venv ~/env-pysys
 source ~/env-pysys/bin/activate
 pip3 install -r tests/requirements.txt
 cd tests/PySys/
+
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 # Run all software management tests, including the ones for the
 # fake- and the  docker plugin

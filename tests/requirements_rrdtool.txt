@@ -3,4 +3,5 @@ requests == 2.25.1
 toml == 0.10.2
 junit2html == 30.0.6
 rrdtool == 0.1.15
+c8y-api == 1.1.1
 
