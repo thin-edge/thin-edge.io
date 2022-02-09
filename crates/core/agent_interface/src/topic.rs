@@ -1,4 +1,4 @@
-use crate::error::TopicError;
+use crate::error::ApiError;
 use std::convert::TryFrom;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResponseTopic {
@@ -18,14 +18,14 @@ impl ResponseTopic {
 }
 
 impl TryFrom<String> for ResponseTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
             r#"tedge/commands/res/software/list"# => Ok(ResponseTopic::SoftwareListResponse),
             r#"tedge/commands/res/software/update"# => Ok(ResponseTopic::SoftwareUpdateResponse),
             r#"tedge/commands/res/control/restart"# => Ok(ResponseTopic::RestartResponse),
-            err => Err(TopicError::UnknownTopic {
+            err => Err(ApiError::UnknownTopic {
                 topic: err.to_string(),
             }),
         }
@@ -33,7 +33,7 @@ impl TryFrom<String> for ResponseTopic {
 }
 
 impl TryFrom<&str> for ResponseTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_from(value.to_string())
@@ -81,7 +81,7 @@ mod tests {
         let update: ResponseTopic = "tedge/commands/res/software/update".try_into().unwrap();
         assert_eq!(update, ResponseTopic::SoftwareUpdateResponse);
 
-        let error: Result<ResponseTopic, TopicError> = "test".try_into();
+        let error: Result<ResponseTopic, ApiError> = "test".try_into();
         assert!(error.is_err());
     }
 

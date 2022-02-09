@@ -4,7 +4,7 @@ use csv;
 use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug)]
-pub enum TopicError {
+pub enum ApiError {
     #[error("Topic {topic} is unknown.")]
     UnknownTopic { topic: String },
 }

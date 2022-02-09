@@ -6,7 +6,7 @@ use c8y_smartrest::error::{
 #[allow(clippy::enum_variant_names)]
 pub enum CumulocityMapperError {
     #[error(transparent)]
-    InvalidTopicError(#[from] agent_interface::TopicError),
+    InvalidTopicError(#[from] agent_interface::ApiError),
 
     #[error(transparent)]
     InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
