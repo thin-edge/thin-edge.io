@@ -14,7 +14,10 @@ use agent_interface::{
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
-use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use mqtt_channel::{
+    Connection, Message, MqttError, PubChannel, SinkExt, StreamExt, SubChannel, Topic, TopicFilter,
+};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use serde_json::json;
 use std::process;
@@ -241,9 +244,7 @@ impl SmAgent {
     pub async fn start(&mut self) -> Result<(), AgentError> {
         info!("Starting tedge agent");
 
-        let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
-
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
             get_default_plugin(&self.config.config_location)?,
@@ -259,17 +260,30 @@ impl SmAgent {
             );
         }
 
-        let mut mqtt_errors = mqtt.errors;
+        let (request_sender, mut request_receiver) = futures::channel::mpsc::unbounded();
+        let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
+        let mqtt_errors = mqtt.errors;
+        let mqtt_input = mqtt.received;
+        let mqtt_output = mqtt.published.clone();
+        let mut mqtt_responses = mqtt.published.clone();
+        let errors_topics = self.config.errors_topic.clone();
         tokio::spawn(async move {
-            while let Some(error) = mqtt_errors.next().await {
-                error!("{}", error);
-            }
+            Self::process_mqtt_errors(mqtt_errors).await;
+        });
+        tokio::spawn(async move {
+            Self::process_subscribed_messages(
+                mqtt_input,
+                mqtt_output,
+                request_sender,
+                errors_topics,
+            )
+            .await;
         });
 
         let () = self.process_pending_operation(&mut mqtt.published).await?;
 
         while let Err(error) = self
-            .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
+            .process_requests(&mut request_receiver, &mut mqtt_responses, &plugins)
             .await
         {
             error!("{}", error);
@@ -278,15 +292,45 @@ impl SmAgent {
         Ok(())
     }
 
+    async fn process_mqtt_errors(mut mqtt_errors: UnboundedReceiver<MqttError>) {
+        while let Some(error) = mqtt_errors.next().await {
+            error!("{}", error);
+        }
+    }
+
     async fn process_subscribed_messages(
+        mut messages: impl SubChannel,
+        mut responses: impl PubChannel,
+        mut requests: UnboundedSender<AgentRequest>,
+        errors_topic: Topic,
+    ) {
+        while let Some(message) = messages.next().await {
+            match message.try_into() {
+                Ok(request) => {
+                    if let Err(error) = requests.send(request).await {
+                        error!("Worker stopped: {}", error);
+                        break;
+                    }
+                }
+                Err(error) => {
+                    debug!("Protocol error: {}", error);
+                    let _ = responses
+                        .publish(Message::new(&errors_topic, format!("{}", error)))
+                        .await;
+                }
+            }
+        }
+    }
+
+    async fn process_requests(
         &mut self,
-        requests: &mut impl SubChannel,
+        requests: &mut UnboundedReceiver<AgentRequest>,
         responses: &mut impl PubChannel,
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
-        while let Some(message) = requests.next().await {
-            match message.try_into() {
-                Ok(AgentRequest::HealthCheck) => {
+        while let Some(request) = requests.next().await {
+            match request {
+                AgentRequest::HealthCheck => {
                     let health_status = json!({
                         "status": "up",
                         "pid": process::id()
@@ -297,7 +341,7 @@ impl SmAgent {
                     let _ = responses.publish(health_message).await;
                 }
 
-                Ok(AgentRequest::SoftwareList(request)) => {
+                AgentRequest::SoftwareList(request) => {
                     let _success = self
                         .handle_software_list_request(
                             responses,
@@ -311,7 +355,7 @@ impl SmAgent {
                         });
                 }
 
-                Ok(AgentRequest::SoftwareUpdate(request)) => {
+                AgentRequest::SoftwareUpdate(request) => {
                     let () = plugins.lock().await.load()?;
                     let () = plugins
                         .lock()
@@ -331,7 +375,7 @@ impl SmAgent {
                         });
                 }
 
-                Ok(AgentRequest::DeviceRestart(request)) => {
+                AgentRequest::DeviceRestart(request) => {
                     let () = self
                         .persistance_store
                         .store(&State {
@@ -357,16 +401,6 @@ impl SmAgent {
                             ))
                             .await?;
                     }
-                }
-
-                Err(error) => {
-                    debug!("Protocol error: {}", error);
-                    let () = responses
-                        .publish(Message::new(
-                            &self.config.errors_topic,
-                            format!("{}", error),
-                        ))
-                        .await?;
                 }
             }
         }
