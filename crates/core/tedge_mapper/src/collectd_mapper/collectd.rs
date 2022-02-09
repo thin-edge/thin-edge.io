@@ -1,13 +1,13 @@
 use batcher::Batchable;
-use chrono::{DateTime, NaiveDateTime, Utc};
 use mqtt_channel::Message;
 use thin_edge_json::measurement::MeasurementVisitor;
+use time::{Duration, OffsetDateTime};
 
 #[derive(Debug)]
 pub struct CollectdMessage {
     pub metric_group_key: String,
     pub metric_key: String,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: OffsetDateTime,
     pub metric_value: f64,
 }
 
@@ -43,7 +43,7 @@ impl CollectdMessage {
         metric_group_key: &str,
         metric_key: &str,
         metric_value: f64,
-        timestamp: DateTime<Utc>,
+        timestamp: OffsetDateTime,
     ) -> Self {
         Self {
             metric_group_key: metric_group_key.to_string(),
@@ -167,10 +167,11 @@ impl CollectdPayload {
         })
     }
 
-    pub fn timestamp(&self) -> DateTime<Utc> {
+    pub fn timestamp(&self) -> OffsetDateTime {
         let timestamp = self.timestamp.trunc() as i64;
         let nanoseconds = (self.timestamp.fract() * 1.0e9) as u32;
-        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, nanoseconds), Utc)
+        OffsetDateTime::from_unix_timestamp(timestamp).unwrap()
+            + Duration::nanoseconds(nanoseconds as i64)
     }
 }
 
@@ -181,18 +182,17 @@ impl Batchable for CollectdMessage {
         format!("{}/{}", &self.metric_group_key, &self.metric_key)
     }
 
-    fn event_time(&self) -> DateTime<Utc> {
+    fn event_time(&self) -> OffsetDateTime {
         self.timestamp
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Index;
-
     use assert_matches::assert_matches;
-    use chrono::TimeZone;
     use mqtt_channel::Topic;
+    use std::ops::Index;
+    use time::macros::datetime;
 
     use super::*;
 
@@ -212,10 +212,7 @@ mod tests {
         assert_eq!(metric_group_key, "temperature");
 
         assert_eq!(metric_key, "value");
-        assert_eq!(
-            *timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
-        );
+        assert_eq!(*timestamp, datetime!(1973-11-29 21:33:09.0 UTC));
         assert_eq!(*metric_value, 32.5);
     }
 
@@ -230,15 +227,12 @@ mod tests {
             metric_group_key,
             metric_key,
             timestamp,
-            metric_value,
+            metric_value: _,
         } = collectd_message.index(0);
         assert_eq!(metric_group_key, "temperature");
 
         assert_eq!(metric_key, "value_val1");
-        assert_eq!(
-            *timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
-        );
+        assert_eq!(*timestamp, datetime!(1973-11-29 21:33:09.0 UTC));
 
         let CollectdMessage {
             metric_group_key,
@@ -249,10 +243,7 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value_val2");
-        assert_eq!(
-            *timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 0)
-        );
+        assert_eq!(*timestamp, datetime!(1973-11-29 21:33:09.0 UTC));
         assert_eq!(*metric_value, 45.2);
     }
 
@@ -272,10 +263,7 @@ mod tests {
 
         assert_eq!(metric_group_key, "temperature");
         assert_eq!(metric_key, "value");
-        assert_eq!(
-            *timestamp,
-            Utc.ymd(1973, 11, 29).and_hms_milli(21, 33, 09, 125)
-        );
+        assert_eq!(*timestamp, datetime!(1973-11-29 21:33:09.125 UTC));
         assert_eq!(*metric_value, 32.5);
     }
 
