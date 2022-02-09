@@ -21,7 +21,7 @@ pub async fn create_mapper<'a>(
     let mqtt_client = Connection::new(&mqtt_config(
         app_name,
         mqtt_port,
-        mapper_config.in_topic_filter.clone().into(),
+        mapper_config.in_topic_filter.clone(),
     )?)
     .await?;
 

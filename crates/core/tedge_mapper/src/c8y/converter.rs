@@ -46,8 +46,6 @@ const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/upda
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const TEDGE_MEASUREMENTS_TOPIC: &str = "tedge/measurements";
-const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 
 #[derive(Debug)]
 pub struct CumulocityConverter<Proxy>
@@ -301,7 +299,7 @@ impl AlarmConverter {
                     .strip_prefix(TEDGE_ALARMS_TOPIC)
                     .expect("Expected tedge/alarms prefix")
                     .to_string();
-                pending_alarms_map.insert(alarm_id.clone(), input.clone());
+                pending_alarms_map.insert(alarm_id, input.clone());
             }
             Self::Synced => {
                 //Regular conversion phase
