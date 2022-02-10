@@ -8,19 +8,20 @@ use tedge_api::{
 
 struct HeartbeatServiceBuilder;
 
+#[async_trait]
 impl PluginBuilder for HeartbeatServiceBuilder {
     fn name(&self) -> &'static str {
         todo!()
     }
 
-    fn verify_configuration(
+    async fn verify_configuration(
         &self,
         _config: &PluginConfiguration,
     ) -> Result<(), tedge_api::errors::PluginError> {
         Ok(())
     }
 
-    fn instantiate(
+    async fn instantiate(
         &self,
         config: PluginConfiguration,
         tedge_comms: tedge_api::plugins::Comms,
@@ -89,7 +90,7 @@ async fn main() {
     )
     .unwrap();
 
-    let mut heartbeat = hsb.instantiate(config, comms).unwrap();
+    let mut heartbeat = hsb.instantiate(config, comms).await.unwrap();
 
     heartbeat.setup().await.unwrap();
 
