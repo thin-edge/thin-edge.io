@@ -11,6 +11,9 @@ pub enum TedgeApplicationError {
 
     #[error("The following Plugin has no configuration: {0}")]
     PluginConfigMissing(String),
+
+    #[error("Unknown Plugin kind: {0}")]
+    UnknownPluginKind(String),
 }
 
 pub type Result<T> = std::result::Result<T, TedgeApplicationError>;
