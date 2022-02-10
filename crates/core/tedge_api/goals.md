@@ -150,14 +150,15 @@ The bash file:
 
 On startup `tedge` will:
 
-- Check if your configuration is syntactically correct and that all requested kinds exist
+- Check if your configuration is syntactically correct and that all requested
+  kinds exist
 - Startup the requested plugins and process messages
 
 In this case, the `heartbeat` service will keep sending messages every 500ms to
 both "simple-bash" and "simple-bash2" with a `PluginMessage::SignalPluginState`
 to which they should answer with their status, e.g. `PluginStatus::Ok`.
 
------
+-------
 
 At the heart of these choices lies the idea of making sure that using ThinEdge
 is precise, simple, and hard to misuse.
@@ -165,6 +166,7 @@ is precise, simple, and hard to misuse.
 - In the above example, the `heartbeat` service kind would check if the targets
   are actually existing plugins it could check the heartbeat on _before_ the
   application itself would start!
+
 - Similarly, the `stdio-external` plugin kind would check that the file it is
   given as `path` is accessible and executable!
 
@@ -178,6 +180,59 @@ clear paths forwards for all errors/warnings, if possible.
 ----
 
 # Reference Explanation
+
+The core design part of ThinEdge software are messages that get passed around.
+
+## Messages 
+
+Each message carries its source and destination, an id, and a payload. The
+payload is _well defined_ in the `MessagePayload` enum. This means that the
+amount of different message kinds is limited and well known per-version. The
+message kinds are forward compatible. Meaning that new kinds of messages may be
+received but simply rejected if unknown.
+
+Messages conversations are also asynchronous, meaning that upon receiving a
+message ThinEdge might not reply. (This does not preclude the transport layer
+to assure that the message has been well received)
+
+This has two reasons:
+
+- It makes communication easier to implement
+- It reflects the network situation
+
+Using such an interface is still clunky without some additional help.
+
+As all messages have an ID, it could be possible to design a way of 'awaiting'
+a response. This is left as a future addition.
+
+## Plugins
+
+_Note: 'Plugins' is simply a working name for now. We are free to rename this
+to 'Extension' or any other name we think is good._
+
+Plugins are what makes ThinEdge work! They receive messages and execute their
+specific action if applicable.
+
+This part is split into two parts: PluginBuilders and Plugins themselves.
+
+### PluginBuilders
+
+A `PluginBuilder` is a Rust struct that implements `PluginBuilder`. They are the
+sole sources of plugin kinds in ThinEdge. (This is not a limitation for
+proprietary and non-rust plugins, read further to see how those are handled.)
+They are registered at startup and hardcoded into the ThinEdge binary.
+
+### Plugins
+
+A Plugin is a Rust struct that implements `Plugin`. It is clear that requiring
+all users who wish to extend ThinEdge to learn and use Rust is a _bad idea_. To
+make sure those users also get a first class experience special kinds of
+plugins are bundled per default: `stdio-external`, `http-external`. (The
+specific list will surely evolve over time.) These get instantiated like any
+other with the exception that it is expected that all messages are forwarded,
+e.g. to another binary or http endpoint. This way any user simply needs to know
+what kind of messages exists and how to send/receive them, giving them the same
+situation like a pure-Rust plugin would have.
 
 # Drawbacks
 
