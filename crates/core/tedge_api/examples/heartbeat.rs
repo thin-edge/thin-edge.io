@@ -10,7 +10,7 @@ struct HeartbeatServiceBuilder;
 
 #[async_trait]
 impl PluginBuilder for HeartbeatServiceBuilder {
-    fn name(&self) -> &'static str {
+    fn kind_name(&self) -> &'static str {
         todo!()
     }
 

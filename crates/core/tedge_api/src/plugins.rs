@@ -38,8 +38,8 @@ pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 /// A plugin builder for a given plugin
 #[async_trait]
 pub trait PluginBuilder: Sync + Send + 'static {
-    /// The name of the plugins this creates, this should be unique and will prevent startup otherwise
-    fn name(&self) -> &'static str;
+    /// The a name for the kind of plugins this creates, this should be unique and will prevent startup otherwise
+    fn kind_name(&self) -> &'static str;
 
     /// This may be called anytime to verify whether a plugin could be instantiated with the
     /// passed configuration.
