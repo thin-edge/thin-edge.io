@@ -1,12 +1,10 @@
-use chrono::offset::Utc;
-use chrono::DateTime;
-use chrono::Duration;
 use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::RcgenError;
 use sha1::{Digest, Sha1};
 use std::path::Path;
+use time::{Duration, OffsetDateTime};
 use zeroize::Zeroizing;
 
 pub mod device_id;
@@ -94,7 +92,7 @@ impl KeyCertPair {
         config: &NewCertificateConfig,
         id: &str,
     ) -> Result<KeyCertPair, CertificateError> {
-        let today = Utc::now();
+        let today = OffsetDateTime::now_utc();
         let not_before = today - Duration::days(1); // Ensure the certificate is valid today
         KeyCertPair::new_selfsigned_certificate_at(config, id, not_before)
     }
@@ -102,7 +100,7 @@ impl KeyCertPair {
     pub fn new_selfsigned_certificate_at(
         config: &NewCertificateConfig,
         id: &str,
-        not_before: DateTime<Utc>,
+        not_before: OffsetDateTime,
     ) -> Result<KeyCertPair, CertificateError> {
         let () = KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
@@ -178,6 +176,8 @@ impl Default for NewCertificateConfig {
 
 #[cfg(test)]
 mod tests {
+    use time::macros::datetime;
+
     use super::*;
 
     fn pem_of_keypair(keypair: &KeyCertPair) -> PemCertificate {
@@ -251,9 +251,7 @@ mod tests {
         // Create a certificate with a given birthdate.
         let config = NewCertificateConfig::default();
         let id = "some-id";
-        let birthdate = DateTime::parse_from_rfc3339("2021-03-31T16:39:57+01:00")
-            .unwrap()
-            .with_timezone(&Utc);
+        let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
         let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
             .expect("Fail to create a certificate");
@@ -274,9 +272,7 @@ mod tests {
             ..Default::default()
         };
         let id = "some-id";
-        let birthdate = DateTime::parse_from_rfc3339("2021-03-31T16:39:57+01:00")
-            .unwrap()
-            .with_timezone(&Utc);
+        let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
         let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
             .expect("Fail to create a certificate");
