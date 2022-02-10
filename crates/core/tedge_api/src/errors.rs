@@ -7,3 +7,4 @@ pub enum PluginError {
     CouldNotSendMessage(#[from] tokio::sync::mpsc::error::SendError<crate::Message>),
     Configuration(#[from] toml::de::Error),
 }
+
