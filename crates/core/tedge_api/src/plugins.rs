@@ -36,18 +36,19 @@ impl Comms {
 pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 
 /// A plugin builder for a given plugin
+#[async_trait]
 pub trait PluginBuilder: Sync + Send + 'static {
     /// The name of the plugins this creates, this should be unique and will prevent startup otherwise
     fn name(&self) -> &'static str;
 
     /// This may be called anytime to verify whether a plugin could be instantiated with the
     /// passed configuration.
-    fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
+    async fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
 
     /// Instantiate a new instance of this plugin using the given configuration
     ///
     /// This _must not_ block
-    fn instantiate(
+    async fn instantiate(
         &self,
         config: PluginConfiguration,
         tedge_comms: Comms,
