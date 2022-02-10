@@ -46,6 +46,9 @@ pub enum AgentError {
 
     #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {}")]
     TimestampConversionError { timestamp: i64, error_msg: String },
+
+    #[error(transparent)]
+    FromOperationsLogs(#[from] crate::operation_logs::OperationLogsError),
 }
 
 #[derive(Debug, thiserror::Error)]

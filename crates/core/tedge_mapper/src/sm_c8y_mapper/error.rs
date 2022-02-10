@@ -29,14 +29,17 @@ pub enum SMCumulocityMapperError {
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
 
+    #[error(transparent)]
+    FromTimeFormat(#[from] time::error::Format),
+
+    #[error(transparent)]
+    FromTimeParse(#[from] time::error::Parse),
+
     #[error("Invalid date in file name: {0}")]
     InvalidDateInFileName(String),
 
     #[error("Invalid path. Not UTF-8.")]
     InvalidUtf8Path,
-
-    #[error(transparent)]
-    FromChronoParse(#[from] chrono::ParseError),
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
