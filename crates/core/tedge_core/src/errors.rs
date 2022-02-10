@@ -8,6 +8,9 @@ pub enum TedgeApplicationError {
 
     #[error("The following Plugin kind are not covered in the configuration: {0}")]
     UnconfiguredPlugins(crate::utils::CommaSeperatedString),
+
+    #[error("The following Plugin has no configuration: {0}")]
+    PluginConfigMissing(String),
 }
 
 pub type Result<T> = std::result::Result<T, TedgeApplicationError>;

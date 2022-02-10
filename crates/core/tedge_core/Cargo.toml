@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.52"
+futures = "0.3"
 log = "0.4"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
