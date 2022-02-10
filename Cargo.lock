@@ -335,23 +335,18 @@ version = "0.1.0"
 dependencies = [
  "agent_interface",
  "async-trait",
- "batcher",
  "c8y_smartrest",
- "c8y_translator",
  "chrono",
  "clock",
  "csv",
  "download",
- "flockfile",
  "futures",
  "mockall",
  "mqtt_channel",
  "reqwest",
  "serde",
  "serde_json",
- "structopt",
  "tedge_config",
- "tedge_users",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -464,6 +459,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time 0.1.43",
  "winapi",
 ]
@@ -1312,6 +1308,30 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if 1.0.0",
  "value-bag",
+]
+
+[[package]]
+name = "log_request_plugin"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_smartrest",
+ "chrono",
+ "csv",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

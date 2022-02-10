@@ -5,7 +5,7 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58"
 license = "Apache-2.0"
-# TODO: add description? 
+description = "Thin.edge.io operation plugin for Cumulocity log request"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,12 +21,10 @@ mockall = "0.10"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1.9", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
-tedge_mapper = { path = "../../crates/core/tedge_mapper" }
 tedge_config = { path = "../../crates/common/tedge_config" }
 mqtt_channel = { path = "../../crates/common/mqtt_channel" }
 

@@ -79,8 +79,7 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let session_name = "SM-Tedge-Mapper";
-        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config, &session_name).await?;
+        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config, SM_MAPPER).await?;
         let mut sm_mapper =
             CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
 
