@@ -1,9 +1,9 @@
-use tedge_api::CoreMessage;
 use tedge_api::Plugin;
 use tedge_api::messages::Message;
 
 use crate::errors::Result;
 use crate::errors::TedgeApplicationError;
+use crate::task::Task;
 
 type Sender = tokio::sync::mpsc::Sender<tedge_api::messages::Message>;
 type Receiver = tokio::sync::mpsc::Receiver<tedge_api::messages::Message>;
@@ -17,7 +17,6 @@ pub struct PluginTask {
 }
 
 impl PluginTask {
-
     pub fn new(
         plugin_name: String,
         plugin: Box<dyn Plugin>,
@@ -34,7 +33,31 @@ impl PluginTask {
         }
     }
 
-    pub async fn run(mut self) -> Result<()> {
+    async fn receive_only_from_other_tasks(mut self) -> Result<()> {
+        while let Some(msg) = self.tasks_receiver.recv().await {
+            self.handle_message_to_plugin(msg).await?;
+        }
+
+        self.plugin
+            .shutdown()
+            .await
+            .map_err(TedgeApplicationError::from)
+    }
+
+    async fn handle_message_from_plugin(&mut self, msg: Message) -> Result<()> {
+        log::debug!("Received message from plugin {}", self.plugin_name);
+        self.core_msg_sender.send(msg).await.map_err(TedgeApplicationError::from)
+    }
+
+    async fn handle_message_to_plugin(&mut self, msg: Message) -> Result<()> {
+        log::debug!("Sending message to plugin {}", self.plugin_name);
+        self.plugin.handle_message(msg).await.map_err(TedgeApplicationError::from)
+    }
+}
+
+#[async_trait::async_trait]
+impl Task for PluginTask {
+    async fn run(mut self) -> Result<()> {
         loop {
             tokio::select! {
                 message_from_plugin = self.plugin_message_receiver.recv() => if let Some(msg) = message_from_plugin {
@@ -73,37 +96,4 @@ impl PluginTask {
             .map_err(TedgeApplicationError::from)
     }
 
-    pub async fn receive_only_from_other_tasks(mut self) -> Result<()> {
-        while let Some(_msg) = self.tasks_receiver.recv().await {
-            log::debug!("Sending message to plugin {}", self.plugin_name);
-            // plugin.handle_message(_msg) //TODO
-            unimplemented!()
-        }
-        Ok(())
-    }
-
-    pub async fn handle_message_from_plugin(&mut self, msg: CoreMessage) -> Result<()> {
-        log::debug!("Received message from plugin {}", self.plugin_name);
-
-        match msg.destination().endpoint() {
-            EndpointKind::Core => {
-                unimplemented!()
-            }
-
-            EndpointKind::Plugin { id } => {
-                log::debug!("Message to plugin {}, looking for plugin", id);
-                if let Some(sender) = self.plugin_task_senders.get_mut(id) {
-                    log::debug!("Sending message to plugin {}", id);
-                    sender.send(msg).await?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn handle_message_to_plugin(&mut self, _msg: CoreMessage) -> Result<()> {
-        log::debug!("Sending message to plugin {}", self.plugin_name);
-        Ok(())
-    }
 }

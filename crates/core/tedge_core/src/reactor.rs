@@ -8,6 +8,7 @@ use crate::configuration::PluginKind;
 use crate::errors::Result;
 use crate::errors::TedgeApplicationError;
 use crate::plugin_task::PluginTask;
+use crate::task::Task;
 
 /// Helper type for running a TedgeApplication
 ///
@@ -43,7 +44,7 @@ impl Reactor {
             .collect::<Result<Vec<PluginTaskPrep>>>()
             .and_then(associate_plugin_task_senders)?
             .into_iter()
-            .map(PluginTask::run)
+            .map(Task::run)
             .collect::<futures::stream::FuturesUnordered<_>>() // main loop
             .collect::<Vec<Result<()>>>()
             .await
