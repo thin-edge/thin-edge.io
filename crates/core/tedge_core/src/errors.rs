@@ -14,6 +14,9 @@ pub enum TedgeApplicationError {
 
     #[error("Unknown Plugin kind: {0}")]
     UnknownPluginKind(String),
+
+    #[error("Failed to send message")]
+    TokioError(#[from] tokio::sync::mpsc::error::SendError<tedge_api::Message>),
 }
 
 pub type Result<T> = std::result::Result<T, TedgeApplicationError>;
