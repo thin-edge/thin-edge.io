@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 #[derive(serde::Deserialize)]
 pub struct TedgeConfiguration {
+    communication_buffer_size: std::num::NonZeroUsize,
     plugins: HashMap<String, PluginInstanceConfiguration>,
 }
 
@@ -32,6 +33,10 @@ impl AsRef<str> for PluginKind {
 }
 
 impl TedgeConfiguration {
+    pub fn communication_buffer_size(&self) -> std::num::NonZeroUsize {
+        self.communication_buffer_size
+    }
+
     pub fn plugins(&self) -> &HashMap<String, PluginInstanceConfiguration> {
         &self.plugins
     }

@@ -99,8 +99,9 @@ impl Reactor {
                 TedgeApplicationError::PluginConfigMissing(pname)
             })?;
 
-        let (plugin_message_sender, plugin_message_receiver) = tokio::sync::mpsc::channel(10); // TODO: Channel size should be configurable
-        let (task_sender, task_receiver) = tokio::sync::mpsc::channel(10); // TODO: Channel size should be configurable
+        let buf_size = self.0.config().communication_buffer_size().get();
+        let (plugin_message_sender, plugin_message_receiver) = tokio::sync::mpsc::channel(buf_size);
+        let (task_sender, task_receiver) = tokio::sync::mpsc::channel(buf_size);
 
         let comms = tedge_api::plugins::Comms::new(plugin_message_sender);
 
