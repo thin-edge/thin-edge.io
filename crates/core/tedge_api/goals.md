@@ -182,6 +182,52 @@ clear paths forwards for all errors/warnings, if possible.
 # Reference Explanation
 
 The core design part of ThinEdge software are messages that get passed around.
+This has these benefits:
+
+- Simple architecture as 'dumb plumbing' -> complexity is handled by the
+  plugins
+- Clean separation of different parts, using messages codifies what can be
+  exchanged and makes it explicit
+
+An example communication flow (with an arrow being a message, except 1 and 10):
+
+```
+
+ ┌─────────────┐
+ │ MQTT Broker │
+ └┬───▲────────┘
+  │1  │10    azure_mqtt
+ ┌▼───┴────────────────┐
+ │MQTT Plugin          │
+ │                     │
+ │Target: azure_cloud  │
+ │                     │
+ │Data: Proprietary    │
+ │                     │                azure_cloud
+ └───────┬─────▲───────┘               ┌──────────────────────────────┐
+         │     │               3       │Azure Plugin                  │
+         │     │9            ┌─────────►                              │
+         │     │             │         │Target: service_health        │
+        2│   ┌─┴─────────────┴─┐    4  │                              │
+         └───►                 ◄───────┤Data: GetInfo "crit_service"  │
+             │                 │       ├──────────────────────────────┤
+             │      CORE       │  7    │                              │
+             │                 ├───────► Target: azure_mqtt           │
+             │                 │  8    │                              │
+             │                 ◄───────┤ Data: Proprietary            │
+             │                 │       └──────────────────────────────┘
+             └────────▲───┬────┘
+                      │  5│  service_health
+                      │   │ ┌──────────────────────┐
+                     6│   │ │systemd Plugin        │
+                      │   └─►                      │
+                      │     │Target: <sender>      │
+                      │     │                      │
+                      └─────┤Data: OK              │
+                            │                      │
+                            └──────────────────────┘
+
+```
 
 ## Messages 
 
