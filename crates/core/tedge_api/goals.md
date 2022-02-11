@@ -236,7 +236,25 @@ situation like a pure-Rust plugin would have.
 
 # Drawbacks
 
+- Tying the software specification to Rust code makes it more brittle to
+  accidental incompatibilities
+- People might get confused as to how Plugins can be written -> They see "Rust"
+  and think they need to know the language to make their own
+- Having everything in a single process group can make it harder to correctly
+  segment security rules for individual plugins
+
 # Rationale and alternatives
+
+Playing to Rust's strengths makes for better maintainable software. Using
+Traits to specify behaviour and "plain old Rust objects" also make the messages
+clear. As ThinEdge is a specialized piece of software, this should be embraced
+to deliver on an amazing experience.
+
+Alternatives could include:
+
+- Defining the objects externally, with for example CapNProto
+- Defining the objects through an API like Swagger or similar
+- Not doing this
 
 # Prior Art
 
