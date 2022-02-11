@@ -16,6 +16,10 @@ impl Address {
         }
     }
 
+    pub fn endpoint(&self) -> &EndpointKind {
+        &self.endpoint
+    }
+
     /// Get the original source of an `Address`
     pub fn origin(&self) -> &Address {
         if let Some(source) = self.source.as_ref() {
