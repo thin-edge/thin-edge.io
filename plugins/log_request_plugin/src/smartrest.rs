@@ -119,7 +119,7 @@ pub fn read_tedge_logs(
 
 #[cfg(test)]
 mod tests {
-    use crate::smartrest::read_tedge_logs;
+    use super::read_tedge_logs;
     use c8y_smartrest::smartrest_deserializer::SmartRestLogRequest;
     use std::fs::File;
     use std::io::Write;
