@@ -175,6 +175,7 @@ impl Connection {
         }
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
+        let _ = error_sender.close().await;
     }
 
     async fn sender_loop(
