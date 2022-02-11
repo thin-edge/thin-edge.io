@@ -13,7 +13,6 @@ pub struct PluginTask {
     plugin: Box<dyn Plugin>,
     plugin_message_receiver: Receiver,
     tasks_receiver: Receiver,
-    plugin_task_senders: HashMap<String, Sender>,
     core_msg_sender: Sender,
 }
 
@@ -23,7 +22,6 @@ impl PluginTask {
         plugin: Box<dyn Plugin>,
         plugin_message_receiver: Receiver,
         tasks_receiver: Receiver,
-        plugin_task_senders: HashMap<String, Sender>,
         core_msg_sender: Sender,
     ) -> Self {
         Self {
@@ -31,7 +29,6 @@ impl PluginTask {
             plugin,
             plugin_message_receiver,
             tasks_receiver,
-            plugin_task_senders,
             core_msg_sender,
         }
     }

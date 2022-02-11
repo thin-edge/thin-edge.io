@@ -54,8 +54,11 @@ impl Reactor {
             crate::core_task::CoreTask::new(core_msg_recv, plugin_senders).run()
         };
 
-        let running_plugins = associate_plugin_task_senders(instantiated_plugins)?
+        let running_plugins = instantiated_plugins
             .into_iter()
+            .map(|prep| {
+                PluginTask::new(prep.name, prep.plugin, prep.plugin_recv, prep.task_recv, prep.core_msg_sender)
+            })
             .map(Task::run)
             .map(Box::pin)
             .collect::<futures::stream::FuturesUnordered<_>>() // main loop
@@ -137,26 +140,3 @@ impl Reactor {
     }
 }
 
-fn associate_plugin_task_senders(instantiated_plugins: Vec<PluginTaskPrep>) -> Result<Vec<PluginTask>> {
-    let mut senders_for_plugin_mapping = HashMap::with_capacity(instantiated_plugins.len());
-    {
-        for instantiated_plugin in instantiated_plugins.iter() {
-            for other_plugin in instantiated_plugins.iter() {
-                if other_plugin.name == instantiated_plugin.name {
-                    continue
-                }
-                senders_for_plugin_mapping.entry(instantiated_plugin.name.clone())
-                    .or_insert_with(HashMap::new)
-                    .insert(other_plugin.name.clone(), other_plugin.task_sender.clone());
-            }
-        }
-    }
-
-    instantiated_plugins.into_iter()
-        .map(|prep| -> Result<PluginTask> {
-            let plugin_task_senders = senders_for_plugin_mapping.remove(&prep.name).unwrap(); // TODO: If this panics, we have a bug
-
-            Ok(PluginTask::new(prep.name, prep.plugin, prep.plugin_recv, prep.task_recv, plugin_task_senders, prep.core_msg_sender))
-        })
-        .collect()
-}
