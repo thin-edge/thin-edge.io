@@ -76,7 +76,7 @@ impl Command for ConnectCommand {
                 return match self.check_connection(&config) {
                     Ok(_) => {
                         let cloud = br_config.cloud_name.clone();
-                        println!("Connection check to {} cloud is successfull.\n", cloud);
+                        println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
                     Err(err) => Err(err.into()),
@@ -274,7 +274,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 println!("Local MQTT publish has timed out.");
-                break;
+                return Err(ConnectError::TimeoutElapsedError);
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("ERROR: Disconnected");
