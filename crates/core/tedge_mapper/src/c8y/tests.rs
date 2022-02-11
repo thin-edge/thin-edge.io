@@ -1,11 +1,17 @@
 use crate::core::{converter::Converter, mapper::create_mapper, size_threshold::SizeThreshold};
-use c8y_api::{http_proxy::C8YHttpProxy, json_c8y::C8yUpdateSoftwareListResponse};
+use anyhow::Result;
+use c8y_api::{
+    http_proxy::{C8YHttpProxy, JwtAuthHttpProxy, MockC8YHttpProxy},
+    json_c8y::C8yUpdateSoftwareListResponse,
+};
 use c8y_smartrest::{
     error::SMCumulocityMapperError, operations::Operations,
     smartrest_deserializer::SmartRestJwtResponse,
 };
-use mqtt_channel::{Message, Topic};
+use mockall::predicate;
+use mqtt_channel::{Connection, Message, Topic, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
+use serde_json::json;
 use serial_test::serial;
 use std::time::Duration;
 use test_case::test_case;
@@ -706,6 +712,71 @@ fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_event() -> Result<()> {
+    let size_threshold = SizeThreshold(32 * 1024);
+    let device_name = String::from("test");
+    let device_type = String::from("test_type");
+    let operations = Operations::new();
+    let http_proxy = MockC8YHttpProxy::new();
+
+    let mut converter = CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    );
+
+    let event_topic = "tedge/events/click_event";
+    let event_payload = r#"{ "message": "Someone clicked" }"#;
+    let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+    let converted_events = converter.convert(&event_message).await;
+    assert_eq!(converted_events.len(), 1);
+    let converted_event = converted_events.get(0).unwrap();
+    assert_eq!(converted_event.topic.name, "c8y/s/us");
+    assert!(converted_event
+        .payload_str()?
+        .starts_with("400,click_event"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_big_event() {
+    let mqtt_packet_limit = 16;
+    let size_threshold = SizeThreshold(mqtt_packet_limit * 1024);
+    let device_name = String::from("test");
+    let device_type = String::from("test_type");
+    let operations = Operations::new();
+
+    let mut http_proxy = MockC8YHttpProxy::new();
+    http_proxy
+        .expect_send_event()
+        .with(
+            predicate::eq("click_event"),
+            predicate::always(),
+            predicate::always(),
+        )
+        .returning(|_, _, _| Ok("123".into()));
+
+    let mut converter = CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    );
+
+    let event_topic = "tedge/events/click_event";
+    let big_event_message = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
+    let big_event_payload = json!({ "message": big_event_message }).to_string();
+    let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
+
+    assert!(converter.convert(&big_event_message).await.is_empty());
+}
+
 fn create_packet(size: usize) -> String {
     let data: String = "Some data!".into();
     let loops = size / data.len();
@@ -744,6 +815,15 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         _log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
+    }
+
+    async fn send_event(
+        &mut self,
+        _event_type: &str,
+        _text: &str,
+        _time: Option<String>,
+    ) -> Result<String, SMCumulocityMapperError> {
+        Ok("123".into())
     }
 }
 

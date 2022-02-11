@@ -9,7 +9,7 @@ use c8y_api::{http_proxy::C8YHttpProxy, json_c8y::C8yUpdateSoftwareListResponse}
 use c8y_smartrest::{
     alarm,
     error::SmartRestDeserializerError,
-    event::serialize_event,
+    event::{self},
     operations::Operations,
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
     smartrest_serializer::{
@@ -144,12 +144,32 @@ where
         Ok(vec)
     }
 
-    fn try_convert_event(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+    async fn try_convert_event(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
         let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-        let smartrest_alarm = serialize_event(tedge_event)?;
-        let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+        match self.size_threshold.validate(input.payload_str()?) {
+            // If the message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
+            Ok(()) => {
+                let smartrest_alarm = event::serialize_event(tedge_event)?;
+                let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
 
-        Ok(vec![Message::new(&smartrest_topic, smartrest_alarm)])
+                Ok(vec![Message::new(&smartrest_topic, smartrest_alarm)])
+            }
+            // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
+            Err(_) => {
+                let event_text = tedge_event
+                    .data
+                    .and_then(|data| data.message)
+                    .unwrap_or_else(|| "generic event".into());
+                let _ = self
+                    .http_proxy
+                    .send_event(tedge_event.name.as_str(), event_text.as_str(), None)
+                    .await?;
+                Ok(vec![])
+            }
+        }
     }
 }
 
@@ -164,20 +184,22 @@ where
         &self.mapper_config
     }
     async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
-        let () = self.size_threshold.validate(message.payload_str()?)?;
-
         match &message.topic {
             topic if topic.name.starts_with("tedge/measurements") => {
+                let () = self.size_threshold.validate(message.payload_str()?)?;
                 self.try_convert_measurement(message)
             }
             topic if topic.name.starts_with("tedge/alarms") => {
+                let () = self.size_threshold.validate(message.payload_str()?)?;
                 self.alarm_converter.try_convert_alarm(message)
             }
             topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => self.try_convert_event(message),
+            topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
+                self.try_convert_event(message).await
+            }
             topic => match topic.clone().try_into() {
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
                     debug!("Software list");

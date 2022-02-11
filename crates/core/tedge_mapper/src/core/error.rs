@@ -33,7 +33,10 @@ pub enum ConversionError {
     FromCumulocityJsonError(#[from] c8y_translator::json::CumulocityJsonError),
 
     #[error(transparent)]
-    FromCumulocityCumulocityMapperError(#[from] CumulocityMapperError),
+    FromCumulocityMapperError(#[from] CumulocityMapperError),
+
+    #[error(transparent)]
+    FromCumulocitySmartRestMapperError(#[from] c8y_smartrest::error::SMCumulocityMapperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),

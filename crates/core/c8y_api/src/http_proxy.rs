@@ -1,9 +1,12 @@
 use crate::json_c8y::{
-    C8yCreateEvent, C8yManagedObject, C8yUpdateSoftwareListResponse, InternalIdResponse,
+    C8yCreateEvent, C8yEventResponse, C8yManagedObject, C8yUpdateSoftwareListResponse,
+    InternalIdResponse,
 };
 
 use async_trait::async_trait;
 use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse};
+use futures::TryFutureExt;
+use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
@@ -13,12 +16,12 @@ use tedge_config::{
 };
 use time::{format_description, OffsetDateTime};
 
-use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
 /// An HttpProxy handles http requests to C8y on behalf of the device.
+#[automock]
 #[async_trait]
 pub trait C8YHttpProxy: Send + Sync {
     async fn init(&mut self) -> Result<(), SMCumulocityMapperError>;
@@ -26,6 +29,13 @@ pub trait C8YHttpProxy: Send + Sync {
     fn url_is_in_my_tenant_domain(&self, url: &str) -> bool;
 
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
+
+    async fn send_event(
+        &mut self,
+        event_type: &str,
+        text: &str,
+        time: Option<String>,
+    ) -> Result<String, SMCumulocityMapperError>;
 
     async fn send_software_list_http(
         &mut self,
@@ -118,13 +128,6 @@ impl C8yEndPoint {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-/// used to retrieve the id of a log event
-pub struct SmartRestLogEvent {
-    pub id: String,
-}
-
 /// An HttpProxy that uses MQTT to retrieve JWT tokens and authenticate the device
 ///
 /// - Keep the connection info to c8y and the internal Id of the device
@@ -204,26 +207,24 @@ impl JwtAuthHttpProxy {
         Ok(internal_id)
     }
 
-    /// Make a POST request to /event/events and return the event id from response body.
-    /// The event id is used to upload the binary.
     fn create_log_event(&self) -> C8yCreateEvent {
-        let local = OffsetDateTime::now_utc();
+        self.create_event("c8y_Logfile", "software-management", None)
+    }
 
+    fn create_event(&self, event_type: &str, text: &str, time: Option<String>) -> C8yCreateEvent {
         let c8y_managed_object = C8yManagedObject {
             id: self.end_point.c8y_internal_id.clone(),
         };
 
-        C8yCreateEvent::new(
-            c8y_managed_object,
-            "c8y_Logfile",
-            &local
+        let time = time.unwrap_or_else(|| {
+            OffsetDateTime::now_utc()
                 .format(&format_description::well_known::Rfc3339)
-                .unwrap(),
-            "software-management",
-        )
+                .unwrap()
+        });
+        C8yCreateEvent::new(c8y_managed_object, event_type, time.as_str(), text)
     }
 
-    async fn get_event_id(
+    async fn send_event(
         &mut self,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
@@ -240,7 +241,7 @@ impl JwtAuthHttpProxy {
             .build()?;
 
         let response = self.http_con.execute(request).await?;
-        let event_response_body = response.json::<SmartRestLogEvent>().await?;
+        let event_response_body = response.json::<C8yEventResponse>().await?;
 
         Ok(event_response_body.id)
     }
@@ -293,6 +294,16 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
     }
 
+    async fn send_event(
+        &mut self,
+        event_type: &str,
+        text: &str,
+        time: Option<String>,
+    ) -> Result<String, SMCumulocityMapperError> {
+        let c8y_event: C8yCreateEvent = self.create_event(event_type, text, time);
+        self.send_event(c8y_event).await
+    }
+
     async fn send_software_list_http(
         &mut self,
         c8y_software_list: &C8yUpdateSoftwareListResponse,
@@ -320,7 +331,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         let token = self.get_jwt_token().await?;
 
         let log_event = self.create_log_event();
-        let event_response_id = self.get_event_id(log_event).await?;
+        let event_response_id = self.send_event(log_event).await?;
         let binary_upload_event_url = self
             .end_point
             .get_url_for_event_binary_upload(&event_response_id);
