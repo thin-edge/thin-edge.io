@@ -36,6 +36,10 @@ Git commit messages should explain the how and why of your change and be separat
 Generally, pull requests need at least an approval from one maintainer to be merged.
 
 When addressing review feedback, it is helpful to the reviewer if additional changes are made in new commits. This allows the reviewer to easily see the delta between what they previously reviewed and the changes you added to address their feedback.
+If applicable, the `git commit --fixup=<sha>` feature should be used.
+These fixup commits should then be squashed
+(usually `git rebase -i --autosquash main`) by the author of the PR after it
+passed review and before it is merged.
 
 Once a PR has the necessary approvals, it can be merged. Here’s how the merge should be handled:
 
