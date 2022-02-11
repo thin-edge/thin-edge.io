@@ -25,14 +25,13 @@ use c8y_smartrest::{
         SmartRestSetSupportedLogType,
     },
 };
-use chrono::{DateTime, FixedOffset};
 use download::{Auth, DownloadInfo};
 use mqtt_channel::{Config, Connection, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
 use std::{convert::TryInto, process::Stdio};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
+use time::{format_description, OffsetDateTime};
 use tracing::{debug, error, info, instrument};
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
@@ -502,7 +501,7 @@ pub struct SmartRestLogEvent {
 /// ```
 fn get_datetime_from_file_path(
     log_path: &PathBuf,
-) -> Result<DateTime<FixedOffset>, SMCumulocityMapperError> {
+) -> Result<OffsetDateTime, SMCumulocityMapperError> {
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
@@ -511,7 +510,7 @@ fn get_datetime_from_file_path(
         stem_string_vec.reverse();
         // join on '-' to get the date string
         let date_string = stem_string_vec.join("-");
-        let dt = DateTime::parse_from_rfc3339(&date_string)?;
+        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339)?;
 
         return Ok(dt);
     }
