@@ -8,6 +8,7 @@ use tedge_api::PluginBuilder;
 pub mod configuration;
 pub mod errors;
 mod task;
+mod core_task;
 mod plugin_task;
 mod reactor;
 mod utils;

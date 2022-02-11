@@ -26,31 +26,47 @@ struct PluginTaskPrep {
     plugin_recv: Receiver,
     task_sender: Sender,
     task_recv: Receiver,
+    core_msg_sender: Sender,
 }
 
 impl Reactor {
     pub async fn run(self) -> Result<()> {
         self.verify_configurations().await?;
 
-        self.0
+        let buf_size = self.0.config().communication_buffer_size().get();
+        let (core_msg_sender, core_msg_recv) = tokio::sync::mpsc::channel(buf_size);
+
+        let instantiated_plugins = self.0
             .config()
             .plugins()
             .iter()
-            .map(|(pname, pconfig)| self.instantiate_plugin(pname, pconfig))
+            .map(|(pname, pconfig)| self.instantiate_plugin(pname, pconfig, core_msg_sender.clone()))
             .collect::<futures::stream::FuturesUnordered<_>>()
             .collect::<Vec<Result<_>>>()
-            .await // instantiation
+            .await
             .into_iter()
-            .collect::<Result<Vec<PluginTaskPrep>>>()
-            .and_then(associate_plugin_task_senders)?
+            .collect::<Result<Vec<_>>>()?;
+
+        let running_core = {
+            let plugin_senders = instantiated_plugins.iter()
+                .map(|prep| (prep.name.clone(), prep.task_sender.clone()))
+                .collect();
+            crate::core_task::CoreTask::new(core_msg_recv, plugin_senders).run()
+        };
+
+        let running_plugins = associate_plugin_task_senders(instantiated_plugins)?
             .into_iter()
             .map(Task::run)
+            .map(Box::pin)
             .collect::<futures::stream::FuturesUnordered<_>>() // main loop
-            .collect::<Vec<Result<()>>>()
-            .await
+            .collect::<Vec<Result<()>>>();
+
+        let (plugin_res, core_res) = tokio::join!(running_plugins, running_core);
+
+        plugin_res
             .into_iter() // result type conversion
             .collect::<Result<Vec<()>>>()
-            .map(|_| ())
+            .and_then(|_| core_res)
     }
 
     /// Check whether all configured plugin kinds exist (are available in registered plugins)
@@ -87,7 +103,7 @@ impl Reactor {
             .map(AsRef::as_ref)
     }
 
-    async fn instantiate_plugin(&self, plugin_name: &str, plugin_config: &PluginInstanceConfiguration) -> Result<PluginTaskPrep> {
+    async fn instantiate_plugin(&self, plugin_name: &str, plugin_config: &PluginInstanceConfiguration, core_msg_sender: Sender) -> Result<PluginTaskPrep> {
         let builder = self.find_plugin_builder(plugin_config.kind())
             .ok_or_else(|| {
                 let kind_name = plugin_config.kind().as_ref().to_string();
@@ -116,6 +132,7 @@ impl Reactor {
                 plugin_recv: plugin_message_receiver,
                 task_sender,
                 task_recv: task_receiver,
+                core_msg_sender,
             })
     }
 }
@@ -139,7 +156,7 @@ fn associate_plugin_task_senders(instantiated_plugins: Vec<PluginTaskPrep>) -> R
         .map(|prep| -> Result<PluginTask> {
             let plugin_task_senders = senders_for_plugin_mapping.remove(&prep.name).unwrap(); // TODO: If this panics, we have a bug
 
-            Ok(PluginTask::new(prep.name, prep.plugin, prep.plugin_recv, prep.task_recv, plugin_task_senders))
+            Ok(PluginTask::new(prep.name, prep.plugin, prep.plugin_recv, prep.task_recv, plugin_task_senders, prep.core_msg_sender))
         })
         .collect()
 }
