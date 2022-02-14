@@ -128,7 +128,7 @@ impl Downloader {
         .await?;
 
         let file_len = match response.content_length() {
-            Some(len) => len as usize,
+            Some(len) => len,
             None => 0,
         };
         let mut file =
@@ -159,7 +159,7 @@ impl Downloader {
 
 fn create_file_and_try_pre_allocate_space(
     file_path: &Path,
-    file_len: usize,
+    file_len: u64,
 ) -> Result<File, DownloadError> {
     let file = File::create(file_path)?;
     if file_len > 0 {
@@ -167,9 +167,8 @@ fn create_file_and_try_pre_allocate_space(
             let tmpstats = statvfs::statvfs(root)?;
             // Reserve 5% of total disk space
             let five_percent_disk_space =
-                (tmpstats.blocks() as usize * tmpstats.block_size() as usize) * 5 / 100;
-            let usable_disk_space = tmpstats.blocks_free() as usize
-                * tmpstats.block_size() as usize
+                (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
+            let usable_disk_space = tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64
                 - five_percent_disk_space;
 
             if file_len >= usable_disk_space {
@@ -244,7 +243,7 @@ mod tests {
     async fn downloader_download_with_content_length_larger_than_usable_disk_space(
     ) -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
-        let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
+        let usable_disk_space = tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64;
         let _mock1 = mock("GET", "/some_file.txt")
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
