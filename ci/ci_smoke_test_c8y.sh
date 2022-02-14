@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/usr/bin/bash
 
 # Smoke test for Cumulocity
 # - Rebuild bridge
@@ -74,7 +74,10 @@ fi
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
-export C8YDEVICEID=$(./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+python3 -m venv ~/env-c8y-api
+source ~/env-c8y-api/bin/activate
+pip3 install c8y-api
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 # after calling the script, the ID should be there
 if [ -z $C8YDEVICEID ]; then
