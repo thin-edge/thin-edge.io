@@ -11,6 +11,7 @@
 	<groups inherit="true">
 	  <group></group>
 	</groups>
+  <skipped reason="instable https://github.com/thin-edge/thin-edge.io/issues/752"/>
 	<modes inherit="true">
 	</modes>
   </classification>
