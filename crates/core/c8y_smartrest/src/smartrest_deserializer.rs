@@ -170,8 +170,7 @@ fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
 {
-    // NOTE `OffsetDateTime` is used here because c8y uses for log requests a date time string which
-    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
+    // NOTE `OffsetDateTime` is used here because c8y uses for log requests a date time string which is not compliant with rfc3339
     // c8y result:
     // 2021-10-23T19:03:26+0100
     // rfc3339 expected:

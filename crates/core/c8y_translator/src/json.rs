@@ -14,9 +14,9 @@
 //! ```
 
 use crate::serializer;
-use chrono::prelude::*;
 use clock::{Clock, WallClock};
 use thin_edge_json::parser::*;
+use time::{self, OffsetDateTime};
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
@@ -46,7 +46,7 @@ pub fn from_thin_edge_json_with_child(
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
-    timestamp: DateTime<FixedOffset>,
+    timestamp: OffsetDateTime,
     maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
@@ -58,8 +58,10 @@ fn from_thin_edge_json_with_timestamp(
 mod tests {
     use super::*;
     use assert_json_diff::*;
+    use proptest::prelude::*;
     use serde_json::{json, Value};
     use test_case::test_case;
+    use time::{format_description, macros::datetime};
 
     #[test]
     fn check_single_value_translation() {
@@ -68,14 +70,17 @@ mod tests {
                   "pressure": 220.0
                }"#;
 
-        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let output =
             from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
-            "time": timestamp.to_rfc3339(),
+            "time": timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
             "temperature": {
                 "temperature": {
                     "value": 23.0
@@ -137,14 +142,17 @@ mod tests {
             "pressure": 98.0
         }"#;
 
-        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let output =
             from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None);
 
         let expected_output = json!({
             "type": "ThinEdgeMeasurement",
-            "time": timestamp.to_rfc3339(),
+            "time": timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
             "temperature": {
                 "temperature": {
                     "value": 25.0
@@ -200,7 +208,6 @@ mod tests {
             actual_output
         );
     }
-    use proptest::prelude::*;
 
     proptest! {
 
@@ -270,7 +277,7 @@ mod tests {
         thin_edge_json: &str,
         expected_output: Value,
     ) {
-        let timestamp = FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0);
+        let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
         let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, Some(child_id));
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),

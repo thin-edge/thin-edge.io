@@ -234,7 +234,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "batcher"
 version = "0.5.2"
 dependencies = [
- "chrono",
+ "time 0.3.5",
  "tokio",
 ]
 
@@ -354,7 +354,6 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -364,6 +363,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -424,7 +424,6 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "time 0.1.43",
  "winapi",
 ]
 
@@ -447,7 +446,6 @@ dependencies = [
 name = "clock"
 version = "0.5.2"
 dependencies = [
- "chrono",
  "mockall",
  "serde",
  "time 0.3.5",
@@ -2704,7 +2702,6 @@ dependencies = [
  "batcher",
  "c8y_smartrest",
  "c8y_translator",
- "chrono",
  "clock",
  "csv",
  "download",
@@ -2811,7 +2808,6 @@ version = "0.5.2"
 dependencies = [
  "anyhow",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",

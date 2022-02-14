@@ -618,7 +618,7 @@ mod tests {
     #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
     #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
     fn test_datetime_parsing_from_path(file_path: &str) {
-        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // checking that `get_date_from_file_path` unwraps a `OffsetDateTime` object.
         // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
@@ -630,7 +630,7 @@ mod tests {
     #[test_case("/path/to/another-variant-07:45:41Z-2021-10-25T.log")]
     #[test_case("/yet-another-variant-2021-10-25T07:45Z.log")]
     fn test_datetime_parsing_from_path_fail(file_path: &str) {
-        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // checking that `get_date_from_file_path` unwraps a `OffsetDateTime` object.
         // this should return an err.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);

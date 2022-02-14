@@ -1,11 +1,11 @@
 //! The in-memory data model representing ThinEdge JSON.
 
-use chrono::prelude::*;
+use time::OffsetDateTime;
 
 /// In-memory representation of parsed ThinEdge JSON.
 #[derive(Debug)]
 pub struct ThinEdgeJson {
-    pub timestamp: Option<DateTime<FixedOffset>>,
+    pub timestamp: Option<OffsetDateTime>,
     pub values: Vec<ThinEdgeValue>,
 }
 
@@ -14,7 +14,7 @@ impl ThinEdgeJson {
         self.timestamp.is_some()
     }
 
-    pub fn set_timestamp(&mut self, timestamp: DateTime<FixedOffset>) {
+    pub fn set_timestamp(&mut self, timestamp: OffsetDateTime) {
         self.timestamp = Some(timestamp)
     }
 }

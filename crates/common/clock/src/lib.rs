@@ -1,9 +1,8 @@
-use chrono::{DateTime, FixedOffset, Local};
 use mockall::automock;
 use serde::{Deserialize, Deserializer};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-pub type Timestamp = DateTime<FixedOffset>;
+pub type Timestamp = OffsetDateTime;
 
 #[automock]
 pub trait Clock: Sync + Send + 'static {
@@ -15,8 +14,7 @@ pub struct WallClock;
 
 impl Clock for WallClock {
     fn now(&self) -> Timestamp {
-        let local_time_now = Local::now();
-        local_time_now.with_timezone(local_time_now.offset())
+        OffsetDateTime::now_utc()
     }
 }
 
@@ -29,5 +27,5 @@ where
     let timestamp = String::deserialize(deserializer)?;
     OffsetDateTime::parse(timestamp.as_str(), &Rfc3339)
         .map_err(serde::de::Error::custom)
-        .map(|val| Some(val))
+        .map(Some)
 }
