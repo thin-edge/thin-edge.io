@@ -130,9 +130,9 @@ impl TryInto<Topic> for &str {
     }
 }
 
-impl Into<TopicFilter> for Topic {
-    fn into(self) -> TopicFilter {
-        self.filter()
+impl From<Topic> for TopicFilter {
+    fn from(topic: Topic) -> TopicFilter {
+        topic.filter()
     }
 }
 
