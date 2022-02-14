@@ -7,6 +7,9 @@ use serde::Deserialize;
 use std::io::{self};
 use std::process::{Command, ExitStatus, Stdio};
 use structopt::StructOpt;
+use rumqttc::{Event, Incoming, Outgoing, Packet};
+
+const DEFAULT_QUEUE_CAPACITY: usize = 10;
 
 #[derive(StructOpt)]
 struct AptCli {
@@ -61,7 +64,7 @@ struct SoftwareModuleUpdate {
     pub path: Option<String>,
 }
 
-fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
+fn run(operation: PluginOp, module_type: &str) -> Result<ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List {} => {
             let apt = Command::new("apt")
@@ -70,6 +73,14 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 .spawn()
                 .map_err(|err| InternalError::exec_error("apt", err))?;
 
+            let linefilter = if module_type == "tedge" {
+                // all packages starting with "tedge"
+                r#"{if ($1 != "Listing..." && $1  ~ /^tedge.*/) { print $1"\t"$3 }}"#
+            } else {
+                // all packages not starting with "tedge"
+                r#"{if ($1 != "Listing..." && $1 !~ /^tedge.*/) { print $1"\t"$3 }}"#
+            };
+
             // apt output    = openssl/focal-security,now 1.1.1f-1ubuntu2.3 amd64 [installed]
             // awk -F '[/ ]' =   $1   ^       $2         ^   $3            ^   $4
             // awk print     =   name ^                  ^   version       ^
@@ -77,7 +88,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 .args(vec![
                     "-F",
                     "[/ ]",
-                    r#"{if ($1 != "Listing...") { print $1"\t"$3}}"#,
+                    linefilter,
                 ])
                 .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()
@@ -240,23 +251,73 @@ fn main() {
     // On usage error, the process exits with a status code of 1
     let apt = AptCli::from_args();
 
-    match run(apt.operation) {
+    // That plugin can be called via softlinks. The module type the plugin serves is
+    // derived from the exec name with which it was called (i.E. a softlink name the original filename).
+    // NOTE: In case module type can not be derived, the plugin shall pani. Thats why unwrap() is used intentionally.
+    let args : Vec<String> = std::env::args().collect();
+    let module_type = std::path::Path::new(& args[0]).file_name().unwrap().to_os_string().into_string().unwrap();
+    let exit_code;
+
+    match run(apt.operation, &module_type) {
         Ok(status) if status.success() => {
-            std::process::exit(0);
+            exit_code = 0;
         }
 
         Ok(status) => {
             if status.code().is_some() {
-                std::process::exit(2);
+                exit_code= 2;
             } else {
                 eprintln!("Interrupted by a signal!");
-                std::process::exit(4);
+                exit_code = 4;
             }
         }
 
         Err(err) => {
             eprintln!("ERROR: {}", err);
-            std::process::exit(5);
+            exit_code = 5;
         }
     }
+
+    if module_type == "tedge" {
+
+        let mut publish_succeeded = false;
+
+        let mqtt_port = 1883; // TODO: read from tedge-config
+
+        // loop until message has arrived at the broker
+        while !publish_succeeded {
+
+            // Using here runmqtt directly instead of tedge's mqtt_channel class, to have access
+            // to runmqtt's eventloop for feedback (PubComp). That is to wait with plugin's process-exit until
+            // published message has really arrived at the broker.
+            let mut options = rumqttc::MqttOptions::new(String::from("sm plugin-apt"), String::from("localhost"), mqtt_port);
+            options.set_clean_session(true);
+            let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
+            _ = client.publish(String::from("tedge/plugins/software/tedge"), rumqttc::QoS::ExactlyOnce, true, exit_code.to_string());
+
+            for event in connection.iter() {
+                match event {
+
+                    Ok(Event::Incoming(Packet::PubComp(_))) => {
+                      publish_succeeded = true;
+                      break;
+                    }
+
+                    // TODO: Crosscheck that all fail cases are covered!
+                    //       Check for a more safe way to really assure not to run in endless loop?
+                    Ok(Event::Outgoing(Outgoing::Disconnect))
+                    | Ok(Event::Incoming(Incoming::Disconnect))
+                    | Err(_) => {
+                      // Sending pub to broker failed. Wait some time to not overload the CPU and loopback network with MQTT pub retries.
+                      std::thread::sleep(std::time::Duration::from_secs(5));
+                      break;
+                    }
+                    _ => { }
+                }
+            }
+        }
+    }
+
+    std::process::exit(exit_code);
 }
+

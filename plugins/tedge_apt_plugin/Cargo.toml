@@ -19,6 +19,7 @@ structopt = "0.3"
 thiserror = "1.0"
 csv = "1.1"
 serde = { version = "1", features = ["derive"] }
+rumqttc = "0.10"
 
 [dev-dependencies]
 anyhow = "1.0"
