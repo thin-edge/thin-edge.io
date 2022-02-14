@@ -242,7 +242,6 @@ impl JwtAuthHttpProxy {
             .build()?;
 
         let response = self.http_con.execute(request).await?;
-        dbg!(&response);
         let event_response_body = response.json::<SmartRestLogEvent>().await?;
 
         Ok(event_response_body.id)

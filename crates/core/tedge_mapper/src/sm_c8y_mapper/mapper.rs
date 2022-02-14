@@ -29,6 +29,8 @@ use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
 use tracing::{debug, error, info, instrument};
 
 const SM_MAPPER: &str = "SM-C8Y-Mapper";
+const SM_MAPPER_JWT_TOKEN_SESSION_NAME: &str = "SM-C8Y-Mapper-JWT-Token";
+
 pub struct CumulocitySoftwareManagementMapper {}
 
 impl CumulocitySoftwareManagementMapper {
@@ -79,7 +81,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config, SM_MAPPER).await?;
+        let http_proxy =
+            JwtAuthHttpProxy::try_new(&tedge_config, SM_MAPPER_JWT_TOKEN_SESSION_NAME).await?;
         let mut sm_mapper =
             CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
 

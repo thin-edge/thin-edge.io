@@ -1311,30 +1311,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "log_request_plugin"
-version = "0.5.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "c8y_api",
- "c8y_smartrest",
- "chrono",
- "csv",
- "futures",
- "mockall",
- "mqtt_channel",
- "reqwest",
- "serde",
- "serde_json",
- "tedge_config",
- "tempfile",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "matchers"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2749,6 +2725,30 @@ version = "0.5.2"
 dependencies = [
  "structopt",
  "thiserror",
+]
+
+[[package]]
+name = "tedge_logfile_request_plugin"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_smartrest",
+ "chrono",
+ "csv",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

@@ -67,8 +67,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let msg = get_log_file_request_done_message(&upload_event_url).await?;
     let () = mqtt_client.published.send(msg).await?;
 
-    // force a pause to allow 4. to run
-    let () = do_one_second_pause().await;
+    mqtt_client.close().await;
 
     Ok(())
 }
