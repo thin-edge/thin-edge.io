@@ -43,12 +43,14 @@ pub struct SoftwareListRequest {
 
 impl<'a> Jsonify<'a> for SoftwareListRequest {}
 
-impl SoftwareListRequest {
-    pub fn new() -> SoftwareListRequest {
+impl Default for SoftwareListRequest {
+    fn default() -> SoftwareListRequest {
         let id = nanoid!();
         SoftwareListRequest { id }
     }
+}
 
+impl SoftwareListRequest {
     pub fn new_with_id(id: &str) -> SoftwareListRequest {
         SoftwareListRequest { id: id.to_string() }
     }
@@ -69,15 +71,17 @@ pub struct SoftwareUpdateRequest {
 
 impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
 
-impl SoftwareUpdateRequest {
-    pub fn new() -> SoftwareUpdateRequest {
+impl Default for SoftwareUpdateRequest {
+    fn default() -> SoftwareUpdateRequest {
         let id = nanoid!();
         SoftwareUpdateRequest {
             id,
             update_list: vec![],
         }
     }
+}
 
+impl SoftwareUpdateRequest {
     pub fn new_with_id(id: &str) -> SoftwareUpdateRequest {
         SoftwareUpdateRequest {
             id: id.to_string(),
@@ -474,12 +478,14 @@ pub struct RestartOperationRequest {
 
 impl<'a> Jsonify<'a> for RestartOperationRequest {}
 
-impl RestartOperationRequest {
-    pub fn new() -> RestartOperationRequest {
+impl Default for RestartOperationRequest {
+    fn default() -> RestartOperationRequest {
         let id = nanoid!();
         RestartOperationRequest { id }
     }
+}
 
+impl RestartOperationRequest {
     pub fn new_with_id(id: &str) -> RestartOperationRequest {
         RestartOperationRequest { id: id.to_string() }
     }

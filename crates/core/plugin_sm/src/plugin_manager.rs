@@ -260,12 +260,16 @@ impl ExternalPlugins {
         response
     }
 
-    fn error_message(log_file: &str, error_count: i32) -> Option<String> {
+    fn error_message(log_file: &Path, error_count: i32) -> Option<String> {
         if error_count > 0 {
             let reason = if error_count == 1 {
-                format!("1 error, see device log file {}", log_file)
+                format!("1 error, see device log file {}", log_file.display())
             } else {
-                format!("{} errors, see device log file {}", error_count, log_file)
+                format!(
+                    "{} errors, see device log file {}",
+                    error_count,
+                    log_file.display()
+                )
             };
             Some(reason)
         } else {
