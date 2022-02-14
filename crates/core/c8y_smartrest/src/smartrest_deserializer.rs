@@ -1,11 +1,11 @@
 use crate::error::SmartRestDeserializerError;
 use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
-use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
+use time::{format_description, OffsetDateTime};
 
 #[derive(Debug)]
 enum CumulocitySoftwareUpdateActions {
@@ -166,11 +166,11 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
-fn to_datetime<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
 {
-    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
+    // NOTE `OffsetDateTime` is used here because c8y uses for log requests a date time string which
     // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
     // c8y result:
     // 2021-10-23T19:03:26+0100
@@ -191,7 +191,7 @@ where
         _ => date_string,
     };
 
-    match DateTime::parse_from_rfc3339(&date_string) {
+    match OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339) {
         Ok(result) => Ok(result),
         Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
     }
@@ -207,9 +207,9 @@ pub struct SmartRestLogRequest {
     pub device: String,
     pub log_type: String,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_from: DateTime<FixedOffset>,
+    pub date_from: OffsetDateTime,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_to: DateTime<FixedOffset>,
+    pub date_to: OffsetDateTime,
     pub needle: Option<String>,
     pub lines: usize,
 }

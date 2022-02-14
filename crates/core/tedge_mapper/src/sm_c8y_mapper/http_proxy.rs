@@ -5,7 +5,6 @@ use crate::sm_c8y_mapper::json_c8y::{
 use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
 use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
-use chrono::{DateTime, Local};
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
@@ -13,6 +12,7 @@ use tedge_config::{
     C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
     MqttPortSetting, TEdgeConfig,
 };
+use time::{format_description, OffsetDateTime};
 use tracing::{error, info, instrument};
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -200,16 +200,18 @@ impl JwtAuthHttpProxy {
     /// Make a POST request to /event/events and return the event id from response body.
     /// The event id is used to upload the binary.
     fn create_log_event(&self) -> C8yCreateEvent {
-        let local: DateTime<Local> = Local::now();
+        let local = OffsetDateTime::now_utc();
 
         let c8y_managed_object = C8yManagedObject {
             id: self.end_point.c8y_internal_id.clone(),
         };
 
         C8yCreateEvent::new(
-            c8y_managed_object.to_owned(),
+            c8y_managed_object,
             "c8y_Logfile",
-            &local.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            &local
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap(),
             "software-management",
         )
     }

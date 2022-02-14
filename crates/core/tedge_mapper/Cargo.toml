@@ -49,6 +49,7 @@ tedge_users = { path = "../../common/tedge_users" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
+time = "0.3"
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
@@ -62,6 +63,7 @@ serde_json = "1.0"
 serial_test = "0.5"
 tempfile = "3.2"
 test-case = "1.2"
+time = { version = "0.3", features = ["macros"] }
 tokio-test = "0.4"
 
 [features]
