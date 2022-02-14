@@ -19,3 +19,24 @@ fn excerpt_returns_string_starting_from_line_and_column() {
     );
     assert_eq!("n", excerpt("line 1\nline 2\nline 3\n", 2, 3, 1));
 }
+
+#[test]
+fn excerpt_returns_string_starting_from_line_and_column_but_limits_output() {
+    let expected = "ne 2\nli";
+    let result = excerpt("line 1\nline 2\nline 3\n", 2, 3, 7);
+    assert_eq!(expected, result);
+}
+
+#[test]
+fn excerpt_counts_newline_as_one_char_from_beginning() {
+    let expected = "\n\n\n";
+    let result = excerpt("\n\n\n\n", 1, 1, 3);
+    assert_eq!(expected, result);
+}
+
+#[test]
+fn excerpt_counts_newline_as_one_char_in_between_lines() {
+    let expected = "\n\n";
+    let result = excerpt("\n\n\n\n", 2, 1, 2);
+    assert_eq!(expected, result);
+}
