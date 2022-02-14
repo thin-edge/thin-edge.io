@@ -229,7 +229,7 @@ where
 
     #[instrument(skip(self), name = "software-list")]
     async fn ask_software_list(&mut self) -> Result<(), SMCumulocityMapperError> {
-        let request = SoftwareListRequest::new();
+        let request = SoftwareListRequest::default();
         let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
         let json_list_request = request.to_json()?;
         let () = self.publish(&topic, json_list_request).await?;
@@ -438,7 +438,7 @@ where
         let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
         let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
 
-        let request = RestartOperationRequest::new();
+        let request = RestartOperationRequest::default();
         let () = self.publish(&topic, request.to_json()?).await?;
 
         Ok(())
