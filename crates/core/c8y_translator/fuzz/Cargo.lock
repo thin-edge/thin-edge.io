@@ -25,7 +25,7 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "c8y_translator"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "chrono",
  "clock",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "chrono",
  "mockall",
@@ -118,7 +118,7 @@ checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
 name = "json-writer"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -331,7 +331,7 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 
 [[package]]
 name = "thin_edge_json"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "chrono",
  "clock",

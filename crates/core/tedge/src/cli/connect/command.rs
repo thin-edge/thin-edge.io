@@ -74,12 +74,18 @@ impl Command for ConnectCommand {
             let br_config = self.bridge_config(&config)?;
             if self.check_if_bridge_exists(&br_config) {
                 return match self.check_connection(&config) {
-                    Ok(_) => {
+                    Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = br_config.cloud_name.clone();
                         println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
-                    Err(err) => Err(err.into()),
+                    _ => {
+                        println!(
+                            "Connection check to {} cloud failed.\n",
+                            self.cloud.as_str()
+                        );
+                        Ok(())
+                    }
                 };
             } else {
                 return Err((ConnectError::DeviceNotConnected {
@@ -131,7 +137,7 @@ impl Command for ConnectCommand {
 
         match self.check_connection(&config) {
             Ok(DeviceStatus::AlreadyExists) => {
-                println!("Connection check is successfull.\n");
+                println!("Connection check is successful.\n");
             }
             _ => {
                 println!(
@@ -236,7 +242,7 @@ where
 }
 
 // Check the connection by using the jwt token retrival over the mqtt.
-// If successfull in getting the jwt token '71,xxxxx', the connection is established.
+// If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
@@ -273,8 +279,8 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                println!("Local MQTT publish has timed out.");
-                return Err(ConnectError::TimeoutElapsedError);
+                eprintln!("ERROR: Local MQTT publish has timed out.");
+                break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("ERROR: Disconnected");
@@ -345,7 +351,7 @@ fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                println!("Local MQTT publish has timed out.");
+                eprintln!("ERROR: Local MQTT publish has timed out.");
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
