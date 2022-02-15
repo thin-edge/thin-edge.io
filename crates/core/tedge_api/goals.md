@@ -1,41 +1,101 @@
 # Summary
 
-Currently there are is no centralized specification of both behaviour and
-messages. This crate would bridge this gap by introducing traits for potential
-runtimes to hook into. The goal is to be *agnostic* on whether a given `Plugin`
-is part of the same executable or not. Since all messages are meant to be
-easily de/serializable they are also transport agnostic, allowing implementers
-and users to configure it how they see it fit.
+This crate would bring centralized definitions of both messages and behaviour
+by introducing traits for runtime Plugins to hook into. One goal is to be
+*agnostic* on whether a given `Plugin` is part of the same executable or not.
+As all messages are easily de/serializable they are also transport agnostic,
+allowing implementers and users to send them however they see fit.
 
 # Motivation
 
 Users and developers need to have a common ground to future proof communication
 and growth. A common crate to both will make sure that all sides do not grow
-apart.
+apart and stay compatible to each other.
 
 # Guide-level explanation
 
 _This section is meant to be read as if the feature was_ already _implemented._
 
-
 -----
 
-Thin-Edge is an edge focused IoT framework built upon a message passing core
+Thin-Edge is an edge focused IoT framework built upon a message passing router
 with a modular approach for extending its functionality.
 
 Thin-Edge can be extended with two flavors of plugins:
 
+- Run-time, which are provided to Thin-Edge and meant to interoperate with it
+  specifically
 - Compile-time, which are built into the binary and written in Rust.
     - These provide the benefit of assuring compatibility with future versions
       during the build step
-- External, which are executables that simply exist on your target system
 
-Both are functionally equivalent and support the same features. If you are new
-to the project you should first get an overview of the project and its goals.
+Both ways are _functionally equivalent_ and _support the same features_.
 
-Creating a new plugin then takes the following steps:
+We aim to provide plugins for all common server and use-cases, see further down
+if you wish to extend Thin-Edge yourself.
 
-**For Compile Plugins**
+## Configuring your plugins
+
+Included plugins first need to get configured before they can do their work.
+The core idea here is that you can create as many plugin instances of a single
+plugin _kind_ as you wish. For example you could have multiple "File Watcher"
+instances that each watch a different file. To see how this is done, check out
+this example file: 
+
+- Create a plugin named 'simple-heartbeat' of kind 'heartbeat'
+- Create two plugins that both use an external 
+
+```toml
+[plugins.simple-heartbeat] # 'simple-heartbeat' is the name of this _instance_,
+                           # it may be the same as its kind
+kind = "heartbeat" # 'heartbeat' is the _kind_ of plugin you wish to instantiate
+configuration = { targets = ["watch_sudo_calls", "check_service_alive"], interval-ms = 400 }
+
+[plugins.watch_sudo_calls]
+kind = "stdio-external"
+configuration = { path = "/srv/thin-edge-plugins/sudo_watcher" }
+
+[plugins.check_service_alive] # There can be more than one instance of the same kind of plugin
+kind = "stdio-external"
+configuration = { path = "/srv/thin-edge-plugins/check_service" }
+```
+
+Once you have this configuration file, you can go on and start Thin-Edge
+
+## Starting Thin-Edge
+
+On startup `tedge` will:
+
+- Check if your configuration is syntactically correct and that all requested
+  kinds exist
+- Startup the requested plugins and process messages
+
+In this case, the `heartbeat` service will keep sending messages every 400ms to
+both `watch_sudo_calls` and `check_service_alive` with a
+`MessageKind::SignalPluginState` to which they should answer with their
+status, e.g. `PluginStatus::Ok`.
+
+## Writing your own plugins
+
+### For External Plugins
+
+External plugins are executables that interact with the `tedge` api through a
+specific compile-time plugin, like for example `StdIoExternalPlugin` which
+communicates through STDIN/STDOUT.
+
+To use it, simply choose the plugin that fits your communication style and move
+to the configuration section below.
+
+### For Compile Plugins
+
+Compile-time plugins are written in Rust. They require two parts: A
+`PluginBuilder` and a `Plugin`. 
+
+- The `PluginBuilder` creates instances of `Plugins` and verifies if the
+  configuration is sane.
+- The `Plugin` is the object that contains the 'business logic' of your plugin
+
+So, to get started:
 
 1. Implement `PluginBuilder` for the struct that you will use to instantiate your plugin.
 
@@ -43,18 +103,19 @@ It looks like this:
 
 ```rust
 /// A plugin builder for a given plugin
+#[async_trait]
 pub trait PluginBuilder: Sync + Send + 'static {
-    /// The name of the plugins this creates, this should be unique and will prevent startup otherwise
-    fn name(&self) -> &'static str;
+    /// The a name for the kind of plugins this creates, this should be unique and will prevent startup otherwise
+    fn kind_name(&self) -> &'static str;
 
     /// This may be called anytime to verify whether a plugin could be instantiated with the
     /// passed configuration.
-    fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
+    async fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
 
     /// Instantiate a new instance of this plugin using the given configuration
     ///
     /// This _must not_ block
-    fn instantiate(
+    async fn instantiate(
         &self,
         config: PluginConfiguration,
         tedge_comms: Comms,
@@ -64,7 +125,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
 
 Things of note here:
 
-- `name` _has_ to be unique, and will be used to refer to this kind of plugin
+- `kind_name` _has_ to be unique, and will be used to refer to this kind of plugin
 - `verify_configuration` allows one to check if a given configuration _could even work_
     - It however is not required to prove it
 - `instantiate` which actually constructs your plugin and returns a new instance of it
@@ -72,91 +133,32 @@ Things of note here:
       channel to the tedge core, and through which messages can be sent
 
 
-
 2. Implement `Plugin` for your plugin struct.
 
 `Plugin` is defined as follows:
 
 ```rust
+/// A functionality extension to ThinEdge
 #[async_trait]
 pub trait Plugin: Sync + Send {
     /// The plugin can set itself up here
     async fn setup(&mut self) -> Result<(), PluginError>;
 
     /// Handle a message specific to this plugin
-    async fn handle_message(&self, message: PluginMessage) -> Result<(), PluginError>;
+    async fn handle_message(&self, message: Message) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
     async fn shutdown(&mut self) -> Result<(), PluginError>;
 }
 ```
 
-It follows a straightforward lifecycle:
+Plugins follow a straightforward lifecycle:
 
-- After being instantiated the plugin will have a chance to set itself up and get ready accept messages
-- It will then continuously receive messages as they come in (and are addressed to it)
+- After being instantiated the plugin will have a chance to set itself up and get ready to accept messages
+- It will then continuously receive messages as they come in
 - If it ever needs to be shutdown, its shutdown method will give it the opportunity to do so.
 
-See `PluginMessage` for possible values.
-
-
-**For External Plugins**
-
-External plugins are executables that interact with the `tedge` api through a
-specific compile-time plugin, like for example `StdIoExternalPlugin` which
-communicates through STDIN/STDOUT.
-
-To use it, simply choose the plugin that fits your communication style and move
-to the configuration section below.
-
-
-**Configuring your plugin**
-
-Only adding a compile time plugin to the list of plugins does nothing on its
-own. They simple serve as 'factories' of the given plugin, depending on how you configure it.
-
-An example configuration can be seen below. It configures a heartbeat plugin as
-well as an external bash script that replies to the heartbeats.
-
-The configuration:
-
-```toml
-[plugins.simple-heartbeat] # 'simple-heartbeat' is the name of this _instance_,
-                           # it may be the same as its kind, both are unique to
-                           # each other though
-kind = "heartbeat" # 'heartbeat' is the compile-time name of the plugin
-
-configuration = { targets = ["simple-bash", "simple-bash2"] }
-
-[plugins.simple-bash]
-kind = "stdio-external"
-
-configuration = { path = "/usr/bin/bash-service", interval-ms = 500 }
-
-[plugins.simple-bash2] # There can be more than one instance of the same kind of plugin
-kind = "stdio-external"
-
-configuration = { path = "/usr/bin/bash-service", interval-ms = 500 }
-```
-
-The bash file:
-
-```bash
-# Rethink hard if you actually want to implement this in bash
-# TODO
-```
-
-**Starting tedge**
-
-On startup `tedge` will:
-
-- Check if your configuration is syntactically correct and that all requested
-  kinds exist
-- Startup the requested plugins and process messages
-
-In this case, the `heartbeat` service will keep sending messages every 500ms to
-both "simple-bash" and "simple-bash2" with a `PluginMessage::SignalPluginState`
-to which they should answer with their status, e.g. `PluginStatus::Ok`.
+See `message::Message` for possible values.
 
 -------
 
@@ -307,9 +309,10 @@ Alternatives could include:
 
 # Unresolved questions
 
-- How to extend the `PluginMessageKind` type?
+- How to extend the `MessageKind` type?
     - The enum itself is `#[non_exhaustive]`, but extending it still requires a
       whole developer story
+- How does the IO interface look like for external plugins?
 
 # Future possibilities
 
