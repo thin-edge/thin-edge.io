@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/usr/bin/bash
 
 # Smoke test for Cumulocity
 # - Rebuild bridge
@@ -16,7 +16,6 @@
 #    C8YUSERNAME
 #    C8YTENANT
 #    C8YPASS
-#    C8YDEVICEID
 #    EXAMPLEDIR
 
 # a simple function to append lines to files if not already there
@@ -32,13 +31,6 @@ appendtofile() {
 
 if [ -z $C8YDEVICE ]; then
     echo "Error: Please supply your device name as environment variable C8YDEVICE"
-    exit 1
-else
-    echo "Your device: HIDDEN"
-fi
-
-if [ -z $C8YDEVICEID ]; then
-    echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
     exit 1
 else
     echo "Your device: HIDDEN"
@@ -82,19 +74,19 @@ fi
 # Adding sbin seems to be necessary for non Raspberry P OS systems as Debian or Ubuntu
 PATH=$PATH:/usr/sbin
 
-echo "Disconnect old bridge"
+python3 -m venv ~/env-c8y-api
+source ~/env-c8y-api/bin/activate
+pip3 install c8y-api
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
-# Disconnect - may fail if not there
-sudo tedge disconnect c8y
+# after calling the script, the ID should be a numeric value
+if [[ $C8YDEVICEID =~ ^[0-9]+$ ]]; then
+    echo "Your device ID: $C8YDEVICEID"
+else
+    echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
+    exit 1
+fi
 
-# From now on exit if a command exits with a non-zero status.
-# Commands above are allowed to fail
-set -e
-
-./ci/configure_bridge.sh
-
-# wait for certificate to to reflect in the c8y cloud
-sleep 5
 
 echo "Connect again"
 sudo tedge connect c8y
