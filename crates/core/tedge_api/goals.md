@@ -309,4 +309,8 @@ Alternatives could include:
 
 # Unresolved questions
 
+- How to extend the `PluginMessageKind` type?
+    - The enum itself is `#[non_exhaustive]`, but extending it still requires a
+      whole developer story
+
 # Future possibilities
