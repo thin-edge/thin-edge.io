@@ -312,3 +312,10 @@ Alternatives could include:
       whole developer story
 
 # Future possibilities
+
+As all messages are routed through the application itself, it should be
+possible to add other transformations to messages as they are being handled.
+
+- Logging of what communicated with what
+- Access Control
+- Overriding destinations
