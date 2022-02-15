@@ -75,6 +75,13 @@ jobs:
           command: deb
           args: -p tedge_agent
 
+      - name: Build tedge_logfile_request_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_logfile_request_plugin
+
       - name: build sawtooth-publisher for amd64
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -187,6 +194,9 @@ jobs:
       - name: Strip tedge_apama_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apama_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apama_plugin
 
+      - name: Strip tedge_logfile_request_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin
+
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -221,6 +231,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_logfile_request_plugin debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_logfile_request_plugin --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build sawtooth publisher
         uses: actions-rs/cargo@v1

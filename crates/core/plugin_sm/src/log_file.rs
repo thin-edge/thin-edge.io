@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::BufWriter;
@@ -15,8 +16,8 @@ impl LogFile {
         Ok(LogFile { path, buffer })
     }
 
-    pub fn path(&self) -> &str {
-        &self.path.to_str().unwrap_or("/var/log/tedge/agent")
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     pub fn buffer(&mut self) -> &mut BufWriter<File> {

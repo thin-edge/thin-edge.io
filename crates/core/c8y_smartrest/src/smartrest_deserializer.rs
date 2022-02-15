@@ -1,11 +1,12 @@
-use crate::error::SmartRestDeserializerError;
+use crate::error::{SMCumulocityMapperError, SmartRestDeserializerError};
 use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
-use chrono::{DateTime, FixedOffset};
 use csv::ReaderBuilder;
 use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::path::PathBuf;
+use time::{format_description, OffsetDateTime};
 
 #[derive(Debug)]
 enum CumulocitySoftwareUpdateActions {
@@ -71,7 +72,7 @@ impl SmartRestUpdateSoftware {
     }
 
     pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-        let request = self.map_to_software_update_request(SoftwareUpdateRequest::new())?;
+        let request = self.map_to_software_update_request(SoftwareUpdateRequest::default())?;
         Ok(request)
     }
 
@@ -166,12 +167,11 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
-fn to_datetime<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
 {
-    // NOTE `NaiveDateTime` is used here because c8y uses for log requests a date time string which
-    // does not exactly equal `chrono::DateTime::parse_from_rfc3339`
+    // NOTE `OffsetDateTime` is used here because c8y uses for log requests a date time string which is not compliant with rfc3339
     // c8y result:
     // 2021-10-23T19:03:26+0100
     // rfc3339 expected:
@@ -191,7 +191,7 @@ where
         _ => date_string,
     };
 
-    match DateTime::parse_from_rfc3339(&date_string) {
+    match OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339) {
         Ok(result) => Ok(result),
         Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
     }
@@ -207,9 +207,9 @@ pub struct SmartRestLogRequest {
     pub device: String,
     pub log_type: String,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_from: DateTime<FixedOffset>,
+    pub date_from: OffsetDateTime,
     #[serde(deserialize_with = "to_datetime")]
-    pub date_to: DateTime<FixedOffset>,
+    pub date_to: OffsetDateTime,
     pub needle: Option<String>,
     pub lines: usize,
 }
@@ -288,12 +288,50 @@ impl SmartRestJwtResponse {
     }
 }
 
+/// Returns a date time object from a file path or file-path-like string
+/// a typical file stem looks like this: "software-list-2021-10-27T10:29:58Z"
+///
+/// # Examples:
+/// ```
+/// use std::path::PathBuf;
+/// use crate::c8y_smartrest::smartrest_deserializer::get_datetime_from_file_path;
+///
+/// let mut path = PathBuf::new();
+/// path.push("/path/to/file/with/date/in/path-2021-10-27T10:29:58Z");
+/// let path_bufdate_time = get_datetime_from_file_path(&path).unwrap();
+/// ```
+pub fn get_datetime_from_file_path(
+    log_path: &PathBuf,
+) -> Result<OffsetDateTime, SMCumulocityMapperError> {
+    if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
+        // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
+        // to extract the date, rsplit string on "-" and take (last) 3
+        let mut stem_string_vec = stem_string.rsplit('-').take(3).collect::<Vec<_>>();
+        // reverse back the order (because of rsplit)
+        stem_string_vec.reverse();
+        // join on '-' to get the date string
+        let date_string = stem_string_vec.join("-");
+        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339)?;
+
+        return Ok(dt);
+    }
+    match log_path.to_str() {
+        Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
+            path.to_string(),
+        ))?,
+        None => Err(SMCumulocityMapperError::InvalidUtf8Path)?,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
+    use std::fs::File;
+    use std::io::Write;
+    use std::str::FromStr;
     use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.
@@ -568,5 +606,43 @@ mod tests {
         let smartrest = String::from(&format!("510,user"));
         let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
+    }
+
+    #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]
+    #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
+    #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
+    #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
+    fn test_datetime_parsing_from_path(file_path: &str) {
+        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // this should return an Ok Result.
+        let path_buf = PathBuf::from_str(file_path).unwrap();
+        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
+        assert!(path_buf_datetime.is_ok());
+    }
+
+    #[test_case("/path/to/software-list-2021-10-27-10:44:44Z.log")]
+    #[test_case("/path/to/tedge/agent/software-update-10-25-2021T07:45:41Z.log")]
+    #[test_case("/path/to/another-variant-07:45:41Z-2021-10-25T.log")]
+    #[test_case("/yet-another-variant-2021-10-25T07:45Z.log")]
+    fn test_datetime_parsing_from_path_fail(file_path: &str) {
+        // checking that `get_date_from_file_path` unwraps a `chrono::NaiveDateTime` object.
+        // this should return an err.
+        let path_buf = PathBuf::from_str(file_path).unwrap();
+        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
+        assert!(path_buf_datetime.is_err());
+    }
+
+    fn parse_file_names_from_log_content(log_content: &str) -> [&str; 5] {
+        let mut files: Vec<&str> = vec![];
+        for line in log_content.lines() {
+            if line.contains("filename: ") {
+                let filename: &str = line.split("filename: ").last().unwrap();
+                files.push(filename);
+            }
+        }
+        match files.try_into() {
+            Ok(arr) => arr,
+            Err(_) => panic!("Could not convert to Array &str, size 5"),
+        }
     }
 }

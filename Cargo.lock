@@ -234,7 +234,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "batcher"
 version = "0.5.2"
 dependencies = [
- "chrono",
+ "time 0.3.5",
  "tokio",
 ]
 
@@ -330,6 +330,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_api"
+version = "0.1.0"
+dependencies = [
+ "agent_interface",
+ "async-trait",
+ "c8y_smartrest",
+ "chrono",
+ "clock",
+ "csv",
+ "download",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tedge_utils",
+ "tempfile",
+ "test-case",
+ "thin_edge_json",
+ "thiserror",
+ "time 0.3.5",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "c8y_smartrest"
 version = "0.5.2"
 dependencies = [
@@ -337,15 +366,20 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "csv",
  "download",
+ "mqtt_channel",
+ "reqwest",
  "serde",
  "serde_json",
+ "tedge_config",
+ "tempfile",
  "test-case",
  "thin_edge_json",
  "thiserror",
  "time 0.3.5",
+ "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -355,7 +389,6 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -365,6 +398,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
 ]
 
 [[package]]
@@ -449,7 +483,6 @@ dependencies = [
 name = "clock"
 version = "0.5.2"
 dependencies = [
- "chrono",
  "mockall",
  "serde",
  "time 0.3.5",
@@ -2621,7 +2654,6 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-trait",
- "chrono",
  "flockfile",
  "futures",
  "mockall",
@@ -2696,6 +2728,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_logfile_request_plugin"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_smartrest",
+ "chrono",
+ "csv",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "tedge_mapper"
 version = "0.5.2"
 dependencies = [
@@ -2705,9 +2761,9 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "batcher",
+ "c8y_api",
  "c8y_smartrest",
  "c8y_translator",
- "chrono",
  "clock",
  "csv",
  "download",
@@ -2728,6 +2784,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.5",
  "tokio",
  "tokio-test",
  "toml",
@@ -2758,13 +2815,13 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
+checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
 dependencies = [
  "cfg-if 1.0.0",
+ "fastrand",
  "libc",
- "rand",
  "redox_syscall",
  "remove_dir_all",
  "winapi",
@@ -2813,7 +2870,6 @@ version = "0.5.2"
 dependencies = [
  "anyhow",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",

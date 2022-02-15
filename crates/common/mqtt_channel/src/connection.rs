@@ -1,5 +1,6 @@
 use crate::{Config, ErrChannel, Message, MqttError, PubChannel, SubChannel};
 use futures::channel::mpsc;
+use futures::channel::oneshot;
 use futures::{SinkExt, StreamExt};
 use rumqttc::{
     AsyncClient, ConnectionError, Event, EventLoop, Incoming, Outgoing, Packet, StateError,
@@ -17,6 +18,9 @@ pub struct Connection {
 
     /// The channel of the error messages received by this connection.
     pub errors: mpsc::UnboundedReceiver<MqttError>,
+
+    /// A channel to notify that all the published messages have been actually published.
+    pub pub_done: oneshot::Receiver<()>,
 }
 
 impl Connection {
@@ -69,6 +73,7 @@ impl Connection {
         let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
+        let (pub_done_sender, pub_done_receiver) = oneshot::channel();
 
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
@@ -81,13 +86,20 @@ impl Connection {
             mqtt_client,
             published_receiver,
             error_sender,
+            pub_done_sender,
         ));
 
         Ok(Connection {
             received: received_receiver,
             published: published_sender,
             errors: error_receiver,
+            pub_done: pub_done_receiver,
         })
+    }
+
+    pub async fn close(self) {
+        self.published.close_channel();
+        let _ = self.pub_done.await;
     }
 
     async fn open(
@@ -175,12 +187,14 @@ impl Connection {
         }
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
+        let _ = error_sender.close().await;
     }
 
     async fn sender_loop(
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
+        done: oneshot::Sender<()>,
     ) {
         loop {
             match messages_receiver.next().await {
@@ -201,6 +215,7 @@ impl Connection {
             }
         }
         let _ = mqtt_client.disconnect().await;
+        let _ = done.send(());
     }
 
     pub(crate) fn pause_on_error(err: &ConnectionError) -> bool {

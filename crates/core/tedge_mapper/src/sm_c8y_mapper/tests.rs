@@ -1,10 +1,12 @@
-use crate::sm_c8y_mapper::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use crate::sm_c8y_mapper::json_c8y::C8yUpdateSoftwareListResponse;
 use crate::sm_c8y_mapper::mapper::{
     CumulocitySoftwareManagement, CumulocitySoftwareManagementMapper,
 };
-use crate::{operations::Operations, sm_c8y_mapper::error::SMCumulocityMapperError};
-use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
+use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_smartrest::{
+    error::SMCumulocityMapperError, operations::Operations,
+    smartrest_deserializer::SmartRestJwtResponse,
+};
 use mqtt_channel::{Connection, TopicFilter};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::{Maybe, WithTimeout};

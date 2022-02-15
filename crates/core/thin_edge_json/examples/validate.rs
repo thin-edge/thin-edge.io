@@ -1,6 +1,6 @@
-use chrono::prelude::*;
 use std::env;
 use thin_edge_json::measurement::MeasurementVisitor;
+use time::OffsetDateTime;
 
 #[global_allocator]
 static GLOBAL: &stats_alloc::StatsAlloc<std::alloc::System> = &stats_alloc::INSTRUMENTED_SYSTEM;
@@ -36,7 +36,7 @@ struct DummyVisitor;
 impl MeasurementVisitor for DummyVisitor {
     type Error = DummyError;
 
-    fn visit_timestamp(&mut self, _value: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, _value: OffsetDateTime) -> Result<(), Self::Error> {
         Ok(())
     }
     fn visit_measurement(&mut self, _name: &str, _value: f64) -> Result<(), Self::Error> {

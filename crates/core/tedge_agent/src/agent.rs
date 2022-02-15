@@ -466,7 +466,7 @@ impl SmAgent {
             .await?;
 
         // update status to executing.
-        let executing_response = RestartOperationResponse::new(&RestartOperationRequest::new());
+        let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
         let () = responses
             .publish(Message::new(&topic, executing_response.to_bytes()?))
             .await?;

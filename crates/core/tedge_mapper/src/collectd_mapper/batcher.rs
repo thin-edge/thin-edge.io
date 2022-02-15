@@ -7,7 +7,6 @@ use thin_edge_json::{
 };
 
 use crate::collectd_mapper::{collectd::CollectdMessage, error::DeviceMonitorError};
-use chrono::Local;
 use thin_edge_json::group::MeasurementGrouperError;
 
 #[derive(Debug)]
@@ -22,7 +21,7 @@ impl MessageBatch {
         let mut messages = messages.into_iter();
 
         if let Some(first_message) = messages.next() {
-            let timestamp = first_message.timestamp.with_timezone(Local::now().offset());
+            let timestamp = first_message.timestamp;
             let mut batch = MessageBatch::start_batch(first_message, timestamp)?;
             for message in messages {
                 batch.add_to_batch(message)?;
@@ -72,12 +71,12 @@ impl MessageBatch {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use chrono::{TimeZone, Utc};
     use clock::{Clock, WallClock};
+    use time::macros::datetime;
 
     #[test]
     fn test_message_batch_processor() -> anyhow::Result<()> {
-        let timestamp = Utc.ymd(2015, 5, 15).and_hms_milli(0, 0, 1, 444);
+        let timestamp = datetime!(2015-05-15 0:00:01.444 UTC);
         let collectd_message = CollectdMessage::new("temperature", "value", 32.5, timestamp);
         let mut message_batch = MessageBatch::start_batch(collectd_message, WallClock.now())?;
 

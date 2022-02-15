@@ -1,4 +1,4 @@
-use chrono::Duration;
+use time::Duration;
 
 /// The parameters for the batching process.
 #[derive(Debug, Clone)]

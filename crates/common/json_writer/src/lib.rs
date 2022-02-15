@@ -21,14 +21,17 @@ pub enum JsonWriterError {
     InvalidF64Value { value: f64 },
 }
 
-impl JsonWriter {
-    pub fn new() -> Self {
+#[cfg(test)]
+impl Default for JsonWriter {
+    fn default() -> Self {
         Self {
             buffer: Vec::new(),
             needs_separator: false,
         }
     }
+}
 
+impl JsonWriter {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: Vec::with_capacity(capacity),
@@ -93,7 +96,7 @@ mod tests {
 
     #[test]
     fn write_empty_message() -> anyhow::Result<()> {
-        let mut jw = JsonWriter::new();
+        let mut jw = JsonWriter::default();
         jw.write_open_obj();
         jw.write_close_obj();
         assert_eq!(jw.into_string()?, "{}");
@@ -102,7 +105,7 @@ mod tests {
 
     #[test]
     fn write_invalid_f64_message() -> anyhow::Result<()> {
-        let mut jw = JsonWriter::new();
+        let mut jw = JsonWriter::default();
         let value = 1.0 / 0.0;
         let error = jw.write_f64(value).unwrap_err();
         assert_eq!(error.to_string(), "Invalid f64 value inf");

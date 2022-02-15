@@ -1,0 +1,33 @@
+[package]
+name = "c8y_api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+agent_interface = { path = "../agent_interface"}
+async-trait = "0.1"
+c8y_smartrest = { path = "../c8y_smartrest" }
+chrono = "0.4"
+clock = { path = "../../common/clock" }
+csv = "1.1"
+download = { path = "../../common/download" }
+futures = "0.3"
+mockall = "0.10"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_config = { path = "../../common/tedge_config" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+thin_edge_json = { path = "../thin_edge_json" }
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+tempfile = "3.3"
+test-case = "1.2"

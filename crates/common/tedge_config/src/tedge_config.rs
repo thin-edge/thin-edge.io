@@ -2,6 +2,13 @@ use crate::*;
 use certificate::{CertificateError, PemCertificate};
 use std::convert::{TryFrom, TryInto};
 
+/// loads tedge config from system default
+pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
+    let tedge_config_location = TEdgeConfigLocation::from_default_system_location();
+    let config_repository = TEdgeConfigRepository::new(tedge_config_location);
+    Ok(config_repository.load()?)
+}
+
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
 /// as well as the IoT cloud provider specific configurations.

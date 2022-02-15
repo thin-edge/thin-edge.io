@@ -1,12 +1,12 @@
-use chrono::prelude::*;
 use json_writer::{JsonWriter, JsonWriterError};
 use thin_edge_json::measurement::MeasurementVisitor;
+use time::{format_description, OffsetDateTime};
 
 pub struct C8yJsonSerializer {
     json: JsonWriter,
     is_within_group: bool,
     timestamp_present: bool,
-    default_timestamp: DateTime<FixedOffset>,
+    default_timestamp: OffsetDateTime,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -34,7 +34,7 @@ pub enum MeasurementStreamError {
 }
 
 impl C8yJsonSerializer {
-    pub fn new(default_timestamp: DateTime<FixedOffset>, maybe_child_id: Option<&str>) -> Self {
+    pub fn new(default_timestamp: OffsetDateTime, maybe_child_id: Option<&str>) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
         let mut json = JsonWriter::with_capacity(capa);
 
@@ -96,13 +96,18 @@ impl C8yJsonSerializer {
 impl MeasurementVisitor for C8yJsonSerializer {
     type Error = C8yJsonSerializationError;
 
-    fn visit_timestamp(&mut self, timestamp: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
         self.json.write_key("time")?;
-        self.json.write_str(timestamp.to_rfc3339().as_str())?;
+        self.json.write_str(
+            timestamp
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap()
+                .as_str(),
+        )?;
 
         self.timestamp_present = true;
         Ok(())
@@ -146,18 +151,16 @@ impl MeasurementVisitor for C8yJsonSerializer {
 
 #[cfg(test)]
 mod tests {
+    use ::time::macros::datetime;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
 
     use super::*;
-    use chrono::offset::FixedOffset;
 
     #[test]
     fn serialize_single_value_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
@@ -183,9 +186,7 @@ mod tests {
     }
     #[test]
     fn serialize_multi_value_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
@@ -236,9 +237,7 @@ mod tests {
 
     #[test]
     fn serialize_empty_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
 
@@ -257,9 +256,7 @@ mod tests {
 
     #[test]
     fn serialize_timestamp_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_timestamp(timestamp)?;
@@ -281,9 +278,7 @@ mod tests {
 
     #[test]
     fn serialize_timestamp_within_group() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
@@ -301,9 +296,7 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_measurement("alti", 2100.4)?;
@@ -323,9 +316,7 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
@@ -346,9 +337,7 @@ mod tests {
 
     #[test]
     fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, None);
         serializer.visit_start_group("location")?;
@@ -369,9 +358,7 @@ mod tests {
 
     #[test]
     fn serialize_timestamp_child_message() -> anyhow::Result<()> {
-        let timestamp = FixedOffset::east(5 * 3600)
-            .ymd(2021, 6, 22)
-            .and_hms_nano(17, 3, 14, 123456789);
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let mut serializer = C8yJsonSerializer::new(timestamp, Some("child1"));
         serializer.visit_timestamp(timestamp)?;
