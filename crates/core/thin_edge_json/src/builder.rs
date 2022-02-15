@@ -3,6 +3,7 @@ use time::OffsetDateTime;
 use crate::{data::*, measurement::*};
 
 /// A `MeasurementVisitor` that builds up `ThinEdgeJson`.
+#[derive(Default)]
 pub struct ThinEdgeJsonBuilder {
     timestamp: Option<OffsetDateTime>,
     inside_group: Option<MultiValueMeasurement>,
@@ -10,14 +11,6 @@ pub struct ThinEdgeJsonBuilder {
 }
 
 impl ThinEdgeJsonBuilder {
-    pub fn new() -> Self {
-        Self {
-            timestamp: None,
-            inside_group: None,
-            measurements: Vec::new(),
-        }
-    }
-
     pub fn done(self) -> Result<ThinEdgeJson, ThinEdgeJsonBuilderError> {
         if self.inside_group.is_some() {
             return Err(ThinEdgeJsonBuilderError::UnexpectedOpenGroup);

@@ -51,7 +51,7 @@ impl TryFrom<&str> for AlarmSeverity {
             "warning" => Ok(AlarmSeverity::Warning),
             invalid => Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(
                 invalid.into(),
-            ))?,
+            )),
         }
     }
 }
@@ -84,9 +84,9 @@ impl ThinEdgeAlarm {
                 data: alarm_data,
             })
         } else {
-            return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
                 mqtt_topic.into(),
-            ));
+            ))
         }
     }
 }
