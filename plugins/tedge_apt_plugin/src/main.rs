@@ -120,10 +120,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             // Maintaining this metadata list to keep the debian package symlinks until the installation is complete,
             // which will get cleaned up once it goes out of scope after this block
             let mut metadata_vec = Vec::new();
-            let mut args: Vec<String> = Vec::new();
-            args.push("install".into());
-            args.push("--quiet".into());
-            args.push("--yes".into());
+            let mut args: Vec<String> = vec!["install".into(), "--quiet".into(), "--yes".into()];
             for update_module in updates {
                 match update_module.action {
                     UpdateAction::Install => {
