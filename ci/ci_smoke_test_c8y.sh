@@ -84,7 +84,7 @@ if [ -z $C8YDEVICEID ]; then
     echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
     exit 1
 else
-    echo "Your device: HIDDEN"
+    echo "Your device ID: $C8YDEVICEID"
 fi
 
 

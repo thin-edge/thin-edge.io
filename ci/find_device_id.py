@@ -21,7 +21,7 @@ def get_device_id(c8y, name):
     for dev in c8y.device_inventory.get_all():
         if name == dev.name:
             return dev.id
-    return False
+    return None
 
 
 def main():
