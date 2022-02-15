@@ -6,22 +6,19 @@
 
 use async_trait::async_trait;
 
-use crate::{
-    errors::PluginError,
-    messages::{CoreMessage, PluginMessage},
-};
+use crate::{errors::PluginError, messages::Message};
 
 #[derive(Clone)]
 pub struct Comms {
-    sender: tokio::sync::mpsc::Sender<CoreMessage>,
+    sender: tokio::sync::mpsc::Sender<Message>,
 }
 
 impl Comms {
-    pub const fn new(sender: tokio::sync::mpsc::Sender<CoreMessage>) -> Self {
+    pub const fn new(sender: tokio::sync::mpsc::Sender<Message>) -> Self {
         Self { sender }
     }
 
-    pub async fn send<T: Into<CoreMessage>>(&self, msg: T) -> Result<(), PluginError> {
+    pub async fn send<T: Into<Message>>(&self, msg: T) -> Result<(), PluginError> {
         self.sender.send(msg.into()).await?;
 
         Ok(())
@@ -62,7 +59,7 @@ pub trait Plugin: Sync + Send {
     async fn setup(&mut self) -> Result<(), PluginError>;
 
     /// Handle a message specific to this plugin
-    async fn handle_message(&self, message: PluginMessage) -> Result<(), PluginError>;
+    async fn handle_message(&self, message: Message) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
     async fn shutdown(&mut self) -> Result<(), PluginError>;
@@ -70,7 +67,7 @@ pub trait Plugin: Sync + Send {
 
 #[cfg(test)]
 mod tests {
-    use super::{Comms, Plugin, PluginBuilder, PluginMessage};
+    use super::{Comms, Plugin, PluginBuilder, Message};
     use static_assertions::{assert_impl_all, assert_obj_safe};
 
     // Object Safety
@@ -79,5 +76,5 @@ mod tests {
 
     // Sync + Send
     assert_impl_all!(Comms: Send, Clone);
-    assert_impl_all!(PluginMessage: Send);
+    assert_impl_all!(Message: Send);
 }
