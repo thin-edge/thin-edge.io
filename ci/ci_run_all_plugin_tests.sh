@@ -8,7 +8,6 @@
 # C8YUSERNAME : Cumolocity username
 # C8YTENANT : Cumolocity tenant
 # C8YDEVICE : The device name
-# TIMEZONE : Your timezone (temporary)
 # TEBASEDIR : Base directory for the Thin-Edge repo
 # EXAMPLEDIR : The direcory of the sawtooth example
 # C8YURL : e.g. https://thin-edge-io.eu-latest.cumulocity.com
@@ -32,7 +31,7 @@ cd tests/PySys/
 sudo tedge config set software.plugin.default apt
 
 set +e
-pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='smcontainer'
+pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='container'
 set -e
 
 mv __pysys_junit_xml pysys_junit_xml_apt

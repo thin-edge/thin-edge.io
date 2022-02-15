@@ -27,17 +27,12 @@ def delete_object(c8y, obj):
 
 def delete_device(c8y, name, verbose):
     """Delete the current device"""
-    for dev in c8y.device_inventory.get_all():
-        if verbose:
-            print(
-                "Trying device name:",
-                dev.name,
-                dev.id,
-            )
-        if name == dev.name:
-            print(f"Device has ID {dev.id}")
-            delete_object(c8y, dev.id)
-            return True
+    devices = c8y.device_inventory.get_all(name=name)
+    if len(devices) == 1:
+        dev = devices[0]
+        print(f"Device has ID {dev.id}")
+        delete_object(c8y, dev.id)
+        return True
     return False
 
 

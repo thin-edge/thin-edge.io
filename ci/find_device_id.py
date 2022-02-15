@@ -18,10 +18,11 @@ from c8y_api import CumulocityApi
 
 def get_device_id(c8y, name):
     """retrive the current device ID"""
-    for dev in c8y.device_inventory.get_all():
-        if name == dev.name:
-            return dev.id
-    return False
+
+    devices = c8y.device_inventory.get_all(name=name)
+    if len(devices) == 1:
+        return devices[0].id
+    return None
 
 
 def main():

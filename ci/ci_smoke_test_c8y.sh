@@ -79,12 +79,12 @@ source ~/env-c8y-api/bin/activate
 pip3 install c8y-api
 export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
-# after calling the script, the ID should be there
-if [ -z $C8YDEVICEID ]; then
+# after calling the script, the ID should be a numeric value
+if [[ $C8YDEVICEID =~ ^[0-9]+$ ]]; then
+    echo "Your device ID: $C8YDEVICEID"
+else
     echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
     exit 1
-else
-    echo "Your device: HIDDEN"
 fi
 
 
