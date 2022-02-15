@@ -5,11 +5,21 @@ use crate::address::Address;
 pub struct Message {
     origin: Address,
     kind: MessageKind,
+    id: uuid::Uuid,
 }
 
 impl Message {
     pub fn new(origin: Address, kind: MessageKind) -> Self {
-        Self { origin, kind }
+        Self {
+            origin,
+            kind,
+            id: uuid::Uuid::new_v4(),
+        }
+    }
+
+    /// Get the message id
+    pub fn id(&self) -> &uuid::Uuid {
+        &self.id
     }
 
     /// Get a reference to the plugin message's kind.
