@@ -11,7 +11,6 @@ rust-version = "1.58.1"
 agent_interface = { path = "../agent_interface"}
 async-trait = "0.1"
 c8y_smartrest = { path = "../c8y_smartrest" }
-chrono = "0.4"
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
