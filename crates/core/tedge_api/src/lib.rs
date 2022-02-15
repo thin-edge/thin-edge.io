@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub mod plugins;
-pub use plugins::{Plugin, PluginBuilder, PluginConfiguration};
+pub use plugins::{Plugin, PluginBuilder, PluginConfiguration, Comms};
 
 pub mod address;
 pub use address::Address;
@@ -10,4 +10,4 @@ pub mod errors;
 pub use errors::PluginError;
 
 pub mod messages;
-pub use messages::{CoreMessage, PluginMessage};
+pub use messages::{Message, MessageKind};

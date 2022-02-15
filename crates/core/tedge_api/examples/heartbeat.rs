@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use tedge_api::{
-    address::EndpointKind,
-    messages::{CoreMessageKind, PluginMessageKind},
-    plugins::Comms,
-    Address, CoreMessage, Plugin, PluginBuilder, PluginConfiguration, PluginError, PluginMessage,
+    address::EndpointKind, Address, Comms, Message, MessageKind, Plugin, PluginBuilder,
+    PluginConfiguration, PluginError,
 };
 
 struct HeartbeatServiceBuilder;
@@ -50,21 +48,25 @@ impl HeartbeatService {
 #[async_trait]
 impl Plugin for HeartbeatService {
     async fn setup(&mut self) -> Result<(), PluginError> {
-        println!("Setting up heartbeat service with interval: {}!", self.config.interval);
+        println!(
+            "Setting up heartbeat service with interval: {}!",
+            self.config.interval
+        );
         Ok(())
     }
 
-    async fn handle_message(&self, message: PluginMessage) -> Result<(), PluginError> {
+    async fn handle_message(&self, message: Message) -> Result<(), PluginError> {
         match message.kind() {
-            tedge_api::messages::PluginMessageKind::CheckReadyness => {
-                let msg = CoreMessage::new(
+            MessageKind::CheckReadyness => {
+                let msg = Message::new(
                     message.origin().clone(),
-                    CoreMessageKind::SignalPluginState {
+                    MessageKind::SignalPluginState {
                         state: String::from("Ok"),
                     },
                 );
                 self.comms.send(msg).await?;
             }
+            msg => println!("Does not handle: {:#?}", msg),
         }
 
         Ok(())
@@ -97,9 +99,9 @@ async fn main() {
     let handle = tokio::task::spawn(async move {
         let hb = heartbeat;
 
-        hb.handle_message(PluginMessage::new(
+        hb.handle_message(Message::new(
             Address::new(EndpointKind::Core),
-            PluginMessageKind::CheckReadyness,
+            MessageKind::CheckReadyness,
         ))
         .await
         .unwrap();

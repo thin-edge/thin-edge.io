@@ -2,18 +2,18 @@ use crate::address::Address;
 
 /// A message to be handled by a plugin
 #[derive(Debug)]
-pub struct PluginMessage {
+pub struct Message {
     origin: Address,
-    kind: PluginMessageKind,
+    kind: MessageKind,
 }
 
-impl PluginMessage {
-    pub fn new(origin: Address, kind: PluginMessageKind) -> Self {
+impl Message {
+    pub fn new(origin: Address, kind: MessageKind) -> Self {
         Self { origin, kind }
     }
 
     /// Get a reference to the plugin message's kind.
-    pub fn kind(&self) -> &PluginMessageKind {
+    pub fn kind(&self) -> &MessageKind {
         &self.kind
     }
 
@@ -24,9 +24,11 @@ impl PluginMessage {
 }
 
 #[derive(Debug)]
-pub enum PluginMessageKind {
+#[non_exhaustive]
+pub enum MessageKind {
     /// The plugin is being asked if it is currently able to respond
     /// to requests. It is meant to reply with `CoreMessageKind` stating
     /// its status.
     CheckReadyness,
+    SignalPluginState { state: String },
 }
