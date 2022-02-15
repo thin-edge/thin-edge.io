@@ -9,14 +9,20 @@ rust-version = "1.58.1"
 agent_interface = { path = "../agent_interface" }
 csv = "1.1"
 download = { path = "../../common/download" }
+mqtt_channel = { path = "../../common/mqtt_channel" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
+tedge_config = { path = "../../common/tedge_config" }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde"] }
+tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+toml = "0.5"
 
 [dev-dependencies]
 anyhow = "1.0"
 assert_matches = "1.5"
 assert-json-diff = "2.0"
 serde_json = "1.0"
+tempfile = "3.3"
 test-case = "1.2.1"

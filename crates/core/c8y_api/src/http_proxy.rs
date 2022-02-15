@@ -1,10 +1,9 @@
-use crate::sm_c8y_mapper::error::SMCumulocityMapperError;
-use crate::sm_c8y_mapper::json_c8y::{
+use crate::json_c8y::{
     C8yCreateEvent, C8yManagedObject, C8yUpdateSoftwareListResponse, InternalIdResponse,
 };
-use crate::sm_c8y_mapper::mapper::SmartRestLogEvent;
 use async_trait::async_trait;
-use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
+use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse};
+use chrono::{DateTime, Local};
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
@@ -13,6 +12,8 @@ use tedge_config::{
     MqttPortSetting, TEdgeConfig,
 };
 use time::{format_description, OffsetDateTime};
+
+use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -117,6 +118,13 @@ impl C8yEndPoint {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+/// used to retrieve the id of a log event
+pub struct SmartRestLogEvent {
+    pub id: String,
+}
+
 /// An HttpProxy that uses MQTT to retrieve JWT tokens and authenticate the device
 ///
 /// - Keep the connection info to c8y and the internal Id of the device
@@ -147,6 +155,7 @@ impl JwtAuthHttpProxy {
 
     pub async fn try_new(
         tedge_config: &TEdgeConfig,
+        session_name: &str,
     ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
@@ -157,7 +166,7 @@ impl JwtAuthHttpProxy {
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(mqtt_port)
             .with_clean_session(true)
-            .with_session_name("JWT-Requester")
+            .with_session_name(session_name)
             .with_subscriptions(topic);
         let mut mqtt_con = Connection::new(&mqtt_config).await?;
 

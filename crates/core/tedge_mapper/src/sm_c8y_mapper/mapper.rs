@@ -1,41 +1,35 @@
-use crate::{
-    component::TEdgeComponent,
-    operations::Operations,
-    sm_c8y_mapper::{
-        error::*,
-        http_proxy::{C8YHttpProxy, JwtAuthHttpProxy},
-        json_c8y::C8yUpdateSoftwareListResponse,
-        topic::*,
-    },
-};
+use crate::component::TEdgeComponent;
 
 use agent_interface::{
     topic::*, Jsonify, OperationStatus, RestartOperationRequest, RestartOperationResponse,
     SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use async_trait::async_trait;
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRestartRequest};
+use c8y_api::{
+    http_proxy::{C8YHttpProxy, JwtAuthHttpProxy},
+    json_c8y::C8yUpdateSoftwareListResponse,
+};
+use c8y_smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_smartrest::{
-    error::SmartRestDeserializerError,
+    error::{SMCumulocityMapperError, SmartRestDeserializerError},
+    operations::Operations,
     smartrest_deserializer::SmartRestUpdateSoftware,
     smartrest_serializer::{
         SmartRestGetPendingOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
         SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
         SmartRestSetSupportedLogType,
     },
+    topic::*,
 };
 use download::{Auth, DownloadInfo};
 use mqtt_channel::{Config, Connection, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::{convert::TryInto, process::Stdio};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting, TEdgeConfig};
-use time::{format_description, OffsetDateTime};
 use tracing::{debug, error, info, instrument};
 
-const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
 const SM_MAPPER: &str = "SM-C8Y-Mapper";
+const SM_MAPPER_JWT_TOKEN_SESSION_NAME: &str = "SM-C8Y-Mapper-JWT-Token";
 
 pub struct CumulocitySoftwareManagementMapper {}
 
@@ -87,7 +81,8 @@ impl TEdgeComponent for CumulocitySoftwareManagementMapper {
     #[instrument(skip(self, tedge_config), name = "sm-c8y-mapper")]
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
+        let http_proxy =
+            JwtAuthHttpProxy::try_new(&tedge_config, SM_MAPPER_JWT_TOKEN_SESSION_NAME).await?;
         let mut sm_mapper =
             CumulocitySoftwareManagement::try_new(&tedge_config, http_proxy, operations).await?;
 
@@ -172,9 +167,6 @@ where
         match message_id {
             "528" => {
                 let () = self.forward_software_request(payload).await?;
-            }
-            "522" => {
-                let () = self.forward_log_request(payload).await?;
             }
             "510" => {
                 let () = self.forward_restart_request(payload).await?;
@@ -342,58 +334,6 @@ where
         }
         Ok(())
     }
-
-    async fn set_log_file_request_executing(&mut self) -> Result<(), SMCumulocityMapperError> {
-        let topic = C8yTopic::SmartRestResponse.to_topic()?;
-        let smartrest_set_operation_status =
-            SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
-                .to_smartrest()?;
-
-        let () = self.publish(&topic, smartrest_set_operation_status).await?;
-        Ok(())
-    }
-
-    async fn set_log_file_request_done(
-        &mut self,
-        binary_upload_event_url: &str,
-    ) -> Result<(), SMCumulocityMapperError> {
-        let topic = C8yTopic::SmartRestResponse.to_topic()?;
-        let smartrest_set_operation_status = SmartRestSetOperationToSuccessful::new(
-            CumulocitySupportedOperations::C8yLogFileRequest,
-        )
-        .with_response_parameter(binary_upload_event_url)
-        .to_smartrest()?;
-
-        let () = self.publish(&topic, smartrest_set_operation_status).await?;
-        Ok(())
-    }
-
-    async fn forward_log_request(&mut self, payload: &str) -> Result<(), SMCumulocityMapperError> {
-        // retrieve smartrest object from payload
-        let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
-
-        // 1. set log file request to executing
-        let () = self.set_log_file_request_executing().await?;
-
-        // 2. read logs
-        let log_output = read_tedge_logs(&smartrest_obj, AGENT_LOG_DIR)?;
-
-        // 3. upload log file
-        let binary_upload_event_url = self
-            .http_proxy
-            .upload_log_binary(log_output.as_str())
-            .await?;
-
-        // 4. set log file request to done
-        let () = self
-            .set_log_file_request_done(&binary_upload_event_url)
-            .await?;
-
-        info!("Log file request uploaded");
-
-        Ok(())
-    }
-
     async fn forward_software_request(
         &mut self,
         smartrest: &str,
@@ -482,219 +422,4 @@ async fn execute_operation(payload: &str, command: &str) -> Result<(), SMCumuloc
     });
 
     Ok(())
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-/// used to retrieve the id of a log event
-pub struct SmartRestLogEvent {
-    pub id: String,
-}
-
-/// Returns a date time object from a file path or file-path-like string
-/// a typical file stem looks like this: "software-list-2021-10-27T10:29:58Z"
-///
-/// # Examples:
-/// ```
-/// let path_buf = PathBuf::fromStr("/path/to/file/with/date/in/path").unwrap();
-/// let path_bufdate_time = get_datetime_from_file_path(&path_buf).unwrap();
-/// ```
-fn get_datetime_from_file_path(
-    log_path: &PathBuf,
-) -> Result<OffsetDateTime, SMCumulocityMapperError> {
-    if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
-        // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
-        // to extract the date, rsplit string on "-" and take (last) 3
-        let mut stem_string_vec = stem_string.rsplit('-').take(3).collect::<Vec<_>>();
-        // reverse back the order (because of rsplit)
-        stem_string_vec.reverse();
-        // join on '-' to get the date string
-        let date_string = stem_string_vec.join("-");
-        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339)?;
-
-        return Ok(dt);
-    }
-    match log_path.to_str() {
-        Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
-            path.to_string(),
-        )),
-        None => Err(SMCumulocityMapperError::InvalidUtf8Path),
-    }
-}
-
-/// Reads tedge logs according to `SmartRestLogRequest`.
-///
-/// If needed, logs are concatenated.
-///
-/// Logs are sorted alphanumerically from oldest to newest.
-///
-/// # Examples
-///
-/// ```
-/// let smartrest_obj = SmartRestLogRequest::from_smartrest(
-///     "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
-/// )
-/// .unwrap();
-///
-/// let log = read_tedge_system_logs(&smartrest_obj, "/var/log/tedge").unwrap();
-/// ```
-fn read_tedge_logs(
-    smartrest_obj: &SmartRestLogRequest,
-    logs_dir: &str,
-) -> Result<String, SMCumulocityMapperError> {
-    let mut output = String::new();
-
-    // NOTE: As per documentation of std::fs::read_dir:
-    // "The order in which this iterator returns entries is platform and filesystem dependent."
-    // Therefore, files are sorted by date.
-    let mut read_vector: Vec<_> = std::fs::read_dir(logs_dir)?
-        .filter_map(|r| r.ok())
-        .filter_map(|dir_entry| {
-            let file_path = &dir_entry.path();
-            let datetime_object = get_datetime_from_file_path(&file_path);
-            match datetime_object {
-                Ok(dt) => {
-                    if dt < smartrest_obj.date_from || dt > smartrest_obj.date_to {
-                        return None;
-                    }
-                    Some(dir_entry)
-                }
-                Err(_) => None,
-            }
-        })
-        .collect();
-
-    read_vector.sort_by_key(|dir| dir.path());
-
-    // loop sorted vector and push store log file to `output`
-    let mut line_counter: usize = 0;
-    for entry in read_vector {
-        let file_path = entry.path();
-        let file_content = std::fs::read_to_string(&file_path)?;
-        if file_content.is_empty() {
-            continue;
-        }
-
-        // adding file header only if line_counter permits more lines to be added
-        match &file_path.file_stem().and_then(|f| f.to_str()) {
-            Some(file_name) if line_counter < smartrest_obj.lines => {
-                output.push_str(&format!("filename: {}\n", file_name));
-            }
-            _ => {}
-        }
-
-        // split at new line delimiter ("\n")
-        let mut lines = file_content.lines();
-        while line_counter < smartrest_obj.lines {
-            if let Some(haystack) = lines.next() {
-                if let Some(needle) = &smartrest_obj.needle {
-                    if haystack.contains(needle) {
-                        output.push_str(&format!("{}\n", haystack));
-                        line_counter += 1;
-                    }
-                } else {
-                    output.push_str(&format!("{}\n", haystack));
-                    line_counter += 1;
-                }
-            } else {
-                // there are no lines.next()
-                break;
-            }
-        }
-    }
-    Ok(output)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Write;
-    use std::str::FromStr;
-    use test_case::test_case;
-
-    #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]
-    #[test_case("/path/to/tedge/agent/software-update-2021-10-25T07:45:41Z.log")]
-    #[test_case("/path/to/another-variant-2021-10-25T07:45:41Z.log")]
-    #[test_case("/yet-another-variant-2021-10-25T07:45:41Z.log")]
-    fn test_datetime_parsing_from_path(file_path: &str) {
-        // checking that `get_date_from_file_path` unwraps a `OffsetDateTime` object.
-        // this should return an Ok Result.
-        let path_buf = PathBuf::from_str(file_path).unwrap();
-        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
-        assert!(path_buf_datetime.is_ok());
-    }
-
-    #[test_case("/path/to/software-list-2021-10-27-10:44:44Z.log")]
-    #[test_case("/path/to/tedge/agent/software-update-10-25-2021T07:45:41Z.log")]
-    #[test_case("/path/to/another-variant-07:45:41Z-2021-10-25T.log")]
-    #[test_case("/yet-another-variant-2021-10-25T07:45Z.log")]
-    fn test_datetime_parsing_from_path_fail(file_path: &str) {
-        // checking that `get_date_from_file_path` unwraps a `OffsetDateTime` object.
-        // this should return an err.
-        let path_buf = PathBuf::from_str(file_path).unwrap();
-        let path_buf_datetime = get_datetime_from_file_path(&path_buf);
-        assert!(path_buf_datetime.is_err());
-    }
-
-    fn parse_file_names_from_log_content(log_content: &str) -> [&str; 5] {
-        let mut files: Vec<&str> = vec![];
-        for line in log_content.lines() {
-            if line.contains("filename: ") {
-                let filename: &str = line.split("filename: ").last().unwrap();
-                files.push(filename);
-            }
-        }
-        match files.try_into() {
-            Ok(arr) => arr,
-            Err(_) => panic!("Could not convert to Array &str, size 5"),
-        }
-    }
-
-    #[test]
-    /// testing read_tedge_logs
-    ///
-    /// this test creates 5 fake log files in a temporary directory.
-    /// files are dated 2021-01-0XT01:00Z, where X = a different day.
-    ///
-    /// this tests will assert that files are read alphanumerically from oldest to newest
-    fn test_read_logs() {
-        // order in which files are created
-        const LOG_FILE_NAMES: [&str; 5] = [
-            "software-list-2021-01-03T01:00:00Z.log",
-            "software-list-2021-01-02T01:00:00Z.log",
-            "software-list-2021-01-01T01:00:00Z.log",
-            "software-update-2021-01-03T01:00:00Z.log",
-            "software-update-2021-01-02T01:00:00Z.log",
-        ];
-
-        // expected (sorted) output
-        const EXPECTED_OUTPUT: [&str; 5] = [
-            "software-list-2021-01-01T01:00:00Z",
-            "software-list-2021-01-02T01:00:00Z",
-            "software-list-2021-01-03T01:00:00Z",
-            "software-update-2021-01-02T01:00:00Z",
-            "software-update-2021-01-03T01:00:00Z",
-        ];
-
-        let smartrest_obj = SmartRestLogRequest::from_smartrest(
-            "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
-        )
-        .unwrap();
-
-        let temp_dir = tempfile::tempdir().unwrap();
-        // creating the files
-        for (idx, file) in LOG_FILE_NAMES.iter().enumerate() {
-            let file_path = &temp_dir.path().join(file);
-            let mut file = File::create(file_path).unwrap();
-            writeln!(file, "file num {}", idx).unwrap();
-        }
-
-        // reading the logs and extracting the file names from the log output.
-        let output = read_tedge_logs(&smartrest_obj, temp_dir.path().to_str().unwrap()).unwrap();
-        let parsed_values = parse_file_names_from_log_content(&output);
-
-        // asserting the order = `EXPECTED_OUTPUT`
-        assert!(parsed_values.eq(&EXPECTED_OUTPUT));
-    }
 }

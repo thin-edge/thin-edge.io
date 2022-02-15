@@ -1,6 +1,7 @@
-use agent_interface::{error::*, topic::ResponseTopic};
-use mqtt_channel::{MqttError, Topic};
-use std::convert::{TryFrom, TryInto};
+use agent_interface::topic::ResponseTopic;
+use agent_interface::TopicError;
+use mqtt_channel::MqttError;
+use mqtt_channel::Topic;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum C8yTopic {
