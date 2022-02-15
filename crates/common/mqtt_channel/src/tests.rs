@@ -452,4 +452,52 @@ mod tests {
             Err(MqttError::SubscriptionFailure)
         ));
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn ensure_that_all_messages_are_sent_before_disconnect() -> Result<(), anyhow::Error> {
+        let broker = mqtt_tests::test_mqtt_broker();
+        let topic = "data/topic";
+        let mut messages = broker.messages_published_on(topic).await;
+
+        // An mqtt process publishing messages
+        // must ensure the messages have been sent before process exit.
+        std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let mqtt_config = Config::default().with_port(broker.port);
+                    let topic = Topic::new_unchecked(topic);
+                    let mut con = Connection::new(&mqtt_config).await.expect("a connection");
+
+                    con.published
+                        .send(Message::new(&topic, "datum 1"))
+                        .await
+                        .expect("message sent");
+                    con.published
+                        .send(Message::new(&topic, "datum 2"))
+                        .await
+                        .expect("message sent");
+                    con.published
+                        .send(Message::new(&topic, "datum 3"))
+                        .await
+                        .expect("message sent");
+
+                    // Wait for all the messages to be actually sent
+                    // before the runtime is shutdown dropping the mqtt sender loop.
+                    con.close().await;
+                });
+        });
+
+        mqtt_tests::assert_received(
+            &mut messages,
+            TIMEOUT,
+            vec!["datum 1", "datum 2", "datum 3"],
+        )
+        .await;
+
+        Ok(())
+    }
 }
