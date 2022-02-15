@@ -177,7 +177,10 @@ issues and errors for clear misconfigurations.
 Similarly, _using_ the different plugins should follow the same idea, with
 clear paths forwards for all errors/warnings, if possible.
 
-----
+To make sure that the program itself is _hard to misuse_, the configuration is
+read _once_ at startup.
+
+-------
 
 # Reference Explanation
 
