@@ -1,37 +1,5 @@
 use crate::address::Address;
 
-/// A message to be received by the `tedge` core component
-///
-/// It will be internally routed according to its destination
-#[derive(Debug)]
-pub struct CoreMessage {
-    destination: Address,
-    kind: CoreMessageKind,
-}
-
-impl CoreMessage {
-    pub fn new(destination: Address, kind: CoreMessageKind) -> Self {
-        Self { destination, kind }
-    }
-
-    /// Get a reference to the core message's kind.
-    pub fn kind(&self) -> &CoreMessageKind {
-        &self.kind
-    }
-
-    /// Get a reference to the core message's destination.
-    pub fn destination(&self) -> &Address {
-        &self.destination
-    }
-}
-
-#[derive(Debug)]
-pub enum CoreMessageKind {
-    SendGenericMessage { message: Vec<u8> },
-    SignalPluginState { state: String },
-    // etc...
-}
-
 /// A message to be handled by a plugin
 #[derive(Debug)]
 pub struct PluginMessage {
