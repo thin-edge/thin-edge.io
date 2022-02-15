@@ -10,6 +10,7 @@ async-trait = "0.1.52"
 thiserror = "1.0.30"
 tokio = { version = "1.16.1", features = ["sync"] }
 toml = "0.5.8"
+uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
