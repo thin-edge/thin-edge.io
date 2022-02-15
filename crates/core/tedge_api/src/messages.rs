@@ -36,6 +36,9 @@ impl Message {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum MessageKind {
+    /// A reply to the message with the contained ID
+    Reply(uuid::Uuid),
+
     /// The plugin is being asked if it is currently able to respond
     /// to requests. It is meant to reply with `CoreMessageKind` stating
     /// its status.
