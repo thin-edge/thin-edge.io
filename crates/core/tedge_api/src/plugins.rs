@@ -67,7 +67,7 @@ pub trait Plugin: Sync + Send {
 
 #[cfg(test)]
 mod tests {
-    use super::{Comms, Plugin, PluginBuilder, Message};
+    use super::{Comms, Plugin, PluginBuilder};
     use static_assertions::{assert_impl_all, assert_obj_safe};
 
     // Object Safety
@@ -76,5 +76,4 @@ mod tests {
 
     // Sync + Send
     assert_impl_all!(Comms: Send, Clone);
-    assert_impl_all!(Message: Send);
 }
