@@ -305,8 +305,6 @@ Alternatives could include:
 - Defining the objects through an API like Swagger or similar
 - Not doing this
 
-# Prior Art
-
 # Unresolved questions
 
 - How to extend the `PluginMessageKind` type?
