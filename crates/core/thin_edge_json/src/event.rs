@@ -14,8 +14,9 @@ pub struct ThinEdgeEvent {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeEventData {
     pub message: Option<String>,
+
     #[serde(default)]
-    #[serde(deserialize_with = "clock::deserialize_iso8601_timestamp")]
+    #[serde(with = "clock::serde::rfc3339::option")]
     pub time: Option<OffsetDateTime>,
 }
 
