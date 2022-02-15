@@ -30,5 +30,16 @@ pub enum MessageKind {
     /// to requests. It is meant to reply with `CoreMessageKind` stating
     /// its status.
     CheckReadyness,
-    SignalPluginState { state: String },
+    SignalPluginState {
+        state: String,
+    },
+}
+
+#[cfg(test)]
+mod tests {
+    use static_assertions::assert_impl_all;
+
+    use super::Message;
+
+    assert_impl_all!(Message: Send);
 }
