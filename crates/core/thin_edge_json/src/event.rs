@@ -1,5 +1,5 @@
+use clock::Timestamp;
 use serde::Deserialize;
-use time::OffsetDateTime;
 
 use self::error::ThinEdgeJsonDeserializerError;
 
@@ -14,9 +14,10 @@ pub struct ThinEdgeEvent {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeEventData {
     pub message: Option<String>,
+
     #[serde(default)]
-    #[serde(deserialize_with = "clock::deserialize_iso8601_timestamp")]
-    pub time: Option<OffsetDateTime>,
+    #[serde(with = "clock::serde::rfc3339::option")]
+    pub time: Option<Timestamp>,
 }
 
 pub mod error {

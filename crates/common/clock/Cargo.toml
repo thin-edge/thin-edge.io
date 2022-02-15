@@ -7,5 +7,8 @@ rust-version = "1.58.1"
 
 [dependencies]
 mockall = "0.10"
-serde = { version = "1.0", features = ["derive"] }
-time = { version = "0.3", features = ["serde-human-readable"] }
+time = "0.3.7"
+
+[features]
+default = []
+with-serde = ["time/serde-well-known"]

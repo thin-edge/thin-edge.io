@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
+use clock::Timestamp;
 use serde::Deserialize;
-use time::OffsetDateTime;
 
 /// In-memory representation of ThinEdge JSON alarm.
 #[derive(Debug, Deserialize, PartialEq)]
@@ -23,9 +23,10 @@ pub enum AlarmSeverity {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeAlarmData {
     pub message: Option<String>,
+
     #[serde(default)]
-    #[serde(deserialize_with = "clock::deserialize_iso8601_timestamp")]
-    pub time: Option<OffsetDateTime>,
+    #[serde(with = "clock::serde::rfc3339::option")]
+    pub time: Option<Timestamp>,
 }
 
 #[derive(thiserror::Error, Debug)]
