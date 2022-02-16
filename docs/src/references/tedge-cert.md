@@ -1,7 +1,7 @@
 # The `tedge cert` command
 
 ```
-tedge-cert 0.2.0
+tedge-cert 0.5.3
 Create and manage device certificate
 
 USAGE:
@@ -22,7 +22,7 @@ SUBCOMMANDS:
 ## Create
 
 ```
-tedge-cert-create 0.2.0
+tedge-cert-create 0.5.3
 Create a self-signed device certificate
 
 USAGE:
@@ -39,7 +39,7 @@ OPTIONS:
 ## Show
 
 ```
-tedge-cert-show 0.2.0
+tedge-cert-show 0.5.3
 Show the device certificate, if any
 
 USAGE:
@@ -53,7 +53,7 @@ FLAGS:
 ## Remove
 
 ```
-tedge-cert-remove 0.2.0
+tedge-cert-remove 0.5.3
 Remove the device certificate
 
 USAGE:
@@ -67,7 +67,7 @@ FLAGS:
 ## Upload
 
 ```
-tedge-cert-upload 0.2.0
+tedge-cert-upload 0.5.3
 Upload root certificate
 
 USAGE:

@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_api"
-version = "0.1.1"
+version = "0.5.3"
 dependencies = [
  "agent_interface",
  "async-trait",

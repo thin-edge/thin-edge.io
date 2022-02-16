@@ -1,7 +1,7 @@
 # The `tedge disconnect` command
 
 ```
-tedge-disconnect 0.2.0
+tedge-disconnect 0.5.3
 Remove bridge connection for a provider
 
 USAGE:
@@ -20,7 +20,7 @@ SUBCOMMANDS:
 ## Azure
 
 ```
-tedge-disconnect-az 0.2.0
+tedge-disconnect-az 0.5.3
 Remove bridge connection to Azure
 
 USAGE:
@@ -34,7 +34,7 @@ FLAGS:
 ## Cumulocity
 
 ```
-tedge-disconnect-c8y 0.2.0
+tedge-disconnect-c8y 0.5.3
 Remove bridge connection to Cumulocity
 
 USAGE:

@@ -1,7 +1,7 @@
 # The `tedge config` command
 
 ```
-tedge-config 0.2.0
+tedge-config 0.5.3
 Configure Thin Edge
 
 USAGE:
@@ -22,7 +22,7 @@ SUBCOMMANDS:
 ## Get
 
 ```
-tedge-config-get 0.2.0
+tedge-config-get 0.5.3
 Get the value of the provided configuration key
 
 USAGE:
@@ -39,7 +39,7 @@ ARGS:
 ## Set
 
 ```
-tedge-config-set 0.2.0
+tedge-config-set 0.5.3
 Set or update the provided configuration key with the given value
 
 USAGE:
@@ -57,7 +57,7 @@ ARGS:
 ## List
 
 ```
-tedge-config-list 0.2.0
+tedge-config-list 0.5.3
 Print the configuration keys and their values
 
 USAGE:
@@ -73,7 +73,7 @@ FLAGS:
 ## Unset
 
 ```
-tedge-config-unset 0.2.0
+tedge-config-unset 0.5.3
 Unset the provided configuration key
 
 USAGE:
