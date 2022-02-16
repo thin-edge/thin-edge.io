@@ -459,7 +459,6 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "serde",
  "time 0.1.43",
  "winapi",
 ]
@@ -2735,7 +2734,6 @@ dependencies = [
  "async-trait",
  "c8y_api",
  "c8y_smartrest",
- "chrono",
  "csv",
  "futures",
  "mockall",
