@@ -1,0 +1,39 @@
+[package]
+name = "tedge_logfile_request_plugin"
+version = "0.5.2"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.58"
+license = "Apache-2.0"
+description = "Thin.edge.io operation plugin for Cumulocity log request"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.deb]
+depends = "tedge_mapper"
+assets = [
+    ["../../configuration/contrib/operations/c8y/c8y_LogfileRequest", "/etc/tedge/operations/c8y/", "644"],
+    ["target/release/tedge_logfile_request_plugin", "/usr/bin/tedge_logfile_request_plugin", "755"],
+]
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = { version = "0.4" , features = ["serde"] }
+c8y_api = { path = "../../crates/core/c8y_api" }
+c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
+csv = "1.1"
+futures = "0.3"
+mockall = "0.10"
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.9", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+tedge_config = { path = "../../crates/common/tedge_config" }
+mqtt_channel = { path = "../../crates/common/mqtt_channel" }
+
+[dev-dependencies]
+tempfile = "3.3"

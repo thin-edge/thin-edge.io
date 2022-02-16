@@ -1,4 +1,5 @@
 use agent_interface::SoftwareUpdateResponse;
+use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
@@ -38,4 +39,73 @@ pub enum SmartRestDeserializerError {
 
     #[error("Empty request")]
     EmptyRequest,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationsError {
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error("Cannot extract the operation name from the path: {0}")]
+    InvalidOperationName(PathBuf),
+
+    #[error("Error while parsing operation file: '{0}': {1}.")]
+    TomlError(PathBuf, #[source] toml::de::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SMCumulocityMapperError {
+    #[error("Invalid MQTT Message.")]
+    InvalidMqttMessage,
+
+    #[error(transparent)]
+    InvalidTopicError(#[from] agent_interface::TopicError),
+
+    #[error(transparent)]
+    InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
+
+    #[error(transparent)]
+    FromElapsed(#[from] tokio::time::error::Elapsed),
+
+    #[error(transparent)]
+    FromMqttClient(#[from] mqtt_channel::MqttError),
+
+    #[error(transparent)]
+    FromReqwest(#[from] reqwest::Error),
+
+    #[error(transparent)]
+    FromSmartRestSerializer(#[from] SmartRestSerializerError),
+
+    #[error(transparent)]
+    FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
+
+    #[error(transparent)]
+    FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    FromLoadTedgeConfigError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error("Invalid date in file name: {0}")]
+    InvalidDateInFileName(String),
+
+    #[error("Invalid path. Not UTF-8.")]
+    InvalidUtf8Path,
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error("Request timed out")]
+    RequestTimeout,
+
+    #[error("Operation execution failed: {0}")]
+    ExecuteFailed(String),
+
+    #[error("An unknown operation template: {0}")]
+    UnknownOperation(String),
+
+    #[error(transparent)]
+    FromTimeFormat(#[from] time::error::Format),
+
+    #[error(transparent)]
+    FromTimeParse(#[from] time::error::Parse),
 }

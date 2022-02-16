@@ -77,17 +77,14 @@ impl OperationLogs {
     pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
         let mut update_logs = BinaryHeap::new();
         let mut list_logs = BinaryHeap::new();
-        for entry in self.log_dir.read_dir()? {
-            // Ignore entries with errors
-            if let Ok(file) = entry {
-                if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
-                    if path.starts_with(UPDATE_PREFIX) {
-                        // The paths are pushed using the reverse alphabetic order
-                        update_logs.push(Reverse(path.to_string()));
-                    } else if path.starts_with(LIST_PREFIX) {
-                        // The paths are pushed using the reverse alphabetic order
-                        list_logs.push(Reverse(path.to_string()));
-                    }
+        for file in (self.log_dir.read_dir()?).flatten() {
+            if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
+                if path.starts_with(UPDATE_PREFIX) {
+                    // The paths are pushed using the reverse alphabetic order
+                    update_logs.push(Reverse(path.to_string()));
+                } else if path.starts_with(LIST_PREFIX) {
+                    // The paths are pushed using the reverse alphabetic order
+                    list_logs.push(Reverse(path.to_string()));
                 }
             }
         }

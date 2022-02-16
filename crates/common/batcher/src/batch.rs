@@ -1,7 +1,7 @@
 use crate::batchable::Batchable;
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::iter::once;
+use time::OffsetDateTime;
 
 #[must_use]
 #[derive(Debug)]
@@ -13,13 +13,13 @@ pub enum BatchAdd<B: Batchable> {
 
 #[derive(Debug)]
 pub struct Batch<B: Batchable> {
-    batch_start: DateTime<Utc>,
-    batch_end: DateTime<Utc>,
+    batch_start: OffsetDateTime,
+    batch_end: OffsetDateTime,
     events: HashMap<B::Key, B>,
 }
 
 impl<B: Batchable> Batch<B> {
-    pub fn new(batch_start: DateTime<Utc>, batch_end: DateTime<Utc>, event: B) -> Batch<B> {
+    pub fn new(batch_start: OffsetDateTime, batch_end: OffsetDateTime, event: B) -> Batch<B> {
         let mut events = HashMap::new();
         events.insert(event.key(), event);
 
@@ -30,11 +30,11 @@ impl<B: Batchable> Batch<B> {
         }
     }
 
-    pub fn batch_start(&self) -> DateTime<Utc> {
+    pub fn batch_start(&self) -> OffsetDateTime {
         self.batch_start
     }
 
-    pub fn batch_end(&self) -> DateTime<Utc> {
+    pub fn batch_end(&self) -> OffsetDateTime {
         self.batch_end
     }
 
@@ -55,7 +55,7 @@ impl<B: Batchable> Batch<B> {
         BatchAdd::Added
     }
 
-    fn split(&mut self, existing_event_time: DateTime<Utc>, event: B) -> Batch<B> {
+    fn split(&mut self, existing_event_time: OffsetDateTime, event: B) -> Batch<B> {
         let split_point = midpoint(existing_event_time, event.event_time());
 
         let mut new_batch_events = HashMap::new();
@@ -92,20 +92,19 @@ impl<B: Batchable> Batch<B> {
     }
 }
 
-fn midpoint(event_time1: DateTime<Utc>, event_time2: DateTime<Utc>) -> DateTime<Utc> {
-    let gap = event_time1.signed_duration_since(event_time2);
+fn midpoint(event_time1: OffsetDateTime, event_time2: OffsetDateTime) -> OffsetDateTime {
+    let gap = event_time1 - event_time2;
     event_time2 + gap / 2
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     #[test]
     fn add() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(2, 60);
 
@@ -120,8 +119,8 @@ mod tests {
 
     #[test]
     fn split() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(1, 60);
 
@@ -142,8 +141,8 @@ mod tests {
 
     #[test]
     fn duplicate() {
-        let batch_start = Utc.timestamp_millis(0);
-        let batch_end = Utc.timestamp_millis(100);
+        let batch_start = OffsetDateTime::from_unix_timestamp(0).unwrap();
+        let batch_end = OffsetDateTime::from_unix_timestamp(100).unwrap();
         let event1 = TestBatchEvent::new(1, 40);
         let event2 = TestBatchEvent::new(1, 40);
 
@@ -158,12 +157,12 @@ mod tests {
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct TestBatchEvent {
         key: u64,
-        event_time: DateTime<Utc>,
+        event_time: OffsetDateTime,
     }
 
     impl TestBatchEvent {
         fn new(key: u64, event_time: i64) -> TestBatchEvent {
-            let event_time = Utc.timestamp_millis(event_time);
+            let event_time = OffsetDateTime::from_unix_timestamp(event_time).unwrap();
             TestBatchEvent { key, event_time }
         }
     }
@@ -175,7 +174,7 @@ mod tests {
             self.key
         }
 
-        fn event_time(&self) -> DateTime<Utc> {
+        fn event_time(&self) -> OffsetDateTime {
             self.event_time
         }
     }

@@ -234,7 +234,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "batcher"
 version = "0.5.2"
 dependencies = [
- "chrono",
+ "time 0.3.7",
  "tokio",
 ]
 
@@ -330,6 +330,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_api"
+version = "0.1.0"
+dependencies = [
+ "agent_interface",
+ "async-trait",
+ "c8y_smartrest",
+ "chrono",
+ "clock",
+ "csv",
+ "download",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tedge_utils",
+ "tempfile",
+ "test-case",
+ "thin_edge_json",
+ "thiserror",
+ "time 0.3.7",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "c8y_smartrest"
 version = "0.5.2"
 dependencies = [
@@ -339,12 +368,18 @@ dependencies = [
  "assert_matches",
  "csv",
  "download",
+ "mqtt_channel",
+ "reqwest",
  "serde",
  "serde_json",
+ "tedge_config",
+ "tempfile",
  "test-case",
  "thin_edge_json",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.7",
+ "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -354,7 +389,6 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -364,6 +398,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
+ "time 0.3.7",
 ]
 
 [[package]]
@@ -398,7 +433,7 @@ dependencies = [
  "rcgen",
  "sha-1",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.7",
  "x509-parser",
  "zeroize",
 ]
@@ -424,6 +459,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time 0.1.43",
  "winapi",
 ]
@@ -447,10 +483,8 @@ dependencies = [
 name = "clock"
 version = "0.5.2"
 dependencies = [
- "chrono",
  "mockall",
- "serde",
- "time 0.3.5",
+ "time 0.3.7",
 ]
 
 [[package]]
@@ -590,7 +624,7 @@ checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
 dependencies = [
  "bstr",
  "csv-core",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -1065,7 +1099,7 @@ checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
 dependencies = [
  "bytes",
  "fnv",
- "itoa",
+ "itoa 0.4.8",
 ]
 
 [[package]]
@@ -1121,7 +1155,7 @@ dependencies = [
  "http-body",
  "httparse",
  "httpdate",
- "itoa",
+ "itoa 0.4.8",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -1193,6 +1227,12 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
+
+[[package]]
+name = "itoa"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
 name = "jackiechan"
@@ -1613,6 +1653,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05499f3756671c15885fee9034446956fff3f243d6077b91e5767df161f766b3"
 dependencies = [
  "hermit-abi",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97ba99ba6393e2c3734791401b66902d981cb03bf190af674ca69949b6d5fb15"
+dependencies = [
  "libc",
 ]
 
@@ -2043,7 +2092,7 @@ checksum = "e2296a75ce93ea619bd9686d9f4b060f28845236e67d8666bcd02954e872b400"
 dependencies = [
  "pem",
  "ring",
- "time 0.3.5",
+ "time 0.3.7",
  "yasna",
  "zeroize",
 ]
@@ -2422,7 +2471,7 @@ version = "1.0.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0ffa0837f2dfa6fb90868c2b5468cad482e175f7dad97e7421951e663f2b527"
 dependencies = [
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -2434,7 +2483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edfa57a7f8d9c1d260a549e7224100f6c43d43f9103e06dd8b4095a9b2b43ce9"
 dependencies = [
  "form_urlencoded",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -2635,7 +2684,7 @@ dependencies = [
  "tedge_utils",
  "tempfile",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.7",
  "tokio",
  "tokio-test",
  "toml",
@@ -2693,6 +2742,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_logfile_request_plugin"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_smartrest",
+ "chrono",
+ "csv",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tedge_config",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "tedge_mapper"
 version = "0.5.2"
 dependencies = [
@@ -2702,9 +2775,9 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "batcher",
+ "c8y_api",
  "c8y_smartrest",
  "c8y_translator",
- "chrono",
  "clock",
  "csv",
  "download",
@@ -2725,7 +2798,7 @@ dependencies = [
  "test-case",
  "thin_edge_json",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.7",
  "tokio",
  "tokio-test",
  "toml",
@@ -2756,13 +2829,13 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
+checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
 dependencies = [
  "cfg-if 1.0.0",
+ "fastrand",
  "libc",
- "rand",
  "redox_syscall",
  "remove_dir_all",
  "winapi",
@@ -2811,7 +2884,6 @@ version = "0.5.2"
 dependencies = [
  "anyhow",
  "assert_matches",
- "chrono",
  "clock",
  "criterion",
  "json-writer",
@@ -2822,7 +2894,7 @@ dependencies = [
  "stats_alloc",
  "test-case",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.7",
  "walkdir",
 ]
 
@@ -2867,12 +2939,13 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.5"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
+checksum = "004cbc98f30fa233c61a38bc77e96a9106e65c88f2d3bef182ae952027e5753d"
 dependencies = [
- "itoa",
+ "itoa 1.0.1",
  "libc",
+ "num_threads",
  "serde",
  "time-macros",
 ]
@@ -3498,7 +3571,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
 dependencies = [
- "time 0.3.5",
+ "time 0.3.7",
 ]
 
 [[package]]

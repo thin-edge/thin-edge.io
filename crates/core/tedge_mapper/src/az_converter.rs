@@ -53,15 +53,15 @@ mod tests {
     use crate::size_threshold::SizeThresholdExceeded;
     use assert_json_diff::*;
     use assert_matches::*;
-    use chrono::{FixedOffset, TimeZone};
     use mqtt_channel::Topic;
     use serde_json::json;
+    use time::macros::datetime;
 
     struct TestClock;
 
     impl Clock for TestClock {
         fn now(&self) -> clock::Timestamp {
-            FixedOffset::east(5 * 3600).ymd(2021, 4, 8).and_hms(0, 0, 0)
+            datetime!(2021-04-08 00:00:00 +05:00)
         }
     }
 

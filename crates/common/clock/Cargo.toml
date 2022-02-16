@@ -6,7 +6,9 @@ edition = "2021"
 rust-version = "1.58.1"
 
 [dependencies]
-time = { version = "0.3", features = ["serde-human-readable"] }
-chrono = "0.4"
-serde = { version = "1.0", features = ["derive"] }
 mockall = "0.10"
+time = "0.3.7"
+
+[features]
+default = []
+with-serde = ["time/serde-well-known"]

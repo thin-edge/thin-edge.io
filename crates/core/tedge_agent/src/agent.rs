@@ -24,10 +24,10 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 
 #[cfg(not(test))]
-const INIT_COMMAND: &'static str = "init";
+const INIT_COMMAND: &str = "init";
 
 #[cfg(test)]
-const INIT_COMMAND: &'static str = "echo";
+const INIT_COMMAND: &str = "echo";
 
 #[derive(Debug)]
 pub struct SmAgentConfig {
@@ -468,7 +468,7 @@ impl SmAgent {
         // update status to executing.
         let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
         let () = responses
-            .publish(Message::new(&topic, executing_response.to_bytes()?))
+            .publish(Message::new(topic, executing_response.to_bytes()?))
             .await?;
         let () = restart_operation::create_slash_run_file()?;
 

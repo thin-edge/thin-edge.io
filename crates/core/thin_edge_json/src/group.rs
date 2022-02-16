@@ -1,12 +1,11 @@
-use chrono::offset::FixedOffset;
-use chrono::DateTime;
 use std::collections::HashMap;
+use time::OffsetDateTime;
 
 use crate::measurement::MeasurementVisitor;
 
 #[derive(Debug)]
 pub struct MeasurementGroup {
-    timestamp: Option<DateTime<FixedOffset>>,
+    timestamp: Option<OffsetDateTime>,
     values: HashMap<String, Measurement>,
 }
 
@@ -18,7 +17,7 @@ impl MeasurementGroup {
         }
     }
 
-    pub fn timestamp(&self) -> Option<DateTime<FixedOffset>> {
+    pub fn timestamp(&self) -> Option<OffsetDateTime> {
         self.timestamp
     }
 
@@ -138,7 +137,7 @@ impl Default for MeasurementGrouper {
 impl MeasurementVisitor for MeasurementGrouper {
     type Error = MeasurementGrouperError;
 
-    fn visit_timestamp(&mut self, time: DateTime<FixedOffset>) -> Result<(), Self::Error> {
+    fn visit_timestamp(&mut self, time: OffsetDateTime) -> Result<(), Self::Error> {
         self.measurement_group.timestamp = Some(time);
         Ok(())
     }
@@ -192,9 +191,9 @@ impl MeasurementVisitor for MeasurementGrouper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::prelude::*;
     use mockall::predicate::*;
     use mockall::*;
+    use time::{macros::datetime, Duration};
 
     #[derive(thiserror::Error, Debug, Clone)]
     pub enum TestError {
@@ -209,7 +208,7 @@ mod tests {
         impl MeasurementVisitor for GroupedVisitor {
             type Error = TestError;
 
-            fn visit_timestamp(&mut self, value: DateTime<FixedOffset>) -> Result<(), TestError>;
+            fn visit_timestamp(&mut self, value: OffsetDateTime) -> Result<(), TestError>;
             fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), TestError>;
             fn visit_start_group(&mut self, group: &str) -> Result<(), TestError>;
             fn visit_end_group(&mut self) -> Result<(), TestError>;
@@ -348,9 +347,9 @@ mod tests {
         Ok(())
     }
 
-    fn test_timestamp(minute: u32) -> DateTime<FixedOffset> {
-        FixedOffset::east(5 * 3600)
-            .ymd(2021, 4, 8)
-            .and_hms(13, minute, 00)
+    fn test_timestamp(minute: u32) -> OffsetDateTime {
+        let mut dt = datetime!(2021-04-08 13:00:00 +05:00);
+        dt += Duration::minutes(minute as i64);
+        dt
     }
 }

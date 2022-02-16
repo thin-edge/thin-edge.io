@@ -4,6 +4,7 @@ use mqtt_channel::MqttError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::enum_variant_names)]
 pub enum AgentError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
@@ -52,6 +53,7 @@ pub enum AgentError {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::enum_variant_names)]
 pub enum StateError {
     #[error(transparent)]
     FromTOMLParse(#[from] toml::de::Error),

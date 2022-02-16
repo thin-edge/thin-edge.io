@@ -44,10 +44,7 @@ impl PackageMetadata {
         if self.metadata_contains_all(contain_args) {
             // In the current implementation using `apt-get` it is required that the file has '.deb' extension (if we use dpkg extension doesn't matter).
             if self.file_path.extension() != Some(OsStr::new("deb")) {
-                let new_path = PathBuf::from(format!(
-                    "{}.deb",
-                    self.file_path().to_string_lossy().to_string()
-                ));
+                let new_path = PathBuf::from(format!("{}.deb", self.file_path().to_string_lossy()));
 
                 let _res = std::os::unix::fs::symlink(self.file_path(), &new_path);
                 self.file_path = new_path;

@@ -40,6 +40,10 @@ install_tedge_plugins() {
     # Download and install apama plugin
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb
+
+    # Download and install logfile plugin
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb
 }
 
 if [ $# -lt 3 ]; then
