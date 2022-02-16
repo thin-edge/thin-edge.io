@@ -209,13 +209,17 @@ where
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
-        let inventory_fragments_message = create_inventory_fragments_message(&self.device_name)?;
-        let supported_operations_message = create_supported_operations_fragments_message()?;
-        let device_data_message =
-            create_device_data_fragments(&self.device_name, &self.device_type)?;
-        let supported_log_types_message = create_supported_log_types_message()?;
-        let pending_operations_message = create_get_pending_operations_message()?;
-        let software_list_message = create_get_software_list_message()?;
+        let inventory_fragments_message =
+            self.wrap_error(create_inventory_fragments_message(&self.device_name));
+        let supported_operations_message =
+            self.wrap_error(create_supported_operations_fragments_message());
+        let device_data_message = self.wrap_error(create_device_data_fragments(
+            &self.device_name,
+            &self.device_type,
+        ));
+        let supported_log_types_message = self.wrap_error(create_supported_log_types_message());
+        let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
+        let software_list_message = self.wrap_error(create_get_software_list_message());
 
         Ok(vec![
             inventory_fragments_message,
@@ -569,7 +573,7 @@ async fn forward_software_request(
     http_proxy: &mut impl C8YHttpProxy,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
-    let update_software = SmartRestUpdateSoftware::new();
+    let update_software = SmartRestUpdateSoftware::default();
     let mut software_update_request = update_software
         .from_smartrest(smartrest)?
         .to_thin_edge_json()?;
