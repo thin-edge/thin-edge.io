@@ -109,7 +109,7 @@ pub enum RestartOperationStatus {
     Restarting,
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
     pub operation_id: Option<String>,

@@ -1,3 +1,4 @@
+use crate::journal::Journal;
 use crate::operation_logs::{LogKind, OperationLogs};
 use crate::{
     error::AgentError,
@@ -21,7 +22,7 @@ use mqtt_channel::{
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use serde_json::json;
 use std::process;
-use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{convert::TryInto, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathDefaultSetting,
     MqttBindAddressSetting, MqttPortSetting, RunPathDefaultSetting, SoftwarePluginDefaultSetting,
@@ -190,20 +191,27 @@ impl SmAgentConfig {
             ..self
         }
     }
+
+    pub fn journal_path(&self) -> PathBuf {
+        let mut state_repo_path = self.sm_home.clone();
+        state_repo_path.push(PathBuf::from_str(".agent").expect("infallible"));
+        state_repo_path.push(PathBuf::from_str("journal").expect("infallible"));
+        state_repo_path
+    }
 }
 
 #[derive(Debug)]
 pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
-    persistance_store: AgentStateRepository,
+    persistance_store: Journal,
 }
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
         info!("{} starting", &name);
 
-        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let persistance_store = Journal::open(config.journal_path())?;
         let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
         config.mqtt_config = config

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::journal::JournalError;
 use agent_interface::{ApiError, SoftwareError};
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
@@ -31,6 +32,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromState(#[from] StateError),
+
+    #[error(transparent)]
+    FromJournal(#[from] JournalError),
 
     #[error(transparent)]
     FromTedgeConfig(#[from] TEdgeConfigError),

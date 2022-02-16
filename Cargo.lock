@@ -2310,6 +2310,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86018df177b1beef6c7c8ef949969c4f7cb9a9344181b92486b23c79995bdaa4"
+dependencies = [
+ "base64",
+ "bitflags",
+ "serde",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2383,6 +2394,18 @@ dependencies = [
  "mqttbytes",
  "segments",
  "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "rustbreak"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460d97902465327d69ecfe8cefdb5972c6f94d6127ac9e992acdb51458bebc27"
+dependencies = [
+ "ron",
+ "serde",
+ "tempfile",
  "thiserror",
 ]
 
@@ -2788,6 +2811,7 @@ dependencies = [
  "once_cell",
  "plugin_sm",
  "predicates 2.1.1",
+ "rustbreak",
  "serde",
  "serde_json",
  "serial_test",
