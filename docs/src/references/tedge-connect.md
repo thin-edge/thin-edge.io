@@ -1,7 +1,7 @@
 # The `tedge connect` command
 
 ```
-tedge-connect 0.2.0
+tedge-connect 0.5.3
 Connect to connector provider
 
 USAGE:
@@ -24,7 +24,7 @@ SUBCOMMANDS:
 ## Azure
 
 ```
-tedge-connect-az 0.2.0
+tedge-connect-az 0.5.3
 Create connection to Azure
 
 The command will create config and start edge relay from the device to az instance
@@ -46,7 +46,7 @@ FLAGS:
 ## Cumulocity
 
 ```
-tedge-connect-c8y 0.2.0
+tedge-connect-c8y 0.5.3
 Create connection to Cumulocity
 
 The command will create config and start edge relay from the device to c8y instance
