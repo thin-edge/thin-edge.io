@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use crate::command::{BuildCommand, BuildContext, Command};
 use clap;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod certificate;
 mod config;
@@ -16,6 +19,9 @@ mod mqtt;
 pub struct Opt {
     #[clap(subcommand)]
     pub tedge: TEdgeOpt,
+
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
 }
 
 #[derive(clap::Subcommand, Debug)]

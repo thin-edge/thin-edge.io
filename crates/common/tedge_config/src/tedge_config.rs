@@ -4,7 +4,7 @@ use std::convert::{TryFrom, TryInto};
 
 /// loads tedge config from system default
 pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
-    let tedge_config_location = TEdgeConfigLocation::from_default_system_location();
+    let tedge_config_location = TEdgeConfigLocation::default();
     let config_repository = TEdgeConfigRepository::new(tedge_config_location);
     Ok(config_repository.load()?)
 }
