@@ -3,7 +3,6 @@ use crate::json_c8y::{
 };
 use async_trait::async_trait;
 use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse};
-use chrono::{DateTime, Local};
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::time::Duration;
