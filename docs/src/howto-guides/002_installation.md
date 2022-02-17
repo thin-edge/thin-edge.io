@@ -39,11 +39,12 @@ When all dependencies are in place you can proceed with installation of `thin-ed
 
 If you already have `thin-edge.io` on your device to upgrade `thin-edge.io` follow the steps below, there is no need to remove old version.
 
-> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components should be stopped, eg: `tedge-mapper` and `tedge-agent`:
+> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components must stopped before upgrade, and started again afterwards. Easiest was is to use commands `tedge disconnect <cloud>` and `tedge connect <cloud>`. Example:
 >
 > ```shell
-> systemctl stop tedge-mapper-c8y
-> systemctl stop tedge-agent
+> sudo tedge disconnect c8y
+> ... process upgrade ...
+> sudo tedge connect c8y
 > ```
 
 ### Package download
