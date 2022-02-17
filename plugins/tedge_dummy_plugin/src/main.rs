@@ -23,6 +23,9 @@ pub enum PluginOp {
         version: Option<String>,
     },
 
+    /// Install or remove multiple modules at once
+    UpdateList,
+
     /// Prepare a sequences of install/remove commands
     Prepare,
 
@@ -53,6 +56,7 @@ fn main() {
         PluginOp::List
         | PluginOp::Prepare
         | PluginOp::Finalize
+        | PluginOp::UpdateList
         | PluginOp::Install { .. }
         | PluginOp::Remove { .. } => process_call_with_file(),
     };
