@@ -67,6 +67,7 @@ impl ThinEdgeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use assert_matches::assert_matches;
     use serde_json::{json, Value};
     use test_case::test_case;
@@ -156,8 +157,11 @@ mod tests {
     }
 
     #[test]
-    fn event_translation_empty_payload() {
-        let result = ThinEdgeEvent::try_from("tedge/events/click_event", "");
-        assert_matches!(result.unwrap().data, None);
+    fn event_translation_empty_payload() -> Result<()> {
+        let result = ThinEdgeEvent::try_from("tedge/events/click_event", "")?;
+        assert_eq!(result.name, "click_event".to_string());
+        assert_matches!(result.data, None);
+
+        Ok(())
     }
 }
