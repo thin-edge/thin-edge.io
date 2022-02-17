@@ -1,7 +1,7 @@
 # Thin Edge Event
 
 Events on thin-edge.io can be used to trigger signals when some event happens in the system.
-For example, a person entering a room or someone logging into a machine/website can all be represnted as events.
+For example, a person entering a room or someone logging into a machine/website can all be represented as events.
 Events are stateless and hence are processed as and when they occur.
 They don't represent state but can be used to represent state changes.
 An event can't be updated/cleared once its triggered, unlike alarms that are cleared explicitly after processing.
@@ -40,6 +40,7 @@ Payload:
 ```
 
 > Note: Both the `message` field and the `time` field are optional.
+
 When a `message` is not provided, a placeholder message like `generic event` would be generated if the connected cloud mandates one.
 When `time` is not provided, thin-edge.io will use the current system time as the `time` of the event.
 When you want to skip both fields, use an empty json fragment `{}` as the payload to indicate the same.
@@ -53,4 +54,5 @@ The mapping of thin-edge events data to its respective cloud-native representati
 For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge event JSON data to its equivalent Cumulocity SmartREST representation.
 
 > Warning: As of now, event data mapping is supported only on Cumulocity IoT cloud platform.
+
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events)
