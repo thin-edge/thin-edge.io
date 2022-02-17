@@ -1,7 +1,7 @@
 use crate::core::{converter::Converter, mapper::create_mapper, size_threshold::SizeThreshold};
 use anyhow::Result;
 use c8y_api::{
-    http_proxy::{C8YHttpProxy, JwtAuthHttpProxy, MockC8YHttpProxy},
+    http_proxy::{C8YHttpProxy, C8yMqttJwtTokenRetriever, JwtAuthHttpProxy, MockC8YHttpProxy},
     json_c8y::C8yUpdateSoftwareListResponse,
 };
 use c8y_smartrest::{

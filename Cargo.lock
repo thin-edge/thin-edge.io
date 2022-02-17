@@ -334,13 +334,15 @@ name = "c8y_api"
 version = "0.5.3"
 dependencies = [
  "agent_interface",
+ "anyhow",
  "async-trait",
  "c8y_smartrest",
  "clock",
  "csv",
  "download",
  "futures",
- "mockall 0.10.2",
+ "mockall 0.11.0",
+ "mockito",
  "mqtt_channel",
  "reqwest",
  "serde",
