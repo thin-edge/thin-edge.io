@@ -321,8 +321,8 @@ pub fn get_datetime_from_file_path(
     match log_path.to_str() {
         Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
             path.to_string(),
-        ))?,
-        None => Err(SMCumulocityMapperError::InvalidUtf8Path)?,
+        )),
+        None => Err(SMCumulocityMapperError::InvalidUtf8Path),
     }
 }
 
