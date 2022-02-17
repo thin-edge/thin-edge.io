@@ -335,7 +335,7 @@ mod tests {
             .await;
 
         // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
-        assert_matches!(res, Err(SoftwareError::UpdateListNotSupported(_)));
+        assert!(res.is_ok());
     }
 
     // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
