@@ -19,7 +19,6 @@ assets = [
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = { version = "0.4" , features = ["serde"] }
 c8y_api = { path = "../../crates/core/c8y_api" }
 c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
 csv = "1.1"

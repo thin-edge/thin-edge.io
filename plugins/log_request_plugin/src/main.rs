@@ -9,9 +9,6 @@ use futures::SinkExt;
 use smartrest::{
     get_log_file_request_done_message, get_log_file_request_executing, read_tedge_logs,
 };
-use std::time::Duration;
-
-use tokio::time::sleep;
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
 const MQTT_SESSION_NAME: &str = "log plugin mqtt session";
@@ -70,14 +67,4 @@ async fn main() -> Result<(), anyhow::Error> {
     mqtt_client.close().await;
 
     Ok(())
-}
-
-/// does a one second pause.
-///
-/// NOTE: this is a quick-fix to enable step 4. in main to be executed.
-/// if `do_one_second_pause()` is not called, step 4. in main
-/// does not get triggered.
-// see #846
-async fn do_one_second_pause() {
-    sleep(Duration::from_secs(1)).await;
 }
