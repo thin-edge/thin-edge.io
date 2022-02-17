@@ -19,7 +19,7 @@ tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal"] }
 tracing = { version = "0.1", features = [], optional = true }
-tracing-subscriber = { version = "0.2", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = [ "time" ] }
 
 [dev-dependencies]
 assert_matches = "1.5"

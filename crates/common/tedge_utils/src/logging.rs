@@ -12,9 +12,7 @@ pub fn initialise_tracing_subscriber(debug: bool) {
     };
 
     tracing_subscriber::fmt()
-        .with_timer(tracing_subscriber::fmt::time::ChronoUtc::with_format(
-            "%Y-%m-%dT%H:%M:%S%.3f%:z".into(),
-        ))
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
         .with_max_level(log_level)
         .init();
 }
