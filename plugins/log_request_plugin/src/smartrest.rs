@@ -61,18 +61,10 @@ pub fn read_tedge_logs(
     // Therefore, files are sorted by date.
     let mut read_vector: Vec<_> = std::fs::read_dir(logs_dir)?
         .filter_map(|r| r.ok())
-        .filter_map(|dir_entry| {
-            let file_path = &dir_entry.path();
-            let datetime_object = get_datetime_from_file_path(&file_path);
-            match datetime_object {
-                Ok(dt) => {
-                    if dt < smartrest_obj.date_from || dt > smartrest_obj.date_to {
-                        return None;
-                    }
-                    Some(dir_entry)
-                }
-                Err(_) => None,
-            }
+        .filter(|dir_entry| {
+            get_datetime_from_file_path(&dir_entry.path())
+                .map(|dt| !(dt < smartrest_obj.date_from || dt > smartrest_obj.date_to))
+                .unwrap_or(false)
         })
         .collect();
 
