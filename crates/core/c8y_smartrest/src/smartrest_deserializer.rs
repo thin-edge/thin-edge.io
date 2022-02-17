@@ -45,15 +45,17 @@ pub struct SmartRestUpdateSoftwareModule {
     pub action: String,
 }
 
-impl SmartRestUpdateSoftware {
-    pub fn new() -> Self {
+impl Default for SmartRestUpdateSoftware {
+    fn default() -> Self {
         Self {
             message_id: "528".into(),
             external_id: "".into(),
             update_list: vec![],
         }
     }
+}
 
+impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         let () = message_id.truncate(3);
@@ -62,7 +64,7 @@ impl SmartRestUpdateSoftware {
             .has_headers(false)
             .flexible(true)
             .from_reader(smartrest.as_bytes());
-        let mut record: Self = Self::new();
+        let mut record: Self = Self::default();
 
         for result in rdr.deserialize() {
             record = result?;
@@ -221,11 +223,11 @@ impl SmartRestLogRequest {
             .flexible(true)
             .from_reader(smartrest.as_bytes());
 
-        match rdr.deserialize().next() {
-            Some(Ok(record)) => Ok(record),
-            Some(Err(err)) => Err(err)?,
-            None => panic!("empty request"),
-        }
+        rdr.deserialize()
+            .next()
+            .ok_or_else(|| panic!("empty request"))
+            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
+            .map_err(SmartRestDeserializerError::from)
     }
 }
 
@@ -242,11 +244,10 @@ impl SmartRestRestartRequest {
             .flexible(true)
             .from_reader(smartrest.as_bytes());
 
-        match rdr.deserialize().next() {
-            Some(Ok(record)) => Ok(record),
-            Some(Err(err)) => Err(err)?,
-            None => Err(SmartRestDeserializerError::EmptyRequest),
-        }
+        rdr.deserialize()
+            .next()
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
+            .map_err(SmartRestDeserializerError::from)
     }
 }
 
@@ -258,20 +259,22 @@ pub struct SmartRestJwtResponse {
     token: JwtToken,
 }
 
-impl SmartRestJwtResponse {
-    pub fn new() -> Self {
+impl Default for SmartRestJwtResponse {
+    fn default() -> Self {
         Self {
             id: 71,
             token: "".into(),
         }
     }
+}
 
+impl SmartRestJwtResponse {
     pub fn try_new(to_parse: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut csv = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(to_parse.as_bytes());
 
-        let mut jwt = Self::new();
+        let mut jwt = Self::default();
         for result in csv.deserialize() {
             jwt = result.unwrap();
         }
@@ -347,7 +350,7 @@ mod tests {
 
     #[test]
     fn jwt_token_create_new() {
-        let jwt = SmartRestJwtResponse::new();
+        let jwt = SmartRestJwtResponse::default();
 
         assert!(jwt.token.is_empty());
     }
@@ -418,7 +421,7 @@ mod tests {
     fn deserialize_smartrest_update_software() {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
-        let update_software = SmartRestUpdateSoftware::new()
+        let update_software = SmartRestUpdateSoftware::default()
             .from_smartrest(&smartrest)
             .unwrap();
 
@@ -447,7 +450,7 @@ mod tests {
     #[test]
     fn deserialize_incorrect_smartrest_message_id() {
         let smartrest = String::from("516,external_id");
-        assert!(SmartRestUpdateSoftware::new()
+        assert!(SmartRestUpdateSoftware::default()
             .from_smartrest(&smartrest)
             .is_err());
     }
@@ -456,7 +459,7 @@ mod tests {
     fn deserialize_incorrect_smartrest_action() {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
-        assert!(SmartRestUpdateSoftware::new()
+        assert!(SmartRestUpdateSoftware::default()
             .from_smartrest(&smartrest)
             .unwrap()
             .to_thin_edge_json()
@@ -511,7 +514,7 @@ mod tests {
             String::from("528,external_id,nodered,1.0.0::debian,,install,\
             collectd,5.7::debian,https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2,install,\
             nginx,1.21.0::docker,,install,mongodb,4.4.6::docker,,delete");
-        let update_software = SmartRestUpdateSoftware::new();
+        let update_software = SmartRestUpdateSoftware::default();
         let software_update_request = update_software
             .from_smartrest(&smartrest)
             .unwrap()
@@ -564,7 +567,7 @@ mod tests {
     fn access_smartrest_update_modules() {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
-        let update_software = SmartRestUpdateSoftware::new();
+        let update_software = SmartRestUpdateSoftware::default();
         let vec = update_software
             .from_smartrest(&smartrest)
             .unwrap()

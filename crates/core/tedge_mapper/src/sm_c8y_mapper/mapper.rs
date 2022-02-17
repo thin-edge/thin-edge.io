@@ -339,7 +339,7 @@ where
         smartrest: &str,
     ) -> Result<(), SMCumulocityMapperError> {
         let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
-        let update_software = SmartRestUpdateSoftware::new();
+        let update_software = SmartRestUpdateSoftware::default();
         let mut software_update_request = update_software
             .from_smartrest(smartrest)?
             .to_thin_edge_json()?;
