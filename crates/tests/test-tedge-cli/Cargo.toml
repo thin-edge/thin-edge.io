@@ -6,4 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rexpect = "0.4"
+rexpect = { git = "https://github.com/didier-wenzek/rexpect", branch = "fix/tokenization" }
+
+[dev-dependencies]
+assert_matches = "1.5"
