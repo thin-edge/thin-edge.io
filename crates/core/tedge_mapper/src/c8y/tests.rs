@@ -334,6 +334,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial]
+#[ignore]
 async fn get_jwt_token_full_run() {
     // Given a background process that publish JWT tokens on demand.
     let broker = mqtt_tests::test_mqtt_broker();
