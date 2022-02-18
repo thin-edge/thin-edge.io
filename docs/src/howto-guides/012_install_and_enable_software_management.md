@@ -64,13 +64,13 @@ For debugging purpose or to disable/enable the software management services, one
 
 ```shell
 sudo systemctl start tedge-agent.service
-sudo systemctl start tedge-mapper-sm-c8y.service
+sudo systemctl start tedge-mapper-c8y.service
 ```
 
 ### Stopping the services
 
 ```shell
 sudo systemctl stop tedge-agent.service
-sudo systemctl stop tedge-mapper-sm-c8y.service
+sudo systemctl stop tedge-mapper-c8y.service
 ```
 

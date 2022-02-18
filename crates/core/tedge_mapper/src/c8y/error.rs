@@ -1,10 +1,9 @@
-use c8y_smartrest::error::{SmartRestDeserializerError, SmartRestSerializerError};
+use c8y_smartrest::error::{
+    SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
+};
 
 #[derive(thiserror::Error, Debug)]
-pub enum SMCumulocityMapperError {
-    #[error("Invalid MQTT Message.")]
-    InvalidMqttMessage,
-
+pub enum CumulocityMapperError {
     #[error(transparent)]
     InvalidTopicError(#[from] agent_interface::TopicError),
 
@@ -27,6 +26,9 @@ pub enum SMCumulocityMapperError {
     FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
 
     #[error(transparent)]
+    FromSmCumulocityMapperError(#[from] SMCumulocityMapperError),
+
+    #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
@@ -35,17 +37,8 @@ pub enum SMCumulocityMapperError {
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
 
-    #[error("Invalid date in file name: {0}")]
-    InvalidDateInFileName(String),
-
-    #[error("Invalid path. Not UTF-8.")]
-    InvalidUtf8Path,
-
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
-
-    #[error("Request timed out")]
-    RequestTimeout,
 
     #[error("Operation execution failed: {0}")]
     ExecuteFailed(String),

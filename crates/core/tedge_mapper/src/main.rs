@@ -1,38 +1,27 @@
 use std::fmt;
 
-use crate::sm_c8y_mapper::mapper::CumulocitySoftwareManagementMapper;
 use crate::{
-    az_mapper::AzureMapper, c8y_mapper::CumulocityMapper, collectd_mapper::mapper::CollectdMapper,
-    component::TEdgeComponent, error::*,
+    az::mapper::AzureMapper,
+    c8y::mapper::CumulocityMapper,
+    collectd::mapper::CollectdMapper,
+    core::{component::TEdgeComponent, error::MapperError},
 };
+
 use flockfile::check_another_instance_is_not_running;
 use structopt::*;
 use tedge_config::*;
 use tedge_utils::paths::home_dir;
 
-mod az_converter;
-mod az_mapper;
-mod c8y_converter;
-mod c8y_fragments;
-mod c8y_mapper;
-mod collectd_mapper;
-mod component;
-mod converter;
-mod error;
-mod mapper;
-mod operations;
-mod size_threshold;
-mod sm_c8y_mapper;
-
-#[cfg(test)]
-mod tests;
+mod az;
+mod c8y;
+mod collectd;
+mod core;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
-        MapperName::SmC8y => Box::new(CumulocitySoftwareManagementMapper::new()),
     }
 }
 
@@ -50,7 +39,7 @@ pub struct MapperOpt {
     ///
     /// If off only reports ERROR, WARN, and INFO
     /// If on also reports DEBUG and TRACE
-    #[structopt(long)]
+    #[structopt(long, global = true)]
     pub debug: bool,
 
     /// Start the mapper with clean session off, subscribe to the topics, so that no messages are lost
@@ -69,16 +58,14 @@ pub enum MapperName {
     Az,
     C8y,
     Collectd,
-    SmC8y,
 }
 
 impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MapperName::Az => write!(f, "{}", "tedge-mapper-az"),
-            MapperName::C8y => write!(f, "{}", "tedge-mapper-c8y"),
-            MapperName::Collectd => write!(f, "{}", "tedge-mapper-collectd"),
-            MapperName::SmC8y => write!(f, "{}", "sm-c8y-mapper"),
+            MapperName::Az => write!(f, "tedge-mapper-az"),
+            MapperName::C8y => write!(f, "tedge-mapper-c8y"),
+            MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
         }
     }
 }
@@ -94,10 +81,10 @@ async fn main() -> anyhow::Result<()> {
     let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
 
     if mapper.init {
-        let mut mapper = CumulocitySoftwareManagementMapper::new();
+        let mut mapper = CumulocityMapper::new();
         mapper.init_session().await
     } else if mapper.clear {
-        let mut mapper = CumulocitySoftwareManagementMapper::new();
+        let mut mapper = CumulocityMapper::new();
         mapper.clear_session().await
     } else {
         component.start(config).await

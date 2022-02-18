@@ -1,10 +1,8 @@
-use tracing::{error, info, instrument};
-
-use crate::collectd_mapper::batcher::MessageBatch;
-use crate::collectd_mapper::collectd::CollectdMessage;
-use crate::collectd_mapper::error::DeviceMonitorError;
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
 use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
+use tracing::{error, info, instrument};
+
+use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;

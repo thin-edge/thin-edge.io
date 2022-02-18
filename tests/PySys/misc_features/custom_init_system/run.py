@@ -1,5 +1,6 @@
-from pysys.basetest import BaseTest
 import os
+
+from pysys.basetest import BaseTest
 
 """
 Validate tedge connect/disconnect use a given init system config
@@ -64,7 +65,8 @@ class CustomInitSystem(BaseTest):
         self.assertGrep("tedge_connect.out", "Error", contains=False)
         self.assertGrep("tedge_disconnect.out", "Error", contains=False)
         self.assertGrep(self.dummy_init_output, "Error", contains=False)
-        self.assertGrep(self.dummy_init_output, "The system config file '/etc/tedge/system.toml' doesn't exist.", contains=False)
+        self.assertGrep(self.dummy_init_output,
+                        "The system config file '/etc/tedge/system.toml' doesn't exist.", contains=False)
 
         expected_output = [
             "is_available",
@@ -74,13 +76,9 @@ class CustomInitSystem(BaseTest):
             "enable tedge-mapper-c8y",
             "restart tedge-agent",
             "enable tedge-agent",
-            "restart tedge-mapper-sm-c8y",
-            "enable tedge-mapper-sm-c8y",
             "is-active mosquitto",
             "stop tedge-mapper-c8y",
             "disable tedge-mapper-c8y",
-            "stop tedge-mapper-sm-c8y",
-            "disable tedge-mapper-sm-c8y",
             "stop tedge-agent",
             "disable tedge-agent",
         ]
@@ -88,7 +86,6 @@ class CustomInitSystem(BaseTest):
         # Check the output of init system contains all expected words
         for word in expected_output:
             self.assertGrep(self.dummy_init_output, word, contains=True)
-
 
     def custom_cleanup(self):
         # Remove system.toml from /etc/tedge, otherwise other tests will use the config.
@@ -104,4 +101,3 @@ class CustomInitSystem(BaseTest):
             arguments=["rm", "-rf", self.tmp_dir],
             stdouterr="remove_dummy_init",
         )
-

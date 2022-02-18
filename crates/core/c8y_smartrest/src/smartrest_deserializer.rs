@@ -332,8 +332,6 @@ mod tests {
     use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
-    use std::fs::File;
-    use std::io::Write;
     use std::str::FromStr;
     use test_case::test_case;
 
@@ -633,19 +631,5 @@ mod tests {
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
         assert!(path_buf_datetime.is_err());
-    }
-
-    fn parse_file_names_from_log_content(log_content: &str) -> [&str; 5] {
-        let mut files: Vec<&str> = vec![];
-        for line in log_content.lines() {
-            if line.contains("filename: ") {
-                let filename: &str = line.split("filename: ").last().unwrap();
-                files.push(filename);
-            }
-        }
-        match files.try_into() {
-            Ok(arr) => arr,
-            Err(_) => panic!("Could not convert to Array &str, size 5"),
-        }
     }
 }
