@@ -357,6 +357,7 @@ async fn get_jwt_token_full_run() {
         JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
 
     // ... fetches and returns these JWT tokens.
+    tokio::time::sleep(Duration::from_secs(3)).await;
     let jwt_token = http_proxy.get_jwt_token().await;
 
     // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
