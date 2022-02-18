@@ -1,13 +1,10 @@
 use crate::core::{converter::Converter, mapper::create_mapper, size_threshold::SizeThreshold};
-use c8y_api::{
-    http_proxy::{C8YHttpProxy, JwtAuthHttpProxy},
-    json_c8y::C8yUpdateSoftwareListResponse,
-};
+use c8y_api::{http_proxy::C8YHttpProxy, json_c8y::C8yUpdateSoftwareListResponse};
 use c8y_smartrest::{
     error::SMCumulocityMapperError, operations::Operations,
     smartrest_deserializer::SmartRestJwtResponse,
 };
-use mqtt_channel::{Connection, Message, Topic, TopicFilter};
+use mqtt_channel::{Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use serial_test::serial;
 use std::time::Duration;
@@ -330,38 +327,6 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
         "502,c8y_SoftwareUpdate,\"Parameter remove is not recognized. It must be install or delete.\""],
     )
     .await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[serial_test::serial]
-#[ignore]
-async fn get_jwt_token_full_run() {
-    // Given a background process that publish JWT tokens on demand.
-    let broker = mqtt_tests::test_mqtt_broker();
-    broker.map_messages_background(|(topic, _)| {
-        let mut response = vec![];
-        if &topic == "c8y/s/uat" {
-            response.push(("c8y/s/dat".into(), "71,1111".into()));
-        }
-        response
-    });
-
-    // An JwtAuthHttpProxy ...
-    let mqtt_config = mqtt_channel::Config::default()
-        .with_port(broker.port)
-        .with_session_name("JWT-Requester-Test")
-        .with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat"));
-    let mqtt_client = Connection::new(&mqtt_config).await.unwrap();
-    let http_client = reqwest::ClientBuilder::new().build().unwrap();
-    let mut http_proxy =
-        JwtAuthHttpProxy::new(mqtt_client, http_client, "test.tenant.com", "test-device");
-
-    // ... fetches and returns these JWT tokens.
-    let jwt_token = http_proxy.get_jwt_token().await;
-
-    // `get_jwt_token` should return `Ok` and the value of token should be as set above `1111`.
-    assert!(jwt_token.is_ok());
-    assert_eq!(jwt_token.unwrap().token(), "1111");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
