@@ -1,6 +1,7 @@
 use tokio::sync::mpsc::error::SendError;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum DeviceMonitorError {
     #[error(transparent)]
     FromMqttClient(#[from] mqtt_channel::MqttError),
