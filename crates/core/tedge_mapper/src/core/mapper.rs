@@ -10,8 +10,8 @@ use tracing::{error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
-pub async fn create_mapper<'a>(
-    app_name: &'a str,
+pub async fn create_mapper(
+    app_name: &str,
     mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
