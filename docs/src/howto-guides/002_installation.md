@@ -39,7 +39,7 @@ When all dependencies are in place you can proceed with installation of `thin-ed
 
 If you already have `thin-edge.io` on your device to upgrade `thin-edge.io` follow the steps below, there is no need to remove old version.
 
-> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components must stopped before upgrade, and started again afterwards. Easiest was is to use commands `tedge disconnect <cloud>` and `tedge connect <cloud>`. Example:
+> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components must be stopped before upgrade, and started again afterwards. The simpler is to use the commands `tedge disconnect <cloud>` and `tedge connect <cloud>`. Example:
 >
 > ```shell
 > sudo tedge disconnect c8y
