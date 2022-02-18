@@ -52,6 +52,39 @@ pub async fn assert_received<T>(
     }
 }
 
+/// Pull the received `messages` until all the `expected` messages have been received or timeout reached.
+///
+/// A message is expected if containing one of the `expected` strings.
+/// Returns early on `timeout` while waiting for the next message.
+pub async fn assert_received_all_expected<T>(
+    messages: &mut UnboundedReceiver<String>,
+    timeout: Duration,
+    expected: T,
+) where
+    T: IntoIterator,
+    T::Item: ToString,
+{
+    let mut expected = expected
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let mut received = Vec::new();
+
+    while let Ok(Some(msg)) = messages.next().with_timeout(timeout).await {
+        expected.retain(|expected_msg| !msg.contains(expected_msg));
+        received.push(msg);
+        if expected.is_empty() {
+            return;
+        }
+    }
+
+    assert!(
+        expected.is_empty(),
+        "Didn't receive all expected messages: {expected:?}\n Received: {received:?}",
+    );
+}
+
 /// Publish a message
 ///
 /// Return only when the message has been acknowledged.

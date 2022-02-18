@@ -1,7 +1,6 @@
+use crate::core::error::ConversionError;
 use serde::Serialize;
 use std::process::Command;
-
-use crate::error::ConversionError;
 use tracing::warn;
 
 const DEFAULT_AGENT_FRAGMENT_NAME: &str = "thin-edge.io";
@@ -45,7 +44,7 @@ pub fn get_tedge_version() -> Result<String, ConversionError> {
             Ok(string
                 .split_whitespace()
                 .last()
-                .ok_or_else(|| ConversionError::FromOptionError)?
+                .ok_or(ConversionError::FromOptionError)?
                 .trim()
                 .to_string())
         }
