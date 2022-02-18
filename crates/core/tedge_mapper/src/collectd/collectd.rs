@@ -123,6 +123,7 @@ struct CollectdPayload {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum CollectdPayloadError {
     #[error("Invalid payload: {0}. Expected payload format: <timestamp>:<value>")]
     InvalidMeasurementPayloadFormat(String),
