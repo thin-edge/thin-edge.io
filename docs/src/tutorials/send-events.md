@@ -58,9 +58,9 @@ For example, if the device is connected to Cumulocity IoT cloud platform, the Cu
 ### Cumulocity cloud data mapping
 
 The Cumulocity mapper will convert Thin Edge JSON into Cumulocity SmartREST messages and send it to Cumulocity via MQTT,
-if the size of the event payload size is less than 16K bytes.
+if the event payload size is less than 16K bytes.
 
-For example the `login_event` described in the earlier sections will will be converted to the following Cumulocity SmartREST message:
+For example the `login_event` described in the earlier sections will be converted to the following Cumulocity SmartREST message:
 
 ```csv
 400,login_event,"A user just logged in",2021-01-01T05:30:45+00:00
