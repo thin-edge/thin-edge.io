@@ -21,7 +21,7 @@ The payload format must be as follows:
 
 ```json
 {
-    "message": "<message text>",
+    "message": "<event message text>",
     "time": "<Timestamp in ISO-8601 format>"
 }
 ```
@@ -32,19 +32,19 @@ Topic:
 `tedge/events/login_event`
 
 Payload:
+
 ```json
 {
     "message": "A user just logged in",
-    "time": ""2021-01-01T05:30:45+00:00""
+    "time": "2021-01-01T05:30:45+00:00"
 }
 ```
 
 > Note: Both the `message` field and the `time` field are optional.
 
-When a `message` is not provided, a placeholder message like `generic event` would be generated if the connected cloud mandates one.
-When `time` is not provided, thin-edge.io will use the current system time as the `time` of the event.
-When you want to skip both fields, use an empty json fragment `{}` as the payload to indicate the same.
-
+When the `message` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
+When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.
+When you want to skip both fields, use an empty payload to indicate the same.
 There are no such restrictions on the `<event-type>` value.
 
 ## Cloud data mapping
@@ -55,4 +55,31 @@ For example, if the device is connected to Cumulocity IoT cloud platform, the Cu
 
 > Warning: As of now, event data mapping is supported only on Cumulocity IoT cloud platform.
 
-Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events)
+### Cumulocity cloud data mapping
+
+The Cumulocity mapper will convert Thin Edge JSON into Cumulocity SmartREST messages and send it to Cumulocity via MQTT,
+if the size of the event payload size is less than 16K bytes.
+
+For example the `login_event` described in the earlier sections will will be converted to the following Cumulocity SmartREST message:
+
+```csv
+400,login_event,"A user just logged in",2021-01-01T05:30:45+00:00
+```
+
+... and is published to `c8y/s/us` topic which will get forwarded to the connected Cumulocity cloud instance.
+
+If the event payload size is more than 16K, it will be converted to Cumulocity JSON format and sent over HTTP.
+The Cumulocity JSON mapping of the same event would be as follows:
+
+```json
+{
+    "type":"login_event",
+    "text":"A user just logged in",
+    "time":"2021-01-01T05:30:45+00:00",
+    "source": {
+        "id":"<c8y-device-id>"
+    }
+}
+```
+
+Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
