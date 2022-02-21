@@ -155,7 +155,6 @@ impl JwtAuthHttpProxy {
 
     pub async fn try_new(
         tedge_config: &TEdgeConfig,
-        session_name: &str,
     ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
@@ -166,7 +165,6 @@ impl JwtAuthHttpProxy {
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(mqtt_port)
             .with_clean_session(true)
-            .with_session_name(session_name)
             .with_subscriptions(topic);
         let mut mqtt_con = Connection::new(&mqtt_config).await?;
 

@@ -35,10 +35,6 @@ if command -v systemctl >/dev/null; then
         # start and enable tedge-agent
         systemctl start tedge-agent.service
         systemctl enable tedge-agent.service
-
-        # start and enable tedge-mapper-sm-c8y
-        systemctl start tedge-mapper-sm-c8y.service
-        systemctl enable tedge-mapper-sm-c8y.service
     fi
 fi
 
