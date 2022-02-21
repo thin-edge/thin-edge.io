@@ -72,6 +72,7 @@ fn run_cmd(cmd: &str, args: &str) -> anyhow::Result<(String, String, i32)> {
 // expected exit code
 //
 // description about the test
+#[ignore] // ignored, requires sudo
 #[test_case(
     &format!("install {} --file {}", PACKAGE_NAME, "wrong_path"),
     "ERROR: Parsing Debian package failed",
@@ -120,6 +121,7 @@ fn install_from_local_file_fail(
 // expected exit code
 //
 // description about the test
+#[ignore] // ignored, requires sudo
 #[test_case(
     &format!("install {} --file {}", PACKAGE_NAME, PACKAGE_FILE_PATH),
     PACKAGE_NAME,
