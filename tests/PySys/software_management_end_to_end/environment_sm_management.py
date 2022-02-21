@@ -407,7 +407,7 @@ class SoftwareManagement(EnvironmentC8y):
                 break
         return ret
 
-    def remove_package_apt(name):
+    def remove_package_apt(self, name):
         """Remove a package with apt
         """
         assert isinstance(name, str)
