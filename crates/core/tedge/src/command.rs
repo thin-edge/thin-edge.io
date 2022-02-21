@@ -115,7 +115,7 @@ pub trait Command {
 /// In practice, an implementation will also derives the `Structopt` trait.
 ///
 /// ```
-/// #[derive(StructOpt, Debug)]
+/// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {
 ///     /// Add new value (overwrite the value if the key exists).
 ///     Set { key: String, value: String },

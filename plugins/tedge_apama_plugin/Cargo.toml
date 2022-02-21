@@ -13,7 +13,7 @@ assets = [
 ]
 
 [dependencies]
-structopt = "0.3"
+clap = { version = "3", features = ["derive"] }
 thiserror = "1.0"
 zip = "0.5"
 roxmltree = "0.14"

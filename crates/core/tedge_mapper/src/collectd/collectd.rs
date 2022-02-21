@@ -123,6 +123,7 @@ struct CollectdPayload {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum CollectdPayloadError {
     #[error("Invalid payload: {0}. Expected payload format: <timestamp>:<value>")]
     InvalidMeasurementPayloadFormat(String),
@@ -150,16 +151,14 @@ impl CollectdPayload {
             CollectdPayloadError::InvalidMeasurementTimestamp(msg[0].to_string())
         })?;
 
-        let mut metric_values: Vec<f64> = Vec::with_capacity(vec_len - 1);
-
-        // Process the values
-        for i in 1..vec_len {
-            let value = msg[i].parse::<f64>().map_err(|_err| {
-                CollectdPayloadError::InvalidMeasurementValue(msg[i].to_string())
-            })?;
-
-            metric_values.push(value);
-        }
+        let metric_values = msg
+            .into_iter()
+            .skip(1)
+            .map(|m| {
+                m.parse::<f64>()
+                    .map_err(|_err| CollectdPayloadError::InvalidMeasurementValue(m.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(CollectdPayload {
             timestamp,

@@ -2,7 +2,6 @@ use crate::cli::mqtt::{publish::MqttPublishCommand, subscribe::MqttSubscribeComm
 use crate::command::{BuildCommand, BuildContext, Command};
 use rumqttc::QoS;
 use std::time::Duration;
-use structopt::StructOpt;
 use tedge_config::*;
 
 const DEFAULT_HOST: &str = "localhost";
@@ -10,7 +9,7 @@ const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 pub enum TEdgeMqttCli {
     /// Publish a MQTT message on a topic.
     Pub {
@@ -19,10 +18,10 @@ pub enum TEdgeMqttCli {
         /// Message to publish
         message: String,
         /// QoS level (0, 1, 2)
-        #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
+        #[clap(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
         /// Retain flag
-        #[structopt(short, long = "retain")]
+        #[clap(short, long = "retain")]
         retain: bool,
     },
 
@@ -31,10 +30,10 @@ pub enum TEdgeMqttCli {
         /// Topic to subscribe to
         topic: String,
         /// QoS level (0, 1, 2)
-        #[structopt(short, long, parse(try_from_str = parse_qos), default_value = "0")]
+        #[clap(short, long, parse(try_from_str = parse_qos), default_value = "0")]
         qos: QoS,
         /// Avoid printing the message topics on the console
-        #[structopt(long = "no-topic")]
+        #[clap(long = "no-topic")]
         hide_topic: bool,
     },
 }

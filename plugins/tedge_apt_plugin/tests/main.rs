@@ -122,21 +122,21 @@ fn install_from_local_file_fail(
 // description about the test
 #[test_case(
     &format!("install {} --file {}", PACKAGE_NAME, PACKAGE_FILE_PATH),
-    &format!("The following NEW packages will be installed\n  {}", PACKAGE_NAME),
+    PACKAGE_NAME,
     0
     ; "path"
 )]
 #[serial]
 #[test_case(
     &format!("install {} --file {} --module-version {}", PACKAGE_NAME, PACKAGE_FILE_PATH, PACKAGE_VERSION),
-    &format!("The following NEW packages will be installed\n  {}", PACKAGE_NAME),
+    PACKAGE_NAME,
     0
     ; "path with version"
 )]
 #[serial]
 #[test_case(
     &format!("install {} --module-version {} --file {}", PACKAGE_NAME,  PACKAGE_VERSION, PACKAGE_FILE_PATH),
-    &format!("The following NEW packages will be installed\n  {}", PACKAGE_NAME),
+    PACKAGE_NAME,
     0
     ; "version with path"
 )]

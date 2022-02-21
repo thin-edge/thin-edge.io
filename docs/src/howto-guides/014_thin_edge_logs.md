@@ -55,15 +55,6 @@ tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins
 
 > Note: Run `tedge_agent --debug` to log more debug messages
 
-#### Tedge cumulocity sm mapper logs
-The software management mapper service logs can be accessed as below
-
-`journalctl -u tedge-mapper-sm-c8y.service`
-
-For example: tedge_mapper[6696]: 2021-09-29T03:38:53.853+00:00 ERROR tedge_mapper::mapper: MQTT connection error: I/O: Connection refused
-
-> Note: Run `tedge_mapper --debug sm-c8y` to log more debug messages
-
 ## Thirdparty component logs
 Thin-edge uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
 The logs that are created by these components can be accessed on a thin-edge device as below.
@@ -84,12 +75,12 @@ So, the collectd specific logs can be accessed using the `journalctl` as below
 
 ## Accessing logs remotely
 You can access logs from Cumulocity's "Logs" tab in Device Management. Do to this, go to the device you want to the logs for
-and click on the "Logs" button on the left-hand side. Next, click on the "Request log file" button located in the top right corner. 
-This will bring a dropdown into view where you can select the date and time range, the type of log required as well as filter 
+and click on the "Logs" button on the left-hand side. Next, click on the "Request log file" button located in the top right corner.
+This will bring a dropdown into view where you can select the date and time range, the type of log required as well as filter
 for any particular words in the logs (such as ERROR) and select the total number of lines to upload.
 
 ![Log request dropdown](images/log_request_dropdown.png)
 
-Logs are uploaded in the "Events" tab, where you can download them. 
+Logs are uploaded in the "Events" tab, where you can download them.
 
 ![Log request events tab](images/log_request_events_tab.png)

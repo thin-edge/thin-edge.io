@@ -1,13 +1,12 @@
 use clock::Timestamp;
 use mqtt_channel::Payload;
 use thin_edge_json::{
-    group::{MeasurementGroup, MeasurementGrouper},
+    group::{MeasurementGroup, MeasurementGrouper, MeasurementGrouperError},
     measurement::MeasurementVisitor,
     serialize::ThinEdgeJsonSerializer,
 };
 
-use crate::collectd_mapper::{collectd::CollectdMessage, error::DeviceMonitorError};
-use thin_edge_json::group::MeasurementGrouperError;
+use super::{collectd::CollectdMessage, error::DeviceMonitorError};
 
 #[derive(Debug)]
 pub struct MessageBatch {

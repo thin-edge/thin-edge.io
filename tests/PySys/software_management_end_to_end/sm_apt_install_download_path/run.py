@@ -41,7 +41,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
     def set_download_path(self, download_path):
         self.startProcess(
             command=self.SUDO,
-            arguments=[self.TEDGE, "config", "set", "download.path", f"{download_path}"]
+            arguments=[self.TEDGE, "config", "set", "tmp.path", f"{download_path}"]
         )
 
     def setup(self):
@@ -52,7 +52,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
         self.startProcess(command=self.SUDO, arguments=["mkdir", f"{self.DOWNLOAD_DIR}"])
         self.startProcess(command=self.SUDO, arguments=["chmod", "a+rwx", f"{self.DOWNLOAD_DIR}"])
 
-        self.CURRENT_DOWNLOAD_PATH = subprocess.check_output(f"{self.SUDO} {self.TEDGE} config get download.path", shell=True).decode("utf8").strip()
+        self.CURRENT_DOWNLOAD_PATH = subprocess.check_output(f"{self.SUDO} {self.TEDGE} config get tmp.path", shell=True).decode("utf8").strip()
 
         # setting download.path
         self.set_download_path(self.DOWNLOAD_DIR)

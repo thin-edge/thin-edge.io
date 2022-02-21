@@ -1,7 +1,8 @@
-use crate::az_converter::AzureConverter;
-use crate::component::TEdgeComponent;
-use crate::mapper::*;
-use crate::size_threshold::SizeThreshold;
+use crate::{
+    az::converter::AzureConverter,
+    core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
+};
+
 use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::{AzureMapperTimestamp, TEdgeConfig};

@@ -144,12 +144,6 @@ Starting tedge-agent service.
 Persisting tedge-agent on reboot.
 
 tedge-agent service successfully started and enabled!
-
-Starting tedge-mapper-sm-c8y service.
-
-Persisting tedge-mapper-sm-c8y on reboot.
-
-tedge-mapper-sm-c8y service successfully started and enabled!
 ```
 
 ## Sending your first telemetry data

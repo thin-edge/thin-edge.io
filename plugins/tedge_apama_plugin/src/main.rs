@@ -1,23 +1,23 @@
 mod error;
 
 use crate::error::InternalError;
+use clap::Parser;
 use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use structopt::StructOpt;
 
 /// This plugin supports the installation, update and removal of a single unversioned apama project named "project".
 /// Installation of multiple parallel projects is not supported.
 /// Installing a project will replace the existing project with the new one.
 /// Delta update of a project(for eg: updating just the `mon` file definitions in the project) is not supported either.
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct ApamaCli {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operation: PluginOp,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 pub enum PluginOp {
     /// List the one and only apama project if one is installed
     List,
@@ -25,16 +25,16 @@ pub enum PluginOp {
     /// Install an apama project
     Install {
         module: String,
-        #[structopt(short = "v", long = "--module-version")]
+        #[clap(short = 'v', long = "--module-version")]
         version: Option<String>,
-        #[structopt(long = "--file")]
+        #[clap(long = "--file")]
         file_path: String,
     },
 
     /// Remove an apama project
     Remove {
         module: String,
-        #[structopt(short = "v", long = "--module-version")]
+        #[clap(short = 'v', long = "--module-version")]
         version: Option<String>,
     },
 
@@ -300,7 +300,7 @@ fn run_cmd(cmd: &str, args: &str) -> Result<(), InternalError> {
 
 fn main() {
     // On usage error, the process exits with a status code of 1
-    let apama = ApamaCli::from_args();
+    let apama = ApamaCli::parse();
 
     match run(apama.operation) {
         Ok(()) => {

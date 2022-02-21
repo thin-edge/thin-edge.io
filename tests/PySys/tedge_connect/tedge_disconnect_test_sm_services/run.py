@@ -1,7 +1,8 @@
 import sys
 
-sys.path.append("environments")
 from environment_c8y import EnvironmentC8y
+
+sys.path.append("environments")
 
 """
 Run connection test while being connected :
@@ -16,12 +17,17 @@ Then the test has passed
 
 """
 
+
 class TedgeDisConnectTestSMServices(EnvironmentC8y):
     # The base class rexecutes the `sudo tedge connect c8y`
     def validate(self):
         super().validate()
 
-        self.tedge_disconnect_c8y()
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="tedge_disconnect_c8y",
+        )
 
         # Validate if the Software management services are getting stopped and disabled properly on "tedge disconnect c8y"
         self.assertGrep(
@@ -29,5 +35,5 @@ class TedgeDisConnectTestSMServices(EnvironmentC8y):
         )
 
         self.assertGrep(
-            "tedge_disconnect_c8y.out", "tedge-mapper-sm-c8y service successfully stopped and disabled!", contains=True
+            "tedge_disconnect_c8y.out", "tedge-mapper-c8y service successfully stopped and disabled!", contains=True
         )

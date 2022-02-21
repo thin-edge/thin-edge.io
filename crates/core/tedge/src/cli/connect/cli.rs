@@ -1,16 +1,15 @@
 use crate::cli::connect::*;
 use crate::command::{BuildCommand, BuildContext, Command};
 use crate::system_services::service_manager;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Debug, PartialEq)]
+#[derive(clap::Subcommand, Debug, PartialEq)]
 pub enum TEdgeConnectOpt {
     /// Create connection to Cumulocity
     ///
     /// The command will create config and start edge relay from the device to c8y instance
     C8y {
         /// Test connection to Cumulocity
-        #[structopt(long = "test")]
+        #[clap(long = "test")]
         is_test_connection: bool,
     },
 
@@ -19,7 +18,7 @@ pub enum TEdgeConnectOpt {
     /// The command will create config and start edge relay from the device to az instance
     Az {
         /// Test connection to Azure
-        #[structopt(long = "test")]
+        #[clap(long = "test")]
         is_test_connection: bool,
     },
 }

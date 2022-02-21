@@ -1,6 +1,6 @@
+import subprocess
 import sys
 import time
-import subprocess
 from pathlib import Path
 
 from environment_tedge import TedgeEnvironment
@@ -23,13 +23,15 @@ Then validate subscriber output for `503,c8y_SoftwareUpdate` for final result of
 Then test has passed
 """
 
-class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
+
+class SmMapperC8yReceiveLastMessageOnRestart(BaseTest):
     systemctl = "/usr/bin/systemctl"
     tedge = "/usr/bin/tedge"
     sudo = "/usr/bin/sudo"
     apt = "/usr/bin/apt-get"
     mqtt_sub = "/usr/bin/mosquitto_sub"
     rm = "/usr/bin/rm"
+
     def setup(self):
 
         self.addCleanupFunction(self.smcleanup)
@@ -61,7 +63,7 @@ class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
         time.sleep(2)
         self.startProcess(
             command=self.sudo,
-            arguments=[self.systemctl, "stop", "tedge-mapper-sm-c8y.service"],
+            arguments=[self.systemctl, "stop", "tedge-mapper-c8y.service"],
             stdouterr="sm_mapper_stop",
         )
 
@@ -74,10 +76,10 @@ class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
 
         # check if the agent has completed the operation
         time.sleep(15)
-       
+
         self.startProcess(
             command=self.sudo,
-            arguments=[self.systemctl, "restart", "tedge-mapper-sm-c8y.service"],
+            arguments=[self.systemctl, "restart", "tedge-mapper-c8y.service"],
             stdouterr="sm_mapper_restart",
         )
 
@@ -98,8 +100,12 @@ class SmMapperC8yReceiveLastMessageOnRestart(TedgeEnvironment):
         self.assertGrep("tedge_sub.out", "503,c8y_SoftwareUpdate", contains=True)
 
     def smcleanup(self):
-        self.log.info("Stop sm-mapper and agent")
-        self.tedge_disconnect_c8y()
+        self.log.info("Stop c8y-mapper and agent")
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.tedge, "disconnect", "c8y"],
+            stdouterr="connect_c8y",
+        )
 
     def setup_mosquitto(self):
         self.startProcess(

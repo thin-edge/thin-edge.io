@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use std::fmt::Display;
 use tracing::error;
@@ -9,6 +10,7 @@ pub struct MapperConfig {
     pub errors_topic: Topic,
 }
 
+#[async_trait]
 pub trait Converter: Send + Sync {
     type Error: Display;
 
@@ -18,24 +20,24 @@ pub trait Converter: Send + Sync {
         &self.get_mapper_config().in_topic_filter
     }
 
-    fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
 
-    fn convert(&mut self, input: &Message) -> Vec<Message> {
-        let messages_or_err = self.try_convert(input);
-        self.wrap_error(messages_or_err)
+    async fn convert(&mut self, input: &Message) -> Vec<Message> {
+        let messages_or_err = self.try_convert(input).await;
+        self.wrap_errors(messages_or_err)
     }
 
-    fn wrap_error(&self, messages_or_err: Result<Vec<Message>, Self::Error>) -> Vec<Message> {
-        match messages_or_err {
-            Ok(messages) => messages,
-            Err(error) => {
-                error!("Mapping error: {}", error);
-                vec![Message::new(
-                    &self.get_mapper_config().errors_topic,
-                    error.to_string(),
-                )]
-            }
-        }
+    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, Self::Error>) -> Vec<Message> {
+        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
+    }
+
+    fn wrap_error(&self, message_or_err: Result<Message, Self::Error>) -> Message {
+        message_or_err.unwrap_or_else(|error| self.new_error_message(error))
+    }
+
+    fn new_error_message(&self, error: Self::Error) -> Message {
+        error!("Mapping error: {}", error);
+        Message::new(&self.get_mapper_config().errors_topic, error.to_string())
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, Self::Error> {

@@ -16,7 +16,6 @@ pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
 #[derive(Debug)]
 pub struct TEdgeConfig {
     pub(crate) data: TEdgeConfigDto,
-    pub(crate) config_location: TEdgeConfigLocation,
     pub(crate) config_defaults: TEdgeConfigDefaults,
 }
 
@@ -288,7 +287,6 @@ impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
             .mqtt
             .external_port
             .map(Port)
-            .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: MqttExternalPortSetting::KEY,
             })

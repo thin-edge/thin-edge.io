@@ -1,4 +1,4 @@
-from .environments.environment_c8y import EnvironmentC8y
+from environments.environment_c8y import EnvironmentC8y
 
 """
 Validate command line option help
@@ -13,7 +13,7 @@ Then we find the string SUBCOMMANDS: in the output
 TEDGE_DOWNLOAD_DIR = "/tedge_download_dir"
 TEDGE_DOWNLOAD_PATH = "tmp.path"
 TOPIC = 'tedge/commands/req/software/update'
-PAYLOAD = '{"id":"1234","updateList":[{"type":"apt","modules":[{"name":"rolldice","version":"::apt","url":"https://t48415.basic.stage.c8y.io/inventory/binaries/1202","action":"install"}]}]}'
+PAYLOAD = '{"id":"1234","updateList":[{"type":"apt","modules":[{"name":"rolldice","version":"::apt","url":"{}/inventory/binaries/11643549","action":"install"}]}]}'
 
 
 class PySysTest(EnvironmentC8y):
@@ -82,7 +82,7 @@ class PySysTest(EnvironmentC8y):
         # 4. trigger rolldice download
         _ = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD],
+            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD.format(self.project.c8yurl)],
             stdouterr="rolldice_download",
             expectedExitStatus="==0",
         )

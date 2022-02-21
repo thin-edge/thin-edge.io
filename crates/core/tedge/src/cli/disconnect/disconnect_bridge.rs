@@ -84,8 +84,6 @@ impl DisconnectBridgeCommand {
 
         if self.use_agent && which("tedge_agent").is_ok() {
             self.service_manager()
-                .stop_and_disable_service(SystemService::TEdgeSMMapperC8Y, std::io::stdout());
-            self.service_manager()
                 .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());
         }
 

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use crate::converter::*;
-use crate::error::*;
+use crate::core::{converter::*, error::*};
 
 use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
@@ -11,8 +10,8 @@ use tracing::{error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
-pub async fn create_mapper<'a>(
-    app_name: &'a str,
+pub async fn create_mapper(
+    app_name: &str,
     mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
@@ -22,7 +21,7 @@ pub async fn create_mapper<'a>(
     let mqtt_client = Connection::new(&mqtt_config(
         app_name,
         mqtt_port,
-        mapper_config.in_topic_filter.clone().into(),
+        mapper_config.in_topic_filter.clone(),
     )?)
     .await?;
 
@@ -35,7 +34,7 @@ pub async fn create_mapper<'a>(
     ))
 }
 
-pub(crate) fn mqtt_config(
+pub fn mqtt_config(
     name: &str,
     port: u16,
     topics: TopicFilter,
@@ -111,7 +110,7 @@ impl Mapper {
     }
 
     async fn process_message(&mut self, message: Message) {
-        let converted_messages = self.converter.convert(&message);
+        let converted_messages = self.converter.convert(&message).await;
         for converted_message in converted_messages.into_iter() {
             let _ = self.output.send(converted_message).await;
         }
@@ -121,6 +120,7 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use mqtt_channel::{Message, Topic, TopicFilter};
     use std::time::Duration;
     use tokio::time::sleep;
@@ -193,6 +193,7 @@ mod tests {
         }
     }
 
+    #[async_trait]
     impl Converter for UppercaseConverter {
         type Error = ConversionError;
 
@@ -200,7 +201,7 @@ mod tests {
             &self.mapper_config
         }
 
-        fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+        async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
             let input = input.payload_str().expect("utf8");
             if input.is_ascii() {
                 let msg = vec![Message::new(

@@ -8,24 +8,26 @@ The thin edge device has to be disconnected from the cloud using the `tedge` com
 
 ```shell
 tedge disconnect c8y/az
-```  
+```
 
-## Step 2: Set and verify the new mqtt port 
+## Step 2: Set and verify the new mqtt port
 
 Set the mqtt.port with a desired port using `tedge` command as below.
-   
+
 ```shell
 tedge config set mqtt.port 1024
 ```
+
 This will make sure that all the mqtt clients use the newer port that has been set.
 
 ## Verify the port configured/set
 
 Use below command to check the port has been set properly or not.
- 
+
 ```shell
 tedge config get mqtt.port
 ```
+
 This prints out the port that has been set.
 
 ## Step 3: Connect the thin edge device to cloud
@@ -33,7 +35,7 @@ This prints out the port that has been set.
 Using `tedge` command connect to the desired cloud as below.
 
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service, sm_agent,
-tedge-agent.service, tedge-mapper-sm-c8y.service) to use the newely set port.
+tedge-agent.service) to use the newly set port.
 
 ```shell
 tedge connect c8y
@@ -42,7 +44,6 @@ tedge connect c8y
 
 tedge connect az
 ```
-
 
 Note: The step 1 and 2 can be followed in any order.
 
@@ -53,6 +54,7 @@ To use the default port (1883), the mqtt.port has to be unset using the `tedge` 
 ```shell
 tedge config unset mqtt.port
 ```
+
 Once the port is reverted to default, the [step 1](#Step-3:-Connect-the-thin-edge-device-to-cloud)
 and 3 has to be followed to use the default port.
 
