@@ -15,7 +15,8 @@ pub struct Config {
 
     /// The session name to be use on connect
     ///
-    /// If no session name is provided, a random one will be created on connect.
+    /// If no session name is provided, a random one will be created on connect,
+    /// and the session will be clean on connect.
     ///
     /// Default: None
     pub session_name: Option<String>,
@@ -129,7 +130,14 @@ impl Config {
         };
 
         let mut mqtt_options = rumqttc::MqttOptions::new(id, &self.host, self.port);
-        mqtt_options.set_clean_session(self.clean_session);
+
+        if self.session_name.is_none() {
+            // There is no point to have a session with a random name that will not be reused.
+            mqtt_options.set_clean_session(true);
+        } else {
+            mqtt_options.set_clean_session(self.clean_session);
+        }
+
         mqtt_options.set_max_packet_size(self.max_packet_size, self.max_packet_size);
 
         mqtt_options
