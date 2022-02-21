@@ -3,18 +3,18 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
+use clap::Parser;
 use serde::Deserialize;
 use std::io::{self};
 use std::process::{Command, ExitStatus, Stdio};
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct AptCli {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operation: PluginOp,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 pub enum PluginOp {
     /// List all the installed modules
     List,
@@ -22,16 +22,16 @@ pub enum PluginOp {
     /// Install a module
     Install {
         module: String,
-        #[structopt(short = "v", long = "--module-version")]
+        #[clap(short = 'v', long = "--module-version")]
         version: Option<String>,
-        #[structopt(long = "--file")]
+        #[clap(long = "--file")]
         file_path: Option<String>,
     },
 
     /// Uninstall a module
     Remove {
         module: String,
-        #[structopt(short = "v", long = "--module-version")]
+        #[clap(short = 'v', long = "--module-version")]
         version: Option<String>,
     },
 
@@ -235,7 +235,7 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
 
 fn main() {
     // On usage error, the process exits with a status code of 1
-    let apt = AptCli::from_args();
+    let apt = AptCli::parse();
 
     match run(apt.operation) {
         Ok(status) if status.success() => {

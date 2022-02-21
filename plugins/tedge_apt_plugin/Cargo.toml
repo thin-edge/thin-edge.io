@@ -15,7 +15,7 @@ assets = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-structopt = "0.3"
+clap = { version = "3", features = ["derive"] }
 thiserror = "1.0"
 csv = "1.1"
 serde = { version = "1", features = ["derive"] }

@@ -1,12 +1,12 @@
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct PluginCli {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     operation: PluginOp,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Subcommand)]
 pub enum PluginOp {
     /// List all the installed modules
     List,
@@ -22,6 +22,9 @@ pub enum PluginOp {
         module: String,
         version: Option<String>,
     },
+
+    /// Install or remove multiple modules at once
+    UpdateList,
 
     /// Prepare a sequences of install/remove commands
     Prepare,
@@ -47,12 +50,13 @@ impl InternalError {
 
 fn main() {
     // Emulate plugin's API.
-    let apt = PluginCli::from_args();
+    let apt = PluginCli::parse();
 
     match apt.operation {
         PluginOp::List
         | PluginOp::Prepare
         | PluginOp::Finalize
+        | PluginOp::UpdateList
         | PluginOp::Install { .. }
         | PluginOp::Remove { .. } => process_call_with_file(),
     };

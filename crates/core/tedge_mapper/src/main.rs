@@ -6,9 +6,8 @@ use crate::{
     collectd::mapper::CollectdMapper,
     core::{component::TEdgeComponent, error::MapperError},
 };
-
+use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
-use structopt::*;
 use tedge_config::*;
 use tedge_utils::paths::home_dir;
 
@@ -25,35 +24,35 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[clap(
     name = clap::crate_name!(),
     version = clap::crate_version!(),
     about = clap::crate_description!()
 )]
 pub struct MapperOpt {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub name: MapperName,
 
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
     /// If on also reports DEBUG and TRACE
-    #[structopt(long, global = true)]
+    #[clap(long, global = true)]
     pub debug: bool,
 
     /// Start the mapper with clean session off, subscribe to the topics, so that no messages are lost
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub init: bool,
 
     /// Start the agent with clean session on, drop the previous session and subscriptions
     ///
     /// WARNING: All pending messages will be lost.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub clear: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Subcommand)]
 pub enum MapperName {
     Az,
     C8y,
@@ -72,7 +71,7 @@ impl fmt::Display for MapperName {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mapper = MapperOpt::from_args();
+    let mapper = MapperOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
     let component = lookup_component(&mapper.name);

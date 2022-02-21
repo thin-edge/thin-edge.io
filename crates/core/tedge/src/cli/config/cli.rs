@@ -1,10 +1,9 @@
 use crate::cli::config::{commands::*, config_key::*};
 use crate::command::*;
 use crate::ConfigError;
-use structopt::StructOpt;
 use tedge_config::ConfigRepository;
 
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
     /// Get the value of the provided configuration key
     Get {
@@ -30,11 +29,11 @@ pub enum ConfigCmd {
     /// Print the configuration keys and their values
     List {
         /// Prints all the configuration keys, even those without a configured value
-        #[structopt(long = "all")]
+        #[clap(long = "all")]
         is_all: bool,
 
         /// Prints all keys and descriptions with example values
-        #[structopt(long = "doc")]
+        #[clap(long = "doc")]
         is_doc: bool,
     },
 }
