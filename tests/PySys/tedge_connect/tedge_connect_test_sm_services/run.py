@@ -33,6 +33,3 @@ class TedgeConnectTestSMServices(EnvironmentC8y):
             "tedge_connect_c8y.out", "tedge-agent service successfully started and enabled!", contains=True
         )
 
-        self.assertGrep(
-            "tedge_connect.out", "tedge-mapper-c8y service successfully started and enabled!", contains=True
-        )
