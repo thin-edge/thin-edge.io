@@ -3,7 +3,6 @@ use crate::command::Command;
 use reqwest::{StatusCode, Url};
 use std::{io::prelude::*, path::Path};
 use tedge_config::*;
-use tedge_utils::paths::pathbuf_to_string;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -134,11 +133,10 @@ fn get_tenant_id_blocking(
 }
 
 fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
-    let path = path.as_ref();
-    let path = pathbuf_to_string(path.to_owned())?;
-
-    let mut file =
-        std::fs::File::open(&path).map_err(|err| CertError::CertificateReadFailed(err, path))?;
+    let mut file = std::fs::File::open(path.as_ref()).map_err(|err| {
+        let path = path.as_ref().display().to_string();
+        CertError::CertificateReadFailed(err, path)
+    })?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
 
