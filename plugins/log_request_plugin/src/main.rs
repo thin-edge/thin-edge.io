@@ -11,18 +11,13 @@ use smartrest::{
 };
 
 const AGENT_LOG_DIR: &str = "/var/log/tedge/agent";
-const MQTT_SESSION_NAME: &str = "log plugin mqtt session";
-const HTTP_SESSION_NAME: &str = "log plugin http session";
 
-/// creates an mqtt client with a given `session_name`
-pub async fn create_mqtt_client(
-    session_name: &str,
-) -> Result<mqtt_channel::Connection, anyhow::Error> {
+/// creates an mqtt client
+pub async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error> {
     let tedge_config = get_tedge_config()?;
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
-        .with_session_name(session_name)
         .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
             C8yTopic::SmartRestResponse.as_str(),
         ));
@@ -31,10 +26,10 @@ pub async fn create_mqtt_client(
     Ok(mqtt_client)
 }
 
-/// creates an http client with a given `session_name`
-pub async fn create_http_client(session_name: &str) -> Result<JwtAuthHttpProxy, anyhow::Error> {
+/// creates an http client
+pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
     let config = get_tedge_config()?;
-    let mut http_proxy = JwtAuthHttpProxy::try_new(&config, session_name).await?;
+    let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
 }
@@ -45,8 +40,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let payload = std::env::args().nth(1).expect("no payload given");
 
     // creating required clients
-    let mut mqtt_client = create_mqtt_client(MQTT_SESSION_NAME).await?;
-    let mut http_client = create_http_client(HTTP_SESSION_NAME).await?;
+    let mut mqtt_client = create_mqtt_client().await?;
+    let mut http_client = create_http_client().await?;
 
     // retrieve smartrest object from payload
     let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
