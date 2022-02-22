@@ -5,7 +5,7 @@ use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
-use std::path::PathBuf;
+use std::path::Path;
 use time::{format_description, OffsetDateTime};
 
 #[derive(Debug)]
@@ -304,7 +304,7 @@ impl SmartRestJwtResponse {
 /// let path_bufdate_time = get_datetime_from_file_path(&path).unwrap();
 /// ```
 pub fn get_datetime_from_file_path(
-    log_path: &PathBuf,
+    log_path: &Path,
 ) -> Result<OffsetDateTime, SMCumulocityMapperError> {
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
@@ -321,8 +321,8 @@ pub fn get_datetime_from_file_path(
     match log_path.to_str() {
         Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
             path.to_string(),
-        ))?,
-        None => Err(SMCumulocityMapperError::InvalidUtf8Path)?,
+        )),
+        None => Err(SMCumulocityMapperError::InvalidUtf8Path),
     }
 }
 
@@ -332,6 +332,7 @@ mod tests {
     use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
+    use std::path::PathBuf;
     use std::str::FromStr;
     use test_case::test_case;
 
