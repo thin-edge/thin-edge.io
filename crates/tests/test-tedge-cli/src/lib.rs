@@ -1,10 +1,21 @@
+mod test_env;
+
 #[cfg(test)]
 mod tests {
+    use crate::*;
     use assert_matches::*;
     use rexpect::errors::*;
     use rexpect::process::signal::Signal;
     use rexpect::process::wait::WaitStatus;
     use rexpect::*;
+
+    macro_rules! execute_cmd {
+        ($($arg:tt)*) => {spawn(&format!($($arg)*), TIMEOUT_MS)?.process.wait()?}
+    }
+
+    macro_rules! spawn_cmd {
+        ($($arg:tt)*) => {spawn(&format!($($arg)*), TIMEOUT_MS)?}
+    }
 
     const TIMEOUT_MS: Option<u64> = Some(5_000);
 
@@ -48,6 +59,32 @@ mod tests {
         assert_eq!(sub.read_line()?, "Caused by:");
         assert_eq!(sub.read_line()?, "    HTTP status client error (401 Unauthorized) for url (https://didier.latest.stage.c8y.io/tenant/currentTenant)");
         assert_matches!(sub.process.wait()?, WaitStatus::Exited(_, 1));
+
+        Ok(())
+    }
+
+    #[test]
+    fn tedge_cert_upload_c8y() -> Result<()> {
+        let c8y = test_env::C8YTestEnv::default();
+        let url = c8y.url;
+        let user = c8y.user;
+        let pass = c8y.pass;
+
+        // Create a certificate
+        execute("tedge config set device.cert.path /tmp/test-device.cert")?;
+        execute("tedge config set device.key.path /tmp/test-device.key")?;
+        execute("tedge cert create --device-id test-device")?;
+
+        // Configure tedge for c8y
+        execute_cmd!("tedge config set c8y.url {url}");
+
+        // Upload the password
+        let mut sub = spawn_cmd!("tedge cert upload c8y --user {user}");
+        sub.exp_string("Enter password: ")?;
+        sub.send_line(&pass)?;
+        assert_eq!(sub.read_line()?, "");
+        assert_eq!(sub.read_line()?, "Certificate uploaded successfully.");
+        assert_matches!(sub.process.wait()?, WaitStatus::Exited(_, 0));
 
         Ok(())
     }
