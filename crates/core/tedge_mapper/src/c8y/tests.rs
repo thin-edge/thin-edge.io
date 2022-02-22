@@ -454,7 +454,7 @@ async fn test_sync_alarms() {
     let size_threshold = SizeThreshold(16 * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test_type");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let mut converter = CumulocityConverter::new(
@@ -519,7 +519,7 @@ async fn test_sync_alarms() {
 async fn convert_thin_edge_json_with_child_id() {
     let device_name = String::from("test");
     let device_type = String::from("test");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let mut converter = Box::new(CumulocityConverter::new(
@@ -563,7 +563,7 @@ async fn convert_thin_edge_json_with_child_id() {
 async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
     let device_name = String::from("test");
     let device_type = String::from("test");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let mut converter = Box::new(CumulocityConverter::new(
@@ -609,7 +609,7 @@ async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
 async fn convert_two_thin_edge_json_messages_given_different_child_id() {
     let device_name = String::from("test");
     let device_type = String::from("test");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let mut converter = Box::new(CumulocityConverter::new(
@@ -687,7 +687,7 @@ fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     let size_threshold = SizeThreshold(16 * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let converter = CumulocityConverter::new(
@@ -751,7 +751,7 @@ async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Erro
     let device_name = "test-device".into();
     let device_type = "test-device-type".into();
     let size_threshold = SizeThreshold(16 * 1024);
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
     let converter = Box::new(CumulocityConverter::new(

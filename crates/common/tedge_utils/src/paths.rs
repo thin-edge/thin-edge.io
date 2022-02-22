@@ -37,13 +37,6 @@ pub enum PathsError {
     RelativePathNotPermitted { path: OsString },
 }
 
-pub fn pathbuf_to_string(pathbuf: PathBuf) -> Result<String, PathsError> {
-    pathbuf
-        .into_os_string()
-        .into_string()
-        .map_err(|os_string| PathsError::PathToStringFailed { path: os_string })
-}
-
 pub fn create_directories(dir_path: impl AsRef<Path>) -> Result<(), PathsError> {
     let dir_path = dir_path.as_ref();
     std::fs::create_dir_all(dir_path)
@@ -166,14 +159,6 @@ pub fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsErr
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-
-    #[test]
-    fn pathbuf_to_string_ok() {
-        let pathbuf: PathBuf = "test".into();
-        let expected: String = "test".into();
-        let result = pathbuf_to_string(pathbuf).unwrap();
-        assert_eq!(result, expected);
-    }
 
     #[test]
     #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted

@@ -49,14 +49,16 @@ pub struct Operations {
     operations_by_trigger: HashMap<String, usize>,
 }
 
-impl Operations {
-    pub fn new() -> Self {
+impl Default for Operations {
+    fn default() -> Self {
         Self {
             operations: vec![],
             operations_by_trigger: HashMap::new(),
         }
     }
+}
 
+impl Operations {
     pub fn add(&mut self, operation: Operation) {
         if let Some(detail) = operation.exec() {
             if let Some(on_message) = &detail.on_message {
@@ -93,7 +95,7 @@ impl Operations {
 }
 
 fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations, OperationsError> {
-    let mut operations = Operations::new();
+    let mut operations = Operations::default();
 
     let path = dir.as_ref().join(&cloud_name);
     let dir_entries = fs::read_dir(&path)?

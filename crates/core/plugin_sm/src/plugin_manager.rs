@@ -12,7 +12,6 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
-use tedge_utils::paths::pathbuf_to_string;
 use tracing::{error, info, warn};
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
@@ -141,17 +140,14 @@ impl ExternalPlugins {
                     .status()
                 {
                     Ok(code) if code.success() => {
-                        info!(
-                            "Plugin activated: {}",
-                            pathbuf_to_string(path.clone()).unwrap()
-                        );
+                        info!("Plugin activated: {}", path.display());
                     }
 
                     // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
                     Ok(_) => {
                         error!(
                             "File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.",
-                            pathbuf_to_string(path.clone()).unwrap()
+                            path.display()
                         );
                         continue;
                     }
@@ -160,7 +156,7 @@ impl ExternalPlugins {
                         error!(
                             "File {} Permission Denied, is the file an executable?\n
                             The file will not be registered as a plugin.",
-                            pathbuf_to_string(path.clone()).unwrap()
+                            path.display()
                         );
                         continue;
                     }
@@ -169,7 +165,7 @@ impl ExternalPlugins {
                         error!(
                             "An error occurred while trying to run: {}: {}\n
                             The file will not be registered as a plugin.",
-                            pathbuf_to_string(path.clone()).unwrap(),
+                            path.display(),
                             err
                         );
                         continue;

@@ -68,7 +68,7 @@ impl TEdgeComponent for CumulocityMapper {
         let size_threshold = SizeThreshold(16 * 1024);
 
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config, CUMULOCITY_MAPPER_NAME).await?;
+        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
