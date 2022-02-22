@@ -61,11 +61,11 @@ class MapperReconnectAwait(BaseTest):
             "tedge_mapper_journal.out",
             condition="<=5",
             abortOnError=True,
-            expr="tedge_mapper::mapper: MQTT connection error:",
+            expr="::mapper: MQTT connection error:",
         )
         self.assertLineCount(
             "tedge_mapper_journal.out",
             condition=">=2",
             abortOnError=True,
-            expr="tedge_mapper::mapper: MQTT connection error:",
+            expr="::mapper: MQTT connection error:",
         )
