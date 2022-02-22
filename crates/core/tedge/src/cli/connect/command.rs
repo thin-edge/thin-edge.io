@@ -104,7 +104,10 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = self
             .common_mosquitto_config
             .clone()
-            .with_internal_opts(config.query(MqttPortSetting)?.into())
+            .with_internal_opts(
+                config.query(MqttPortSetting)?.into(),
+                config.query(MqttBindAddressSetting)?.into(),
+            )
             .with_external_opts(
                 config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
                 config.query(MqttExternalBindAddressSetting).ok(),

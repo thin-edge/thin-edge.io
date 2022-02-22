@@ -122,9 +122,10 @@ impl CommonMosquittoConfig {
         Ok(())
     }
 
-    pub fn with_internal_opts(self, port: u16) -> Self {
+    pub fn with_internal_opts(self, port: u16, bind_address: String) -> Self {
         let internal_listener = ListenerConfig {
             port: Some(port),
+            bind_address: Some(bind_address),
             ..self.internal_listener
         };
         Self {
@@ -202,7 +203,7 @@ fn test_serialize() -> anyhow::Result<()> {
 fn test_serialize_with_opts() -> anyhow::Result<()> {
     let common_mosquitto_config = CommonMosquittoConfig::default();
     let mosquitto_config_with_opts = common_mosquitto_config
-        .with_internal_opts(1234)
+        .with_internal_opts(1234, "1.2.3.4".into())
         .with_external_opts(
             Some(2345),
             Some("0.0.0.0".into()),
