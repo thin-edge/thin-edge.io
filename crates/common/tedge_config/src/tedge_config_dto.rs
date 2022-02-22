@@ -87,6 +87,7 @@ pub(crate) struct MqttConfigDto {
     pub(crate) external_capath: Option<FilePath>,
     pub(crate) external_certfile: Option<FilePath>,
     pub(crate) external_keyfile: Option<FilePath>,
+    pub(crate) bind_address: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]

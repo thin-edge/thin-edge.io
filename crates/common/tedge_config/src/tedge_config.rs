@@ -281,6 +281,31 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<String> {
+        Ok(self
+            .data
+            .mqtt
+            .bind_address
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_bind_address.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttBindAddressSetting,
+        value: String,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.bind_address = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.bind_address = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttExternalPortSetting) -> ConfigSettingResult<Port> {
         self.data

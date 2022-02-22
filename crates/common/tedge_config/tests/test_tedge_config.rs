@@ -30,6 +30,7 @@ external_bind_interface = "wlan0"
 external_capath = "ca.pem"
 external_certfile = "cert.pem"
 external_keyfile = "key.pem"
+bind_address = "0.0.0.0"
 
 [tmp]
 path = "/some/value"
@@ -103,6 +104,9 @@ path = "/some/value"
         config.query(TmpPathDefaultSetting)?,
         FilePath::from("/some/value")
     );
+
+    assert_eq!(config.query(MqttBindAddressSetting)?.as_str(), "0.0.0.0");
+
     Ok(())
 }
 
@@ -858,6 +862,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_mqtt_port: Port(1883),
         default_tmp_path: FilePath::from("/tmp"),
         default_device_type: String::from("test"),
+        default_mqtt_bind_address: String::from("localhost"),
     }
 }
 
