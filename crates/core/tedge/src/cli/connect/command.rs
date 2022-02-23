@@ -79,7 +79,7 @@ impl Command for ConnectCommand {
                         println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
-                    _ => {
+                    Ok(DeviceStatus::Unknown) | Err(_) => {
                         println!(
                             "Connection check to {} cloud failed.\n",
                             self.cloud.as_str()
