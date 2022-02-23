@@ -24,7 +24,7 @@ pub fn create_device_with_direct_connection(
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
 
     let address = bridge_config.address.clone();
-    let host: Vec<&str> = address.split(":").collect();
+    let host: Vec<&str> = address.split(':').collect();
 
     let mut mqtt_options = MqttOptions::new(bridge_config.remote_clientid.clone(), host[0], 8883);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
@@ -53,7 +53,7 @@ pub fn create_device_with_direct_connection(
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
-                    &device_type,
+                    device_type,
                 )?;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
@@ -69,7 +69,7 @@ pub fn create_device_with_direct_connection(
                     publish_device_create_message(
                         &mut client,
                         &bridge_config.remote_clientid.clone(),
-                        &device_type,
+                        device_type,
                     )?;
                     device_create_try += 1;
                 } else {
@@ -117,10 +117,12 @@ fn load_root_certs(
         let file = file_entry?;
         let f = File::open(file.path())?;
         let mut rd = BufReader::new(f);
-        let _ = root_store
-            .add_pem_file(&mut rd)
-            .map(|_| ())
-            .map_err(|()| Error::new(ErrorKind::InvalidData, format!("could not load PEM file")));
+        let _ = root_store.add_pem_file(&mut rd).map(|_| ()).map_err(|()| {
+            Error::new(
+                ErrorKind::InvalidData,
+                "could not load PEM file".to_string(),
+            )
+        });
     }
     Ok(())
 }
@@ -140,10 +142,8 @@ fn parse_pkcs8_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        _ => {
-            return Err(ConnectError::UnknownPrivateKeyFormat);
-        }
+        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
+        _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
 
@@ -153,10 +153,8 @@ fn parse_rsa_key(
     let f = File::open(&key_file)?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
-        Ok(key) if key.len() > 0 => return Ok(key[0].clone()),
-        _ => {
-            return Err(ConnectError::UnknownPrivateKeyFormat);
-        }
+        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
+        _ => Err(ConnectError::UnknownPrivateKeyFormat),
     }
 }
 
@@ -165,14 +163,7 @@ fn read_cert_chain(
 ) -> Result<Vec<rustls_0_19::Certificate>, ConnectError> {
     let f = File::open(cert_file)?;
     let mut cert_reader = BufReader::new(f);
-    let result = certs(&mut cert_reader);
-    let cert_chain: Vec<rustls_0_19::Certificate> = match result {
-        Ok(cert) => cert,
-        Err(_) => {
-            return Err(ConnectError::RumqttcCertificate);
-        }
-    };
-    Ok(cert_chain)
+    certs(&mut cert_reader).map_err(|_| ConnectError::RumqttcCertificate)
 }
 
 #[cfg(test)]
