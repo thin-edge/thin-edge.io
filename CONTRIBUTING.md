@@ -33,7 +33,7 @@ Git commit messages should explain the how and why of your change and be separat
 
 ## Reviewing, addressing feedback, and merging
 
-Generally, pull requests need two approvals from maintainers to be merged.
+Generally, pull requests need at least an approval from one maintainer to be merged.
 
 When addressing review feedback, it is helpful to the reviewer if additional changes are made in new commits. This allows the reviewer to easily see the delta between what they previously reviewed and the changes you added to address their feedback.
 
