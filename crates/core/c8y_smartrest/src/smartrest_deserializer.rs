@@ -78,24 +78,15 @@ impl SmartRestUpdateSoftware {
         Ok(request)
     }
 
-    pub fn modules(&self) -> Vec<SmartRestUpdateSoftwareModule> {
-        let mut modules = vec![];
-        for module in &self.update_list {
-            modules.push(SmartRestUpdateSoftwareModule {
-                software: module.software.clone(),
-                version: module.version.clone(),
-                url: module.url.clone(),
-                action: module.action.clone(),
-            });
-        }
-        modules
+    pub fn modules(&self) -> &Vec<SmartRestUpdateSoftwareModule> {
+        &self.update_list
     }
 
     fn map_to_software_update_request(
         &self,
         mut request: SoftwareUpdateRequest,
     ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-        for module in &self.modules() {
+        for module in self.modules() {
             match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
                     request.add_update(SoftwareModuleUpdate::Install {
@@ -567,10 +558,7 @@ mod tests {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
         let update_software = SmartRestUpdateSoftware::default();
-        let vec = update_software
-            .from_smartrest(&smartrest)
-            .unwrap()
-            .modules();
+        let update_software = update_software.from_smartrest(&smartrest).unwrap();
 
         let expected_vec = vec![
             SmartRestUpdateSoftwareModule {
@@ -587,7 +575,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(vec, expected_vec);
+        assert_eq!(update_software.modules(), &expected_vec);
     }
 
     #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+0200"; "c8y expected")]

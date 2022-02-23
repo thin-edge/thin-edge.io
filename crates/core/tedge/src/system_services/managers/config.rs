@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 pub const SERVICE_CONFIG_FILE: &str = "system.toml";
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, Default, PartialEq)]
 pub struct SystemConfig {
     pub(crate) init: InitConfig,
 }
@@ -32,14 +32,6 @@ impl Default for InitConfig {
             enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
             disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
             is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()],
-        }
-    }
-}
-
-impl Default for SystemConfig {
-    fn default() -> Self {
-        Self {
-            init: InitConfig::default(),
         }
     }
 }

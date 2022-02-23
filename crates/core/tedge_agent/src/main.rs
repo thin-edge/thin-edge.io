@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use agent::SmAgentConfig;
 use clap::Parser;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
 mod error;
@@ -30,13 +33,21 @@ pub struct AgentOpt {
     /// WARNING: All pending messages will be lost.
     #[clap(short, long)]
     pub clear: bool,
+
+    /// Start the agent from custom path
+    ///
+    /// WARNING: This is mostly used in testing.
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let agent_opt = AgentOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
-    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_default_system_location();
+
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir);
     let mut agent = agent::SmAgent::try_new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,

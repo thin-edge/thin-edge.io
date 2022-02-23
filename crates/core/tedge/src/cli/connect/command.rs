@@ -75,11 +75,11 @@ impl Command for ConnectCommand {
             if self.check_if_bridge_exists(&br_config) {
                 return match self.check_connection(&config) {
                     Ok(DeviceStatus::AlreadyExists) => {
-                        let cloud = br_config.cloud_name.clone();
+                        let cloud = br_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
-                    _ => {
+                    Ok(DeviceStatus::Unknown) | Err(_) => {
                         println!(
                             "Connection check to {} cloud failed.\n",
                             self.cloud.as_str()
@@ -407,7 +407,7 @@ fn new_bridge(
         let () = c8y_direct_connection::create_device_with_direct_connection(
             user_manager,
             bridge_config,
-            &device_type,
+            device_type,
         )?;
     }
 
