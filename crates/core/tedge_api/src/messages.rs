@@ -56,13 +56,3 @@ mod tests {
 
     assert_impl_all!(Message: Send);
 }
-
-impl MessageKind {
-    pub fn get_reply_to_id(&self) -> Option<&uuid::Uuid> {
-        if let MessageKind::Reply(uuid) = &self {
-            return Some(uuid)
-        }
-        None
-    }
-}
-
