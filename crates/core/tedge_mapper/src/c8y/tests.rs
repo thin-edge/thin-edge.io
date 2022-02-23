@@ -1,7 +1,11 @@
-use crate::core::{converter::Converter, mapper::create_mapper, size_threshold::SizeThreshold};
+use crate::core::{
+    converter::Converter, error::ConversionError, mapper::create_mapper,
+    size_threshold::SizeThreshold,
+};
 use anyhow::Result;
+use assert_matches::assert_matches;
 use c8y_api::{
-    http_proxy::{C8YHttpProxy, C8yMqttJwtTokenRetriever, JwtAuthHttpProxy, MockC8YHttpProxy},
+    http_proxy::{C8YHttpProxy, MockC8YHttpProxy},
     json_c8y::C8yUpdateSoftwareListResponse,
 };
 use c8y_smartrest::{
@@ -9,7 +13,7 @@ use c8y_smartrest::{
     smartrest_deserializer::SmartRestJwtResponse,
 };
 use mockall::predicate;
-use mqtt_channel::{Connection, Message, Topic, TopicFilter};
+use mqtt_channel::{Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use serde_json::json;
 use serial_test::serial;
@@ -457,19 +461,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn test_sync_alarms() {
-    let size_threshold = SizeThreshold(16 * 1024);
-    let device_name = String::from("test");
-    let device_type = String::from("test_type");
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
-
-    let mut converter = CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    );
+    let mut converter = create_c8y_converter();
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
     let alarm_payload = r#"{ "message": "Temperature very high" }"#;
@@ -523,18 +515,7 @@ async fn test_sync_alarms() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_thin_edge_json_with_child_id() {
-    let device_name = String::from("test");
-    let device_type = String::from("test");
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
-
-    let mut converter = Box::new(CumulocityConverter::new(
-        SizeThreshold(16 * 1024),
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    ));
+    let mut converter = create_c8y_converter();
 
     let in_topic = "tedge/measurements/child1";
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -567,18 +548,7 @@ async fn convert_thin_edge_json_with_child_id() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
-    let device_name = String::from("test");
-    let device_type = String::from("test");
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
-
-    let mut converter = Box::new(CumulocityConverter::new(
-        SizeThreshold(16 * 1024),
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    ));
+    let mut converter = create_c8y_converter();
 
     let in_topic = "tedge/measurements/child1";
     let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -613,18 +583,7 @@ async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_two_thin_edge_json_messages_given_different_child_id() {
-    let device_name = String::from("test");
-    let device_type = String::from("test");
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
-
-    let mut converter = Box::new(CumulocityConverter::new(
-        SizeThreshold(16 * 1024),
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    ));
+    let mut converter = create_c8y_converter();
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
     // First message from "child1"
@@ -688,36 +647,32 @@ fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
     }
 }
 
-#[test]
-fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
-    let size_threshold = SizeThreshold(16 * 1024);
-    let device_name = String::from("test");
-    let device_type = String::from("test");
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
+#[tokio::test]
+async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
+    let mut converter = create_c8y_converter();
 
-    let converter = CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    );
-    let buffer = create_packet(1024 * 20);
-    let err = converter.size_threshold.validate(&buffer).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "The input size 20480 is too big. The threshold is 16384."
+    let alarm_topic = "tedge/alarms/critical/temperature_alarm";
+    let big_message = create_packet(1024 * 20);
+    let alarm_payload = json!({ "message": big_message }).to_string();
+    let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
+
+    assert_matches!(
+        converter.try_convert(&alarm_message).await,
+        Err(ConversionError::SizeThresholdExceeded {
+            topic: _,
+            actual_size: 20494,
+            threshold: 16384
+        })
     );
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_convert_event() -> Result<()> {
-    let size_threshold = SizeThreshold(32 * 1024);
+async fn convert_event() -> Result<()> {
+    let size_threshold = SizeThreshold(16 * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test_type");
-    let operations = Operations::new();
+    let operations = Operations::default();
     let http_proxy = MockC8YHttpProxy::new();
 
     let mut converter = CumulocityConverter::new(
@@ -749,7 +704,7 @@ async fn test_convert_big_event() {
     let size_threshold = SizeThreshold(mqtt_packet_limit * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test_type");
-    let operations = Operations::new();
+    let operations = Operations::default();
 
     let mut http_proxy = MockC8YHttpProxy::new();
     http_proxy
@@ -828,26 +783,29 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
 }
 
 async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
-    let device_name = "test-device".into();
-    let device_type = "test-device-type".into();
-    let size_threshold = SizeThreshold(16 * 1024);
-    let operations = Operations::default();
-    let http_proxy = FakeC8YHttpProxy {};
-
-    let converter = Box::new(CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    ));
-
-    let mut mapper = create_mapper("c8y-mapper-test", mqtt_port, converter).await?;
+    let converter = create_c8y_converter();
+    let mut mapper = create_mapper("c8y-mapper-test", mqtt_port, Box::new(converter)).await?;
 
     let mapper_task = tokio::spawn(async move {
         let _ = mapper.run().await;
     });
     Ok(mapper_task)
+}
+
+fn create_c8y_converter() -> CumulocityConverter<FakeC8YHttpProxy> {
+    let size_threshold = SizeThreshold(16 * 1024);
+    let device_name = "test-device".into();
+    let device_type = "test-device-type".into();
+    let operations = Operations::default();
+    let http_proxy = FakeC8YHttpProxy {};
+
+    CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    )
 }
 
 fn remove_whitespace(s: &str) -> String {

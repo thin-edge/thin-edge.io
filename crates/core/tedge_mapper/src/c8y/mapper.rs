@@ -16,6 +16,7 @@ use tracing::{info, info_span, Instrument};
 use super::topic::C8yTopic;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
+const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16 * 1024;
 
 pub struct CumulocityMapper {}
 
@@ -65,7 +66,7 @@ impl CumulocityMapper {
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-        let size_threshold = SizeThreshold(16 * 1024);
+        let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
         let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
