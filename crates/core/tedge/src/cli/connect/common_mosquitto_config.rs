@@ -206,7 +206,7 @@ fn test_serialize_with_opts() -> anyhow::Result<()> {
         .with_internal_opts(1234, "1.2.3.4".into())
         .with_external_opts(
             Some(2345),
-            Some("0.0.0.0".into()),
+            Some("0.0.0.0".to_string()),
             Some("wlan0".into()),
             Some("/etc/ssl/certs".into()),
             Some("cert.pem".into()),
@@ -232,7 +232,7 @@ fn test_serialize_with_opts() -> anyhow::Result<()> {
         "log_type subscribe\n",
         "log_type unsubscribe\n",
         "message_size_limit 268435455\n",
-        "listener 1234 localhost\n",
+        "listener 1234 1.2.3.4\n",
         "allow_anonymous true\n",
         "require_certificate false\n",
         "listener 2345 0.0.0.0\n",

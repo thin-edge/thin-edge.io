@@ -179,10 +179,10 @@ impl ConfigSetting for MqttBindAddressSetting {
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt bind address, which is used by the mqtt clients to publish or subscribe. ",
-        "Example: 0.0.0.0"
+        "Example: 127.0.0.1"
     );
 
-    type Value = String;
+    type Value = IpAddress;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -210,7 +210,7 @@ impl ConfigSetting for MqttExternalBindAddressSetting {
         "Example: 0.0.0.0"
     );
 
-    type Value = String;
+    type Value = IpAddress;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

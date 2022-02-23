@@ -1,4 +1,5 @@
 use crate::models::FilePath;
+use crate::IpAddress;
 use crate::TEdgeConfigLocation;
 use crate::{Flag, Port};
 use std::path::Path;
@@ -7,7 +8,6 @@ const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_TMP_PATH: &str = "/tmp";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
-const DEFAULT_MQTT_BIND_ADDRESS: &str = "localhost";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
@@ -48,7 +48,7 @@ pub struct TEdgeConfigDefaults {
     pub default_device_type: String,
 
     /// Default bind address
-    pub default_mqtt_bind_address: String,
+    pub default_mqtt_bind_address: IpAddress,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -72,7 +72,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: tmp_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
-            default_mqtt_bind_address: DEFAULT_MQTT_BIND_ADDRESS.into(),
+            default_mqtt_bind_address: IpAddress::default(),
         }
     }
 }
@@ -97,7 +97,7 @@ fn test_from_tedge_config_location() {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: FilePath::from("/tmp"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
-            default_mqtt_bind_address: DEFAULT_MQTT_BIND_ADDRESS.into(),
+            default_mqtt_bind_address: IpAddress::default(),
         }
     );
 }

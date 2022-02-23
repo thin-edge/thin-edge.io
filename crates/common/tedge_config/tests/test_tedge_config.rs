@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr};
 use tedge_config::*;
 use tempfile::TempDir;
 
@@ -76,8 +77,8 @@ path = "/some/value"
     assert_eq!(config.query(MqttExternalPortSetting)?, Port(2345));
 
     assert_eq!(
-        config.query(MqttExternalBindAddressSetting)?.as_str(),
-        "0.0.0.0"
+        config.query(MqttExternalBindAddressSetting)?,
+        IpAddress::try_from("0.0.0.0".to_string()).unwrap()
     );
 
     assert_eq!(
@@ -105,7 +106,10 @@ path = "/some/value"
         FilePath::from("/some/value")
     );
 
-    assert_eq!(config.query(MqttBindAddressSetting)?.as_str(), "0.0.0.0");
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress::try_from("0.0.0.0".to_string()).unwrap()
+    );
 
     Ok(())
 }
@@ -128,6 +132,7 @@ mapper_timestamp = false
 
 [mqtt]
 port = 1883
+bind_address = "0.0.0.0"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -143,11 +148,12 @@ port = 1883
     let updated_azure_url = "OtherAzure.azure-devices.net";
     let updated_mqtt_port = Port(2345);
     let updated_mqtt_external_port = Port(3456);
-    let updated_mqtt_external_bind_address = "localhost";
+    let updated_mqtt_external_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
     let updated_mqtt_external_bind_interface = "eth0";
     let updated_mqtt_external_capath = "/some/path";
     let updated_mqtt_external_certfile = "cert.pem";
     let updated_mqtt_external_keyfile = "key.pem";
+    let updated_mqtt_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
 
     {
         let mut config = config_repo.load()?;
@@ -191,8 +197,9 @@ port = 1883
         config.update(MqttExternalPortSetting, updated_mqtt_external_port)?;
         config.update(
             MqttExternalBindAddressSetting,
-            updated_mqtt_external_bind_address.to_string(),
+            updated_mqtt_external_bind_address.clone(),
         )?;
+
         config.update(
             MqttExternalBindInterfaceSetting,
             updated_mqtt_external_bind_interface.to_string(),
@@ -209,6 +216,7 @@ port = 1883
             MqttExternalKeyfileSetting,
             FilePath::from(updated_mqtt_external_keyfile),
         )?;
+        config.update(MqttBindAddressSetting, updated_mqtt_bind_address.clone())?;
         config_repo.store(&config)?;
     }
 
@@ -244,7 +252,7 @@ port = 1883
             updated_mqtt_external_port
         );
         assert_eq!(
-            config.query(MqttExternalBindAddressSetting)?.as_str(),
+            config.query(MqttExternalBindAddressSetting)?,
             updated_mqtt_external_bind_address
         );
         assert_eq!(
@@ -262,6 +270,10 @@ port = 1883
         assert_eq!(
             config.query(MqttExternalKeyfileSetting)?,
             FilePath::from(updated_mqtt_external_keyfile)
+        );
+        assert_eq!(
+            config.query(MqttBindAddressSetting)?,
+            updated_mqtt_bind_address
         );
     }
 
@@ -310,6 +322,10 @@ fn test_parse_config_with_only_device_configuration() -> Result<(), TEdgeConfigE
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress::try_from("127.0.0.1".to_string()).unwrap()
+    );
     Ok(())
 }
 
@@ -358,6 +374,10 @@ url = "your-tenant.cumulocity.com"
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
     Ok(())
 }
 
@@ -406,6 +426,10 @@ url = "MyAzure.azure-devices.net"
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
     Ok(())
 }
 
@@ -414,6 +438,7 @@ fn test_parse_config_with_only_mqtt_configuration() -> Result<(), TEdgeConfigErr
     let toml_conf = r#"
 [mqtt]
 port = 2222
+bind_address = "1.2.3.4"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -451,6 +476,10 @@ port = 2222
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(2222));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress::try_from("1.2.3.4".to_string()).unwrap()
+    );
     Ok(())
 }
 
@@ -568,6 +597,10 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
     Ok(())
 }
 
@@ -600,6 +633,10 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
     assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+    assert_eq!(
+        config.query(MqttBindAddressSetting)?,
+        IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
+    );
     Ok(())
 }
 
@@ -862,7 +899,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_mqtt_port: Port(1883),
         default_tmp_path: FilePath::from("/tmp"),
         default_device_type: String::from("test"),
-        default_mqtt_bind_address: String::from("localhost"),
+        default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
     }
 }
 

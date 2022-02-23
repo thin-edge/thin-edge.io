@@ -11,7 +11,6 @@ use tedge_users::UserManager;
 use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
-pub(crate) const DEFAULT_HOST: &str = "localhost";
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
@@ -106,11 +105,14 @@ impl Command for ConnectCommand {
             .clone()
             .with_internal_opts(
                 config.query(MqttPortSetting)?.into(),
-                config.query(MqttBindAddressSetting)?.into(),
+                config.query(MqttBindAddressSetting)?.to_string(),
             )
             .with_external_opts(
                 config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
-                config.query(MqttExternalBindAddressSetting).ok(),
+                config
+                    .query(MqttExternalBindAddressSetting)
+                    .ok()
+                    .map(|x| x.to_string()),
                 config.query(MqttExternalBindInterfaceSetting).ok(),
                 config
                     .query(MqttExternalCAPathSetting)
@@ -167,6 +169,7 @@ impl Command for ConnectCommand {
             check_connected_c8y_tenant_as_configured(
                 &config.query_string(C8yUrlSetting)?,
                 config.query(MqttPortSetting)?.into(),
+                config.query(MqttBindAddressSetting)?.to_string(),
             );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -209,13 +212,14 @@ impl ConnectCommand {
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         let port = config.query(MqttPortSetting)?.into();
+        let host = config.query(MqttBindAddressSetting)?.to_string();
 
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
-            Cloud::Azure => check_device_status_azure(port),
+            Cloud::Azure => check_device_status_azure(port, host),
             Cloud::C8y => check_device_status_c8y(config),
         }
     }
@@ -253,9 +257,10 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
 
     let mut options = MqttOptions::new(
         CLIENT_ID,
-        DEFAULT_HOST,
+        tedge_config.query(MqttBindAddressSetting)?.to_string(),
         tedge_config.query(MqttPortSetting)?.into(),
     );
+
     options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
@@ -313,14 +318,14 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
 // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
 // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
 // Here if the status is 200 then it's success.
-fn check_device_status_azure(port: u16) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_azure(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
     const REGISTRATION_OK: &str = "200";
 
-    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
+    let mut options = MqttOptions::new(CLIENT_ID, host, port);
     options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
@@ -552,8 +557,8 @@ fn get_common_mosquitto_config_file_path(
 }
 
 // To confirm the connected c8y tenant is the one that user configured.
-fn check_connected_c8y_tenant_as_configured(configured_url: &str, port: u16) {
-    match get_connected_c8y_url(port) {
+fn check_connected_c8y_tenant_as_configured(configured_url: &str, port: u16, host: String) {
+    match get_connected_c8y_url(port, host) {
         Ok(url) if url == configured_url => {}
         Ok(url) => println!(
             "Warning: Connecting to {}, but the configured URL is {}.\n\
