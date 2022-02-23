@@ -4,7 +4,6 @@
 use anyhow::Context;
 use clap::Parser;
 use tedge_users::UserManager;
-use tedge_utils::paths::{home_dir, PathsError};
 
 mod cli;
 mod command;
@@ -22,13 +21,7 @@ fn main() -> anyhow::Result<()> {
 
     let opt = cli::Opt::parse();
 
-    let tedge_config_location = if tedge_users::UserManager::running_as_root() {
-        tedge_config::TEdgeConfigLocation::from_default_system_location()
-    } else {
-        tedge_config::TEdgeConfigLocation::from_users_home_location(
-            home_dir().ok_or(PathsError::HomeDirNotFound)?,
-        )
-    };
+    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(opt.config_dir);
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
 
     let build_context = BuildContext {
