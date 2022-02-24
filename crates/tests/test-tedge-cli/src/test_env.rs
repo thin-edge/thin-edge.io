@@ -15,5 +15,5 @@ impl Default for C8YTestEnv {
 }
 
 fn envvar(var: &str, doc: &str) -> String {
-    std::env::var(var).unwrap_or_else(|_| format!("The {var} env variable must be set with {doc}"))
+    std::env::var(var).unwrap_or_else(|_| panic!("The {var} env variable must be set with {doc}"))
 }
