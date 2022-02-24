@@ -53,6 +53,21 @@ pub enum MessageKind {
     SignalPluginState {
         state: String,
     },
+
+    Measurement {
+        name: String,
+        value: MeasurementValue,
+    },
+}
+
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub enum MeasurementValue {
+    Bool(bool),
+    Int(u64),
+    Float(f64),
+    Str(String),
+    Aggregate(Vec<(String, MeasurementValue)>),
 }
 
 #[cfg(test)]
