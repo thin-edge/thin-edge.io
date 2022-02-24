@@ -37,11 +37,10 @@ impl Converter for AzureConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
-        let input = input.payload_str()?;
         let () = self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        let () = thin_edge_json::parser::parse_str(input, &mut serializer)?;
+        let () = thin_edge_json::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])
@@ -52,11 +51,7 @@ impl Converter for AzureConverter {
 mod tests {
     use crate::{
         az::converter::AzureConverter,
-        core::{
-            converter::*,
-            error::ConversionError,
-            size_threshold::{SizeThreshold, SizeThresholdExceeded},
-        },
+        core::{converter::*, error::ConversionError, size_threshold::SizeThreshold},
     };
 
     use assert_json_diff::*;
@@ -194,17 +189,17 @@ mod tests {
     async fn exceeding_threshold_returns_error() {
         let mut converter = AzureConverter::new(false, Box::new(TestClock), SizeThreshold(1));
 
+        let _topic = "tedge/measurements".to_string();
         let input = "ABC";
         let result = converter.try_convert(&new_tedge_message(input)).await;
 
         assert_matches!(
             result,
-            Err(ConversionError::FromSizeThresholdExceeded(
-                SizeThresholdExceeded {
-                    actual_size: 3,
-                    threshold: 1
-                }
-            ))
+            Err(ConversionError::SizeThresholdExceeded {
+                topic: _topic,
+                actual_size: 3,
+                threshold: 1
+            })
         );
     }
 }

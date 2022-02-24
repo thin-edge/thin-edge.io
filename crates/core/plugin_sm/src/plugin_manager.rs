@@ -194,12 +194,12 @@ impl ExternalPlugins {
         mut log_file: LogFile,
     ) -> SoftwareListResponse {
         let mut response = SoftwareListResponse::new(request);
-        let mut logger = log_file.buffer();
+        let logger = log_file.buffer();
         let mut error_count = 0;
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list(&mut logger).await {
-                Ok(software_list) => response.add_modules(&software_type, software_list),
+            match plugin.list(logger).await {
+                Ok(software_list) => response.add_modules(software_type, software_list),
                 Err(_) => {
                     error_count += 1;
                 }
@@ -220,13 +220,13 @@ impl ExternalPlugins {
         download_path: &Path,
     ) -> SoftwareUpdateResponse {
         let mut response = SoftwareUpdateResponse::new(request);
-        let mut logger = log_file.buffer();
+        let logger = log_file.buffer();
         let mut error_count = 0;
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates, &mut logger, &download_path).await
+                plugin.apply_all(updates, logger, download_path).await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
@@ -240,7 +240,7 @@ impl ExternalPlugins {
         }
 
         for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list(&mut logger).await {
+            match plugin.list(logger).await {
                 Ok(software_list) => response.add_modules(software_type, software_list),
                 Err(err) => {
                     error_count += 1;
