@@ -370,7 +370,6 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
     c8y_mapper.abort();
 }
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_syncs_pending_alarms_on_startup() {
@@ -380,6 +379,10 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 
     // Start the C8Y Mapper
     let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
+
+    let mut internal_messages = broker
+        .messages_published_on("c8y-internal/alarms/critical/temperature_alarm")
+        .await;
 
     let _ = broker
         .publish_with_opts(
@@ -399,6 +402,15 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     )
     .await;
 
+    // Wait till the message get synced to internal topic
+    mqtt_tests::assert_received_all_expected(
+        &mut internal_messages,
+        TEST_TIMEOUT_MS,
+        &["Temperature very high"],
+    )
+    .await;
+
+    // stop the mapper
     c8y_mapper.abort();
 
     //Publish a new alarm while the mapper is down
@@ -425,7 +437,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     //     .unwrap();
 
     // Restart the C8Y Mapper
-    let _ = start_c8y_mapper(broker.port).await.unwrap();
+    let c8y_mapper = start_c8y_mapper(broker.port).await.unwrap();
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
