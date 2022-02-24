@@ -45,8 +45,9 @@ source ~/env-pysys/bin/activate
 # use rrdtool here, for reasons we need a working c compliler, Python.h and others.
 # We kind of like to avoid that for other systems
 pip3 install -r tests/requirements_rrdtool.txt
-cd tests/PySys/
 export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+
+cd tests/PySys/
 
 set +e
 pysys.py run --record -v DEBUG --include analytics
