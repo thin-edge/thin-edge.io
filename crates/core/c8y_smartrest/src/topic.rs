@@ -1,5 +1,5 @@
 use agent_interface::topic::ResponseTopic;
-use agent_interface::TopicError;
+use agent_interface::ApiError;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 

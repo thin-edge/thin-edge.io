@@ -1,5 +1,5 @@
 use agent_interface::topic::ResponseTopic;
-use agent_interface::TopicError;
+use agent_interface::ApiError;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 
@@ -25,7 +25,7 @@ impl C8yTopic {
 }
 
 impl TryFrom<String> for C8yTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
@@ -35,7 +35,7 @@ impl TryFrom<String> for C8yTopic {
                 if topic_name[..3].contains("c8y") {
                     Ok(C8yTopic::OperationTopic(topic_name.to_string()))
                 } else {
-                    Err(TopicError::UnknownTopic {
+                    Err(ApiError::UnknownTopic {
                         topic: topic_name.to_string(),
                     })
                 }
@@ -44,7 +44,7 @@ impl TryFrom<String> for C8yTopic {
     }
 }
 impl TryFrom<&str> for C8yTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_from(value.to_string())
@@ -52,7 +52,7 @@ impl TryFrom<&str> for C8yTopic {
 }
 
 impl TryFrom<Topic> for C8yTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
         value.name.try_into()
@@ -66,7 +66,7 @@ pub enum MapperSubscribeTopic {
 }
 
 impl TryFrom<String> for MapperSubscribeTopic {
-    type Error = TopicError;
+    type Error = ApiError;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match ResponseTopic::try_from(value.clone()) {
             Ok(response_topic) => Ok(MapperSubscribeTopic::ResponseTopic(response_topic)),
@@ -79,7 +79,7 @@ impl TryFrom<String> for MapperSubscribeTopic {
 }
 
 impl TryFrom<&str> for MapperSubscribeTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_from(value.to_string())
@@ -87,7 +87,7 @@ impl TryFrom<&str> for MapperSubscribeTopic {
 }
 
 impl TryFrom<Topic> for MapperSubscribeTopic {
-    type Error = TopicError;
+    type Error = ApiError;
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
         value.name.try_into()
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(c8y_req, C8yTopic::SmartRestRequest);
         let c8y_resp: C8yTopic = "c8y/s/us".try_into().unwrap();
         assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
-        let error: Result<C8yTopic, TopicError> = "test".try_into();
+        let error: Result<C8yTopic, ApiError> = "test".try_into();
         assert!(error.is_err());
     }
 
@@ -122,7 +122,7 @@ mod tests {
 
         let c8y_resp: C8yTopic = Topic::new("c8y/s/us").unwrap().try_into().unwrap();
         assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
-        let error: Result<C8yTopic, TopicError> = Topic::new("test").unwrap().try_into();
+        let error: Result<C8yTopic, ApiError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
     }
 }

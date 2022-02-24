@@ -62,7 +62,7 @@ pub enum SMCumulocityMapperError {
     InvalidMqttMessage,
 
     #[error(transparent)]
-    InvalidTopicError(#[from] agent_interface::TopicError),
+    InvalidApiError(#[from] agent_interface::ApiError),
 
     #[error(transparent)]
     InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
