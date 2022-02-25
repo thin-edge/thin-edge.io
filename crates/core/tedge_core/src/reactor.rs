@@ -123,7 +123,7 @@ impl Reactor {
         let (plugin_message_sender, plugin_message_receiver) = tokio::sync::mpsc::channel(buf_size);
         let (task_sender, task_receiver) = tokio::sync::mpsc::channel(buf_size);
 
-        let comms = tedge_api::plugins::Comms::new(plugin_message_sender);
+        let comms = tedge_api::plugins::Comms::new(plugin_name.to_string(), plugin_message_sender);
 
 
         builder.instantiate(config.clone(), comms)
