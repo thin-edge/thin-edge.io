@@ -45,7 +45,7 @@ pub const fn control_filter_topic() -> &'static str {
 }
 
 /// Message payload definition for SoftwareList request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareListRequest {
@@ -72,7 +72,7 @@ impl SoftwareListRequest {
 }
 
 /// Message payload definition for SoftwareUpdate request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareUpdateRequest {
@@ -480,7 +480,7 @@ pub enum RestartOperation {
 }
 
 /// Message payload definition for restart operation request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartOperationRequest {

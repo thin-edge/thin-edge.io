@@ -2,12 +2,26 @@ use crate::error::ApiError;
 use crate::messages::*;
 use crate::topic::*;
 use mqtt_channel::Message;
+use serde::{Deserialize, Serialize};
 
+pub type RequestId = String;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AgentRequest {
     HealthCheck,
     SoftwareList(SoftwareListRequest),
     SoftwareUpdate(SoftwareUpdateRequest),
     DeviceRestart(RestartOperationRequest),
+}
+
+impl AgentRequest {
+    pub fn request_id(&self) -> &RequestId {
+        match self {
+            AgentRequest::SoftwareList(r) => &r.id,
+            AgentRequest::SoftwareUpdate(r) => &r.id,
+            AgentRequest::DeviceRestart(r) => &r.id,
+        }
+    }
 }
 
 impl TryFrom<mqtt_channel::Message> for AgentRequest {
