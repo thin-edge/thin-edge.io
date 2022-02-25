@@ -9,7 +9,7 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(origin: Address, kind: MessageKind) -> Self {
+    pub(crate) fn new(origin: Address, kind: MessageKind) -> Self {
         Self {
             origin,
             kind,
