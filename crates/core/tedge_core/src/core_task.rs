@@ -25,7 +25,7 @@ impl CoreTask {
 impl Task for CoreTask {
     async fn run(mut self) -> crate::errors::Result<()> {
         while let Some(message) = self.recv.recv().await {
-            match message.origin().endpoint() {
+            match message.destination().endpoint() {
                 EndpointKind::Plugin { id } => {
                     log::trace!("Received message in core, routing to {}", id);
                     if let Some(sender) = self.plugin_senders.get(id) {
