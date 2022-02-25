@@ -1,17 +1,17 @@
 from pysys.basetest import BaseTest
 
 """
-Validate tedge_mapper sm-c8y init session feature.
+Validate tedge_mapper c8y init session feature.
 
 Given unconnected system
 
 When the system is connected to cumulocity cloud
-Then stop the tedge-mapper-sm-c8y
-Then clean the tedge-mapper-sm-c8y session that is present in the broker
-Then initialize the tedge-mapper-sm-c8y session and subscribing to the topics
+Then stop the tedge-mapper-c8y
+Then clean the tedge-mapper-c8y session that is present in the broker
+Then initialize the tedge-mapper-c8y session and subscribing to the topics
 Then publish a software list request onto c8y/s/us
 Then start a subscriber to get the request 'tedge/commands/res/software/list'
-Then start the tedge-mapper-sm-c8y
+Then start the tedge-mapper-c8y
 Now the mapper should receive the request that was receive the previous request
     and forward the request to agent on 'tedge/commands/res/software/list'
 Now stop the subscriber and validate the message received on 'tedge/commands/res/software/list'
@@ -41,7 +41,7 @@ class TedgeSMMapperInitSession(EnvironmentC8y):
 
         remove_lock = self.startProcess(
             command=self.sudo,
-            arguments=["rm", "-rf", "/var/lock/sm-c8y-mapper.lock"],
+            arguments=["rm", "-rf", "/var/lock/tedge-mapper-c8y.lock"],
             stdouterr="remove_lock",
         )
         mapper_drop = self.startProcess(
