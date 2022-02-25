@@ -43,7 +43,7 @@ Payload:
 ```json
 {
     "message": "Temperature is very high",
-    "time": ""2021-01-01T05:30:45+00:00""
+    "time": "2021-01-01T05:30:45+00:00"
 }
 ```
 
