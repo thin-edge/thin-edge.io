@@ -83,7 +83,7 @@ async fn main() {
     let hsb = HeartbeatServiceBuilder;
     let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
 
-    let comms = Comms::new(sender);
+    let comms = Comms::new("heartbeat-service".to_string(), sender);
 
     let config = toml::from_str(
         r#"
