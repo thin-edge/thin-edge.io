@@ -21,7 +21,7 @@ The payload format must be as follows:
 
 ```json
 {
-    "message": "<event message text>",
+    "text": "<event text>",
     "time": "<Timestamp in ISO-8601 format>"
 }
 ```
@@ -35,12 +35,12 @@ Payload:
 
 ```json
 {
-    "message": "A user just logged in",
+    "text": "A user just logged in",
     "time": "2021-01-01T05:30:45+00:00"
 }
 ```
 
-> Note: Both the `message` field and the `time` field are optional.
+> Note: Both the `text` field and the `time` field are optional.
 
 When the `message` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
 When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.

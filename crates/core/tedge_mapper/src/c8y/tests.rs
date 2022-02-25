@@ -353,7 +353,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
-            r#"{ "message": "Temperature high" }"#,
+            r#"{ "text": "Temperature high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -398,7 +398,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm",
-            r#"{ "message": "Temperature very high" }"#,
+            r#"{ "text": "Temperature very high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -428,7 +428,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm",
-            r#"{ "message": "Pressure very high" }"#,
+            r#"{ "text": "Pressure very high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -477,7 +477,7 @@ async fn test_sync_alarms() {
     let mut converter = create_c8y_converter();
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
-    let alarm_payload = r#"{ "message": "Temperature very high" }"#;
+    let alarm_payload = r#"{ "text": "Temperature very high" }"#;
     let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
     // During the sync phase, alarms are not converted immediately, but only cached to be synced later
@@ -491,7 +491,7 @@ async fn test_sync_alarms() {
     assert!(!converter.convert(&non_alarm_message).await.is_empty());
 
     let internal_alarm_topic = "c8y-internal/alarms/major/pressure_alarm";
-    let internal_alarm_payload = r#"{ "message": "Temperature very high" }"#;
+    let internal_alarm_payload = r#"{ "text": "Temperature very high" }"#;
     let internal_alarm_message = Message::new(
         &Topic::new_unchecked(internal_alarm_topic),
         internal_alarm_payload,
@@ -697,7 +697,7 @@ async fn convert_event() -> Result<()> {
     );
 
     let event_topic = "tedge/events/click_event";
-    let event_payload = r#"{ "message": "Someone clicked" }"#;
+    let event_payload = r#"{ "text": "Someone clicked" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
 
     let converted_events = converter.convert(&event_message).await;
@@ -738,8 +738,8 @@ async fn test_convert_big_event() {
     );
 
     let event_topic = "tedge/events/click_event";
-    let big_event_message = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
-    let big_event_payload = json!({ "message": big_event_message }).to_string();
+    let big_event_text = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
+    let big_event_payload = json!({ "text": big_event_text }).to_string();
     let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
 
     assert!(converter.convert(&big_event_message).await.is_empty());

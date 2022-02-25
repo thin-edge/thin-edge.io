@@ -167,9 +167,7 @@ where
                     (message, time)
                 }
                 Some(event_data) => {
-                    let message = event_data
-                        .message
-                        .unwrap_or_else(|| tedge_event.name.clone());
+                    let message = event_data.text.unwrap_or_else(|| tedge_event.name.clone());
                     let time = event_data.time.map_or_else(
                         || OffsetDateTime::now_utc().format(&Rfc3339),
                         |timestamp| timestamp.format(&Rfc3339),

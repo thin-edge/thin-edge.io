@@ -13,7 +13,7 @@ pub struct ThinEdgeEvent {
 /// In-memory representation of ThinEdge JSON event payload
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeEventData {
-    pub message: Option<String>,
+    pub text: Option<String>,
 
     #[serde(default)]
     #[serde(with = "clock::serde::rfc3339::option")]
@@ -76,13 +76,13 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "Someone clicked",
+            "text": "Someone clicked",
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone clicked".into()),
+                text: Some("Someone clicked".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         };
@@ -91,12 +91,12 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "Someone clicked",
+            "text": "Someone clicked",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone clicked".into()),
+                text: Some("Someone clicked".into()),
                 time: None,
             }),
         };
@@ -110,11 +110,11 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         };
-        "event parsing without message"
+        "event parsing without text"
     )]
     #[test_case(
         "tedge/events/click_event",
@@ -122,11 +122,11 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: None,
             }),
         };
-        "event parsing without message or timestamp"
+        "event parsing without text or timestamp"
     )]
     fn parse_thin_edge_event_json(
         event_topic: &str,

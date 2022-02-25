@@ -19,7 +19,7 @@ pub fn serialize_event(event: ThinEdgeEvent) -> Result<String, SmartRestSerializ
             let smartrest_message = format!(
                 "{CREATE_EVENT_SMARTREST_CODE},{},\"{}\",{}",
                 event.name.clone(),
-                event_data.message.unwrap_or(event.name),
+                event_data.text.unwrap_or(event.name),
                 event_data.time.map_or_else(
                     || current_timestamp.format(&Rfc3339),
                     |timestamp| timestamp.format(&Rfc3339)
@@ -45,7 +45,7 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone clicked".into()),
+                text: Some("Someone clicked".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -56,7 +56,7 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -67,7 +67,7 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone, clicked, it".into()),
+                text: Some("Someone, clicked, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -93,7 +93,7 @@ mod tests {
         let event = ThinEdgeEvent {
             name: "empty_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: None,
             }),
         };
