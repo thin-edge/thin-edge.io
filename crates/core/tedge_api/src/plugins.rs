@@ -17,16 +17,23 @@ type ReplyReceiver = tokio::sync::oneshot::Receiver<Message>;
 
 #[derive(Clone)]
 pub struct Comms {
+    plugin_name: String,
     sender: tokio::sync::mpsc::Sender<Message>,
     replymap: Arc<RwLock<HashMap<uuid::Uuid, ReplySender>>>,
 }
 
 impl Comms {
-    pub fn new(sender: tokio::sync::mpsc::Sender<Message>) -> Self {
+    pub fn new(plugin_name: String, sender: tokio::sync::mpsc::Sender<Message>) -> Self {
         Self {
+            plugin_name,
             sender,
             replymap: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    pub fn new_message(&self, kind: crate::MessageKind) -> Message {
+        let addr = crate::Address::new(crate::address::EndpointKind::Plugin { id: self.plugin_name.clone() });
+        Message::new(addr, kind)
     }
 
     pub async fn send<T: Into<Message>>(&self, msg: T) -> Result<(), PluginError> {
