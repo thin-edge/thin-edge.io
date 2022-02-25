@@ -31,9 +31,9 @@ impl Comms {
         }
     }
 
-    pub fn new_message(&self, kind: crate::MessageKind) -> Message {
+    pub fn new_message(&self, destination: crate::Address, kind: crate::MessageKind) -> Message {
         let addr = crate::Address::new(crate::address::EndpointKind::Plugin { id: self.plugin_name.clone() });
-        Message::new(addr, kind)
+        Message::new(addr, destination, kind)
     }
 
     pub async fn send<T: Into<Message>>(&self, msg: T) -> Result<(), PluginError> {

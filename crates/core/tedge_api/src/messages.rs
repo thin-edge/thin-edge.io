@@ -4,14 +4,16 @@ use crate::address::Address;
 #[derive(Debug)]
 pub struct Message {
     origin: Address,
+    destination: Address,
     kind: MessageKind,
     id: uuid::Uuid,
 }
 
 impl Message {
-    pub(crate) fn new(origin: Address, kind: MessageKind) -> Self {
+    pub(crate) fn new(origin: Address, destination: Address, kind: MessageKind) -> Self {
         Self {
             origin,
+            destination,
             kind,
             id: uuid::Uuid::new_v4(),
         }
@@ -30,6 +32,11 @@ impl Message {
     /// Get a reference to the plugin message's origin.
     pub fn origin(&self) -> &Address {
         &self.origin
+    }
+
+    /// Get a reference to the plugin message's destination
+    pub fn destination(&self) -> &Address {
+        &self.destination
     }
 }
 
