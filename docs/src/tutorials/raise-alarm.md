@@ -24,7 +24,7 @@ The payload format must be as follows:
 
 ```json
 {
-    "message": "<message text>",
+    "text": "<alarm text>",
     "time": "<Timestamp in ISO-8601 format>"
 }
 ```
@@ -42,16 +42,16 @@ Topic:
 Payload:
 ```json
 {
-    "message": "Temperature is very high",
+    "text": "Temperature is very high",
     "time": "2021-01-01T05:30:45+00:00"
 }
 ```
 
-> Note: Both the `message` field and the `time` field are optional.
-When a `message` is not provided, it is assumed to be empty.
+> Note: Both the `text` field and the `time` field are optional.
+When a `text` is not provided, it is assumed to be empty.
 When `time` is not provided, thin-edge.io will use the current system time as the `time` of the alarm.
 When you want to skip both fields, use an empty json fragment `{}` as the payload to indicate the same.
-An empty message can't be used for the same as empty messages are used to clear alarms, which is discussed in the next section.
+An empty message can't be used for the same, as empty messages are used to clear alarms, which is discussed in the next section.
 
 The `<severity>` value in the MQTT topic can only be one of the following values:
 
@@ -79,4 +79,19 @@ The mapping of thin-edge alarms data to its respective cloud-native representati
 For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge alarm JSON data to its equivalent Cumulocity SmartREST representation.
 
 > Warning: As of now, alarm data mapping is supported only on Cumulocity IoT cloud platform.
+
+### Cumulocity cloud data mapping
+
+The Cumulocity mapper will convert Thin Edge JSON alarm into Cumulocity SmartREST messages and send it to Cumulocity via MQTT.
+
+For example the `temperature_high` alarm with `critical` severity described in the earlier sections will be converted to the following Cumulocity SmartREST message:
+
+```csv
+301,temperature_high,"Temperature is very high",2021-01-01T05:30:45+00:00
+```
+
+... and is published to `c8y/s/us` topic which will get forwarded to the connected Cumulocity cloud instance.
+
+Find more information about SmartREST representations for alarms in Cumulocity [here](https://cumulocity.com/guides/10.11.0/reference/smartrest-two/#alarm-templates)
+
 Find more information about alarms data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events)

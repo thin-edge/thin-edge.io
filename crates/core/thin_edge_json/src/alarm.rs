@@ -22,7 +22,7 @@ pub enum AlarmSeverity {
 /// In-memory representation of ThinEdge JSON alarm payload
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ThinEdgeAlarmData {
-    pub message: Option<String>,
+    pub text: Option<String>,
 
     #[serde(default)]
     #[serde(with = "clock::serde::rfc3339::option")]
@@ -103,14 +103,14 @@ mod tests {
     #[test_case(
         "tedge/alarms/critical/temperature_alarm",
         json!({
-            "message": "I raised it",
+            "text": "I raised it",
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Critical,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         };
@@ -119,13 +119,13 @@ mod tests {
     #[test_case(
         "tedge/alarms/major/temperature_alarm",
         json!({
-            "message": "I raised it",
+            "text": "I raised it",
         }),
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Major,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                text: Some("I raised it".into()),
                 time: None,
             }),
         };
@@ -140,11 +140,11 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Minor,
             data: Some(ThinEdgeAlarmData {
-                message: None,
+                text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         };
-        "minor alarm parsing without message"
+        "minor alarm parsing without text"
     )]
     #[test_case(
         "tedge/alarms/warning/temperature_alarm",
@@ -153,11 +153,11 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
-                message: None,
+                text: None,
                 time: None,
             }),
         };
-        "warning alarm parsing without message or timestamp"
+        "warning alarm parsing without text or timestamp"
     )]
     fn parse_thin_edge_alarm_json(
         alarm_topic: &str,
