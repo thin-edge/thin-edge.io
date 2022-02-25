@@ -514,7 +514,7 @@ impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
         Ok(self
             .data
             .tmp
-            .tmp_path
+            .dir_path
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
     }
@@ -524,12 +524,37 @@ impl ConfigSettingAccessor<TmpPathDefaultSetting> for TEdgeConfig {
         _setting: TmpPathDefaultSetting,
         value: FilePath,
     ) -> ConfigSettingResult<()> {
-        self.data.tmp.tmp_path = Some(value);
+        self.data.tmp.dir_path = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: TmpPathDefaultSetting) -> ConfigSettingResult<()> {
-        self.data.tmp.tmp_path = None;
+        self.data.tmp.dir_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<LogPathDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: LogPathDefaultSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .logs
+            .dir_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_logs_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: LogPathDefaultSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.logs.dir_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: LogPathDefaultSetting) -> ConfigSettingResult<()> {
+        self.data.logs.dir_path = None;
         Ok(())
     }
 }

@@ -58,6 +58,7 @@ impl ConfigKey {
             config_key!(MqttExternalKeyfileSetting),
             config_key!(SoftwarePluginDefaultSetting),
             config_key!(TmpPathDefaultSetting),
+            config_key!(LogPathDefaultSetting),
         ]
     }
 }

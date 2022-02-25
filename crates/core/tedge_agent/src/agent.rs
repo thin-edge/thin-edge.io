@@ -17,9 +17,9 @@ use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
-    MqttBindAddressSetting, MqttPortSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
-    TmpPathDefaultSetting,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathDefaultSetting,
+    MqttBindAddressSetting, MqttPortSetting, RunPathDefaultSetting, SoftwarePluginDefaultSetting,
+    TEdgeConfigLocation, TmpPathDefaultSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
@@ -77,7 +77,7 @@ impl Default for SmAgentConfig {
 
         let sm_home = PathBuf::from("/etc/tedge");
 
-        let log_dir = PathBuf::from("/var/log/tedge/agent");
+        let log_dir = PathBuf::from(&format!("{DEFAULT_LOG_PATH}/tedge/agent"));
 
         let config_location = TEdgeConfigLocation::default();
 
@@ -119,11 +119,14 @@ impl SmAgentConfig {
 
         let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
 
+        let tedge_log_dir = tedge_config.query_string(LogPathDefaultSetting)?.into();
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_config(mqtt_config)
             .with_config_location(tedge_config_location)
-            .with_download_directory(tedge_download_dir))
+            .with_download_directory(tedge_download_dir)
+            .with_log_directory(tedge_log_dir))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -147,6 +150,13 @@ impl SmAgentConfig {
     pub fn with_download_directory(self, tmp_dir: PathBuf) -> Self {
         Self {
             download_dir: tmp_dir,
+            ..self
+        }
+    }
+
+    pub fn with_log_directory(self, tmp_dir: PathBuf) -> Self {
+        Self {
+            log_dir: tmp_dir,
             ..self
         }
     }
