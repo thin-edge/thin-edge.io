@@ -15,11 +15,12 @@ pub enum AgentRequest {
 }
 
 impl AgentRequest {
-    pub fn request_id(&self) -> &RequestId {
+    pub fn request_id(&self) -> Option<&RequestId> {
         match self {
-            AgentRequest::SoftwareList(r) => &r.id,
-            AgentRequest::SoftwareUpdate(r) => &r.id,
-            AgentRequest::DeviceRestart(r) => &r.id,
+            AgentRequest::HealthCheck => None,
+            AgentRequest::SoftwareList(r) => Some(&r.id),
+            AgentRequest::SoftwareUpdate(r) => Some(&r.id),
+            AgentRequest::DeviceRestart(r) => Some(&r.id),
         }
     }
 }

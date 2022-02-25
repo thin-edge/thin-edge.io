@@ -4,7 +4,7 @@ use crate::{
     error::AgentError,
     restart_operation_handler::restart_operation,
     state::{
-        AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
+        RestartOperationStatus, SoftwareOperationVariants, State,
         StateRepository, StateStatus,
     },
 };
@@ -15,10 +15,7 @@ use agent_interface::{
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use mqtt_channel::{
-    Connection, Message, MqttError, PubChannel, SinkExt, StreamExt, SubChannel, Topic, TopicFilter,
-};
+use mqtt_channel::{Connection, ErrChannel, Message, PubChannel, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use serde_json::json;
 use std::process;
@@ -204,14 +201,12 @@ impl SmAgentConfig {
 pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
-    persistance_store: Journal,
 }
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
         info!("{} starting", &name);
 
-        let persistance_store = Journal::open(config.journal_path())?;
         let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
         config.mqtt_config = config
@@ -222,7 +217,6 @@ impl SmAgent {
         Ok(Self {
             config,
             operation_logs,
-            persistance_store,
         })
     }
 
@@ -268,30 +262,35 @@ impl SmAgent {
             );
         }
 
-        let (request_sender, mut request_receiver) = futures::channel::mpsc::unbounded();
+        let request_journal = Journal::open(self.config.journal_path()).await?;
+        let persistance_store = request_journal.clone();
+
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let mqtt_errors = mqtt.errors;
         let mqtt_input = mqtt.received;
         let mqtt_output = mqtt.published.clone();
         let mut mqtt_responses = mqtt.published.clone();
         let errors_topics = self.config.errors_topic.clone();
+
         tokio::spawn(async move {
             Self::process_mqtt_errors(mqtt_errors).await;
         });
         tokio::spawn(async move {
             Self::process_subscribed_messages(
+                &request_journal,
                 mqtt_input,
                 mqtt_output,
-                request_sender,
                 errors_topics,
             )
             .await;
         });
 
-        let () = self.process_pending_operation(&mut mqtt.published).await?;
+        let () = self
+            .process_pending_operation(&persistance_store, &mut mqtt.published)
+            .await?;
 
         while let Err(error) = self
-            .process_requests(&mut request_receiver, &mut mqtt_responses, &plugins)
+            .process_requests(&persistance_store, &mut mqtt_responses, &plugins)
             .await
         {
             error!("{}", error);
@@ -300,22 +299,22 @@ impl SmAgent {
         Ok(())
     }
 
-    async fn process_mqtt_errors(mut mqtt_errors: UnboundedReceiver<MqttError>) {
+    async fn process_mqtt_errors(mut mqtt_errors: impl ErrChannel) {
         while let Some(error) = mqtt_errors.next().await {
             error!("{}", error);
         }
     }
 
     async fn process_subscribed_messages(
+        persistance_store: &Journal,
         mut messages: impl SubChannel,
         mut responses: impl PubChannel,
-        mut requests: UnboundedSender<AgentRequest>,
         errors_topic: Topic,
     ) {
         while let Some(message) = messages.next().await {
             match message.try_into() {
                 Ok(request) => {
-                    if let Err(error) = requests.send(request).await {
+                    if let Err(error) = persistance_store.schedule(request).await {
                         error!("Worker stopped: {}", error);
                         break;
                     }
@@ -332,11 +331,11 @@ impl SmAgent {
 
     async fn process_requests(
         &mut self,
-        requests: &mut UnboundedReceiver<AgentRequest>,
+        persistance_store: &Journal,
         responses: &mut impl PubChannel,
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
-        while let Some(request) = requests.next().await {
+        while let Some(request) = persistance_store.next_request().await {
             match request {
                 AgentRequest::HealthCheck => {
                     let health_status = json!({
@@ -352,6 +351,7 @@ impl SmAgent {
                 AgentRequest::SoftwareList(request) => {
                     let _success = self
                         .handle_software_list_request(
+                            persistance_store,
                             responses,
                             plugins.clone(),
                             &self.config.response_topic_list,
@@ -372,6 +372,7 @@ impl SmAgent {
 
                     let _success = self
                         .handle_software_update_request(
+                            persistance_store,
                             responses,
                             plugins.clone(),
                             &self.config.response_topic_update,
@@ -384,8 +385,7 @@ impl SmAgent {
                 }
 
                 AgentRequest::DeviceRestart(request) => {
-                    let () = self
-                        .persistance_store
+                    let () = persistance_store
                         .store(&State {
                             operation_id: Some(request.id.clone()),
                             operation: Some(StateStatus::Restart(
@@ -394,12 +394,16 @@ impl SmAgent {
                         })
                         .await?;
                     if let Err(error) = self
-                        .handle_restart_operation(responses, &self.config.response_topic_restart)
+                        .handle_restart_operation(
+                            persistance_store,
+                            responses,
+                            &self.config.response_topic_restart,
+                        )
                         .await
                     {
                         error!("{}", error);
 
-                        self.persistance_store.clear().await?;
+                        persistance_store.clear().await?;
                         let status = OperationStatus::Failed;
                         let response = RestartOperationResponse::new(&request).with_status(status);
                         let () = responses
@@ -418,13 +422,13 @@ impl SmAgent {
 
     async fn handle_software_list_request(
         &self,
+        persistance_store: &Journal,
         responses: &mut impl PubChannel,
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         request: SoftwareListRequest,
     ) -> Result<(), AgentError> {
-        let () = self
-            .persistance_store
+        let () = persistance_store
             .store(&State {
                 operation_id: Some(request.id.clone()),
                 operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
@@ -457,20 +461,20 @@ impl SmAgent {
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state: State = self.persistance_store.clear().await?;
+        let _state: State = persistance_store.clear().await?;
 
         Ok(())
     }
 
     async fn handle_software_update_request(
         &self,
+        persistance_store: &Journal,
         responses: &mut impl PubChannel,
         plugins: Arc<Mutex<ExternalPlugins>>,
         response_topic: &Topic,
         request: SoftwareUpdateRequest,
     ) -> Result<(), AgentError> {
-        let _ = self
-            .persistance_store
+        let _ = persistance_store
             .store(&State {
                 operation_id: Some(request.id.clone()),
                 operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
@@ -505,17 +509,18 @@ impl SmAgent {
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state = self.persistance_store.clear().await?;
+        let _state = persistance_store.clear().await?;
 
         Ok(())
     }
 
     async fn handle_restart_operation(
         &self,
+        persistance_store: &Journal,
         responses: &mut impl PubChannel,
         topic: &Topic,
     ) -> Result<(), AgentError> {
-        self.persistance_store
+        persistance_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
@@ -548,9 +553,10 @@ impl SmAgent {
 
     async fn process_pending_operation(
         &self,
+        persistance_store: &Journal,
         responses: &mut impl PubChannel,
     ) -> Result<(), AgentError> {
-        let state: Result<State, _> = self.persistance_store.load().await;
+        let state: Result<State, _> = persistance_store.load().await;
         let mut status = OperationStatus::Failed;
 
         if let State {
@@ -577,7 +583,7 @@ impl SmAgent {
                 }
 
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let _state = self.persistance_store.clear().await?;
+                    let _state = persistance_store.clear().await?;
                     if restart_operation::has_rebooted(&self.config.run_dir)? {
                         info!("Device restart successful.");
                         status = OperationStatus::Successful;
@@ -613,20 +619,20 @@ fn get_default_plugin(
 
 #[cfg(test)]
 mod tests {
-
     use std::io::Write;
     use std::path::PathBuf;
 
     use assert_json_diff::assert_json_include;
     use serde_json::Value;
 
+    use tempfile::tempdir;
     use super::*;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
 
-    #[ignore]
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
+        // The test is aborted if the init command is a reboot
         assert_eq!(INIT_COMMAND, "echo");
 
         let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
@@ -636,12 +642,15 @@ mod tests {
         )
         .unwrap();
 
+        let journal_path = tempdir().expect("tmp dir").path().join("journal").into();
+        let journal = Journal::open(journal_path).await.expect("an empty journal");
+
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
         let (_, mut output_stream) = mqtt_tests::output_stream();
         let response_topic_restart =
-            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+            Topic::new_unchecked(RestartOperationResponse::topic_name());
         let () = agent
-            .handle_restart_operation(&mut output_stream, &response_topic_restart)
+            .handle_restart_operation(&journal, &mut output_stream, &response_topic_restart)
             .await?;
         assert!(
             std::path::Path::new(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).exists()
