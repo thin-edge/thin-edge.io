@@ -59,6 +59,7 @@ impl ConfigKey {
             config_key!(SoftwarePluginDefaultSetting),
             config_key!(TmpPathDefaultSetting),
             config_key!(LogPathDefaultSetting),
+            config_key!(RunPathDefaultSetting),
         ]
     }
 }

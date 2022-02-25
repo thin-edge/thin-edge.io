@@ -558,3 +558,28 @@ impl ConfigSettingAccessor<LogPathDefaultSetting> for TEdgeConfig {
         Ok(())
     }
 }
+
+impl ConfigSettingAccessor<RunPathDefaultSetting> for TEdgeConfig {
+    fn query(&self, _setting: RunPathDefaultSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .run
+            .dir_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_logs_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: RunPathDefaultSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.run.dir_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: RunPathDefaultSetting) -> ConfigSettingResult<()> {
+        self.data.run.dir_path = None;
+        Ok(())
+    }
+}

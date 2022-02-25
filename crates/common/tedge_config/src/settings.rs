@@ -311,3 +311,16 @@ impl ConfigSetting for LogPathDefaultSetting {
 
     type Value = FilePath;
 }
+
+pub struct RunPathDefaultSetting;
+
+impl ConfigSetting for RunPathDefaultSetting {
+    const KEY: &'static str = "run.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default path to be used for runtime information",
+        "Example: /run"
+    );
+
+    type Value = FilePath;
+}

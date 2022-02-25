@@ -43,6 +43,7 @@ pub struct SmAgentConfig {
     pub response_topic_restart: Topic,
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
+    pub run_dir: PathBuf,
     config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
 }
@@ -79,6 +80,8 @@ impl Default for SmAgentConfig {
 
         let log_dir = PathBuf::from(&format!("{DEFAULT_LOG_PATH}/tedge/agent"));
 
+        let run_dir = PathBuf::from(DEFAULT_RUN_PATH);
+
         let config_location = TEdgeConfigLocation::default();
 
         let download_dir = PathBuf::from("/tmp");
@@ -95,6 +98,7 @@ impl Default for SmAgentConfig {
             response_topic_restart,
             sm_home,
             log_dir,
+            run_dir,
             config_location,
             download_dir,
         }
@@ -120,13 +124,15 @@ impl SmAgentConfig {
         let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
 
         let tedge_log_dir = tedge_config.query_string(LogPathDefaultSetting)?.into();
+        let tedge_run_dir = tedge_config.query_string(RunPathDefaultSetting)?.into();
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_config(mqtt_config)
             .with_config_location(tedge_config_location)
             .with_download_directory(tedge_download_dir)
-            .with_log_directory(tedge_log_dir))
+            .with_log_directory(tedge_log_dir)
+            .with_run_directory(tedge_run_dir))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -160,6 +166,13 @@ impl SmAgentConfig {
             ..self
         }
     }
+
+    pub fn with_run_directory(self, tmp_dir: PathBuf) -> Self {
+        Self {
+            run_dir: tmp_dir,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -172,7 +185,7 @@ pub struct SmAgent {
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
-        let flock = check_another_instance_is_not_running(name)?;
+        let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
         info!("{} starting", &name);
 
         let persistance_store = AgentStateRepository::new(config.sm_home.clone());
@@ -482,7 +495,7 @@ impl SmAgent {
         let () = responses
             .publish(Message::new(topic, executing_response.to_bytes()?))
             .await?;
-        let () = restart_operation::create_slash_run_file()?;
+        let () = restart_operation::create_slash_run_file(&self.config.run_dir)?;
 
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
         // state = "Restarting"
@@ -536,7 +549,7 @@ impl SmAgent {
 
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
                     let _state = self.persistance_store.clear().await?;
-                    if restart_operation::has_rebooted()? {
+                    if restart_operation::has_rebooted(&self.config.run_dir)? {
                         info!("Device restart successful.");
                         status = OperationStatus::Successful;
                     }

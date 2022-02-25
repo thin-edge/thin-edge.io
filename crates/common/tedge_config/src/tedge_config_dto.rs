@@ -28,6 +28,9 @@ pub(crate) struct TEdgeConfigDto {
 
     #[serde(default)]
     pub(crate) logs: PathConfigDto,
+
+    #[serde(default)]
+    pub(crate) run: PathConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section

@@ -49,6 +49,9 @@ pub struct TEdgeConfigDefaults {
     /// Default log path
     pub default_logs_path: FilePath,
 
+    /// Default run path
+    pub default_run_path: FilePath,
+
     /// Default device type
     pub default_device_type: String,
 
@@ -61,6 +64,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
         let system_cert_path = Path::new(DEFAULT_ETC_PATH).join("ssl").join("certs");
         let tmp_path = Path::new(DEFAULT_TMP_PATH);
         let logs_path = Path::new(DEFAULT_LOG_PATH);
+        let run_path = Path::new(DEFAULT_RUN_PATH);
         Self {
             default_device_cert_path: config_location
                 .tedge_config_root_path()
@@ -78,6 +82,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: tmp_path.into(),
             default_logs_path: logs_path.into(),
+            default_run_path: run_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
         }
@@ -104,6 +109,7 @@ fn test_from_tedge_config_location() {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: FilePath::from("/tmp"),
             default_logs_path: FilePath::from("/var/log"),
+            default_run_path: FilePath::from("/run"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
         }
