@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 mod config_setting;
 mod error;
 mod models;
