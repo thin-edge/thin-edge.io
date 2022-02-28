@@ -1,10 +1,11 @@
 # Summary
 
-This crate would bring centralized definitions of both messages and behaviour
-by introducing traits for runtime Plugins to hook into. One goal is to be
-*agnostic* on whether a given `Plugin` is part of the same executable or not.
-As all messages are easily de/serializable they are also transport agnostic,
-allowing implementers and users to send them however they see fit.
+The `tedge_api` crate brings centralized definitions of both messages and
+behaviour by introducing traits for runtime Plugins to hook into. One goal is
+to be *agnostic* on whether a given `Plugin` is part of the same executable or
+not. As all messages are easily de/serializable they are also transport
+agnostic, allowing implementers and users to de/construct them from/for whatever
+sources/destinations they see fit.
 
 # Motivation
 
@@ -18,16 +19,27 @@ _This section is meant to be read as if the feature was_ already _implemented._
 
 -----
 
-Thin-Edge is an edge focused IoT framework built upon a message passing router
-with a modular approach for extending its functionality.
+ThinEdge is an edge focused IoT framework. At its core it serves to bridge the
+gap between devices and the cloud. As it is meant to run on low-resources
+devices it's core architecture supports that.
+As such, it is built upon a message passing router with a modular approach for
+extending its functionality through plugins.
 
-Thin-Edge can be extended with two flavors of plugins:
+ThinEdge can thus be understood as being a common-core of a message passing router
+with a collection of plugins that ultimately define what it actually _does_.
 
-- Run-time, which are provided to Thin-Edge and meant to interoperate with it
-  specifically
-- Compile-time, which are built into the binary and written in Rust.
-    - These provide the benefit of assuring compatibility with future versions
-      during the build step
+Plugins come in two forms:
+
+- Run-time & external, which are provided to Thin-Edge and meant to
+  interoperate with it specifically through stdin/stdout or some other
+  well-specified interface (cf. external plugins further down)
+    - These are for example custom built executables that a user provides and
+      wishes to not integrate into ThinEdge for various reasons (e.g. language
+      differences or license)
+- Compile-time & built-in, which are compiled into the actual ThinEdge binary
+  and written in Rust.
+    - These offer the advantage of simplifying deployment as well as assurances
+      w.r.t. the messages (i.e. changes)
 
 Both ways are _functionally equivalent_ and _support the same features_.
 
@@ -312,7 +324,9 @@ Alternatives could include:
 - How to extend the `MessageKind` type?
     - The enum itself is `#[non_exhaustive]`, but extending it still requires a
       whole developer story
+    - What is the process of adding new variants?
 - How does the IO interface look like for external plugins?
+    - Which ones should exist? Just StdIO at first, HTTP maybe later?
 
 # Future possibilities
 
