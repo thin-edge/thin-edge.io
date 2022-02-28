@@ -1,10 +1,10 @@
 # How to configure the local port and bind address in mosquitto?
 
-Configuring a mosquitto port and bind address in thin edge is a three step process.
+Configuring a mosquitto port and bind address in thin-edge.io is a three-step process.
 
 > Note: The mqtt.port and the mqtt.bind_address can be set/unset independently.
 
-## Step 1: Disconnect the thin edge device
+## Step 1: Disconnect thin-edge.io edge device
 
 The thin edge device has to be disconnected from the cloud using the `tedge` command
 
@@ -91,7 +91,7 @@ Caused by:
 
 Update the `collectd.conf` with the new port and host in `<Plugin mqtt>`.
 
-Then restart the collectd service
+Then, restart the collectd service.
 
 ```shell
 sudo systemctl restart collectd.service
