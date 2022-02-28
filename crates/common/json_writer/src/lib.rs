@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 use std::num::FpCategory;
 
 #[derive(Debug, Clone)]
