@@ -54,9 +54,8 @@ impl CumulocityMapper {
     fn get_mqtt_config(&mut self) -> Result<mqtt_channel::Config, anyhow::Error> {
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
         let mqtt_topic = Self::subscriptions(&operations)?;
-        let config_repository = tedge_config::TEdgeConfigRepository::new(
-            tedge_config::TEdgeConfigLocation::from_default_system_location(),
-        );
+        let config_repository =
+            tedge_config::TEdgeConfigRepository::new(tedge_config::TEdgeConfigLocation::default());
         let tedge_config = config_repository.load()?;
 
         let mqtt_config = mqtt_channel::Config::default()
