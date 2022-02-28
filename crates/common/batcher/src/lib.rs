@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 //! Group together events that are close in time.
 
 mod batch;
