@@ -1,3 +1,6 @@
+#![cfg_attr(test, deny(warnings))]
+
+//!
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
