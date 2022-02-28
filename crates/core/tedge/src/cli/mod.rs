@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::command::{BuildCommand, BuildContext, Command};
-use clap;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod certificate;
