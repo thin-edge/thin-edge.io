@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
