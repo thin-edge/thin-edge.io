@@ -15,7 +15,7 @@ assets = [
 [dependencies]
 clap = { version = "3", features = ["derive"] }
 thiserror = "1.0"
-zip = "0.5"
+zip = { version = "0.5", default-features = false }
 roxmltree = "0.14"
 
 [dev-dependencies]
