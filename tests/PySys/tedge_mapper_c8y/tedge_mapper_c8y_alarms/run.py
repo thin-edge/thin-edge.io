@@ -25,6 +25,10 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         # Solution: only inject the variables we really need
         environ={ 'HOME':os.environ.get('HOME')}
 
+        # TODO to wait for 5s until everythig is settled in the background is probably to
+        # long -> test and reduce
+        time.sleep(5)
+
         self.startProcess(
             command=self.tedge,
             arguments=["mqtt", "pub",
