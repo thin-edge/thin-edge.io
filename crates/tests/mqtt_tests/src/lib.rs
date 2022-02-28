@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 mod message_streams;
 mod test_mqtt_client;
 pub mod test_mqtt_server;
