@@ -1,5 +1,6 @@
 import os
 import subprocess
+
 from environment_sm_management import SoftwareManagement
 from environment_tedge import TedgeEnvironment
 from retry import retry
@@ -15,7 +16,7 @@ steps:
     3. trigger donload
     4. assert package downloads in /tedge_download_path_test
     5. remove package
-    6. reset tmp.path to inital value
+    6. reset tmp.path to initial value
 """
 
 
