@@ -15,7 +15,7 @@ clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
 futures = "0.3"
-mockall = "0.10"
+mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -30,5 +30,7 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
+anyhow = "1.0"
+mockito = "0.30"
 tempfile = "3.3"
 test-case = "1.2"

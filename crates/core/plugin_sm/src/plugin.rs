@@ -28,7 +28,7 @@ pub trait Plugin {
 
     async fn update_list(
         &self,
-        modules: &Vec<SoftwareModuleUpdate>,
+        modules: &[SoftwareModuleUpdate],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
 
@@ -56,7 +56,7 @@ pub trait Plugin {
                 let module_url = module.url.clone();
                 match module_url {
                     Some(url) => {
-                        self.install_from_url(&mut module, &url, logger, &download_path)
+                        self.install_from_url(&mut module, &url, logger, download_path)
                             .await?
                     }
                     None => self.install(&module, logger).await?,
@@ -91,7 +91,7 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger, &download_path).await {
+                match Self::download_from_url(module, &url, logger, download_path).await {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;
@@ -358,7 +358,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn update_list(
         &self,
-        updates: &Vec<SoftwareModuleUpdate>,
+        updates: &[SoftwareModuleUpdate],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
         let mut command = self.command(UPDATE_LIST, None)?;

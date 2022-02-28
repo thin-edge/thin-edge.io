@@ -1,12 +1,17 @@
+use mqtt_channel::Message;
+
+use super::error::ConversionError;
+
 #[derive(Debug)]
 pub struct SizeThreshold(pub usize);
 
 impl SizeThreshold {
-    pub fn validate(&self, input: &str) -> Result<(), SizeThresholdExceeded> {
-        let actual_size = input.len();
+    pub fn validate(&self, input: &Message) -> Result<(), ConversionError> {
+        let actual_size = input.payload_bytes().len();
         let threshold = self.0;
         if actual_size > threshold {
-            Err(SizeThresholdExceeded {
+            Err(ConversionError::SizeThresholdExceeded {
+                topic: input.topic.name.clone(),
                 actual_size,
                 threshold,
             })
@@ -14,11 +19,4 @@ impl SizeThreshold {
             Ok(())
         }
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error("The input size {actual_size} is too big. The threshold is {threshold}.")]
-pub struct SizeThresholdExceeded {
-    pub actual_size: usize,
-    pub threshold: usize,
 }

@@ -1,4 +1,4 @@
-use crate::{c8y::error::CumulocityMapperError, core::size_threshold::SizeThresholdExceeded};
+use crate::c8y::error::CumulocityMapperError;
 
 use c8y_smartrest::error::OperationsError;
 use mqtt_channel::MqttError;
@@ -10,6 +10,7 @@ pub enum MapperError {
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
 
+    #[cfg(test)] // this error is only used in a test so far
     #[error("Home directory is not found.")]
     HomeDirNotFound,
 
@@ -32,7 +33,10 @@ pub enum ConversionError {
     FromCumulocityJsonError(#[from] c8y_translator::json::CumulocityJsonError),
 
     #[error(transparent)]
-    FromCumulocityCumulocityMapperError(#[from] CumulocityMapperError),
+    FromCumulocityMapperError(#[from] CumulocityMapperError),
+
+    #[error(transparent)]
+    FromCumulocitySmartRestMapperError(#[from] c8y_smartrest::error::SMCumulocityMapperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
@@ -50,8 +54,12 @@ pub enum ConversionError {
     #[error(transparent)]
     FromThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
 
-    #[error(transparent)]
-    FromSizeThresholdExceeded(#[from] SizeThresholdExceeded),
+    #[error("The size of the message received on {topic} is {actual_size} which is greater than the threshold size of {threshold}.")]
+    SizeThresholdExceeded {
+        topic: String,
+        actual_size: usize,
+        threshold: usize,
+    },
 
     #[error("The given Child ID '{id}' is invalid.")]
     InvalidChildId { id: String },
@@ -79,4 +87,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromTimeFormatError(#[from] time::error::Format),
 }

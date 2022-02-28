@@ -4,9 +4,8 @@ use std::convert::{TryFrom, TryInto};
 
 /// loads tedge config from system default
 pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
-    let tedge_config_location = TEdgeConfigLocation::from_default_system_location();
-    let config_repository = TEdgeConfigRepository::new(tedge_config_location);
-    Ok(config_repository.load()?)
+    let tedge_config_location = TEdgeConfigLocation::default();
+    TEdgeConfigRepository::new(tedge_config_location).load()
 }
 
 /// Represents the complete configuration of a thin edge device.

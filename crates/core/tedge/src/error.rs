@@ -1,6 +1,7 @@
 use crate::system_services;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum TEdgeError {
     #[error("TOML parse error")]
     FromTomlParse(#[from] toml::de::Error),

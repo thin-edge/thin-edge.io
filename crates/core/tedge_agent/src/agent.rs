@@ -79,7 +79,7 @@ impl Default for SmAgentConfig {
 
         let log_dir = PathBuf::from("/var/log/tedge/agent");
 
-        let config_location = TEdgeConfigLocation::from_default_system_location();
+        let config_location = TEdgeConfigLocation::default();
 
         let download_dir = PathBuf::from("/tmp");
 
@@ -569,8 +569,7 @@ mod tests {
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
         assert_eq!(INIT_COMMAND, "echo");
-        let tedge_config_location =
-            tedge_config::TEdgeConfigLocation::from_default_system_location();
+        let tedge_config_location = tedge_config::TEdgeConfigLocation::default();
         let agent = SmAgent::try_new(
             "tedge_agent_test",
             SmAgentConfig::try_new(tedge_config_location).unwrap(),

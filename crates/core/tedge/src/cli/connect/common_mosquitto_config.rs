@@ -110,11 +110,7 @@ impl CommonMosquittoConfig {
         for log_type in &self.log_types {
             writeln!(writer, "log_type {}", log_type)?;
         }
-        writeln!(
-            writer,
-            "message_size_limit {}",
-            self.message_size_limit.to_string()
-        )?;
+        writeln!(writer, "message_size_limit {}", self.message_size_limit)?;
 
         self.internal_listener.write(writer)?;
         self.external_listener.write(writer)?;

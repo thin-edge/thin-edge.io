@@ -107,17 +107,6 @@ impl Write for DraftFile {
     }
 }
 
-// This isn't complete way to retrieve HOME dir from the user.
-// We could parse passwd file to get actual home path if we can get user name.
-// I suppose rust provides some way to do it or allows through c bindings... But this implies unsafe code.
-// Another alternative is to use deprecated env::home_dir() -1
-// https://github.com/rust-lang/rust/issues/71684
-pub fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .and_then(|home| if home.is_empty() { None } else { Some(home) })
-        .map(PathBuf::from)
-}
-
 /// Set the permission modes of a Unix file.
 #[cfg(not(windows))]
 pub fn set_permission(file: &File, mode: u32) -> Result<(), std::io::Error> {

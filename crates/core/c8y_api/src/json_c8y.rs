@@ -17,6 +17,13 @@ pub struct C8yCreateEvent {
     text: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+/// used to retrieve the id of a log event
+pub struct C8yEventResponse {
+    pub id: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yManagedObject {

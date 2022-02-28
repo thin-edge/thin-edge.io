@@ -1,15 +1,13 @@
-use std::fmt;
+use std::{fmt, path::PathBuf};
 
 use crate::{
-    az::mapper::AzureMapper,
-    c8y::mapper::CumulocityMapper,
-    collectd::mapper::CollectdMapper,
-    core::{component::TEdgeComponent, error::MapperError},
+    az::mapper::AzureMapper, c8y::mapper::CumulocityMapper, collectd::mapper::CollectdMapper,
+    core::component::TEdgeComponent,
 };
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
-use tedge_utils::paths::home_dir;
 
 mod az;
 mod c8y;
@@ -50,6 +48,12 @@ pub struct MapperOpt {
     /// WARNING: All pending messages will be lost.
     #[clap(short, long)]
     pub clear: bool,
+
+    /// Start the mapper from custom path
+    ///
+    /// WARNING: This is mostly used in testing.
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -75,7 +79,10 @@ async fn main() -> anyhow::Result<()> {
     tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
 
     let component = lookup_component(&mapper.name);
-    let config = tedge_config()?;
+
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper.config_dir);
+    let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
     // Run only one instance of a mapper
     let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
 
@@ -88,23 +95,4 @@ async fn main() -> anyhow::Result<()> {
     } else {
         component.start(config).await
     }
-}
-
-fn tedge_config() -> anyhow::Result<TEdgeConfig> {
-    let config_repository = config_repository()?;
-    Ok(config_repository.load()?)
-}
-
-fn config_repository() -> Result<TEdgeConfigRepository, MapperError> {
-    let tedge_config_location = if tedge_users::UserManager::running_as_root()
-        || tedge_users::UserManager::running_as("tedge-mapper")
-    {
-        tedge_config::TEdgeConfigLocation::from_default_system_location()
-    } else {
-        tedge_config::TEdgeConfigLocation::from_users_home_location(
-            home_dir().ok_or(MapperError::HomeDirNotFound)?,
-        )
-    };
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
-    Ok(config_repository)
 }

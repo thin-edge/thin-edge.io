@@ -120,10 +120,7 @@ impl Downloader {
         })
         .await?;
 
-        let file_len = match response.content_length() {
-            Some(len) => len,
-            None => 0,
-        };
+        let file_len = response.content_length().unwrap_or(0);
         let mut file =
             create_file_and_try_pre_allocate_space(self.target_filename.as_path(), file_len)?;
 
