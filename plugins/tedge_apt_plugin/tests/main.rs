@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 #[cfg(feature = "integration-test")]
 mod tests {
     use hamcrest2::prelude::*;
