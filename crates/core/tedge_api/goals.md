@@ -48,29 +48,50 @@ if you wish to extend Thin-Edge yourself.
 
 ## Configuring your plugins
 
-Included plugins first need to get configured before they can do their work.
-The core idea here is that you can create as many plugin instances of a single
-plugin _kind_ as you wish. For example you could have multiple "File Watcher"
-instances that each watch a different file. To see how this is done, check out
-this example file: 
+ThinEdge is on its own merely a collection of plugin kinds, and requires a
+configuration to do any useful work. A common configuration includes a cloud
+mapper, some device management plugins as well as some data sources.
 
-- Create a plugin named 'simple-heartbeat' of kind 'heartbeat'
-- Create two plugins that both use an external 
+> One core idea is that you can create as many plugin instances of a single
+> plugin _kind_ as you wish. For example you could have multiple "File Watcher"
+> instances that each watch a different file. 
+
+
+Here is an fictuous configuration that would connect the device to the acme cloud.
 
 ```toml
-[plugins.simple-heartbeat] # 'simple-heartbeat' is the name of this _instance_,
-                           # it may be the same as its kind
-kind = "heartbeat" # 'heartbeat' is the _kind_ of plugin you wish to instantiate
-configuration = { targets = ["watch_sudo_calls", "check_service_alive"], interval-ms = 400 }
+[plugins.acme]
+kind = "acme_mapper"
+[plugins.acme.configuration]
+tenant = "coyote"
+software_mgmt_plugin = "pacman" # Here we tell the azure_mapper plugin where to
+                                # send software management requests
+service_mgmt_plugin = "systemd"
 
-[plugins.watch_sudo_calls]
-kind = "stdio-external"
-configuration = { path = "/srv/thin-edge-plugins/sudo_watcher" }
+[plugins.pacman]
+kind = "pacman_handler"
+[plugins.pacman.configuration]
+allow_destructive_operations = true # Per default the plugin does not allow
+                                    # adding/removing packages
 
-[plugins.check_service_alive] # There can be more than one instance of the same kind of plugin
-kind = "stdio-external"
-configuration = { path = "/srv/thin-edge-plugins/check_service" }
+[plugins.systemd]
+kind = "systemd_handler"
+configuration = { 
+    restrict_units_to = ["nginx.service"]  # Only allow interacting with the nginx service
+}
 ```
+
+Of note here is that everying in the `plugins.<plugin id>.configuration` space
+is per plugin! Each plugin exposes its own set of configurations depending on
+its needs and abilities. Nonetheless some parts are probably more common:
+
+- Per default plugins should strive to do the 'safe' thing. Ambiguitiy should
+  be reduced as much as possible and if defaults are unclear should either
+  force the user to specify it or do an idempotent safe/pure operation. (e.g.
+  the pacman plugin only allows listing packages per default)
+- Plugins don't guess where to send their messages to. If the `acme_mapper`
+  receives a 'Restart "nginx" service' message it needs to be configured to
+  tell it where to find the destination for it.
 
 Once you have this configuration file, you can go on and start Thin-Edge
 
@@ -327,6 +348,10 @@ Alternatives could include:
     - What is the process of adding new variants?
 - How does the IO interface look like for external plugins?
     - Which ones should exist? Just StdIO at first, HTTP maybe later?
+- How to delineate between different plugin kinds in terms of messages it should be able to handle?
+    - For example are services always 'on system' and if one wants to restart a
+      container one needs to be _specific_ about the container? 
+        - If yes, how do mappers potentially make the difference?
 
 # Future possibilities
 
