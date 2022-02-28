@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 use mockall::automock;
 use time::OffsetDateTime;
 
