@@ -1,66 +1,55 @@
 # The `tedge connect` command
 
 ```
-tedge-connect 0.5.3
+tedge-connect 
 Connect to connector provider
 
 USAGE:
     tedge connect <SUBCOMMAND>
 
-FLAGS:
-    -h, --help       
-            Prints help information
-
-    -V, --version    
-            Prints version information
-
+OPTIONS:
+    -h, --help    Print help information
 
 SUBCOMMANDS:
     az      Create connection to Azure
     c8y     Create connection to Cumulocity
-    help    Prints this message or the help of the given subcommand(s)
+    help    Print this message or the help of the given subcommand(s)
 ```
 
 ## Azure
 
 ```
-tedge-connect-az 0.5.3
+tedge-connect-az 
 Create connection to Azure
 
 The command will create config and start edge relay from the device to az instance
 
 USAGE:
-    tedge connect az [FLAGS]
+    tedge connect az [OPTIONS]
 
-FLAGS:
-    -h, --help       
-            Prints help information
+OPTIONS:
+    -h, --help
+            Print help information
 
-        --test       
+        --test
             Test connection to Azure
-
-    -V, --version    
-            Prints version information
 ```
 
 ## Cumulocity
 
 ```
-tedge-connect-c8y 0.5.3
+tedge-connect-c8y 
 Create connection to Cumulocity
 
 The command will create config and start edge relay from the device to c8y instance
 
 USAGE:
-    tedge connect c8y [FLAGS]
+    tedge connect c8y [OPTIONS]
 
-FLAGS:
-    -h, --help       
-            Prints help information
+OPTIONS:
+    -h, --help
+            Print help information
 
-        --test       
+        --test
             Test connection to Cumulocity
-
-    -V, --version    
-            Prints version information
 ```
