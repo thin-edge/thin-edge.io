@@ -29,7 +29,7 @@ This identifier will be used to uniquely identify your devices among others in y
 This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is the device with that identity.
 
-```
+```shell
 $ sudo tedge cert create --device-id my-device
 ```
 
@@ -37,7 +37,7 @@ $ sudo tedge cert create --device-id my-device
 
 You can then check the content of that certificate.
 
-```
+```shell
 $ sudo tedge cert show
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
@@ -77,7 +77,7 @@ To connect the device to the Azure IoT Hub, one needs to set the URL/Hostname of
 
 Set the URL/Hostname of your Azure IoT Hub.   
 
-```
+```shell
 sudo tedge config set az.url your-iot-hub-name.azure-devices.net
 ```
 
@@ -85,7 +85,7 @@ The URL/Hostname can be found in the Azure web portal, clicking on the overview 
 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
-```
+```shell
 sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 ```
 
@@ -102,9 +102,8 @@ This command configures the MQTT broker:
 Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-az systemd service.
 At last, it sends packets to Azure IoT Hub to check the connection.
 
-```
+```shell
 $ sudo tedge connect az
-
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -117,21 +116,22 @@ Restarting mosquitto service.
 
 Awaiting mosquitto to start. This may take up to 5 seconds.
 
-Persisting mosquitto on reboot.
+Enabling mosquitto service on reboots.
 
 Successfully created bridge connection!
 
+Sending packets to check connection. This may take up to 2 seconds.
+
+Connection check is successful.
+
 Checking if tedge-mapper is installed.
 
-Starting tedge-mapper service.
+Starting tedge-mapper-az service.
 
-Persisting tedge-mapper on reboot.
+Persisting tedge-mapper-az on reboot.
 
-tedge-mapper service successfully started and enabled!
+tedge-mapper-az service successfully started and enabled!
 
-Sending packets to check connection. This may take up to 10 seconds.
-
-Received expected response message, connection check is successful.
 ```
 
 ## Sending your first telemetry data
@@ -140,7 +140,7 @@ Sending data to Azure is done using MQTT over topics prefixed with `az`.
 Any messages sent on the topic will be forwarded to Azure.
 Here, we use `tedge mqtt pub az/messages/events/` a message to be understood as a temperature of 20 Degree.
 
-```
+```shell
 $ tedge mqtt pub az/messages/events/ '{"temperature": 20}'
 ```
 To view the messages that were sent from the device to the cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).

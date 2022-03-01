@@ -70,7 +70,7 @@ Successfully created bridge connection!
 
 Sending packets to check connection. This may take up to 2 seconds.
 
-Connection check is successfull.
+Connection check is successful.
 
 Checking if tedge-mapper is installed.
 
@@ -119,21 +119,26 @@ Applying changes to mosquitto.
 
 Cumulocity Bridge successfully disconnected!
 
-Stopping tedge-mapper service.
+Stopping tedge-mapper-c8y service.
 
-Disabling tedge-mapper service.
+Disabling tedge-mapper-c8y service.
 
-tedge-mapper service successfully stopped and disabled!
+tedge-mapper-c8y service successfully stopped and disabled!
 
+Stopping tedge-agent service.
+
+Disabling tedge-agent service.
+
+tedge-agent service successfully stopped and disabled!
 ```
 
 > Note: `tedge disconnect c8y` also stops and disable **tedge-mapper** service if it is installed on the device.
 
 And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to create new bridge.
 
-#### Connection check failure
+#### Connection check warning
 
-Sample output of tedge connect when this error occurs:
+Sample output of tedge connect when this warning occurs:
 
 ```shell
 $ sudo tedge connect c8y
@@ -143,32 +148,43 @@ Checking if configuration for requested bridge already exists.
 
 Validating the bridge certificates.
 
+Creating the device in Cumulocity cloud.
+
 Saving configuration for requested bridge.
 
 Restarting mosquitto service.
 
 Awaiting mosquitto to start. This may take up to 5 seconds.
 
-Persisting mosquitto on reboot.
+Enabling mosquitto service on reboots.
 
 Successfully created bridge connection!
 
+Sending packets to check connection. This may take up to 2 seconds.
+
+ERROR: Local MQTT publish has timed out.
+Warning: Bridge has been configured, but Cumulocity connection check failed.
+
 Checking if tedge-mapper is installed.
 
-Starting tedge-mapper service.
+Starting tedge-mapper-c8y service.
 
-Persisting tedge-mapper on reboot.
+Persisting tedge-mapper-c8y on reboot.
 
-tedge-mapper service successfully started and enabled!
+tedge-mapper-c8y service successfully started and enabled!
 
-Sending packets to check connection. This may take up to 10 seconds.
+Enabling software management.
 
-Try 1 / 2: Sending a message to Cumulocity. ... No response. If the device is new, it's normal to get no response in the first try.
-Try 2 / 2: Sending a message to Cumulocity. ... No response.
-Warning: Bridge has been configured, but Cumulocity connection check failed.
+Checking if tedge-agent is installed.
+
+Starting tedge-agent service.
+
+Persisting tedge-agent on reboot.
+
+tedge-agent service successfully started and enabled!
 ```
 
-This error may be caused by some of the following reasons:
+This warning may be caused by some of the following reasons:
 
 - No access to Internet connection
 
