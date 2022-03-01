@@ -22,6 +22,14 @@ pub struct Comms {
     replymap: Arc<RwLock<HashMap<uuid::Uuid, ReplySender>>>,
 }
 
+impl std::fmt::Debug for Comms {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Comms")
+            .field("plugin_name", &self.plugin_name)
+            .finish()
+    }
+}
+
 impl Comms {
     pub fn new(plugin_name: String, sender: tokio::sync::mpsc::Sender<Message>) -> Self {
         Self {
