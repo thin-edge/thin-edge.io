@@ -172,6 +172,19 @@ impl ConfigSetting for MqttPortSetting {
     type Value = Port;
 }
 
+pub struct MqttBindAddressSetting;
+
+impl ConfigSetting for MqttBindAddressSetting {
+    const KEY: &'static str = "mqtt.bind_address";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Mqtt bind address, which is used by the mqtt clients to publish or subscribe. ",
+        "Example: 127.0.0.1"
+    );
+
+    type Value = IpAddress;
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MqttExternalPortSetting;
 
@@ -197,7 +210,7 @@ impl ConfigSetting for MqttExternalBindAddressSetting {
         "Example: 0.0.0.0"
     );
 
-    type Value = String;
+    type Value = IpAddress;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

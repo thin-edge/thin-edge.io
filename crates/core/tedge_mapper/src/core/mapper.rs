@@ -12,6 +12,7 @@ const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
 pub async fn create_mapper(
     app_name: &str,
+    mqtt_host: String,
     mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
@@ -20,6 +21,7 @@ pub async fn create_mapper(
     let mapper_config = converter.get_mapper_config();
     let mqtt_client = Connection::new(&mqtt_config(
         app_name,
+        &mqtt_host,
         mqtt_port,
         mapper_config.in_topic_filter.clone(),
     )?)
@@ -36,10 +38,12 @@ pub async fn create_mapper(
 
 pub fn mqtt_config(
     name: &str,
+    host: &str,
     port: u16,
     topics: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
     Ok(mqtt_channel::Config::default()
+        .with_host(host)
         .with_port(port)
         .with_session_name(name)
         .with_subscriptions(topics)

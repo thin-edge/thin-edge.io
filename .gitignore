@@ -6,7 +6,7 @@
 **/*.rs.bk
 
 #.lock file
-mapper/cumulocity/c8y_translator_lib/fuzz/Cargo.lock
+crates/core/c8y_translator/fuzz/Cargo.lock
 
 .idea/
 .vscode/

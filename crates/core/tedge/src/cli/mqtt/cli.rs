@@ -4,7 +4,6 @@ use rumqttc::QoS;
 use std::time::Duration;
 use tedge_config::*;
 
-const DEFAULT_HOST: &str = "localhost";
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
 const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -41,7 +40,10 @@ pub enum TEdgeMqttCli {
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let port = context.config_repository.load()?.query(MqttPortSetting)?;
-
+        let host = context
+            .config_repository
+            .load()?
+            .query(MqttBindAddressSetting)?;
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {
@@ -50,7 +52,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     retain,
                 } => MqttPublishCommand {
-                    host: DEFAULT_HOST.to_string(),
+                    host: host.to_string(),
                     port: port.into(),
                     topic,
                     message,
@@ -65,7 +67,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     hide_topic,
                 } => MqttSubscribeCommand {
-                    host: DEFAULT_HOST.to_string(),
+                    host: host.to_string(),
                     port: port.into(),
                     topic,
                     qos,
