@@ -11,7 +11,7 @@ use reqwest::Url;
 use std::time::Duration;
 use tedge_config::{
     C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
-    MqttPortSetting, TEdgeConfig,
+    MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
 };
 use time::{format_description, OffsetDateTime};
 
@@ -210,11 +210,14 @@ impl JwtAuthHttpProxy {
         let http_con = reqwest::ClientBuilder::new().build()?;
 
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
         let topic = TopicFilter::new("c8y/s/dat")?;
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(mqtt_port)
             .with_clean_session(true)
+            .with_host(mqtt_host)
             .with_subscriptions(topic);
+
         let mut mqtt_con = Connection::new(&mqtt_config).await?;
 
         // Ignore errors on this connection

@@ -1,4 +1,5 @@
 use crate::models::FilePath;
+use crate::IpAddress;
 use crate::TEdgeConfigLocation;
 use crate::{Flag, Port};
 use std::path::Path;
@@ -45,6 +46,9 @@ pub struct TEdgeConfigDefaults {
 
     /// Default device type
     pub default_device_type: String,
+
+    /// Default bind address
+    pub default_mqtt_bind_address: IpAddress,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -68,6 +72,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: tmp_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
+            default_mqtt_bind_address: IpAddress::default(),
         }
     }
 }
@@ -92,6 +97,7 @@ fn test_from_tedge_config_location() {
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: FilePath::from("/tmp"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
+            default_mqtt_bind_address: IpAddress::default(),
         }
     );
 }

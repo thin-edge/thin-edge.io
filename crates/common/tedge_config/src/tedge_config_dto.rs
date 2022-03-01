@@ -81,8 +81,9 @@ pub(crate) struct AzureConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct MqttConfigDto {
     pub(crate) port: Option<u16>,
+    pub(crate) bind_address: Option<IpAddress>,
     pub(crate) external_port: Option<u16>,
-    pub(crate) external_bind_address: Option<String>,
+    pub(crate) external_bind_address: Option<IpAddress>,
     pub(crate) external_bind_interface: Option<String>,
     pub(crate) external_capath: Option<FilePath>,
     pub(crate) external_certfile: Option<FilePath>,

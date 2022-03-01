@@ -1,13 +1,13 @@
-use crate::cli::connect::{ConnectError, DEFAULT_HOST, RESPONSE_TIMEOUT};
+use crate::cli::connect::{ConnectError, RESPONSE_TIMEOUT};
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 
-pub(crate) fn get_connected_c8y_url(port: u16) -> Result<String, ConnectError> {
+pub(crate) fn get_connected_c8y_url(port: u16, host: String) -> Result<String, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const CLIENT_ID: &str = "get_jwt_token_c8y";
 
-    let mut options = MqttOptions::new(CLIENT_ID, DEFAULT_HOST, port);
+    let mut options = MqttOptions::new(CLIENT_ID, host, port);
     options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);

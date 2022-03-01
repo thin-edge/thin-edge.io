@@ -15,7 +15,7 @@ const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
-    host: &'static str,
+    host: String,
     port: u16,
     mqtt_client_id: &'static str,
     mqtt_source_topic: &'static str,
@@ -28,7 +28,7 @@ pub struct DeviceMonitorConfig {
 impl Default for DeviceMonitorConfig {
     fn default() -> Self {
         Self {
-            host: DEFAULT_HOST,
+            host: DEFAULT_HOST.to_string(),
             port: DEFAULT_PORT,
             mqtt_client_id: DEFAULT_MQTT_CLIENT_ID,
             mqtt_source_topic: DEFAULT_MQTT_SOURCE_TOPIC,
@@ -43,6 +43,10 @@ impl Default for DeviceMonitorConfig {
 impl DeviceMonitorConfig {
     pub fn with_port(self, port: u16) -> Self {
         Self { port, ..self }
+    }
+
+    pub fn with_host(self, host: String) -> Self {
+        Self { host, ..self }
     }
 }
 
@@ -63,7 +67,7 @@ impl DeviceMonitor {
         let input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
             .with_qos(QoS::AtMostOnce);
         let mqtt_config = mqtt_channel::Config::new(
-            self.device_monitor_config.host,
+            self.device_monitor_config.host.to_string(),
             self.device_monitor_config.port,
         )
         .with_session_name(self.device_monitor_config.mqtt_client_id)

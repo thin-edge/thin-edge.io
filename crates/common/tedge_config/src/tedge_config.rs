@@ -280,6 +280,31 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<IpAddress> {
+        Ok(self
+            .data
+            .mqtt
+            .bind_address
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_bind_address.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttBindAddressSetting,
+        value: IpAddress,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.bind_address = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.bind_address = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttExternalPortSetting) -> ConfigSettingResult<Port> {
         self.data
@@ -307,7 +332,7 @@ impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<MqttExternalBindAddressSetting> for TEdgeConfig {
-    fn query(&self, _setting: MqttExternalBindAddressSetting) -> ConfigSettingResult<String> {
+    fn query(&self, _setting: MqttExternalBindAddressSetting) -> ConfigSettingResult<IpAddress> {
         self.data
             .mqtt
             .external_bind_address
@@ -320,7 +345,7 @@ impl ConfigSettingAccessor<MqttExternalBindAddressSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: MqttExternalBindAddressSetting,
-        value: String,
+        value: IpAddress,
     ) -> ConfigSettingResult<()> {
         self.data.mqtt.external_bind_address = Some(value);
         Ok(())

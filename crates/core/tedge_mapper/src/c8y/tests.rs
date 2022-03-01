@@ -24,6 +24,7 @@ use tokio::task::JoinHandle;
 use super::converter::{get_child_id_from_topic, CumulocityConverter};
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const MQTT_HOST: &str = "127.0.0.1";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
@@ -796,7 +797,13 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
 
 async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Error> {
     let converter = create_c8y_converter();
-    let mut mapper = create_mapper("c8y-mapper-test", mqtt_port, Box::new(converter)).await?;
+    let mut mapper = create_mapper(
+        "c8y-mapper-test",
+        MQTT_HOST.to_string(),
+        mqtt_port,
+        Box::new(converter),
+    )
+    .await?;
 
     let mapper_task = tokio::spawn(async move {
         let _ = mapper.run().await;

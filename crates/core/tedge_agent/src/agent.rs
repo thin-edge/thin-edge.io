@@ -17,8 +17,9 @@ use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, MqttPortSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathDefaultSetting,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
+    MqttBindAddressSetting, MqttPortSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    TmpPathDefaultSetting,
 };
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
@@ -107,6 +108,7 @@ impl SmAgentConfig {
         let tedge_config = config_repository.load()?;
 
         let mqtt_config = mqtt_channel::Config::default()
+            .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
             .with_port(tedge_config.query(MqttPortSetting)?.into())
             .with_max_packet_size(10 * 1024 * 1024);
 
