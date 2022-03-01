@@ -19,6 +19,7 @@ Then we stop the tedge-mapper-c8y systemctl service
 
 class TedgeMapperC8yThresholdPacketSize(BaseTest):
     def setup(self):
+        super().setup()
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.mosquitto_pub = "/usr/bin/mosquitto_pub"

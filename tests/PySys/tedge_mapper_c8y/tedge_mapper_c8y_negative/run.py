@@ -2,6 +2,8 @@ from pysys.basetest import BaseTest
 
 import time
 
+from environment_c8y import EnvironmentC8y
+
 """
 Validate an invalid JSON message that is published
 on tedge/errors by tedge-mapper c8y
@@ -17,8 +19,9 @@ Then we stop the tedge-mapper-c8y systemctl service
 """
 
 
-class TedgeMapperC8y(BaseTest):
+class TedgeMapperC8y(EnvironmentC8y):
     def setup(self):
+        super().setup()
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 

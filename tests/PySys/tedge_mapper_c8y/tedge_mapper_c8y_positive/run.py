@@ -2,6 +2,10 @@ from pysys.basetest import BaseTest
 
 import time
 import json
+import sys
+
+from environment_c8y import EnvironmentC8y
+#sys.path.append("environments")
 
 """
 Validate a tedge-mapper-c8y message that is published
@@ -18,8 +22,9 @@ Then we stop the tedge-mapper-c8y systemctl service
 """
 
 
-class TedgeMapperC8y(BaseTest):
+class TedgeMapperC8y(EnvironmentC8y):
     def setup(self):
+        super().setup()
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
