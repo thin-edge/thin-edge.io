@@ -3,7 +3,7 @@ name = "tedge_logfile_request_plugin"
 version = "0.5.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
-rust-version = "1.58"
+rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "Thin.edge.io operation plugin for Cumulocity log request"
 
