@@ -1,4 +1,5 @@
-from environments.environment_c8y import EnvironmentC8y
+import os
+from environment_c8y import EnvironmentC8y
 
 """
 Validate command line option help
