@@ -8,7 +8,6 @@
 	</purpose>
   </description>
   <classification>
-	<skipped reason="???"/>
 	<groups inherit="true">
 	  <group></group>
 	</groups>
@@ -23,5 +22,4 @@
 	  <requirement id=""/>
 	</requirements>
   </traceability>
-  <skipped reason="Disabled, see https://cumulocity.atlassian.net/browse/CIT-318"/>
 </pysystest>
