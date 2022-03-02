@@ -61,13 +61,15 @@ class PySysTest(EnvironmentC8y):
         # make a new directory `TEDGE_DOWNLOAD_DIR`
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["mkdir", TEDGE_DOWNLOAD_DIR]
+            arguments=["mkdir", "-p", TEDGE_DOWNLOAD_DIR],
+            stdouterr="mkdir"
         )
 
         # give full permission to `TEDGE_DOWNLOAD_DIR`
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["chmod", "a+rwx", TEDGE_DOWNLOAD_DIR]
+            arguments=["chmod", "a+rwx", TEDGE_DOWNLOAD_DIR],
+            stdouterr="chmod"
         )
 
         # 1. save the current/pre-change setting in /Output
@@ -108,7 +110,8 @@ class PySysTest(EnvironmentC8y):
         # removing tedge dir
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["rmdir", TEDGE_DOWNLOAD_DIR]
+            arguments=["rmdir", TEDGE_DOWNLOAD_DIR],
+            stdouterr="rmdir"
         )
 
         return super().cleanup()
