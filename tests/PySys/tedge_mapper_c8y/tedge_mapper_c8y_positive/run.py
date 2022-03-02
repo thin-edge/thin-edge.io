@@ -5,7 +5,6 @@ import json
 import sys
 
 from environment_c8y import EnvironmentC8y
-#sys.path.append("environments")
 
 """
 Validate a tedge-mapper-c8y message that is published

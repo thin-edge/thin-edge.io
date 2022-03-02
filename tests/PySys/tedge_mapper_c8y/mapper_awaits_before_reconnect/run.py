@@ -1,6 +1,8 @@
 from pysys.basetest import BaseTest
 from datetime import datetime, timedelta
 
+from environment_c8y import EnvironmentC8y
+
 """
 Validate mapper doesn't reconnect too often.
 
@@ -17,7 +19,10 @@ Then we validate output contains no more than 5 error messages
 """
 
 
-class MapperReconnectAwait(BaseTest):
+class MapperReconnectAwait(EnvironmentC8y):
+    def setup(self):
+        super().setup()
+
     def execute(self):
         tedge_mapper = "/usr/bin/tedge_mapper"
         self.sudo = "/usr/bin/sudo"
@@ -61,11 +66,11 @@ class MapperReconnectAwait(BaseTest):
             "tedge_mapper_journal.out",
             condition="<=5",
             abortOnError=True,
-            expr="::mapper: MQTT connection error:",
+            expr="tedge_mapper::core::mapper: MQTT connection error:",
         )
         self.assertLineCount(
             "tedge_mapper_journal.out",
             condition=">=2",
             abortOnError=True,
-            expr="::mapper: MQTT connection error:",
+            expr="tedge_mapper::core::mapper: MQTT connection error:",
         )
