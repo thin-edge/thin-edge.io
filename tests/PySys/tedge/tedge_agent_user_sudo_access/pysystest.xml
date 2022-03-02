@@ -11,7 +11,7 @@
 	<groups inherit="true">
 	  <group></group>
 	</groups>
-	<skipped reason="#955"/>
+	<skipped reason="#955 Observation: Exit code of the apt plugin when called with no arguments"/>
 	<modes inherit="true">
 	</modes>
   </classification>

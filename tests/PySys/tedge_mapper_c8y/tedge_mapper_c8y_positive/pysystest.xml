@@ -10,7 +10,7 @@
 			<![CDATA[ ]]>
 		</purpose>
 	</description>
-	<skipped reason="#958"/>
+	<skipped reason="#958  Observation: Message on tedge/errors is recently missing when we are not connected #958 "/>
 	<classification>
 		<groups inherit="true">
 			<group>
