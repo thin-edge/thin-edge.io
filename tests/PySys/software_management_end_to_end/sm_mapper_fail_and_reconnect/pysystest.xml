@@ -16,7 +16,7 @@
 	</modes>
   </classification>
   <data>
-	<class name="SmMapperC8yReceiveLastMessageOnRestart" module="run"/>
+	<class name="MapperC8yReceiveLastMessageOnRestart" module="run"/>
   </data>
   <traceability>
 	<requirements>

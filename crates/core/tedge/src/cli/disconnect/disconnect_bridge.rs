@@ -1,6 +1,7 @@
 use crate::cli::disconnect::error::*;
 use crate::command::*;
 use crate::system_services::*;
+use std::fmt;
 use std::sync::Arc;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
@@ -22,11 +23,11 @@ impl Cloud {
     }
 }
 
-impl From<Cloud> for String {
-    fn from(val: Cloud) -> Self {
-        match val {
-            Cloud::C8y => "Cumulocity".into(),
-            Cloud::Azure => "Azure".into(),
+impl fmt::Display for Cloud {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Cloud::C8y => write!(f, "Cumulocity"),
+            Cloud::Azure => write!(f, "Azure"),
         }
     }
 }
@@ -43,7 +44,7 @@ pub struct DisconnectBridgeCommand {
 
 impl Command for DisconnectBridgeCommand {
     fn description(&self) -> String {
-        format!("remove the bridge to disconnect {:?} cloud", self.cloud)
+        format!("remove the bridge to disconnect {} cloud", self.cloud)
     }
 
     fn execute(&self) -> anyhow::Result<()> {
@@ -98,7 +99,7 @@ impl DisconnectBridgeCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&self.config_file);
 
-        println!("Removing {:?} bridge.\n", self.cloud);
+        println!("Removing {} bridge.\n", self.cloud);
         match std::fs::remove_file(&bridge_conf_path) {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
@@ -127,7 +128,7 @@ impl DisconnectBridgeCommand {
             .service_manager()
             .restart_service_if_running(SystemService::Mosquitto)?
         {
-            println!("{:?} Bridge successfully disconnected!\n", self.cloud);
+            println!("{} Bridge successfully disconnected!\n", self.cloud);
         }
         Ok(())
     }

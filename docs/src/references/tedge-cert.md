@@ -1,19 +1,18 @@
 # The `tedge cert` command
 
 ```
-tedge-cert 0.5.3
+tedge-cert 
 Create and manage device certificate
 
 USAGE:
     tedge cert <SUBCOMMAND>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help    Print help information
 
 SUBCOMMANDS:
     create    Create a self-signed device certificate
-    help      Prints this message or the help of the given subcommand(s)
+    help      Print this message or the help of the given subcommand(s)
     remove    Remove the device certificate
     show      Show the device certificate, if any
     upload    Upload root certificate
@@ -22,66 +21,56 @@ SUBCOMMANDS:
 ## Create
 
 ```
-tedge-cert-create 0.5.3
+tedge-cert-create 
 Create a self-signed device certificate
 
 USAGE:
-    tedge cert create --device-id <id>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    tedge cert create --device-id <ID>
 
 OPTIONS:
-        --device-id <id>    The device identifier to be used as the common name for the certificate
+        --device-id <ID>    The device identifier to be used as the common name for the certificate
+    -h, --help              Print help information
 ```
 
 ## Show
 
 ```
-tedge-cert-show 0.5.3
+tedge-cert-show 
 Show the device certificate, if any
 
 USAGE:
     tedge cert show
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help    Print help information
 ```
 
 ## Remove
 
 ```
-tedge-cert-remove 0.5.3
+tedge-cert-remove 
 Remove the device certificate
 
 USAGE:
     tedge cert remove
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help    Print help information
 ```
 
 ## Upload
 
 ```
-tedge-cert-upload 0.5.3
+tedge-cert-upload 
 Upload root certificate
 
 USAGE:
     tedge cert upload <SUBCOMMAND>
 
-FLAGS:
-    -h, --help       
-            Prints help information
-
-    -V, --version    
-            Prints version information
-
+OPTIONS:
+    -h, --help    Print help information
 
 SUBCOMMANDS:
     c8y     Upload root certificate to Cumulocity
-    help    Prints this message or the help of the given subcommand(s)
+    help    Print this message or the help of the given subcommand(s)
 ```
