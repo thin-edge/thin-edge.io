@@ -51,14 +51,26 @@ class TedgeMapperC8yThresholdPacketSize(EnvironmentC8y):
         # Create a big file using the `dd` command
         msg = self.startProcess(
             command=self.sudo,
-            arguments=["dd", "if=/dev/zero", "of=/tmp/big_message.txt", "bs=10", "count=1", "seek=2048"],
+            arguments=[
+                "dd",
+                "if=/dev/zero",
+                "of=/tmp/big_message.txt",
+                "bs=10",
+                "count=1",
+                "seek=2048",
+            ],
             stdouterr="tedge_msg",
         )
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.mosquitto_pub, "-t", "tedge/measurements",
-                      "-f", "/tmp/big_message.txt"],
+            arguments=[
+                self.mosquitto_pub,
+                "-t",
+                "tedge/measurements",
+                "-f",
+                "/tmp/big_message.txt",
+            ],
             stdouterr="tedge_pub",
         )
 
@@ -71,7 +83,12 @@ class TedgeMapperC8yThresholdPacketSize(EnvironmentC8y):
         )
 
     def validate(self):
-        self.assertGrep('tedge_sub.out', "The size of the message received on tedge/measurements is 20489 which is greater than the threshold size of 16384", contains=True)
+        self.assertGrep(
+            "tedge_sub.out",
+            "The size of the message received on tedge/measurements is 20489 "
+            + "which is greater than the threshold size of 16384",
+            contains=True,
+        )
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")
