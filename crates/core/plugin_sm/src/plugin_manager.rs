@@ -1,4 +1,4 @@
-use crate::plugin::{self, Plugin, LIST};
+use crate::plugin::{Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
 use agent_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,

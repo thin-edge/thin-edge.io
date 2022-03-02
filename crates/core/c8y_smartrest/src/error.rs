@@ -1,5 +1,5 @@
 use agent_interface::SoftwareUpdateResponse;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {

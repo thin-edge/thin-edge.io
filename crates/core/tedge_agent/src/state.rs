@@ -31,7 +31,7 @@ impl StateRepository for AgentStateRepository {
 
             Err(err) => {
                 error!("Error reading: {:?}", &self.state_repo_path);
-                return Err(StateError::FromIo(err));
+                Err(StateError::FromIo(err))
             }
         }
     }
