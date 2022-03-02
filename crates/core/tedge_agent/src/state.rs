@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, str::FromStr};
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
+use tracing::error;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
@@ -28,7 +29,10 @@ impl StateRepository for AgentStateRepository {
         match fs::read(&self.state_repo_path).await {
             Ok(bytes) => Ok(toml::from_slice::<State>(bytes.as_slice())?),
 
-            Err(err) => Err(StateError::FromIo(err)),
+            Err(err) => {
+                error!("Error reading: {:?}", &self.state_repo_path);
+                return Err(StateError::FromIo(err));
+            }
         }
     }
 

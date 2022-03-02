@@ -1,4 +1,4 @@
-use crate::plugin::{Plugin, LIST};
+use crate::plugin::{self, Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
 use agent_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
@@ -96,7 +96,14 @@ impl ExternalPlugins {
             default_plugin_type: default_plugin_type.clone(),
             sudo,
         };
-        let () = plugins.load()?;
+        if let Err(e) = plugins.load() {
+            warn!(
+                "Reading the plugins directory: failed with: {:?}: {:?}",
+                e.kind(),
+                &plugins.plugin_dir
+            );
+            return Ok(plugins);
+        }
 
         match default_plugin_type {
             Some(default_plugin_type) => {
@@ -276,4 +283,12 @@ impl ExternalPlugins {
             None
         }
     }
+}
+
+#[test]
+fn test_no_sm_plugin_dir() {
+    let plugin_dir = tempfile::TempDir::new().unwrap();
+
+    let actual = ExternalPlugins::open(plugin_dir.path(), None, None);
+    assert!(actual.is_ok());
 }

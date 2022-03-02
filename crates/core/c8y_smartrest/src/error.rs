@@ -1,5 +1,5 @@
 use agent_interface::SoftwareUpdateResponse;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
@@ -43,6 +43,9 @@ pub enum SmartRestDeserializerError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationsError {
+    #[error("Failed to read directory: {dir}")]
+    ReadDirError { dir: PathBuf },
+
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
