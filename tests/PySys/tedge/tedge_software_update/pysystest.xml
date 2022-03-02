@@ -12,7 +12,6 @@
 	  <group></group>
 	</groups>
 	<modes inherit="true">
-	<skipped reason="instable"/>
 	</modes>
   </classification>
   <data>

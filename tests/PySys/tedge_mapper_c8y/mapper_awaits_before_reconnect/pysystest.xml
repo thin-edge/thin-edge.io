@@ -11,7 +11,6 @@
 	<groups inherit="true">
 	  <group></group>
 	</groups>
-	<skipped reason="#958 Observation: Message on tedge/errors is recently missing when we are not connected"/>
 	<modes inherit="true">
 	</modes>
   </classification>
