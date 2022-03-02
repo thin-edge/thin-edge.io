@@ -93,8 +93,8 @@ class PySysTest(EnvironmentC8y):
     def validate(self):
         self.assertGrep("tedge_config_get_new_value.out", f'{TEDGE_DOWNLOAD_DIR}', contains=True)
 
-        with open("Output/linux/tedge_config_get_original.out", "r") as handle:
     def mycleanup(self):
+        with open(os.path.join(self.output, "tedge_config_get_original.out"), "r") as handle:
             original_value = handle.read().strip()
 
         # reverting to original value
