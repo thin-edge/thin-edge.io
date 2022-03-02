@@ -1,7 +1,7 @@
 # The `tedge` command
 
 ```
-tedge 0.5.3
+tedge 0.5.4
 tedge is the cli tool for thin-edge.io
 
 USAGE:
