@@ -1,4 +1,5 @@
-from environments.environment_c8y import EnvironmentC8y
+import os
+from environment_c8y import EnvironmentC8y
 
 """
 TODO : Update this tests docu
@@ -7,7 +8,7 @@ TODO : Update this tests docu
 TEDGE_DOWNLOAD_DIR = "/tedge_download_dir"
 TEDGE_DOWNLOAD_PATH = "tmp.path"
 TOPIC = 'tedge/commands/req/software/update'
-PAYLOAD = '{"id":"1234","updateList":[{"type":"apt","modules":[{"name":"rolldice","version":"::apt","url":"{}/inventory/binaries/11643549","action":"install"}]}]}'
+PAYLOAD = '{"id":"1234","updateList":[{"type":"apt","modules":[{"name":"rolldice","version":"::apt","url":"%s/inventory/binaries/11643549","action":"install"}]}]}'
 
 
 class PySysTest(EnvironmentC8y):
@@ -54,13 +55,15 @@ class PySysTest(EnvironmentC8y):
         # make a new directory `TEDGE_DOWNLOAD_DIR`
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["mkdir", TEDGE_DOWNLOAD_DIR]
+            arguments=["mkdir", "-p", TEDGE_DOWNLOAD_DIR],
+            stdouterr="mkdir"
         )
 
         # give full permission to `TEDGE_DOWNLOAD_DIR`
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["chmod", "a+rwx", TEDGE_DOWNLOAD_DIR]
+            arguments=["chmod", "a+rwx", TEDGE_DOWNLOAD_DIR],
+            stdouterr="chmod"
         )
 
         # 1. save the current/pre-change setting in /Output
@@ -76,7 +79,7 @@ class PySysTest(EnvironmentC8y):
         # 4. trigger rolldice download
         _ = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD.format(self.project.c8yurl)],
+            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD%self.project.c8yurl ],
             stdouterr="rolldice_download",
             expectedExitStatus="==0",
         )
@@ -84,9 +87,8 @@ class PySysTest(EnvironmentC8y):
     def validate(self):
         self.assertGrep("tedge_config_get_new_value.out", f'{TEDGE_DOWNLOAD_DIR}', contains=True)
 
-    def cleanup(self):
-
-        with open("Output/linux/tedge_config_get_original.out", "r") as handle:
+    def mycleanup(self):
+        with open(os.path.join(self.output, "tedge_config_get_original.out"), "r") as handle:
             original_value = handle.read().strip()
 
         # reverting to original value
@@ -101,7 +103,7 @@ class PySysTest(EnvironmentC8y):
         # removing tedge dir
         _ = self.startProcess(
             command=self.sudo,
-            arguments=["rmdir", TEDGE_DOWNLOAD_DIR]
+            arguments=["rmdir", TEDGE_DOWNLOAD_DIR],
+            stdouterr="rmdir"
         )
 
-        return super().cleanup()
