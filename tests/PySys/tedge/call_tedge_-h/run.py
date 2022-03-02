@@ -9,7 +9,7 @@ Validate command line option -h
 Given a running system
 When we call tedge -h
 Then we find the string USAGE: in the output
-Then we find the string FLAGS: in the output
+Then we find the string OPTIONS: in the output
 Then we find the string SUBCOMMANDS: in the output
 """
 
