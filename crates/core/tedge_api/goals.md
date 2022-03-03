@@ -64,7 +64,7 @@ Here is an fictuous configuration that would connect the device to the acme clou
 kind = "acme_mapper"
 [plugins.acme.configuration]
 tenant = "coyote"
-software_mgmt_plugin = "pacman" # Here we tell the azure_mapper plugin where to
+software_mgmt_plugin = "pacman" # Here we tell the acme_mapper plugin where to
                                 # send software management requests
 service_mgmt_plugin = "systemd"
 
