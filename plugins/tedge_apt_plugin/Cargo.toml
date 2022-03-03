@@ -1,6 +1,6 @@
 [package]
 name = "tedge_apt_plugin"
-version = "0.5.3"
+version = "0.5.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -27,3 +27,7 @@ reqwest = { version = "0.11", default-features = false, features = [ "blocking",
 serial_test = "0.5"
 tedge_utils = { path = "../../crates/common/tedge_utils" }
 test-case = "1.2"
+
+[features]
+requires-sudo = []
+integration-test = []
