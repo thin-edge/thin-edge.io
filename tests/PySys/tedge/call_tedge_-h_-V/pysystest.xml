@@ -22,5 +22,4 @@
 	  <requirement id=""/>
 	</requirements>
   </traceability>
-  <skipped reason="Disabled, see https://cumulocity.atlassian.net/browse/CIT-318"/>
 </pysystest>
