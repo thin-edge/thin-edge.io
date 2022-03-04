@@ -2,7 +2,12 @@ import os
 from environment_c8y import EnvironmentC8y
 
 """
-TODO : Update this tests docu
+Test if alternate download path setting works
+
+When we configure an alternate download path
+When we trigger a software installation with a custom binary
+Then we find the newly downloaded binary in the alternate path
+Then we find the string of the new location in the output of tedge config
 """
 
 TEDGE_DOWNLOAD_DIR = "/tedge_download_dir"
