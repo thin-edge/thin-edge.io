@@ -4,22 +4,14 @@
 //!     - Its purpose is to simply instantiate your plugins as needed with custom logic if required
 //! 2. Create your plugin struct that implements `Plugin`
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
 use crate::{errors::PluginError, messages::Message};
-
-type ReplySender = tokio::sync::oneshot::Sender<Message>;
-type ReplyReceiver = tokio::sync::oneshot::Receiver<Message>;
 
 #[derive(Clone)]
 pub struct Comms {
     plugin_name: String,
     sender: tokio::sync::mpsc::Sender<Message>,
-    replymap: Arc<RwLock<HashMap<uuid::Uuid, ReplySender>>>,
 }
 
 impl std::fmt::Debug for Comms {
@@ -35,7 +27,6 @@ impl Comms {
         Self {
             plugin_name,
             sender,
-            replymap: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -50,36 +41,6 @@ impl Comms {
         self.sender.send(msg.into()).await?;
 
         Ok(())
-    }
-
-    pub async fn send_and_wait_for_reply<T: Into<Message>>(
-        &self,
-        msg: T,
-    ) -> Result<tokio::sync::oneshot::Receiver<Message>, PluginError> {
-        let msg = msg.into();
-        let mut map = self.replymap.write().await;
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        map.insert(msg.id().clone(), tx);
-        self.send(msg).await.map(|_| rx)
-    }
-
-    /// Process a message that could be a reply
-    ///
-    /// # Returns
-    ///
-    /// * Ok(Some(Message)) if the message was not handled
-    /// * Ok(None) if the message was handled
-    /// * Err(_) in case of error
-    ///
-    pub async fn handle_reply(&self, msg: Message) -> Result<Option<Message>, PluginError> {
-        if let Some(sender) = self.replymap.write().await.remove(msg.id()) {
-            match sender.send(msg) {
-                Ok(()) => Ok(None),
-                Err(msg) => Ok(Some(msg)), // TODO: Is this the right way?
-            }
-        } else {
-            Ok(Some(msg))
-        }
     }
 }
 
