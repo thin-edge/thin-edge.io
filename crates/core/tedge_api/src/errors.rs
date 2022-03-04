@@ -7,5 +7,5 @@ pub enum PluginError {
     #[error("An error in the configuration was found")]
     Configuration(#[from] toml::de::Error),
     #[error(transparent)]
-    Custom(#[from] anyhow::Error)
+    Custom(#[from] anyhow::Error),
 }

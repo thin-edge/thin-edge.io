@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub mod plugins;
-pub use plugins::{Plugin, PluginBuilder, PluginConfiguration, Comms};
+pub use plugins::{Comms, Plugin, PluginBuilder, PluginConfiguration};
 
 pub mod address;
 pub use address::Address;

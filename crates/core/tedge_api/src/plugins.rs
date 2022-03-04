@@ -40,7 +40,9 @@ impl Comms {
     }
 
     pub fn new_message(&self, destination: crate::Address, kind: crate::MessageKind) -> Message {
-        let addr = crate::Address::new(crate::address::EndpointKind::Plugin { id: self.plugin_name.clone() });
+        let addr = crate::Address::new(crate::address::EndpointKind::Plugin {
+            id: self.plugin_name.clone(),
+        });
         Message::new(addr, destination, kind)
     }
 
@@ -50,13 +52,15 @@ impl Comms {
         Ok(())
     }
 
-    pub async fn send_and_wait_for_reply<T: Into<Message>>(&self, msg: T) -> Result<tokio::sync::oneshot::Receiver<Message>, PluginError> {
+    pub async fn send_and_wait_for_reply<T: Into<Message>>(
+        &self,
+        msg: T,
+    ) -> Result<tokio::sync::oneshot::Receiver<Message>, PluginError> {
         let msg = msg.into();
         let mut map = self.replymap.write().await;
         let (tx, rx) = tokio::sync::oneshot::channel();
         map.insert(msg.id().clone(), tx);
         self.send(msg).await.map(|_| rx)
-
     }
 
     /// Process a message that could be a reply
