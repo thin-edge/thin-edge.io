@@ -58,12 +58,10 @@ impl Plugin for HeartbeatService {
     async fn handle_message(&self, message: Message) -> Result<(), PluginError> {
         match message.kind() {
             MessageKind::CheckReadyness => {
-                let msg = Message::new(
-                    message.origin().clone(),
-                    MessageKind::SignalPluginState {
-                        state: String::from("Ok"),
-                    },
-                );
+                let kind = MessageKind::SignalPluginState {
+                    state: String::from("Ok"),
+                };
+                let msg = self.comms.new_message(message.origin().clone(), kind);
                 self.comms.send(msg).await?;
             }
             msg => println!("Does not handle: {:#?}", msg),
@@ -92,15 +90,17 @@ async fn main() {
     )
     .unwrap();
 
-    let mut heartbeat = hsb.instantiate(config, comms).await.unwrap();
+    let mut heartbeat = hsb.instantiate(config, comms.clone()).await.unwrap();
 
     heartbeat.setup().await.unwrap();
 
     let handle = tokio::task::spawn(async move {
         let hb = heartbeat;
 
-        hb.handle_message(Message::new(
-            Address::new(EndpointKind::Core),
+        hb.handle_message(comms.new_message(
+            Address::new(EndpointKind::Plugin {
+                id: "heartbeat-service".to_string(),
+            }),
             MessageKind::CheckReadyness,
         ))
         .await
