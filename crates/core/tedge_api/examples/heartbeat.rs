@@ -58,12 +58,10 @@ impl Plugin for HeartbeatService {
     async fn handle_message(&self, message: Message) -> Result<(), PluginError> {
         match message.kind() {
             MessageKind::CheckReadyness => {
-                let msg = Message::new(
-                    message.origin().clone(),
-                    MessageKind::SignalPluginState {
-                        state: String::from("Ok"),
-                    },
-                );
+                let kind = MessageKind::SignalPluginState {
+                    state: String::from("Ok"),
+                };
+                let msg = self.comms.new_message(message.origin().clone(), kind);
                 self.comms.send(msg).await?;
             }
             msg => println!("Does not handle: {:#?}", msg),
