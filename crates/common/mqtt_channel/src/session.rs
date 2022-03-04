@@ -40,6 +40,8 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
                 if Connection::pause_on_error(&err) {
                     Connection::do_pause().await;
                 }
+                eprintln!("Connection Error {}", err.to_string());
+                break;
             }
             _ => (),
         }
@@ -81,6 +83,8 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
                 if Connection::pause_on_error(&err) {
                     Connection::do_pause().await;
                 }
+                eprintln!("Connection Error {}", err.to_string());
+                break;
             }
             _ => (),
         }
