@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 use futures::future::FutureExt;
 use futures::select;
 use futures_timer::Delay;
