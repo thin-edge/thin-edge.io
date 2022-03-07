@@ -1,4 +1,4 @@
-use crate::{Config, Connection, MqttError};
+use crate::{Config, MqttError};
 use rumqttc::{AsyncClient, Event, Packet};
 
 /// Create a persistent session on the MQTT server `config.host`.
@@ -37,9 +37,8 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                if Connection::pause_on_error(&err) {
-                    Connection::do_pause().await;
-                }
+                eprintln!("Connection Error {}", err.to_string());
+                break;
             }
             _ => (),
         }
@@ -78,9 +77,8 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                if Connection::pause_on_error(&err) {
-                    Connection::do_pause().await;
-                }
+                eprintln!("Connection Error {}", err.to_string());
+                break;
             }
             _ => (),
         }
