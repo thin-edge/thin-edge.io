@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 mod download;
 mod error;
 
