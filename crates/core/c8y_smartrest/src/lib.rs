@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 pub mod alarm;
 pub mod error;
 pub mod operations;
