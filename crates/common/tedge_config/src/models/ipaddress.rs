@@ -51,30 +51,36 @@ impl From<IpAddress> for IpAddr {
 }
 
 #[cfg(test)]
-use assert_matches::*;
-use std::net::Ipv6Addr;
+mod tests {
+    use super::InvalidIpAddress;
+    use super::IpAddress;
+    use assert_matches::*;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::Ipv6Addr;
 
-#[test]
-fn conversion_from_valid_ipv4_succeeds() {
-    let _loh: IpAddress = IpAddress::try_from("127.0.0.1".to_string()).unwrap();
-    assert_matches!(Ipv4Addr::LOCALHOST, _loh);
-}
+    #[test]
+    fn conversion_from_valid_ipv4_succeeds() {
+        let _loh: IpAddress = IpAddress::try_from("127.0.0.1".to_string()).unwrap();
+        assert_matches!(Ipv4Addr::LOCALHOST, _loh);
+    }
 
-#[test]
-fn conversion_from_valid_ipv6_succeeds() {
-    let _loh: IpAddress = IpAddress::try_from("::1".to_string()).unwrap();
-    assert_matches!(Ipv6Addr::LOCALHOST, _loh);
-}
+    #[test]
+    fn conversion_from_valid_ipv6_succeeds() {
+        let _loh: IpAddress = IpAddress::try_from("::1".to_string()).unwrap();
+        assert_matches!(Ipv6Addr::LOCALHOST, _loh);
+    }
 
-#[test]
-fn conversion_from_longer_integer_fails() {
-    assert_matches!(
-        IpAddress::try_from("66000".to_string()),
-        Err(InvalidIpAddress { .. })
-    );
-}
+    #[test]
+    fn conversion_from_longer_integer_fails() {
+        assert_matches!(
+            IpAddress::try_from("66000".to_string()),
+            Err(InvalidIpAddress { .. })
+        );
+    }
 
-#[test]
-fn conversion_from_ip_to_string() {
-    assert_matches!(TryInto::<String>::try_into(IpAddress(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)))), Ok(ip_str) if ip_str == "::1");
+    #[test]
+    fn conversion_from_ip_to_string() {
+        assert_matches!(TryInto::<String>::try_into(IpAddress(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)))), Ok(ip_str) if ip_str == "::1");
+    }
 }
