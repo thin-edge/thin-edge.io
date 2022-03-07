@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::net::IpAddr;
+use std::net::Ipv4Addr;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct IpAddress(pub IpAddr);
@@ -51,7 +52,6 @@ impl From<IpAddress> for IpAddr {
 
 #[cfg(test)]
 use assert_matches::*;
-use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 
 #[test]
