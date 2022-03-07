@@ -190,6 +190,7 @@ mod tests {
 
     struct TestOperations {
         temp_dir: tempfile::TempDir,
+        #[allow(dead_code)]
         operations: Vec<PathBuf>,
     }
 
