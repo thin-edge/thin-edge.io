@@ -5,11 +5,13 @@ use agent_interface::{
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use async_trait::async_trait;
-use c8y_api::{http_proxy::C8YHttpProxy, json_c8y::C8yUpdateSoftwareListResponse};
+use c8y_api::{
+    http_proxy::C8YHttpProxy,
+    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
+};
 use c8y_smartrest::{
     alarm,
     error::SmartRestDeserializerError,
-    event::{self},
     operations::Operations,
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
     smartrest_serializer::{
@@ -29,7 +31,6 @@ use std::{
     process::Stdio,
 };
 use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tracing::{debug, info, log::error};
 
 use super::{
@@ -47,6 +48,9 @@ const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
+const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
+
+const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 
 #[derive(Debug)]
 pub struct CumulocityConverter<Proxy>
@@ -150,42 +154,37 @@ where
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+        let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
-        // If the message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
-        if input.payload_bytes().len() < self.size_threshold.0 {
-            let smartrest_alarm = event::serialize_event(tedge_event)?;
+        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+        let message = if c8y_event.extras.is_empty() {
+            let smartrest_event = Self::serialize_to_smartrest(&c8y_event);
             let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
 
-            Ok(vec![Message::new(&smartrest_topic, smartrest_alarm)])
+            Message::new(&smartrest_topic, smartrest_event)
+        } else {
+            // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+            let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+            let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+
+            Message::new(&json_mqtt_topic, cumulocity_event_json)
+        };
+
+        // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
+        if input.payload_bytes().len() < self.size_threshold.0 {
+            Ok(vec![message])
         } else {
             // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
-            let (event_text, event_time) = match tedge_event.data {
-                None => {
-                    let message = tedge_event.name.clone();
-                    let time = OffsetDateTime::now_utc().format(&Rfc3339)?;
-
-                    (message, time)
-                }
-                Some(event_data) => {
-                    let message = event_data.text.unwrap_or_else(|| tedge_event.name.clone());
-                    let time = event_data.time.map_or_else(
-                        || OffsetDateTime::now_utc().format(&Rfc3339),
-                        |timestamp| timestamp.format(&Rfc3339),
-                    )?;
-                    (message, time)
-                }
-            };
-
-            let _ = self
-                .http_proxy
-                .send_event(
-                    tedge_event.name.as_str(),
-                    event_text.as_str(),
-                    Some(event_time),
-                )
-                .await?;
+            let _ = self.http_proxy.send_event(c8y_event).await?;
             Ok(vec![])
         }
+    }
+
+    fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> String {
+        format!(
+            "{},{},\"{}\",{}",
+            CREATE_EVENT_SMARTREST_CODE, c8y_event.event_type, c8y_event.text, c8y_event.time
+        )
     }
 }
 

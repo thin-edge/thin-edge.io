@@ -362,6 +362,7 @@ version = "0.5.4"
 dependencies = [
  "agent_interface",
  "anyhow",
+ "assert_matches",
  "async-trait",
  "c8y_smartrest",
  "clock",

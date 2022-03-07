@@ -3,10 +3,11 @@ use crate::core::{
     size_threshold::SizeThreshold,
 };
 use anyhow::Result;
+use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
 use c8y_api::{
     http_proxy::{C8YHttpProxy, MockC8YHttpProxy},
-    json_c8y::C8yUpdateSoftwareListResponse,
+    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
 use c8y_smartrest::{
     error::SMCumulocityMapperError, operations::Operations,
@@ -681,7 +682,7 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn convert_event() -> Result<()> {
+async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let size_threshold = SizeThreshold(16 * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test_type");
@@ -704,9 +705,48 @@ async fn convert_event() -> Result<()> {
     assert_eq!(converted_events.len(), 1);
     let converted_event = converted_events.get(0).unwrap();
     assert_eq!(converted_event.topic.name, "c8y/s/us");
+    dbg!(converted_event.payload_str()?);
     assert!(converted_event
         .payload_str()?
-        .starts_with("400,click_event"));
+        .starts_with(r#"400,click_event,"Someone clicked","#));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
+    let size_threshold = SizeThreshold(16 * 1024);
+    let device_name = String::from("test");
+    let device_type = String::from("test_type");
+    let operations = Operations::default();
+    let http_proxy = MockC8YHttpProxy::new();
+
+    let mut converter = CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    );
+
+    let event_topic = "tedge/events/click_event";
+    let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
+    let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+    let converted_events = converter.convert(&event_message).await;
+    assert_eq!(converted_events.len(), 1);
+    let converted_event = converted_events.get(0).unwrap();
+    assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+    let converted_c8y_json = json!({
+        "type": "click_event",
+        "text": "tick",
+        "foo": "bar",
+    });
+    assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+    assert_json_include!(
+        actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str()?)?,
+        expected: converted_c8y_json
+    );
 
     Ok(())
 }
@@ -722,12 +762,8 @@ async fn test_convert_big_event() {
     let mut http_proxy = MockC8YHttpProxy::new();
     http_proxy
         .expect_send_event()
-        .with(
-            predicate::eq("click_event"),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, _, _| Ok("123".into()));
+        .with(predicate::always())
+        .returning(|_| Ok("123".into()));
 
     let mut converter = CumulocityConverter::new(
         size_threshold,
@@ -787,9 +823,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
 
     async fn send_event(
         &mut self,
-        _event_type: &str,
-        _text: &str,
-        _time: Option<String>,
+        _c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("123".into())
     }

@@ -17,7 +17,7 @@ use tracing::{info, info_span, Instrument};
 use super::topic::C8yTopic;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
-const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16 * 1024;
+const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 
 pub struct CumulocityMapper {}
 
