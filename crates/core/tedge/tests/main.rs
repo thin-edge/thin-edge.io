@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 mod os_related;
 
 mod tests {
