@@ -235,7 +235,14 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
 
 fn main() {
     // On usage error, the process exits with a status code of 1
-    let apt = AptCli::parse();
+
+    let apt = match AptCli::try_parse() {
+        Ok(aptcli) => aptcli,
+        Err(_e) => {
+            // re-write the clap exit_status from 2 to 1, if parse fails
+            std::process::exit(1)
+        }
+    };
 
     match run(apt.operation) {
         Ok(status) if status.success() => {
