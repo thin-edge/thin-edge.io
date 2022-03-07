@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 use std::{fmt, path::PathBuf};
 
 use crate::{
