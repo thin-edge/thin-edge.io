@@ -12,6 +12,7 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting,
     MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
 };
+use tedge_utils::file::*;
 use tracing::{info, info_span, Instrument};
 
 use super::topic::C8yTopic;
@@ -39,8 +40,9 @@ impl CumulocityMapper {
         Ok(topic_filter)
     }
 
-    pub async fn init_session(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper session");
+    pub async fn init(&mut self, mapper_name: &str) -> Result<(), anyhow::Error> {
+        create_directories()?;
+        info!("Initialize tedge mapper {}", mapper_name);
         mqtt_channel::init_session(&self.get_mqtt_config()?).await?;
         Ok(())
     }
@@ -100,4 +102,16 @@ impl TEdgeComponent for CumulocityMapper {
 
         Ok(())
     }
+}
+
+fn create_directories() -> Result<(), anyhow::Error> {
+    create_directory_with_user_group("tedge-mapper", vec!["/etc/tedge/operations/c8y"])?;
+    create_file_with_user_group(
+        "tedge-mapper",
+        vec![
+            "/etc/tedge/operations/c8y/c8y_SoftwareUpdate",
+            "/etc/tedge/operations/c8y/c8y_Restart",
+        ],
+    )?;
+    Ok(())
 }

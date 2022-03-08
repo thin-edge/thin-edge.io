@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::{AzureMapperTimestamp, MqttBindAddressSetting, TEdgeConfig};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting};
-use tracing::{info_span, Instrument};
+use tedge_utils::file::create_directory_with_user_group;
+use tracing::{info, info_span, Instrument};
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -16,6 +17,12 @@ pub struct AzureMapper {}
 impl AzureMapper {
     pub fn new() -> AzureMapper {
         AzureMapper {}
+    }
+
+    pub async fn init(&mut self, mapper_name: &str) -> Result<(), anyhow::Error> {
+        create_directory_with_user_group("tedge-mapper", vec!["/etc/tedge/operations/az"])?;
+        info!("Initialize tedge mapper {} session", mapper_name);
+        Ok(())
     }
 }
 

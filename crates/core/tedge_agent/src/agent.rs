@@ -21,6 +21,7 @@ use tedge_config::{
     MqttBindAddressSetting, MqttPortSetting, RunPathDefaultSetting, SoftwarePluginDefaultSetting,
     TEdgeConfigLocation, TmpPathDefaultSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
+use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -207,9 +208,14 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn init_session(&mut self) -> Result<(), AgentError> {
+    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
+        create_directory_with_user_group(
+            "tedge-agent",
+            vec!["/etc/tedge/.agent", "/var/log/tedge/agent"],
+        )?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
+
         Ok(())
     }
 

@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use tedge_config::{ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig};
-use tracing::{info_span, Instrument};
+use tracing::{info, info_span, Instrument};
 
 const APP_NAME: &str = "tedge-mapper-collectd";
 
@@ -13,6 +13,11 @@ pub struct CollectdMapper {}
 impl CollectdMapper {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub async fn init(&mut self, mapper_name: &str) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper {} session", mapper_name);
+        Ok(())
     }
 }
 

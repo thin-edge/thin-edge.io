@@ -13,14 +13,19 @@ mod mqtt;
 #[clap(
     name = clap::crate_name!(),
     version = clap::crate_version!(),
-    about = clap::crate_description!()
+    about = clap::crate_description!(),
+    arg_required_else_help(true)
 )]
+
 pub struct Opt {
-    #[clap(subcommand)]
-    pub tedge: TEdgeOpt,
+    #[clap(short, long)]
+    pub init: bool,
 
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     pub config_dir: PathBuf,
+
+    #[clap(subcommand)]
+    pub tedge: Option<TEdgeOpt>,
 }
 
 #[derive(clap::Subcommand, Debug)]
