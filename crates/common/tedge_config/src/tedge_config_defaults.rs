@@ -7,6 +7,8 @@ use std::path::Path;
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
 const DEFAULT_TMP_PATH: &str = "/tmp";
+pub const DEFAULT_LOG_PATH: &str = "/var/log";
+pub const DEFAULT_RUN_PATH: &str = "/run";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
@@ -44,6 +46,12 @@ pub struct TEdgeConfigDefaults {
     /// Default tmp path
     pub default_tmp_path: FilePath,
 
+    /// Default log path
+    pub default_logs_path: FilePath,
+
+    /// Default run path
+    pub default_run_path: FilePath,
+
     /// Default device type
     pub default_device_type: String,
 
@@ -55,6 +63,8 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
     fn from(config_location: &TEdgeConfigLocation) -> Self {
         let system_cert_path = Path::new(DEFAULT_ETC_PATH).join("ssl").join("certs");
         let tmp_path = Path::new(DEFAULT_TMP_PATH);
+        let logs_path = Path::new(DEFAULT_LOG_PATH);
+        let run_path = Path::new(DEFAULT_RUN_PATH);
         Self {
             default_device_cert_path: config_location
                 .tedge_config_root_path()
@@ -71,6 +81,8 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: tmp_path.into(),
+            default_logs_path: logs_path.into(),
+            default_run_path: run_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
         }
@@ -96,6 +108,8 @@ fn test_from_tedge_config_location() {
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
             default_tmp_path: FilePath::from("/tmp"),
+            default_logs_path: FilePath::from("/var/log"),
+            default_run_path: FilePath::from("/run"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
         }

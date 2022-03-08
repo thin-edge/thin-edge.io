@@ -84,7 +84,10 @@ async fn main() -> anyhow::Result<()> {
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper.config_dir);
     let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
     // Run only one instance of a mapper
-    let _flock = check_another_instance_is_not_running(&mapper.name.to_string())?;
+    let _flock = check_another_instance_is_not_running(
+        &mapper.name.to_string(),
+        &config.query(RunPathDefaultSetting)?.into(),
+    )?;
 
     if mapper.init {
         let mut mapper = CumulocityMapper::new();

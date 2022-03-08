@@ -44,3 +44,9 @@ impl std::fmt::Display for FilePath {
         write!(f, "{}", self.0.display())
     }
 }
+
+impl Into<PathBuf> for FilePath {
+    fn into(self) -> PathBuf {
+        PathBuf::from(self.0)
+    }
+}
