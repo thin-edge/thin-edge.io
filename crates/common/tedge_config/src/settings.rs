@@ -300,3 +300,27 @@ impl ConfigSetting for TmpPathDefaultSetting {
 
     type Value = FilePath;
 }
+
+pub struct LogPathDefaultSetting;
+
+impl ConfigSetting for LogPathDefaultSetting {
+    const KEY: &'static str = "logs.path";
+
+    const DESCRIPTION: &'static str =
+        concat!("The default path to be used for logs", "Example: /var/log");
+
+    type Value = FilePath;
+}
+
+pub struct RunPathDefaultSetting;
+
+impl ConfigSetting for RunPathDefaultSetting {
+    const KEY: &'static str = "run.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The default path to be used for runtime information",
+        "Example: /run"
+    );
+
+    type Value = FilePath;
+}

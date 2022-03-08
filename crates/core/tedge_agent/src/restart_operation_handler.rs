@@ -1,10 +1,16 @@
 pub mod restart_operation {
 
     use crate::error::AgentError;
-    use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
+    use std::{
+        fs::File,
+        fs::OpenOptions,
+        io::Read,
+        io::Write,
+        path::{Path, PathBuf},
+    };
     use time::OffsetDateTime;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
     /// creates an empty file in /run
@@ -14,8 +20,9 @@ pub mod restart_operation {
     /// ```
     /// let () = RestartOperationHelper::create_slash_run_file()?;
     /// ```
-    pub fn create_slash_run_file() -> Result<(), AgentError> {
-        let path = Path::new(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+    pub fn create_slash_run_file(run_dir: &PathBuf) -> Result<(), AgentError> {
+        let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+        let path = Path::new(path);
 
         let mut file = match OpenOptions::new()
             .create(true)
@@ -33,8 +40,9 @@ pub mod restart_operation {
         Ok(())
     }
 
-    pub fn slash_run_file_exists() -> bool {
-        std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART.to_string()).exists()
+    pub fn slash_run_file_exists(run_dir: &PathBuf) -> bool {
+        let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+        std::path::Path::new(path).exists()
     }
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
@@ -92,10 +100,10 @@ pub mod restart_operation {
     }
 
     /// checks if system rebooted by comparing dt of tedge_agent_restart with dt of system restart.
-    pub fn has_rebooted() -> Result<bool, AgentError> {
+    pub fn has_rebooted(run_dir: &PathBuf) -> Result<bool, AgentError> {
         // there is no slash run file after the reboot, so we assume success.
         // this is true for most of the cases as "/run/" is normally cleared after a reboot.
-        if !slash_run_file_exists() {
+        if !slash_run_file_exists(&run_dir) {
             return Ok(true);
         }
 
