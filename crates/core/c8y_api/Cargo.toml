@@ -33,4 +33,4 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 anyhow = "1.0"
 mockito = "0.30"
 tempfile = "3.3"
-test-case = "1.2"
+test-case = "2.0"
