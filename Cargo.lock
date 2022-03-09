@@ -2792,6 +2792,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "tedge_apt_plugin"
 version = "0.5.4"
 dependencies = [
