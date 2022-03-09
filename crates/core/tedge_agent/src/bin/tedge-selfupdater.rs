@@ -155,7 +155,7 @@ fn status_to_exitcode(status : Result<ExitStatus, std::io::Error>) -> i32 {
 
         Ok(status) => {
             if status.code().is_some() {
-                exit_code = 2;
+                exit_code = status.code().unwrap();
             } else {
                 eprintln!("Interrupted by a signal!");
                 exit_code = 4;
