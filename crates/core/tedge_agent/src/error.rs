@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use agent_interface::SoftwareError;
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
@@ -15,8 +17,8 @@ pub enum AgentError {
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
 
-    #[error("Couldn't load plugins from /etc/tedge/sm-plugins")]
-    NoPlugins,
+    #[error("Couldn't load plugins from {plugins_path}")]
+    NoPlugins { plugins_path: PathBuf },
 
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
