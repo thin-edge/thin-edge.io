@@ -40,6 +40,7 @@ time = { version = "0.3", features = ["formatting"] }
 tokio = { version = "1.8", features = ["fs","process", "rt"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
+globwalk = "0.8.1"
 
 [dev-dependencies]
 anyhow = "1.0"
