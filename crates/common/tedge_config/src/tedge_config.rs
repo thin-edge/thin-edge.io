@@ -566,7 +566,7 @@ impl ConfigSettingAccessor<RunPathDefaultSetting> for TEdgeConfig {
             .run
             .dir_path
             .clone()
-            .unwrap_or_else(|| self.config_defaults.default_logs_path.clone()))
+            .unwrap_or_else(|| self.config_defaults.default_run_path.clone()))
     }
 
     fn update(

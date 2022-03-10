@@ -5,7 +5,9 @@ use std::{
     os::unix::io::AsRawFd,
     path::{Path, PathBuf},
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
+
+const LOCK_CHILD_DIRECTORY: &str = "lock/";
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
@@ -40,9 +42,8 @@ impl Flockfile {
     ///
     /// let _lockfile = match flockfile::Flockfile::new_lock("app")).unwrap();
     ///
-    pub fn new_lock(lock_name: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
-        let path = Path::new("/run/lock").join(lock_name);
-
+    pub fn new_lock(path: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
+        let path = PathBuf::new().join(path);
         let file = match OpenOptions::new()
             .create(true)
             .read(true)
@@ -62,7 +63,7 @@ impl Flockfile {
             }
         };
 
-        debug!(r#"Lockfile created "{:?}""#, &path);
+        info!(r#"Lockfile created {:?}"#, &path);
         Ok(Flockfile {
             handle: Some(file),
             path,
@@ -109,7 +110,11 @@ pub fn check_another_instance_is_not_running(
     app_name: &str,
     run_dir: &PathBuf,
 ) -> Result<Flockfile, FlockfileError> {
-    match Flockfile::new_lock(run_dir.join(format!("{}.lock", app_name))) {
+    match Flockfile::new_lock(
+        run_dir
+            .join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name))
+            .as_path(),
+    ) {
         Ok(file) => Ok(file),
         Err(err) => {
             return match &err {
