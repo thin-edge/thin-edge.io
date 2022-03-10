@@ -21,6 +21,10 @@ pub enum PluginOp {
 
 }
 
+fn exit_with_error<T>(code : i32, message : &str) -> T {
+    eprintln!("{}", message);
+    std::process::exit(code); // no return from that call
+}
 
 fn run(operation: PluginOp) -> i32 {
     match operation {
@@ -43,18 +47,18 @@ fn run(operation: PluginOp) -> i32 {
             let bridge_cfg_dir = Path::new(config_location).join(TEDGE_BRIDGE_CONF_DIR_PATH);
             let walker = globwalk::GlobWalkerBuilder::from_patterns(bridge_cfg_dir, &[format!("*{}", TEDGE_BRIDGE_CONF_POSTFIX)])
                 .max_depth(1)
-                .build().unwrap()
+                .build().unwrap_or_else(|e : globwalk::GlobError| exit_with_error(2, format!("Cannot build globwalk, error: '{}'", e).as_str()) )
                 .into_iter()
                 .filter_map(Result::ok);
 
             for img in walker {
                 let cloud_name = img.path()
                                     .file_name()
-                                    .unwrap()
+                                    .unwrap_or_else(|| exit_with_error(2, "Cannot read bridge-config filename from folder.") )
                                     .to_str()
-                                    .unwrap()
+                                    .unwrap_or_else(|| exit_with_error(2, "Cannot handle bridge-config filename as string.") )
                                     .strip_suffix(TEDGE_BRIDGE_CONF_POSTFIX)
-                                    .unwrap();
+                                    .unwrap_or_else(|| exit_with_error(2, "Cannot strip suffix from bridge-config filename.") );
                 clouds.push(cloud_name.to_string());
                 println!("Found cloud connection: {}", cloud_name);
             }
@@ -99,7 +103,7 @@ fn run(operation: PluginOp) -> i32 {
             // NOTE: all clouds will be tried to connected here, even those that were not able to
             //       be disconnect in loop on top.
             for cloud in clouds.into_iter() {
-                println!("Connectiong {}", cloud);
+                println!("Connecting {}", cloud);
                 match run_tedge_cli(&format!("connect {}", cloud)) {
                     Ok(_)  => (),
                     Err(e) => eprintln!("Error occured when calling tedge CLI {}", e),
