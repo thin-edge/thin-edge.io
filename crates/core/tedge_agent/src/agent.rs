@@ -24,6 +24,8 @@ use tedge_config::{
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument};
 
+const SM_PLUGINS: &str = "sm-plugins";
+
 #[cfg(not(test))]
 const INIT_COMMAND: &str = "init";
 
@@ -223,16 +225,21 @@ impl SmAgent {
         info!("Starting tedge agent");
 
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
+        let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
-            self.config.sm_home.join("sm-plugins"),
+            &sm_plugins_path,
             get_default_plugin(&self.config.config_location)?,
             Some("sudo".into()),
         )?));
 
         if plugins.lock().await.empty() {
-            error!("Couldn't load plugins from /etc/tedge/sm-plugins");
-            return Err(AgentError::NoPlugins);
+            error!(
+                "{}",
+                AgentError::NoPlugins {
+                    plugins_path: sm_plugins_path,
+                }
+            );
         }
 
         let mut mqtt_errors = mqtt.errors;
@@ -361,7 +368,7 @@ impl SmAgent {
                 .into());
             }
         };
-        let executing_response = SoftwareListResponse::new(&request);
+        let mut executing_response = SoftwareListResponse::new(&request);
 
         let () = responses
             .publish(Message::new(
@@ -370,11 +377,18 @@ impl SmAgent {
             ))
             .await?;
 
-        let log_file = self
+        let response = match self
             .operation_logs
             .new_log_file(LogKind::SoftwareList)
-            .await?;
-        let response = plugins.lock().await.list(&request, log_file).await;
+            .await
+        {
+            Ok(log_file) => plugins.lock().await.list(&request, log_file).await,
+            Err(err) => {
+                error!("{}", err);
+                executing_response.set_error(&format!("{}", err));
+                executing_response
+            }
+        };
 
         let () = responses
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -421,21 +435,29 @@ impl SmAgent {
             }
         };
 
-        let executing_response = SoftwareUpdateResponse::new(&request);
+        let mut executing_response = SoftwareUpdateResponse::new(&request);
         let () = responses
             .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
-        let log_file = self
+        let response = match self
             .operation_logs
             .new_log_file(LogKind::SoftwareUpdate)
-            .await?;
-
-        let response = plugins
-            .lock()
             .await
-            .process(&request, log_file, &self.config.download_dir)
-            .await;
+        {
+            Ok(log_file) => {
+                plugins
+                    .lock()
+                    .await
+                    .process(&request, log_file, &self.config.download_dir)
+                    .await
+            }
+            Err(err) => {
+                error!("{}", err);
+                executing_response.set_error(&format!("{}", err));
+                executing_response
+            }
+        };
 
         let () = responses
             .publish(Message::new(response_topic, response.to_bytes()?))
@@ -585,14 +607,20 @@ fn get_default_plugin(
 #[cfg(test)]
 mod tests {
 
+    use anyhow::Result;
+    use std::io::Write;
+    use std::path::PathBuf;
+
     use super::*;
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "/run/tedge_agent/tedge_agent_restart";
+
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
 
     #[ignore]
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
         assert_eq!(INIT_COMMAND, "echo");
-        let tedge_config_location = tedge_config::TEdgeConfigLocation::default();
+
+        let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
         let agent = SmAgent::try_new(
             "tedge_agent_test",
             SmAgentConfig::try_new(tedge_config_location).unwrap(),
@@ -606,10 +634,105 @@ mod tests {
         let () = agent
             .handle_restart_operation(&mut output_stream, &response_topic_restart)
             .await?;
-        assert!(std::path::Path::new(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).exists());
+        assert!(
+            std::path::Path::new(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).exists()
+        );
 
         // removing the file
-        let () = std::fs::remove_file(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART).unwrap();
+        let () =
+            std::fs::remove_file(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).unwrap();
+
+        Ok(())
+    }
+
+    fn message(t: &str, p: &str) -> Message {
+        let topic = Topic::new(t).expect("a valid topic");
+        let payload = p.as_bytes();
+        Message::new(&topic, payload)
+    }
+
+    fn create_temp_tedge_config() -> std::io::Result<(tempfile::TempDir, TEdgeConfigLocation)> {
+        let dir = tempfile::TempDir::new()?;
+
+        let dir_path = dir.path().join(".agent");
+        std::fs::create_dir(&dir_path).unwrap();
+
+        let () = {
+            let _file = std::fs::File::create(dir.path().join(".agent/current-operation")).unwrap();
+        };
+
+        let dir_path = dir.path().join("sm-plugins");
+        std::fs::create_dir(dir_path).unwrap();
+
+        let dir_path = dir.path().join("lock");
+        std::fs::create_dir(dir_path).unwrap();
+
+        let dir_path = dir.path().join("logs");
+        std::fs::create_dir(dir_path).unwrap();
+
+        let toml_conf = &format!(
+            r#"
+            [logs]
+            path = '{}'
+            [run]
+            path = '{}'"#,
+            &dir.path().join("logs").to_str().unwrap(),
+            &dir.path().to_str().unwrap()
+        );
+
+        let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
+        let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
+        file.write_all(toml_conf.as_bytes())?;
+        Ok((dir, config_location))
+    }
+
+    #[tokio::test]
+    /// testing that tedge agent returns an expety software list when there is no sm plugin
+    async fn test_empty_software_list_returned_when_no_sm_plugin() -> Result<(), AgentError> {
+        let (output, mut output_sink) = mqtt_tests::output_stream();
+        let expected_messages = vec![
+            message(
+                r#"tedge/commands/res/software/list"#,
+                r#"{"id":"123","status":"executing"}"#,
+            ),
+            message(
+                r#"tedge/commands/res/software/list"#,
+                r#"{"id":"123","status":"successful","currentSoftwareList":[{"type":"","modules":[]}]}"#,
+            ),
+        ];
+        let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
+
+        tokio::spawn(async move {
+            let agent = SmAgent::try_new(
+                "tedge_agent_test",
+                SmAgentConfig::try_new(tedge_config_location).unwrap(),
+            )
+            .unwrap();
+
+            let response_topic_restart =
+                Topic::new(SoftwareListResponse::topic_name()).expect("Invalid topic");
+
+            let plugins = Arc::new(Mutex::new(
+                ExternalPlugins::open(
+                    PathBuf::from(&dir.path()).join("sm-plugins"),
+                    get_default_plugin(&agent.config.config_location).unwrap(),
+                    Some("sudo".into()),
+                )
+                .unwrap(),
+            ));
+            let () = agent
+                .handle_software_list_request(
+                    &mut output_sink,
+                    plugins,
+                    &response_topic_restart,
+                    &Message::new(&response_topic_restart, r#"{"id":"123"}"#),
+                )
+                .await
+                .unwrap();
+        });
+
+        let response = output.collect().await;
+        assert_eq!(expected_messages, response);
 
         Ok(())
     }
