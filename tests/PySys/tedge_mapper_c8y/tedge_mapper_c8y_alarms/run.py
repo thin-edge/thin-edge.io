@@ -31,7 +31,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
 
         self.startProcess(
             command=self.tedge,
-            arguments=["mqtt", "pub",
+            arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/warning/temperature_high",
                        '{"message":"temperature is high", "time":"2021-12-15T15:22:06.464247777+05:30"}'],
             environs=environ
@@ -40,7 +40,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         # Publish one temperature_high alarm with "MAJOR" severity to thin-edge device
         self.startProcess(
             command=self.tedge,
-            arguments=["mqtt", "pub",
+            arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/major/temperature_very_high",
                        '{"message":"temperature is very high"}'],
             environs=environ
@@ -49,7 +49,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         # Publish one temperature_high alarm with "CRITICAL" severity to thin-edge device
         self.startProcess(
             command=self.tedge,
-            arguments=["mqtt", "pub",
+            arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/critical/temperature_dangerous",
                        '{"message":"temperature is dangerously high"}'],
             environs=environ
@@ -58,7 +58,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         # Publish one temperature_high alarm with "MINOR" severity to thin-edge device
         self.startProcess(
             command=self.tedge,
-            arguments=["mqtt", "pub",
+            arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/minor/temperature_low",
                        '{"message":"temperature low"}'],
             environs=environ
@@ -67,7 +67,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
         # Clear the last "MINOR" alarm
         self.startProcess(
             command=self.tedge,
-            arguments=["mqtt", "pub",
+            arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/minor/temperature_low", ""],
             environs=environ
         )
@@ -106,4 +106,21 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
                             actual=alarm_json['type'], expected=expected_alarm_type)
 
     def test_cleanup(self):
+        # Clear all previously raised alarms
+        self.startProcess(
+            command=self.tedge,
+            arguments=["mqtt", "pub", "-r",
+                       "tedge/alarms/warning/temperature_high", ""],
+        )
+        self.startProcess(
+            command=self.tedge,
+            arguments=["mqtt", "pub", "-r",
+                       "tedge/alarms/major/temperature_very_high", ""],
+        )
+        self.startProcess(
+            command=self.tedge,
+            arguments=["mqtt", "pub", "-r",
+                       "tedge/alarms/critical/temperature_dangerous", ""],
+        )
+
         self.cumulocity.clear_all_alarms_from_device(self.project.deviceid)

@@ -23,5 +23,5 @@ anyhow = "1.0"
 assert_matches = "1.5"
 serial_test = "0.5.1"
 tempfile = "3.2"
-test-case = "1.2.1"
+test-case = "2.0"
 
