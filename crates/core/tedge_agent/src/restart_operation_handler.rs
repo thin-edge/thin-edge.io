@@ -46,8 +46,8 @@ pub mod restart_operation {
     }
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
-    fn get_restart_file_datetime() -> Result<time::OffsetDateTime, AgentError> {
-        let mut file = File::open(&SLASH_RUN_PATH_TEDGE_AGENT_RESTART)?;
+    fn get_restart_file_datetime(run_dir: &PathBuf) -> Result<time::OffsetDateTime, AgentError> {
+        let mut file = File::open(&run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
@@ -108,7 +108,7 @@ pub mod restart_operation {
         }
 
         let system_reboot_dt = get_system_uptime()?;
-        let tedge_restart_file_dt = get_restart_file_datetime()?;
+        let tedge_restart_file_dt = get_restart_file_datetime(&run_dir)?;
 
         Ok(system_reboot_dt > tedge_restart_file_dt)
     }

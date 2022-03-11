@@ -21,7 +21,7 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializ
                 "{},{},\"{}\",{}",
                 smartrest_code,
                 alarm.name,
-                alarm_data.message.unwrap_or_default(),
+                alarm_data.text.unwrap_or_default(),
                 alarm_data.time.map_or_else(
                     || current_timestamp.format(&Rfc3339),
                     |timestamp| timestamp.format(&Rfc3339)
@@ -47,7 +47,7 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Critical,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -59,7 +59,7 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Major,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -71,7 +71,7 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Minor,
             data: Some(ThinEdgeAlarmData {
-                message: None,
+                text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -83,7 +83,7 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I, raised, it".into()),
+                text: Some("I, raised, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
             }),
         },
@@ -119,7 +119,7 @@ mod tests {
             name: "temperature_alarm".into(),
             severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
-                message: Some("I raised it".into()),
+                text: Some("I raised it".into()),
                 time: None,
             }),
         };

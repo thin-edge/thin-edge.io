@@ -23,7 +23,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
 
         # Pysys seems to print and record the environment it will also print passwords in the env
         # Solution: only inject the variables we really need
-        environ={ 'HOME':os.environ.get('HOME')}
+        environ = {'HOME': os.environ.get('HOME')}
 
         # TODO to wait for 5s until everythig is settled in the background is probably to
         # long -> test and reduce
@@ -33,7 +33,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/warning/temperature_high",
-                       '{"message":"temperature is high", "time":"2021-12-15T15:22:06.464247777+05:30"}'],
+                       '{"text":"temperature is high", "time":"2021-12-15T15:22:06.464247777+05:30"}'],
             environs=environ
         )
 
@@ -42,7 +42,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/major/temperature_very_high",
-                       '{"message":"temperature is very high"}'],
+                       '{"text":"temperature is very high"}'],
             environs=environ
         )
 
@@ -51,7 +51,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/critical/temperature_dangerous",
-                       '{"message":"temperature is dangerously high"}'],
+                       '{"text":"temperature is dangerously high"}'],
             environs=environ
         )
 
@@ -60,7 +60,7 @@ class TedgeMapperC8yAlarm(EnvironmentC8y):
             command=self.tedge,
             arguments=["mqtt", "pub", "-r",
                        "tedge/alarms/minor/temperature_low",
-                       '{"message":"temperature low"}'],
+                       '{"text":"temperature low"}'],
             environs=environ
         )
 

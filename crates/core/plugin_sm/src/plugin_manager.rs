@@ -197,11 +197,15 @@ impl ExternalPlugins {
         let logger = log_file.buffer();
         let mut error_count = 0;
 
-        for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list(logger).await {
-                Ok(software_list) => response.add_modules(software_type, software_list),
-                Err(_) => {
-                    error_count += 1;
+        if self.plugin_map.is_empty() {
+            response.add_modules("", vec![]);
+        } else {
+            for (software_type, plugin) in self.plugin_map.iter() {
+                match plugin.list(logger).await {
+                    Ok(software_list) => response.add_modules(software_type, software_list),
+                    Err(_) => {
+                        error_count += 1;
+                    }
                 }
             }
         }
