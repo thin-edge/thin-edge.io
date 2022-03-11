@@ -31,6 +31,8 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 anyhow = "1.0"
+assert_matches = "1.5"
 mockito = "0.30"
 tempfile = "3.3"
 test-case = "2.0"
+time = { version = "0.3", features = ["macros"] }

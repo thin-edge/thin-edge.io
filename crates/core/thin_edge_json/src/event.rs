@@ -1,23 +1,31 @@
+use std::collections::HashMap;
+
 use clock::Timestamp;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use self::error::ThinEdgeJsonDeserializerError;
 
 /// In-memory representation of ThinEdge JSON event.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ThinEdgeEvent {
+    #[serde(rename = "type")]
     pub name: String,
+    #[serde(flatten)]
     pub data: Option<ThinEdgeEventData>,
 }
 
 /// In-memory representation of ThinEdge JSON event payload
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ThinEdgeEventData {
-    pub message: Option<String>,
+    pub text: Option<String>,
 
     #[serde(default)]
     #[serde(with = "clock::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
+
+    #[serde(flatten)]
+    pub extras: HashMap<String, Value>,
 }
 
 pub mod error {
@@ -76,14 +84,15 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "Someone clicked",
+            "text": "Someone clicked",
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone clicked".into()),
+                text: Some("Someone clicked".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
             }),
         };
         "event parsing"
@@ -91,13 +100,14 @@ mod tests {
     #[test_case(
         "tedge/events/click_event",
         json!({
-            "message": "Someone clicked",
+            "text": "Someone clicked",
         }),
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: Some("Someone clicked".into()),
+                text: Some("Someone clicked".into()),
                 time: None,
+                extras: HashMap::new(),
             }),
         };
         "event parsing without timestamp"
@@ -110,11 +120,12 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
             }),
         };
-        "event parsing without message"
+        "event parsing without text"
     )]
     #[test_case(
         "tedge/events/click_event",
@@ -122,11 +133,12 @@ mod tests {
         ThinEdgeEvent {
             name: "click_event".into(),
             data: Some(ThinEdgeEventData {
-                message: None,
+                text: None,
                 time: None,
+                extras: HashMap::new(),
             }),
         };
-        "event parsing without message or timestamp"
+        "event parsing without text or timestamp"
     )]
     fn parse_thin_edge_event_json(
         event_topic: &str,
@@ -158,9 +170,53 @@ mod tests {
 
     #[test]
     fn event_translation_empty_payload() -> Result<()> {
+        let event_data = ThinEdgeEventData {
+            text: Some("foo".to_string()),
+            time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+            extras: HashMap::new(),
+        };
+
+        let serialized = serde_json::to_string(&event_data).unwrap();
+        println!("serialized = {}", serialized);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize() -> Result<()> {
         let result = ThinEdgeEvent::try_from("tedge/events/click_event", "")?;
         assert_eq!(result.name, "click_event".to_string());
         assert_matches!(result.data, None);
+        Ok(())
+    }
+
+    #[test]
+    fn event_translation_additional_fields() -> Result<()> {
+        let event_json = json!({
+            "text": "foo",
+            "time": "2021-04-23T19:00:00+05:00",
+            "extra": "field",
+            "numeric": 32u64,
+            "complex": {
+                "hello": "world",
+                "num": 5u32
+            }
+        });
+
+        let result =
+            ThinEdgeEvent::try_from("tedge/events/click_event", event_json.to_string().as_str())?;
+
+        assert_eq!(result.name, "click_event".to_string());
+        let event_data = result.data.unwrap();
+        assert_eq!(
+            event_data.extras.get("extra").unwrap().as_str().unwrap(),
+            "field"
+        );
+        assert_eq!(
+            event_data.extras.get("numeric").unwrap().as_u64().unwrap(),
+            32u64
+        );
+        assert_matches!(event_data.extras.get("complex"), Some(Value::Object(_)));
 
         Ok(())
     }

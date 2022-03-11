@@ -3,10 +3,11 @@ use crate::core::{
     size_threshold::SizeThreshold,
 };
 use anyhow::Result;
+use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
 use c8y_api::{
     http_proxy::{C8YHttpProxy, MockC8YHttpProxy},
-    json_c8y::C8yUpdateSoftwareListResponse,
+    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
 use c8y_smartrest::{
     error::SMCumulocityMapperError, operations::Operations,
@@ -353,7 +354,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
-            r#"{ "message": "Temperature high" }"#,
+            r#"{ "text": "Temperature high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -398,7 +399,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm",
-            r#"{ "message": "Temperature very high" }"#,
+            r#"{ "text": "Temperature very high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -428,7 +429,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let _ = broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm",
-            r#"{ "message": "Pressure very high" }"#,
+            r#"{ "text": "Pressure very high" }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
         )
@@ -477,7 +478,7 @@ async fn test_sync_alarms() {
     let mut converter = create_c8y_converter();
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
-    let alarm_payload = r#"{ "message": "Temperature very high" }"#;
+    let alarm_payload = r#"{ "text": "Temperature very high" }"#;
     let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
     // During the sync phase, alarms are not converted immediately, but only cached to be synced later
@@ -491,7 +492,7 @@ async fn test_sync_alarms() {
     assert!(!converter.convert(&non_alarm_message).await.is_empty());
 
     let internal_alarm_topic = "c8y-internal/alarms/major/pressure_alarm";
-    let internal_alarm_payload = r#"{ "message": "Temperature very high" }"#;
+    let internal_alarm_payload = r#"{ "text": "Temperature very high" }"#;
     let internal_alarm_message = Message::new(
         &Topic::new_unchecked(internal_alarm_topic),
         internal_alarm_payload,
@@ -665,23 +666,23 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     let mut converter = create_c8y_converter();
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
-    let big_message = create_packet(1024 * 20);
-    let alarm_payload = json!({ "message": big_message }).to_string();
+    let big_alarm_text = create_packet(1024 * 20);
+    let alarm_payload = json!({ "text": big_alarm_text }).to_string();
     let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
     assert_matches!(
         converter.try_convert(&alarm_message).await,
         Err(ConversionError::SizeThresholdExceeded {
             topic: _,
-            actual_size: 20494,
-            threshold: 16384
+            actual_size: _,
+            threshold: _
         })
     );
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn convert_event() -> Result<()> {
+async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let size_threshold = SizeThreshold(16 * 1024);
     let device_name = String::from("test");
     let device_type = String::from("test_type");
@@ -697,16 +698,55 @@ async fn convert_event() -> Result<()> {
     );
 
     let event_topic = "tedge/events/click_event";
-    let event_payload = r#"{ "message": "Someone clicked" }"#;
+    let event_payload = r#"{ "text": "Someone clicked" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
 
     let converted_events = converter.convert(&event_message).await;
     assert_eq!(converted_events.len(), 1);
     let converted_event = converted_events.get(0).unwrap();
     assert_eq!(converted_event.topic.name, "c8y/s/us");
+    dbg!(converted_event.payload_str()?);
     assert!(converted_event
         .payload_str()?
-        .starts_with("400,click_event"));
+        .starts_with(r#"400,click_event,"Someone clicked","#));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
+    let size_threshold = SizeThreshold(16 * 1024);
+    let device_name = String::from("test");
+    let device_type = String::from("test_type");
+    let operations = Operations::default();
+    let http_proxy = MockC8YHttpProxy::new();
+
+    let mut converter = CumulocityConverter::new(
+        size_threshold,
+        device_name,
+        device_type,
+        operations,
+        http_proxy,
+    );
+
+    let event_topic = "tedge/events/click_event";
+    let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
+    let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+    let converted_events = converter.convert(&event_message).await;
+    assert_eq!(converted_events.len(), 1);
+    let converted_event = converted_events.get(0).unwrap();
+    assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+    let converted_c8y_json = json!({
+        "type": "click_event",
+        "text": "tick",
+        "foo": "bar",
+    });
+    assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+    assert_json_include!(
+        actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str()?)?,
+        expected: converted_c8y_json
+    );
 
     Ok(())
 }
@@ -722,12 +762,8 @@ async fn test_convert_big_event() {
     let mut http_proxy = MockC8YHttpProxy::new();
     http_proxy
         .expect_send_event()
-        .with(
-            predicate::eq("click_event"),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, _, _| Ok("123".into()));
+        .with(predicate::always())
+        .returning(|_| Ok("123".into()));
 
     let mut converter = CumulocityConverter::new(
         size_threshold,
@@ -738,8 +774,8 @@ async fn test_convert_big_event() {
     );
 
     let event_topic = "tedge/events/click_event";
-    let big_event_message = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
-    let big_event_payload = json!({ "message": big_event_message }).to_string();
+    let big_event_text = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
+    let big_event_payload = json!({ "text": big_event_text }).to_string();
     let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
 
     assert!(converter.convert(&big_event_message).await.is_empty());
@@ -787,9 +823,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
 
     async fn send_event(
         &mut self,
-        _event_type: &str,
-        _text: &str,
-        _time: Option<String>,
+        _c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("123".into())
     }

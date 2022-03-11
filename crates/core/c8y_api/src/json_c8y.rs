@@ -1,20 +1,34 @@
+use std::collections::HashMap;
+
 use agent_interface::{
     Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
 
+use c8y_smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use thin_edge_json::event::ThinEdgeEvent;
+use time::OffsetDateTime;
 
 const EMPTY_STRING: &str = "";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateEvent {
-    source: C8yManagedObject,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<C8yManagedObject>,
+
     #[serde(rename = "type")]
-    event_type: String,
-    time: String,
-    text: String,
+    pub event_type: String,
+
+    #[serde(with = "time::serde::rfc3339")]
+    pub time: OffsetDateTime,
+
+    pub text: String,
+
+    #[serde(flatten)]
+    pub extras: HashMap<String, Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -24,7 +38,7 @@ pub struct C8yEventResponse {
     pub id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yManagedObject {
     pub id: String,
@@ -97,13 +111,51 @@ impl From<&SoftwareListResponse> for C8yUpdateSoftwareListResponse {
 }
 
 impl C8yCreateEvent {
-    pub fn new(source: C8yManagedObject, event_type: &str, time: &str, text: &str) -> Self {
+    pub fn new(
+        source: Option<C8yManagedObject>,
+        event_type: String,
+        time: OffsetDateTime,
+        text: String,
+        extras: HashMap<String, Value>,
+    ) -> Self {
         Self {
             source,
-            event_type: event_type.into(),
-            time: time.into(),
-            text: text.into(),
+            event_type,
+            time,
+            text,
+            extras,
         }
+    }
+}
+
+impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
+    type Error = SMCumulocityMapperError;
+
+    fn try_from(event: ThinEdgeEvent) -> Result<Self, SMCumulocityMapperError> {
+        let event_type = event.name;
+        let text;
+        let time;
+        let extras;
+        match event.data {
+            None => {
+                text = event_type.clone();
+                time = OffsetDateTime::now_utc();
+                extras = HashMap::new();
+            }
+            Some(event_data) => {
+                text = event_data.text.unwrap_or_else(|| event_type.clone());
+                time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
+                extras = event_data.extras;
+            }
+        }
+
+        Ok(Self {
+            source: None,
+            event_type,
+            time,
+            text,
+            extras,
+        })
     }
 }
 
@@ -142,6 +194,12 @@ fn combine_version_and_type(
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
+    use assert_matches::assert_matches;
+    use test_case::test_case;
+    use thin_edge_json::event::ThinEdgeEventData;
+    use time::macros::datetime;
+
     use super::*;
 
     #[test]
@@ -285,5 +343,110 @@ mod tests {
             combine_version_and_type(&none_version, &none_module_type),
             EMPTY_STRING
         );
+    }
+
+    #[test_case(
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+        },
+        C8yCreateEvent {
+            source: None,
+            event_type: "click_event".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "Someone clicked".into(),
+            extras: HashMap::new(),
+        }
+        ;"event translation"
+    )]
+    #[test_case(
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+        },
+        C8yCreateEvent {
+            source: None,
+            event_type: "click_event".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "click_event".into(),
+            extras: HashMap::new(),
+        }
+        ;"event translation without text"
+    )]
+    #[test_case(
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone, clicked, it".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+        },
+        C8yCreateEvent {
+            source: None,
+            event_type: "click_event".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "Someone, clicked, it".into(),
+            extras: HashMap::new(),
+        }
+        ;"event translation with commas in text"
+    )]
+    fn check_event_translation(
+        tedge_event: ThinEdgeEvent,
+        expected_c8y_event: C8yCreateEvent,
+    ) -> Result<()> {
+        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+        assert_eq!(expected_c8y_event, actual_c8y_event);
+
+        Ok(())
+    }
+
+    #[test]
+    fn event_translation_empty_json_payload_generates_timestamp() -> Result<()> {
+        let tedge_event = ThinEdgeEvent {
+            name: "empty_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+        };
+
+        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+        assert_eq!(actual_c8y_event.event_type, "empty_event".to_string());
+        assert_eq!(actual_c8y_event.text, "empty_event".to_string());
+        assert_matches!(actual_c8y_event.time, _);
+        assert_matches!(actual_c8y_event.source, None);
+        assert!(actual_c8y_event.extras.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn event_translation_empty_payload() -> Result<()> {
+        let tedge_event = ThinEdgeEvent {
+            name: "empty_event".into(),
+            data: None,
+        };
+
+        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+        assert_eq!(actual_c8y_event.event_type, "empty_event".to_string());
+        assert_eq!(actual_c8y_event.text, "empty_event".to_string());
+        assert!(actual_c8y_event.time < OffsetDateTime::now_utc());
+        assert_matches!(actual_c8y_event.source, None);
+        assert!(actual_c8y_event.extras.is_empty());
+
+        Ok(())
     }
 }

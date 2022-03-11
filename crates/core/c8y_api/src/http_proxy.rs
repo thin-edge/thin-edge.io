@@ -8,12 +8,12 @@ use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::Smar
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tedge_config::{
     C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
     MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
 };
-use time::{format_description, OffsetDateTime};
+use time::OffsetDateTime;
 
 use tracing::{error, info, instrument};
 
@@ -31,9 +31,7 @@ pub trait C8YHttpProxy: Send + Sync {
 
     async fn send_event(
         &mut self,
-        event_type: &str,
-        text: &str,
-        time: Option<String>,
+        c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError>;
 
     async fn send_software_list_http(
@@ -255,20 +253,17 @@ impl JwtAuthHttpProxy {
     }
 
     fn create_log_event(&self) -> C8yCreateEvent {
-        self.create_event("c8y_Logfile", "software-management", None)
-    }
-
-    fn create_event(&self, event_type: &str, text: &str, time: Option<String>) -> C8yCreateEvent {
         let c8y_managed_object = C8yManagedObject {
             id: self.end_point.c8y_internal_id.clone(),
         };
 
-        let time = time.unwrap_or_else(|| {
-            OffsetDateTime::now_utc()
-                .format(&format_description::well_known::Rfc3339)
-                .unwrap()
-        });
-        C8yCreateEvent::new(c8y_managed_object, event_type, time.as_str(), text)
+        C8yCreateEvent::new(
+            Some(c8y_managed_object),
+            "c8y_Logfile".to_string(),
+            OffsetDateTime::now_utc(),
+            "software-management".to_string(),
+            HashMap::new(),
+        )
     }
 
     async fn send_event_internal(
@@ -325,11 +320,13 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
 
     async fn send_event(
         &mut self,
-        event_type: &str,
-        text: &str,
-        time: Option<String>,
+        mut c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
-        let c8y_event: C8yCreateEvent = self.create_event(event_type, text, time);
+        if c8y_event.source.is_none() {
+            c8y_event.source = Some(C8yManagedObject {
+                id: self.end_point.c8y_internal_id.clone(),
+            });
+        }
         self.send_event_internal(c8y_event).await
     }
 
@@ -498,11 +495,15 @@ mod tests {
             device_id,
         );
 
-        // ... creates the event and assert its id
-        assert_eq!(
-            http_proxy.send_event("clock_event", "tick", None).await?,
-            event_id
+        let c8y_event = C8yCreateEvent::new(
+            None,
+            "clock_event".to_string(),
+            OffsetDateTime::now_utc(),
+            "tick".to_string(),
+            HashMap::new(),
         );
+        // ... creates the event and assert its id
+        assert_eq!(http_proxy.send_event(c8y_event).await?, event_id);
 
         Ok(())
     }
