@@ -1,39 +1,23 @@
-/// An address which could be either a target or source of messages
+/// An address which specifices either the unique name of a plugin or the core of ThinEdge
 ///
-/// Nesting addresses allows to disambiguated between different kind of
-/// sources and the way they have arrived here.
+/// This is used in the [`Comms::send`](crate::plugin::Comms::send) method to send messages to
+/// other plugins attached to the same core.
 #[derive(Debug, Clone)]
 pub struct Address {
-    endpoint: EndpointKind,
-    source: Option<Box<Address>>,
+    endpoint_kind: EndpointKind,
 }
 
 impl Address {
+    /// Create a new address with the given destination/origin
     pub fn new(endpoint: EndpointKind) -> Address {
         Self {
-            endpoint,
-            source: None,
+            endpoint_kind: endpoint,
         }
     }
 
-    pub fn endpoint(&self) -> &EndpointKind {
-        &self.endpoint
-    }
-
-    /// Get the original source of an `Address`
-    pub fn origin(&self) -> &Address {
-        if let Some(source) = self.source.as_ref() {
-            source.origin()
-        } else {
-            self
-        }
-    }
-
-    pub fn add_new_step(&self, endpoint: EndpointKind) -> Self {
-        Self {
-            endpoint,
-            source: Some(Box::new(self.clone())),
-        }
+    /// Get the endpoint kind associated to this address
+    pub fn endpoint_kind(&self) -> &EndpointKind {
+        &self.endpoint_kind
     }
 }
 
