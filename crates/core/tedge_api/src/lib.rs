@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod plugin;
 pub use plugin::{Comms, Plugin, PluginBuilder, PluginConfiguration};
 
