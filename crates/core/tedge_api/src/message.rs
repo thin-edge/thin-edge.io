@@ -44,7 +44,10 @@ impl Message {
 #[non_exhaustive]
 pub enum MessageKind {
     /// A reply to the message with the contained ID
-    Reply(uuid::Uuid),
+    Reply {
+        message_id: uuid::Uuid,
+        content: Box<MessageKind>,
+    },
 
     /// The plugin is being asked if it is currently able to respond
     /// to requests. It is meant to reply with `CoreMessageKind` stating
