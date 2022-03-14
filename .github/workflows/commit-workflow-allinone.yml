@@ -382,7 +382,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: debian-packages-amd64
@@ -478,7 +478,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: debian-packages-amd64
@@ -528,7 +528,7 @@ jobs:
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
@@ -540,7 +540,7 @@ jobs:
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
