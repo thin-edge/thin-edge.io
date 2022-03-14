@@ -92,6 +92,9 @@ pub enum SoftwareError {
 
     #[error("CSV error: {reason:?}")]
     FromCSV { reason: String },
+
+    #[error("Failed to parse")]
+    FromToml { reason: String },
 }
 
 impl From<serde_json::Error> for SoftwareError {
@@ -113,6 +116,14 @@ impl From<std::io::Error> for SoftwareError {
 impl From<csv::Error> for SoftwareError {
     fn from(err: csv::Error) -> Self {
         SoftwareError::FromCSV {
+            reason: format!("{}", err),
+        }
+    }
+}
+
+impl From<toml::de::Error> for SoftwareError {
+    fn from(err: toml::de::Error) -> Self {
+        SoftwareError::FromToml {
             reason: format!("{}", err),
         }
     }

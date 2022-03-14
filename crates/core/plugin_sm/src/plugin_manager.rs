@@ -1,15 +1,18 @@
-use crate::plugin::{Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
+use crate::{
+    plugin::{Plugin, LIST},
+    updater::Updater,
+};
 use agent_interface::{
     SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse, DEFAULT,
 };
-use std::path::Path;
+use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs,
     io::{self, ErrorKind},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 use tracing::{error, info, warn};
@@ -41,14 +44,17 @@ pub trait Plugins {
 }
 
 #[derive(Debug)]
-pub struct ExternalPlugins {
+pub struct ExternalPlugins<P>
+where
+    P: Plugin,
+{
     plugin_dir: PathBuf,
-    plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
+    plugin_map: HashMap<SoftwareType, P>,
     default_plugin_type: Option<SoftwareType>,
     sudo: Option<PathBuf>,
 }
 
-impl Plugins for ExternalPlugins {
+impl Plugins for ExternalPlugins<ExternalPluginCommand> {
     type Plugin = ExternalPluginCommand;
 
     fn default(&self) -> Option<&Self::Plugin> {
@@ -84,12 +90,20 @@ impl Plugins for ExternalPlugins {
     }
 }
 
-impl ExternalPlugins {
+impl ExternalPlugins<Updater> {
+    pub fn add_updater(&mut self, plugin: Updater) -> Result<(), SoftwareError> {
+        self.plugin_map
+            .insert("tedge_self_updater".to_string(), plugin);
+        Ok(())
+    }
+}
+
+impl ExternalPlugins<ExternalPluginCommand> {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
         sudo: Option<PathBuf>,
-    ) -> Result<ExternalPlugins, SoftwareError> {
+    ) -> Result<ExternalPlugins<ExternalPluginCommand>, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
@@ -233,11 +247,62 @@ impl ExternalPlugins {
         let mut response = SoftwareUpdateResponse::new(request);
         let logger = log_file.buffer();
         let mut error_count = 0;
+        let updater = Some(Updater::new("/usr/bin/tedge_updater"));
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates, logger, download_path).await
+
+                // read /etc/tedge/tedge_components.toml list of components
+                let components = get_tedge_components("/etc/tedge/tedge_components.toml").unwrap();
+
+                let mut exclusive = true;
+                let mut contains_tedge = false;
+                // check if any in the update
+                for update in &updates {
+                    if components.components.contains(&update.module().name) {
+                        contains_tedge = true;
+                    } else {
+                        exclusive = false;
+                        break;
+                    }
+                }
+
+                // if yes and not exclusive fail operation with error message: non exclusive tedge update attempt
+                if contains_tedge && !exclusive {
+                    // return error response
+                    response.set_error("tedge update attempt with other modules");
+                    return response;
+                }
+
+                // if yes and exclusive call self updater with:
+                if contains_tedge && exclusive {
+                    //   if tedge_self_updater detected:
+                    // /usr/bin/tedge_self_updater update-list --plugin-name=/etc/tedge/plugins/apt
+                    // install tedge 1.0
+                    // install tedge_agent 1.0
+                    //   else fail with error
+
+                    match &updater {
+                        Some(updater) => {
+                            updater
+                                .apply_all(
+                                    updates,
+                                    logger,
+                                    download_path,
+                                    Some(plugin.path.as_path().to_str().unwrap()),
+                                )
+                                .await
+                        }
+                        None => {
+                            response.set_error("tedge_updater not found");
+                            return response;
+                        }
+                    }
+                } else {
+                    // run normal update
+                    plugin.apply_all(updates, logger, download_path, None).await
+                }
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
@@ -282,6 +347,29 @@ impl ExternalPlugins {
         } else {
             None
         }
+    }
+
+    fn updater(&self) -> Option<&ExternalPluginCommand> {
+        self.plugin_map.get("tedge_self_updater")
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct Components {
+    components: Vec<String>,
+}
+
+fn get_tedge_components(path: impl AsRef<Path>) -> Result<Components, SoftwareError> {
+    match fs::read(path) {
+        Ok(bytes) => toml::from_slice::<Components>(bytes.as_slice()).map_err(|err| {
+            SoftwareError::FromToml {
+                reason: err.to_string(),
+            }
+        }),
+
+        Err(err) => Err(SoftwareError::IoError {
+            reason: err.to_string(),
+        }),
     }
 }
 

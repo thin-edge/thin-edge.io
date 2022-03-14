@@ -12,32 +12,45 @@ use tracing::error;
 
 #[async_trait]
 pub trait Plugin {
-    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
+        Ok(())
+    }
 
     async fn install(
         &self,
-        module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
-    ) -> Result<(), SoftwareError>;
+        _module: &SoftwareModule,
+        _logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
+        Ok(())
+    }
 
     async fn remove(
         &self,
-        module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
-    ) -> Result<(), SoftwareError>;
+        _module: &SoftwareModule,
+        _logger: &mut BufWriter<File>,
+    ) -> Result<(), SoftwareError> {
+        Ok(())
+    }
 
     async fn update_list(
         &self,
-        modules: &[SoftwareModuleUpdate],
-        logger: &mut BufWriter<File>,
-    ) -> Result<(), SoftwareError>;
+        _modules: &[SoftwareModuleUpdate],
+        _logger: &mut BufWriter<File>,
+        _maybe_plugin: Option<&str>,
+    ) -> Result<(), SoftwareError> {
+        Ok(())
+    }
 
-    async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn finalize(&self, _logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
+        Ok(())
+    }
 
     async fn list(
         &self,
-        logger: &mut BufWriter<File>,
-    ) -> Result<Vec<SoftwareModule>, SoftwareError>;
+        _logger: &mut BufWriter<File>,
+    ) -> Result<Vec<SoftwareModule>, SoftwareError> {
+        Ok(vec![])
+    }
 
     async fn version(
         &self,
@@ -73,6 +86,7 @@ pub trait Plugin {
         mut updates: Vec<SoftwareModuleUpdate>,
         logger: &mut BufWriter<File>,
         download_path: &Path,
+        maybe_plugin: Option<&str>,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
@@ -103,7 +117,7 @@ pub trait Plugin {
 
         // Execute the updates
         if failed_updates.is_empty() {
-            let outcome = self.update_list(&updates, logger).await;
+            let outcome = self.update_list(&updates, logger, maybe_plugin).await;
             if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
                 for update in updates.iter() {
                     if let Err(error) = self.apply(update, logger, download_path).await {
@@ -130,6 +144,70 @@ pub trait Plugin {
 
         failed_updates
     }
+
+    // async fn apply_tedge(
+    //     &self,
+    //     mut updates: Vec<SoftwareModuleUpdate>,
+    //     logger: &mut BufWriter<File>,
+    //     download_path: &Path,
+    //     maybe_plugin: Option<&str>,
+    // ) -> Vec<SoftwareError> {
+    //     let mut failed_updates = Vec::new();
+
+    //     // Prepare the updates
+    //     if let Err(prepare_error) = self.prepare(logger).await {
+    //         failed_updates.push(prepare_error);
+    //         return failed_updates;
+    //     }
+
+    //     // Download all modules for which a download URL is provided
+    //     let mut downloaders = Vec::new();
+    //     for update in updates.iter_mut() {
+    //         let module = match update {
+    //             SoftwareModuleUpdate::Remove { module } => module,
+    //             SoftwareModuleUpdate::Install { module } => module,
+    //         };
+    //         let module_url = module.url.clone();
+    //         if let Some(url) = module_url {
+    //             match Self::download_from_url(module, &url, logger, download_path).await {
+    //                 Err(prepare_error) => {
+    //                     failed_updates.push(prepare_error);
+    //                     break;
+    //                 }
+    //                 Ok(downloader) => downloaders.push(downloader),
+    //             }
+    //         }
+    //     }
+
+    //     // Execute the updates
+    //     if failed_updates.is_empty() {
+    //         let outcome = self.update_list(&updates, logger, maybe_plugin).await;
+    //         if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
+    //             for update in updates.iter() {
+    //                 if let Err(error) = self.apply(update, logger, download_path).await {
+    //                     failed_updates.push(error);
+    //                 };
+    //             }
+    //         } else if let Err(update_list_error) = outcome {
+    //             failed_updates.push(update_list_error);
+    //         }
+    //     }
+
+    //     // Finalize the updates
+    //     if let Err(finalize_error) = self.finalize(logger).await {
+    //         failed_updates.push(finalize_error);
+    //     }
+
+    //     // Cleanup all the downloaded modules
+    //     for downloader in downloaders {
+    //         if let Err(cleanup_error) = Self::cleanup_downloaded_artefacts(downloader, logger).await
+    //         {
+    //             failed_updates.push(cleanup_error);
+    //         }
+    //     }
+
+    //     failed_updates
+    // }
 
     async fn install_from_url(
         &self,
@@ -232,6 +310,7 @@ impl ExternalPluginCommand {
         &self,
         action: &str,
         maybe_module: Option<&SoftwareModule>,
+        maybe_plugin: Option<&str>,
     ) -> Result<LoggedCommand, SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = LoggedCommand::new(sudo);
@@ -254,6 +333,11 @@ impl ExternalPluginCommand {
                 command.arg("--file");
                 command.arg(path);
             }
+        }
+
+        if let Some(plugin) = maybe_plugin {
+            command.arg("--plugin-name");
+            command.arg(plugin);
         }
 
         Ok(command)
@@ -307,7 +391,7 @@ const VERSION: &str = "version";
 #[async_trait]
 impl Plugin for ExternalPluginCommand {
     async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
-        let command = self.command(PREPARE, None)?;
+        let command = self.command(PREPARE, None, None)?;
         let output = self.execute(command, logger).await?;
 
         if output.status.success() {
@@ -325,7 +409,7 @@ impl Plugin for ExternalPluginCommand {
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        let command = self.command(INSTALL, Some(module))?;
+        let command = self.command(INSTALL, Some(module), None)?;
         let output = self.execute(command, logger).await?;
 
         if output.status.success() {
@@ -343,7 +427,7 @@ impl Plugin for ExternalPluginCommand {
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
-        let command = self.command(REMOVE, Some(module))?;
+        let command = self.command(REMOVE, Some(module), None)?;
         let output = self.execute(command, logger).await?;
 
         if output.status.success() {
@@ -360,8 +444,9 @@ impl Plugin for ExternalPluginCommand {
         &self,
         updates: &[SoftwareModuleUpdate],
         logger: &mut BufWriter<File>,
+        maybe_plugin: Option<&str>,
     ) -> Result<(), SoftwareError> {
-        let mut command = self.command(UPDATE_LIST, None)?;
+        let mut command = self.command(UPDATE_LIST, None, maybe_plugin)?;
 
         let mut child = command.spawn()?;
         let child_stdin =
@@ -414,7 +499,7 @@ impl Plugin for ExternalPluginCommand {
     }
 
     async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
-        let command = self.command(FINALIZE, None)?;
+        let command = self.command(FINALIZE, None, None)?;
         let output = self.execute(command, logger).await?;
 
         if output.status.success() {
@@ -431,7 +516,7 @@ impl Plugin for ExternalPluginCommand {
         &self,
         logger: &mut BufWriter<File>,
     ) -> Result<Vec<SoftwareModule>, SoftwareError> {
-        let command = self.command(LIST, None)?;
+        let command = self.command(LIST, None, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
             Ok(deserialize_module_info(
@@ -451,7 +536,7 @@ impl Plugin for ExternalPluginCommand {
         module: &SoftwareModule,
         logger: &mut BufWriter<File>,
     ) -> Result<Option<String>, SoftwareError> {
-        let command = self.command(VERSION, Some(module))?;
+        let command = self.command(VERSION, Some(module), None)?;
         let output = self.execute(command, logger).await?;
 
         if output.status.success() {

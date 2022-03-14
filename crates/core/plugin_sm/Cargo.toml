@@ -9,12 +9,15 @@ rust-version = "1.58.1"
 agent_interface = { path = "../agent_interface" }
 async-trait = "0.1"
 csv = "1.1"
+daemonize = "0.4"
 download = { path = "../../common/download" }
+fork = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["process", "rt"] }
+toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 url = "2.2"
 
