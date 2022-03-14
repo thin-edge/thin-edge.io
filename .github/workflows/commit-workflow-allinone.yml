@@ -385,7 +385,7 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-amd64.zip
+          name: debian-packages-amd64
           path: debian-package_unpack
 
       - name: unpack
@@ -481,7 +481,7 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-amd64.zip
+          name: debian-packages-amd64
           path: debian-package_unpack
 
       - name: unpack
@@ -531,7 +531,7 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: unpack
@@ -543,7 +543,7 @@ jobs:
       - uses: actions/download-artifact@v2
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf.zip
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
       - name: unpack
