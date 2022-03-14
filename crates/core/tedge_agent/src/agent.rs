@@ -15,10 +15,20 @@ use agent_interface::{
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
-use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
+use plugin_sm::{
+    plugin::ExternalPluginCommand,
+    plugin_manager::{ExternalPlugins, Plugins},
+};
 use serde_json::json;
-use std::process;
-use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{
+    convert::TryInto,
+    fmt::Debug,
+    fs::File,
+    io::{BufReader, Read},
+    path::PathBuf,
+    process,
+    sync::Arc,
+};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathDefaultSetting,
     MqttBindAddressSetting, MqttPortSetting, RunPathDefaultSetting, SoftwarePluginDefaultSetting,
@@ -290,7 +300,7 @@ impl SmAgent {
         &mut self,
         requests: &mut impl SubChannel,
         responses: &mut impl PubChannel,
-        plugins: &Arc<Mutex<ExternalPlugins>>,
+        plugins: &Arc<Mutex<ExternalPlugins<ExternalPluginCommand>>>,
     ) -> Result<(), AgentError> {
         while let Some(message) = requests.next().await {
             debug!("Request {:?}", message);
@@ -372,7 +382,7 @@ impl SmAgent {
     async fn handle_software_list_request(
         &self,
         responses: &mut impl PubChannel,
-        plugins: Arc<Mutex<ExternalPlugins>>,
+        plugins: Arc<Mutex<ExternalPlugins<ExternalPluginCommand>>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
@@ -438,7 +448,7 @@ impl SmAgent {
     async fn handle_software_update_request(
         &self,
         responses: &mut impl PubChannel,
-        plugins: Arc<Mutex<ExternalPlugins>>,
+        plugins: Arc<Mutex<ExternalPlugins<ExternalPluginCommand>>>,
         response_topic: &Topic,
         message: &Message,
     ) -> Result<(), AgentError> {
@@ -598,6 +608,11 @@ impl SmAgent {
                 }
 
                 StateStatus::Software(SoftwareOperationVariants::Update) => {
+                    status = match read_status_file() {
+                        Ok(0) => OperationStatus::Successful,
+                        _ => OperationStatus::Failed,
+                    };
+
                     &self.config.response_topic_update
                 }
 
@@ -629,6 +644,17 @@ impl SmAgent {
 
         Ok(())
     }
+}
+
+fn read_status_file() -> Result<i32, AgentError> {
+    let file = File::open("/var/run/tedge_update/selfupdate-result")?;
+    let mut reader = BufReader::new(file);
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    let code = contents.trim().parse::<i32>().unwrap();
+
+    // remove the file after read.
+    Ok(code)
 }
 
 fn get_default_plugin(

@@ -31,6 +31,7 @@ impl LoggingChild {
 /// and
 /// [`Command::get_args()`](https://doc.rust-lang.org/std/process/struct.Command.html#method.get_args)
 /// are nightly-only experimental APIs.
+#[derive(Debug)]
 pub struct LoggedCommand {
     command_line: String,
     command: Command,

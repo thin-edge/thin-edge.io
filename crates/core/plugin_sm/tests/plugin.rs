@@ -41,23 +41,18 @@ mod tests {
     #[test_case("abc",None  ; "without version")]
     fn desrialize_plugin_result(module_name: &str, version: Option<&str>) {
         let mut data = String::from(module_name);
-        match version {
-            Some(v) => {
-                data.push_str("\t");
-                data.push_str(v)
-            }
-            None => {}
+        if let Some(v) = version {
+            data.push('\t');
+            data.push_str(v)
         }
 
-        let mut expected_software_list = Vec::new();
-
-        expected_software_list.push(SoftwareModule {
+        let expected_software_list = vec![SoftwareModule {
             name: module_name.into(),
             version: version.map(|s| s.to_string()),
             module_type: Some("test".into()),
             file_path: None,
             url: None,
-        });
+        }];
 
         let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
@@ -67,15 +62,13 @@ mod tests {
     fn desrialize_plugin_result_with_trailing_tab() {
         let data = "abc\t";
 
-        let mut expected_software_list = Vec::new();
-
-        expected_software_list.push(SoftwareModule {
+        let expected_software_list = vec![SoftwareModule {
             name: "abc".into(),
             version: None,
             module_type: Some("test".into()),
             file_path: None,
             url: None,
-        });
+        }];
 
         let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
@@ -330,6 +323,7 @@ mod tests {
                     SoftwareModuleUpdate::Remove { module: module2 },
                 ],
                 &mut logger,
+                None,
             )
             .await;
 
@@ -371,6 +365,7 @@ mod tests {
                 ],
                 &mut logger,
                 &download,
+                None,
             )
             .await;
 

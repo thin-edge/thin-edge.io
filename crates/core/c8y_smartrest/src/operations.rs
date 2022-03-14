@@ -43,19 +43,10 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct Operations {
     operations: Vec<Operation>,
     operations_by_trigger: HashMap<String, usize>,
-}
-
-impl Default for Operations {
-    fn default() -> Self {
-        Self {
-            operations: vec![],
-            operations_by_trigger: HashMap::new(),
-        }
-    }
 }
 
 impl Operations {
