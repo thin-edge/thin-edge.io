@@ -43,6 +43,9 @@ pub enum SmartRestDeserializerError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationsError {
+    #[error("Failed to read directory: {dir}")]
+    ReadDirError { dir: PathBuf },
+
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 

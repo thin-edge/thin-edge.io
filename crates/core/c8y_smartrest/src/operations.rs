@@ -98,7 +98,10 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
     let mut operations = Operations::default();
 
     let path = dir.as_ref().join(&cloud_name);
-    let dir_entries = fs::read_dir(&path)?
+    let dir_entries = fs::read_dir(&path)
+        .map_err(|_| OperationsError::ReadDirError {
+            dir: PathBuf::from(&path),
+        })?
         .map(|entry| entry.map(|e| e.path()))
         .collect::<Result<Vec<PathBuf>, _>>()?
         .into_iter()

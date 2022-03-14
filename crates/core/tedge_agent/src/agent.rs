@@ -22,7 +22,7 @@ use tedge_config::{
     TEdgeConfigLocation, TmpPathDefaultSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 const SM_PLUGINS: &str = "sm-plugins";
 
@@ -234,7 +234,7 @@ impl SmAgent {
         )?));
 
         if plugins.lock().await.empty() {
-            error!(
+            warn!(
                 "{}",
                 AgentError::NoPlugins {
                     plugins_path: sm_plugins_path,
@@ -607,7 +607,6 @@ fn get_default_plugin(
 #[cfg(test)]
 mod tests {
 
-    use anyhow::Result;
     use std::io::Write;
     use std::path::PathBuf;
 

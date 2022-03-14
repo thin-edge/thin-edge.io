@@ -50,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.55"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "159bb86af3a200e19a068f4224eae4c8bb2d0fa054c7e5d1cacd5cef95e684cd"
+checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
 
 [[package]]
 name = "argh"
@@ -492,9 +492,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.3"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86f8c0e2a6b902acc18214e24a6935cdaf8a8e34231913d4404dcaee659f65a1"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
@@ -504,14 +504,14 @@ dependencies = [
  "os_str_bytes",
  "strsim",
  "termcolor",
- "textwrap 0.14.2",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.1.2"
+version = "3.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01d42c94ce7c2252681b5fed4d3627cc807b13dfc033246bd05d5b252399000e"
+checksum = "da95d038ede1a964ce99f49cbe27a7fb538d1da595e4b4f70b8c8f338d17bf16"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -1065,9 +1065,9 @@ checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
 name = "h2"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9f1f717ddc7b2ba36df7e871fd88db79326551d3d6f1fc406fbfd28b582ff8e"
+checksum = "62eeb471aa3e3c9197aa4bfeabfe02982f6dc96f750486c0bb0009ac58b26d2b"
 dependencies = [
  "bytes",
  "fnv",
@@ -1271,9 +1271,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.3.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
+checksum = "35e70ee094dc02fd9c13fdad4940090f22dbd6ac7c9e7094a46cf0232a50bc7c"
 
 [[package]]
 name = "itertools"
@@ -1518,13 +1518,12 @@ dependencies = [
 
 [[package]]
 name = "mockito"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d10030163d67f681db11810bc486df3149e6d91c8b4f3f96fa8b62b546c2cef8"
+checksum = "401edc088069634afaa5f4a29617b36dba683c0c16fe4435a86debad23fa2f1a"
 dependencies = [
  "assert-json-diff",
  "colored",
- "difference",
  "httparse",
  "lazy_static",
  "log",
@@ -1532,6 +1531,7 @@ dependencies = [
  "regex",
  "serde_json",
  "serde_urlencoded",
+ "similar",
 ]
 
 [[package]]
@@ -1765,9 +1765,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
+checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 
 [[package]]
 name = "oorandom"
@@ -2211,9 +2211,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.5.4"
+version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
+checksum = "1a11647b6b25ff05a515cb92c365cec08801e83423a235b51e231e1808747286"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2644,6 +2644,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "similar"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e24979f63a11545f5f2c60141afe249d4f19f84581ea2138065e400941d83d3"
+
+[[package]]
 name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2726,7 +2732,7 @@ dependencies = [
  "assert_matches",
  "base64",
  "certificate",
- "clap 3.1.3",
+ "clap 3.1.6",
  "futures",
  "hyper",
  "mockito",
@@ -2758,7 +2764,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-trait",
- "clap 3.1.3",
+ "clap 3.1.6",
  "flockfile",
  "futures",
  "mockall 0.10.2",
@@ -2786,7 +2792,7 @@ dependencies = [
 name = "tedge_apama_plugin"
 version = "0.5.4"
 dependencies = [
- "clap 3.1.3",
+ "clap 3.1.6",
  "roxmltree",
  "tempfile",
  "thiserror",
@@ -2798,7 +2804,7 @@ name = "tedge_apt_plugin"
 version = "0.5.4"
 dependencies = [
  "anyhow",
- "clap 3.1.3",
+ "clap 3.1.6",
  "csv",
  "hamcrest2",
  "reqwest",
@@ -2828,7 +2834,7 @@ dependencies = [
 name = "tedge_dummy_plugin"
 version = "0.5.4"
 dependencies = [
- "clap 3.1.3",
+ "clap 3.1.6",
  "thiserror",
 ]
 
@@ -2868,7 +2874,7 @@ dependencies = [
  "c8y_api",
  "c8y_smartrest",
  "c8y_translator",
- "clap 3.1.3",
+ "clap 3.1.6",
  "clock",
  "csv",
  "download",
@@ -2933,9 +2939,9 @@ dependencies = [
 
 [[package]]
 name = "termcolor"
-version = "1.1.2"
+version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
+checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
 dependencies = [
  "winapi-util",
 ]
@@ -2970,9 +2976,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thin_edge_json"
@@ -3188,9 +3194,9 @@ checksum = "360dfd1d6d30e05fda32ace2c8c70e9c0a9da713275777f5a4dbb8a1893930c6"
 
 [[package]]
 name = "tracing"
-version = "0.1.31"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6c650a8ef0cd2dd93736f033d21cbd1224c5a967aa0c258d00fcf7dafef9b9f"
+checksum = "4a1bdf54a7c28a2bbf701e1d2233f6c77f473486b94bee4f9678da5a148dca7f"
 dependencies = [
  "cfg-if 1.0.0",
  "log",
@@ -3201,9 +3207,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8276d9a4a3a558d7b7ad5303ad50b53d58264641b82914b7ada36bd762e7a716"
+checksum = "2e65ce065b4b5c53e73bb28912318cb8c9e9ad3921f1d669eb0e68b4c8143a2b"
 dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.15",
@@ -3212,9 +3218,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03cfcb51380632a72d3111cb8d3447a8d908e577d31beeac006f836383d29a23"
+checksum = "aa31669fa42c09c34d94d8165dd2012e8ff3c66aca50f3bb226b68f216f2706c"
 dependencies = [
  "lazy_static",
  "valuable",
