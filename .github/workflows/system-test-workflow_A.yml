@@ -66,8 +66,6 @@ jobs:
         # We need to continue when there is no tedge already installed
         continue-on-error: true
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge packages
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core mosquitto-clients collectd
 
