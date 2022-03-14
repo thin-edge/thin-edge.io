@@ -111,6 +111,8 @@ jobs:
         with:
           command: test
           args: --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
+        env:
+          RUST_BACKTRACE: 1
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
