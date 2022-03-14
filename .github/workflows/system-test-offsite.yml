@@ -52,8 +52,7 @@ jobs:
           path: /home/pi/examples
 
       - name: purge packages
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
-        continue-on-error: true
+        run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
 
       - name: install packages
         run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core
