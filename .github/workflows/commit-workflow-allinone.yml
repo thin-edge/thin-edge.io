@@ -2,11 +2,9 @@ name: commit-workflow-allinone
 
 on:
   push:
-    branches: [main]
+    branches: [continuous_integration]
   workflow_dispatch:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [continuous_integration]
 
 env:
   CARGO_TERM_COLOR: always
@@ -393,7 +391,7 @@ jobs:
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: commit-workflow-allinone.yml
-          branch: main
+          branch: continuous_integration
           workflow_conclusion: in_progress
           name: debian-packages-amd64
           path: debian-package_unpack
@@ -437,6 +435,7 @@ jobs:
   cargo-test-features:
     name: Run cargo test features
     runs-on: Ubuntu-20.04
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: Checkout
@@ -479,6 +478,7 @@ jobs:
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
+    needs: [build_matrix_arm]
 
     steps:
       - name: checkout
@@ -491,7 +491,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: commit-workflow-allinone.yml
           workflow_conclusion: in_progress
-          branch: main
+          branch: continuous_integration
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
@@ -543,7 +543,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: commit-workflow-allinone.yml
           workflow_conclusion: in_progress
-          branch: main
+          branch: continuous_integration
           name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
@@ -557,7 +557,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: commit-workflow-allinone.yml
           workflow_conclusion: in_progress
-          branch: main
+          branch: continuous_integration
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
