@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 
-use crate::{errors::PluginError, messages::Message};
+use crate::{error::PluginError, message::Message};
 
 #[derive(Clone)]
 pub struct Comms {
