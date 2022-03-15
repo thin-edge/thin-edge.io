@@ -348,7 +348,7 @@ jobs:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
-      - name: upload sawtooth publisheras zip
+      - name: upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
@@ -389,7 +389,7 @@ jobs:
           path: debian-package_unpack
 
       - name: unpack
-        run: unzip debian-package_unpack/*.zip
+        run: unzip debian-package_unpack/*
 
       - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
@@ -485,7 +485,7 @@ jobs:
           path: debian-package_unpack
 
       - name: unpack
-        run: unzip debian-package_unpack/*.zip
+        run: unzip debian-package_unpack/*
 
       - name: Workaround Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
@@ -535,7 +535,7 @@ jobs:
           path: /home/pi/examples
 
       - name: unpack
-        run: unzip /home/pi/examples/sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
+        run: unzip /home/pi/examples/sawtooth_publisher_armv7-unknown-linux-gnueabihf
 
       - name: chmod publisher
         run: chmod +x /home/pi/examples/sawtooth_publisher
@@ -547,7 +547,7 @@ jobs:
           path: /home/pi/tedge_dummy_plugin
 
       - name: unpack
-        run: unzip /home/pi/tedge_dummy_plugin/tedge_dummy_plugin_armv7-unknown-linux-gnueabihf.zip
+        run: unzip /home/pi/tedge_dummy_plugin/tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
 
       - name: chmod dummy_plugin
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
