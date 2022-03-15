@@ -109,7 +109,16 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
+          args: --verbose --features integration-test,requires-sudo -- \
+            --skip sending_and_receiving_a_message \
+            --skip tests::install_from_local_file_success::version_with_path \
+            --skip tests::install_from_local_file_success::path_with_version \
+            --skip tests::install_from_local_file_success::path \
+            --skip tests::install_from_local_file_fail::wrong_path_with_wrong_version \
+            --skip tests::install_from_local_file_fail::wrong_path_with_right_version \
+            --skip tests::install_from_local_file_fail::wrong_path \
+            --skip tests::install_from_local_file_fail::right_path_with_wrong_version
+
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
