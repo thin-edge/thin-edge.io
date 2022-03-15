@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use tedge_api::{
-    address::EndpointKind, Address, Comms, Message, MessageKind, Plugin, PluginBuilder,
+    address::EndpointKind, Address, CoreCommunication, Message, MessageKind, Plugin, PluginBuilder,
     PluginConfiguration, PluginError,
 };
 
@@ -15,14 +15,14 @@ impl PluginBuilder for HeartbeatServiceBuilder {
     async fn verify_configuration(
         &self,
         _config: &PluginConfiguration,
-    ) -> Result<(), tedge_api::errors::PluginError> {
+    ) -> Result<(), tedge_api::error::PluginError> {
         Ok(())
     }
 
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        tedge_comms: tedge_api::plugins::Comms,
+        tedge_comms: tedge_api::plugin::CoreCommunication,
     ) -> Result<Box<dyn Plugin>, PluginError> {
         let hb_config: HeartbeatConfig = toml::Value::try_into(config.into_inner())?;
         Ok(Box::new(HeartbeatService::new(tedge_comms, hb_config)))
@@ -35,12 +35,12 @@ struct HeartbeatConfig {
 }
 
 struct HeartbeatService {
-    comms: tedge_api::plugins::Comms,
+    comms: tedge_api::plugin::CoreCommunication,
     config: HeartbeatConfig,
 }
 
 impl HeartbeatService {
-    fn new(comms: tedge_api::plugins::Comms, config: HeartbeatConfig) -> Self {
+    fn new(comms: tedge_api::plugin::CoreCommunication, config: HeartbeatConfig) -> Self {
         Self { comms, config }
     }
 }
@@ -61,8 +61,7 @@ impl Plugin for HeartbeatService {
                 let kind = MessageKind::SignalPluginState {
                     state: String::from("Ok"),
                 };
-                let msg = self.comms.new_message(message.origin().clone(), kind);
-                self.comms.send(msg).await?;
+                self.comms.send(kind, message.origin().clone()).await?;
             }
             msg => println!("Does not handle: {:#?}", msg),
         }
@@ -81,7 +80,8 @@ async fn main() {
     let hsb = HeartbeatServiceBuilder;
     let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
 
-    let comms = Comms::new("heartbeat-service".to_string(), sender);
+    let plugin_name = "heartbeat-service".to_string();
+    let comms = CoreCommunication::new(plugin_name.clone(), sender);
 
     let config = toml::from_str(
         r#"
@@ -97,10 +97,9 @@ async fn main() {
     let handle = tokio::task::spawn(async move {
         let hb = heartbeat;
 
-        hb.handle_message(comms.new_message(
-            Address::new(EndpointKind::Plugin {
-                id: "heartbeat-service".to_string(),
-            }),
+        hb.handle_message(Message::new(
+            Address::new(EndpointKind::Plugin { id: plugin_name }),
+            Address::new(EndpointKind::Core),
             MessageKind::CheckReadyness,
         ))
         .await

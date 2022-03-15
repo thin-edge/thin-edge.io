@@ -10,7 +10,8 @@ pub struct Message {
 }
 
 impl Message {
-    pub(crate) fn new(origin: Address, destination: Address, kind: MessageKind) -> Self {
+    #[doc(hidden)]
+    pub fn new(origin: Address, destination: Address, kind: MessageKind) -> Self {
         Self {
             origin,
             destination,

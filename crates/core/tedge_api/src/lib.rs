@@ -1,5 +1,5 @@
 pub mod plugin;
-pub use plugin::{Comms, Plugin, PluginBuilder, PluginConfiguration};
+pub use plugin::{CoreCommunication, Plugin, PluginBuilder, PluginConfiguration};
 
 pub mod address;
 pub use address::Address;

@@ -6,23 +6,28 @@
 
 use async_trait::async_trait;
 
-use crate::{error::PluginError, message::Message};
+use crate::{error::PluginError, message::Message, Address, MessageKind};
 
+/// The communication struct to interface with the core of ThinEdge
+///
+/// It's main purpose is the [`send`](CoreCommunication::send) method, through which one plugin
+/// can communicate with another.
 #[derive(Clone)]
-pub struct Comms {
+pub struct CoreCommunication {
     plugin_name: String,
     sender: tokio::sync::mpsc::Sender<Message>,
 }
 
-impl std::fmt::Debug for Comms {
+impl std::fmt::Debug for CoreCommunication {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Comms")
             .field("plugin_name", &self.plugin_name)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
-impl Comms {
+impl CoreCommunication {
+    #[doc(hidden)]
     pub fn new(plugin_name: String, sender: tokio::sync::mpsc::Sender<Message>) -> Self {
         Self {
             plugin_name,
@@ -30,14 +35,15 @@ impl Comms {
         }
     }
 
-    pub fn new_message(&self, destination: crate::Address, kind: crate::MessageKind) -> Message {
-        let addr = crate::Address::new(crate::address::EndpointKind::Plugin {
+    pub async fn send(
+        &self,
+        msg_kind: MessageKind,
+        destination: Address,
+    ) -> Result<(), PluginError> {
+        let origin = Address::new(crate::address::EndpointKind::Plugin {
             id: self.plugin_name.clone(),
         });
-        Message::new(addr, destination, kind)
-    }
-
-    pub async fn send<T: Into<Message>>(&self, msg: T) -> Result<(), PluginError> {
+        let msg = Message::new(origin, destination, msg_kind);
         self.sender.send(msg.into()).await?;
 
         Ok(())
@@ -67,7 +73,7 @@ pub trait PluginBuilder: Sync + Send + 'static {
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        tedge_comms: Comms,
+        core_comms: CoreCommunication,
     ) -> Result<Box<dyn Plugin + 'static>, PluginError>;
 }
 
@@ -86,7 +92,7 @@ pub trait Plugin: Sync + Send {
 
 #[cfg(test)]
 mod tests {
-    use super::{Comms, Plugin, PluginBuilder};
+    use super::{CoreCommunication, Plugin, PluginBuilder};
     use static_assertions::{assert_impl_all, assert_obj_safe};
 
     // Object Safety
@@ -94,5 +100,5 @@ mod tests {
     assert_obj_safe!(Plugin);
 
     // Sync + Send
-    assert_impl_all!(Comms: Send, Clone);
+    assert_impl_all!(CoreCommunication: Send, Clone);
 }
