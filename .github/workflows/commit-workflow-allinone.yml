@@ -478,7 +478,7 @@ jobs:
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-amd64
+          name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
       - name: Workaround Stop collectd mapper
