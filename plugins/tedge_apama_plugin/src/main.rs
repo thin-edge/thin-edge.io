@@ -300,7 +300,13 @@ fn run_cmd(cmd: &str, args: &str) -> Result<(), InternalError> {
 
 fn main() {
     // On usage error, the process exits with a status code of 1
-    let apama = ApamaCli::parse();
+    let apama = match ApamaCli::try_parse() {
+        Ok(apamacli) => apamacli,
+        Err(_e) => {
+            // re-write the clap exit_status from 2 to 1, if parse fails
+            std::process::exit(1)
+        }
+    };
 
     match run(apama.operation) {
         Ok(()) => {
