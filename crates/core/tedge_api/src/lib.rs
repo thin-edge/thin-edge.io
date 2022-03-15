@@ -6,6 +6,3 @@ pub use address::Address;
 
 pub mod error;
 pub use error::PluginError;
-
-pub mod message;
-pub use message::{Message, MessageKind};
