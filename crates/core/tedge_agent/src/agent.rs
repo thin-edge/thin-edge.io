@@ -25,6 +25,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
 const SM_PLUGINS: &str = "sm-plugins";
+const AGENT_LOG_PATH: &str = "tedge/agent";
 
 #[cfg(not(test))]
 const INIT_COMMAND: &str = "init";
@@ -80,7 +81,7 @@ impl Default for SmAgentConfig {
 
         let sm_home = PathBuf::from("/etc/tedge");
 
-        let log_dir = PathBuf::from(&format!("{DEFAULT_LOG_PATH}/tedge/agent"));
+        let log_dir = PathBuf::from(&format!("{DEFAULT_LOG_PATH}/{AGENT_LOG_PATH}"));
 
         let run_dir = PathBuf::from(DEFAULT_RUN_PATH);
 
@@ -125,7 +126,8 @@ impl SmAgentConfig {
 
         let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
 
-        let tedge_log_dir = tedge_config.query_string(LogPathDefaultSetting)?.into();
+        let tedge_log_dir: String = tedge_config.query_string(LogPathDefaultSetting)?.into();
+        let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathDefaultSetting)?.into();
 
         Ok(SmAgentConfig::default()
