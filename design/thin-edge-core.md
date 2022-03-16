@@ -48,3 +48,150 @@ To open this static core, thin-edge provides bridge components opening channels 
   * to handle specific south-bound protocols as Modbus or OPC UA,
   * to trigger operations on the devices through a command line interface,
   * and, last but not least, to connect to specific cloud end-point with mapper components.
+
+
+## Building an application with thin-edge
+
+A thin-edge IoT application is built using two kinds of building blocks:
+* At the system level, an application is built as *a dynamic assemblage of unix processes* that exchange JSON messages over an MQTT bus.
+* Internally, a thin-edge executable is built as *a static assemblage of rust plugins* that exchange Rust-typed messages over in-memory channels. 
+
+Thin-edge is shipped with general purpose executables, mappers and agent, aimed to ease on-boarding
+with support for Cumulocity, Azure, collectd, external software-management plugins, thin-edge json, etc.
+By using these main executables, an IoT-application developer can easily connect his device to the cloud
+and other local tools like `apt`, `collectd` or `apama`.
+
+
+```
+                        #
+┌────────────────┐      #      ┌─────────────────┐     ┌─────────────────┐
+│                │      #      │                 │     │                 │
+│  C8Y           │      #      │  Mapper         │     │  Agent          │
+│                │      #      │                 │     │                 │
+│                │      #      │                 │     │                 │
+│                │      #      │                 │     │                 │
+│                │      #      │                 │     │                 │
+│                │      #      │                 │     │                 │
+└───────┬─▲──────┘      #      └──────┬─▲────────┘     └──────▲─┬────────┘
+        │ │             #             │ │                     │ │
+        │ │  SmartRest  #             │ │ JSON,CSV,SmartRest  │ │ JSON
+        │ │             #             │ │                     │ │
+┌───────▼─┴─────────────#─────────────▼─┴─────────────────────┴─▼────────────────┐
+│  MQTT                 #                                                        │
+│                       #                                                        │
+└───────────────────────#─────────────▲───────────────────────▲──────────────────┘
+                        #             │                       │
+                        #             │ CSV                   │  JSON
+                        #             │                       │
+                        #      ┌──────┴──────────┐      ┌─────┴──────────┐
+                        #      │                 │      │                │
+                        #      │ Collectd        │      │ Third-party    │
+                        #      │                 │      │                │
+                        #      │                 │      │                │
+                        #      │                 │      │                │
+                        #      │                 │      │                │
+                        #      │                 │      │                │
+                        #      └─────────────────┘      └────────────────┘
+                        #
+                        #
+```
+
+If we zoom into a built-in thin-edge executable, then we have a different kind of components, Rust actors,
+that exchange typed messages over in-memory channels.
+
+For instance, the generic mapper provides support for Cumulocity, Azure, collectd
+and telemetry data (measurements, events, alarms) collected over MQTT using the thin-edge JSON format.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│ Generic Mapper                                           │
+│                                                          │
+│                                                          │
+│  ┌─────────────────┐                                     │
+│  │ c8y plugin      ├────► operations ──────┐             │
+│  │                 │                       │             │
+│  │                 │                       │             │
+│  │                 ◄──┬─── telemetry ◄───┐ │             │
+│  └─▲─┬─────────────┘  │     ▲            │ │             │
+│    │ │                │     │            │ │             │
+│    │ │                │     │            │ │             │
+│    │ │  ┌─────────────▼───┐ │    ┌───────┴─▼───────┐     │
+│    │ │  │ az plugin       │ │    │ thin-edge JSON  │     │
+│    │ │  │                 │ │    │                 │     │
+│    │ │  │                 │ │    │                 │     │
+│    │ │  │                 │ │    │                 │     │
+│    │ │  └──▲─┬────────────┘ │    └───────▲─┬───────┘     │
+│    │ │     │ │              │            │ │             │
+│    │ │     │ │              │            │ │             │
+│    │ │     │ │     ┌────────┴────────┐   │ │             │
+│    │ │     │ │     │ collectd plugin │   │ │             │
+│    │ │     │ │     │                 │   │ │             │
+│    │ │     │ │     │                 │   │ │             │
+│    │ │     │ │     │                 │   │ │             │
+│    │ │     │ │     └────────▲────────┘   │ │             │
+│    │ │     │ │              │            │ │             │
+│    │ │     │ │              │            │ │             │
+│  ┌─┴─▼─────┴─▼──────────────┴────────────┴─▼─────────┐   │
+│  │  MQTT Connection plugin                           │   │
+│  │                                                   │   │
+│  │                                                   │   │
+│  └───────────────────────────────────────────────────┘   │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+The main motivation for this internal design is the ability to build specific executables that are smaller,
+tuned for a specific use-case, consuming less memory and offering a reduced attack surface.
+
+For instance, note that the generic mapper provides support for several clouds, even if the device will connect to only one.
+Note also that MQTT is used to send operations to the agent via JSON over MQTT.
+An application developer can easily reassemble cherry-picked thin-edge plugins into a highly tuned executable.
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                                                               │
+│  tuned mapper + agent                                         │
+│                                                               │
+│    ┌────────────────┐                ┌─────────────────┐      │
+│    │                │                │                 │      │
+│    │ c8y plugin     ├─► operations───►  apt plugin     │      │
+│    │                │                │                 │      │
+│    │                │                │                 │      │
+│    │                │                │                 │      │
+│    └────▲─┬───▲─────┘                └─────────────────┘      │
+│         │ │   │                                               │
+│         │ │   │                      ┌─────────────────┐      │
+│         │ │   │                      │                 │      │
+│         │ │   └────────telemetry ◄───┤ thin-edge JSON  │      │
+│         │ │                          │                 │      │
+│         │ │                          │                 │      │
+│         │ │                          │                 │      │
+│         │ │                          └───────▲─────────┘      │
+│         │ │                                  │                │
+│         │ │                                  │                │
+│         │ │                                  │                │
+│   ┌─────┴─▼──────────────────────────────────┴────────────┐   │
+│   │                                                       │   │
+│   │  MQTT Connection plugin                               │   │
+│   │                                                       │   │
+│   │                                                       │   │
+│   │                                                       │   │
+│   └─────▲─┬──────────────────────────────────▲────────────┘   │
+│         │ │                                  │                │
+│         │ │                                  │                │
+└─────────┼─┼──────────────────────────────────┼────────────────┘
+          │ │                                  │
+          │ │                                  │
+          │ │                                  │
+          │ ▼                                  │
+
+
+          C8y                                 Sensors
+```
+
+The key points to be highlighted are that:
+* To connect to thin-edge via MQTT, a component is not required to follow this design, not even to be written in Rust.
+* The mapper and the agent provided by thin-edge out of the box can be used without any modifications.
+* Building a tuned mapper or agent requires a Rust compiler but not a deep expertise in Rust.
+  What has to be done is mostly to list the plugins to be included and to connect message producers and consumers.
