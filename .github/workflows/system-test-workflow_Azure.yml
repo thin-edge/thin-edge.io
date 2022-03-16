@@ -1,21 +1,26 @@
+#
+# DO NOT EDIT
+# This file is crated automatically !!!
+#
+
 name: system-test-workflow-Azure
 
 on:
   workflow_dispatch:
-    branches: [ main, continuous_integration]
-#  workflow_run:
-#    workflows: ["integration-test-workflow"]
-#    branches: [main, continuous_integration]
-#    types:
-#      - completed
+    branches: [continuous_integration]
+  workflow_run:
+    workflows: ["integration-test-workflow"]
+    branches: [continuous_integration]
+    types:
+      - completed
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
 
-  install-and-use-azure-offsite:
-    runs-on: [self-hosted, Linux, x64, offsite]
+  install-and-use-rpi-offsite_azure:
+    runs-on: [self-hosted, Linux, ARM, offsiteazure]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -30,8 +35,22 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: continuous_integration
-          name: debian-packages-amd64
+          name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
+
+      - name: delete old publisher
+        run: rm -f /home/pi/examples/sawtooth_publisher
+
+      - name: Download artifact examples
+        uses: dawidd6/action-download-artifact@v2
+        # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-workflow.yml
+          workflow_conclusion: success
+          branch: continuous_integration
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
+          path: /home/pi/examples
 
       - name: Stop collectd mapper
         run: sudo systemctl stop tedge-mapper-collectd
@@ -47,25 +66,8 @@ jobs:
         # We need to continue when there is no tedge already installed
         continue-on-error: true
 
-      - name: delete old publisher
-        run: rm -f /home/azureuser/examples/sawtooth_publisher
-
-      - name: Download artifact examples
-        uses: dawidd6/action-download-artifact@v2
-        # https://github.com/marketplace/actions/download-workflow-artifact
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build-workflow.yml
-          workflow_conclusion: success
-          branch: continuous_integration
-          name: examples_amd64
-          path: /home/azureuser/examples
-
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge packages
-        run: sudo dpkg -P tedge_agent tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core
-        continue-on-error: true
+        run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install packages
         run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core
@@ -81,7 +83,7 @@ jobs:
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
       - name: chmod publisher
-        run: chmod +x /home/azureuser/examples/sawtooth_publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
 
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
@@ -91,11 +93,22 @@ jobs:
           workflow: build-workflow.yml
           workflow_conclusion: success
           branch: continuous_integration
-          name: tedge_dummy_plugin_amd64
-          path: /home/azureuser/tedge_dummy_plugin
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
 
-      - name: chmod publisher
-        run: chmod +x /home/azureuser/tedge_dummy_plugin/tedge_dummy_plugin
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
+      - name: Configure Bridge
+        run: ./ci/configure_bridge.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_Azure }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
       - name: Run Smoke Test
         run: ./ci/ci_smoke_test_c8y.sh
@@ -103,15 +116,14 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_A }}
-          C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_A }}
-          TEBASEDIR: /home/azureuser/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/azureuser/examples
+          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_Azure }}
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
-  system-test-offsite:
-    needs: [install-and-use-azure-offsite]
-    runs-on: [self-hosted, Linux, x64, offsite]
+  system-test-offsite_azure:
+    needs: [install-and-use-rpi-offsite_azure]
+    runs-on: [self-hosted, Linux, ARM, offsiteazure]
 
     steps:
 
@@ -119,41 +131,39 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Run all Tests
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_A }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_Azure }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_A }}
-            TEBASEDIR: /home/azureuser/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/azureuser/examples
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all plugin tests
-      continue-on-error: false
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_A }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_Azure }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_A }}
-            TEBASEDIR: /home/azureuser/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/azureuser/examples
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: Run all sm tests
-      continue-on-error: false
+      continue-on-error: true
       run:  bash  ./ci/ci_run_all_sm_tests.sh
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_A }}
+            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE_OFFSITE_Azure }}
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YDEVICEID: ${{ secrets.SECRET_C8YDEVICEID_OFFSITE_A }}
-            TEBASEDIR: /home/azureuser/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/azureuser/examples
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
 
     - name: upload results as zip
