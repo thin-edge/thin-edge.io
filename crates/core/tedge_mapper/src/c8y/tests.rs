@@ -698,7 +698,7 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     );
 
     let event_topic = "tedge/events/click_event";
-    let event_payload = r#"{ "text": "Someone clicked" }"#;
+    let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
 
     let converted_events = converter.convert(&event_message).await;
@@ -706,9 +706,10 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let converted_event = converted_events.get(0).unwrap();
     assert_eq!(converted_event.topic.name, "c8y/s/us");
     dbg!(converted_event.payload_str()?);
-    assert!(converted_event
-        .payload_str()?
-        .starts_with(r#"400,click_event,"Someone clicked","#));
+    assert_eq!(
+        converted_event.payload_str()?,
+        r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+    );
 
     Ok(())
 }

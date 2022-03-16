@@ -31,6 +31,7 @@ use std::{
     process::Stdio,
 };
 use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
+use time::format_description::well_known::Rfc3339;
 use tracing::{debug, info, log::error};
 
 use super::{
@@ -158,7 +159,7 @@ where
 
         // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
         let message = if c8y_event.extras.is_empty() {
-            let smartrest_event = Self::serialize_to_smartrest(&c8y_event);
+            let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
             let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
 
             Message::new(&smartrest_topic, smartrest_event)
@@ -180,11 +181,14 @@ where
         }
     }
 
-    fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> String {
-        format!(
+    fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
+        Ok(format!(
             "{},{},\"{}\",{}",
-            CREATE_EVENT_SMARTREST_CODE, c8y_event.event_type, c8y_event.text, c8y_event.time
-        )
+            CREATE_EVENT_SMARTREST_CODE,
+            c8y_event.event_type,
+            c8y_event.text,
+            c8y_event.time.format(&Rfc3339)?
+        ))
     }
 }
 
