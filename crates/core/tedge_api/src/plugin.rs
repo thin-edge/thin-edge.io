@@ -51,27 +51,173 @@ pub trait PluginDirectory: Clone + Send + Sync {
 pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 
 /// A plugin builder for a given plugin
+///
+/// A type implementing PluginBuilder is used by the core of thin-edge to instantiate a plugin
+/// implementation.
+///
+/// # Note
+///
+/// Plugin authors want to implement this trait so that the core of thin-edge can instantiate their
+/// plugin if the configuration of thin-edge desires so.
+///
+/// The implementation of the trait is then used by thin-edge to verify that the configuration
+/// passed to the plugin is sound (what "sound" means in this context is to be decided by the
+/// plugin author, i.e. the author of the implementation of this trait).
+///
+/// The plugin author must also name all message types the plugin which is about to be instantiated
+/// can receive (see `PluginBuilder::kind_message_types`).
 #[async_trait]
 pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// The name for the kind of plugins this creates, this should be unique and will prevent startup otherwise
+    ///
+    /// The "kind name" of a plugin is used by the configuration to name what plugin is to be
+    /// instantiated. For example, if the configuration asks thin-edge to instantiate a plugin
+    /// of kind "foo", but only a plugin implementation of kind "bar" is compiled into thin-edge,
+    /// the software is able to report misconfiguration on startup.
     fn kind_name() -> &'static str
     where
         Self: Sized;
 
     /// A list of message types the plugin this builder creates supports
     ///
-    /// To create it, you must use the [`HandleTypes::get_handlers_for`] method.
+    /// This function must return a `HandleTypes` object which represents the types of messages
+    /// that a plugin is able to handle.
+    ///
+    /// To create an instance of this type, you must use the [`HandleTypes::get_handlers_for`] method.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// #[derive(Debug)]
+    /// struct MyMessage;
+    /// impl Message for MyMessage {}
+    ///
+    /// struct MyPluginBuilder;
+    /// struct MyPlugin; // + some impl Plugin for MyPlugin
+    /// # impl Plugin for MyPlugin {
+    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
+    ///
+    /// #[async_trait]
+    /// impl<PD: PluginDirectory> PluginBuilder<PD> for MyPluginBuilder {
+    ///     fn kind_message_types() -> tedge_api::plugin::HandleTypes
+    ///     where
+    ///         Self: Sized,
+    ///     {
+    ///         HandleTypes::get_handlers_for::<(MyMessage,), MyPlugin>()
+    ///     }
+    ///     // other trait functions...
+    /// #   fn kind_name(&self) -> &'static str {
+    /// #       unimplemented!()
+    /// #   }
+    /// #   async fn verify_configuration(
+    /// #       &self,
+    /// #       _config: &PluginConfiguration,
+    /// #   ) -> Result<(), tedge_api::error::PluginError> {
+    /// #       unimplemented!()
+    /// #   }
+    /// #   async fn instantiate(
+    /// #       &self,
+    /// #       config: PluginConfiguration,
+    /// #       tedge_comms: &PD,
+    /// #   ) -> Result<BuiltPlugin, PluginError>
+    /// #   where
+    /// #       PD: 'async_trait,
+    /// #   {
+    /// #       unimplemented!()
+    /// #   }
+    /// }
+    /// ```
     fn kind_message_types() -> HandleTypes
     where
         Self: Sized;
 
-    /// This may be called anytime to verify whether a plugin could be instantiated with the
-    /// passed configuration.
+    /// Verify the configuration of the plugin for this plugin kind
+    ///
+    /// This function will be used by the core implementation to verify that a given plugin
+    /// configuration can be used by a plugin.
+    ///
+    /// After the plugin configuration got loaded and deserialized, it might still contain settings
+    /// which are erroneous, for example
+    ///
+    /// ```toml
+    /// timeout = -1
+    /// ```
+    ///
+    /// This function can be used by plugin authors to verify that a given verification is sound,
+    /// before the plugins are instantiated (to be able to fail early).
+    ///
+    /// # Note
+    ///
+    /// This may be called anytime (also while plugins are already running) to verify whether a
+    /// plugin could be instantiated with the passed configuration.
     async fn verify_configuration(&self, config: &PluginConfiguration) -> Result<(), PluginError>;
 
     /// Instantiate a new instance of this plugin using the given configuration
     ///
-    /// This _must not_ block
+    /// This function is called by the core of thin-edge to create a new plugin instance.
+    ///
+    /// The `PluginExt::into_untyped()` function can be used to make any `Plugin` implementing type
+    /// into a `BuiltPlugin`, which the function requires to be returned (see example below).
+    ///
+    /// # Note
+    ///
+    /// This function _must not_ block.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// #[derive(Debug)]
+    /// struct MyMessage;
+    /// impl Message for MyMessage {}
+    ///
+    /// struct MyPluginBuilder;
+    /// struct MyPlugin; // + some impl Plugin for MyPlugin
+    /// # impl Plugin for MyPlugin {
+    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
+    ///
+    /// #[async_trait]
+    /// impl<PD: PluginDirectory> PluginBuilder<PD> for MyPluginBuilder {
+    ///     async fn instantiate(
+    ///         &self,
+    ///         config: PluginConfiguration,
+    ///         tedge_comms: &PD,
+    ///     ) -> Result<BuiltPlugin, PluginError>
+    ///     where
+    ///         PD: 'async_trait,
+    ///     {
+    ///         let p = MyPlugin {};
+    ///         Ok(p.into_untyped::<(MyMessage,)>())
+    ///     }
+    ///     // other trait functions...
+    /// #   fn kind_name(&self) -> &'static str {
+    /// #       unimplemented!()
+    /// #   }
+    /// #   fn kind_message_types() -> tedge_api::plugin::HandleTypes
+    /// #   where
+    /// #       Self: Sized,
+    /// #   {
+    /// #       HandleTypes::get_handlers_for::<(MyMessage,), MyPlugin>()
+    /// #   }
+    /// #   async fn verify_configuration(
+    /// #       &self,
+    /// #       _config: &PluginConfiguration,
+    /// #   ) -> Result<(), tedge_api::error::PluginError> {
+    /// #       unimplemented!()
+    /// #   }
+    /// }
+    /// ```
     async fn instantiate(
         &self,
         config: PluginConfiguration,
