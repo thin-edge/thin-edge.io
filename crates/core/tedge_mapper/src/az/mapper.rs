@@ -20,7 +20,12 @@ impl AzureMapper {
     }
 
     pub async fn init(&mut self, mapper_name: &str) -> Result<(), anyhow::Error> {
-        create_directory_with_user_group("tedge-mapper", vec!["/etc/tedge/operations/az"])?;
+        create_directory_with_user_group(
+            "tedge-mapper",
+            "tedge-mapper",
+            "/etc/tedge/operations/az",
+            0o775,
+        )?;
         info!("Initialize tedge mapper {} session", mapper_name);
         Ok(())
     }

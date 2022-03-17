@@ -105,13 +105,23 @@ impl TEdgeComponent for CumulocityMapper {
 }
 
 fn create_directories() -> Result<(), anyhow::Error> {
-    create_directory_with_user_group("tedge-mapper", vec!["/etc/tedge/operations/c8y"])?;
+    create_directory_with_user_group(
+        "tedge-mapper",
+        "tedge-mapper",
+        "/etc/tedge/operations/c8y",
+        0o775,
+    )?;
     create_file_with_user_group(
         "tedge-mapper",
-        vec![
-            "/etc/tedge/operations/c8y/c8y_SoftwareUpdate",
-            "/etc/tedge/operations/c8y/c8y_Restart",
-        ],
+        "tedge-mapper",
+        "/etc/tedge/operations/c8y/c8y_SoftwareUpdate",
+        0o644,
+    )?;
+    create_file_with_user_group(
+        "tedge-mapper",
+        "tedge-mapper",
+        "/etc/tedge/operations/c8y/c8y_Restart",
+        0o644,
     )?;
     Ok(())
 }

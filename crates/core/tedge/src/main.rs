@@ -46,16 +46,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn initialize_tedge() -> anyhow::Result<()> {
-    create_directory_with_user_group(
-        "tedge",
-        vec![
-            "/etc/tedge",
-            "/var/log/tedge",
-            "/etc/tedge/mosquitto-conf",
-            "/etc/tedge/operations",
-            "/etc/tedge/plugins",
-        ],
-    )?;
-    create_directory_with_user_group("mosquitto", vec!["/etc/tedge/device-certs"])?;
+    create_directory_with_user_group("tedge", "tedge", "/etc/tedge", 0o775)?;
+    create_directory_with_user_group("tedge", "tedge", "/var/log/tedge", 0o775)?;
+    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/mosquitto-conf", 0o775)?;
+    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/operations", 0o775)?;
+    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/plugins", 0o775)?;
+    create_directory_with_user_group("mosquitto", "mosquitto", "/etc/tedge/device-certs", 0o775)?;
     Ok(())
 }
