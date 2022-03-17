@@ -706,6 +706,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
 name = "download"
 version = "0.5.2"
 dependencies = [
@@ -2692,6 +2698,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "downcast-rs",
  "futures",
  "serde",
  "static_assertions",

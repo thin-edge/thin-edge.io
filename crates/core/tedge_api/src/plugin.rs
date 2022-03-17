@@ -5,27 +5,20 @@
 //! 2. Create your plugin struct that implements `Plugin`
 
 use futures::future::BoxFuture;
-use std::any::{Any, TypeId};
+use std::{
+    any::{Any, TypeId},
+    collections::HashSet,
+};
+
+use downcast_rs::{impl_downcast, DowncastSync};
 
 use async_trait::async_trait;
 
-use crate::error::PluginError;
+use crate::{error::PluginError, Address};
 
 /// The communication struct to interface with the core of ThinEdge
-///
-/// It's main purpose is the [`send`](CoreCommunication::send) method, through which one plugin
-/// can communicate with another.
-#[derive(Clone)]
-pub struct CoreCommunication {
-    plugin_name: String,
-}
-
-impl std::fmt::Debug for CoreCommunication {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Comms")
-            .field("plugin_name", &self.plugin_name)
-            .finish_non_exhaustive()
-    }
+pub trait CoreCommunication: Clone + Send + Sync {
+    fn get_address_for<MB: MessageBundle>(&self, name: &str) -> Result<Address<MB>, PluginError>;
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
@@ -37,15 +30,16 @@ pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 
 /// A plugin builder for a given plugin
 #[async_trait]
-pub trait PluginBuilder: Sync + Send + 'static {
+pub trait PluginBuilder<CC: CoreCommunication>: Sync + Send + 'static {
     /// The name for the kind of plugins this creates, this should be unique and will prevent startup otherwise
     fn kind_name(&self) -> &'static str;
 
     /// A list of message types the plugin this builder creates supports
     ///
-    /// To create it, you must use the `HandleTypes::get_handlers_for` method. See there on how to
-    /// use it.
-    fn kind_message_types(&self) -> HandleTypes;
+    /// To create it, you must use the [`HandleTypes::get_handlers_for`] method.
+    fn kind_message_types() -> HandleTypes
+    where
+        Self: Sized;
 
     /// This may be called anytime to verify whether a plugin could be instantiated with the
     /// passed configuration.
@@ -57,19 +51,23 @@ pub trait PluginBuilder: Sync + Send + 'static {
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        core_comms: CoreCommunication,
-    ) -> Result<BuiltPlugin, PluginError>;
+        core_comms: &CC,
+    ) -> Result<BuiltPlugin, PluginError>
+    where
+        CC: 'async_trait;
 }
 
 /// A functionality extension to ThinEdge
 #[async_trait]
-pub trait Plugin: Sync + Send + std::any::Any {
+pub trait Plugin: Sync + Send + DowncastSync {
     /// The plugin can set itself up here
     async fn setup(&mut self) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
     async fn shutdown(&mut self) -> Result<(), PluginError>;
 }
+
+impl_downcast!(sync Plugin);
 
 #[async_trait]
 pub trait Handle<Msg> {
@@ -81,6 +79,10 @@ pub trait Handle<Msg> {
 pub struct HandleTypes(Vec<(&'static str, TypeId)>);
 
 impl HandleTypes {
+    pub fn get_types(&self) -> &[(&'static str, TypeId)] {
+        &self.0
+    }
+
     /// Get a list of message types this plugin is proven to handle
     ///
     /// ## Example
@@ -147,29 +149,33 @@ impl HandleTypes {
     /// XX  | println!("{:#?}", HandleTypes::get_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
     ///     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Handle<Heartbeat>` is not implemented for `HeartbeatPlugin`
     /// ```
-    pub fn get_handlers_for<M: MsgBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
+    pub fn get_handlers_for<M: MessageBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
         HandleTypes(M::get_ids())
     }
 }
 
-pub trait MsgBundle {
+impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
+    fn from(ht: HandleTypes) -> Self {
+        ht.0.into_iter().collect()
+    }
+}
+
+pub trait Message: 'static + Send {}
+
+pub trait MessageBundle {
     fn get_ids() -> Vec<(&'static str, TypeId)>;
 }
 
-impl<A: Message> MsgBundle for (A,) {
-    fn get_ids() -> Vec<(&'static str, TypeId)> {
-        vec![(std::any::type_name::<A>(), TypeId::of::<A>())]
+pub trait PluginExt: Plugin {
+    fn into_untyped<M: MessageBundle>(self) -> BuiltPlugin
+    where
+        Self: DoesHandle<M> + Sized,
+    {
+        self.into_built_plugin()
     }
 }
 
-impl<A: Message, B: Message> MsgBundle for (A, B) {
-    fn get_ids() -> Vec<(&'static str, TypeId)> {
-        vec![
-            (std::any::type_name::<A>(), TypeId::of::<A>()),
-            (std::any::type_name::<B>(), TypeId::of::<B>()),
-        ]
-    }
-}
+impl<P: Plugin> PluginExt for P {}
 
 type PluginHandlerFn =
     for<'r> fn(&'r dyn Any, Box<dyn Any + Send>) -> BoxFuture<'r, Result<(), PluginError>>;
@@ -180,82 +186,132 @@ pub struct BuiltPlugin {
 }
 
 impl BuiltPlugin {
+    /// Call the plugin with the given types.
+    ///
+    /// ## Panics
+    ///
+    /// This method will panic when given a message it does not understand.
+    #[must_use]
     pub fn handle_message(
         &self,
         message: Box<dyn Any + Send>,
     ) -> BoxFuture<'_, Result<(), PluginError>> {
-        (self.handler)(&self.plugin, message)
+        (self.handler)((&*self.plugin).as_any(), message)
+    }
+
+    /// Get a mutable reference to the built plugin's plugin.
+    pub fn plugin_mut(&mut self) -> &mut Box<dyn Plugin> {
+        &mut self.plugin
+    }
+
+    /// Get a reference to the built plugin's plugin.
+    pub fn plugin(&self) -> &dyn Plugin {
+        self.plugin.as_ref()
     }
 }
 
-pub trait DoesHandle<M: MsgBundle> {
-    fn into_untyped(self) -> BuiltPlugin;
+pub trait DoesHandle<M: MessageBundle> {
+    fn into_built_plugin(self) -> BuiltPlugin;
 }
 
-// TODO: Implement these with a macro to cut down on repetition
+pub trait Contains<M: Message> {}
 
-impl<A: Message, PLUG: Plugin + Handle<A>> DoesHandle<(A,)> for PLUG {
-    fn into_untyped(self) -> BuiltPlugin {
-        fn handle_message<'a, M: Message, PLUG: Plugin + Handle<M>>(
-            plugin: &'a dyn Any,
-            message: Box<dyn Any + Send>,
-        ) -> BoxFuture<'a, Result<(), PluginError>> {
-            let plug = plugin.downcast_ref::<PLUG>().unwrap();
-            let message = {
-                if let Ok(message) = message.downcast::<M>() {
-                    message
-                } else {
-                    unreachable!()
+macro_rules! impl_does_handle_tuple {
+    () => {};
+    ($cur:ident $($rest:tt)*) => {
+        impl<$cur: Message, $($rest: Message,)* PLUG: Plugin + Handle<$cur> $(+ Handle<$rest>)*> DoesHandle<($cur, $($rest),*)> for PLUG {
+            fn into_built_plugin(self) -> BuiltPlugin {
+                fn handle_message<'a, $cur: Message, $($rest: Message,)* PLUG: Plugin + Handle<$cur> $(+ Handle<$rest>)*>(
+                    plugin: &'a dyn Any,
+                    message: Box<dyn Any + Send>,
+                    ) -> BoxFuture<'a, Result<(), PluginError>> {
+                    let plug = match plugin.downcast_ref::<PLUG>() {
+                        Some(p) => p,
+                        None => {
+                            panic!("Could not downcast to {}", std::any::type_name::<PLUG>());
+                        }
+                    };
+                    futures::FutureExt::boxed(async move {
+                        #![allow(unused)]
+
+                        let message = match message.downcast::<$cur>() {
+                            Ok(message) => return plug.handle_message(*message).await,
+                            Err(m) => m,
+                        };
+
+                        $(
+                        let message = match message.downcast::<$rest>() {
+                            Ok(message) => return plug.handle_message(*message).await,
+                            Err(m) => m,
+                        };
+                        )*
+
+                        unreachable!();
+                    })
                 }
-            };
+                BuiltPlugin {
+                    plugin: Box::new(self),
+                    handler: handle_message::<$cur, $($rest,)* PLUG>,
+                }
+            }
+        }
 
-            futures::FutureExt::boxed(async move { plug.handle_message(*message).await })
-        }
-        BuiltPlugin {
-            plugin: Box::new(self),
-            handler: handle_message::<A, PLUG>,
-        }
-    }
+        impl_does_handle_tuple!($($rest)*);
+    };
 }
-impl<A: Message, B: Message, PLUG: Plugin + Handle<A> + Handle<B>> DoesHandle<(A, B)> for PLUG {
-    fn into_untyped(self) -> BuiltPlugin {
-        fn handle_message<'a, A: Message, B: Message, PLUG: Plugin + Handle<A> + Handle<B>>(
-            plugin: &'a dyn Any,
-            message: Box<dyn Any + Send>,
-        ) -> BoxFuture<'a, Result<(), PluginError>> {
-            let plug = plugin.downcast_ref::<PLUG>().unwrap();
-            futures::FutureExt::boxed(async move {
-                let message = match message.downcast::<A>() {
-                    Ok(message) => return plug.handle_message(*message).await,
-                    Err(m) => m,
-                };
 
-                match message.downcast::<B>() {
-                    Ok(message) => return plug.handle_message(*message).await,
-                    Err(m) => m,
-                };
-
-                unreachable!();
-            })
-        }
-        BuiltPlugin {
-            plugin: Box::new(self),
-            handler: handle_message::<A, B, PLUG>,
-        }
+impl<M: Message> MessageBundle for M {
+    fn get_ids() -> Vec<(&'static str, TypeId)> {
+        vec![(std::any::type_name::<M>(), TypeId::of::<M>())]
     }
 }
 
-pub trait Message: 'static + Send {}
+macro_rules! impl_msg_bundle_tuple {
+    () => {};
+    (@rec_tuple $cur:ident) => {
+        ($cur, ())
+    };
+    (@rec_tuple $cur:ident $($rest:tt)*) => {
+        ($cur, impl_msg_bundle_tuple!(@rec_tuple $($rest)*))
+    };
+    ($cur:ident $($rest:tt)*) => {
+        impl<$cur: Message, $($rest: Message),*> MessageBundle for ($cur,$($rest),*) {
+            fn get_ids() -> Vec<(&'static str, TypeId)> {
+                vec![
+                    (std::any::type_name::<$cur>(), TypeId::of::<$cur>()),
+                    $((std::any::type_name::<$rest>(), TypeId::of::<$rest>())),*
+                ]
+            }
+        }
+
+        impl_msg_bundle_tuple!($($rest)*);
+    };
+}
+
+impl_msg_bundle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
+impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
+
+#[macro_export]
+macro_rules! make_message_bundle {
+    (struct $name:ident($($msg:ty),+)) => {
+        struct $name;
+
+        impl $crate::plugin::MessageBundle for $name {
+            fn get_ids() -> Vec<(&'static str, std::any::TypeId)> {
+                <($($msg),+) as $crate::plugin::MessageBundle>::get_ids()
+            }
+        }
+
+        $(impl $crate::plugin::Contains<$msg> for $name {})+
+    };
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{CoreCommunication, Plugin, PluginBuilder};
-    use static_assertions::{assert_impl_all, assert_obj_safe};
+    use super::{Plugin, PluginBuilder};
+    use static_assertions::assert_obj_safe;
 
     // Object Safety
-    assert_obj_safe!(PluginBuilder);
+    assert_obj_safe!(PluginBuilder<()>);
     assert_obj_safe!(Plugin);
-
-    // Sync + Send
-    assert_impl_all!(CoreCommunication: Send, Clone);
 }
