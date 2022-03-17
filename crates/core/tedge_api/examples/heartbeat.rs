@@ -6,7 +6,7 @@ use std::{
 use async_trait::async_trait;
 use tedge_api::{
     plugin::{BuiltPlugin, Handle, HandleTypes, Message, PluginExt},
-    Address, CoreCommunication, Plugin, PluginBuilder, PluginConfiguration, PluginError,
+    Address, PluginDirectory, Plugin, PluginBuilder, PluginConfiguration, PluginError,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ struct HeartbeatServiceBuilder;
 type HeartbeatMessages = (HeartbeatStatusReply,);
 
 #[async_trait]
-impl<CC: CoreCommunication> PluginBuilder<CC> for HeartbeatServiceBuilder {
+impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
     fn kind_name(&self) -> &'static str {
         todo!()
     }
@@ -48,10 +48,10 @@ impl<CC: CoreCommunication> PluginBuilder<CC> for HeartbeatServiceBuilder {
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        tedge_comms: &CC,
+        tedge_comms: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where
-        CC: 'async_trait,
+        PD: 'async_trait,
     {
         let hb_config: HeartbeatConfig = toml::Value::try_into(config.into_inner())?;
         let monitored_services = hb_config
@@ -123,7 +123,7 @@ struct CriticalServiceBuilder;
 tedge_api::make_message_bundle!(struct CriticalServiceMessage(Heartbeat));
 
 #[async_trait]
-impl<CC: CoreCommunication> PluginBuilder<CC> for CriticalServiceBuilder {
+impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
     fn kind_name(&self) -> &'static str {
         todo!()
     }
@@ -145,10 +145,10 @@ impl<CC: CoreCommunication> PluginBuilder<CC> for CriticalServiceBuilder {
     async fn instantiate(
         &self,
         _config: PluginConfiguration,
-        _tedge_comms: &CC,
+        _tedge_comms: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where
-        CC: 'async_trait,
+        PD: 'async_trait,
     {
         Ok(CriticalService {}.into_untyped::<(Heartbeat,)>())
     }
@@ -213,7 +213,7 @@ impl Communication {
     }
 }
 
-impl CoreCommunication for Communication {
+impl PluginDirectory for Communication {
     fn get_address_for<MB: tedge_api::plugin::MessageBundle>(
         &self,
         name: &str,

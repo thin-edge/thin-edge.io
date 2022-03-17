@@ -14,11 +14,21 @@ use downcast_rs::{impl_downcast, DowncastSync};
 
 use async_trait::async_trait;
 
-use crate::{error::PluginError, Address};
+use crate::{error::PluginError, message::CoreMessages, Address};
 
 /// The communication struct to interface with the core of ThinEdge
-pub trait CoreCommunication: Clone + Send + Sync {
+pub trait PluginDirectory: Clone + Send + Sync {
+    /// Request an `Address` object for a given plugin which can receive messages included in the
+    /// message bundle `MB`.
+    ///
+    /// ## Also see
+    ///
+    /// - [`make_message_bundle`] On how to define your own named message bundle
     fn get_address_for<MB: MessageBundle>(&self, name: &str) -> Result<Address<MB>, PluginError>;
+
+    /// Request an `Address` to the core itself. It will only accept messages from the
+    /// [`CoreMessages`] bundle.
+    fn get_address_for_core(&self, name: &str) -> Result<Address<CoreMessages>, PluginError>;
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
@@ -30,9 +40,11 @@ pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
 
 /// A plugin builder for a given plugin
 #[async_trait]
-pub trait PluginBuilder<CC: CoreCommunication>: Sync + Send + 'static {
+pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// The name for the kind of plugins this creates, this should be unique and will prevent startup otherwise
-    fn kind_name(&self) -> &'static str;
+    fn kind_name() -> &'static str
+    where
+        Self: Sized;
 
     /// A list of message types the plugin this builder creates supports
     ///
@@ -51,10 +63,10 @@ pub trait PluginBuilder<CC: CoreCommunication>: Sync + Send + 'static {
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        core_comms: &CC,
+        core_comms: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where
-        CC: 'async_trait;
+        PD: 'async_trait;
 }
 
 /// A functionality extension to ThinEdge
@@ -70,12 +82,14 @@ pub trait Plugin: Sync + Send + DowncastSync {
 impl_downcast!(sync Plugin);
 
 #[async_trait]
+#[doc(hidden)]
 pub trait Handle<Msg> {
     /// Handle a message specific to this plugin
     async fn handle_message(&self, message: Msg) -> Result<(), PluginError>;
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct HandleTypes(Vec<(&'static str, TypeId)>);
 
 impl HandleTypes {
@@ -210,10 +224,12 @@ impl BuiltPlugin {
     }
 }
 
+#[doc(hidden)]
 pub trait DoesHandle<M: MessageBundle> {
     fn into_built_plugin(self) -> BuiltPlugin;
 }
 
+#[doc(hidden)]
 pub trait Contains<M: Message> {}
 
 macro_rules! impl_does_handle_tuple {
@@ -293,10 +309,11 @@ impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 
 #[macro_export]
 macro_rules! make_message_bundle {
-    (struct $name:ident($($msg:ty),+)) => {
-        struct $name;
+    ($pu:vis struct $name:ident($($msg:ty),+)) => {
+        $pu struct $name;
 
         impl $crate::plugin::MessageBundle for $name {
+            #[allow(unused_parens)]
             fn get_ids() -> Vec<(&'static str, std::any::TypeId)> {
                 <($($msg),+) as $crate::plugin::MessageBundle>::get_ids()
             }
