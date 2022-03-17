@@ -361,7 +361,11 @@ impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
 /// between plugins in thin-edge.
 pub trait Message: 'static + Send {}
 
+/// A bundle of messages
+///
+/// This trait is implemented on types that represent a bundle of different types of messages.
 pub trait MessageBundle {
+    /// Get the names and ids of the types that are represented by this bundle
     fn get_ids() -> Vec<(&'static str, TypeId)>;
 }
 
