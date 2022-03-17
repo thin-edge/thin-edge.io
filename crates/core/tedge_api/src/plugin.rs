@@ -369,7 +369,16 @@ pub trait MessageBundle {
     fn get_ids() -> Vec<(&'static str, TypeId)>;
 }
 
+/// An extension for a Plugin implementing type
+///
+/// This trait implements an extension for all types that implement `Plugin`.
+/// This extension can be used by plugin authors to make their specific plugin type instance into a
+/// [`BuiltPlugin`].
 pub trait PluginExt: Plugin {
+    /// Convert a `Plugin` into a `BuiltPlugin`
+    ///
+    /// This function is only available if the Plugin is able to handle messages that are inside
+    /// the specified `MessageBundle`.
     fn into_untyped<M: MessageBundle>(self) -> BuiltPlugin
     where
         Self: DoesHandle<M> + Sized,
