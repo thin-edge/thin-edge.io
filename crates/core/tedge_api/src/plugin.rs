@@ -355,6 +355,10 @@ impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
     }
 }
 
+/// A thing that can be send around
+///
+/// This trait is a marker trait for all types that can be used as messages which can be send
+/// between plugins in thin-edge.
 pub trait Message: 'static + Send {}
 
 pub trait MessageBundle {
