@@ -40,9 +40,9 @@ impl CumulocityMapper {
         Ok(topic_filter)
     }
 
-    pub async fn init(&mut self, mapper_name: &str) -> Result<(), anyhow::Error> {
+    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper c8y");
         create_directories()?;
-        info!("Initialize tedge mapper {}", mapper_name);
         mqtt_channel::init_session(&self.get_mqtt_config()?).await?;
         Ok(())
     }

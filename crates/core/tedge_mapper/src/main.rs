@@ -93,26 +93,34 @@ async fn main() -> anyhow::Result<()> {
         match mapper_opt.name {
             MapperName::Az => {
                 let mut mapper = AzureMapper::new();
-                println!("initialize az mapper");
-                mapper.init("az").await?;
-                Ok(())
+                mapper.init().await?;
             }
             MapperName::C8y => {
                 let mut mapper = CumulocityMapper::new();
-                println!("initialize c8y mapper");
-                mapper.init("c8y").await?;
-                Ok(())
+                mapper.init().await?;
             }
             MapperName::Collectd => {
                 let mut mapper = CollectdMapper::new();
-                println!("initialize collectd mapper");
-                mapper.init("collectd").await?;
-                Ok(())
+                mapper.init().await?;
             }
         }
+        Ok(())
     } else if mapper_opt.clear {
-        let mut mapper = CumulocityMapper::new();
-        mapper.clear_session().await
+        match mapper_opt.name {
+            MapperName::Az => {
+                let mut mapper = AzureMapper::new();
+                mapper.clear_session().await?;
+            }
+            MapperName::C8y => {
+                let mut mapper = CumulocityMapper::new();
+                mapper.clear_session().await?;
+            }
+            MapperName::Collectd => {
+                let mut mapper = CollectdMapper::new();
+                mapper.clear_session().await?;
+            }
+        }
+        Ok(())
     } else {
         component.start(config).await
     }
