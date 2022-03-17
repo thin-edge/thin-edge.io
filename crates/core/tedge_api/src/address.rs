@@ -10,7 +10,12 @@ pub type MessageSender = tokio::sync::mpsc::Sender<Box<dyn std::any::Any + Send>
 #[doc(hidden)]
 pub type MessageReceiver = tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>;
 
-/// An address of a plugin that can receive messages of type `M`
+/// An address of a plugin that can receive messages a certain type of messages
+///
+/// An instance of this type represents an address that can be used to send messages of a
+/// well-defined type to a specific plugin.
+/// The `Address` instance can be used to send messages of several types, but each type has to be
+/// in `MB: MessageBundle`.
 #[derive(Debug, Clone)]
 pub struct Address<MB: MessageBundle> {
     _pd: PhantomData<MB>,
