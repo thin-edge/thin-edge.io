@@ -17,9 +17,21 @@ use async_trait::async_trait;
 use crate::{error::PluginError, message::CoreMessages, Address};
 
 /// The communication struct to interface with the core of ThinEdge
+///
+/// Implementors of this trait can be used to get an address of a certain plugin, which can then be
+/// used to send messages of a specific type to that plugin.
+/// Alternatively, implementors of this trait can be used to send messages to the core of
+/// thin-edge.
+///
+/// # Note
+///
+/// As a plugin author, you will not have to implement this trait.
+/// The core of thin-edge will use this trait to hand over an object to a plugin that can then be
+/// used to communicate with other plugins (as described above).
+///
 pub trait PluginDirectory: Clone + Send + Sync {
-    /// Request an `Address` object for a given plugin which can receive messages included in the
-    /// message bundle `MB`.
+    /// Request an `Address` object for a given plugin which can receive messages of a type
+    /// included in the message bundle `MB`.
     ///
     /// ## Also see
     ///
