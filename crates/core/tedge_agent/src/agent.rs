@@ -209,11 +209,11 @@ impl SmAgent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        create_directory_with_user_group("tedge-agent", "tedge-agent", "/etc/tedge/.agent", 0o775)?;
+        create_directory_with_user_group("/etc/tedge/.agent", "tedge-agent", "tedge-agent", 0o775)?;
         create_directory_with_user_group(
-            "tedge-agent",
-            "tedge-agent",
             "/var/log/tedge/agent",
+            "tedge-agent",
+            "tedge-agent",
             0o775,
         )?;
         info!("Initializing the tedge agent session");

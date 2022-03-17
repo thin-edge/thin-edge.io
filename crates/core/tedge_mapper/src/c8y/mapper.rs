@@ -39,40 +39,23 @@ impl CumulocityMapper {
 
         Ok(topic_filter)
     }
-
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper c8y");
-        create_directories()?;
-        mqtt_channel::init_session(&self.get_mqtt_config()?).await?;
-        Ok(())
-    }
-
-    pub async fn clear_session(&mut self) -> Result<(), anyhow::Error> {
-        info!("Clear tedge mapper session");
-        mqtt_channel::clear_session(&self.get_mqtt_config()?).await?;
-        Ok(())
-    }
-
-    fn get_mqtt_config(&mut self) -> Result<mqtt_channel::Config, anyhow::Error> {
-        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let mqtt_topic = Self::subscriptions(&operations)?;
-        let config_repository =
-            tedge_config::TEdgeConfigRepository::new(tedge_config::TEdgeConfigLocation::default());
-        let tedge_config = config_repository.load()?;
-
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
-            .with_port(tedge_config.query(MqttPortSetting)?.into())
-            .with_session_name(CUMULOCITY_MAPPER_NAME)
-            .with_clean_session(false)
-            .with_subscriptions(mqtt_topic);
-
-        Ok(mqtt_config)
-    }
 }
 
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
+    async fn init(&self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper c8y");
+        create_directories()?;
+        mqtt_channel::init_session(&get_mqtt_config()?).await?;
+        Ok(())
+    }
+
+    async fn clear_session(&self) -> Result<(), anyhow::Error> {
+        info!("Clear tedge mapper session");
+        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
+        Ok(())
+    }
+
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
@@ -104,23 +87,40 @@ impl TEdgeComponent for CumulocityMapper {
     }
 }
 
+fn get_mqtt_config() -> Result<mqtt_channel::Config, anyhow::Error> {
+    let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+    let mqtt_topic = CumulocityMapper::subscriptions(&operations)?;
+    let config_repository =
+        tedge_config::TEdgeConfigRepository::new(tedge_config::TEdgeConfigLocation::default());
+    let tedge_config = config_repository.load()?;
+
+    let mqtt_config = mqtt_channel::Config::default()
+        .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
+        .with_port(tedge_config.query(MqttPortSetting)?.into())
+        .with_session_name(CUMULOCITY_MAPPER_NAME)
+        .with_clean_session(false)
+        .with_subscriptions(mqtt_topic);
+
+    Ok(mqtt_config)
+}
+
 fn create_directories() -> Result<(), anyhow::Error> {
     create_directory_with_user_group(
-        "tedge-mapper",
-        "tedge-mapper",
         "/etc/tedge/operations/c8y",
+        "tedge-mapper",
+        "tedge-mapper",
         0o775,
     )?;
     create_file_with_user_group(
-        "tedge-mapper",
-        "tedge-mapper",
         "/etc/tedge/operations/c8y/c8y_SoftwareUpdate",
+        "tedge-mapper",
+        "tedge-mapper",
         0o644,
     )?;
     create_file_with_user_group(
-        "tedge-mapper",
-        "tedge-mapper",
         "/etc/tedge/operations/c8y/c8y_Restart",
+        "tedge-mapper",
+        "tedge-mapper",
         0o644,
     )?;
     Ok(())

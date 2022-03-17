@@ -16,13 +16,13 @@ use command::{BuildCommand, BuildContext};
 
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
-    let user_manager = UserManager::new();
+
     if opt.init {
-        println!("Initialize the tedge");
         initialize_tedge()?;
         return Ok(());
     }
 
+    let user_manager = UserManager::new();
     let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(opt.config_dir);
     let _user_guard = user_manager.become_user(tedge_users::TEDGE_USER)?;
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
@@ -46,11 +46,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn initialize_tedge() -> anyhow::Result<()> {
-    create_directory_with_user_group("tedge", "tedge", "/etc/tedge", 0o775)?;
-    create_directory_with_user_group("tedge", "tedge", "/var/log/tedge", 0o775)?;
-    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/mosquitto-conf", 0o775)?;
-    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/operations", 0o775)?;
-    create_directory_with_user_group("tedge", "tedge", "/etc/tedge/plugins", 0o775)?;
-    create_directory_with_user_group("mosquitto", "mosquitto", "/etc/tedge/device-certs", 0o775)?;
+    create_directory_with_user_group("/etc/tedge", "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group("/var/log/tedge", "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group("/etc/tedge/mosquitto-conf", "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group("/etc/tedge/operations", "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group("/etc/tedge/plugins", "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group("/etc/tedge/device-certs", "mosquitto", "mosquitto", 0o775)?;
     Ok(())
 }

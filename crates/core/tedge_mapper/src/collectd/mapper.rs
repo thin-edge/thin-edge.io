@@ -16,18 +16,6 @@ impl CollectdMapper {
     pub fn new() -> Self {
         Self {}
     }
-
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper collectd");
-        mqtt_channel::init_session(&get_mqtt_config()?).await?;
-        Ok(())
-    }
-
-    pub async fn clear_session(&mut self) -> Result<(), anyhow::Error> {
-        info!("Clear tedge mapper collectd session");
-        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -46,6 +34,18 @@ impl TEdgeComponent for CollectdMapper {
             .instrument(info_span!(COLLECTD_MAPPER_NAME))
             .await?;
 
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper collectd");
+        mqtt_channel::init_session(&get_mqtt_config()?).await?;
+        Ok(())
+    }
+
+    async fn clear_session(&self) -> Result<(), anyhow::Error> {
+        info!("Clear tedge mapper collectd session");
+        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
         Ok(())
     }
 }

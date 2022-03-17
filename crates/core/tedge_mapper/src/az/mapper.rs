@@ -19,24 +19,6 @@ impl AzureMapper {
     pub fn new() -> AzureMapper {
         AzureMapper {}
     }
-
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper az");
-        create_directory_with_user_group(
-            "tedge-mapper",
-            "tedge-mapper",
-            "/etc/tedge/operations/az",
-            0o775,
-        )?;
-        mqtt_channel::init_session(&get_mqtt_config()?).await?;
-        Ok(())
-    }
-
-    pub async fn clear_session(&mut self) -> Result<(), anyhow::Error> {
-        info!("Clear tedge mapper session");
-        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -57,6 +39,24 @@ impl TEdgeComponent for AzureMapper {
             .instrument(info_span!(AZURE_MAPPER_NAME))
             .await?;
 
+        Ok(())
+    }
+
+    async fn init(&self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper az");
+        create_directory_with_user_group(
+            "/etc/tedge/operations/az",
+            "tedge-mapper",
+            "tedge-mapper",
+            0o775,
+        )?;
+        mqtt_channel::init_session(&get_mqtt_config()?).await?;
+        Ok(())
+    }
+
+    async fn clear_session(&self) -> Result<(), anyhow::Error> {
+        info!("Clear tedge mapper session");
+        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
         Ok(())
     }
 }

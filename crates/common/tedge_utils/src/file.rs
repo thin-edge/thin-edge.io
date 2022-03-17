@@ -8,13 +8,13 @@ use users::{get_group_by_name, get_user_by_name};
 #[derive(thiserror::Error, Debug)]
 pub enum FileError {
     #[error("Creating the directory failed: {dir:?}.")]
-    DirectoryCreateFailed { dir: String },
+    DirectoryCreateFailed { dir: String, from: std::io::Error },
 
     #[error("Creating the file failed: {file:?}.")]
-    FileCreateFailed { file: String },
+    FileCreateFailed { file: String, from: std::io::Error },
 
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    #[error("Failed to change owner: {name:?}.")]
+    MetaDataError { name: String, from: std::io::Error },
 
     #[error("User not found: {user:?}.")]
     UserNotFound { user: String },
@@ -27,9 +27,9 @@ pub enum FileError {
 }
 
 pub fn create_directory_with_user_group(
+    dir: &str,
     user: &str,
     group: &str,
-    dir: &str,
     mode: u32,
 ) -> Result<(), FileError> {
     match fs::create_dir(dir) {
@@ -41,7 +41,10 @@ pub fn create_directory_with_user_group(
             if e.kind() == io::ErrorKind::AlreadyExists {
                 return Ok(());
             } else {
-                return Err(FileError::IoError(e));
+                return Err(FileError::DirectoryCreateFailed {
+                    dir: dir.to_string(),
+                    from: e,
+                });
             }
         }
     }
@@ -49,9 +52,9 @@ pub fn create_directory_with_user_group(
 }
 
 pub fn create_file_with_user_group(
+    file: &str,
     user: &str,
     group: &str,
-    file: &str,
     mode: u32,
 ) -> Result<(), anyhow::Error> {
     match File::create(file) {
@@ -91,8 +94,18 @@ fn change_owner_and_permission(
         }
     };
 
-    let uid = fs::metadata(file)?.st_uid();
-    let gid = fs::metadata(file)?.st_gid();
+    let uid = fs::metadata(file)
+        .map_err(|e| FileError::MetaDataError  {
+            name: file.to_string(),
+            from: e,
+        })?
+        .st_uid();
+    let gid = fs::metadata(file)
+        .map_err(|e| FileError::MetaDataError {
+            name: file.to_string(),
+            from: e,
+        })?
+        .st_gid();
 
     // if user and group is same as existing, then do not change
     if (ud != uid) && (gd != gid) {
@@ -103,9 +116,18 @@ fn change_owner_and_permission(
         )?;
     }
 
-    let mut perm = fs::metadata(file)?.permissions();
+    let mut perm = fs::metadata(file)
+        .map_err(|e| FileError::MetaDataError {
+            name: file.to_string(),
+            from: e,
+        })?
+        .permissions();
     perm.set_mode(mode);
-    fs::set_permissions(file, perm)?;
+
+    fs::set_permissions(file, perm).map_err(|e| FileError::MetaDataError {
+        name: file.to_string(),
+        from: e,
+    })?;
 
     Ok(())
 }
@@ -142,8 +164,9 @@ mod tests {
         let user = whoami::username();
         let err = create_file_with_user_group(&user, "test", "/tmp/fcreate_wrong_group", 0o775)
             .unwrap_err();
-        fs::remove_file("/tmp/fcreate_wrong_group").unwrap();
+
         assert!(err.to_string().contains("Group not found"));
+        fs::remove_file("/tmp/fcreate_wrong_group").unwrap();
     }
 
     #[test]

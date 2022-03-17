@@ -90,37 +90,9 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     if mapper_opt.init {
-        match mapper_opt.name {
-            MapperName::Az => {
-                let mut mapper = AzureMapper::new();
-                mapper.init().await?;
-            }
-            MapperName::C8y => {
-                let mut mapper = CumulocityMapper::new();
-                mapper.init().await?;
-            }
-            MapperName::Collectd => {
-                let mut mapper = CollectdMapper::new();
-                mapper.init().await?;
-            }
-        }
-        Ok(())
+        component.init().await
     } else if mapper_opt.clear {
-        match mapper_opt.name {
-            MapperName::Az => {
-                let mut mapper = AzureMapper::new();
-                mapper.clear_session().await?;
-            }
-            MapperName::C8y => {
-                let mut mapper = CumulocityMapper::new();
-                mapper.clear_session().await?;
-            }
-            MapperName::Collectd => {
-                let mut mapper = CollectdMapper::new();
-                mapper.clear_session().await?;
-            }
-        }
-        Ok(())
+        component.clear_session().await
     } else {
         component.start(config).await
     }
