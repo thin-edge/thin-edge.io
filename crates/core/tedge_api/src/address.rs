@@ -27,6 +27,22 @@ impl<MB: MessageBundle> Address<MB> {
         }
     }
 
+    /// Send a message `M` to the address represented by the instance of this struct
+    ///
+    /// This function can be used to send a message of type `M` to the plugin that is addressed by
+    /// the instance of this type.
+    ///
+    /// # Return
+    ///
+    /// The function either returns `Ok(())` if sending the message succeeded,
+    /// or the message in the error variant of the `Result`: `Err(M)`.
+    ///
+    /// The error is returned if the receiving side (the plugin that is addressed) does not receive
+    /// messages anymore.
+    ///
+    /// # Details
+    ///
+    /// For details on sending and receiving, see `tokio::sync::mpsc::Sender`.
     pub async fn send<M: Message>(&self, msg: M) -> Result<(), M>
     where
         MB: Contains<M>,
