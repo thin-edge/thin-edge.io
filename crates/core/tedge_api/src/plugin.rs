@@ -392,6 +392,9 @@ impl<P: Plugin> PluginExt for P {}
 type PluginHandlerFn =
     for<'r> fn(&'r dyn Any, Box<dyn Any + Send>) -> BoxFuture<'r, Result<(), PluginError>>;
 
+/// A plugin that is instantiated
+///
+/// This type represents a plugin that is instantiated (via the [`PluginBuilder`]).
 pub struct BuiltPlugin {
     plugin: Box<dyn Plugin>,
     handler: PluginHandlerFn,
