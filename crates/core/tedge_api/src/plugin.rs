@@ -256,10 +256,16 @@ pub trait Plugin: Sync + Send + DowncastSync {
 
 impl_downcast!(sync Plugin);
 
+/// A trait marking that a plugin is able to handle certain messages
+///
+/// This trait can be used by plugin authors to make their plugins able to handle messages of a
+/// certain type (`Msg`).
+///
+/// A Plugin that is able to receive different types of messages would have multiple
+/// implementations of this trait.
 #[async_trait]
-#[doc(hidden)]
 pub trait Handle<Msg> {
-    /// Handle a message specific to this plugin
+    /// Handle a message of type `Msg` that gets send to this plugin
     async fn handle_message(&self, message: Msg) -> Result<(), PluginError>;
 }
 
