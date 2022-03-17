@@ -228,12 +228,29 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
 }
 
 /// A functionality extension to ThinEdge
+///
+/// The `Plugin` trait can be implemented to implement behaviour within thin-edge.
+/// If a plugin also would like to receive messages, the author of a plugin must also implement the
+/// `Handle` trait.
+///
+/// The functionality implemented via the `Plugin` trait is used to setup the plugin before
+/// messages are sent to it, and to shut the plugin down when thin-edge stops operation.
+///
+/// The `Plugin::setup` function would be the place where a plugin author would create background
+/// tasks, if their plugin must send messages pro-actively.
 #[async_trait]
 pub trait Plugin: Sync + Send + DowncastSync {
     /// The plugin can set itself up here
+    ///
+    /// This function will be called by the core of thin-edge before any message-passing starts.
+    /// The plugin is free to for example spawn up background tasks here.
     async fn setup(&mut self) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
+    ///
+    /// This function is called by the core of thin-edge before the software shuts down as a whole,
+    /// giving the plugin the opportunity to clear up resources (e.g. deallocate file handles
+    /// cleanly, shut down network connections properly, etc...).
     async fn shutdown(&mut self) -> Result<(), PluginError>;
 }
 
