@@ -40,7 +40,7 @@ pub trait PluginDirectory: Clone + Send + Sync {
 
     /// Request an `Address` to the core itself. It will only accept messages from the
     /// [`CoreMessages`] bundle.
-    fn get_address_for_core(&self, name: &str) -> Result<Address<CoreMessages>, PluginError>;
+    fn get_address_for_core(&self) -> Result<Address<CoreMessages>, PluginError>;
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
@@ -88,6 +88,8 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// # Example
     ///
     /// ```no_run
+    /// # use tedge_api::{Message, Plugin, plugin::{BuiltPlugin}, PluginConfiguration}
+    ///
     /// #[derive(Debug)]
     /// struct MyMessage;
     /// impl Message for MyMessage {}
