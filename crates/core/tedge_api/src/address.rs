@@ -16,10 +16,25 @@ pub type MessageReceiver = tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + S
 /// well-defined type to a specific plugin.
 /// The `Address` instance can be used to send messages of several types, but each type has to be
 /// in `MB: MessageBundle`.
-#[derive(Debug, Clone)]
 pub struct Address<MB: MessageBundle> {
     _pd: PhantomData<MB>,
     sender: MessageSender,
+}
+
+impl<MB: MessageBundle> std::fmt::Debug for Address<MB> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(&format!("Address<{}>", std::any::type_name::<MB>()))
+            .finish_non_exhaustive()
+    }
+}
+
+impl<MB: MessageBundle> Clone for Address<MB> {
+    fn clone(&self) -> Self {
+        Self {
+            _pd: PhantomData,
+            sender: self.sender.clone(),
+        }
+    }
 }
 
 impl<MB: MessageBundle> Address<MB> {
