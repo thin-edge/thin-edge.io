@@ -9,4 +9,6 @@ edition = "2021"
 async-trait = "0.1"
 futures = "0.3"
 thiserror = "1.0"
-toml = "0.5"
+
+[dev-dependencies]
+tokio = "1.17"

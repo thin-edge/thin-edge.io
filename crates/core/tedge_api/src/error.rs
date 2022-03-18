@@ -1,6 +1,4 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum PluginError {
-
-}
+pub enum RuntimeError {}

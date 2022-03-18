@@ -1,21 +1,14 @@
-use std::collections::HashMap;
-use crate::message::Message;
+use async_trait::async_trait;
 
-trait Producer<M> {
-    fn get(&self) -> futures::channel::mpsc::Receiver<M>;
-}
-trait Consumer<M> {
-    fn set(&self) -> u64;
+pub trait Producer<M> {
+    //fn add_consumer(&mut self, consumer: Consumer<M>);
 }
 
-#[derive(Default)]
-pub struct PubSubPeers<M> {
-    producers: HashMap<String, Box<dyn Producer<M>>>,
-    consumers: HashMap<String, Box<dyn Consumer<M>>>,
+#[async_trait]
+pub trait Consumer<M> {
+    //async fn consume(&self, message: M);
 }
 
-impl<M: Message> PubSubPeers<M> {
+pub trait Requester<Req, Res> {}
 
-
-}
-
+pub trait Responder<Req, Res> {}

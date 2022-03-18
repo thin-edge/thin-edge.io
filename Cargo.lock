@@ -2798,7 +2798,7 @@ dependencies = [
  "async-trait",
  "futures",
  "thiserror",
- "toml",
+ "tokio",
 ]
 
 [[package]]
