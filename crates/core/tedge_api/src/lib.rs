@@ -19,4 +19,5 @@ pub use address::Address;
 pub mod error;
 pub use error::PluginError;
 
+/// Predefined messages
 pub mod message;
