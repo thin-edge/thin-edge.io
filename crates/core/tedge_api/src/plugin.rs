@@ -508,6 +508,9 @@ macro_rules! impl_msg_bundle_tuple {
 impl_msg_bundle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 
+/// Declare a set of messages to be a "MessageBundle"
+///
+/// This macro can be used by a plugin author to declare a set of messages to be a `MessageBundle`.
 #[macro_export]
 macro_rules! make_message_bundle {
     ($pu:vis struct $name:ident($($msg:ty),+)) => {
