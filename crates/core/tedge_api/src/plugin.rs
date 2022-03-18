@@ -515,6 +515,7 @@ impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 #[macro_export]
 macro_rules! make_message_bundle {
     ($pu:vis struct $name:ident($($msg:ty),+)) => {
+        #[allow(missing_docs)]
         #[derive(Debug)]
         $pu struct $name;
 
