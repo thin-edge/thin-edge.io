@@ -395,6 +395,7 @@ type PluginHandlerFn =
 /// A plugin that is instantiated
 ///
 /// This type represents a plugin that is instantiated (via the [`PluginBuilder`]).
+#[allow(missing_debug_implementations)]
 pub struct BuiltPlugin {
     plugin: Box<dyn Plugin>,
     handler: PluginHandlerFn,
