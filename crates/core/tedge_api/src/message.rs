@@ -1,5 +1,6 @@
 use crate::plugin::Message;
 
+#[derive(Debug)]
 pub struct StopCore;
 
 impl Message for StopCore {}
