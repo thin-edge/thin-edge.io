@@ -1,14 +1,24 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::plugin::{Contains, Message, MessageBundle};
 
-/// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
 #[doc(hidden)]
-pub type MessageSender = tokio::sync::mpsc::Sender<Box<dyn std::any::Any + Send>>;
+pub type AnySendBox = Box<dyn std::any::Any + Send>;
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct InternalMessage {
+    pub(crate) data: AnySendBox,
+    pub(crate) reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
+}
 
 /// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
 #[doc(hidden)]
-pub type MessageReceiver = tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>;
+pub type MessageSender = tokio::sync::mpsc::Sender<InternalMessage>;
+
+/// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
+#[doc(hidden)]
+pub type MessageReceiver = tokio::sync::mpsc::Receiver<InternalMessage>;
 
 /// An address of a plugin that can receive messages a certain type of messages
 ///
@@ -63,15 +73,71 @@ impl<MB: MessageBundle> Address<MB> {
     /// # Details
     ///
     /// For details on sending and receiving, see `tokio::sync::mpsc::Sender`.
-    pub async fn send<M: Message>(&self, msg: M) -> Result<(), M>
+    pub async fn send<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M>
     where
         MB: Contains<M>,
     {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+
         self.sender
-            .send(Box::new(msg))
+            .send(InternalMessage {
+                data: Box::new(msg),
+                reply_sender: sender,
+            })
             .await
-            .map_err(|msg| *msg.0.downcast::<M>().unwrap())
+            .map_err(|msg| *msg.0.data.downcast::<M>().unwrap())?;
+
+        Ok(ReplyReceiver {
+            _pd: PhantomData,
+            reply_recv: receiver,
+        })
     }
+}
+
+#[derive(Debug)]
+pub struct ReplyReceiver<M> {
+    _pd: PhantomData<M>,
+    reply_recv: tokio::sync::oneshot::Receiver<AnySendBox>,
+}
+
+impl<M: Message> ReplyReceiver<M> {
+    pub async fn wait_for_reply(self, timeout: Duration) -> Result<M, ReplyError> {
+        let data = tokio::time::timeout(timeout, self.reply_recv)
+            .await
+            .map_err(|_| ReplyError::Timeout)?
+            .map_err(|_| ReplyError::Unknown)?;
+
+        Ok(*data.downcast().expect("Invalid type received"))
+    }
+}
+
+#[derive(Debug)]
+pub struct ReplySender<M> {
+    _pd: PhantomData<M>,
+    reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
+}
+
+impl<M: Message> ReplySender<M> {
+    pub(crate) fn new(reply_sender: tokio::sync::oneshot::Sender<AnySendBox>) -> Self {
+        Self {
+            _pd: PhantomData,
+            reply_sender,
+        }
+    }
+
+    pub fn reply(self, msg: M) -> Result<(), M> {
+        self.reply_sender
+            .send(Box::new(msg))
+            .map_err(|msg| *msg.downcast::<M>().unwrap())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ReplyError {
+    #[error("There was no response before timeout")]
+    Timeout,
+    #[error("Could not send reply")]
+    Unknown
 }
 
 #[cfg(test)]
@@ -80,11 +146,15 @@ mod tests {
 
     struct Foo;
 
-    impl Message for Foo {}
+    impl Message for Foo {
+        type Reply = Bar;
+    }
 
     struct Bar;
 
-    impl Message for Bar {}
+    impl Message for Bar {
+        type Reply = Bar;
+    }
 
     make_message_bundle!(struct FooBar(Foo, Bar));
 

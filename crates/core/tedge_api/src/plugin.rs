@@ -14,7 +14,12 @@ use downcast_rs::{impl_downcast, DowncastSync};
 
 use async_trait::async_trait;
 
-use crate::{error::PluginError, message::CoreMessages, Address};
+use crate::{
+    address::{InternalMessage, ReplySender},
+    error::PluginError,
+    message::CoreMessages,
+    Address,
+};
 
 /// The communication struct to interface with the core of ThinEdge
 ///
@@ -266,9 +271,13 @@ impl_downcast!(sync Plugin);
 /// A Plugin that is able to receive different types of messages would have multiple
 /// implementations of this trait.
 #[async_trait]
-pub trait Handle<Msg> {
+pub trait Handle<Msg: Message> {
     /// Handle a message of type `Msg` that gets send to this plugin
-    async fn handle_message(&self, message: Msg) -> Result<(), PluginError>;
+    async fn handle_message(
+        &self,
+        message: Msg,
+        sender: ReplySender<Msg::Reply>,
+    ) -> Result<(), PluginError>;
 }
 
 #[derive(Debug)]
@@ -349,6 +358,12 @@ impl HandleTypes {
     pub fn get_handlers_for<M: MessageBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
         HandleTypes(M::get_ids())
     }
+
+    /// Empty list of types. A plugin that does not handle anything will not be able to receive
+    /// messages except through replies sent with [`Reply`](crate::address::Reply)
+    pub fn empty() -> HandleTypes {
+        HandleTypes(Vec::with_capacity(0))
+    }
 }
 
 impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
@@ -361,7 +376,9 @@ impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
 ///
 /// This trait is a marker trait for all types that can be used as messages which can be send
 /// between plugins in thin-edge.
-pub trait Message: 'static + Send {}
+pub trait Message: 'static + Send + std::fmt::Debug {
+    type Reply: Message;
+}
 
 /// A bundle of messages
 ///
@@ -392,7 +409,7 @@ pub trait PluginExt: Plugin {
 impl<P: Plugin> PluginExt for P {}
 
 type PluginHandlerFn =
-    for<'r> fn(&'r dyn Any, Box<dyn Any + Send>) -> BoxFuture<'r, Result<(), PluginError>>;
+    for<'r> fn(&'r dyn Any, InternalMessage) -> BoxFuture<'r, Result<(), PluginError>>;
 
 /// A plugin that is instantiated
 ///
@@ -412,7 +429,7 @@ impl BuiltPlugin {
     #[must_use]
     pub fn handle_message(
         &self,
-        message: Box<dyn Any + Send>,
+        message: InternalMessage,
     ) -> BoxFuture<'_, Result<(), PluginError>> {
         (self.handler)((&*self.plugin).as_any(), message)
     }
@@ -443,7 +460,7 @@ macro_rules! impl_does_handle_tuple {
             fn into_built_plugin(self) -> BuiltPlugin {
                 fn handle_message<'a, $cur: Message, $($rest: Message,)* PLUG: Plugin + Handle<$cur> $(+ Handle<$rest>)*>(
                     plugin: &'a dyn Any,
-                    message: Box<dyn Any + Send>,
+                    message: InternalMessage,
                     ) -> BoxFuture<'a, Result<(), PluginError>> {
                     let plug = match plugin.downcast_ref::<PLUG>() {
                         Some(p) => p,
@@ -454,14 +471,23 @@ macro_rules! impl_does_handle_tuple {
                     futures::FutureExt::boxed(async move {
                         #![allow(unused)]
 
+                        let InternalMessage { data: message, reply_sender } = message;
+
+
                         let message = match message.downcast::<$cur>() {
-                            Ok(message) => return plug.handle_message(*message).await,
+                            Ok(message) => {
+                                let reply_sender = crate::address::ReplySender::new(reply_sender);
+                                return plug.handle_message(*message, reply_sender).await
+                            }
                             Err(m) => m,
                         };
 
                         $(
                         let message = match message.downcast::<$rest>() {
-                            Ok(message) => return plug.handle_message(*message).await,
+                            Ok(message) => {
+                                let reply_sender = crate::address::ReplySender::new(reply_sender);
+                                return plug.handle_message(*message, reply_sender).await
+                            }
                             Err(m) => m,
                         };
                         )*
@@ -483,6 +509,27 @@ macro_rules! impl_does_handle_tuple {
 impl<M: Message> MessageBundle for M {
     fn get_ids() -> Vec<(&'static str, TypeId)> {
         vec![(std::any::type_name::<M>(), TypeId::of::<M>())]
+    }
+}
+
+impl MessageBundle for () {
+    fn get_ids() -> Vec<(&'static str, TypeId)> {
+        vec![]
+    }
+}
+
+impl<P: Plugin> DoesHandle<()> for P {
+    fn into_built_plugin(self) -> BuiltPlugin {
+        fn handle_message<'a, PLUG: Plugin>(
+            _plugin: &'a dyn Any,
+            _message: InternalMessage,
+        ) -> BoxFuture<'a, Result<(), PluginError>> {
+            unreachable!()
+        }
+        BuiltPlugin {
+            plugin: Box::new(self),
+            handler: handle_message::<P>,
+        }
     }
 }
 
