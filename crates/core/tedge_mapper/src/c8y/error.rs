@@ -41,8 +41,12 @@ pub enum CumulocityMapperError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
-    #[error("Operation execution failed: {0}")]
-    ExecuteFailed(String),
+    #[error("Operation execution failed: {error_message}. Command: {command}. Operation name: {operation_name}")]
+    ExecuteFailed {
+        error_message: String,
+        command: String,
+        operation_name: String,
+    },
 
     #[error("An unknown operation template: {0}")]
     UnknownOperation(String),
