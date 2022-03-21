@@ -12,3 +12,12 @@ pub enum PluginError {
     #[error(transparent)]
     Custom(#[from] anyhow::Error),
 }
+
+#[derive(Error, Debug)]
+pub enum DirectoryError {
+    #[error("Plugin named '{}' not found", .0)]
+    PluginNameNotFound(String),
+
+    #[error("Plugin '{}' does not support the following message types: {}", .0 ,.1.join(","))]
+    PluginDoesNotSupport(String, Vec<&'static str>),
+}

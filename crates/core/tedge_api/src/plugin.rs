@@ -17,7 +17,7 @@ use async_trait::async_trait;
 
 use crate::{
     address::{InternalMessage, ReceiverBundle, ReplySender},
-    error::PluginError,
+    error::{PluginError, DirectoryError},
     message::CoreMessages,
     Address,
 };
@@ -42,7 +42,7 @@ pub trait PluginDirectory: Clone + Send + Sync {
     /// ## Also see
     ///
     /// - [`make_message_bundle`] On how to define your own named message bundle
-    fn get_address_for<RB: ReceiverBundle>(&self, name: &str) -> Result<Address<RB>, PluginError>;
+    fn get_address_for<RB: ReceiverBundle>(&self, name: &str) -> Result<Address<RB>, DirectoryError>;
 
     /// Request an `Address` to the core itself. It will only accept messages from the
     /// [`CoreMessages`] bundle.

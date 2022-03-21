@@ -325,7 +325,7 @@ impl PluginDirectory for Communication {
     fn get_address_for<MB: tedge_api::address::ReceiverBundle>(
         &self,
         name: &str,
-    ) -> Result<Address<MB>, PluginError> {
+    ) -> Result<Address<MB>, tedge_api::error::DirectoryError> {
         let types = MB::get_ids().into_iter().collect();
 
         let plug = self.plugins.get(name).unwrap_or_else(|| {
@@ -350,7 +350,7 @@ impl PluginDirectory for Communication {
         }
     }
 
-    fn get_address_for_core(&self) -> Result<Address<tedge_api::CoreMessages>, PluginError> {
+    fn get_address_for_core(&self) -> Address<tedge_api::CoreMessages> {
         todo!()
     }
 }
