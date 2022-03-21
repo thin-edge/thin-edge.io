@@ -34,11 +34,13 @@ set +e
 pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='container'
 set -e
 
+mv __pysys_junit_xml pysys_junit_xml_apt
+
 set +e
 pysys.py run --record -v DEBUG 'apama_*' -XmyPlatform='container'
 set -e
 
-mv __pysys_junit_xml pysys_junit_xml_apt
+mv __pysys_junit_xml pysys_junit_xml_apama
 
 sudo cp ../../plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-plugins/docker
 sudo chmod +x /etc/tedge/sm-plugins/docker
