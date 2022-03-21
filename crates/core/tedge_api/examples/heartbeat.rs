@@ -59,7 +59,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
         &self,
         config: PluginConfiguration,
         cancellation_token: CancellationToken,
-        tedge_comms: &PD,
+        plugin_dir: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where
         PD: 'async_trait,
@@ -69,7 +69,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
             .plugins
             .iter()
             .map(|name| {
-                tedge_comms
+                plugin_dir
                     .get_address_for::<HeartbeatMessages>(name)
                     .map(|addr| (name.clone(), addr))
             })
@@ -218,7 +218,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
         &self,
         _config: PluginConfiguration,
         _cancellation_token: CancellationToken,
-        _tedge_comms: &PD,
+        _plugin_dir: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where
         PD: 'async_trait,
