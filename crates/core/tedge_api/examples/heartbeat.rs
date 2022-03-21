@@ -183,7 +183,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
     where
         Self: Sized,
     {
-        HandleTypes::get_handlers_for::<(Heartbeat,), CriticalService>()
+        HandleTypes::declare_handlers_for::<(Heartbeat,), CriticalService>()
     }
 
     async fn verify_configuration(

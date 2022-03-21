@@ -355,7 +355,7 @@ impl HandleTypes {
     /// XX  | println!("{:#?}", HandleTypes::get_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
     ///     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Handle<Heartbeat>` is not implemented for `HeartbeatPlugin`
     /// ```
-    pub fn get_handlers_for<M: MessageBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
+    pub fn declare_handlers_for<M: MessageBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
         HandleTypes(M::get_ids())
     }
 
