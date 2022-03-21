@@ -31,6 +31,13 @@ pub struct Address<MB: ReceiverBundle> {
     sender: MessageSender,
 }
 
+// implement Sync for Address for all ReceiverBundle types
+//
+// MessageSender is a tokio::sync::mpsc::Sender<InternalMessage>, which is sync, MB is never
+// instantiated, so this is safe to implement
+#[allow(unsafe_code)]
+unsafe impl<MB: ReceiverBundle + Send> Sync for Address<MB> {}
+
 impl<MB: ReceiverBundle> std::fmt::Debug for Address<MB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(&format!("Address<{}>", std::any::type_name::<MB>()))
