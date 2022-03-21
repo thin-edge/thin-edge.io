@@ -35,7 +35,7 @@ use crate::{
 /// The core of thin-edge will use this trait to hand over an object to a plugin that can then be
 /// used to communicate with other plugins (as described above).
 ///
-pub trait PluginDirectory: Clone + Send + Sync {
+pub trait PluginDirectory: Send + Sync {
     /// Request an `Address` object for a given plugin which can receive messages of a type
     /// included in the message bundle `MB`.
     ///
