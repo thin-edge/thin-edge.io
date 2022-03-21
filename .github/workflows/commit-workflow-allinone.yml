@@ -476,7 +476,7 @@ jobs:
             --skip tests::install_from_local_file_fail::right_path_with_wrong_version
 
   install-and-use-rpi:
-    runs-on: [self-hosted, Linux, ARM, onsite]
+    runs-on: [self-hosted, Linux, ARM, offsite_mythica]
     needs: [build_matrix_arm]
 
     steps:
@@ -554,7 +554,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          C8YDEVICE: offsite_mythica
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -566,7 +566,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+          C8YDEVICE: offsite_mythica
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -585,7 +585,7 @@ jobs:
 #################################################################################
 
   system-test_onsite:
-    runs-on: [self-hosted, Linux, ARM, onsite]
+    runs-on: [self-hosted, Linux, ARM, offsite_mythica]
     needs: [install-and-use-rpi]
 
     steps:
@@ -599,7 +599,7 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICE: offsite_mythica
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
@@ -611,7 +611,7 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICE: offsite_mythica
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
@@ -623,7 +623,7 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICE: offsite_mythica
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
@@ -635,7 +635,7 @@ jobs:
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: ${{ secrets.SECRET_C8YDEVICE }}
+            C8YDEVICE: offsite_mythica
             C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
             C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
