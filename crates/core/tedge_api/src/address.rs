@@ -148,7 +148,7 @@ pub enum ReplyError {
 }
 
 #[doc(hidden)]
-pub trait ReceiverBundle {
+pub trait ReceiverBundle: Send + 'static {
     fn get_ids() -> Vec<(&'static str, std::any::TypeId)>;
 }
 
