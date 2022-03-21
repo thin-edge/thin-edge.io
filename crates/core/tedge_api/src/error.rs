@@ -11,6 +11,9 @@ pub enum PluginError {
     /// Error kind to report any `anyhow::Error` error
     #[error(transparent)]
     Custom(#[from] anyhow::Error),
+
+    #[error("Error from directory")]
+    DirectoryError(#[from] DirectoryError),
 }
 
 #[derive(Error, Debug)]

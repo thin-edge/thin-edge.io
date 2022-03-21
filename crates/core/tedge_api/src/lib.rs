@@ -3,7 +3,6 @@
     missing_debug_implementations,
     unreachable_pub,
     unsafe_code,
-    variant_size_differences
 ))]
 #![doc = include_str!("../README.md")]
 
