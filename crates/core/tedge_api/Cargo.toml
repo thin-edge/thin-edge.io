@@ -11,7 +11,7 @@ async-trait = "0.1.52"
 downcast-rs = "1.2.0"
 futures = "0.3.21"
 thiserror = "1.0.30"
-tokio = { version = "1.16.1", features = ["sync"] }
+tokio = { version = "1.16.1", features = ["sync", "time"] }
 tokio-util = "0.7.0"
 toml = "0.5.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
