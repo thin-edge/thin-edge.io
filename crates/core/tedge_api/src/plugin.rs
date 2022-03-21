@@ -46,7 +46,7 @@ pub trait PluginDirectory: Clone + Send + Sync {
 
     /// Request an `Address` to the core itself. It will only accept messages from the
     /// [`CoreMessages`] bundle.
-    fn get_address_for_core(&self) -> Result<Address<CoreMessages>, PluginError>;
+    fn get_address_for_core(&self) -> Address<CoreMessages>;
 }
 
 /// The plugin configuration as a `toml::Spanned` table.
