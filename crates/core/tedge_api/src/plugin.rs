@@ -15,7 +15,7 @@ use downcast_rs::{impl_downcast, DowncastSync};
 use async_trait::async_trait;
 
 use crate::{
-    address::{InternalMessage, ReplySender},
+    address::{InternalMessage, ReceiverBundle, ReplySender},
     error::PluginError,
     message::CoreMessages,
     Address,
@@ -41,7 +41,7 @@ pub trait PluginDirectory: Clone + Send + Sync {
     /// ## Also see
     ///
     /// - [`make_message_bundle`] On how to define your own named message bundle
-    fn get_address_for<MB: MessageBundle>(&self, name: &str) -> Result<Address<MB>, PluginError>;
+    fn get_address_for<RB: ReceiverBundle>(&self, name: &str) -> Result<Address<RB>, PluginError>;
 
     /// Request an `Address` to the core itself. It will only accept messages from the
     /// [`CoreMessages`] bundle.
@@ -421,6 +421,10 @@ pub struct BuiltPlugin {
 }
 
 impl BuiltPlugin {
+    pub fn new(plugin: Box<dyn Plugin>, handler: PluginHandlerFn) -> Self {
+        Self { plugin, handler }
+    }
+
     /// Call the plugin with the given types.
     ///
     /// ## Panics
@@ -449,9 +453,6 @@ impl BuiltPlugin {
 pub trait DoesHandle<M: MessageBundle> {
     fn into_built_plugin(self) -> BuiltPlugin;
 }
-
-#[doc(hidden)]
-pub trait Contains<M: Message> {}
 
 macro_rules! impl_does_handle_tuple {
     () => {};
@@ -506,12 +507,6 @@ macro_rules! impl_does_handle_tuple {
     };
 }
 
-impl<M: Message> MessageBundle for M {
-    fn get_ids() -> Vec<(&'static str, TypeId)> {
-        vec![(std::any::type_name::<M>(), TypeId::of::<M>())]
-    }
-}
-
 impl MessageBundle for () {
     fn get_ids() -> Vec<(&'static str, TypeId)> {
         vec![]
@@ -557,27 +552,6 @@ macro_rules! impl_msg_bundle_tuple {
 
 impl_msg_bundle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
-
-/// Declare a set of messages to be a "MessageBundle"
-///
-/// This macro can be used by a plugin author to declare a set of messages to be a `MessageBundle`.
-#[macro_export]
-macro_rules! make_message_bundle {
-    ($pu:vis struct $name:ident($($msg:ty),+)) => {
-        #[allow(missing_docs)]
-        #[derive(Debug)]
-        $pu struct $name;
-
-        impl $crate::plugin::MessageBundle for $name {
-            #[allow(unused_parens)]
-            fn get_ids() -> Vec<(&'static str, std::any::TypeId)> {
-                <($($msg),+) as $crate::plugin::MessageBundle>::get_ids()
-            }
-        }
-
-        $(impl $crate::plugin::Contains<$msg> for $name {})+
-    };
-}
 
 #[cfg(test)]
 mod tests {

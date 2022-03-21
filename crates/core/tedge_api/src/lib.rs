@@ -22,3 +22,8 @@ pub use error::PluginError;
 /// Predefined messages
 pub mod message;
 pub use message::CoreMessages;
+
+#[doc(hidden)]
+mod _internal {
+    pub use futures::future::BoxFuture;
+}

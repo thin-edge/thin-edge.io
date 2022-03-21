@@ -171,7 +171,7 @@ struct CriticalServiceBuilder;
 
 // declare a set of messages that the CriticalService can receive.
 // In this example, it can only receive a Heartbeat.
-tedge_api::make_message_bundle!(struct HeartbeatMessages(Heartbeat));
+tedge_api::make_receiver_bundle!(struct HeartbeatMessages(Heartbeat));
 
 #[async_trait]
 impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
@@ -300,7 +300,7 @@ impl Communication {
 }
 
 impl PluginDirectory for Communication {
-    fn get_address_for<MB: tedge_api::plugin::MessageBundle>(
+    fn get_address_for<MB: tedge_api::address::ReceiverBundle>(
         &self,
         name: &str,
     ) -> Result<Address<MB>, PluginError> {

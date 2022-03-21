@@ -16,4 +16,4 @@ impl Message for StopCore {
     type Reply = NoReply;
 }
 
-crate::make_message_bundle!(pub struct CoreMessages(StopCore));
+crate::make_receiver_bundle!(pub struct CoreMessages(StopCore));

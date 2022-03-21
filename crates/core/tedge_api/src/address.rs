@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use crate::plugin::{Contains, Message, MessageBundle};
+use crate::plugin::Message;
 
 #[doc(hidden)]
 pub type AnySendBox = Box<dyn std::any::Any + Send>;
@@ -26,19 +26,19 @@ pub type MessageReceiver = tokio::sync::mpsc::Receiver<InternalMessage>;
 /// well-defined type to a specific plugin.
 /// The `Address` instance can be used to send messages of several types, but each type has to be
 /// in `MB: MessageBundle`.
-pub struct Address<MB: MessageBundle> {
+pub struct Address<MB: ReceiverBundle> {
     _pd: PhantomData<MB>,
     sender: MessageSender,
 }
 
-impl<MB: MessageBundle> std::fmt::Debug for Address<MB> {
+impl<MB: ReceiverBundle> std::fmt::Debug for Address<MB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(&format!("Address<{}>", std::any::type_name::<MB>()))
             .finish_non_exhaustive()
     }
 }
 
-impl<MB: MessageBundle> Clone for Address<MB> {
+impl<MB: ReceiverBundle> Clone for Address<MB> {
     fn clone(&self) -> Self {
         Self {
             _pd: PhantomData,
@@ -47,7 +47,7 @@ impl<MB: MessageBundle> Clone for Address<MB> {
     }
 }
 
-impl<MB: MessageBundle> Address<MB> {
+impl<MB: ReceiverBundle> Address<MB> {
     /// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
     #[doc(hidden)]
     pub fn new(sender: MessageSender) -> Self {
@@ -137,26 +137,59 @@ pub enum ReplyError {
     #[error("There was no response before timeout")]
     Timeout,
     #[error("Could not send reply")]
-    Unknown
+    Unknown,
+}
+
+#[doc(hidden)]
+pub trait ReceiverBundle {
+    fn get_ids() -> Vec<(&'static str, std::any::TypeId)>;
+}
+
+#[doc(hidden)]
+pub trait Contains<M: Message> {}
+
+/// Declare a set of messages to be a "MessageBundle"
+///
+/// This macro can be used by a plugin author to declare a set of messages to be a `MessageBundle`.
+#[macro_export]
+macro_rules! make_receiver_bundle {
+    ($pu:vis struct $name:ident($($msg:ty),+)) => {
+        #[allow(missing_docs)]
+        #[derive(Debug)]
+        $pu struct $name;
+
+        impl $crate::address::ReceiverBundle for $name {
+            #[allow(unused_parens)]
+            fn get_ids() -> Vec<(&'static str, std::any::TypeId)> {
+                vec![
+                    $((std::any::type_name::<$msg>(), std::any::TypeId::of::<$msg>())),+
+                ]
+            }
+        }
+
+        $(impl $crate::address::Contains<$msg> for $name {})+
+    };
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{make_message_bundle, plugin::Message, Address};
+    use crate::{make_receiver_bundle, plugin::Message, Address};
 
+    #[derive(Debug)]
     struct Foo;
 
     impl Message for Foo {
         type Reply = Bar;
     }
 
+    #[derive(Debug)]
     struct Bar;
 
     impl Message for Bar {
         type Reply = Bar;
     }
 
-    make_message_bundle!(struct FooBar(Foo, Bar));
+    make_receiver_bundle!(struct FooBar(Foo, Bar));
 
     #[allow(unreachable_code, dead_code, unused)]
     fn check_compile() {
