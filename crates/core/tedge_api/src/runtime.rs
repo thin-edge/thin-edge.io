@@ -33,5 +33,5 @@ pub trait PluginConfig {
 
 #[async_trait]
 pub trait Plugin {
-    async fn start(&mut self) -> Result<(), RuntimeError>;
+    async fn start(self) -> Result<(), RuntimeError>;
 }
