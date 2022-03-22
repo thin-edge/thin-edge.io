@@ -336,26 +336,40 @@ impl HandleTypes {
     ///
     /// ```rust
     /// # use async_trait::async_trait;
-    /// # use tedge_api::plugin::{Message, Handle, HandleTypes};
+    /// # use tedge_api::plugin::{Handle, HandleTypes};
+    /// # use tedge_api::address::ReplySender;
     /// # use tedge_api::PluginError;
     ///
+    /// #[derive(Debug)]
     /// struct Heartbeat;
     ///
-    /// impl Message for Heartbeat {}
+    /// impl tedge_api::plugin::Message for Heartbeat {
+    ///     type Reply = tedge_api::message::NoReply;
+    /// }
     ///
     /// struct HeartbeatPlugin;
     ///
     /// #[async_trait]
     /// impl Handle<Heartbeat> for HeartbeatPlugin {
-    ///     async fn handle_message(&self, message: Heartbeat) -> Result<(), PluginError> {
+    ///     async fn handle_message(&self, message: Heartbeat, sender: ReplySender<tedge_api::message::NoReply>) -> Result<(), PluginError> {
     ///     // ... Do something with it
     ///#         Ok(())
     ///     }
     /// }
     ///
-    /// # impl Plugin for HeartbeatPlugin {  }
+    /// # use tedge_api::{Address, CoreMessages, error::DirectoryError, address::ReceiverBundle};
+    /// # #[async_trait::async_trait]
+    /// # impl tedge_api::Plugin for HeartbeatPlugin {
+    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// #
+    /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
+    /// #         unimplemented!()
+    /// #     }
+    /// # }
     ///
-    /// println!("{:#?}", HandleTypes::get_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
+    /// println!("{:#?}", HandleTypes::declare_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
     /// // This will print something akin to:
     /// //
     /// // HandleTypes(
