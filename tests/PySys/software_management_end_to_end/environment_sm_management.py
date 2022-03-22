@@ -12,11 +12,11 @@ Better run them in a VM or a container.
 
 To run the tests:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
+    pysys.py run 'sm-apt*' -XmyPlatform='container'
 
 To run the tests with another tenant url:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
+    pysys.py run 'sm-apt*' -XmyPlatform='container' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
 
 
 
@@ -71,7 +71,7 @@ class SoftwareManagement(EnvironmentC8y):
 
     # Static class member that can be overridden by a command line argument
     # E.g.:
-    # pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
+    # pysys.py run 'sm-apt*' -XmyPlatform='container'
 
     myPlatform = None
 
@@ -94,10 +94,10 @@ class SoftwareManagement(EnvironmentC8y):
     def setup(self):
         """Setup Environment"""
 
-        if self.myPlatform != "smcontainer":
+        if self.myPlatform != "container":
             self.skipTest(
                 "Testing the apt plugin is not supported on this platform."+\
-                    "Use parameter -XmyPlatform='smcontainer' to enable it")
+                    "Use parameter -XmyPlatform='container' to enable it")
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded

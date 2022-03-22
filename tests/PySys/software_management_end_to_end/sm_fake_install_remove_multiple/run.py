@@ -14,7 +14,7 @@ This test is currently skipped as it needs a specialized setup with the
 dummy-plugin set up to install fruits.
 
 To run it do this:
-    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=container
 
 """
 
