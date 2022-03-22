@@ -1,37 +1,26 @@
 use crate::*;
-use std::sync::Arc;
 use async_trait::async_trait;
 
-#[derive(Default)]
-pub struct Runtime {
-    plugins: Vec<Arc<dyn Plugin>>,
-}
-
-impl Runtime {
-    // Start all the registered plugin instances.
-    pub async fn start(&mut self) -> Result<(), RuntimeError> {
-        Ok(())
-    }
-
-    pub fn register(&mut self, plugin: Arc<dyn Plugin>) {
-        self.plugins.push(plugin);
-    }
-
-    pub fn instantiate<P:Plugin>(&mut self, config: impl PluginConfig<Plugin=P>) -> Result<P, RuntimeError> {
-        let plugin = config.instantiate()?;
-        //fixme self.register(&plugin);
-        Ok(plugin)
-    }
-}
-
+/// The configuration for a plugin instance
 pub trait PluginConfig {
     type Plugin: Plugin;
 
-    // Create a plugin from the config
+    /// Create a plugin from the config
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError>;
 }
 
+/// A plugin instance
 #[async_trait]
 pub trait Plugin {
+    /// The type of Input messages this plugin can process
+    type Input;
+
+    /// The address where messages for this plugin can be sent
+    fn get_address(&self) -> Address<Self::Input>;
+
+    /// Start the plugin in the background
     async fn start(self) -> Result<(), RuntimeError>;
 }
+
+/// Empty enum used by plugin that consumes no messages.
+pub enum NoInput {}

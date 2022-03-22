@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
     // Up to now all the plugins were inactive.
     // Let them run!
     // Do we need some runtime here?
-    c8y.start().await?;
+    tokio::spawn(c8y.start());
     collectd.start().await?;
     thin_edge_json.start().await?;
     sm_service.start().await?;
@@ -84,33 +84,78 @@ use async_trait::async_trait;
 /// and c8y operations into sm operations
 #[derive(Default)]
 struct C8YMapperConfig {}
-struct C8YMapper {}
+struct C8YMapper {
+    mailbox: MailBox<C8YMessage>,
+}
 
 impl PluginConfig for C8YMapperConfig {
     type Plugin = C8YMapper;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(C8YMapper {})
+        Ok(C8YMapper {
+            mailbox: MailBox::new(),
+        })
     }
 }
 
 #[async_trait]
 impl Plugin for C8YMapper {
+    type Input = C8YMessage;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
     async fn start(self) -> Result<(), RuntimeError> {
         todo!()
     }
 }
-impl Consumer<Measurement> for C8YMapper {}
-impl Requester<SMRequest, SMResponse> for C8YMapper {}
+
+/// Messages handled by the C8Y mapper
+enum C8YMessage {
+    MqttMessage(MqttMessage),  // A message received from C8Y
+    Measurement(Measurement),  // A measurement received from another plugin
+    SMResponse(SMResponse),    // A response to an SMRequest sent by this plugin
+}
+
+// A derive macro would be helpful here
+impl Into<C8YMessage> for MqttMessage {
+    fn into(self) -> C8YMessage {
+        C8YMessage::MqttMessage(self)
+    }
+}
+impl Into<C8YMessage> for Measurement {
+    fn into(self) -> C8YMessage {
+        C8YMessage::Measurement(self)
+    }
+}
+impl Into<C8YMessage> for SMResponse {
+    fn into(self) -> C8YMessage {
+        C8YMessage::SMResponse(self)
+    }
+}
+
+/// Messages produced by the C8Y mapper
+impl Requester<SMRequest,SMResponse> for C8YMapper {
+    fn add_responder(&mut self, recipient: Address<Request<SMRequest, SMResponse>>) {
+        todo!()
+    }
+}
+
+impl Producer<MqttMessage> for C8YMapper {
+    fn add_recipient(&mut self, recipient: Address<MqttMessage>) {
+        todo!()
+    }
+}
 
 impl C8YMapper {
-    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Consumer<MqttMessage>)) {
+    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Plugin<Input=MqttMessage>)) {
         todo!()
     }
     pub fn add_measurement_producer(&mut self, producer: &mut impl Producer<Measurement>) {
         todo!()
     }
-    pub fn set_sm_service(&mut self, sm: &mut impl Responder<SMRequest, SMResponse>) {
+    pub fn set_sm_service(&mut self, sm: &mut impl Plugin<Input=SMMessage>) {
         todo!()
     }
 }
@@ -118,123 +163,217 @@ impl C8YMapper {
 /// Measurements received from Collectd via MQTT
 #[derive(Default)]
 struct CollectdMapperConfig {}
-struct CollectdMapper {}
+struct CollectdMapper {
+    mailbox: MailBox<MqttMessage>,
+    recipients: Vec<Address<Measurement>>
+}
 
-impl Producer<Measurement> for CollectdMapper {}
+impl Producer<Measurement> for CollectdMapper {
+    fn add_recipient(&mut self, recipient: Address<Measurement>) {
+        self.recipients.push(recipient)
+    }
+}
 
 impl PluginConfig for CollectdMapperConfig {
     type Plugin = CollectdMapper;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        todo!()
+        Ok(CollectdMapper { mailbox: MailBox::new() , recipients: vec![] })
     }
 }
 
 #[async_trait]
 impl Plugin for CollectdMapper {
-    async fn start(self) -> Result<(), RuntimeError> {
-        todo!()
+    type Input = MqttMessage;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
+    async fn start(mut self) -> Result<(), RuntimeError> {
+        while let Some(message) = self.mailbox.next().await {
+            // Translate the message and sent a copy of the translation to all the recipients
+            todo!();
+        }
+
+        Ok(())
     }
 }
 
 impl CollectdMapper {
-    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Consumer<MqttMessage>)) {
-        todo!()
+    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Plugin<Input=MqttMessage>)) {
+        con.add_recipient(self.get_address());
     }
 }
 
 /// Measurements received from /tedge/measurements via MQTT
 #[derive(Default)]
 struct ThinEdgeJsonConfig {}
-struct ThinEdgeJson {}
+struct ThinEdgeJson {
+    mailbox: MailBox<MqttMessage>,
+    recipients: Vec<Address<Measurement>>
+}
 
-impl Producer<Measurement> for ThinEdgeJson {}
+impl Producer<Measurement> for ThinEdgeJson {
+    fn add_recipient(&mut self, recipient: Address<Measurement>) {
+        self.recipients.push(recipient)
+    }
+}
 
 impl PluginConfig for ThinEdgeJsonConfig {
     type Plugin = ThinEdgeJson;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        todo!()
+        Ok(ThinEdgeJson {
+            recipients: vec![],
+            mailbox: MailBox::new()
+        })
     }
 }
 
 #[async_trait]
 impl Plugin for ThinEdgeJson {
-    async fn start(self) -> Result<(), RuntimeError> {
-        todo!()
+    type Input = MqttMessage;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
+    async fn start(mut self) -> Result<(), RuntimeError> {
+        while let Some(message) = self.mailbox.next().await {
+            // Translate the message and sent a copy of the translation to all the recipients
+            todo!();
+        }
+
+        Ok(())
     }
 }
 
 impl ThinEdgeJson {
-    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Consumer<MqttMessage>)) {
-        todo!()
+    pub fn set_mqtt_con(&mut self, con: &mut impl Producer<MqttMessage>) {
+        con.add_recipient(self.get_address())
     }
 }
 
 /// Handle sm operations
 #[derive(Default)]
 struct SoftwareManagementServiceConfig {}
-struct SoftwareManagementService {}
-impl Responder<SMRequest, SMResponse> for SoftwareManagementService {}
+struct SoftwareManagementService {
+    mailbox: MailBox<SMMessage>
+}
 
 impl PluginConfig for SoftwareManagementServiceConfig {
     type Plugin = SoftwareManagementService;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        todo!()
+        Ok(SoftwareManagementService{
+            mailbox: MailBox::new(),
+        })
     }
 }
 
 #[async_trait]
 impl Plugin for SoftwareManagementService {
+    type Input = SMMessage;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
     async fn start(self) -> Result<(), RuntimeError> {
         todo!()
     }
 }
 
+enum SMMessage {
+    SMRequest(Request<SMRequest,SMResponse>),
+    SMResponse(SMResponse),
+}
+
 impl SoftwareManagementService {
-    pub fn add_package_manager(&mut self, package_manager: &mut impl Responder<SMRequest, SMResponse>) {
+    pub fn add_package_manager(&mut self, package_manager: &mut impl Plugin<Input=Request<SMRequest,SMResponse>>) {
         todo!()
+    }
+}
+
+impl Requester<SMRequest,SMResponse> for SoftwareManagementService {
+    fn add_responder(&mut self, recipient: Address<Request<SMRequest,SMResponse>>) {
+        todo!()
+        // TODO add a name to the `Address` structs
+        // So the sender can distinguish several recipients
+        // Here, one per plugin type.
     }
 }
 
 #[derive(Default)]
 struct AptPackagerConfig {}
-struct AptPackager {}
-impl Responder<SMRequest, SMResponse> for AptPackager {}
+struct AptPackager {
+    mailbox: MailBox<Request<SMRequest,SMResponse>>
+}
 
 impl PluginConfig for AptPackagerConfig {
     type Plugin = AptPackager;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        todo!()
+        Ok(AptPackager{mailbox: MailBox::new()})
     }
 }
 
 #[async_trait]
 impl Plugin for AptPackager {
-    async fn start(self) -> Result<(), RuntimeError> {
-        todo!()
+    type Input = Request<SMRequest,SMResponse>;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
+    async fn start(mut self) -> Result<(), RuntimeError> {
+        while let Some(message) = self.mailbox.next().await {
+            // build the response for the request
+            let request = message.as_ref();
+            let response = SMResponse::SoftwareList { list: vec![] };
+
+            // send the response
+            let _ = message.send_response(response).await;
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Default)]
 struct ApamaPackagerConfig {}
-struct ApamaPackager {}
-impl Responder<SMRequest, SMResponse> for ApamaPackager {}
+struct ApamaPackager {
+    mailbox: MailBox<Request<SMRequest,SMResponse>>
+}
 
 impl PluginConfig for ApamaPackagerConfig {
     type Plugin = ApamaPackager;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        todo!()
+        Ok(ApamaPackager{mailbox: MailBox::new()})
     }
 }
 
 #[async_trait]
 impl Plugin for ApamaPackager {
-    async fn start(self) -> Result<(), RuntimeError> {
-        todo!()
+    type Input = Request<SMRequest,SMResponse>;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
+    async fn start(mut self) -> Result<(), RuntimeError> {
+        while let Some(message) = self.mailbox.next().await {
+            // build the response for the request
+            let request = message.as_ref();
+            let response = SMResponse::SoftwareList { list: vec![] };
+
+            // send the response
+            let _ = message.send_response(response).await;
+        }
+
+        Ok(())
     }
 }
 
@@ -294,14 +433,20 @@ struct MqttConfig {
 }
 
 struct MqttConnection {
-    /// On a real case, must hold the connection not its config
-    config: MqttConfig,
+    /// On a real case, must hold the MQTT connection
+
+    /// The recipient of the MqttMessage that have been received
+    recipient: Option<Address<MqttMessage>>,
+
+    /// The mailbox to post the MqttMessage to be sent
+    mailbox: MailBox<MqttMessage>,
 }
 
 impl MqttConnection {
     fn new(config: &MqttConfig) -> Self {
         MqttConnection {
-            config: config.clone(),
+            mailbox: MailBox::new(),
+            recipient: None,
         }
     }
 }
@@ -310,17 +455,29 @@ impl PluginConfig for MqttConfig {
     type Plugin = MqttConnection;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(MqttConnection{config: self})
+        Ok(MqttConnection::new(&self))
     }
 }
 
 #[async_trait]
 impl Plugin for MqttConnection {
+    type Input = MqttMessage;
+
+    fn get_address(&self) -> Address<Self::Input> {
+        self.mailbox.get_address()
+    }
+
     async fn start(self) -> Result<(), RuntimeError> {
+        // loop over the messages received either the mailbox or the TCP con
+        // Send over TCP messages received from the mailbox
+        // Send to the recipient the messages received from TCP
         todo!()
     }
 }
 
-impl Consumer<MqttMessage> for MqttConnection {}
-
-impl Producer<MqttMessage> for MqttConnection {}
+impl Producer<MqttMessage> for MqttConnection {
+    fn add_recipient(&mut self, recipient: Address<MqttMessage>) {
+        // TODO return an error if there is already a recipient
+        self.recipient = Some(recipient)
+    }
+}
