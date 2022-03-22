@@ -93,14 +93,17 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// # Example
     ///
     /// ```no_run
-    /// # use tedge_api::{Message, Plugin, plugin::{BuiltPlugin}, PluginConfiguration}
+    /// # use tedge_api::{Plugin, plugin::BuiltPlugin, PluginError, PluginDirectory, PluginBuilder, PluginConfiguration};
     ///
     /// #[derive(Debug)]
     /// struct MyMessage;
-    /// impl Message for MyMessage {}
+    /// impl tedge_api::plugin::Message for MyMessage {
+    ///     type Reply = tedge_api::message::NoReply;
+    /// }
     ///
     /// struct MyPluginBuilder;
     /// struct MyPlugin; // + some impl Plugin for MyPlugin
+    /// # #[async_trait::async_trait]
     /// # impl Plugin for MyPlugin {
     /// #     async fn setup(&mut self) -> Result<(), PluginError> {
     /// #         unimplemented!()
@@ -110,16 +113,28 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// #     }
     /// # }
     ///
-    /// #[async_trait]
+    /// #[async_trait::async_trait]
+    /// impl tedge_api::plugin::Handle<MyMessage> for MyPlugin {
+    ///     async fn handle_message(
+    ///         &self,
+    ///         message: MyMessage,
+    ///         sender: tedge_api::address::ReplySender<tedge_api::message::NoReply>
+    ///     ) -> Result<(), tedge_api::error::PluginError> {
+    ///         // ... Do something with it
+    ///#         Ok(())
+    ///     }
+    /// }
+    ///
+    /// #[async_trait::async_trait]
     /// impl<PD: PluginDirectory> PluginBuilder<PD> for MyPluginBuilder {
     ///     fn kind_message_types() -> tedge_api::plugin::HandleTypes
     ///     where
     ///         Self: Sized,
     ///     {
-    ///         HandleTypes::get_handlers_for::<(MyMessage,), MyPlugin>()
+    ///         tedge_api::plugin::HandleTypes::declare_handlers_for::<(MyMessage,), MyPlugin>()
     ///     }
     ///     // other trait functions...
-    /// #   fn kind_name(&self) -> &'static str {
+    /// #   fn kind_name() -> &'static str {
     /// #       unimplemented!()
     /// #   }
     /// #   async fn verify_configuration(
@@ -131,8 +146,9 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// #   async fn instantiate(
     /// #       &self,
     /// #       config: PluginConfiguration,
-    /// #       tedge_comms: &PD,
-    /// #   ) -> Result<BuiltPlugin, PluginError>
+    /// #       cancellation_token: tedge_api::CancellationToken,
+    /// #       core_comms: &PD,
+    /// #   ) -> Result<BuiltPlugin, tedge_api::error::PluginError>
     /// #   where
     /// #       PD: 'async_trait,
     /// #   {
@@ -179,43 +195,67 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// # Example
     ///
     /// ```no_run
+    /// # use tedge_api::plugin::BuiltPlugin;
+    /// # use tedge_api::PluginConfiguration;
+    /// # use tedge_api::Plugin;
+    /// # use tedge_api::PluginBuilder;
+    /// # use tedge_api::PluginDirectory;
+    ///
     /// #[derive(Debug)]
     /// struct MyMessage;
-    /// impl Message for MyMessage {}
+    /// impl tedge_api::plugin::Message for MyMessage {
+    ///     type Reply = tedge_api::message::NoReply;
+    /// }
+    ///
     ///
     /// struct MyPluginBuilder;
     /// struct MyPlugin; // + some impl Plugin for MyPlugin
+    /// # #[async_trait::async_trait]
     /// # impl Plugin for MyPlugin {
-    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #     async fn setup(&mut self) -> Result<(), tedge_api::error::PluginError> {
     /// #         unimplemented!()
     /// #     }
-    /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
+    /// #     async fn shutdown(&mut self) -> Result<(), tedge_api::error::PluginError> {
     /// #         unimplemented!()
     /// #     }
     /// # }
     ///
-    /// #[async_trait]
+    /// #[async_trait::async_trait]
+    /// impl tedge_api::plugin::Handle<MyMessage> for MyPlugin {
+    ///     async fn handle_message(
+    ///         &self,
+    ///         _message: MyMessage,
+    ///         _sender: tedge_api::address::ReplySender<tedge_api::message::NoReply>,
+    ///     ) -> Result<(), tedge_api::error::PluginError> {
+    ///         // implementation...
+    /// #       unimplemented!()
+    ///     }
+    /// }
+    ///
+    /// #[async_trait::async_trait]
     /// impl<PD: PluginDirectory> PluginBuilder<PD> for MyPluginBuilder {
     ///     async fn instantiate(
     ///         &self,
     ///         config: PluginConfiguration,
-    ///         tedge_comms: &PD,
-    ///     ) -> Result<BuiltPlugin, PluginError>
+    ///         cancellation_token: tedge_api::CancellationToken,
+    ///         core_comms: &PD,
+    ///     ) -> Result<BuiltPlugin, tedge_api::error::PluginError>
     ///     where
     ///         PD: 'async_trait,
     ///     {
+    ///         use tedge_api::plugin::PluginExt;
     ///         let p = MyPlugin {};
     ///         Ok(p.into_untyped::<(MyMessage,)>())
     ///     }
     ///     // other trait functions...
-    /// #   fn kind_name(&self) -> &'static str {
+    /// #   fn kind_name() -> &'static str {
     /// #       unimplemented!()
     /// #   }
     /// #   fn kind_message_types() -> tedge_api::plugin::HandleTypes
     /// #   where
     /// #       Self: Sized,
     /// #   {
-    /// #       HandleTypes::get_handlers_for::<(MyMessage,), MyPlugin>()
+    /// #       tedge_api::plugin::HandleTypes::declare_handlers_for::<(MyMessage,), MyPlugin>()
     /// #   }
     /// #   async fn verify_configuration(
     /// #       &self,
