@@ -83,7 +83,7 @@ export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $
 if [[ $C8YDEVICEID =~ ^[0-9]+$ ]]; then
     echo "Your device ID: $C8YDEVICEID"
 else
-    echo "Error: Please supply your Cumulocity device ID  name as environment variable C8YDEVICEID"
+    echo "Error: Please supply your Cumulocity device ID name as environment variable C8YDEVICEID ($C8YDEVICEID)"
     exit 1
 fi
 
