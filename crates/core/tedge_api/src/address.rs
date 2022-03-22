@@ -27,16 +27,9 @@ pub type MessageReceiver = tokio::sync::mpsc::Receiver<InternalMessage>;
 /// The `Address` instance can be used to send messages of several types, but each type has to be
 /// in `MB: MessageBundle`.
 pub struct Address<MB: ReceiverBundle> {
-    _pd: PhantomData<MB>,
+    _pd: PhantomData<fn(MB)>,
     sender: MessageSender,
 }
-
-// implement Sync for Address for all ReceiverBundle types
-//
-// MessageSender is a tokio::sync::mpsc::Sender<InternalMessage>, which is sync, MB is never
-// instantiated, so this is safe to implement
-#[allow(unsafe_code)]
-unsafe impl<MB: ReceiverBundle + Send> Sync for Address<MB> {}
 
 impl<MB: ReceiverBundle> std::fmt::Debug for Address<MB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -103,7 +96,7 @@ impl<MB: ReceiverBundle> Address<MB> {
 
 #[derive(Debug)]
 pub struct ReplyReceiver<M> {
-    _pd: PhantomData<M>,
+    _pd: PhantomData<fn(M)>,
     reply_recv: tokio::sync::oneshot::Receiver<AnySendBox>,
 }
 
@@ -120,7 +113,7 @@ impl<M: Message> ReplyReceiver<M> {
 
 #[derive(Debug)]
 pub struct ReplySender<M> {
-    _pd: PhantomData<M>,
+    _pd: PhantomData<fn(M)>,
     reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
 }
 
@@ -180,7 +173,14 @@ macro_rules! make_receiver_bundle {
 
 #[cfg(test)]
 mod tests {
-    use crate::{make_receiver_bundle, plugin::Message, Address};
+    use static_assertions::{assert_impl_all, assert_not_impl_any};
+
+    use crate::{
+        address::{ReplyReceiver, ReplySender},
+        make_receiver_bundle,
+        plugin::Message,
+        Address,
+    };
 
     #[derive(Debug)]
     struct Foo;
@@ -204,4 +204,17 @@ mod tests {
         addr.send(Foo);
         addr.send(Bar);
     }
+
+    /////// Assert that types have the correct traits
+
+    #[allow(dead_code)]
+    struct NotSync {
+        _pd: std::marker::PhantomData<*const ()>,
+    }
+
+    assert_impl_all!(Address<FooBar>: Clone, Send, Sync);
+
+    assert_not_impl_any!(NotSync: Send, Sync);
+    assert_impl_all!(ReplySender<NotSync>: Send, Sync);
+    assert_impl_all!(ReplyReceiver<NotSync>: Send, Sync);
 }
