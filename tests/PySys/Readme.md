@@ -97,11 +97,11 @@ Better run them in a VM or a container.
 
 To run the tests:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer'
+    pysys.py run 'sm-apt*' -XmyPlatform='container'
 
 To run the tests with another tenant url:
 
-    pysys.py run 'sm-apt*' -XmyPlatform='smcontainer' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
+    pysys.py run 'sm-apt*' -XmyPlatform='container' -Xtenant_url='thin-edge-io.eu-latest.cumulocity.com'
 
 
 ### Apt Plugin Tests
@@ -119,7 +119,7 @@ To run the tests:
 Some of the tests desire a configured fakeplugin to simulate fruits.
 To run the tests on a platform with fake plugin:
 
-    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=smcontainer
+    pysys.py run -v DEBUG 'sm-fake*' -Xfakeplugin=fakeplugin -XmyPlatform=container
 
 See file software-management-end-to-end/dummy-plugin-configuration/Info.md
 on how to setup and configure the fake plugin.
