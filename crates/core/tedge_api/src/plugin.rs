@@ -5,7 +5,6 @@
 //! 2. Create your plugin struct that implements `Plugin`
 
 use futures::future::BoxFuture;
-use tokio_util::sync::CancellationToken;
 use std::{
     any::{Any, TypeId},
     collections::HashSet,
@@ -229,7 +228,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     async fn instantiate(
         &self,
         config: PluginConfiguration,
-        cancellation_token: CancellationToken,
+        cancellation_token: crate::CancellationToken,
         core_comms: &PD,
     ) -> Result<BuiltPlugin, PluginError>
     where

@@ -22,7 +22,12 @@ pub use error::PluginError;
 pub mod message;
 pub use message::CoreMessages;
 
+
+/// Cancellation token used by `tedge_api`
+///
+pub use tokio_util::sync::CancellationToken;
+
 #[doc(hidden)]
-mod _internal {
+pub mod _internal {
     pub use futures::future::BoxFuture;
 }

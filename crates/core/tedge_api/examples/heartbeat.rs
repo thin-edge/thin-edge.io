@@ -10,9 +10,8 @@ use tedge_api::{
     address::ReplySender,
     message::NoReply,
     plugin::{BuiltPlugin, Handle, HandleTypes, Message, PluginExt},
-    Address, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginError,
+    Address, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginError, CancellationToken,
 };
-use tokio_util::sync::CancellationToken;
 
 /// A message that represents a heartbeat that gets sent to plugins
 #[derive(Debug)]
