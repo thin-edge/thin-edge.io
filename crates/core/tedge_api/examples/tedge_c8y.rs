@@ -1,6 +1,5 @@
 use tedge_api::*;
 
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // The first step is to read the configuration
@@ -64,15 +63,17 @@ async fn main() -> anyhow::Result<()> {
     // Up to now all the plugins were inactive.
     // Let them run!
     // Do we need some runtime here?
-    tokio::spawn(c8y.start());
-    collectd.start().await?;
-    thin_edge_json.start().await?;
-    sm_service.start().await?;
-    apt.start().await?;
-    apama.start().await?;
-    c8y_con.start().await?;
-    collectd_con.start().await?;
-    thin_edge_json_con.start().await?;
+    let _ = tokio::join!(
+        tokio::spawn(c8y.start()),
+        tokio::spawn(collectd.start()),
+        tokio::spawn(thin_edge_json.start()),
+        tokio::spawn(sm_service.start()),
+        tokio::spawn(apt.start()),
+        tokio::spawn(apama.start()),
+        tokio::spawn(c8y_con.start()),
+        tokio::spawn(collectd_con.start()),
+        tokio::spawn(thin_edge_json_con.start()),
+    );
 
     Ok(())
 }
@@ -113,9 +114,9 @@ impl Plugin for C8YMapper {
 
 /// Messages handled by the C8Y mapper
 enum C8YMessage {
-    MqttMessage(MqttMessage),  // A message received from C8Y
-    Measurement(Measurement),  // A measurement received from another plugin
-    SMResponse(SMResponse),    // A response to an SMRequest sent by this plugin
+    MqttMessage(MqttMessage), // A message received from C8Y
+    Measurement(Measurement), // A measurement received from another plugin
+    SMResponse(SMResponse),   // A response to an SMRequest sent by this plugin
 }
 
 // A derive macro would be helpful here
@@ -136,7 +137,7 @@ impl Into<C8YMessage> for SMResponse {
 }
 
 /// Messages produced by the C8Y mapper
-impl Requester<SMRequest,SMResponse> for C8YMapper {
+impl Requester<SMRequest, SMResponse> for C8YMapper {
     fn add_responder(&mut self, recipient: Address<Request<SMRequest, SMResponse>>) {
         todo!()
     }
@@ -149,13 +150,16 @@ impl Producer<MqttMessage> for C8YMapper {
 }
 
 impl C8YMapper {
-    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Plugin<Input=MqttMessage>)) {
+    pub fn set_mqtt_con(
+        &mut self,
+        con: &mut (impl Producer<MqttMessage> + Plugin<Input = MqttMessage>),
+    ) {
         todo!()
     }
     pub fn add_measurement_producer(&mut self, producer: &mut impl Producer<Measurement>) {
         todo!()
     }
-    pub fn set_sm_service(&mut self, sm: &mut impl Plugin<Input=SMMessage>) {
+    pub fn set_sm_service(&mut self, sm: &mut impl Plugin<Input = SMMessage>) {
         todo!()
     }
 }
@@ -165,7 +169,7 @@ impl C8YMapper {
 struct CollectdMapperConfig {}
 struct CollectdMapper {
     mailbox: MailBox<MqttMessage>,
-    recipients: Vec<Address<Measurement>>
+    recipients: Vec<Address<Measurement>>,
 }
 
 impl Producer<Measurement> for CollectdMapper {
@@ -178,7 +182,10 @@ impl PluginConfig for CollectdMapperConfig {
     type Plugin = CollectdMapper;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(CollectdMapper { mailbox: MailBox::new() , recipients: vec![] })
+        Ok(CollectdMapper {
+            mailbox: MailBox::new(),
+            recipients: vec![],
+        })
     }
 }
 
@@ -201,7 +208,10 @@ impl Plugin for CollectdMapper {
 }
 
 impl CollectdMapper {
-    pub fn set_mqtt_con(&mut self, con: &mut (impl Producer<MqttMessage> + Plugin<Input=MqttMessage>)) {
+    pub fn set_mqtt_con(
+        &mut self,
+        con: &mut (impl Producer<MqttMessage> + Plugin<Input = MqttMessage>),
+    ) {
         con.add_recipient(self.get_address());
     }
 }
@@ -211,7 +221,7 @@ impl CollectdMapper {
 struct ThinEdgeJsonConfig {}
 struct ThinEdgeJson {
     mailbox: MailBox<MqttMessage>,
-    recipients: Vec<Address<Measurement>>
+    recipients: Vec<Address<Measurement>>,
 }
 
 impl Producer<Measurement> for ThinEdgeJson {
@@ -226,7 +236,7 @@ impl PluginConfig for ThinEdgeJsonConfig {
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
         Ok(ThinEdgeJson {
             recipients: vec![],
-            mailbox: MailBox::new()
+            mailbox: MailBox::new(),
         })
     }
 }
@@ -259,14 +269,14 @@ impl ThinEdgeJson {
 #[derive(Default)]
 struct SoftwareManagementServiceConfig {}
 struct SoftwareManagementService {
-    mailbox: MailBox<SMMessage>
+    mailbox: MailBox<SMMessage>,
 }
 
 impl PluginConfig for SoftwareManagementServiceConfig {
     type Plugin = SoftwareManagementService;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(SoftwareManagementService{
+        Ok(SoftwareManagementService {
             mailbox: MailBox::new(),
         })
     }
@@ -286,18 +296,21 @@ impl Plugin for SoftwareManagementService {
 }
 
 enum SMMessage {
-    SMRequest(Request<SMRequest,SMResponse>),
+    SMRequest(Request<SMRequest, SMResponse>),
     SMResponse(SMResponse),
 }
 
 impl SoftwareManagementService {
-    pub fn add_package_manager(&mut self, package_manager: &mut impl Plugin<Input=Request<SMRequest,SMResponse>>) {
+    pub fn add_package_manager(
+        &mut self,
+        package_manager: &mut impl Plugin<Input = Request<SMRequest, SMResponse>>,
+    ) {
         todo!()
     }
 }
 
-impl Requester<SMRequest,SMResponse> for SoftwareManagementService {
-    fn add_responder(&mut self, recipient: Address<Request<SMRequest,SMResponse>>) {
+impl Requester<SMRequest, SMResponse> for SoftwareManagementService {
+    fn add_responder(&mut self, recipient: Address<Request<SMRequest, SMResponse>>) {
         todo!()
         // TODO add a name to the `Address` structs
         // So the sender can distinguish several recipients
@@ -308,20 +321,22 @@ impl Requester<SMRequest,SMResponse> for SoftwareManagementService {
 #[derive(Default)]
 struct AptPackagerConfig {}
 struct AptPackager {
-    mailbox: MailBox<Request<SMRequest,SMResponse>>
+    mailbox: MailBox<Request<SMRequest, SMResponse>>,
 }
 
 impl PluginConfig for AptPackagerConfig {
     type Plugin = AptPackager;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(AptPackager{mailbox: MailBox::new()})
+        Ok(AptPackager {
+            mailbox: MailBox::new(),
+        })
     }
 }
 
 #[async_trait]
 impl Plugin for AptPackager {
-    type Input = Request<SMRequest,SMResponse>;
+    type Input = Request<SMRequest, SMResponse>;
 
     fn get_address(&self) -> Address<Self::Input> {
         self.mailbox.get_address()
@@ -344,20 +359,22 @@ impl Plugin for AptPackager {
 #[derive(Default)]
 struct ApamaPackagerConfig {}
 struct ApamaPackager {
-    mailbox: MailBox<Request<SMRequest,SMResponse>>
+    mailbox: MailBox<Request<SMRequest, SMResponse>>,
 }
 
 impl PluginConfig for ApamaPackagerConfig {
     type Plugin = ApamaPackager;
 
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
-        Ok(ApamaPackager{mailbox: MailBox::new()})
+        Ok(ApamaPackager {
+            mailbox: MailBox::new(),
+        })
     }
 }
 
 #[async_trait]
 impl Plugin for ApamaPackager {
-    type Input = Request<SMRequest,SMResponse>;
+    type Input = Request<SMRequest, SMResponse>;
 
     fn get_address(&self) -> Address<Self::Input> {
         self.mailbox.get_address()
