@@ -134,7 +134,7 @@ for X in "offsite"
     echo "Processing: $X"
     FILES="sag_system-test-$X/PySys/pysys_junit_xml_all/*.xml"
     FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_apt/*.xml"
-    FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_apama/*.xml"
+    #FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_apama/*.xml"
     FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_docker/*.xml"
     FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_sm/*.xml"
     junitparser merge $FILES $SAGOUT"_"$X.xml
