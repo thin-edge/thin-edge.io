@@ -56,7 +56,7 @@ pub fn create_file_with_user_group(
     user: &str,
     group: &str,
     mode: u32,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), FileError> {
     match File::create(file) {
         Ok(_) => {
             change_owner_and_permission(file, user, group, mode)?;
@@ -65,7 +65,10 @@ pub fn create_file_with_user_group(
             if e.kind() == io::ErrorKind::AlreadyExists {
                 return Ok(());
             } else {
-                return Err(e.into());
+                return Err(FileError::FileCreateFailed {
+                    file: file.to_string(),
+                    from: e,
+                });
             }
         }
     }
@@ -95,7 +98,7 @@ fn change_owner_and_permission(
     };
 
     let uid = fs::metadata(file)
-        .map_err(|e| FileError::MetaDataError  {
+        .map_err(|e| FileError::MetaDataError {
             name: file.to_string(),
             from: e,
         })?
@@ -140,7 +143,7 @@ mod tests {
     #[test]
     fn create_file_correct_user_group() {
         let user = whoami::username();
-        let _ = create_file_with_user_group(&user, &user, "/tmp/fcreate_test", 0o644).unwrap();
+        let _ = create_file_with_user_group("/tmp/fcreate_test", &user, &user, 0o644).unwrap();
         assert!(Path::new("/tmp/fcreate_test").exists());
         let meta = std::fs::metadata("/tmp/fcreate_test").unwrap();
         let perm = meta.permissions();
@@ -152,7 +155,7 @@ mod tests {
     #[test]
     fn create_file_wrong_user() {
         let user = whoami::username();
-        let err = create_file_with_user_group("test", &user, "/tmp/fcreate_wrong_user", 0o775)
+        let err = create_file_with_user_group("/tmp/fcreate_wrong_user", "test", &user, 0o775)
             .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
@@ -162,7 +165,7 @@ mod tests {
     #[test]
     fn create_file_wrong_group() {
         let user = whoami::username();
-        let err = create_file_with_user_group(&user, "test", "/tmp/fcreate_wrong_group", 0o775)
+        let err = create_file_with_user_group("/tmp/fcreate_wrong_group", &user, "test", 0o775)
             .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
@@ -173,7 +176,7 @@ mod tests {
     fn create_directory_with_correct_user_group() {
         let user = whoami::username();
         let _ =
-            create_directory_with_user_group(&user, &user, "/tmp/fcreate_test_dir", 0o775).unwrap();
+            create_directory_with_user_group("/tmp/fcreate_test_dir", &user, &user, 0o775).unwrap();
 
         assert!(Path::new("/tmp/fcreate_test_dir").exists());
         let meta = std::fs::metadata("/tmp/fcreate_test_dir").unwrap();
@@ -187,7 +190,7 @@ mod tests {
     fn create_directory_with_wrong_user() {
         let user = whoami::username();
 
-        let err = create_directory_with_user_group("test", &user, "/tmp/wrong_user_dir", 0o775)
+        let err = create_directory_with_user_group("/tmp/wrong_user_dir", "test", &user, 0o775)
             .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
@@ -198,7 +201,7 @@ mod tests {
     fn create_directory_with_wrong_group() {
         let user = whoami::username();
 
-        let err = create_directory_with_user_group(&user, "test", "/tmp/wrong_group_dir", 0o775)
+        let err = create_directory_with_user_group("/tmp/wrong_group_dir", &user, "test", 0o775)
             .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));

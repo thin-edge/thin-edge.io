@@ -18,7 +18,8 @@ mod mqtt;
 )]
 
 pub struct Opt {
-    #[clap(short, long)]
+    /// Initialize the tedge
+    #[clap(long)]
     pub init: bool,
 
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]

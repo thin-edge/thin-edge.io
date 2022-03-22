@@ -9,8 +9,8 @@ use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::operations::Operations;
 use mqtt_channel::TopicFilter;
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting,
-    MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
+    ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
+    MqttPortSetting, TEdgeConfig,
 };
 use tedge_utils::file::*;
 use tracing::{info, info_span, Instrument};
@@ -43,16 +43,17 @@ impl CumulocityMapper {
 
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
+    fn session_name(&self) -> &str {
+        CUMULOCITY_MAPPER_NAME
+    }
+
     async fn init(&self) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper c8y");
         create_directories()?;
-        mqtt_channel::init_session(&get_mqtt_config()?).await?;
-        Ok(())
-    }
-
-    async fn clear_session(&self) -> Result<(), anyhow::Error> {
-        info!("Clear tedge mapper session");
-        mqtt_channel::clear_session(&get_mqtt_config()?).await?;
+        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let mqtt_topics = CumulocityMapper::subscriptions(&operations)?;
+        let mqtt_config = self.get_mqtt_config()?;
+        mqtt_channel::init_session(&mqtt_config.with_subscriptions(mqtt_topics)).await?;
         Ok(())
     }
 
@@ -85,23 +86,6 @@ impl TEdgeComponent for CumulocityMapper {
 
         Ok(())
     }
-}
-
-fn get_mqtt_config() -> Result<mqtt_channel::Config, anyhow::Error> {
-    let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-    let mqtt_topic = CumulocityMapper::subscriptions(&operations)?;
-    let config_repository =
-        tedge_config::TEdgeConfigRepository::new(tedge_config::TEdgeConfigLocation::default());
-    let tedge_config = config_repository.load()?;
-
-    let mqtt_config = mqtt_channel::Config::default()
-        .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
-        .with_port(tedge_config.query(MqttPortSetting)?.into())
-        .with_session_name(CUMULOCITY_MAPPER_NAME)
-        .with_clean_session(false)
-        .with_subscriptions(mqtt_topic);
-
-    Ok(mqtt_config)
 }
 
 fn create_directories() -> Result<(), anyhow::Error> {
