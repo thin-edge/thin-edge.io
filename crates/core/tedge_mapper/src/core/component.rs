@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use mqtt_channel::TopicFilter;
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
 };
@@ -9,6 +10,7 @@ pub trait TEdgeComponent: Sync + Send {
     fn session_name(&self) -> &str;
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error>;
     async fn init(&self) -> Result<(), anyhow::Error>;
+    async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error>;
 
     async fn clear_session(&self) -> Result<(), anyhow::Error> {
         info!("Clear {} session", self.session_name());

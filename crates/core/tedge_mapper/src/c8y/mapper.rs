@@ -51,7 +51,12 @@ impl TEdgeComponent for CumulocityMapper {
         info!("Initialize tedge mapper c8y");
         create_directories()?;
         let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
-        let mqtt_topics = CumulocityMapper::subscriptions(&operations)?;
+        self.init_session(CumulocityMapper::subscriptions(&operations)?)
+            .await?;
+        Ok(())
+    }
+
+    async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error> {
         let mqtt_config = self.get_mqtt_config()?;
         mqtt_channel::init_session(&mqtt_config.with_subscriptions(mqtt_topics)).await?;
         Ok(())

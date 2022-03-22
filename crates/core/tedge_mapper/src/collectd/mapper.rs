@@ -3,6 +3,7 @@ use crate::{
     core::component::TEdgeComponent,
 };
 use async_trait::async_trait;
+use mqtt_channel::TopicFilter;
 use tedge_config::{ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig};
 use tracing::{info, info_span, Instrument};
 
@@ -24,7 +25,15 @@ impl TEdgeComponent for CollectdMapper {
 
     async fn init(&self) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper collectd");
-        mqtt_channel::init_session(&self.get_mqtt_config()?).await?;
+        self.init_session(TopicFilter::new(
+            DeviceMonitorConfig::default().mqtt_source_topic,
+        )?)
+        .await?;
+        Ok(())
+    }
+
+    async fn init_session(&self, c8y_topics: TopicFilter) -> Result<(), anyhow::Error> {
+        mqtt_channel::init_session(&self.get_mqtt_config()?.with_subscriptions(c8y_topics)).await?;
         Ok(())
     }
 
