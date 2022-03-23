@@ -1175,7 +1175,7 @@ jobs:
 #############################################################################
 
   system-test_onsite:
-    needs: [system-test-offsite_a, system-test-offsite_b, system-test-offsite_c, system-test-offsite_d]
+    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
     runs-on: Ubuntu-20.04
     steps:
     # Trigger repo dispatch here.
