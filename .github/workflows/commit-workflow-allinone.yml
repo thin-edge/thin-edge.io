@@ -912,7 +912,7 @@ jobs:
 
   system-test_offsite_a:
     runs-on: [self-hosted, Linux, ARM, offsite_mythica]
-    needs: [install-and-use-rpi_mythtica]
+    needs: [install-and-use-rpi_mythica]
 
     steps:
 
