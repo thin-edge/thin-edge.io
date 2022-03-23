@@ -1,0 +1,16 @@
+[package]
+name = "tedge_monitor"
+version = "0.6.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.58.1"
+license = "Apache-2.0"
+description = "tedge_monitor checks the health of all the thin-edge.io components/services."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+rumqttc = "0.10"
+sd-notify ="0.4.0"
+sysinfo = "0.23.5"

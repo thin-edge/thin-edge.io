@@ -560,6 +560,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-foundation-sys"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2522,6 +2528,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sd-notify"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fde85c94a50dc789df8ca7b39f6b8b1eaa6cd320cc729e9ce1e1e1104292719"
+
+[[package]]
 name = "segments"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2737,6 +2749,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.23.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07fa4c84a5305909b0eedfcc8d1f2fafdbede645bb700a45ecaafe681a0ac5d6"
+dependencies = [
+ "cfg-if 1.0.0",
+ "core-foundation-sys",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "rayon",
+ "winapi",
+]
+
+[[package]]
 name = "tedge"
 version = "0.6.1"
 dependencies = [
@@ -2913,6 +2940,16 @@ dependencies = [
  "tokio-test",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "tedge_monitor"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "rumqttc",
+ "sd-notify",
+ "sysinfo",
 ]
 
 [[package]]
