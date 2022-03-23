@@ -20,7 +20,7 @@ env:
 jobs:
 
   install-and-use-rpi-offsite_c:
-    runs-on: [self-hosted, Linux, ARM, offsitec]
+    runs-on: [self-hosted, Linux, ARM, offsite_offsitec]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
