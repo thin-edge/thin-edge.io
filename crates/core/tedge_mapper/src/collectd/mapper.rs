@@ -32,11 +32,6 @@ impl TEdgeComponent for CollectdMapper {
         Ok(())
     }
 
-    async fn init_session(&self, c8y_topics: TopicFilter) -> Result<(), anyhow::Error> {
-        mqtt_channel::init_session(&self.get_mqtt_config()?.with_subscriptions(c8y_topics)).await?;
-        Ok(())
-    }
-
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();

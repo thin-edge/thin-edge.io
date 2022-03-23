@@ -10,7 +10,11 @@ pub trait TEdgeComponent: Sync + Send {
     fn session_name(&self) -> &str;
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error>;
     async fn init(&self) -> Result<(), anyhow::Error>;
-    async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error>;
+    async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error> {
+        mqtt_channel::init_session(&self.get_mqtt_config()?.with_subscriptions(mqtt_topics))
+            .await?;
+        Ok(())
+    }
 
     async fn clear_session(&self) -> Result<(), anyhow::Error> {
         info!("Clear {} session", self.session_name());

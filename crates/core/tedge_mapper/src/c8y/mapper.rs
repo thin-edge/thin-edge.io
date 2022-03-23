@@ -56,12 +56,6 @@ impl TEdgeComponent for CumulocityMapper {
         Ok(())
     }
 
-    async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error> {
-        let mqtt_config = self.get_mqtt_config()?;
-        mqtt_channel::init_session(&mqtt_config.with_subscriptions(mqtt_topics)).await?;
-        Ok(())
-    }
-
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
