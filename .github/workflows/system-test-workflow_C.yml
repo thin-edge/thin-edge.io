@@ -123,7 +123,7 @@ jobs:
 
   system-test-offsite_c:
     needs: [install-and-use-rpi-offsite_c]
-    runs-on: [self-hosted, Linux, ARM, offsitec]
+    runs-on: [self-hosted, Linux, ARM, offsite_offsitec]
 
     steps:
 

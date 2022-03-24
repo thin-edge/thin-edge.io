@@ -1174,7 +1174,7 @@ jobs:
 
 #############################################################################
 
-  system-test_onsite:
+  system-test_postprocessing:
     needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
     runs-on: Ubuntu-20.04
     steps:

@@ -20,7 +20,7 @@ env:
 jobs:
 
   install-and-use-rpi-offsite_b:
-    runs-on: [self-hosted, Linux, ARM, offsiteb]
+    runs-on: [self-hosted, Linux, ARM, offsite_offsiteb]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -123,7 +123,7 @@ jobs:
 
   system-test-offsite_b:
     needs: [install-and-use-rpi-offsite_b]
-    runs-on: [self-hosted, Linux, ARM, offsiteb]
+    runs-on: [self-hosted, Linux, ARM, offsite_offsiteb]
 
     steps:
 
