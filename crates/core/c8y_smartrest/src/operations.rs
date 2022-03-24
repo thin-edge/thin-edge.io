@@ -25,7 +25,7 @@ pub struct OnMessageExec {
 #[serde(rename_all = "lowercase")]
 pub struct Operation {
     #[serde(skip)]
-    name: String,
+    pub name: String,
     exec: Option<OnMessageExec>,
 }
 
