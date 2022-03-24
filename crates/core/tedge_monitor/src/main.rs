@@ -4,16 +4,16 @@ use std::{thread, time};
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 use sd_notify::NotifyState;
-use sysinfo::{ProcessExt, System, SystemExt, PidExt};
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 
 fn main() {
-    println!("tedge_mapper_c8y_pid: {:?}",get_process_id("tedge_mapper"));
+    println!("tedge_mapper_c8y_pid: {:?}", get_process_id("tedge_mapper"));
     monitor_tedge_mapper_c8y();
 }
 
 pub fn monitor_tedge_mapper_c8y() {
-    const C8Y_MAPPER_HEALTH_CHECK_REQ: &str = "tedge/health-check/req/tedge-mapper-c8y";
-    const C8Y_MAPPER_HEALTH_CHECK_RES: &str = "tedge/health-check/res/tedge-mapper-c8y";
+    const C8Y_MAPPER_HEALTH_CHECK_REQ: &str = "tedge/health-check/tedge-mapper-c8y";
+    const C8Y_MAPPER_HEALTH_CHECK_RES: &str = "tedge/health/tedge-mapper-c8y";
     const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
     const CLIENT_ID: &str = "tedge_mapper_c8y_health";
 
@@ -80,7 +80,7 @@ pub fn monitor_tedge_mapper_c8y() {
     }
 }
 
-fn get_process_id(name:&str) -> u32 {
+fn get_process_id(name: &str) -> u32 {
     let s = System::new_all();
 
     for process in s.processes_by_exact_name(name) {
@@ -90,6 +90,6 @@ fn get_process_id(name:&str) -> u32 {
     return 0;
 }
 
-fn notify_systemd(){
+fn notify_systemd() {
     let _ = sd_notify::notify(true, &[NotifyState::Watchdog]);
 }
