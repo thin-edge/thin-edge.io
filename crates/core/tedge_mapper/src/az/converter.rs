@@ -2,7 +2,7 @@ use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 
 use async_trait::async_trait;
 use clock::Clock;
-use mqtt_channel::Message;
+use mqtt_channel::{Message, TopicFilter};
 use thin_edge_json::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
@@ -15,7 +15,7 @@ pub struct AzureConverter {
 impl AzureConverter {
     pub fn new(add_timestamp: bool, clock: Box<dyn Clock>, size_threshold: SizeThreshold) -> Self {
         let mapper_config = MapperConfig {
-            in_topic_filter: make_valid_topic_filter_or_panic("tedge/measurements"),
+            in_topic_filter: Self::in_topic_filter(),
             out_topic: make_valid_topic_or_panic("az/messages/events/"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
@@ -25,6 +25,10 @@ impl AzureConverter {
             size_threshold,
             mapper_config,
         }
+    }
+
+    pub fn in_topic_filter() -> TopicFilter {
+        make_valid_topic_filter_or_panic("tedge/measurements")
     }
 }
 

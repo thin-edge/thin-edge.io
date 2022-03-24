@@ -75,26 +75,24 @@ impl fmt::Display for MapperName {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mapper = MapperOpt::parse();
-    tedge_utils::logging::initialise_tracing_subscriber(mapper.debug);
+    let mapper_opt = MapperOpt::parse();
+    tedge_utils::logging::initialise_tracing_subscriber(mapper_opt.debug);
 
-    let component = lookup_component(&mapper.name);
+    let component = lookup_component(&mapper_opt.name);
 
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper.config_dir);
+        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
     let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
     // Run only one instance of a mapper
     let _flock = check_another_instance_is_not_running(
-        &mapper.name.to_string(),
+        &mapper_opt.name.to_string(),
         &config.query(RunPathDefaultSetting)?.into(),
     )?;
 
-    if mapper.init {
-        let mut mapper = CumulocityMapper::new();
-        mapper.init_session().await
-    } else if mapper.clear {
-        let mut mapper = CumulocityMapper::new();
-        mapper.clear_session().await
+    if mapper_opt.init {
+        component.init().await
+    } else if mapper_opt.clear {
+        component.clear_session().await
     } else {
         component.start(config).await
     }
