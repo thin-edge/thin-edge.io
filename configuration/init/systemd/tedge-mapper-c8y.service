@@ -5,13 +5,8 @@ After=syslog.target network.target mosquitto.service
 [Service]
 User=tedge-mapper
 ExecStart=/usr/bin/tedge_mapper c8y
-Restart=on-failure
-RestartPreventExitStatus=255
-stop-on-upgrade = false
-Type=notify
 Restart=always
-RestartSec=1
-TimeoutSec=5
+RestartPreventExitStatus=255
 WatchdogSec=5
 
 [Install]
