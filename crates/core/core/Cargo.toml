@@ -1,0 +1,41 @@
+[package]
+name = "tedge_core"
+version = "0.6.0"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.58.1"
+license = "Apache-2.0"
+description = ""
+
+[dependencies]
+actix = "0.13"
+agent_interface = { path = "../agent_interface" }
+anyhow = "1.0"
+async-trait = "0.1"
+clap = { version = "3.0", features = ["cargo", "derive"] }
+flockfile = { path = "../../common/flockfile" }
+futures = "0.3"
+mockall = "0.10"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+plugin_sm = { path = "../plugin_sm" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_config = { path = "../../common/tedge_config" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1.8", features = ["fs","process", "rt"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+anyhow = "1.0"
+assert_cmd = "2.0"
+once_cell = "1.8"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+predicates = "2.1"
+tedge_users = { path = "../../common/tedge_users"}
+tedge_utils = { path = "../../common/tedge_utils"}
+tempfile = "3.2"
+tokio-test = "0.4"
+serial_test = "0.5"

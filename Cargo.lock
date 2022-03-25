@@ -3,6 +3,51 @@
 version = 3
 
 [[package]]
+name = "actix"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f728064aca1c318585bf4bb04ffcfac9e75e508ab4e8b1bd9ba5dfe04e2cbed5"
+dependencies = [
+ "actix-rt",
+ "actix_derive",
+ "bitflags",
+ "bytes",
+ "crossbeam-channel",
+ "futures-core",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "log",
+ "once_cell",
+ "parking_lot 0.12.0",
+ "pin-project-lite",
+ "smallvec",
+ "tokio",
+ "tokio-util 0.7.0",
+]
+
+[[package]]
+name = "actix-rt"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ea16c295198e958ef31930a6ef37d0fb64e9ca3b6116e6b93a8bdae96ee1000"
+dependencies = [
+ "futures-core",
+ "tokio",
+]
+
+[[package]]
+name = "actix_derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d44b8fee1ced9671ba043476deddef739dd0959bf77030b26b738cc591737a7"
+dependencies = [
+ "proc-macro2 1.0.36",
+ "quote 1.0.15",
+ "syn 1.0.88",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1091,7 +1136,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.6.9",
  "tracing",
 ]
 
@@ -2284,7 +2329,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-rustls 0.23.2",
- "tokio-util",
+ "tokio-util 0.6.9",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2844,6 +2889,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_core"
+version = "0.6.0"
+dependencies = [
+ "actix",
+ "agent_interface",
+ "anyhow",
+ "assert_cmd",
+ "async-trait",
+ "clap 3.1.6",
+ "flockfile",
+ "futures",
+ "mockall 0.10.2",
+ "mqtt_channel",
+ "mqtt_tests",
+ "once_cell",
+ "plugin_sm",
+ "predicates 2.1.1",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tedge_config",
+ "tedge_users",
+ "tedge_utils",
+ "tempfile",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-test",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "tedge_dummy_plugin"
 version = "0.6.0"
 dependencies = [
@@ -3194,6 +3272,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-util"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64910e1b9c1901aaf5375561e35b9c057d95ff41a44ede043a03e09279eabaf1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "toml"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3467,7 +3559,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
- "tokio-util",
+ "tokio-util 0.6.9",
  "tower-service",
  "tracing",
 ]
