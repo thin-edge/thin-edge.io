@@ -11,8 +11,9 @@ description = "tedge_monitor checks the health of all the thin-edge.io component
 
 [dependencies]
 anyhow = "1.0"
+nanoid = "0.4.0"
 rumqttc = "0.10"
-sd-notify ="0.4.0"
-sysinfo = "0.23.5"
-systemd = "0.10.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_config = { path = "../../common/tedge_config" }
 thiserror ="1.0.30"

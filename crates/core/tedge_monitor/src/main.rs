@@ -1,65 +1,127 @@
 use std::process::{self, Command, ExitStatus, Stdio};
-use std::time::Duration;
 use std::{thread, time};
 
+use nanoid::nanoid;
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
-use sysinfo::{PidExt, ProcessExt, System, SystemExt};
+use serde::{Deserialize, Serialize};
+use tedge_config::{
+    ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
+};
+use time::Duration;
 
-fn main() {
-    //let tedge_services = vec!["tedge-mapper-c8y","tedge-mapper-az", "tedge-mapper-collectd", "tedge-agent"];
-    let _ = notify_systemd(process::id(), "--ready");
-    let tedge_services = vec!["tedge-mapper-c8y"];
-    for service in tedge_services {
-        let req_topic = format!("tedge/health-check/{}", service);
-        let res_topic = format!("tedge/health/{}", service);
-        if service.contains("c8y") {
-            let _ = monitor_tedge_service(service, Some("c8y"), &req_topic, &res_topic);
-        }
-    }
-    println!(
-        "tedge_mapper_c8y_pid: {:?}",
-        get_process_id("tedge_mapper", Some("c8y"))
-    );
+pub const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
+
+#[derive(Serialize, Deserialize)]
+pub struct Response {
+    status: String,
+    pid: u32,
 }
 
-pub fn monitor_tedge_service(
-    name: &str,
-    m_type: Option<&str>,
-    req_topic: &str,
-    res_topic: &str,
-) -> Result<ExitStatus, WatchdogError> {
-    const RESPONSE_TIMEOUT: Duration = Duration::from_secs(60);
-    let client_id: &str = &format!("{}-health", name);
+fn main() {
+    let _ = start_watchdog();
+}
 
-    let mut options = MqttOptions::new(client_id, "localhost", 1883);
-    options.set_keep_alive(RESPONSE_TIMEOUT);
+fn start_watchdog() {
+    // Send ready notification to systemd.
+    let _ = notify_systemd(process::id(), "--ready");
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
-
-    client.subscribe(res_topic, AtLeastOnce).unwrap();
-
+    // Start helth check request publisher
+    thread::spawn(move || publish());
     loop {
-        for event in connection.iter() {
+        let tedge_services = vec![
+            "tedge-mapper-c8y",
+            "tedge-mapper-az",
+            "tedge-mapper-collectd",
+            "tedge-agent",
+        ];
+        let mut watchdog_threads = vec![];
+
+        for service in tedge_services {
+            let res_topic = format!("tedge/health/{}", service);
+
+            watchdog_threads.push(thread::spawn(move || {
+                monitor_tedge_service(service, &res_topic)
+            }));
+        }
+
+        for child in watchdog_threads {
+            // Wait for the thread to finish. Returns a result.
+            let _ = child
+                .join()
+                .expect("Couldn't join on the associated thread");
+        }
+
+        thread::sleep(Duration::from_secs(1));
+    }
+}
+
+fn publish() {
+    let client_id: &str = "watchdog_publisher";
+    let options = get_mqtt_options(client_id);
+
+    let mut mqtt = rumqttc::Client::new(options, 10);
+    let mut timedout: bool = false;
+    loop {
+        if timedout {
+            let options = get_mqtt_options(client_id);
+            mqtt = rumqttc::Client::new(options, 10);
+        }
+        let _ = mqtt.0.publish("tedge/health-check", AtLeastOnce, false, "");
+        for event in mqtt.1.iter() {
             match event {
-                Ok(Event::Incoming(Packet::SubAck(_))) => {
-                    client.publish(req_topic, AtLeastOnce, false, "").unwrap();
+                Ok(Event::Outgoing(Outgoing::Publish(_))) => {
+                    break;
                 }
                 Ok(Event::Incoming(Packet::PubAck(_))) => {
-                    println!("published successfully");
-                    // The request has been sent
+                    break;
                 }
-                Ok(Event::Incoming(Packet::Publish(_response))) => {
-                    // We got a response forward it to systemd
-                    // println!("received response {:?}", response);
-                    let pid = get_process_id("tedge_mapper", m_type);
-                    notify_systemd(pid, "WATCHDOG=1")?;
+                Ok(Event::Incoming(Packet::PubComp(_))) => {
                     break;
                 }
                 Ok(Event::Outgoing(Outgoing::PingReq)) => {
                     // No messages have been received for a while
-                    println!("Local MQTT publish has timed out.");
+                    eprintln!("Local MQTT publish has timed out.");
+                    timedout = true;
                     break;
+                }
+                Ok(Event::Incoming(Incoming::Disconnect)) => {
+                    eprintln!("Disconnected");
+                    break;
+                }
+                Err(err) => {
+                    eprintln!("Error: {}", err.to_string());
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        thread::sleep(Duration::from_secs(2));
+    }
+}
+
+fn monitor_tedge_service(name: &str, res_topic: &str) -> Result<(), WatchdogError> {
+    let client_id: &str = &format!("{}_{}", name, nanoid!());
+    let options = get_mqtt_options(client_id);
+    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+
+    println!("started watchdog for service: {}", name);
+    loop {
+        for event in connection.iter() {
+            match event {
+                Ok(Event::Incoming(Packet::Publish(response))) => {
+                    // Received response from thin-edge service, update the status to systemd on behalf of service
+                    let p: Response = serde_json::from_str(
+                        &String::from_utf8(response.payload.to_vec()).unwrap(),
+                    )
+                    .unwrap();
+                    notify_systemd(p.pid, "WATCHDOG=1")?;
+                    break;
+                }
+                Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                    eprintln!("INFO: Connected");
+                    client.subscribe(res_topic, AtLeastOnce).unwrap();
                 }
                 Ok(Event::Incoming(Incoming::Disconnect)) => {
                     eprintln!("ERROR: Disconnected");
@@ -67,40 +129,29 @@ pub fn monitor_tedge_service(
                 }
                 Err(err) => {
                     eprintln!("ERROR: {:?}", err);
-                    client.subscribe(res_topic, AtLeastOnce).unwrap();
                     break;
                 }
                 _ => {}
             }
         }
-        thread::sleep(time::Duration::from_secs(2));
-        client.publish(req_topic, AtLeastOnce, false, "").unwrap();
     }
 }
 
-fn get_process_id(daemon_name: &str, mapper_type: Option<&str>) -> u32 {
-    let s = System::new_all();
-
-    for process in s.processes_by_exact_name(daemon_name) {
-        println!("{} {} {:?}", process.pid(), process.name(), process.cmd());
-        match mapper_type {
-            Some(m_type) => {
-                for subcmd in process.cmd().iter() {
-                    if m_type.eq(subcmd) {
-                        return process.pid().as_u32();
-                    }
-                }
-            }
-            None => {
-                return process.pid().as_u32();
-            }
-        }
-    }
-    return 0;
+fn get_mqtt_options(client_id: &str) -> MqttOptions {
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(DEFAULT_TEDGE_CONFIG_PATH);
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load().unwrap();
+    let host = tedge_config
+        .query(MqttBindAddressSetting)
+        .unwrap()
+        .to_string();
+    let port = tedge_config.query(MqttPortSetting).unwrap().into();
+    MqttOptions::new(client_id, host, port)
 }
 
 fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
-    let pid_opt = format!("--pid={}", pid.to_string());
+    let pid_opt = format!("--pid={}", pid);
     let status = Command::new("systemd-notify")
         .args([status, &pid_opt])
         .stdin(Stdio::null())
@@ -109,7 +160,6 @@ fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
             cmd: String::from("systemd-notify"),
             from: err,
         })?;
-
     Ok(status)
 }
 

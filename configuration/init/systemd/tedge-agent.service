@@ -8,6 +8,7 @@ RuntimeDirectory=tedge_agent
 ExecStart=/usr/bin/tedge_agent
 Restart=on-failure
 RestartPreventExitStatus=255
+WatchdogSec=15
 
 [Install]
 WantedBy=multi-user.target
