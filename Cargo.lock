@@ -2919,13 +2919,14 @@ dependencies = [
 name = "tedge_monitor"
 version = "0.6.0"
 dependencies = [
- "anyhow",
+ "futures",
+ "mqtt_channel",
  "nanoid",
- "rumqttc",
  "serde",
  "serde_json",
  "tedge_config",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

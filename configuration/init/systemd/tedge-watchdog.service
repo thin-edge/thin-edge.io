@@ -1,5 +1,5 @@
 [Unit]
-Description=tedge-monitor
+Description=tedge-monitor: Checks the health of all thin-edge.io services
 After=syslog.target network.target mosquitto.service
 StartLimitIntervalSec=0
 
