@@ -28,7 +28,7 @@ async fn start_watchdog() {
     let _ = notify_systemd(process::id(), "--ready");
 
     // Start helth check request publisher
-    tokio::spawn(async move { publish().await });
+    tokio::spawn(async move { health_check_trigger().await });
 
     loop {
         let tedge_services = vec![
@@ -51,7 +51,7 @@ async fn start_watchdog() {
     }
 }
 
-async fn publish() -> Result<(), WatchdogError> {
+async fn health_check_trigger() -> Result<(), WatchdogError> {
     let client_id: &str = "watchdog_publisher";
     let mqtt_config = get_mqtt_config(client_id)?;
 
@@ -81,32 +81,39 @@ async fn monitor_tedge_service(name: &str, res_topic: &str) -> Result<(), Watchd
 
     println!("started watchdog for service: {}", name);
 
-    while let Some(msg) = received.next().await {
-        let message = match msg.payload_str() {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("Failed to translate bytes to str: {}", e.to_string());
-                continue;
-            }
-        };
+    loop {
+        let res = tokio::time::timeout(tokio::time::Duration::from_secs(3), received.next()).await;
+        match res {
+            Ok(Some(msg)) => {
+                let message = match msg.payload_str() {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to translate bytes to str: {}", e.to_string());
+                        continue;
+                    }
+                };
 
-        let p: Response = match serde_json::from_str(message) {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("Failed to deserialize str: {}", e.to_string());
-                continue;
-            }
-        };
+                let p: Response = match serde_json::from_str(message) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to deserialize str: {}", e.to_string());
+                        continue;
+                    }
+                };
 
-        match notify_systemd(p.pid, "WATCHDOG=1") {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("{}", e.to_string())
+                match notify_systemd(p.pid, "WATCHDOG=1") {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("{}", e.to_string())
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(_elapsed) => {
+                println!("Wait time elapsed to receive a message from: {}",name)
             }
         }
     }
-
-    Ok(())
 }
 
 fn get_mqtt_config(client_id: &str) -> Result<Config, WatchdogError> {
