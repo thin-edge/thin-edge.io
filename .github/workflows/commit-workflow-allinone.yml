@@ -517,6 +517,7 @@ jobs:
 
       - name: Stop apama
         run: sudo systemctl stop apama
+        continue-on-error: true
 
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
@@ -637,6 +638,7 @@ jobs:
 
       - name: Stop apama
         run: sudo systemctl stop apama
+        continue-on-error: true
 
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
@@ -757,6 +759,7 @@ jobs:
 
       - name: Stop apama
         run: sudo systemctl stop apama
+        continue-on-error: true
 
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
@@ -877,6 +880,7 @@ jobs:
 
       - name: Stop apama
         run: sudo systemctl stop apama
+        continue-on-error: true
 
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.

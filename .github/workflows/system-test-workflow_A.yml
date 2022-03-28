@@ -68,6 +68,7 @@ jobs:
 
       - name: Stop apama
         run: sudo systemctl stop apama
+        continue-on-error: true
 
       - name: purge packages
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
