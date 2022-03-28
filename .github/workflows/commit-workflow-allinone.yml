@@ -415,16 +415,17 @@ jobs:
         run: sudo apt-get --assume-yes install collectd-core
 
       - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
+        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_amd64.deb
 
       - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
+        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_amd64.deb
 
       - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
 
       - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
+        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
+
 
       - name: run tedge help
         run: tedge --help
