@@ -113,7 +113,7 @@ where
         }
     }
 
-    fn try_convert_measurement(
+    pub fn try_convert_measurement(
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {

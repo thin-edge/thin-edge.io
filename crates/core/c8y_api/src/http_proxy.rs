@@ -176,10 +176,17 @@ impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
 ///
 /// - Keep the connection info to c8y and the internal Id of the device
 /// - Handle JWT requests
+#[derive(Debug)]
 pub struct JwtAuthHttpProxy {
     jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
+}
+
+impl core::fmt::Debug for dyn C8yJwtTokenRetriever {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "C8yJwtTokenRetriever")
+    }
 }
 
 impl JwtAuthHttpProxy {

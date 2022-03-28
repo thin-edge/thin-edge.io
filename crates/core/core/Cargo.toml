@@ -12,19 +12,28 @@ actix = "0.13"
 agent_interface = { path = "../agent_interface" }
 anyhow = "1.0"
 async-trait = "0.1"
+batcher = { path = "../../common/batcher" }
+c8y_api = { path = "../c8y_api" }
+c8y_smartrest = { path = "../c8y_smartrest" }
+c8y_translator = { path = "../c8y_translator" }
 clap = { version = "3.0", features = ["cargo", "derive"] }
+clock = { path = "../../common/clock" }
+csv = "1.1"
+download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 mockall = "0.10"
 mqtt_channel = { path = "../../common/mqtt_channel" }
-plugin_sm = { path = "../plugin_sm" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_config = { path = "../../common/tedge_config" }
+tedge_mapper = { path = "../../core/tedge_mapper" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 time = { version = "0.3", features = ["formatting"] }
-tokio = { version = "1.8", features = ["fs","process", "rt"] }
+tokio = { version = "1.17", features = ["fs","process", "rt"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
