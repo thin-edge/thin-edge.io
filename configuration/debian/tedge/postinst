@@ -17,21 +17,6 @@ if ! getent passwd tedge >/dev/null; then
     adduser --quiet --system --gecos "" --no-create-home --disabled-login --shell /sbin/nologin --ingroup tedge tedge
 fi
 
-### Create directories
-# thin-edge.io uses `/etc/tedge` directory as its main configuration directory.
-# This directory contains mqtt bus configuration directory under `mosquitto-conf`
-# and device certificates under `device-certs` so both have to be created in the directory structure.
-install -g tedge -o tedge -m 755 -d /etc/tedge
-install -g tedge -o tedge -m 755 -d /etc/tedge/mosquitto-conf
-install -g mosquitto -o mosquitto -m 755 -d /etc/tedge/device-certs
-
-# Create a directory for the operations added by the user.
-install -g tedge -o tedge -m 755 -d /etc/tedge/operations
-install -g tedge -o tedge -m 755 -d /etc/tedge/plugins
-
-# Create directory for logs
-install -g tedge -o tedge -m 755 -d /var/log/tedge
-
 ### Add include to mosquitto.conf so tedge specific conf will be loaded
 if ! grep -q "/etc/tedge/mosquitto-conf" "/etc/mosquitto/mosquitto.conf"; then
     echo "include_dir /etc/tedge/mosquitto-conf" >>/etc/mosquitto/mosquitto.conf
@@ -43,6 +28,9 @@ echo "%tedge-users   ALL = (ALL) /usr/bin/tedge" >/etc/sudoers.d/tedge-users
 if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
     echo "%tedge-users   ALL = (ALL) NOPASSWD: /usr/bin/tedge" >/etc/sudoers.d/tedge-users-nopasswd
 fi
+
+# Initialize the tedge
+tedge --init
 
 ### Below are automatically created script parts by cargo deb (Search for cargo deb DEBHELPER)
 #DEBHELPER#

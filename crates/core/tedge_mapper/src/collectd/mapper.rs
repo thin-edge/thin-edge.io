@@ -3,10 +3,11 @@ use crate::{
     core::component::TEdgeComponent,
 };
 use async_trait::async_trait;
+use mqtt_channel::TopicFilter;
 use tedge_config::{ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig};
-use tracing::{info_span, Instrument};
+use tracing::{info, info_span, Instrument};
 
-const APP_NAME: &str = "tedge-mapper-collectd";
+const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 
 pub struct CollectdMapper {}
 
@@ -18,6 +19,19 @@ impl CollectdMapper {
 
 #[async_trait]
 impl TEdgeComponent for CollectdMapper {
+    fn session_name(&self) -> &str {
+        COLLECTD_MAPPER_NAME
+    }
+
+    async fn init(&self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper collectd");
+        self.init_session(TopicFilter::new(
+            DeviceMonitorConfig::default().mqtt_source_topic,
+        )?)
+        .await?;
+        Ok(())
+    }
+
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
@@ -29,7 +43,7 @@ impl TEdgeComponent for CollectdMapper {
         let device_monitor = DeviceMonitor::new(device_monitor_config);
         device_monitor
             .run()
-            .instrument(info_span!(APP_NAME))
+            .instrument(info_span!(COLLECTD_MAPPER_NAME))
             .await?;
 
         Ok(())

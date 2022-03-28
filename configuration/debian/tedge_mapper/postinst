@@ -11,19 +11,10 @@ fi
 # Create user tedge-mapper with no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
 if ! getent passwd tedge-mapper >/dev/null; then
     adduser --quiet --system --no-create-home --ingroup tedge-mapper --shell /usr/sbin/nologin tedge-mapper
+    adduser tedge-mapper tedge
 fi
-
-### Create supported cloud operations directories
-install -g tedge -o tedge -m 755 -d /etc/tedge/operations/c8y
-install -g tedge -o tedge -m 755 -d /etc/tedge/operations/az
-
-### Create operation file.
-# This allows thin-edge.io components to list and declare supported operations for the cloud provider.
-# Some of the examples for Cumulocity IoT supported opertations: https://cumulocity.com/api/10.11.0/#section/Device-management-library/Miscellaneous
-install -g tedge -o tedge -m 644 /dev/null /etc/tedge/operations/c8y/c8y_SoftwareUpdate
-install -g tedge -o tedge -m 644 /dev/null /etc/tedge/operations/c8y/c8y_Restart
 
 ### Initialize the sm mapper
 runuser -u tedge-mapper -- tedge_mapper --init c8y
-
+runuser -u tedge-mapper -- tedge_mapper --init az
 #DEBHELPER#

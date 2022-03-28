@@ -288,7 +288,11 @@ async fn parse_c8y_topics(
         Err(
             ref err @ CumulocityMapperError::FromSmartRestDeserializer(
                 SmartRestDeserializerError::InvalidParameter { ref operation, .. },
-            ),
+            )
+            | ref err @ CumulocityMapperError::ExecuteFailed {
+                operation_name: ref operation,
+                ..
+            },
         ) => {
             let topic = C8yTopic::SmartRestResponse.to_topic()?;
             let msg1 = Message::new(&topic, format!("501,{operation}"));
@@ -296,7 +300,6 @@ async fn parse_c8y_topics(
             error!("{err}");
             Ok(vec![msg1, msg2])
         }
-
         Err(err) => {
             error!("{err}");
             Ok(vec![])
@@ -576,24 +579,37 @@ async fn validate_and_publish_software_list(
     Ok(vec![])
 }
 
-async fn execute_operation(payload: &str, command: &str) -> Result<(), CumulocityMapperError> {
+async fn execute_operation(
+    payload: &str,
+    command: &str,
+    operation_name: &str,
+) -> Result<(), CumulocityMapperError> {
     let command = command.to_owned();
     let payload = payload.to_string();
 
-    let _handle = tokio::spawn(async move {
-        let mut child = tokio::process::Command::new(command)
-            .args(&[payload])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| CumulocityMapperError::ExecuteFailed(e.to_string()))
-            .unwrap();
+    let child = tokio::process::Command::new(&command)
+        .args(&[&payload])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| CumulocityMapperError::ExecuteFailed {
+            error_message: e.to_string(),
+            command: command.to_string(),
+            operation_name: operation_name.to_string(),
+        });
 
-        child.wait().await
-    });
-
-    Ok(())
+    match child {
+        Ok(mut child) => {
+            let _handle = tokio::spawn(async move {
+                let _ = child.wait().await;
+            });
+            return Ok(());
+        }
+        Err(err) => {
+            return Err(err);
+        }
+    };
 }
 
 async fn process_smartrest(
@@ -660,7 +676,7 @@ async fn forward_operation_request(
     match operations.matching_smartrest_template(template) {
         Some(operation) => {
             if let Some(command) = operation.command() {
-                execute_operation(payload, command.as_str()).await?;
+                execute_operation(payload, command.as_str(), &operation.name).await?;
             }
             Ok(vec![])
         }
@@ -715,5 +731,22 @@ pub fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, Conversion
             Err(ConversionError::InvalidChildId { id: maybe_id })
         }
         option => Ok(option),
+    }
+}
+
+mod tests {
+    #[tokio::test]
+    async fn test_execute_operation_is_not_blocked() {
+        let now = std::time::Instant::now();
+        let () = super::execute_operation("5", "sleep", "sleep_one")
+            .await
+            .unwrap();
+        let () = super::execute_operation("5", "sleep", "sleep_two")
+            .await
+            .unwrap();
+
+        // a result between now and elapsed that is not 0 probably means that the operations are
+        // blocking and that you probably removed a tokio::spawn handle (;
+        assert_eq!(now.elapsed().as_secs(), 0);
     }
 }

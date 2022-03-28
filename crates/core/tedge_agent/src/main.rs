@@ -53,7 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
     if agent_opt.init {
-        agent.init_session().await?;
+        agent.init().await?;
     } else if agent_opt.clear {
         agent.clear_session().await?;
     } else {

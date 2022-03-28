@@ -11,6 +11,7 @@ fi
 # Create user tedge-agent with no home(--no-create-home), no login(--shell) and in group tedge-agent(--ingroup)
 if ! getent passwd tedge-agent >/dev/null; then
     adduser --quiet --system --no-create-home --ingroup tedge-agent --shell /usr/sbin/nologin tedge-agent
+    adduser tedge-agent tedge
 fi
 
 ### Create file in /etc/sudoers.d directory
@@ -20,13 +21,6 @@ echo "%tedge-agent   ALL = (ALL) NOPASSWD: /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /
 if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
     echo "%tedge-agent   ALL = (ALL) NOPASSWD: /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge-agent-nopasswd
 fi
-
-### Create directories
-# Create tedge-agent state directory /etc/tedge/.agent
-install -g tedge-agent -o tedge-agent -m 754 -d /etc/tedge/.agent
-
-# Create /var/log/tedge/agent directory
-install -g tedge-agent -o tedge-agent -m 755 -d /var/log/tedge/agent
 
 # Reenable the services only if systemctl is available
 if command -v systemctl >/dev/null; then

@@ -18,7 +18,7 @@ pub struct DeviceMonitorConfig {
     host: String,
     port: u16,
     mqtt_client_id: &'static str,
-    mqtt_source_topic: &'static str,
+    pub mqtt_source_topic: &'static str,
     mqtt_target_topic: &'static str,
     batching_window: u32,
     maximum_message_delay: u32,

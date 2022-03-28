@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::{AzureMapperTimestamp, MqttBindAddressSetting, TEdgeConfig};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting};
-use tracing::{info_span, Instrument};
+use tedge_utils::file::create_directory_with_user_group;
+use tracing::{info, info_span, Instrument};
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -21,6 +22,23 @@ impl AzureMapper {
 
 #[async_trait]
 impl TEdgeComponent for AzureMapper {
+    fn session_name(&self) -> &str {
+        AZURE_MAPPER_NAME
+    }
+
+    async fn init(&self) -> Result<(), anyhow::Error> {
+        info!("Initialize tedge mapper az");
+        create_directory_with_user_group(
+            "/etc/tedge/operations/az",
+            "tedge-mapper",
+            "tedge-mapper",
+            0o775,
+        )?;
+
+        self.init_session(AzureConverter::in_topic_filter()).await?;
+        Ok(())
+    }
+
     async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
