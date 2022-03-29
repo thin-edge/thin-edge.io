@@ -87,6 +87,8 @@ use async_trait::async_trait;
 struct C8YMapperConfig {}
 struct C8YMapper {
     mailbox: MailBox<C8YMessage>,
+    c8y: Option<Address<MqttMessage>>,
+    sm: Option<Address<Request<SMRequest, SMResponse>>>,
 }
 
 impl PluginConfig for C8YMapperConfig {
@@ -95,6 +97,8 @@ impl PluginConfig for C8YMapperConfig {
     fn instantiate(self) -> Result<Self::Plugin, RuntimeError> {
         Ok(C8YMapper {
             mailbox: MailBox::new(),
+            c8y: None,
+            sm: None,
         })
     }
 }
@@ -107,12 +111,45 @@ impl Plugin for C8YMapper {
         self.mailbox.get_address()
     }
 
-    async fn start(self) -> Result<(), RuntimeError> {
-        todo!()
+    async fn start(mut self) -> Result<(), RuntimeError> {
+        while let Some(message) = self.mailbox.next().await {
+            match message {
+                C8YMessage::MqttMessage(_) => {
+                    // Translate the mqtt message received from c8y
+                    // into an operation
+                    // forward this operation to the sm plugin
+                    let request = SMRequest::SoftwareList;
+                    self.send_request_to(&mut self.sm.expect("a plugin instance"), request)
+                        .await?;
+                }
+                C8YMessage::Measurement(_) => {
+                    // Translate the measurement into a message for c8y
+                    let message = MqttMessage {
+                        topic: "c8y/measurement".to_string(),
+                        payload: "foo".to_string(),
+                        qos: QoS::AtLeastOnce,
+                    };
+                    self.c8y.expect("a plugin instance").send_msg(message).await?
+                }
+                C8YMessage::SMResponse(_) => {
+                    // translate the response received for the sm plugin
+                    // into a message for c8y
+                    let message = MqttMessage {
+                        topic: "c8y/operation".to_string(),
+                        payload: "bar".to_string(),
+                        qos: QoS::AtLeastOnce,
+                    };
+                    self.c8y.expect("a plugin instance").send_msg(message).await?
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
 /// Messages handled by the C8Y mapper
+#[derive(Debug,Clone)]
 enum C8YMessage {
     MqttMessage(MqttMessage), // A message received from C8Y
     Measurement(Measurement), // A measurement received from another plugin
@@ -139,26 +176,31 @@ impl Into<C8YMessage> for SMResponse {
 /// Messages produced by the C8Y mapper
 impl Requester<SMRequest, SMResponse> for C8YMapper {
     fn add_responder(&mut self, recipient: Address<Request<SMRequest, SMResponse>>) {
-        todo!()
+        // TODO Raise an error if there is already a recipient
+        self.sm = Some(recipient);
     }
 }
 
 impl Producer<MqttMessage> for C8YMapper {
     fn add_recipient(&mut self, recipient: Address<MqttMessage>) {
-        todo!()
+        // TODO Raise an error if there is already a recipient
+        self.c8y = Some(recipient);
     }
 }
 
 impl C8YMapper {
     pub fn set_mqtt_con(
         &mut self,
-        con: &mut (impl Producer<MqttMessage> + Plugin<Input = MqttMessage>),
+        con: &mut (impl Plugin<Input = MqttMessage> + Producer<MqttMessage>),
     ) {
-        todo!()
+        self.add_recipient(con.get_address());
+        con.add_recipient(self.get_address());
     }
+
     pub fn add_measurement_producer(&mut self, producer: &mut impl Producer<Measurement>) {
         todo!()
     }
+
     pub fn set_sm_service(&mut self, sm: &mut impl Plugin<Input = SMMessage>) {
         todo!()
     }
@@ -295,9 +337,22 @@ impl Plugin for SoftwareManagementService {
     }
 }
 
+#[derive(Debug,Clone)]
 enum SMMessage {
     SMRequest(Request<SMRequest, SMResponse>),
     SMResponse(SMResponse),
+}
+
+// A derive macro would be helpful here
+impl Into<SMMessage> for Request<SMRequest, SMResponse> {
+    fn into(self) -> SMMessage {
+        SMMessage::SMRequest(self)
+    }
+}
+impl Into<SMMessage> for SMResponse {
+    fn into(self) -> SMMessage {
+        SMMessage::SMResponse(self)
+    }
 }
 
 impl SoftwareManagementService {
@@ -395,6 +450,7 @@ impl Plugin for ApamaPackager {
 }
 
 /// Plugins exchanging telemetry data
+#[derive(Debug,Clone)]
 struct Measurement {
     source: String,
     name: String,
@@ -403,26 +459,31 @@ struct Measurement {
 }
 
 /// Plugins exchanging SM operations
+#[derive(Debug,Clone)]
 enum SMRequest {
     SoftwareList,
     SoftwareUpdate { update: Vec<SMOperation> },
 }
 
+#[derive(Debug,Clone)]
 enum SMResponse {
     SoftwareList { list: Vec<PackageVersion> },
     SoftwareUpdate { errors: Vec<SMError> },
 }
 
+#[derive(Debug,Clone)]
 enum SMOperation {
     Install { package: PackageVersion },
     Remove { package: PackageVersion },
 }
 
+#[derive(Debug,Clone)]
 struct SMError {
     operation: SMOperation,
     error: String,
 }
 
+#[derive(Debug,Clone)]
 struct PackageVersion {
     manager: String,
     package: String,
@@ -430,12 +491,14 @@ struct PackageVersion {
 }
 
 /// Plugins exchanging MQTT messages
+#[derive(Debug,Clone)]
 struct MqttMessage {
     topic: String,
     payload: String,
     qos: QoS,
 }
 
+#[derive(Debug,Clone)]
 enum QoS {
     AtMostOnce,
     AtLeastOnce,

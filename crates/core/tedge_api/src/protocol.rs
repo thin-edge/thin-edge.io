@@ -1,8 +1,10 @@
-use crate::RuntimeError;
+use std::fmt::{Debug, Formatter};
+use crate::{Message, RuntimeError};
+use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 
-/// The mailbox gathering all the messages to be processed by a plugin
+/// A mailbox gathering all the messages to be processed by a plugin
 pub struct MailBox<M> {
     sender: mpsc::UnboundedSender<M>,
     receiver: mpsc::UnboundedReceiver<M>,
@@ -20,41 +22,57 @@ impl<M> MailBox<M> {
 
     pub fn get_address(&self) -> Address<M> {
         Address {
-            recipient: self.sender.clone(),
+            sender: self.sender.clone(),
         }
     }
 }
 
-/// An address where messages of type `M` can be sent
-pub struct Address<M> {
-    recipient: mpsc::UnboundedSender<M>,
+/// A recipient for messages of type `M`
+#[async_trait]
+pub trait Recipient<M> {
+    async fn send_msg(&mut self, message: M) -> Result<(), RuntimeError>;
 }
 
-impl<M> Address<M> {
-    /// Send a message to this address
-    pub async fn send(&mut self, message: impl Into<M>) -> Result<(), RuntimeError> {
-        Ok(self.recipient.send(message.into()).await?)
-    }
+/// An address where messages of type `M` can be sent
+#[derive(Clone,Debug)]
+pub struct Address<M> {
+    sender: mpsc::UnboundedSender<M>,
+}
 
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Recipient<N> for Address<M> {
+    async fn send_msg(&mut self, message: N) -> Result<(), RuntimeError> {
+        Ok(self.sender.send(message.into()).await?)
+    }
+}
+
+/// A request which response has to be sent to a given recipient
+pub struct Request<Req, Res> {
+    request: Req,
+    requester: Box<dyn Recipient<Res>>,
+}
+
+impl<Req: Message, Res> Debug for Request<Req, Res> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Request({:?})", self.request))
+    }
+}
+
+impl<M: Message> Address<M> {
     /// Send a request which response will be sent to this address
-    pub async fn send_request_to<Req>(
-        self,
-        recipient: &mut Address<Request<Req, M>>,
+    pub async fn send_request_to<Req, Res: Message + Into<M>>(
+        &self,
+        recipient: &mut impl Recipient<Request<Req, Res>>,
         request: Req,
     ) -> Result<(), RuntimeError> {
+        let requester: Box<dyn Recipient<Res>> = Box::new(self.clone());
         recipient
-            .send(Request {
+            .send_msg(Request {
                 request,
-                requester: self,
+                requester,
             })
             .await
     }
-}
-
-/// A request which response has to be sent to a given address
-pub struct Request<Req, Res> {
-    request: Req,
-    requester: Address<Res>,
 }
 
 /// The actual request of a `Request` struct
@@ -66,8 +84,8 @@ impl<Req, Res> AsRef<Req> for Request<Req, Res> {
 
 impl<Req, Res> Request<Req, Res> {
     /// Send the response for a request to the requester
-    pub async fn send_response(mut self, response: impl Into<Res>) -> Result<(), RuntimeError> {
-        self.requester.send(response).await
+    pub async fn send_response(mut self, response: Res) -> Result<(), RuntimeError> {
+        self.requester.send_msg(response).await
     }
 }
 

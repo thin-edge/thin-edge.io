@@ -20,6 +20,19 @@ pub trait Plugin {
 
     /// Start the plugin in the background
     async fn start(self) -> Result<(), RuntimeError>;
+
+    // /// Send a request to a peer
+    // async fn send_request_to<Req, Res: Message + Into<Self::Input>>(
+    //     &self,
+    //     peer: &mut impl Recipient<Request<Req, Res>>,
+    //     request: Req,
+    // ) -> Result<(), RuntimeError>
+    // where
+    //     Res: Into<Self::Input>,
+    // {
+    //     self.get_address().send_request_to(peer, request).await?;
+    //     Ok(())
+    // }
 }
 
 /// Empty enum used by plugin that consumes no messages.
