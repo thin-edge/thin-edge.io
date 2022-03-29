@@ -74,7 +74,7 @@ jobs:
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install packages
-        run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core
+        run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install tedge package
         run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
