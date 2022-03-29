@@ -53,22 +53,12 @@ uploading and downloading configuration files
 ```shell
 $ ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_UploadConfigFile
-
-$ cat /etc/tedge/operations/c8y/c8y_UploadConfigFile
-[exec]
-  topic = "c8y/s/ds"
-  on_message = "526"
-  command = "/usr/bin/c8y_configuration_plugin"
   
 $ ls -l /etc/tedge/operations/c8y/c8y_DownloadConfigFile
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_DownloadConfigFile
-
-$ cat /etc/tedge/operations/c8y/c8y_DownloadConfigFile
-[exec]
-  topic = "c8y/s/ds"
-  on_message = "524"
-  command = "/usr/bin/c8y_configuration_plugin"
 ```
+
+The `c8y_configuration_plugin` has to be run as a daemon on the device, the latter being connected to Cumulocity.
 
 ## Configuration
 
@@ -112,20 +102,23 @@ $ c8y_configuration_plugin
 Thin-edge device configuration management for Cumulocity
 
 USAGE:
-    c8y_configuration_plugin [OPTIONS] [SMARTREST_OPERATION]
+    c8y_configuration_plugin [OPTIONS]
 
 OPTIONS:
+        --config-dir <CONFIG_DIR>      [default: /etc/tedge]
         --config-file <CONFIG_FILE>    [default: /etc/tedge/c8y/c8y_configuration_plugin.toml]
     -h, --help                         Print help information
     -V, --version                      Print version information
 
-SMARTREST_OPERATION:
-    The SmartRest2 message received on `c8y/s/ds` and triggering either a download or an upload.
-    This operation is then processed in its enterity by the `c8y_configuration_plugin`,
-    notifying the Cumulocity tenant of its progress (messages `501`, `502` and `503`).
+    On start, `c8y_configuration_plugin` notifies the cloud tenant
+    of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+    `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
+    notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
     
-    If no SmartRest2 operation is provided, `c8y_configuration_plugin`
-    sends a `119` message to the cloud tenant with the list of managed configuration files.
+    The thin-edge `CONFIG_DIR` is used to find where:
+    * to store temporary files on download: `tedge config get tmp.path`,
+    * to log operation errors and progress: `tedge config get log.path`,
+    * to connect the MQTT bus: `tedge config get mqtt.port`.
 ```
 
 ## Logging
@@ -141,21 +134,7 @@ The `c8y_configuration_plugin` reports progress and errors in the log file `/var
 
 Points that still need to be addressed:
 
-* __CRITICAL__ When the list of configurations is sent to the Cumulocity?
-  * This question is related to how the `c8y_configuration_plugin` is launched.
-  * If launched by the mapper when a `524` or `526` message is received on `c8y/s/ds`,
-    then the `c8y_configuration_plugin` must be launched at least once to send a `119`.
-    * This can be done on install. Or when the file `c8y_configuration_plugin.toml` is changed.
-      This is utterly fragile.
-    * One can update the mapper to run `[init]` operations.
-      This is more consistent with the current design and will be useful for other operations
-      (for instance, log management).
-  * The `c8y_configuration_plugin` command can also run as a daemon that
-    sends a first `119` message, subscribe to `c8y/s/ds`,
-    and process autonomously the `524` or `526` messages.
-    * In that case, the files `/etc/tedge/operations/c8y/c8y_DownloadConfigFile`
-      and `/etc/tedge/operations/c8y/c8y_UploadConfigFile` are simply empty.
-    * The `c8y_configuration_plugin` has to be run as a daemon on the device.
+* Which topic and message payload to notify successfully changed configuration.
 * The user running `c8y_configuration_plugin` must have read and write access
   to all the files listed by the configuration `/etc/tedge/c8y/c8y_configuration_plugin.toml`.
 * When a download file is copied to its target, the unix user, group and mod must be preserved.
