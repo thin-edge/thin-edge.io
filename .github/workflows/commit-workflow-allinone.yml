@@ -553,6 +553,7 @@ jobs:
         run: tedge --help
 
         # replace the default config file with tedge custom config file
+        # TODO : Only for repos with enabled collectd statistics recording
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -609,7 +610,7 @@ jobs:
 
 #################################################################################
 
-  install-and-use-rpi_mythicc:
+  install-and-use-rpi_mythicb:
     runs-on: [self-hosted, Linux, ARM, offsite_mythicc]
     needs: [build_matrix_arm]
 
@@ -701,7 +702,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: offsite_mythicc
+          C8YDEVICE: offsite_mythicb
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -713,7 +714,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: offsite_mythicc
+          C8YDEVICE: offsite_mythicb
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -730,7 +731,7 @@ jobs:
 
 #################################################################################
 
-  install-and-use-rpi_mythicb:
+  install-and-use-rpi_mythicc:
     runs-on: [self-hosted, Linux, ARM, offsite_mythicb]
     needs: [build_matrix_arm]
 
@@ -822,7 +823,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: offsite_mythicb
+          C8YDEVICE: offsite_mythicc
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -834,7 +835,7 @@ jobs:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
           C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: offsite_mythicb
+          C8YDEVICE: offsite_mythicc
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -916,6 +917,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
+        # TODO : Only for repos with enabled collectd statistics recording
         # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
