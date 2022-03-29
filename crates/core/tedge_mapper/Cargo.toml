@@ -8,7 +8,7 @@ license = "Apache-2.0"
 description = "tedge_mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
 
 [package.metadata.deb]
-depends = "tedge"
+pre-depends = "tedge"
 maintainer-scripts = "../../../configuration/debian/tedge_mapper"
 assets = [
     ["../../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
