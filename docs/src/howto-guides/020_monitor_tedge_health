@@ -1,0 +1,31 @@
+# How to monitor health of tedge daemons
+
+The health of tedge daemon processes like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
+These daemons expose MQTT health endpoints which you can query to check if the process is still active or not.
+
+The health endpoints conform to the following topic scheme, listening for health check requests:
+
+`tedge/health-check/<tedge-daemon-name>`
+
+expecting empty messages, triggering the health check.
+
+The daemon will then respond back on the topic:
+
+`tedge/health/<tedge-daemon-name>`
+
+with the following payload:
+
+```json
+{ "status": "up" }
+```
+
+## Supported MQTT topic endpoints
+
+The following endpoints are currently supported by various tedge daemons:
+
+* `tedge/health/tedge-agent`
+* `tedge/health/tedge-mapper-c8y`
+* `tedge/health/tedge-mapper-az`
+* `tedge/health/tedge-mapper-collectd`
+
+All future tedge daemons will also follow the same topic naming scheme convention.
