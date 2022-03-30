@@ -1,15 +1,16 @@
 # The `tedge` command
 
 ```
-tedge 0.6.0
+tedge 0.6.1
 tedge is the cli tool for thin-edge.io
 
 USAGE:
-    tedge [OPTIONS] <SUBCOMMAND>
+    tedge [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
         --config-dir <CONFIG_DIR>    [default: /etc/tedge]
     -h, --help                       Print help information
+        --init                       Initialize the tedge
     -V, --version                    Print version information
 
 SUBCOMMANDS:
