@@ -25,6 +25,10 @@ where
     }
 }
 
+pub const fn health_check_topic() -> &'static str {
+    "tedge/health-check/tedge-agent"
+}
+
 pub const fn software_filter_topic() -> &'static str {
     "tedge/commands/req/software/#"
 }
