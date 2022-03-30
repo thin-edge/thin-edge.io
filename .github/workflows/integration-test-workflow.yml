@@ -80,6 +80,7 @@ jobs:
     name: Run cargo test features
     runs-on: Ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: install-and-use-amd64
 
     steps:
       - name: Checkout
@@ -119,15 +120,7 @@ jobs:
         with:
           command: test
           args: --verbose --features integration-test,requires-sudo -- \
-            --skip sending_and_receiving_a_message \
-            --skip tests::install_from_local_file_success::version_with_path \
-            --skip tests::install_from_local_file_success::path_with_version \
-            --skip tests::install_from_local_file_success::path \
-            --skip tests::install_from_local_file_fail::wrong_path_with_wrong_version \
-            --skip tests::install_from_local_file_fail::wrong_path_with_right_version \
-            --skip tests::install_from_local_file_fail::wrong_path \
-            --skip tests::install_from_local_file_fail::right_path_with_wrong_version
-
+            --skip sending_and_receiving_a_message
 
   install-and-use-rpi:
     runs-on: [self-hosted, Linux, ARM, onsite]
