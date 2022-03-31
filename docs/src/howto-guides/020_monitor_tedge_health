@@ -19,6 +19,8 @@ with the following payload:
 { "status": "up" }
 ```
 
+All daemons will also respond to health checks sent to the common health check endpoint `tedge/health-check`.
+
 ## Supported MQTT topic endpoints
 
 The following endpoints are currently supported by various tedge daemons:

@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use agent_interface::{
-    control_filter_topic, health_check_topic, software_filter_topic, Jsonify, OperationStatus,
+    control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
     RestartOperationRequest, RestartOperationResponse, SoftwareError, SoftwareListRequest,
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
@@ -40,7 +40,7 @@ const INIT_COMMAND: &str = "echo";
 pub struct SmAgentConfig {
     pub errors_topic: Topic,
     pub mqtt_config: mqtt_channel::Config,
-    pub request_topic_health: Topic,
+    pub request_topics_health: TopicFilter,
     pub request_topic_list: Topic,
     pub request_topic_update: Topic,
     pub request_topics: TopicFilter,
@@ -62,15 +62,14 @@ impl Default for SmAgentConfig {
 
         let mqtt_config = mqtt_channel::Config::default();
 
-        let request_topics = vec![
-            health_check_topic(),
-            software_filter_topic(),
-            control_filter_topic(),
-        ]
-        .try_into()
-        .expect("Invalid topic filter");
+        let mut request_topics: TopicFilter = vec![software_filter_topic(), control_filter_topic()]
+            .try_into()
+            .expect("Invalid topic filter");
 
-        let request_topic_health = Topic::new_unchecked(health_check_topic());
+        let request_topics_health: TopicFilter = health_check_topics()
+            .try_into()
+            .expect("Invalid topic filter");
+        request_topics.add_all(request_topics_health.clone());
 
         let response_topic_health = Topic::new_unchecked("tedge/health/tedge-agent");
 
@@ -105,7 +104,7 @@ impl Default for SmAgentConfig {
         Self {
             errors_topic,
             mqtt_config,
-            request_topic_health,
+            request_topics_health,
             request_topic_list,
             request_topic_update,
             request_topics,
@@ -295,7 +294,7 @@ impl SmAgent {
         while let Some(message) = requests.next().await {
             debug!("Request {:?}", message);
             match &message.topic {
-                topic if topic == &self.config.request_topic_health => {
+                topic if self.config.request_topics_health.accept_topic(topic) => {
                     let health_message =
                         Message::new(&self.config.response_topic_health, HEALTH_STATUS_UP);
                     let _ = responses.publish(health_message).await;

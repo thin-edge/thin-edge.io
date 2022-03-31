@@ -12,6 +12,7 @@ const DEFAULT_MAXIMUM_MESSAGE_DELAY: u32 = 400; // Heuristic delay that should w
 const DEFAULT_MESSAGE_LEAP_LIMIT: u32 = 0;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
+const COMMON_HEALTH_CHECK_TOPIC: &str = "tedge/health-check";
 const HEALTH_CHECK_TOPIC: &str = "tedge/health-check/tedge-mapper-collectd";
 const HEALTH_STATUS_TOPIC: &str = "tedge/health/tedge-mapper-collectd";
 const HEALTH_STATUS_UP: &str = r#"{"status": "up"}"#;
@@ -67,12 +68,14 @@ impl DeviceMonitor {
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let health_check_topic = TopicFilter::new_unchecked(HEALTH_CHECK_TOPIC);
+        let health_check_topics: TopicFilter = vec![COMMON_HEALTH_CHECK_TOPIC, HEALTH_CHECK_TOPIC]
+            .try_into()
+            .expect("Valid health topics");
         let health_status_topic = Topic::new_unchecked(HEALTH_STATUS_TOPIC);
 
         let mut input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
             .with_qos(QoS::AtMostOnce);
-        input_topic.add_all(health_check_topic.clone());
+        input_topic.add_all(health_check_topics.clone());
 
         let mqtt_config = mqtt_channel::Config::new(
             self.device_monitor_config.host.to_string(),
@@ -101,7 +104,7 @@ impl DeviceMonitor {
         let mut output_messages = mqtt_client.published.clone();
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
-                if health_check_topic.accept(&message) {
+                if health_check_topics.accept(&message) {
                     let health_message = Message::new(&health_status_topic, HEALTH_STATUS_UP);
                     let _ = output_messages.send(health_message).await;
                 } else {

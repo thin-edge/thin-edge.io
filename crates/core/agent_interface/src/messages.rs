@@ -25,8 +25,8 @@ where
     }
 }
 
-pub const fn health_check_topic() -> &'static str {
-    "tedge/health-check/tedge-agent"
+pub fn health_check_topics() -> Vec<&'static str> {
+    vec!["tedge/health-check", "tedge/health-check/tedge-agent"]
 }
 
 pub const fn software_filter_topic() -> &'static str {
