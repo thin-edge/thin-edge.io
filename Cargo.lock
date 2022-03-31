@@ -2775,6 +2775,7 @@ version = "0.6.1"
 dependencies = [
  "agent_interface",
  "anyhow",
+ "assert-json-diff",
  "assert_cmd",
  "async-trait",
  "clap 3.1.6",
