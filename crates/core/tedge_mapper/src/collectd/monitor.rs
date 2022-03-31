@@ -1,5 +1,8 @@
+use std::process;
+
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
 use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
+use serde_json::json;
 use tracing::{error, info, instrument};
 
 use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
@@ -15,7 +18,6 @@ const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
 const COMMON_HEALTH_CHECK_TOPIC: &str = "tedge/health-check";
 const HEALTH_CHECK_TOPIC: &str = "tedge/health-check/tedge-mapper-collectd";
 const HEALTH_STATUS_TOPIC: &str = "tedge/health/tedge-mapper-collectd";
-const HEALTH_STATUS_UP: &str = r#"{"status": "up"}"#;
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
@@ -105,7 +107,12 @@ impl DeviceMonitor {
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
                 if health_check_topics.accept(&message) {
-                    let health_message = Message::new(&health_status_topic, HEALTH_STATUS_UP);
+                    let health_status = json!({
+                        "status": "up",
+                        "pid": process::id()
+                    })
+                    .to_string();
+                    let health_message = Message::new(&health_status_topic, health_status);
                     let _ = output_messages.send(health_message).await;
                 } else {
                     match CollectdMessage::parse_from(&message) {

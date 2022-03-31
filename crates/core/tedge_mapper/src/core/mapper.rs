@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{process, time::Duration};
 
 use crate::core::{converter::*, error::*};
 
@@ -6,10 +6,10 @@ use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
+use serde_json::json;
 use tracing::{error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
-const HEALTH_STATUS_UP: &str = r#"{"status": "up"}"#;
 
 pub async fn create_mapper(
     app_name: &str,
@@ -131,7 +131,12 @@ impl Mapper {
 
     async fn process_message(&mut self, message: Message) {
         if self.health_check_topics.accept(&message) {
-            let health_message = Message::new(&self.health_status_topic, HEALTH_STATUS_UP);
+            let health_status = json!({
+                "status": "up",
+                "pid": process::id()
+            })
+            .to_string();
+            let health_message = Message::new(&self.health_status_topic, health_status);
             let _ = self.output.send(health_message).await;
         } else {
             let converted_messages = self.converter.convert(&message).await;
@@ -145,8 +150,10 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_json_diff::assert_json_include;
     use async_trait::async_trait;
     use mqtt_channel::{Message, Topic, TopicFilter};
+    use serde_json::Value;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -219,15 +226,32 @@ mod tests {
 
         let health_check_topic = format!("tedge/health-check/{name}");
         let health_topic = format!("tedge/health/{name}");
-        let actual = broker
+        let health_status = broker
             .wait_for_response_on_publish(
                 &health_check_topic,
                 "",
                 &health_topic,
                 Duration::from_secs(1),
             )
-            .await;
-        assert_eq!(actual.unwrap(), HEALTH_STATUS_UP);
+            .await
+            .expect("JSON status message");
+        let health_status: Value = serde_json::from_str(health_status.as_str())?;
+        assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
+        assert!(health_status["pid"].is_number());
+
+        let common_health_check_topic = "tedge/health-check";
+        let health_status = broker
+            .wait_for_response_on_publish(
+                &common_health_check_topic,
+                "",
+                &health_topic,
+                Duration::from_secs(1),
+            )
+            .await
+            .expect("JSON status message");
+        let health_status: Value = serde_json::from_str(health_status.as_str())?;
+        assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
+        assert!(health_status["pid"].is_number());
 
         Ok(())
     }

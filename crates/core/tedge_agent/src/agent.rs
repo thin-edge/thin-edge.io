@@ -16,6 +16,8 @@ use agent_interface::{
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
+use serde_json::json;
+use std::process;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathDefaultSetting,
@@ -28,7 +30,6 @@ use tracing::{debug, error, info, instrument, warn};
 
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
-const HEALTH_STATUS_UP: &str = r#"{"status": "up"}"#;
 
 #[cfg(not(test))]
 const INIT_COMMAND: &str = "init";
@@ -295,8 +296,13 @@ impl SmAgent {
             debug!("Request {:?}", message);
             match &message.topic {
                 topic if self.config.request_topics_health.accept_topic(topic) => {
+                    let health_status = json!({
+                        "status": "up",
+                        "pid": process::id()
+                    })
+                    .to_string();
                     let health_message =
-                        Message::new(&self.config.response_topic_health, HEALTH_STATUS_UP);
+                        Message::new(&self.config.response_topic_health, health_status);
                     let _ = responses.publish(health_message).await;
                 }
 
@@ -640,6 +646,9 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
+    use assert_json_diff::assert_json_include;
+    use serde_json::Value;
+
     use super::*;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
@@ -770,12 +779,11 @@ mod tests {
     /// test health check request response contract
     async fn health_check() -> Result<(), AgentError> {
         let (responses, mut response_sink) = mqtt_tests::output_stream();
-        let expected_responses = vec![message(
-            r#"tedge/health/tedge-agent"#,
-            r#"{"status": "up"}"#,
-        )];
-        let mut requests =
-            mqtt_tests::input_stream(vec![message(r#"tedge/health-check/tedge-agent"#, "")]).await;
+        let mut requests = mqtt_tests::input_stream(vec![
+            message("tedge/health-check/tedge-agent", ""),
+            message("tedge/health-check", ""),
+        ])
+        .await;
 
         let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
 
@@ -801,7 +809,14 @@ mod tests {
         });
 
         let responses = responses.collect().await;
-        assert_eq!(expected_responses, responses);
+        assert_eq!(responses.len(), 2);
+
+        for response in responses {
+            assert_eq!(response.topic.name, "tedge/health/tedge-agent");
+            let health_status: Value = serde_json::from_slice(response.payload_bytes())?;
+            assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
+            assert!(health_status["pid"].is_number());
+        }
 
         Ok(())
     }
