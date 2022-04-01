@@ -85,10 +85,11 @@ use async_trait::async_trait;
 /// and c8y operations into sm operations
 #[derive(Default)]
 struct C8YMapperConfig {}
-struct C8YMapper {
+struct C8YMapper<C8Y, SM>
+where C8Y: Recipient<MqttMessage>, SM: Recipient<Request<SMRequest, SMResponse>> {
     mailbox: MailBox<C8YMessage>,
-    c8y: Option<Address<MqttMessage>>,
-    sm: Option<Address<Request<SMRequest, SMResponse>>>,
+    c8y: Option<C8Y>,
+    sm: Option<SM>,
 }
 
 impl PluginConfig for C8YMapperConfig {
