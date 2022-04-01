@@ -1,8 +1,8 @@
 use crate::{error::SoftwareError, software::*, ApiError};
 use download::DownloadInfo;
+use mqtt_channel::TopicFilter;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use mqtt_channel::TopicFilter;
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>

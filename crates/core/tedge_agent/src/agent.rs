@@ -4,14 +4,13 @@ use crate::{
     error::AgentError,
     restart_operation_handler::restart_operation,
     state::{
-        RestartOperationStatus, SoftwareOperationVariants, State,
-        StateRepository, StateStatus,
+        RestartOperationStatus, SoftwareOperationVariants, State, StateRepository, StateStatus,
     },
 };
 use agent_interface::request::AgentRequest;
 use agent_interface::{
-    control_filter_topic, health_check_topic_filter, software_filter_topic, Jsonify, OperationStatus,
-    RestartOperationRequest, RestartOperationResponse, SoftwareListRequest,
+    control_filter_topic, health_check_topic_filter, software_filter_topic, Jsonify,
+    OperationStatus, RestartOperationRequest, RestartOperationResponse, SoftwareListRequest,
     SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
     SoftwareUpdateResponse,
 };
@@ -342,7 +341,7 @@ impl SmAgent {
                         "status": "up",
                         "pid": process::id()
                     })
-                        .to_string();
+                    .to_string();
                     let health_message =
                         Message::new(&self.config.response_topic_health, health_status);
                     let _ = responses.publish(health_message).await;
@@ -625,8 +624,8 @@ mod tests {
     use assert_json_diff::assert_json_include;
     use serde_json::Value;
 
-    use tempfile::tempdir;
     use super::*;
+    use tempfile::tempdir;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
 
@@ -647,8 +646,7 @@ mod tests {
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
         let (_, mut output_stream) = mqtt_tests::output_stream();
-        let response_topic_restart =
-            Topic::new_unchecked(RestartOperationResponse::topic_name());
+        let response_topic_restart = Topic::new_unchecked(RestartOperationResponse::topic_name());
         let () = agent
             .handle_restart_operation(&journal, &mut output_stream, &response_topic_restart)
             .await?;
