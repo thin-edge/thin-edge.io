@@ -66,11 +66,14 @@ impl JournalDB {
         let db = PathDatabase::<JournalData, Ron>::load_from_path_or(path, empty)?;
         let (mut request_sender, request_receiver) = mpsc::unbounded();
 
-        {
+        let requests: Vec<AgentRequest> = {
+            // Extract the requests, to force the data `Lock` to stay in a scope with no `.await`.
             let data = db.borrow_data()?;
-            for request in data.pending.iter() {
-                let _ = request_sender.send(request.clone()).await;
-            }
+            data.pending.iter().map(|r| r.clone()).collect()
+        };
+
+        for request in requests.into_iter() {
+            let _ = request_sender.send(request).await;
         }
 
         Ok(JournalDB {

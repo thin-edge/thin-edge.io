@@ -269,6 +269,7 @@ impl SmAgent {
         let mqtt_input = mqtt.received;
         let mqtt_output = mqtt.published.clone();
         let mut mqtt_responses = mqtt.published.clone();
+        let health_topic = self.config.response_topic_health.clone();
         let errors_topics = self.config.errors_topic.clone();
 
         tokio::spawn(async move {
@@ -279,6 +280,7 @@ impl SmAgent {
                 &request_journal,
                 mqtt_input,
                 mqtt_output,
+                health_topic,
                 errors_topics,
             )
             .await;
@@ -304,14 +306,24 @@ impl SmAgent {
         }
     }
 
-    async fn process_subscribed_messages(
+    pub async fn process_subscribed_messages(
         persistance_store: &Journal,
         mut messages: impl SubChannel,
         mut responses: impl PubChannel,
+        health_topic: Topic,
         errors_topic: Topic,
     ) {
         while let Some(message) = messages.next().await {
             match message.try_into() {
+                Ok(AgentRequest::HealthCheck) => {
+                    let health_status = json!({
+                        "status": "up",
+                        "pid": process::id()
+                    })
+                    .to_string();
+                    let health_message = Message::new(&health_topic, health_status);
+                    let _ = responses.publish(health_message).await;
+                }
                 Ok(request) => {
                     if let Err(error) = persistance_store.schedule(request).await {
                         error!("Worker stopped: {}", error);
@@ -337,14 +349,7 @@ impl SmAgent {
         while let Some(request) = persistance_store.next_request().await {
             match request {
                 AgentRequest::HealthCheck => {
-                    let health_status = json!({
-                        "status": "up",
-                        "pid": process::id()
-                    })
-                    .to_string();
-                    let health_message =
-                        Message::new(&self.config.response_topic_health, health_status);
-                    let _ = responses.publish(health_message).await;
+                    // HealthCheck are not stored
                 }
 
                 AgentRequest::SoftwareList(request) => {
@@ -703,7 +708,7 @@ mod tests {
     }
 
     #[tokio::test]
-    /// testing that tedge agent returns an expety software list when there is no sm plugin
+    /// testing that tedge agent returns an empty software list when there is no sm plugin
     async fn test_empty_software_list_returned_when_no_sm_plugin() -> Result<(), AgentError> {
         let (output, mut output_sink) = mqtt_tests::output_stream();
         let expected_messages = vec![
@@ -736,12 +741,20 @@ mod tests {
                 )
                 .unwrap(),
             ));
+
+            let journal = Journal::open(dir.path().join("journal"))
+                .await
+                .expect("an empty journal");
+
             let () = agent
                 .handle_software_list_request(
+                    &journal,
                     &mut output_sink,
                     plugins,
                     &response_topic_restart,
-                    &Message::new(&response_topic_restart, r#"{"id":"123"}"#),
+                    SoftwareListRequest {
+                        id: "123".to_string(),
+                    },
                 )
                 .await
                 .unwrap();
@@ -756,41 +769,37 @@ mod tests {
     #[tokio::test]
     /// test health check request response contract
     async fn health_check() -> Result<(), AgentError> {
-        let (responses, mut response_sink) = mqtt_tests::output_stream();
-        let mut requests = mqtt_tests::input_stream(vec![
+        let health_topic = Topic::new_unchecked("tedge/health/tedge-agent");
+        let health_topic_clone = health_topic.clone();
+        let (responses, response_sink) = mqtt_tests::output_stream();
+        let requests = mqtt_tests::input_stream(vec![
             message("tedge/health-check/tedge-agent", ""),
             message("tedge/health-check", ""),
         ])
         .await;
 
-        let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
+        let dir = tempfile::TempDir::new().unwrap();
 
         tokio::spawn(async move {
-            let mut agent = SmAgent::try_new(
-                "tedge_agent_test",
-                SmAgentConfig::try_new(tedge_config_location).unwrap(),
-            )
-            .unwrap();
-
-            let plugins = Arc::new(Mutex::new(
-                ExternalPlugins::open(
-                    PathBuf::from(&dir.path()).join("sm-plugins"),
-                    get_default_plugin(&agent.config.config_location).unwrap(),
-                    Some("sudo".into()),
-                )
-                .unwrap(),
-            ));
-            let () = agent
-                .process_subscribed_messages(&mut requests, &mut response_sink, &plugins)
+            let journal = Journal::open(dir.path().join("journal"))
                 .await
-                .unwrap();
+                .expect("an empty journal");
+
+            let () = SmAgent::process_subscribed_messages(
+                &journal,
+                requests,
+                response_sink.clone(),
+                health_topic_clone,
+                Topic::new_unchecked("errors"),
+            )
+            .await;
         });
 
         let responses = responses.collect().await;
         assert_eq!(responses.len(), 2);
 
         for response in responses {
-            assert_eq!(response.topic.name, "tedge/health/tedge-agent");
+            assert_eq!(response.topic.name, health_topic.name);
             let health_status: Value = serde_json::from_slice(response.payload_bytes())?;
             assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
             assert!(health_status["pid"].is_number());
