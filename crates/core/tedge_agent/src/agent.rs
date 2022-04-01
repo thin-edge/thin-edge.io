@@ -630,7 +630,6 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-    use tempfile::tempdir;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
 
@@ -646,7 +645,7 @@ mod tests {
         )
         .unwrap();
 
-        let journal_path = tempdir().expect("tmp dir").path().join("journal").into();
+        let journal_path = dir.path().join("journal").into();
         let journal = Journal::open(journal_path).await.expect("an empty journal");
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
