@@ -38,6 +38,12 @@ impl<T> MessageOutputStream<T> {
     }
 }
 
+impl<T> MessageOutputStream<T> {
+    pub async fn next_msg(&mut self) -> Option<T> {
+        self.receiver.next().await
+    }
+}
+
 /// A `Stream` of `T` that is populated using a vector of `T` samples.
 ///
 /// ```
