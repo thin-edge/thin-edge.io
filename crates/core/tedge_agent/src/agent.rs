@@ -649,18 +649,23 @@ mod tests {
         let journal = Journal::open(journal_path).await.expect("an empty journal");
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-        let (_, mut output_stream) = mqtt_tests::output_stream();
+        let (mut output, mut output_stream) = mqtt_tests::output_stream();
         let response_topic_restart = Topic::new_unchecked(RestartOperationResponse::topic_name());
-        let () = agent
+        let result = agent
             .handle_restart_operation(&journal, &mut output_stream, &response_topic_restart)
-            .await?;
+            .await;
+
+        let response = output.next_msg().await;
+        assert!(response.is_some());
+        assert_eq!(
+            response.unwrap().topic.name,
+            "tedge/commands/res/control/restart".to_string()
+        );
+
+        assert!(result.is_ok());
         assert!(
             std::path::Path::new(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).exists()
         );
-
-        // removing the file
-        let () =
-            std::fs::remove_file(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).unwrap();
 
         Ok(())
     }
@@ -676,6 +681,8 @@ mod tests {
 
         let dir_path = dir.path().join(".agent");
         std::fs::create_dir(&dir_path).unwrap();
+        let run_path = dir.path().join("tedge_agent");
+        std::fs::create_dir(&run_path).unwrap();
 
         let () = {
             let _file = std::fs::File::create(dir.path().join(".agent/current-operation")).unwrap();
