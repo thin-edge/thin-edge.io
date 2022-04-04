@@ -1,7 +1,7 @@
 mod error;
 
 use crate::error::InternalError;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::path::Path;
@@ -302,7 +302,11 @@ fn main() {
     // On usage error, the process exits with a status code of 1
     let apama = match ApamaCli::try_parse() {
         Ok(apamacli) => apamacli,
-        Err(_e) => {
+        Err(err) => {
+            eprintln!("ERROR: {}", err);
+            ApamaCli::command()
+                .print_help()
+                .expect("Failed to print command usage help message");
             // re-write the clap exit_status from 2 to 1, if parse fails
             std::process::exit(1)
         }
