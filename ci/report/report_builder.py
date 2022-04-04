@@ -113,14 +113,17 @@ def postprocess_runner(runner):
             if tag in tests:
                 folder = f"{prefix}/PySys/pysys_junit_xml_{tag}"
                 if os.path.exists(folder):
-                    files += f"{prefix}/PySys/pysys_junit_xml_{tag}/*.xml"
+                    files += f"{prefix}/PySys/pysys_junit_xml_{tag}/*.xml "
                 else:
                     raise SystemError("Folder Expected", folder)
 
         cmd = f"junitparser merge {files} { report }.xml"
 
         print(cmd)
-        #os.system(cmd)
+
+        sub=subprocess.run(cmd, shell=True)
+        sub.check_returncode()
+
         print(f"junit2html {report}.xml")
 
 def postprocess():
@@ -174,18 +177,18 @@ def postprocess():
 
 def main():
 
-    cleanup()
+    #cleanup()
 
-    download( workflows_abel, "abelikt", folders_abel)
+    #download( workflows_abel, "abelikt", folders_abel)
 
-    download( workflows_sag, "thin-edge", folders_sag)
+    #download( workflows_sag, "thin-edge", folders_sag)
 
     runners = {
             "michael":{     "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
-            "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report",   "tests":["all", "apt", "apama", "docker", "sm", ] },
+            "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+            "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+            "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+            "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
 
             "sag":{         "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
             "offsite-sag":{ "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
