@@ -2,8 +2,7 @@
 
 # This solution is far from perfect
 # TODO Make it more flexible
-# TODO Make it more obvious what is going on here
-# TODO Host this report somewhere
+# TODO Make it more obvious what is going on here TODO Host this report somewhere
 # TODO Add an additional report to store the sources (run-id, date, runner)
 # TODO Decide on what to do if we have failures or skipped workflows
 
@@ -41,51 +40,46 @@ import sys
 #
 # # Workflow selection
 
-WORKFLOWS = "system-test-workflow_A.yml"
-# WORKFLOWS+=" system-test-workflow_Azure.yml"
-WORKFLOWS += " system-test-workflow_B.yml"
-WORKFLOWS += " system-test-workflow_C.yml"
-WORKFLOWS += " system-test-workflow_D.yml"
-WORKFLOWS += " system-test-workflow.yml"
+workflows_abel = ["system-test-workflow_A.yml"
+"system-test-_abelworkflow_B.yml",
+"system-test-workflow_C.yml",
+"system-test-workflow_D.yml",
+"system-test-workflow.yml"]
 
 
-def download():
+workflows_sag = ["system-test-workflow.yml", "system-test-offsite.yml"]
+
+folders_abel=["ci_system-test-workflow",
+            "ci_system-test-workflow_A",
+            "ci_system-test-workflow_B",
+            "ci_system-test-workflow_C",
+            "ci_system-test-workflow_D"]
+
+folders_sag= ["sag_system-test-workflow", "sag_system-test-offsite"]
+
+def download(workflows, repo, folders):
     # Download and unzip results from test workflows
 
-    # for i in $WORKFLOWS;
-    #     do
-    #     echo $i;
-    #     ./download_workflow_artifact.py abelikt $i -o ci_$i;
-    #     unzip -q -o -d ci_${i/.yml/} ci_${i/.yml/.zip};
-    # done
+    if repo == "abelikt":
+        prefix= "ci_"
+    elif repo =="thin-edge":
+        prefix="sag_"
 
-    # # Doublecheck if our result folders are there
-    # FOLDERS="ci_system-test-workflow ci_system-test-workflow_A ci_system-test-workflow_B ci_system-test-workflow_C ci_system-test-workflow_D"
-    # for FOLDER in $FOLDERS; do
-    #     if [ ! -d $FOLDER ]; then
-    #         echo "Folder missing: " $FOLDER
-    #     fi
-    # done
+    for w in workflows:
+        y = w.replace(".zip",".yml")
+        print(w, y)
+        cmd=f"./download_workflow_artifact.py {repo} {w} -o ci_{w};"
+        print(cmd)
+        os.system(cmd)
+        cmd =f"unzip -q -o -d ci_{y} ci_{y};"
+        print(cmd)
+        os.system(cmd)
 
-    # # Workflow selection for official repository
+    # Doublecheck if our result folders are there
 
-    WORKFLOWS = "system-test-workflow.yml"
-    WORKFLOWS += " system-test-offsite.yml"
-
-    # for i in $WORKFLOWS;
-    #     do
-    #     echo $i;
-    #     ./download_workflow_artifact.py thin-edge $i -o sag_$i;
-    #     unzip -q -o -d sag_${i/.yml/} sag_${i/.yml/.zip};
-    # done
-
-    # # Doublecheck if our result folders are there
-    # FOLDERS="sag_system-test-workflow sag_system-test-offsite"
-    # for FOLDER in $FOLDERS; do
-    #     if [ ! -d $FOLDER ]; then
-    #         echo "Folder missing: " $FOLDER
-    #     fi
-    # done
+    for f in folders:
+        print(f)
+        assert os.path.exists(f)
 
 
 def postprocess():
@@ -191,5 +185,6 @@ def postprocess():
     # zip report.zip *.html *.json
 
 
-download()
-# postprocess()
+#download( workflows_abel, "abelikt", folders_abel)
+#download( workflows_sag, "thin-edge", folders_sag)
+postprocess()
