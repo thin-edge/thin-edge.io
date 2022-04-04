@@ -82,64 +82,35 @@ def download(workflows, repo, folders):
         assert os.path.exists(f)
 
 
-def postprocess():
+def postprocess_runner(runner):
     # Postprocess results
-    OUT = "ci_system-test-report"
+
 
     # Postporcess results for the onsite runner onsite at Michael
+        prefix = runner["prefix"]
+        report = runner ["report"]
+        tests = runner["tests"]
 
-    for X in ["empty"]:
-        X = ""
-        print(f"Processing: {X}")
-        FILES = f"ci_system-test-workflow{X}/PySys/pysys_junit_xml_all/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_apt/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_apama/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_docker/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_sm/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_analytics/*.xml"
-        cmd = f"junitparser merge {FILES} {OUT}{X}.xml"
+        print(f"Processing: {prefix} ")
+
+        tags = ["all", "apt", "apama", "docker", "sm", "analytics"]
+        files = ""
+
+        for tag in tags:
+            if tag in tests:
+                files += f"{prefix}/PySys/pysys_junit_xml_{tag}/*.xml"
+
+        cmd = f"junitparser merge {files} { report }.xml"
+
         print(cmd)
-        os.system(cmd)
-        print(f"junit2html {OUT}{X}.xml")
+        #os.system(cmd)
+        print(f"junit2html {report}.xml")
 
-    # Postporcess results for the offsite runners from Michael
-    for X in ["_A", "_B", "_C", "_D"]:
-        print(f"Processing: {X}")
-        FILES = f"ci_system-test-workflow{X}/PySys/pysys_junit_xml_all/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_apt/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_apama/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_docker/*.xml"
-        FILES += f" ci_system-test-workflow{X}/PySys/pysys_junit_xml_sm/*.xml"
-        cmd = f"junitparser merge {FILES} {OUT}{X}.xml"
-        print(cmd)
-        os.system(cmd)
-        print(f"junit2html {OUT}{X}.xml")
-
-    SAGOUT = "sag_system-test-report"
-
-    # Postporcess results for the local runner onsite at Rina
-    for X in ["workflow"]:
-        print(f"Processing: {X}")
-        FILES = f"sag_system-test-{X}/PySys/pysys_junit_xml_all/*.xml"
-        cmd = f"junitparser merge {FILES} {SAGOUT}_{X}.xml"
-        print(cmd)
-        os.system(cmd)
-        print(f"junit2html {SAGOUT}_{X}.xml")
-
-    # Postporcess results for the official runners offsite
-    for X in ["offsite"]:
-        print(f"Processing: {X}")
-        FILES = f"sag_system-test-{X}/PySys/pysys_junit_xml_all/*.xml"
-        FILES += f" sag_system-test-{X}/PySys/pysys_junit_xml_apt/*.xml"
-        # FILES+=" sag_system-test-$X/PySys/pysys_junit_xml_apama/*.xml"
-        FILES += f" sag_system-test-{X}/PySys/pysys_junit_xml_docker/*.xml"
-        FILES += f" sag_system-test-{X}/PySys/pysys_junit_xml_sm/*.xml"
-        cmd = f"junitparser merge {FILES} {SAGOUT}_{X}.xml"
-        print(cmd)
-        os.system(cmd)
-        print(" junit2html {SAGOUT}_{X}.xml")
+def postprocess():
 
     # Create a combined report matrix from all report sources
+    OUT = "ci_system-test-report"
+    SAGOUT = "sag_system-test-report"
 
     XMLFILES = (
         OUT
@@ -187,4 +158,21 @@ def postprocess():
 
 #download( workflows_abel, "abelikt", folders_abel)
 #download( workflows_sag, "thin-edge", folders_sag)
+
+runners = {
+        "michael":{     "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+        "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+        "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+        "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+        "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report",   "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+
+        "sag":{         "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+        "offsite-sag":{ "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+            }
+
+print(runners.keys())
+
+for key in runners.keys():
+    postprocess_runner( runners[key] )
+
 postprocess()
