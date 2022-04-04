@@ -2954,6 +2954,8 @@ dependencies = [
 name = "tedge_watchdog"
 version = "0.6.0"
 dependencies = [
+ "anyhow",
+ "clap 3.1.6",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
@@ -2961,6 +2963,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_config",
+ "tedge_utils",
  "thiserror",
  "tokio",
 ]
