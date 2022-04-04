@@ -51,7 +51,9 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: false,
-            notifications: false,
+            notifications: true,
+            notifications_local_only: true,
+            notification_topic: "tedge/health/mosquitto-az-bridge".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 pub_msg_topic,
@@ -101,7 +103,9 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         try_private: false,
         start_type: "automatic".into(),
         clean_session: false,
-        notifications: false,
+        notifications: true,
+        notifications_local_only: true,
+        notification_topic: "tedge/health/mosquitto-az-bridge".into(),
         bridge_attempt_unsubscribe: false,
     };
 
