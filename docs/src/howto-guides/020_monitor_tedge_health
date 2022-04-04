@@ -16,8 +16,10 @@ The daemon will then respond back on the topic:
 with the following payload:
 
 ```json
-{ "status": "up" }
+{ "status": "up", "pid": <process id of the daemon> }
 ```
+
+All daemons will also respond to health checks sent to the common health check endpoint `tedge/health-check`.
 
 ## Supported MQTT topic endpoints
 

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{process, time::Duration};
 
 use crate::core::{converter::*, error::*};
 
@@ -6,10 +6,10 @@ use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
+use serde_json::json;
 use tracing::{error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
-const HEALTH_STATUS_UP: &str = r#"{"status": "up"}"#;
 
 pub async fn create_mapper(
     app_name: &str,
@@ -19,9 +19,18 @@ pub async fn create_mapper(
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
 
+    let health_check_topics: TopicFilter = vec![
+        "tedge/health-check",
+        format!("tedge/health-check/{}", app_name).as_str(),
+    ]
+    .try_into()
+    .expect("health check topics must be valid");
+
+    let health_status_topic = Topic::new_unchecked(format!("tedge/health/{}", app_name).as_str());
+
     let mapper_config = converter.get_mapper_config();
     let mut topic_filter = mapper_config.in_topic_filter.clone();
-    topic_filter.add(format!("tedge/health-check/{}", app_name).as_str())?;
+    topic_filter.add_all(health_check_topics.clone());
 
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
@@ -29,10 +38,11 @@ pub async fn create_mapper(
     Mapper::subscribe_errors(mqtt_client.errors);
 
     Ok(Mapper::new(
-        app_name.to_string(),
         mqtt_client.received,
         mqtt_client.published,
         converter,
+        health_check_topics,
+        health_status_topic,
     ))
 }
 
@@ -54,26 +64,24 @@ pub struct Mapper {
     input: UnboundedReceiver<Message>,
     output: UnboundedSender<Message>,
     converter: Box<dyn Converter<Error = ConversionError>>,
-    health_check_topic: TopicFilter,
-    health_topic: Topic,
+    health_check_topics: TopicFilter,
+    health_status_topic: Topic,
 }
 
 impl Mapper {
     pub fn new(
-        name: String,
         input: UnboundedReceiver<Message>,
         output: UnboundedSender<Message>,
         converter: Box<dyn Converter<Error = ConversionError>>,
+        health_check_topics: TopicFilter,
+        health_status_topic: Topic,
     ) -> Self {
-        let health_check_topic =
-            TopicFilter::new_unchecked(format!("tedge/health-check/{}", name).as_str());
-        let health_topic = Topic::new_unchecked(format!("tedge/health/{}", name).as_str());
         Self {
             input,
             output,
             converter,
-            health_check_topic,
-            health_topic,
+            health_check_topics,
+            health_status_topic,
         }
     }
 
@@ -122,8 +130,13 @@ impl Mapper {
     }
 
     async fn process_message(&mut self, message: Message) {
-        if self.health_check_topic.accept(&message) {
-            let health_message = Message::new(&self.health_topic, HEALTH_STATUS_UP);
+        if self.health_check_topics.accept(&message) {
+            let health_status = json!({
+                "status": "up",
+                "pid": process::id()
+            })
+            .to_string();
+            let health_message = Message::new(&self.health_status_topic, health_status);
             let _ = self.output.send(health_message).await;
         } else {
             let converted_messages = self.converter.convert(&message).await;
@@ -137,8 +150,10 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_json_diff::assert_json_include;
     use async_trait::async_trait;
     use mqtt_channel::{Message, Topic, TopicFilter};
+    use serde_json::Value;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -150,18 +165,13 @@ mod tests {
 
         // Given a mapper
         let name = "mapper_under_test";
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(broker.port)
-            .with_session_name(name)
-            .with_subscriptions(TopicFilter::new_unchecked("in_topic"));
-        let mqtt_client = Connection::new(&mqtt_config).await?;
-
-        let mut mapper = Mapper::new(
-            name.to_string(),
-            mqtt_client.received,
-            mqtt_client.published,
+        let mut mapper = create_mapper(
+            name,
+            "localhost".into(),
+            broker.port,
             Box::new(UppercaseConverter::new()),
-        );
+        )
+        .await?;
 
         // Let's run the mapper in the background
         tokio::spawn(async move {
@@ -216,15 +226,32 @@ mod tests {
 
         let health_check_topic = format!("tedge/health-check/{name}");
         let health_topic = format!("tedge/health/{name}");
-        let actual = broker
+        let health_status = broker
             .wait_for_response_on_publish(
                 &health_check_topic,
                 "",
                 &health_topic,
                 Duration::from_secs(1),
             )
-            .await;
-        assert_eq!(actual.unwrap(), HEALTH_STATUS_UP);
+            .await
+            .expect("JSON status message");
+        let health_status: Value = serde_json::from_str(health_status.as_str())?;
+        assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
+        assert!(health_status["pid"].is_number());
+
+        let common_health_check_topic = "tedge/health-check";
+        let health_status = broker
+            .wait_for_response_on_publish(
+                &common_health_check_topic,
+                "",
+                &health_topic,
+                Duration::from_secs(1),
+            )
+            .await
+            .expect("JSON status message");
+        let health_status: Value = serde_json::from_str(health_status.as_str())?;
+        assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
+        assert!(health_status["pid"].is_number());
 
         Ok(())
     }

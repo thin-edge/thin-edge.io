@@ -1,6 +1,6 @@
 [package]
 name = "tedge_mapper"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -49,7 +49,7 @@ tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 time = "0.3"
-tokio = { version = "1.8", features = ["rt", "sync", "time"] }
+tokio = { version = "1.8", features = ["process", "rt", "rt-multi-thread", "sync", "time"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
