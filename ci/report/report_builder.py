@@ -9,6 +9,7 @@
 import os
 import sys
 import subprocess
+import shutil
 
 # set -e
 #
@@ -22,16 +23,17 @@ import subprocess
 # system-test-workflow-A_261.json
 # ci_system-test-report_A.xml
 
+# commit-workflow-allinone_results_a_35.zip
+# commit-workflow-allinone_results_b_35.zip
+# commit-workflow-allinone_results_c_35.zip
+# commit-workflow-allinone_results_d_35.zip
 
-runners_cfg = {
-    "michael": {
+
+runners_cfg = [
+    {
+        "name": "offsite_mythica",
         "repo": "abelikt",
-        "workflow": "system-test-workflow.yml",
-        "tests": ["all", "apt", "apama", "docker", "sm", "analytics"],
-    },
-    "offsitea": {
-        "repo": "abelikt",
-        "workflow": "system-test-workflow_A.yml",
+        "archive": "commit-workflow-allinone_results_a_35.zip",
         "tests": [
             "all",
             "apt",
@@ -40,9 +42,10 @@ runners_cfg = {
             "sm",
         ],
     },
-    "offsiteb": {
+    {
+        "name": "offsite_mythicb",
         "repo": "abelikt",
-        "workflow": "system-test-workflow_B.yml",
+        "archive": "commit-workflow-allinone_results_b_35.zip",
         "tests": [
             "all",
             "apt",
@@ -51,9 +54,10 @@ runners_cfg = {
             "sm",
         ],
     },
-    "offsitec": {
+    {
+        "name": "offsite_mythicc",
         "repo": "abelikt",
-        "workflow": "system-test-workflow_C.yml",
+        "archive": "commit-workflow-allinone_results_c_35.zip",
         "tests": [
             "all",
             "apt",
@@ -62,9 +66,10 @@ runners_cfg = {
             "sm",
         ],
     },
-    "offsited": {
+    {
+        "name": "offsite_mythicd",
         "repo": "abelikt",
-        "workflow": "system-test-workflow_D.yml",
+        "archive": "commit-workflow-allinone_results_d_35.zip",
         "tests": [
             "all",
             "apt",
@@ -73,22 +78,7 @@ runners_cfg = {
             "sm",
         ],
     },
-    "sag": {
-        "repo": "thin-edge",
-        "workflow": "system-test-workflow.yml",
-        "tests": ["all"],
-    },
-    "offsite-sag": {
-        "repo": "thin-edge",
-        "workflow": "system-test-offsite.yml",
-        "tests": [
-            "all",
-            "apt",
-            "docker",
-            "sm",
-        ],
-    },
-}
+]
 
 
 def cleanup(download_reports):
@@ -124,27 +114,33 @@ def cleanup(download_reports):
             print("Warning command failed:", cmd)
 
 
-def download(workflow, repo, simulate=False):
+def download(repo, workflow, simulate=False):
     # Download and unzip results from test workflows
 
     # ./download_workflow_artifact.py abelikt system-test-workflow_A.yml -o ci_system-test-workflow_A;
     # ./download_workflow_artifact.py abelikt system-test-workflow_B.yml -o ci_system-test-workflow_B;
     # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
 
-    name = repo + "_" + workflow.replace(".yml", "")
-    filename = name + ".zip"
+    # ./download_workflow_artifact.py abelikt commit-workflow-allinone.yml --filter result
 
-    print(name)
-    cmd = f"../download_workflow_artifact.py {repo} {workflow} -o {name}"
+    #name = repo + "_" + workflow.replace(".yml", "")
+    #filename = name + ".zip"
+
+    #print(name)
+    #cmd = f"../download_workflow_artifact.py {repo} {workflow} -o {name}"
+    cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter result"
     print(cmd)
 
     if not simulate:
         sub = subprocess.run(cmd, shell=True)
         sub.check_returncode()
 
-    assert os.path.exists(filename)
 
-    cmd = f"unzip -q -o -d {name} {filename}"
+def unpack_reports(runner):
+    assert os.path.exists(runner["archive"])
+    name = runner["name"]
+    archive = runner["archive"]
+    cmd = f"unzip -q -o -d {name} {archive}"
     print(cmd)
 
     sub = subprocess.run(cmd, shell=True)
@@ -155,16 +151,14 @@ def postprocess_runner(runner):
     # Postprocess results
 
     # Postporcess results for the onsite runner onsite at Michael
-    workflow = runner["workflow"]
+    name = runner["name"]
     repo = runner["repo"]
     tests = runner["tests"]
 
-    print(f"Processing: {workflow} ")
+    print(f"Processing: {name} ")
 
     tags = ["all", "apt", "apama", "docker", "sm", "analytics"]
     files = ""
-
-    name = repo + "_" + workflow.replace(".yml", "")
 
     for tag in tags:
         if tag in tests:
@@ -190,59 +184,60 @@ def postprocess(runners):
 
     files = ""
 
-    for key in runners.keys():
-        workflow = runners[key]["workflow"]
-        repo = runners[key]["repo"]
-        name = repo + "_" + workflow.replace(".yml", ".xml")
+    for runner in runners:
+        name = runner["name"] + ".xml"
+        repo = runner["repo"]
         files += " " + name
 
     print("Files:  ", files)
 
-
     # Print summary matrix
-
     cmd = f"junit2html --summary-matrix {files}"
     print(cmd)
+    sub = subprocess.run(cmd, shell=True)
+    sub.check_returncode()
 
-    os.system(cmd)
-
-    cmd = f"junit2html --summary-matrix {files} > report.out"
-    print(cmd)
-    os.system(cmd)
-
-    # # Build report matrix
+    # Build report matrix
     cmd = f"junit2html --report-matrix report-matrix.html {files}"
     print(cmd)
-
-    os.system(cmd)
+    sub = subprocess.run(cmd, shell=True)
+    sub.check_returncode()
 
     # Zip everything
-    # zip report.zip *.html *.json
+    cmd="zip report.zip *.html *.json"
+    print(cmd)
+    sub = subprocess.run(cmd, shell=True)
+    sub.check_returncode()
 
 
 def main(runners, download_reports=True):
 
-    cleanup(download_reports)
+    #cleanup(download_reports)
 
     simulate = not download_reports
 
-    for key in runners.keys():
-        print("Key", key, "Repo", runners[key]["repo"])
-        download(runners[key]["workflow"], runners[key]["repo"], simulate=simulate)
+    # for key in runners.keys():
+    #    print("Key", key, "Repo", runners[key]["repo"])
+    #    download(runners[key]["workflow"], runners[key]["repo"], simulate=simulate)
 
-    print(runners.keys())
+    download("abelikt", "commit-workflow-allinone.yml" ,simulate);
 
-    for key in runners.keys():
-        postprocess_runner(runners[key])
+    for runner in runners:
+        print("Runner", runner, "Repo", runner["repo"])
+        unpack_reports(runner)
+
+    for runner in runners:
+        postprocess_runner(runner)
 
     postprocess(runners)
 
 
 if __name__ == "__main__":
 
-    download_reports=True
+    download_reports = False
+
     if download_reports:
-        os.rmdir("report")
+        shutil.rmtree("report")
         os.mkdir("report")
     os.chdir("report")
 
