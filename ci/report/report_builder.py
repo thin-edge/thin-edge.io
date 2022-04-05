@@ -35,13 +35,22 @@ folders_abel=["ci_system-test-workflow",
 folders_sag= ["sag_system-test-workflow", "sag_system-test-offsite"]
 
 
-def cleanup():
+runners_cfg = {
+    "michael":{     "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+    "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
+
+    "sag":{         "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
+    "offsite-sag":{ "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
+        }
+
+def cleanup(download_reports):
 
     folders =     [
-    "*.zip",
     "*.xml",
     "*.html",
-    "*.json",
     "system-test-workflow",
     "system-test-workflow_A",
     "system-test-workflow_B",
@@ -55,6 +64,10 @@ def cleanup():
     "sag_system-test-workflow",
     "sag_system-test-offsite"]
 
+    if download_reports:
+        folders.append("*.zip")
+        folders.append("*.json")
+
     for folder in folders:
         cmd = "rm -rf "+ folder
         print(cmd)
@@ -64,7 +77,7 @@ def cleanup():
         if sub.returncode != 0:
             print("Warning command failed:", cmd)
 
-def download(workflows, repo, folders):
+def download(workflows, repo, folders, simulate=False):
     # Download and unzip results from test workflows
 
     if repo == "abelikt":
@@ -81,7 +94,8 @@ def download(workflows, repo, folders):
         cmd=f"./download_workflow_artifact.py {repo} {w} -o {prefix}{name};"
         print(cmd)
 
-        sub=subprocess.run(cmd, shell=True)
+        if not simulate:
+            sub=subprocess.run(cmd, shell=True)
 
         cmd =f"unzip -q -o -d {prefix}{name} {prefix}{y}"
         print(cmd)
@@ -161,6 +175,11 @@ def postprocess():
 
     cmd = f"junit2html --summary-matrix {XMLFILES}"
     print(cmd)
+
+    expect = "junit2html --summary-matrix ci_system-test-report.xml ci_system-test-report_A.xml ci_system-test-report_B.xml ci_system-test-report_C.xml ci_system-test-report_D.xml sag_system-test-report_offsite.xml sag_system-test-report_workflow.xml"
+
+    assert expect == cmd
+
     os.system(cmd)
 
     cmd = f"junit2html --summary-matrix {XMLFILES} > report.out"
@@ -170,29 +189,26 @@ def postprocess():
     # # Build report matrix
     cmd = f"junit2html --report-matrix report-matrix.html {XMLFILES}"
     print(cmd)
+
+    expect = "junit2html --report-matrix report-matrix.html ci_system-test-report.xml ci_system-test-report_A.xml ci_system-test-report_B.xml ci_system-test-report_C.xml ci_system-test-report_D.xml sag_system-test-report_offsite.xml sag_system-test-report_workflow.xml"
+
+    assert expect == cmd
+
     os.system(cmd)
+
 
     # Zip everything
     # zip report.zip *.html *.json
 
-def main():
+def main(runners, download_reports=True):
 
-    #cleanup()
+    cleanup(download_reports)
 
-    #download( workflows_abel, "abelikt", folders_abel)
+    simulate = True
 
-    #download( workflows_sag, "thin-edge", folders_sag)
+    download( workflows_abel, "abelikt", folders_abel, simulate=simulate)
+    download( workflows_sag, "thin-edge", folders_sag, simulate=simulate)
 
-    runners = {
-            "michael":{     "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
-            "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-            "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
-
-            "sag":{         "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
-            "offsite-sag":{ "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
-                }
 
     print(runners.keys())
 
@@ -202,5 +218,5 @@ def main():
     postprocess()
 
 if __name__=="__main__":
-    main()
+    main(runners_cfg, download_reports=False)
 
