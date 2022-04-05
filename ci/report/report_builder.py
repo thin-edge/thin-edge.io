@@ -24,7 +24,7 @@ runners_cfg = [
     {
         "name": "offsite_mythica",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_a_35.zip",
+        "archive": "results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
             "apt",
@@ -36,7 +36,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicb",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_b_35.zip",
+        "archive": "results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
             "apt",
@@ -48,7 +48,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicc",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_c_35.zip",
+        "archive": "results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
             "apt",
@@ -60,7 +60,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicd",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_d_35.zip",
+        "archive": "results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
             "apt",
