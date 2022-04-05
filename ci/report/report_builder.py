@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # This solution is far from perfect
-# TODO Make it more flexible
-# TODO Make it more obvious what is going on here TODO Host this report somewhere
+# TODO Export configuration to separate config file
+# TODO Add Command line interface
 # TODO Add an additional report to store the sources (run-id, date, runner)
-# TODO Decide on what to do if we have failures or skipped workflows
+# TODO return non zero exit code when there was an issue
 
 import os
 import sys
@@ -132,10 +132,10 @@ def download(workflow, repo, simulate=False):
     # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
 
     name = repo + "_" + workflow.replace(".yml", "")
-    filename = "report/"name + ".zip"
+    filename = name + ".zip"
 
     print(name)
-    cmd = f"./download_workflow_artifact.py {repo} {workflow} -o {name}"
+    cmd = f"../download_workflow_artifact.py {repo} {workflow} -o {name}"
     print(cmd)
 
     if not simulate:
@@ -239,4 +239,11 @@ def main(runners, download_reports=True):
 
 
 if __name__ == "__main__":
-    main(runners_cfg, download_reports=True)
+
+    download_reports=True
+    if download_reports:
+        os.rmdir("report")
+        os.mkdir("report")
+    os.chdir("report")
+
+    main(runners_cfg, download_reports=download_reports)
