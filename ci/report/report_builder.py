@@ -184,7 +184,7 @@ def postprocess_runner(runner):
     print(f"junit2html {name}.xml")
 
 
-def postprocess():
+def postprocess(runners):
 
     # Create a combined report matrix from all report sources
     OUT = "abelikt_system-test-workflow"
@@ -207,7 +207,18 @@ def postprocess():
         + "-workflow.xml"
     )
 
+    files = ""
+
+    for key in runners.keys():
+        workflow = runners[key]["workflow"]
+        repo = runners[key]["repo"]
+        name = repo + "_" + workflow.replace(".yml", ".xml")
+        files += " " + name
+
     print("Files:  ", XMLFILES)
+    print("Files:  ", files.strip())
+    assert files ==XMLFILES
+
 
     # Print summary matrix
 
@@ -245,7 +256,7 @@ def main(runners, download_reports=True):
     for key in runners.keys():
         postprocess_runner(runners[key])
 
-    postprocess()
+    postprocess(runners)
 
 
 if __name__ == "__main__":
