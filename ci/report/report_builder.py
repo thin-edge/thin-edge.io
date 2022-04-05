@@ -24,14 +24,13 @@ import subprocess
 
 
 runners_cfg = {
-    "michael":{     "repo":"abelikt", "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
-    "offsitea":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsiteb":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsitec":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsited":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
-
-    "sag":{         "repo":"thin-edge", "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
-    "offsite-sag":{ "repo":"thin-edge", "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
+    "michael":{     "repo":"abelikt",   "workflow":"system-test-workflow.yml",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+    "offsitea":{    "repo":"abelikt",   "workflow":"system-test-workflow_A.yml",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsiteb":{    "repo":"abelikt",   "workflow":"system-test-workflow_B.yml",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsitec":{    "repo":"abelikt",   "workflow":"system-test-workflow_C.yml",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsited":{    "repo":"abelikt",   "workflow":"system-test-workflow_D.yml",   "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "sag":{         "repo":"thin-edge", "workflow":"system-test-workflow.yml",  "tests":["all" ] },
+    "offsite-sag":{ "repo":"thin-edge", "workflow":"system-test-offsite.yml",   "tests":["all", "apt", "docker", "sm", ] },
         }
 
 def cleanup(download_reports):
@@ -65,28 +64,27 @@ def cleanup(download_reports):
         if sub.returncode != 0:
             print("Warning command failed:", cmd)
 
-def download(workflow, repo, folders, simulate=False):
+def download(workflow, repo, simulate=False):
     # Download and unzip results from test workflows
 
     # ./download_workflow_artifact.py abelikt system-test-workflow_A.yml -o ci_system-test-workflow_A;
     # ./download_workflow_artifact.py abelikt system-test-workflow_B.yml -o ci_system-test-workflow_B;
     # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
 
-    w=workflow
+    name = repo +"_"+ workflow.replace(".yml","")
+    filename = name+".zip"
 
-    y = w.replace(".yml",".zip")
-    name = w.replace(".yml","")
-    print(w, y)
-    cmd=f"./download_workflow_artifact.py {repo} {w} -o {name};"
+    print(name)
+    cmd=f"./download_workflow_artifact.py {repo} {workflow} -o {name}"
     print(cmd)
 
     if not simulate:
         sub=subprocess.run(cmd, shell=True)
         sub.check_returncode()
 
-    assert os.path.exists(y)
+    assert os.path.exists(filename)
 
-    cmd =f"unzip -q -o -d {name} {y}"
+    cmd =f"unzip -q -o -d {name} {filename}"
     print(cmd)
 
     sub=subprocess.run(cmd, shell=True)
@@ -98,37 +96,39 @@ def postprocess_runner(runner):
 
 
     # Postporcess results for the onsite runner onsite at Michael
-        prefix = runner["prefix"]
-        report = runner ["report"]
+        workflow = runner ["workflow"]
+        repo = runner ["repo"]
         tests = runner["tests"]
 
-        print(f"Processing: {prefix} ")
+        print(f"Processing: {workflow} ")
 
         tags = ["all", "apt", "apama", "docker", "sm", "analytics"]
         files = ""
 
+        name = repo +"_"+ workflow.replace(".yml","")
+
         for tag in tags:
             if tag in tests:
-                folder = f"{prefix}/PySys/pysys_junit_xml_{tag}"
+                folder = f"{name}/PySys/pysys_junit_xml_{tag}"
                 if os.path.exists(folder):
-                    files += f"{prefix}/PySys/pysys_junit_xml_{tag}/*.xml "
+                    files += f"{name}/PySys/pysys_junit_xml_{tag}/*.xml "
                 else:
                     raise SystemError("Folder Expected", folder)
 
-        cmd = f"junitparser merge {files} { report }.xml"
+        cmd = f"junitparser merge {files} { name }.xml"
 
         print(cmd)
 
         sub=subprocess.run(cmd, shell=True)
         sub.check_returncode()
 
-        print(f"junit2html {report}.xml")
+        print(f"junit2html {name}.xml")
 
 def postprocess():
 
     # Create a combined report matrix from all report sources
-    OUT = "ci_system-test-report"
-    SAGOUT = "sag_system-test-report"
+    OUT = "abelikt_system-test-workflow"
+    SAGOUT = "thin-edge_system-test"
 
     XMLFILES = (
         OUT
@@ -142,27 +142,17 @@ def postprocess():
         + OUT
         + "_D.xml "
         + SAGOUT
-        + "_offsite.xml "
+        + "-offsite.xml "
         + SAGOUT
-        + "_workflow.xml"
+        + "-workflow.xml"
     )
 
     print("Files:  ", XMLFILES)
-
-    expect = "ci_system-test-report.xml ci_system-test-report_A.xml ci_system-test-report_B.xml ci_system-test-report_C.xml ci_system-test-report_D.xml sag_system-test-report_offsite.xml sag_system-test-report_workflow.xml"
-
-    print("Expected: ", expect)
-
-    assert XMLFILES == expect
 
     # Print summary matrix
 
     cmd = f"junit2html --summary-matrix {XMLFILES}"
     print(cmd)
-
-    expect = "junit2html --summary-matrix ci_system-test-report.xml ci_system-test-report_A.xml ci_system-test-report_B.xml ci_system-test-report_C.xml ci_system-test-report_D.xml sag_system-test-report_offsite.xml sag_system-test-report_workflow.xml"
-
-    assert expect == cmd
 
     os.system(cmd)
 
@@ -174,12 +164,7 @@ def postprocess():
     cmd = f"junit2html --report-matrix report-matrix.html {XMLFILES}"
     print(cmd)
 
-    expect = "junit2html --report-matrix report-matrix.html ci_system-test-report.xml ci_system-test-report_A.xml ci_system-test-report_B.xml ci_system-test-report_C.xml ci_system-test-report_D.xml sag_system-test-report_offsite.xml sag_system-test-report_workflow.xml"
-
-    assert expect == cmd
-
     os.system(cmd)
-
 
     # Zip everything
     # zip report.zip *.html *.json
@@ -192,7 +177,7 @@ def main(runners, download_reports=True):
 
     for key in runners.keys():
         print( "Key", key, "Repo", runners[key]["repo"] )
-        download( runners[key]["prefix"]+".yml", runners[key]["repo"], runners[key]["report"], simulate=simulate)
+        download( runners[key]["workflow"], runners[key]["repo"], simulate=simulate)
 
     print(runners.keys())
 
@@ -202,5 +187,5 @@ def main(runners, download_reports=True):
     postprocess()
 
 if __name__=="__main__":
-    main(runners_cfg, download_reports=True)
+    main(runners_cfg, download_reports=False)
 
