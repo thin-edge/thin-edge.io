@@ -1,12 +1,22 @@
-# How to enable the watchdog feature using systemd in thin-edge.io
+# Watchdog feature using `systemd` in `thin-edge.io`
 
-When thin-edge.io services are managed using the systemd. Then one can use `systemd`
+## Introduction
+
+`Watchdog` feature is used to check the health of a service/process by constantly exchanging
+the message between the watchdog process and the service/process that is being monitored.
+When the process does not update its health status within a specified `time` period, then the watchdog process will
+restart the service that is being monitored.
+
+This document shows how `thin-edge.io` services are managed using the systemd, then one can use `systemd`
 feature to check the health of these services as well. This document provides
-information about how to use `systemd` for cheacking the health of the services.
+information about how to use `systemd` for checking the health of the services.
 
-Enabling the `watchdog` feature for a `thin-edge.io` service (tedge_agent, tedge_mapper_c8y/az/collectd) using the `systemd` is a two step process.
+## Enabling the `watchdog` feature in `systemd`
 
-## Step 1: Enable the `watchdog` feature in the `systemd` service file
+Enabling the `watchdog` feature in systemd for a `thin-edge.io` service (tedge_agent, tedge_mapper_c8y/az/collectd)
+using the `systemd` is a two-step process.
+
+### Step 1: Enable the `watchdog` feature in the `systemd` service file
 For example to enable the `watchdog` feature for `tedge-mapper-c8y` service, update systemd service file as shown below.
 
 Add `tedge_watchdog.service` in  `After` under `[Unit]` section.
@@ -29,7 +39,7 @@ WatchdogSec=5
 
 > Note: The systemd service file usually present in `/lib/systemd/system/tedge-mapper-c8y.service`.
 
-## Step 2: Start the `tedge-watchdog` service
+### Step 2: Start the `tedge-watchdog` service
 
 Start the `watchdog` service as below.
 ```shell
