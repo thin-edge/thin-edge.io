@@ -1,33 +1,24 @@
-#!/bin/bash
+#!/usr/bin/python3
 
 # This solution is far from perfect
 # TODO Export configuration to separate config file
-# TODO Add Command line interface
 # TODO Add an additional report to store the sources (run-id, date, runner)
 # TODO return non zero exit code when there was an issue
 
+import argparse
 import os
 import sys
 import subprocess
 import shutil
 
-# set -e
+# Exemplary call
 #
 # python3 -m venv ~/env-pysys
 # source ~/env-pysys/bin/activate
 # pip3 install -r tests/requirements.txt
 #
-
-# system-test-workflow_A.yml
-# ci_system-test-workflow_A.zip
-# system-test-workflow-A_261.json
-# ci_system-test-report_A.xml
-
-# commit-workflow-allinone_results_a_35.zip
-# commit-workflow-allinone_results_b_35.zip
-# commit-workflow-allinone_results_c_35.zip
-# commit-workflow-allinone_results_d_35.zip
-
+# ./report_builder.py abelikt commit-workflow-allinone.yml
+# ./report_builder.py abelikt commit-workflow-allinone.yml --download
 
 runners_cfg = [
     {
@@ -81,15 +72,13 @@ runners_cfg = [
 ]
 
 
-def download(repo, workflow, simulate=False):
+def download_results(repo, workflow):
     # Download and unzip results from test workflows
 
     cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter result"
     print(cmd)
-
-    if not simulate:
-        sub = subprocess.run(cmd, shell=True)
-        sub.check_returncode()
+    sub = subprocess.run(cmd, shell=True)
+    sub.check_returncode()
 
 
 def unpack_reports(runner):
@@ -159,15 +148,17 @@ def postprocess(runners):
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
 
+def main(runners, repo, workflow, download_reports=True):
 
-def main(runners, download_reports=True):
+    if download_reports:
+        shutil.rmtree("report")
+        os.mkdir("report")
+    os.chdir("report")
 
-    simulate = not download_reports
-
-    download("abelikt", "commit-workflow-allinone.yml", simulate)
+    if download_reports:
+        download_results("abelikt", "commit-workflow-allinone.yml")
 
     for runner in runners:
-        print("Runner", runner, "Repo", runner["repo"])
         unpack_reports(runner)
 
     for runner in runners:
@@ -178,11 +169,16 @@ def main(runners, download_reports=True):
 
 if __name__ == "__main__":
 
-    download_reports = False
+    parser = argparse.ArgumentParser()
+    parser.add_argument("repo", type=str, help="GitHub repository")
+    parser.add_argument("workflow", type=str, help="Name of workflow")
+    parser.add_argument('--download', action='store_true')
 
-    if download_reports:
-        shutil.rmtree("report")
-        os.mkdir("report")
-    os.chdir("report")
+    args = parser.parse_args()
 
-    main(runners_cfg, download_reports=download_reports)
+    repo = args.repo
+    workflow = args.workflow
+    download = args.download
+
+    main(runners_cfg, repo, workflow, download_reports=download)
+
