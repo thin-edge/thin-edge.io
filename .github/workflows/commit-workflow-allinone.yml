@@ -1036,7 +1036,7 @@ jobs:
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
-        name: results_a_${{ github.run_number }}
+        name: results_pysys_offsite_mythica
         path: tests/
 
 #################################################################################
@@ -1102,7 +1102,7 @@ jobs:
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
-        name: results_b_${{ github.run_number }}
+        name: results_pysys_offsite_mythicb
         path: tests/
 
 #################################################################################
@@ -1168,7 +1168,7 @@ jobs:
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
-        name: results_c_${{ github.run_number }}
+        name: results_pysys_offsite_mythicc
         path: tests/
 
 #################################################################################
@@ -1234,7 +1234,7 @@ jobs:
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
-        name: results_d_${{ github.run_number }}
+        name: results_pysys_offsite_mythicd
         path: tests/
 
 #############################################################################
@@ -1253,3 +1253,36 @@ jobs:
           token: ${{ secrets.SECRET_THEGHTOKEN  }}
           event-type: postprocess
           repository: abelikt/thin-edge.io_analytics
+
+    - name: download result a
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythica
+        path: results_pysys_offsite_mythica
+
+    - name: download result b
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicb
+        path: results_pysys_offsite_mythicb
+
+    - name: download result c
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicc
+        path: results_pysys_offsite_mythicc
+
+    - name: download result d
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicd
+        path: results_pysys_offsite_mythicd
+
+    - name: ls
+      # dummy
+      run:  bash ls -lah
+
