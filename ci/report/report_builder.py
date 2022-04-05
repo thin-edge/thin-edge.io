@@ -75,7 +75,7 @@ runners_cfg = [
 def download_results(repo, workflow):
     # Download and unzip results from test workflows
 
-    cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter result"
+    cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter results"
     print(cmd)
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
@@ -150,16 +150,20 @@ def postprocess(runners):
 
 def main(runners, repo, workflow, download_reports=True):
 
-    if download_reports:
-        shutil.rmtree("report")
-        os.mkdir("report")
-    os.chdir("report")
+    # TODO make this more flexible
+    # path = os.path.dirname(os.path.realpath(__file__))
+    # os.chdir(path)
+
+    #if download_reports:
+    #    shutil.rmtree("report")
+    #    os.mkdir("report")
+    #os.chdir("report")
 
     if download_reports:
         download_results("abelikt", "commit-workflow-allinone.yml")
 
-    for runner in runners:
-        unpack_reports(runner)
+        for runner in runners:
+            unpack_reports(runner)
 
     for runner in runners:
         postprocess_runner(runner)
