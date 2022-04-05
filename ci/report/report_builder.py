@@ -132,7 +132,7 @@ def download(workflow, repo, simulate=False):
     # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
 
     name = repo + "_" + workflow.replace(".yml", "")
-    filename = name + ".zip"
+    filename = "report/"name + ".zip"
 
     print(name)
     cmd = f"./download_workflow_artifact.py {repo} {workflow} -o {name}"
@@ -187,25 +187,6 @@ def postprocess_runner(runner):
 def postprocess(runners):
 
     # Create a combined report matrix from all report sources
-    OUT = "abelikt_system-test-workflow"
-    SAGOUT = "thin-edge_system-test"
-
-    XMLFILES = (
-        OUT
-        + ".xml "
-        + OUT
-        + "_A.xml "
-        + OUT
-        + "_B.xml "
-        + OUT
-        + "_C.xml "
-        + OUT
-        + "_D.xml "
-        + SAGOUT
-        + "-offsite.xml "
-        + SAGOUT
-        + "-workflow.xml"
-    )
 
     files = ""
 
@@ -215,24 +196,22 @@ def postprocess(runners):
         name = repo + "_" + workflow.replace(".yml", ".xml")
         files += " " + name
 
-    print("Files:  ", XMLFILES)
-    print("Files:  ", files.strip())
-    assert files ==XMLFILES
+    print("Files:  ", files)
 
 
     # Print summary matrix
 
-    cmd = f"junit2html --summary-matrix {XMLFILES}"
+    cmd = f"junit2html --summary-matrix {files}"
     print(cmd)
 
     os.system(cmd)
 
-    cmd = f"junit2html --summary-matrix {XMLFILES} > report.out"
+    cmd = f"junit2html --summary-matrix {files} > report.out"
     print(cmd)
     os.system(cmd)
 
     # # Build report matrix
-    cmd = f"junit2html --report-matrix report-matrix.html {XMLFILES}"
+    cmd = f"junit2html --report-matrix report-matrix.html {files}"
     print(cmd)
 
     os.system(cmd)
@@ -260,4 +239,4 @@ def main(runners, download_reports=True):
 
 
 if __name__ == "__main__":
-    main(runners_cfg, download_reports=False)
+    main(runners_cfg, download_reports=True)
