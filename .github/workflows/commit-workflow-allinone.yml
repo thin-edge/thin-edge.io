@@ -1284,5 +1284,9 @@ jobs:
 
     - name: ls
       # dummy
-      run:  bash ls -lah
+      run: ls -lah
+
+
+    - name: Build report
+      run: .ci/report/build.sh
 
