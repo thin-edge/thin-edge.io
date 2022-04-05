@@ -81,53 +81,9 @@ runners_cfg = [
 ]
 
 
-def cleanup(download_reports):
-
-    folders = [
-        "*.xml",
-        "*.html",
-        "system-test-workflow",
-        "system-test-workflow_A",
-        "system-test-workflow_B",
-        "system-test-workflow_C",
-        "system-test-workflow_D",
-        "ci_system-test-workflow",
-        "ci_system-test-workflow_A",
-        "ci_system-test-workflow_B",
-        "ci_system-test-workflow_C",
-        "ci_system-test-workflow_D",
-        "sag_system-test-workflow",
-        "sag_system-test-offsite",
-    ]
-
-    if download_reports:
-        folders.append("*.zip")
-        folders.append("*.json")
-
-    for folder in folders:
-        cmd = "rm -rf " + folder
-        print(cmd)
-        sub = subprocess.run(cmd, shell=True)
-
-        # sub.check_returncode()
-        if sub.returncode != 0:
-            print("Warning command failed:", cmd)
-
-
 def download(repo, workflow, simulate=False):
     # Download and unzip results from test workflows
 
-    # ./download_workflow_artifact.py abelikt system-test-workflow_A.yml -o ci_system-test-workflow_A;
-    # ./download_workflow_artifact.py abelikt system-test-workflow_B.yml -o ci_system-test-workflow_B;
-    # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
-
-    # ./download_workflow_artifact.py abelikt commit-workflow-allinone.yml --filter result
-
-    #name = repo + "_" + workflow.replace(".yml", "")
-    #filename = name + ".zip"
-
-    #print(name)
-    #cmd = f"../download_workflow_artifact.py {repo} {workflow} -o {name}"
     cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter result"
     print(cmd)
 
@@ -150,7 +106,6 @@ def unpack_reports(runner):
 def postprocess_runner(runner):
     # Postprocess results
 
-    # Postporcess results for the onsite runner onsite at Michael
     name = runner["name"]
     repo = runner["repo"]
     tests = runner["tests"]
@@ -169,13 +124,9 @@ def postprocess_runner(runner):
                 raise SystemError("Folder Expected", folder)
 
     cmd = f"junitparser merge {files} { name }.xml"
-
     print(cmd)
-
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
-
-    print(f"junit2html {name}.xml")
 
 
 def postprocess(runners):
@@ -186,7 +137,6 @@ def postprocess(runners):
 
     for runner in runners:
         name = runner["name"] + ".xml"
-        repo = runner["repo"]
         files += " " + name
 
     print("Files:  ", files)
@@ -204,7 +154,7 @@ def postprocess(runners):
     sub.check_returncode()
 
     # Zip everything
-    cmd="zip report.zip *.html *.json"
+    cmd = "zip report.zip *.html *.json"
     print(cmd)
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
@@ -212,15 +162,9 @@ def postprocess(runners):
 
 def main(runners, download_reports=True):
 
-    #cleanup(download_reports)
-
     simulate = not download_reports
 
-    # for key in runners.keys():
-    #    print("Key", key, "Repo", runners[key]["repo"])
-    #    download(runners[key]["workflow"], runners[key]["repo"], simulate=simulate)
-
-    download("abelikt", "commit-workflow-allinone.yml" ,simulate);
+    download("abelikt", "commit-workflow-allinone.yml", simulate)
 
     for runner in runners:
         print("Runner", runner, "Repo", runner["repo"])
