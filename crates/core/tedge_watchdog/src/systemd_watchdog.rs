@@ -36,30 +36,29 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
     let watchdog_threads = FuturesUnordered::new();
 
     for service in tedge_services {
-        let interval = match get_watchdog_sec(&format!("/lib/systemd/system/{service}.service")) {
-            Ok(i) => i,
+        match get_watchdog_sec(&format!("/lib/systemd/system/{service}.service")) {
+            Ok(interval) => {
+                let req_topic = format!("tedge/health-check/{service}");
+                let res_topic = format!("tedge/health/{service}");
+                let tedge_config_location =
+                    tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
+
+                watchdog_threads.push(tokio::spawn(async move {
+                    monitor_tedge_service(
+                        tedge_config_location,
+                        service,
+                        &req_topic,
+                        &res_topic,
+                        interval,
+                    )
+                    .await
+                }));
+            }
+
             Err(_e) => continue, // Watchdog not enabled for this service
-        };
-        let req_topic = format!("tedge/health-check/{service}");
-        let res_topic = format!("tedge/health/{service}");
-        let tedge_config_location =
-            tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
-        if interval > 0 {
-            watchdog_threads.push(tokio::spawn(async move {
-                monitor_tedge_service(
-                    tedge_config_location,
-                    service,
-                    &req_topic,
-                    &res_topic,
-                    interval / 2,
-                )
-                .await
-            }));
         }
     }
-
     futures::future::join_all(watchdog_threads).await;
-
     Ok(())
 }
 
@@ -103,7 +102,7 @@ async fn monitor_tedge_service(
                 eprintln!("The {name} failed with {elapsed}");
             }
         }
-        tokio::time::sleep(start.elapsed()).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(interval) - start.elapsed()).await;
     }
 }
 
@@ -111,7 +110,7 @@ fn get_mqtt_config(
     tedge_config_location: TEdgeConfigLocation,
     client_id: &str,
 ) -> Result<Config, WatchdogError> {
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     let tedge_config = config_repository.load()?;
     let mqtt_config = Config::default()
         .with_session_name(client_id)
@@ -122,21 +121,29 @@ fn get_mqtt_config(
 
 fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
     let pid_opt = format!("--pid={pid}");
-    Ok(Command::new("systemd-notify")
+    Command::new("systemd-notify")
         .args([status, &pid_opt])
         .stdin(Stdio::null())
         .status()
         .map_err(|err| WatchdogError::CommandExecError {
             cmd: String::from("systemd-notify"),
             from: err,
-        })?)
+        })
 }
 
 fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
     let entry = parse_entry(service_file)?;
     if let Some(interval) = entry.section("Service").attr("WatchdogSec") {
-        Ok(interval.parse()?)
+        interval.parse().map_err({
+            eprintln!(
+                "Failed to parse the to WatchdogSec to integer from {}",
+                service_file
+            );
+            WatchdogError::ParseWatchdogSecToInt
+        })
     } else {
-        Err(WatchdogError::NoWatchdogSec)
+        Err(WatchdogError::NoWatchdogSec {
+            file: service_file.to_string(),
+        })
     }
 }

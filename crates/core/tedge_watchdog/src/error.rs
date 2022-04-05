@@ -19,12 +19,12 @@ pub enum WatchdogError {
     #[error(transparent)]
     DeserializeError(#[from] serde_json::Error),
 
-    #[error("Failed to parse watchdogsec")]
-    ParseWatchdogSec(#[from] std::num::ParseIntError),
+    #[error(transparent)]
+    ParseWatchdogSecToInt(#[from] std::num::ParseIntError),
 
     #[error(transparent)]
     ParseSystemdFile(#[from] std::io::Error),
 
-    #[error("Did not find the WatchdogSec")]
-    NoWatchdogSec,
+    #[error("Did not find the WatchdogSec{file}")]
+    NoWatchdogSec { file: String },
 }

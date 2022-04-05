@@ -31,6 +31,5 @@ async fn main() -> Result<(), anyhow::Error> {
     let watchdog_opt = WatchdogOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(watchdog_opt.debug);
 
-    systemd_watchdog::start_watchdog(watchdog_opt.config_dir).await?;
-    Ok(())
+    systemd_watchdog::start_watchdog(watchdog_opt.config_dir).await
 }
