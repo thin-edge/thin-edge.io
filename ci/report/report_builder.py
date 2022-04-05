@@ -17,33 +17,21 @@ import subprocess
 # pip3 install -r tests/requirements.txt
 #
 
-workflows_abel = ["system-test-workflow_A.yml",
-"system-test-workflow_B.yml",
-"system-test-workflow_C.yml",
-"system-test-workflow_D.yml",
-"system-test-workflow.yml"]
-
-
-workflows_sag = ["system-test-workflow.yml", "system-test-offsite.yml"]
-
-folders_abel=["ci_system-test-workflow",
-            "ci_system-test-workflow_A",
-            "ci_system-test-workflow_B",
-            "ci_system-test-workflow_C",
-            "ci_system-test-workflow_D"]
-
-folders_sag= ["sag_system-test-workflow", "sag_system-test-offsite"]
+# system-test-workflow_A.yml
+# ci_system-test-workflow_A.zip
+# system-test-workflow-A_261.json
+# ci_system-test-report_A.xml
 
 
 runners_cfg = {
-    "michael":{     "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
-    "offsitea":{    "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsiteb":{    "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsitec":{    "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
-    "offsited":{    "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "michael":{     "repo":"abelikt", "prefix":"ci_system-test-workflow",   "report":"ci_system-test-report",  "tests":["all", "apt", "apama", "docker", "sm", "analytics"] },
+    "offsitea":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_A", "report":"ci_system-test-report_A",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsiteb":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_B", "report":"ci_system-test-report_B",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsitec":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_C", "report":"ci_system-test-report_C",  "tests":["all", "apt", "apama", "docker", "sm", ] },
+    "offsited":{    "repo":"abelikt", "prefix":"ci_system-test-workflow_D", "report":"ci_system-test-report_D",   "tests":["all", "apt", "apama", "docker", "sm", ] },
 
-    "sag":{         "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
-    "offsite-sag":{ "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
+    "sag":{         "repo":"thin-edge", "prefix":"sag_system-test-workflow",  "report":"sag_system-test-report_workflow",  "tests":["all" ] },
+    "offsite-sag":{ "repo":"thin-edge", "prefix":"sag_system-test-offsite",   "report":"sag_system-test-report_offsite",   "tests":["all", "apt", "docker", "sm", ] },
         }
 
 def cleanup(download_reports):
@@ -77,36 +65,32 @@ def cleanup(download_reports):
         if sub.returncode != 0:
             print("Warning command failed:", cmd)
 
-def download(workflows, repo, folders, simulate=False):
+def download(workflow, repo, folders, simulate=False):
     # Download and unzip results from test workflows
 
-    if repo == "abelikt":
-        prefix= "ci_"
-    elif repo =="thin-edge":
-        prefix="sag_"
-    else:
-        raise SystemError
+    # ./download_workflow_artifact.py abelikt system-test-workflow_A.yml -o ci_system-test-workflow_A;
+    # ./download_workflow_artifact.py abelikt system-test-workflow_B.yml -o ci_system-test-workflow_B;
+    # unzip -q -o -d ci_system-test-workflow_B ci_system-test-workflow_B.zip
 
-    for w in workflows:
-        y = w.replace(".yml",".zip")
-        name = w.replace(".yml","")
-        print(w, y)
-        cmd=f"./download_workflow_artifact.py {repo} {w} -o {prefix}{name};"
-        print(cmd)
+    w=workflow
 
-        if not simulate:
-            sub=subprocess.run(cmd, shell=True)
+    y = w.replace(".yml",".zip")
+    name = w.replace(".yml","")
+    print(w, y)
+    cmd=f"./download_workflow_artifact.py {repo} {w} -o {name};"
+    print(cmd)
 
-        cmd =f"unzip -q -o -d {prefix}{name} {prefix}{y}"
-        print(cmd)
-
+    if not simulate:
         sub=subprocess.run(cmd, shell=True)
+        sub.check_returncode()
 
-    # Doublecheck if our result folders are there
+    assert os.path.exists(y)
 
-    for f in folders:
-        print("Checking folder", f)
-        assert os.path.exists(f)
+    cmd =f"unzip -q -o -d {name} {y}"
+    print(cmd)
+
+    sub=subprocess.run(cmd, shell=True)
+    sub.check_returncode()
 
 
 def postprocess_runner(runner):
@@ -204,11 +188,11 @@ def main(runners, download_reports=True):
 
     cleanup(download_reports)
 
-    simulate = True
+    simulate = not download_reports
 
-    download( workflows_abel, "abelikt", folders_abel, simulate=simulate)
-    download( workflows_sag, "thin-edge", folders_sag, simulate=simulate)
-
+    for key in runners.keys():
+        print( "Key", key, "Repo", runners[key]["repo"] )
+        download( runners[key]["prefix"]+".yml", runners[key]["repo"], runners[key]["report"], simulate=simulate)
 
     print(runners.keys())
 
@@ -218,5 +202,5 @@ def main(runners, download_reports=True):
     postprocess()
 
 if __name__=="__main__":
-    main(runners_cfg, download_reports=False)
+    main(runners_cfg, download_reports=True)
 
