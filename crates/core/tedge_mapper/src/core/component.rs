@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
 use tedge_config::{
@@ -8,8 +10,8 @@ use tracing::info;
 #[async_trait]
 pub trait TEdgeComponent: Sync + Send {
     fn session_name(&self) -> &str;
-    async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error>;
-    async fn init(&self) -> Result<(), anyhow::Error>;
+    async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error>;
+    async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error>;
     async fn init_session(&self, mqtt_topics: TopicFilter) -> Result<(), anyhow::Error> {
         mqtt_channel::init_session(&self.get_mqtt_config()?.with_subscriptions(mqtt_topics))
             .await?;

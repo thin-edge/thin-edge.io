@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
+use std::path::PathBuf;
+
 use anyhow::Context;
 use clap::Parser;
 use tedge_users::UserManager;
@@ -18,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
 
     if opt.init {
-        initialize_tedge()?;
+        initialize_tedge(&opt.config_dir)?;
         return Ok(());
     }
 
@@ -45,12 +47,23 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn initialize_tedge() -> anyhow::Result<()> {
-    create_directory_with_user_group("/etc/tedge", "tedge", "tedge", 0o775)?;
+fn initialize_tedge(cfg_dir: &PathBuf) -> anyhow::Result<()> {
+    let config_dir = cfg_dir.as_path().display().to_string();
+    create_directory_with_user_group(&config_dir, "tedge", "tedge", 0o775)?;
     create_directory_with_user_group("/var/log/tedge", "tedge", "tedge", 0o775)?;
-    create_directory_with_user_group("/etc/tedge/mosquitto-conf", "tedge", "tedge", 0o775)?;
-    create_directory_with_user_group("/etc/tedge/operations", "tedge", "tedge", 0o775)?;
-    create_directory_with_user_group("/etc/tedge/plugins", "tedge", "tedge", 0o775)?;
-    create_directory_with_user_group("/etc/tedge/device-certs", "mosquitto", "mosquitto", 0o775)?;
+    create_directory_with_user_group(
+        &format!("{config_dir}/mosquitto-conf"),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_directory_with_user_group(&format!("{config_dir}/operations"), "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group(&format!("{config_dir}/plugins"), "tedge", "tedge", 0o775)?;
+    create_directory_with_user_group(
+        &format!("{config_dir}/device-certs"),
+        "mosquitto",
+        "mosquitto",
+        0o775,
+    )?;
     Ok(())
 }

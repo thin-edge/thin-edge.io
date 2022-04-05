@@ -90,10 +90,10 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     if mapper_opt.init {
-        component.init().await
+        component.init(&mapper_opt.config_dir).await
     } else if mapper_opt.clear {
         component.clear_session().await
     } else {
-        component.start(config).await
+        component.start(config, &mapper_opt.config_dir).await
     }
 }

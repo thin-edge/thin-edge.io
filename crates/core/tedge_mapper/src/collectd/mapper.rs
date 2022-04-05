@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     collectd::monitor::{DeviceMonitor, DeviceMonitorConfig},
     core::component::TEdgeComponent,
@@ -23,7 +25,7 @@ impl TEdgeComponent for CollectdMapper {
         COLLECTD_MAPPER_NAME
     }
 
-    async fn init(&self) -> Result<(), anyhow::Error> {
+    async fn init(&self, _cfg_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper collectd");
         self.init_session(TopicFilter::new(
             DeviceMonitorConfig::default().mqtt_source_topic,
@@ -32,7 +34,11 @@ impl TEdgeComponent for CollectdMapper {
         Ok(())
     }
 
-    async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+    async fn start(
+        &self,
+        tedge_config: TEdgeConfig,
+        _config_dir: &Path,
+    ) -> Result<(), anyhow::Error> {
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
 
