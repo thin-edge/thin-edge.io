@@ -57,8 +57,29 @@ jobs:
       - name: install packages
         run: sudo apt-get --assume-yes install mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
-      - name: install packages
-        run: sudo dpkg -i ./debian-package_unpack/*.deb
+      - name: install mosquitto
+        run: sudo apt-get --assume-yes install mosquitto
+
+      - name: install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
+
+      - name: install mosquitto-clients
+        run: sudo apt-get --assume-yes install mosquitto-clients
+
+      - name: install collectd-core
+        run: sudo apt-get --assume-yes install collectd-core collectd
+
+      - name: install tedge package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
+
+      - name: install tedge mapper package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
+
+      - name: install tedge agent package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge plugin packages
+        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
