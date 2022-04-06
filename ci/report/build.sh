@@ -8,6 +8,4 @@ pip3 install -r tests/requirements.txt
 
 cd ci/report/
 
-# ./report_builder.py abelikt commit-workflow-allinone.yml --download
-
-./report_builder.py abelikt commit-workflow-allinone.yml
+./report_builder.py abelikt ci_pipeline.yml

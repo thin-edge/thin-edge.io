@@ -17,14 +17,14 @@ import shutil
 # source ~/env-pysys/bin/activate
 # pip3 install -r tests/requirements.txt
 #
-# ./report_builder.py abelikt commit-workflow-allinone.yml
-# ./report_builder.py abelikt commit-workflow-allinone.yml --download
+# ./report_builder.py abelikt ci_pipeline.yml
+# ./report_builder.py abelikt ci_pipeline.yml --download
 
 runners_cfg = [
     {
         "name": "offsite_mythica",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_pysys_offsite_mythica.zip",
+        "archive": "ci_pipeline_results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
             "apt",
@@ -36,7 +36,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicb",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicb.zip",
+        "archive": "ci_pipeline_results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
             "apt",
@@ -48,7 +48,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicc",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicc.zip",
+        "archive": "ci_pipeline_results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
             "apt",
@@ -60,7 +60,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicd",
         "repo": "abelikt",
-        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicd.zip",
+        "archive": "ci_pipeline_results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
             "apt",
@@ -164,7 +164,7 @@ def main(runners, repo, workflow, download_reports=True):
     os.chdir("report")
 
     if download_reports:
-        download_results("abelikt", "commit-workflow-allinone.yml")
+        download_results("abelikt", "ci_pipeline.yml")
 
         for runner in runners:
             unpack_reports(runner)
