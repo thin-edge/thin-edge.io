@@ -32,7 +32,16 @@ jobs:
           command: fmt
           args: -- --check
 
-      - uses: rickstaa/action-black@v1
+  python-black:
+    name: Python static checks
+    runs-on: Ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Run black
+        uses: rickstaa/action-black@v1
         with:
           black_args: ". --check"
 
