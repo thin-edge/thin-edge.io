@@ -7,19 +7,19 @@ remove_user_tedge() {
     fi
 }
 
-remove_tedge_users_group() {
-    if getent group tedge-users > /dev/null; then
-        groupdel tedge-users
+remove_tedge_group() {
+    if getent group tedge > /dev/null; then
+        groupdel tedge
     fi
 }
 
 remove_sudoers_file() {
-    if [ -f "/etc/sudoers.d/tedge-users" ]; then
-        rm /etc/sudoers.d/tedge-users
+    if [ -f "/etc/sudoers.d/tedge" ]; then
+        rm /etc/sudoers.d/tedge
     fi
 
-    if [ -f "/etc/sudoers.d/tedge-users-nopasswd" ]; then
-        rm /etc/sudoers.d/tedge-users-nopasswd
+    if [ -f "/etc/sudoers.d/tedge-nopasswd" ]; then
+        rm /etc/sudoers.d/tedge-nopasswd
     fi
 }
 
@@ -44,7 +44,7 @@ purge_var_log() {
 case "$1" in
     purge)
         remove_user_tedge
-        remove_tedge_users_group
+        remove_tedge_group
         remove_mosquitto_edit
         remove_sudoers_file
         purge_configs
@@ -53,7 +53,7 @@ case "$1" in
 
     remove)
         remove_user_tedge
-        remove_tedge_users_group
+        remove_tedge_group
         remove_mosquitto_edit
         remove_sudoers_file
     ;;
