@@ -1,4 +1,4 @@
-name: commit-workflow-allinone
+name: ci_pipeline
 
 on:
   push:
