@@ -1,10 +1,13 @@
 #!/bin/bash
 
+# Call this file to generate a report from a GitHub Workflow
+
 set -e
 
-python3 -m venv ~/env-pysys
-source ~/env-pysys/bin/activate
-pip3 install -r tests/requirements.txt
+python3 -m venv ~/env-builder
+source ~/env-builder/bin/activate
+pip3 install junitparser
+pip3 install junit2html
 
 cd ci/report/
 
