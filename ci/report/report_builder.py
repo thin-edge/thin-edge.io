@@ -24,7 +24,7 @@ runners_cfg = [
     {
         "name": "offsite_mythica",
         "repo": "abelikt",
-        "archive": "results_pysys_offsite_mythica.zip",
+        "archive": "commit-workflow-allinone_results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
             "apt",
@@ -36,7 +36,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicb",
         "repo": "abelikt",
-        "archive": "results_pysys_offsite_mythicb.zip",
+        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
             "apt",
@@ -48,7 +48,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicc",
         "repo": "abelikt",
-        "archive": "results_pysys_offsite_mythicc.zip",
+        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
             "apt",
@@ -60,7 +60,7 @@ runners_cfg = [
     {
         "name": "offsite_mythicd",
         "repo": "abelikt",
-        "archive": "results_pysys_offsite_mythicd.zip",
+        "archive": "commit-workflow-allinone_results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
             "apt",
@@ -75,7 +75,9 @@ runners_cfg = [
 def download_results(repo, workflow):
     # Download and unzip results from test workflows
 
-    cmd = f"../download_workflow_artifact.py {repo} {workflow} --filter results"
+    cmd = (
+        f"../download_workflow_artifact.py {repo} {workflow} --filter results --ignore"
+    )
     print(cmd)
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
@@ -148,16 +150,17 @@ def postprocess(runners):
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
 
+
 def main(runners, repo, workflow, download_reports=True):
 
-    # TODO make this more flexible
-    # path = os.path.dirname(os.path.realpath(__file__))
-    # os.chdir(path)
+    # Switch to script path
+    path = os.path.dirname(os.path.realpath(__file__))
+    os.chdir(path)
 
-    #if download_reports:
-    #    shutil.rmtree("report")
-    #    os.mkdir("report")
-    #os.chdir("report")
+    if download_reports:
+        shutil.rmtree("report", ignore_errors=True)
+        os.mkdir("report")
+        os.chdir("report")
 
     if download_reports:
         download_results("abelikt", "commit-workflow-allinone.yml")
@@ -176,7 +179,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", type=str, help="GitHub repository")
     parser.add_argument("workflow", type=str, help="Name of workflow")
-    parser.add_argument('--download', action='store_true')
+    parser.add_argument(
+        "--download", action="store_true", help="Download reports into subfolder"
+    )
 
     args = parser.parse_args()
 
@@ -185,4 +190,3 @@ if __name__ == "__main__":
     download = args.download
 
     main(runners_cfg, repo, workflow, download_reports=download)
-
