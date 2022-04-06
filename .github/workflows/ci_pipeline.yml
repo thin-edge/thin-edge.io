@@ -1243,6 +1243,10 @@ jobs:
     needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
     runs-on: Ubuntu-20.04
     steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
     # Trigger repo dispatch here.
     # This is here a limitation of the amount of workflows
     # that trigger each other (GitHub Bug).
