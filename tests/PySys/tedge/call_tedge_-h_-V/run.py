@@ -29,5 +29,5 @@ class PySysTest(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("tedge.out", "tedge 0.5", contains=True)
+        self.assertGrep("tedge.out", "tedge 0.6", contains=True)
         self.assertGrep("tedge.out", "USAGE:", contains=True)

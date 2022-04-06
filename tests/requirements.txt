@@ -1,4 +1,4 @@
-pysys == 2.0
+pysys == 2.1
 requests == 2.25.1
 toml == 0.10.2
 retry == 0.9.2
