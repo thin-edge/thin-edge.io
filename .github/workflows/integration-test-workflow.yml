@@ -103,7 +103,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build-workflow.yml
           workflow_conclusion: success
-          branch: continuous_integration
+          branch: main
           name: debian-packages-amd64
           path: debian-package_unpack
 
@@ -218,7 +218,7 @@ jobs:
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
 
       - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb  
+        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
