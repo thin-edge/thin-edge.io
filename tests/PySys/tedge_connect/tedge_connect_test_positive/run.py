@@ -21,19 +21,21 @@ class TedgeConnectTestPositive(EnvironmentC8y):
         self.log.info("Execute `tedge connect c8y --test`")
         self.tedge_connect_c8y_test()
         self.device_fragment = self.cumulocity.get_thin_edge_device_by_name(
-            self.project.device)
+            self.project.device
+        )
 
     def validate(self):
         super().validate()
         self.log.info("Validate")
         self.assertGrep(
-            "tedge_connect_c8y_test.out", "Connection check to c8y cloud is successful.", contains=True
+            "tedge_connect_c8y_test.out",
+            "Connection check to c8y cloud is successful.",
+            contains=True,
         )
         try:
-            id = self.device_fragment['id']
+            id = self.device_fragment["id"]
         except:
             self.log.error("Cannot find id in device_fragment")
             raise SystemError("Cannot find id in device_fragment")
 
-        self.assertTrue(
-            id != None, "thin-edge.io device with the given name exists")
+        self.assertTrue(id != None, "thin-edge.io device with the given name exists")

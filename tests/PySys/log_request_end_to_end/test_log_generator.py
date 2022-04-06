@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from random import randint, shuffle, seed
 from typing import Optional
 from retry import retry
+
 # this test will look at the date of current files in /var/log/tedge/agent/
 # and create example files with the same date.
 
@@ -22,11 +23,11 @@ ERROR_MESSAGES = [
 
 
 def create_fake_logs(num_lines=100) -> str:
-    num_loops = int(num_lines/10)
+    num_loops = int(num_lines / 10)
     output = "\n"
     for _ in range(num_loops):
-        output += '\n'.join(map(str, ERROR_MESSAGES))
-        output += '\n'
+        output += "\n".join(map(str, ERROR_MESSAGES))
+        output += "\n"
 
     return output
 
@@ -46,8 +47,11 @@ def check_files_created():
 def create_example_logs():
     file_names = ["example-log1", "example-log2", "example-log3"]
     file_sizes = [50, 100, 250]
-    time_stamps = ["2021-11-18T13:15:10Z",
-                   "2021-11-19T21:15:10Z", "2021-11-20T13:15:10Z"]
+    time_stamps = [
+        "2021-11-18T13:15:10Z",
+        "2021-11-19T21:15:10Z",
+        "2021-11-20T13:15:10Z",
+    ]
     os.mkdir("/tmp/sw_logs")
     for idx, file_name in enumerate(file_names):
         with open(f"/tmp/sw_logs/{file_name}-{time_stamps[idx]}.log", "w") as handle:

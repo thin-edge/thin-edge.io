@@ -35,16 +35,26 @@ class InvalidDeviceId(BaseTest):
         # set the custom certificate path
         set_cert_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "device.cert.path",
-                       "/tmp/test-device-certs/tedge-certificate.pem"],
+            arguments=[
+                self.tedge,
+                "config",
+                "set",
+                "device.cert.path",
+                "/tmp/test-device-certs/tedge-certificate.pem",
+            ],
             stdouterr="set_cert_path",
         )
 
-        # set the custom key path 
+        # set the custom key path
         set_key_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "device.key.path",
-                       "/tmp/test-device-certs/tedge-private-key.pem"],
+            arguments=[
+                self.tedge,
+                "config",
+                "set",
+                "device.key.path",
+                "/tmp/test-device-certs/tedge-private-key.pem",
+            ],
             stdouterr="set_key_path",
         )
 
@@ -54,8 +64,13 @@ class InvalidDeviceId(BaseTest):
         # create a certificate with a device id that contains a  invalid character
         cert_create = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "cert", "create",
-                       "--device-id", "':?=()*@!%,-.123ThinEdgeDevice-id"],
+            arguments=[
+                self.tedge,
+                "cert",
+                "create",
+                "--device-id",
+                "':?=()*@!%,-.123ThinEdgeDevice-id",
+            ],
             stdouterr="cert_create",
             expectedExitStatus="==1",
         )

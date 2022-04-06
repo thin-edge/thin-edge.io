@@ -17,22 +17,22 @@ from environment_sm_management import SoftwareManagement
 
 
 class SMDockerInstallRemove(SoftwareManagement):
-    image1_name="hello-world"
-    image2_name="registry"
-    image2_version1="2.6.2::docker"
-    image2_version2="2.7.1::docker"
+    image1_name = "hello-world"
+    image2_name = "registry"
+    image2_version1 = "2.6.2::docker"
+    image2_version2 = "2.7.1::docker"
     # getting started is not available for arm
     # image3_name="docker/getting-started"
-    image3_name="alpine"
+    image3_name = "alpine"
 
     def setup(self):
         super().setup()
 
-
         if self.dockerplugin != "dockerplugin":
             self.skipTest(
-                "Testing the docker plugin is not supported on this platform" +
-                "To run it, all the test with -Xdockerplugin='dockerplugin'")
+                "Testing the docker plugin is not supported on this platform"
+                + "To run it, all the test with -Xdockerplugin='dockerplugin'"
+            )
 
         setup_action = [
             {
@@ -56,12 +56,15 @@ class SMDockerInstallRemove(SoftwareManagement):
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
 
-        self.assertThat("True == value",
-                        value=self.check_is_installed(self.image1_name))
-        self.assertThat("True == value",
-                        value=self.check_is_installed(self.image2_name))
-        self.assertThat("False == value",
-                        value=self.check_is_installed(self.image3_name))
+        self.assertThat(
+            "True == value", value=self.check_is_installed(self.image1_name)
+        )
+        self.assertThat(
+            "True == value", value=self.check_is_installed(self.image2_name)
+        )
+        self.assertThat(
+            "False == value", value=self.check_is_installed(self.image3_name)
+        )
 
         self.addCleanupFunction(self.docker_cleanup)
 
@@ -90,12 +93,15 @@ class SMDockerInstallRemove(SoftwareManagement):
         self.wait_until_installed()
 
     def validate(self):
-        self.assertThat("True == value",
-                        value=self.check_is_installed(self.image1_name))
-        self.assertThat("True == value",
-                        value=self.check_is_installed(self.image2_name))
-        self.assertThat("True == value",
-                        value=self.check_is_installed(self.image3_name))
+        self.assertThat(
+            "True == value", value=self.check_is_installed(self.image1_name)
+        )
+        self.assertThat(
+            "True == value", value=self.check_is_installed(self.image2_name)
+        )
+        self.assertThat(
+            "True == value", value=self.check_is_installed(self.image3_name)
+        )
 
     def docker_cleanup(self):
         cleanup_action = [
@@ -127,15 +133,18 @@ class SMDockerInstallRemove(SoftwareManagement):
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
 
-        self.assertThat("False == value",
-                        value=self.check_is_installed(self.image1_name))
-        self.assertThat("False == value",
-                        value=self.check_is_installed(self.image2_name))
-        self.assertThat("False == value",
-                        value=self.check_is_installed(self.image3_name))
+        self.assertThat(
+            "False == value", value=self.check_is_installed(self.image1_name)
+        )
+        self.assertThat(
+            "False == value", value=self.check_is_installed(self.image2_name)
+        )
+        self.assertThat(
+            "False == value", value=self.check_is_installed(self.image3_name)
+        )
 
     def wait_until_installed(self):
-        for i in range(1,10):
+        for i in range(1, 10):
             time.sleep(1)
             if self.check_is_installed(self.image1_name):
                 break

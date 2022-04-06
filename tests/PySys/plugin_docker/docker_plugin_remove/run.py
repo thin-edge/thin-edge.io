@@ -17,8 +17,7 @@ class DockerPluginRemoveTest(DockerPlugin):
     def setup(self):
         super().setup()
         # Assert that an image with the given name is not present on the machine before test
-        self.assert_image_present(
-            self.image_name, negate=True, abortOnError=True)
+        self.assert_image_present(self.image_name, negate=True, abortOnError=True)
 
         # Run a container with the test image that is to be removed during the test
         self.docker_run_with_cleanup(self.image_name)

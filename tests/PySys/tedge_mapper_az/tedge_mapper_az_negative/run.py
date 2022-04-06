@@ -16,6 +16,7 @@ Then we stop the tedge-mapper-az systemctl service
 
 """
 
+
 class TedgeMapperAzError(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
@@ -45,8 +46,7 @@ class TedgeMapperAzError(BaseTest):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", "{"],
+            arguments=[self.tedge, "mqtt", "pub", "tedge/measurements", "{"],
             stdouterr="tedge_temp",
         )
 
@@ -59,7 +59,7 @@ class TedgeMapperAzError(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep('tedge_sub.out', "Invalid JSON", contains=True)
+        self.assertGrep("tedge_sub.out", "Invalid JSON", contains=True)
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")

@@ -16,7 +16,7 @@ Then these packages are installed/removed together
 
 class AptPluginUpdateList(AptPlugin):
 
-    update_list = 'update-list'
+    update_list = "update-list"
 
     package1_name = "rolldice"
     package2_name = "asciijump"
@@ -48,12 +48,13 @@ class AptPluginUpdateList(AptPlugin):
         # TODO The version field is not accepted
         # ERROR: CSV error: record 1 (line: 2, byte: 27): found record with 2 fields, but the previous record has 3 fields
         # TODO Trailing tabs added
-        #install	rolldice	1.16-1+b3
-        input_list_path = f'{self.input}/update_list_input'
+        # install	rolldice	1.16-1+b3
+        input_list_path = f"{self.input}/update_list_input"
 
         # Execute the update-list command with the update instructions passed to its stdin from a file
         os.system(
-            f'{self.sudo} {self.apt_plugin} {self.update_list} < {input_list_path }')
+            f"{self.sudo} {self.apt_plugin} {self.update_list} < {input_list_path }"
+        )
 
     def validate(self):
         self.assert_isinstalled(self.package1_name, True)

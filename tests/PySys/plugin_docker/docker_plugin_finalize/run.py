@@ -10,8 +10,7 @@ class DockerPluginFinalizeTest(DockerPlugin):
     def setup(self):
         super().setup()
         # Validate that an image with the given name is not present on the machine before test
-        self.assert_image_present(
-            self.image_name, negate=True, abortOnError=True)
+        self.assert_image_present(self.image_name, negate=True, abortOnError=True)
 
         # Pull the test image that will be used for the test
         self.docker_pull_with_cleanup(self.image_name)

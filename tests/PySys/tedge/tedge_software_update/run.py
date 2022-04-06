@@ -12,7 +12,7 @@ Then we find the string of the new location in the output of tedge config
 
 TEDGE_DOWNLOAD_DIR = "/tedge_download_dir"
 TEDGE_DOWNLOAD_PATH = "tmp.path"
-TOPIC = 'tedge/commands/req/software/update'
+TOPIC = "tedge/commands/req/software/update"
 PAYLOAD = '{"id":"1234","updateList":[{"type":"apt","modules":[{"name":"rolldice","version":"::apt","url":"%s/inventory/binaries/11643549","action":"install"}]}]}'
 
 
@@ -61,14 +61,14 @@ class PySysTest(EnvironmentC8y):
         _ = self.startProcess(
             command=self.sudo,
             arguments=["mkdir", "-p", TEDGE_DOWNLOAD_DIR],
-            stdouterr="mkdir"
+            stdouterr="mkdir",
         )
 
         # give full permission to `TEDGE_DOWNLOAD_DIR`
         _ = self.startProcess(
             command=self.sudo,
             arguments=["chmod", "a+rwx", TEDGE_DOWNLOAD_DIR],
-            stdouterr="chmod"
+            stdouterr="chmod",
         )
 
         # 1. save the current/pre-change setting in /Output
@@ -84,16 +84,20 @@ class PySysTest(EnvironmentC8y):
         # 4. trigger rolldice download
         _ = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD%self.project.c8yurl ],
+            arguments=[self.tedge, "mqtt", "pub", TOPIC, PAYLOAD % self.project.c8yurl],
             stdouterr="rolldice_download",
             expectedExitStatus="==0",
         )
 
     def validate(self):
-        self.assertGrep("tedge_config_get_new_value.out", f'{TEDGE_DOWNLOAD_DIR}', contains=True)
+        self.assertGrep(
+            "tedge_config_get_new_value.out", f"{TEDGE_DOWNLOAD_DIR}", contains=True
+        )
 
     def mycleanup(self):
-        with open(os.path.join(self.output, "tedge_config_get_original.out"), "r") as handle:
+        with open(
+            os.path.join(self.output, "tedge_config_get_original.out"), "r"
+        ) as handle:
             original_value = handle.read().strip()
 
         # reverting to original value
@@ -103,12 +107,13 @@ class PySysTest(EnvironmentC8y):
         self.tedge_get_config(filename="tedge_config_get_cleanup")
 
         # asserting it is the same as `original_value`
-        self.assertGrep("tedge_config_get_cleanup.out", f'{original_value}', contains=True)
+        self.assertGrep(
+            "tedge_config_get_cleanup.out", f"{original_value}", contains=True
+        )
 
         # removing tedge dir
         _ = self.startProcess(
             command=self.sudo,
             arguments=["rmdir", TEDGE_DOWNLOAD_DIR],
-            stdouterr="rmdir"
+            stdouterr="rmdir",
         )
-

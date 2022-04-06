@@ -57,14 +57,17 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
         # validate tedge mqtt pub/sub
         self.validate_tedge_mqtt()
         # validate c8y connection
-        self.assertGrep("tedge_connect_c8y_test.out",
-                        "connection check is successful", contains=True)
+        self.assertGrep(
+            "tedge_connect_c8y_test.out",
+            "connection check is successful",
+            contains=True,
+        )
         # validate c8y mapper
         self.validate_tedge_mapper_c8y()
 
         # validate collectd mapper
         self.validate_collectd_mapper()
-        
+
         # validate tedge agent
         self.validate_tedge_agent()
 
@@ -72,8 +75,13 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
         # publish a message
         mqtt_pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", "{ \"temperature\": 25 }"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "tedge/measurements",
+                '{ "temperature": 25 }',
+            ],
             stdouterr="mqtt_pub",
         )
 
@@ -87,12 +95,11 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
             stdouterr="kill_out",
         )
 
-        self.assertGrep(
-            "mqtt_sub.out", "{ \"temperature\": 25 }", contains=True)
+        self.assertGrep("mqtt_sub.out", '{ "temperature": 25 }', contains=True)
 
     def check_if_sub_logged(self):
-        fout = Path(self.output + '/mqtt_sub.out')
-        ferr = Path(self.output + '/mqtt_sub.err')
+        fout = Path(self.output + "/mqtt_sub.out")
+        ferr = Path(self.output + "/mqtt_sub.err")
         n = 0
         while n < 10:
             if fout.is_file() or ferr.is_file():
@@ -100,8 +107,8 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
             else:
                 time.sleep(1)
                 n += 1
-        self.assertFalse(True, abortOnError=True, assertMessage=None)        
-        
+        self.assertFalse(True, abortOnError=True, assertMessage=None)
+
     def validate_tedge_mapper_c8y(self):
         # check the status of the c8y mapper
         c8y_mapper_status = self.startProcess(
@@ -110,8 +117,11 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
             stdouterr="c8y_mapper_status",
         )
 
-        self.assertGrep("c8y_mapper_status.out",
-                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+        self.assertGrep(
+            "c8y_mapper_status.out",
+            " MQTT connection error: I/O: Connection refused (os error 111)",
+            contains=False,
+        )
 
     def validate_collectd_mapper(self):
         # restart the collectd mapper to use recently set port
@@ -128,8 +138,11 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
             stdouterr="collectd_mapper_status",
         )
 
-        self.assertGrep("collectd_mapper_status.out",
-                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+        self.assertGrep(
+            "collectd_mapper_status.out",
+            " MQTT connection error: I/O: Connection refused (os error 111)",
+            contains=False,
+        )
 
     def validate_tedge_agent(self):
         # restart the tedge-agent to use recently set port
@@ -146,8 +159,11 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
             stdouterr="tedge_agent_status",
         )
 
-        self.assertGrep("tedge_agent_status.out",
-                        " MQTT connection error: I/O: Connection refused (os error 111)", contains=False)
+        self.assertGrep(
+            "tedge_agent_status.out",
+            " MQTT connection error: I/O: Connection refused (os error 111)",
+            contains=False,
+        )
 
     def mqtt_cleanup(self):
 

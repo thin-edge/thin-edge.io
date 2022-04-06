@@ -42,4 +42,6 @@ class RuntimeMultiMappers(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("tedge_mapper2.err", "Error: Couldn't acquire file lock.", contains=True)
+        self.assertGrep(
+            "tedge_mapper2.err", "Error: Couldn't acquire file lock.", contains=True
+        )

@@ -21,4 +21,3 @@ class TedgeConnectTestNegative(TedgeEnvironment):
         self.log.info("Validate")
         fail = "Error: failed to test connection to Cumulocity cloud."
         self.assertGrep("tedge_connect_c8y_test.err", fail, contains=True)
-

@@ -65,8 +65,11 @@ class CustomInitSystem(BaseTest):
         self.assertGrep("tedge_connect.out", "Error", contains=False)
         self.assertGrep("tedge_disconnect.out", "Error", contains=False)
         self.assertGrep(self.dummy_init_output, "Error", contains=False)
-        self.assertGrep(self.dummy_init_output,
-                        "The system config file '/etc/tedge/system.toml' doesn't exist.", contains=False)
+        self.assertGrep(
+            self.dummy_init_output,
+            "The system config file '/etc/tedge/system.toml' doesn't exist.",
+            contains=False,
+        )
 
         expected_output = [
             "is_available",

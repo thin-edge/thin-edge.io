@@ -19,6 +19,7 @@ Then we unset az.mapper.timestamp
 
 """
 
+
 class TedgeMapperAzWithoutTimestamp(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
@@ -54,8 +55,13 @@ class TedgeMapperAzWithoutTimestamp(BaseTest):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", '{"temperature": 12}'],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "tedge/measurements",
+                '{"temperature": 12}',
+            ],
             stdouterr="tedge_temp",
         )
 
@@ -68,11 +74,13 @@ class TedgeMapperAzWithoutTimestamp(BaseTest):
         )
 
     def validate(self):
-        f = open(self.output + '/tedge_sub.out', 'r')
+        f = open(self.output + "/tedge_sub.out", "r")
         thin_edge_json = json.load(f)
 
-        self.assertThat('actual == expected', actual = thin_edge_json['temperature'], expected = 12)
-        self.assertGrep('tedge_sub.out', "time", contains=False)
+        self.assertThat(
+            "actual == expected", actual=thin_edge_json["temperature"], expected=12
+        )
+        self.assertGrep("tedge_sub.out", "time", contains=False)
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")
