@@ -15,3 +15,4 @@
 13. [How to access the logs on the device?](./014_thin_edge_logs.md)
 14. [How to install thin-edge.io on any Linux OS (no deb support)?](./015_installation_without_deb_support.md)
 16. [How to manage apama software artefatcs with apama plugin?](./017_apama_software_management_plugin.md)
+17. [How to enable watchdog using systemd?](./021_enable_tedge_watchdog_using_systemd.md)
