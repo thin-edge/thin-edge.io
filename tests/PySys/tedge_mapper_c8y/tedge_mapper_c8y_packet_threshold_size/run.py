@@ -68,7 +68,13 @@ class TedgeMapperC8yThresholdPacketSize(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep('tedge_sub.out', "The input size 20489 is too big. The threshold is 16384.", contains=True)
+        self.assertGrep(
+            "tedge_sub.out",
+            "The size of the message received on tedge/measurements is 20489 "
+            # Note: 2**16 would bei 18384 but the C8y limit is a bit smaller
+            + "which is greater than the threshold size of 16184.",
+            contains=True,
+        )
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")
