@@ -160,7 +160,8 @@ def main(runners, repo, workflow, download_reports=True):
     if download_reports:
         shutil.rmtree("report", ignore_errors=True)
         os.mkdir("report")
-        os.chdir("report")
+
+    os.chdir("report")
 
     if download_reports:
         download_results("abelikt", "commit-workflow-allinone.yml")

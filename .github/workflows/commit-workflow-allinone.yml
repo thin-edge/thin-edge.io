@@ -1259,34 +1259,55 @@ jobs:
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_mythica
-        path: results_pysys_offsite_mythica
+        path: results/results_pysys_offsite_mythica
 
     - name: download result b
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_mythicb
-        path: results_pysys_offsite_mythicb
+        path: results/results_pysys_offsite_mythicb
 
     - name: download result c
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_mythicc
-        path: results_pysys_offsite_mythicc
+        path: results/results_pysys_offsite_mythicc
 
     - name: download result d
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_mythicd
-        path: results_pysys_offsite_mythicd
+        path: results/results_pysys_offsite_mythicd
 
     - name: ls
-      # dummy
       run: ls -lah
-
 
     - name: Build report
       run: ./ci/report/build.sh
 
+    - name: upload report as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: report_matrix_${{ github.run_number }}
+        path: ci/report/report/report.zip
+
+    - name: upload report as html
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: system-test-report-matrix_${{ github.run_number }}
+        path: ci/report/report/report-matrix.html
+
+    - run: |
+        ls -l ./ci/report
+
+#    - name: Deploy
+#      # peaceiris/actions-gh-pages@v3
+#      uses: peaceiris/actions-gh-pages@v3
+#      with:
+#        github_token: ${{ secrets.GITHUB_TOKEN }}
+#        publish_dir: ./ci/report
