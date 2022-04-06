@@ -46,7 +46,7 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
         time.sleep(int(self.timeslot))
 
         sub = self.startPython(
-            environs={"C8YPASS":self.project.c8ypass},
+            environs={"C8YPASS": self.project.c8ypass},
             arguments=[
                 self.cmd,
                 "-m",
@@ -79,4 +79,3 @@ class Environment_roundtrip_c8y(EnvironmentC8y):
 
     def myenvroundtripcleanup(self):
         self.log.debug("C8y Roundtrip MyCleanup")
-

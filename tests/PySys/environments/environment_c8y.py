@@ -15,6 +15,7 @@ from environment_tedge import TedgeEnvironment
 Environment to manage automated connects and disconnects to c8y
 """
 
+
 class EnvironmentC8y(TedgeEnvironment):
     """
     Pysys Environment to manage automated connect and disconnect to c8y
@@ -31,19 +32,28 @@ class EnvironmentC8y(TedgeEnvironment):
         super().setup()
         if self.project.c8yurl == "":
             self.abort(
-                FAILED, "Cumulocity tenant URL is not set. Set with the env variable C8YURL")
+                FAILED,
+                "Cumulocity tenant URL is not set. Set with the env variable C8YURL",
+            )
         if self.project.tenant == "":
             self.abort(
-                FAILED, "Cumulocity tenant ID is not set. Set with the env variable C8YTENANT")
+                FAILED,
+                "Cumulocity tenant ID is not set. Set with the env variable C8YTENANT",
+            )
         if self.project.c8yusername == "":
             self.abort(
-                FAILED, "Cumulocity tenant username is not set. Set with the env variable C8YUSERNAME")
+                FAILED,
+                "Cumulocity tenant username is not set. Set with the env variable C8YUSERNAME",
+            )
         if self.project.c8ypass == "":
             self.abort(
-                FAILED, "Cumulocity tenant password is not set. Set with the env variable C8YPASS")
+                FAILED,
+                "Cumulocity tenant password is not set. Set with the env variable C8YPASS",
+            )
         if self.project.deviceid == "":
             self.abort(
-                FAILED, "Device ID is not set. Set with the env variable C8YDEVICEID")
+                FAILED, "Device ID is not set. Set with the env variable C8YDEVICEID"
+            )
 
         self.log.info("EnvironmentC8y Setup")
         self.addCleanupFunction(self.myenvcleanup)
@@ -77,7 +87,12 @@ class EnvironmentC8y(TedgeEnvironment):
         )
 
         self.cumulocity = Cumulocity(
-            self.project.c8yurl, self.project.tenant, self.project.c8yusername, self.project.c8ypass, self.log)
+            self.project.c8yurl,
+            self.project.tenant,
+            self.project.c8yusername,
+            self.project.c8ypass,
+            self.log,
+        )
 
     def execute(self):
         self.log.debug("EnvironmentC8y Execute")
@@ -112,4 +127,3 @@ class EnvironmentC8y(TedgeEnvironment):
             stdouterr="serv_mapper5",
             expectedExitStatus="==3",
         )
-

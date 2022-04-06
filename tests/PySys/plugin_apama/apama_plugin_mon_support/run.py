@@ -10,7 +10,6 @@ This project installs and removes this mon file into the apama correlator using 
 
 
 class ApamaPluginMonSupportTest(ApamaPlugin):
-
     def setup(self):
         super().setup()
         # Assert that an apama project is not installed on the machine before test
@@ -28,53 +27,65 @@ class ApamaPluginMonSupportTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "list"],
-            stdouterr="plugin_list_before_install"
+            stdouterr="plugin_list_before_install",
         )
 
         self.startProcess(
             command=self.sudo,
-            arguments=[self.apama_plugin, "install",
-                       "TedgeTestMonitor::mon", "--file", self.project.apama_input_dir + "/TedgeTestMonitor.mon"],
-            stdouterr="plugin_install"
-        )
-        self.wait_till_correlator_ready()
-
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.apama_plugin, "list"],
-            stdouterr="plugin_list_after_install"
-        )
-
-        self.startProcess(
-            command=self.sudo,
-            arguments=[self.apama_plugin, "install",
-                       "TedgeTestMonitor::mon", "--file", self.project.apama_input_dir + "/TedgeTestMonitorV2.mon"],
-            stdouterr="plugin_update"
+            arguments=[
+                self.apama_plugin,
+                "install",
+                "TedgeTestMonitor::mon",
+                "--file",
+                self.project.apama_input_dir + "/TedgeTestMonitor.mon",
+            ],
+            stdouterr="plugin_install",
         )
         self.wait_till_correlator_ready()
 
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "list"],
-            stdouterr="plugin_list_after_update"
+            stdouterr="plugin_list_after_install",
+        )
+
+        self.startProcess(
+            command=self.sudo,
+            arguments=[
+                self.apama_plugin,
+                "install",
+                "TedgeTestMonitor::mon",
+                "--file",
+                self.project.apama_input_dir + "/TedgeTestMonitorV2.mon",
+            ],
+            stdouterr="plugin_update",
+        )
+        self.wait_till_correlator_ready()
+
+        self.startProcess(
+            command=self.sudo,
+            arguments=[self.apama_plugin, "list"],
+            stdouterr="plugin_list_after_update",
         )
 
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "remove", "TedgeTestMonitor::mon"],
-            stdouterr="plugin_remove"
+            stdouterr="plugin_remove",
         )
 
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "list"],
-            stdouterr="plugin_list_after_remove"
+            stdouterr="plugin_list_after_remove",
         )
 
     def validate(self):
-        self.assertGrep("plugin_list_before_install.out",
-                        "TedgeTestMonitor", contains=False)
+        self.assertGrep(
+            "plugin_list_before_install.out", "TedgeTestMonitor", contains=False
+        )
         self.assertGrep("plugin_list_after_install.out", "TedgeTestMonitor")
         self.assertGrep("plugin_list_after_update.out", "TedgeTestMonitor")
-        self.assertGrep("plugin_list_after_remove.out",
-                        "TedgeTestMonitor", contains=False)
+        self.assertGrep(
+            "plugin_list_after_remove.out", "TedgeTestMonitor", contains=False
+        )

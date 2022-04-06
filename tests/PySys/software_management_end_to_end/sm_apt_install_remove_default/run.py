@@ -28,17 +28,13 @@ class PySysTest(SoftwareManagement):
 
     def execute(self):
 
-        self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), " ", "", "install"
-        )
+        self.trigger_action("rolldice", self.get_pkgid("rolldice"), " ", "", "install")
 
         self.wait_until_succcess()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
-        self.trigger_action(
-            "rolldice", self.get_pkgid("rolldice"), " ", "", "delete"
-        )
+        self.trigger_action("rolldice", self.get_pkgid("rolldice"), " ", "", "delete")
 
         self.wait_until_succcess()
 

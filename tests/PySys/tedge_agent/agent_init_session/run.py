@@ -15,6 +15,7 @@ Then stop the agent and the subscriber
 Then validate the output of the subscriber for response
 """
 
+
 class AgentInitSession(BaseTest):
     def setup(self):
         self.sudo = "/usr/bin/sudo"
@@ -25,8 +26,8 @@ class AgentInitSession(BaseTest):
         remove_lock = self.startProcess(
             command=self.sudo,
             arguments=["rm", "-rf", "/var/lock/tedge_agent.lock"],
-            stdouterr="remove_lock",           
-        )    
+            stdouterr="remove_lock",
+        )
 
     def execute(self):
         agent_clear = self.startProcess(
@@ -38,28 +39,36 @@ class AgentInitSession(BaseTest):
         agent_init = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge_agent, "--init"],
-            stdouterr="agent_init",           
+            stdouterr="agent_init",
         )
 
         pub_req = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--qos", "1", "tedge/commands/req/software/list", "{\"id\":\"Ld3KgqpcLDlrYH6sfpG7w\"}"],
-            stdouterr="pub_req",          
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "--qos",
+                "1",
+                "tedge/commands/req/software/list",
+                '{"id":"Ld3KgqpcLDlrYH6sfpG7w"}',
+            ],
+            stdouterr="pub_req",
         )
 
         sub_resp = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "sub", "tedge/commands/res/software/list"],
             stdouterr="sub_resp",
-            background=True,        
+            background=True,
         )
 
         agent_start = self.startProcess(
             command=self.sudo,
             arguments=[self.systemctl, "start", "tedge-agent"],
-            stdouterr="agent_start",           
+            stdouterr="agent_start",
         )
-       
+
         self.wait(2)
 
         agent_stop = self.startProcess(
@@ -76,4 +85,3 @@ class AgentInitSession(BaseTest):
 
     def validate(self):
         self.assertGrep("sub_resp.out", "Ld3KgqpcLDlrYH6sfpG7w", contains=True)
-        

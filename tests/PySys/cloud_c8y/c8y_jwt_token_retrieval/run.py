@@ -37,16 +37,16 @@ class ValidateJWTTokenRetrieval(TedgeEnvironment):
             stdouterr="resp_jwt",
             background=True,
         )
-      
+
         # Publish an empty message on jwt token request topic
         req_jwt_token = self.startProcess(
             command=self.sudo,
             arguments=[self.tedge, "mqtt", "pub", "c8y/s/uat", "''"],
-            stdouterr="req_jwt",            
+            stdouterr="req_jwt",
         )
-        
+
         time.sleep(1)
-        
+
         # Kill the subscriber process explicitly with sudo as PySys does
         # not have the rights to do it
         kill = self.startProcess(
@@ -62,4 +62,3 @@ class ValidateJWTTokenRetrieval(TedgeEnvironment):
     def jwt_token_cleanup(self):
         # disconnect the test
         self.tedge_disconnect_c8y()
-

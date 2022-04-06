@@ -27,7 +27,6 @@ from environment_sm_management import SoftwareManagement
 
 
 class PySysTest(SoftwareManagement):
-
     def get_packages_with_action(self, act):
         "create an action that we can use later"
 
@@ -61,8 +60,10 @@ class PySysTest(SoftwareManagement):
     def setup(self):
 
         if self.fakeplugin != "fakeplugin":
-            self.skipTest("Testing the fake plugin is not enabled."+\
-                    "Use parameter -Xfakeplugin=fakeplugin to enable it")
+            self.skipTest(
+                "Testing the fake plugin is not enabled."
+                + "Use parameter -Xfakeplugin=fakeplugin to enable it"
+            )
 
         super().setup()
 

@@ -34,7 +34,13 @@ class TedgeMapperC8y(BaseTest):
     def execute(self):
         sub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "c8y/measurement/measurements/create"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "sub",
+                "--no-topic",
+                "c8y/measurement/measurements/create",
+            ],
             stdouterr="tedge_sub",
             background=True,
         )
@@ -47,8 +53,13 @@ class TedgeMapperC8y(BaseTest):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", '{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}'],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "tedge/measurements",
+                '{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}',
+            ],
             stdouterr="tedge_temp",
         )
 
@@ -61,12 +72,24 @@ class TedgeMapperC8y(BaseTest):
         )
 
     def validate(self):
-        f = open(self.output + '/tedge_sub.out', 'r')
+        f = open(self.output + "/tedge_sub.out", "r")
         c8y_json = json.load(f)
 
-        self.assertThat('actual == expected', actual = c8y_json['type'], expected = 'ThinEdgeMeasurement')
-        self.assertThat('actual == expected', actual = c8y_json['temperature']['temperature']['value'], expected = 12)
-        self.assertThat('actual == expected', actual = c8y_json['time'], expected = '2021-06-15T17:01:15.806181503+02:00')
+        self.assertThat(
+            "actual == expected",
+            actual=c8y_json["type"],
+            expected="ThinEdgeMeasurement",
+        )
+        self.assertThat(
+            "actual == expected",
+            actual=c8y_json["temperature"]["temperature"]["value"],
+            expected=12,
+        )
+        self.assertThat(
+            "actual == expected",
+            actual=c8y_json["time"],
+            expected="2021-06-15T17:01:15.806181503+02:00",
+        )
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")

@@ -19,15 +19,14 @@ class PySysTest(BaseTest):
     def execute(self):
         tedge = "/usr/bin/tedge"
         sudo = "/usr/bin/sudo"
-        environ = { 'HOME':os.environ.get('HOME')}
+        environ = {"HOME": os.environ.get("HOME")}
 
         sub1 = self.startProcess(
             command=tedge,
             arguments=["mqtt", "sub", "atopic"],
             stdouterr="tedge_sub",
             background=True,
-            environs=environ
-
+            environs=environ,
         )
 
         sub2 = self.startProcess(
@@ -35,7 +34,7 @@ class PySysTest(BaseTest):
             arguments=["mqtt", "sub", "--no-topic", "atopic"],
             stdouterr="tedge_sub_no_topic",
             background=True,
-            environs=environ
+            environs=environ,
         )
 
         # Wait for a small amount of time to give tedge sub time
@@ -48,14 +47,14 @@ class PySysTest(BaseTest):
             command=tedge,
             arguments=["mqtt", "pub", "atopic", "amessage"],
             stdouterr="tedge_pub2",
-            environs=environ
+            environs=environ,
         )
 
         pub = self.startProcess(
             command=tedge,
             arguments=["mqtt", "pub", "atopic", "the message"],
             stdouterr="tedge_pub3",
-            environs=environ
+            environs=environ,
         )
 
         # Kill the subscriber process explicitly with sudo as PySys does

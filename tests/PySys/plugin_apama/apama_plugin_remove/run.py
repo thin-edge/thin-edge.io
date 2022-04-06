@@ -10,7 +10,6 @@ This project deploys a mon file named "TedgeDemoMonitor" into the apama correlat
 
 
 class ApamaPluginRemoveTest(ApamaPlugin):
-
     def setup(self):
         super().setup()
         # Assert that an apama project is not installed on the machine before test
@@ -25,7 +24,7 @@ class ApamaPluginRemoveTest(ApamaPlugin):
         self.startProcess(
             command=self.sudo,
             arguments=[self.apama_plugin, "remove", "QuickStart::project"],
-            stdouterr="plugin_remove"
+            stdouterr="plugin_remove",
         )
 
     def validate(self):

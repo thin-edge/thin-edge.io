@@ -58,7 +58,15 @@ class TedgeSMMapperInitSession(EnvironmentC8y):
 
         pub_req = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "--qos", "1", "c8y/s/us", "118,software-management"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "--qos",
+                "1",
+                "c8y/s/us",
+                "118,software-management",
+            ],
             stdouterr="pub_req",
         )
 
