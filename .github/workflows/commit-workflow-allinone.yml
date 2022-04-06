@@ -1288,5 +1288,5 @@ jobs:
 
 
     - name: Build report
-      run: .ci/report/build.sh
+      run: ./ci/report/build.sh
 
