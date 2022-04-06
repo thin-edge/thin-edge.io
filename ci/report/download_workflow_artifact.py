@@ -138,7 +138,7 @@ def get_workflow(token: str, user: str, name: str) -> int:
     return wfid
 
 
-def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
+def get_valid_run(wfid: int, token: str, user: str, state: str, ignore: bool) -> int:
     """Download the last valid run of workflow that is in requested state"""
 
     index = 0  # Hint: 0 and 1 seem to have an identical meaning when we request
@@ -185,7 +185,7 @@ def get_valid_run(wfid: int, token: str, user: str, state: str) -> int:
         with open(filename, "w") as thefile:
             thefile.write(json.dumps(response, indent="  "))
 
-        if state == conclusion:
+        if (state == conclusion) or ignore:
             found = True
         else:
             print(f"Workflow conclusion was {conclusion}. Trying an older one ...")
@@ -204,12 +204,16 @@ def main():
         "--filter", type=str, help="Download only files starting with ..."
     )
     parser.add_argument("-o", "--output", type=str, help="File to store the result to.")
+    parser.add_argument(
+        "-i", "--ignore", action="store_true", help="Ignore run conclusion"
+    )
     args = parser.parse_args()
 
     username = args.username
     workflowname = os.path.basename(args.workflowname)
     myfilter = args.filter
     output = args.output
+    ignore = args.ignore
 
     token = None
 
@@ -220,7 +224,7 @@ def main():
 
     wfid = get_workflow(token, username, workflowname)
 
-    runid = get_valid_run(wfid, token, username, "success")
+    runid = get_valid_run(wfid, token, username, "success", ignore)
 
     get_artifacts_for_runid(runid, token, username, myfilter, workflowname, output)
 
