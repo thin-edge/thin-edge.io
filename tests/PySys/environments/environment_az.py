@@ -26,9 +26,8 @@ class EnvironmentAz(BaseTest):
             command=self.systemctl,
             arguments=["status", self.tedge_mapper_az],
             stdouterr="serv_mapper1",
-            expectedExitStatus="==3", # 3: disabled
+            expectedExitStatus="==3",  # 3: disabled
         )
-
 
         # Connect the bridge
         connect = self.startProcess(

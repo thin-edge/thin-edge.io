@@ -13,12 +13,13 @@ Then we expect an error code
 Then we restart mosquitto
 """
 
+
 class PySysTest(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
-        self.environ = { 'HOME':os.environ.get('HOME')}
+        self.environ = {"HOME": os.environ.get("HOME")}
 
         self.startProcess(
             command=self.sudo,
@@ -35,7 +36,7 @@ class PySysTest(BaseTest):
             arguments=["mqtt", "sub", "atopic"],
             stdouterr="tedge_sub_fail",
             expectedExitStatus="==1",
-            environs=self.environ
+            environs=self.environ,
         )
 
         # validate exit status with the expected status from calling startProcess
@@ -47,4 +48,3 @@ class PySysTest(BaseTest):
             arguments=[self.systemctl, "start", "mosquitto"],
             stdouterr="start",
         )
-

@@ -30,9 +30,13 @@ class TedgeConnectTestSMServices(EnvironmentC8y):
         # Validate if the Software management services are getting started and enabled properly on "tedge disconnect c8y"
         # EnvironmentC8y captures the log messages in tedge_connect.out
         self.assertGrep(
-            "tedge_connect_c8y.out", "tedge-agent service successfully started and enabled!", contains=True
+            "tedge_connect_c8y.out",
+            "tedge-agent service successfully started and enabled!",
+            contains=True,
         )
 
         self.assertGrep(
-            "tedge_connect_c8y.out", "tedge-mapper-c8y service successfully started and enabled!", contains=True
+            "tedge_connect_c8y.out",
+            "tedge-mapper-c8y service successfully started and enabled!",
+            contains=True,
         )

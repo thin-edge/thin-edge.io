@@ -19,7 +19,6 @@ from environment_sm_management import SoftwareManagement
 
 
 class PySysTest(SoftwareManagement):
-
     def get_packages_with_action(self, act):
         "create an action that we can use later"
 

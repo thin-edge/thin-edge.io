@@ -8,9 +8,8 @@ from pysys.constants import FAILED
 Just fail
 """
 
-class Fail(BaseTest):
 
+class Fail(BaseTest):
     def execute(self):
         self.log.error("I will fail")
         self.addOutcome(FAILED)
-

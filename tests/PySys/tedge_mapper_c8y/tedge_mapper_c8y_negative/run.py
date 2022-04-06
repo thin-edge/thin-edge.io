@@ -49,8 +49,7 @@ class TedgeMapperC8y(EnvironmentC8y):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", "{"],
+            arguments=[self.tedge, "mqtt", "pub", "tedge/measurements", "{"],
             stdouterr="tedge_temp",
         )
 
@@ -63,7 +62,7 @@ class TedgeMapperC8y(EnvironmentC8y):
         )
 
     def validate(self):
-        self.assertGrep('tedge_sub.out', "Invalid JSON", contains=True)
+        self.assertGrep("tedge_sub.out", "Invalid JSON", contains=True)
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")

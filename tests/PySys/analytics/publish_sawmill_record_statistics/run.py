@@ -64,7 +64,7 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
         # These are mostly placeholder validations to make sure
         # that the file is there and is at least not empty
-        self.assertGrep('mosquitto_sub_stdout.out', 'mosquitto', contains=True)
+        self.assertGrep("mosquitto_sub_stdout.out", "mosquitto", contains=True)
 
     def mycleanup(self):
 
@@ -78,28 +78,28 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
 
         node = platform.node()
 
-        path = Path(f'/var/lib/collectd/rrd/{node}.local/exec/')
+        path = Path(f"/var/lib/collectd/rrd/{node}.local/exec/")
         if not path.exists():
             # the hosted rpis don't have the ".local" so we need a workaround here
-            path = Path(f'/var/lib/collectd/rrd/{node}/exec/')
+            path = Path(f"/var/lib/collectd/rrd/{node}/exec/")
             if not path.exists():
                 raise SystemError("Cannot find place for collectd measurements")
 
         for a_file in path.iterdir():
 
             filename = str(a_file.resolve())
-            self.log.info("Exporting data from %s"%filename)
+            self.log.info("Exporting data from %s" % filename)
             result = rrdtool.fetch(filename, "LAST")
             start, end, step = result[0]
 
             rows = result[2]
-            values=rows[-60:]
-            assert step==1
-            counter = end-60
+            values = rows[-60:]
+            assert step == 1
+            counter = end - 60
 
-            with open( os.path.join(self.output, a_file.name+".txt"),"w") as myfile:
+            with open(os.path.join(self.output, a_file.name + ".txt"), "w") as myfile:
                 for i in values:
-                    myfile.write( f"{counter} {i[0]}\n")
+                    myfile.write(f"{counter} {i[0]}\n")
                     counter += step
 
             assert counter == end

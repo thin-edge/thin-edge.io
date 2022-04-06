@@ -12,6 +12,7 @@ When listed config using `tedge config list` the newly set port should be there.
 
 """
 
+
 class MqttPortSet(TedgeEnvironment):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
@@ -34,8 +35,7 @@ class MqttPortSet(TedgeEnvironment):
             stdouterr="tedge_get",
         )
 
-        self.assertGrep(
-            "tedge_get.out", "mqtt.port=8880", contains=True)
+        self.assertGrep("tedge_get.out", "mqtt.port=8880", contains=True)
         self.assertGrep("/etc/tedge/tedge.toml", "port = 8880", contains=True)
 
     def mqtt_cleanup(self):

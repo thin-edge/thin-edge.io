@@ -34,7 +34,7 @@ def generate_sas_token(uri, key, policy_name, expiry=3600):
     skey = "%s\n%d" % ((newuri), ttlive)
     code = hmac.HMAC(
         base64.b64decode(key), skey.encode("utf-8"), hashlib.sha256
-        ).digest()
+    ).digest()
     sign = base64.b64encode(code)
     token = {"sr": uri, "sig": sign, "se": str(ttlive)}
     if policy_name is not None:

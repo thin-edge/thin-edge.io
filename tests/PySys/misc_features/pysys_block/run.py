@@ -8,9 +8,8 @@ from pysys.constants import BLOCKED
 Just fail
 """
 
-class Fail(BaseTest):
 
+class Fail(BaseTest):
     def execute(self):
         self.log.error("I will block")
         self.addOutcome(BLOCKED)
-

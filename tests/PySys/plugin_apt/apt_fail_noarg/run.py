@@ -12,7 +12,6 @@ Then we expect an error code from the plugin
 
 
 class AptPluginFailNoArg(AptPlugin):
-
     def setup(self):
         super().setup()
 
@@ -33,4 +32,4 @@ class AptPluginFailNoArg(AptPlugin):
         self.plugin_cmd("finalize", "outp_install", 1, "nonsense", "nonsense")
 
         # self.skipTest('MyFeature is not supported on Windows')
-        #logging.info('')
+        # logging.info('')

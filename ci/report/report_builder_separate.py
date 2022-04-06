@@ -198,7 +198,6 @@ def postprocess(runners):
 
     print("Files:  ", files)
 
-
     # Print summary matrix
 
     cmd = f"junit2html --summary-matrix {files}"
@@ -240,7 +239,7 @@ def main(runners, download_reports=True):
 
 if __name__ == "__main__":
 
-    download_reports=True
+    download_reports = True
     if download_reports:
         os.rmdir("report")
         os.mkdir("report")

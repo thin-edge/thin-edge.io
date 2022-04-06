@@ -52,12 +52,20 @@ class MapperReconnectAwait(EnvironmentC8y):
 
     def validate(self):
         dt = datetime.now()
-        dt_end = dt.strftime('%Y-%m-%d %H:%M:%S')
-        dt_start = (dt - timedelta(seconds=5)).strftime('%Y-%m-%d %H:%M:%S')
+        dt_end = dt.strftime("%Y-%m-%d %H:%M:%S")
+        dt_start = (dt - timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
 
         journal = self.startProcess(
             command=self.sudo,
-            arguments=["journalctl", "-u", "tedge-mapper-c8y.service", "--since", dt_start, "--until", dt_end],
+            arguments=[
+                "journalctl",
+                "-u",
+                "tedge-mapper-c8y.service",
+                "--since",
+                dt_start,
+                "--until",
+                dt_end,
+            ],
             stdouterr="tedge_mapper_journal",
         )
 

@@ -21,7 +21,7 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     operation_id = None
- 
+
     def setup(self):
         super().setup()
         self.create_logs_for_test()
@@ -33,15 +33,15 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             "dateTo": "2021-11-21T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "",
-            "maximumLines": 300
+            "maximumLines": 300,
         }
 
         self.operation_id = self.cumulocity.trigger_log_request(
-            log_file_request_payload, self.project.deviceid)
+            log_file_request_payload, self.project.deviceid
+        )
 
     def validate(self):
-        self.assertThat("True == value",
-                        value=self.wait_until_logs_retrieved())
+        self.assertThat("True == value", value=self.wait_until_logs_retrieved())
 
     @retry(Exception, tries=20, delay=1)
     def wait_until_logs_retrieved(self):
@@ -52,7 +52,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             raise Exception("retry")
 
     def create_logs_for_test(self):
-         # remove if there are any old files
+        # remove if there are any old files
         rm_logs = self.startProcess(
             command=self.sudo,
             arguments=["rm", "-rf", "/tmp/sw_logs"],
@@ -61,7 +61,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
 
         # create example logs
         create_example_logs()
-        
+
         move_logs = self.startProcess(
             command=self.sudo,
             arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/"],
@@ -69,10 +69,11 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
         )
 
     def download_file_and_verify_number_of_lines(self, url):
-        get_response = requests.get(url, auth=(
-            self.project.c8yusername, self.project.c8ypass), stream=False)
+        get_response = requests.get(
+            url, auth=(self.project.c8yusername, self.project.c8ypass), stream=False
+        )
 
-        nlines = len(get_response.content.decode('utf-8').split('\n')[:-1])
+        nlines = len(get_response.content.decode("utf-8").split("\n")[:-1])
         self.log.info("nlines %s", nlines)
         # The log lines are concatenated from 3 different log files, so there will be 3 extra lines.
         if nlines == 303:
@@ -92,11 +93,16 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
             arguments=["rm", "-rf", "/tmp/sw_logs"],
             stdouterr="rm_tmp_logs",
         )
-        
+
         if self.getOutcome().isFailure():
             log = self.startProcess(
                 command=self.sudo,
-                arguments=[self.tedge, "mqtt", "pub",
-                           "c8y/s/us", "502,c8y_LogfileRequest"],
+                arguments=[
+                    self.tedge,
+                    "mqtt",
+                    "pub",
+                    "c8y/s/us",
+                    "502,c8y_LogfileRequest",
+                ],
                 stdouterr="send_failed",
             )

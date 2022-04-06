@@ -26,7 +26,6 @@ class MqttPortUnSet(BaseTest):
             stdouterr="mqtt_port_set",
         )
 
-
     def execute(self):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
@@ -42,6 +41,4 @@ class MqttPortUnSet(BaseTest):
             stdouterr="tedge_get",
         )
 
-        self.assertGrep(
-            "tedge_get.out", "mqtt.port=1883", contains=True)
-
+        self.assertGrep("tedge_get.out", "mqtt.port=1883", contains=True)

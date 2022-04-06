@@ -58,16 +58,26 @@ class MonitoringWithSimulatedMessages(BaseTest):
         timestamp = time.time()
         temp_pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "collectd/host/temperature/temp", f"{timestamp}:25.5"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "collectd/host/temperature/temp",
+                f"{timestamp}:25.5",
+            ],
             stdouterr="tedge_temp",
         )
 
         timestamp = time.time()
         pres_pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "collectd/host/pressure/pres", f"{timestamp}:500.5"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "collectd/host/pressure/pres",
+                f"{timestamp}:500.5",
+            ],
             stdouterr="tedge_pres",
         )
 
@@ -83,11 +93,14 @@ class MonitoringWithSimulatedMessages(BaseTest):
         )
 
     def validate(self):
-        self.assertThat('collectd_msg_validation_result == expected_result',
-                        collectd_msg_validation_result=self.validate_json(), expected_result=True)
+        self.assertThat(
+            "collectd_msg_validation_result == expected_result",
+            collectd_msg_validation_result=self.validate_json(),
+            expected_result=True,
+        )
 
     def validate_json(self):
-        f = open(self.output + '/tedge_sub.out', 'r')
+        f = open(self.output + "/tedge_sub.out", "r")
         lines = f.readlines()
         for line in lines:
             self.log.info(line)
@@ -97,13 +110,13 @@ class MonitoringWithSimulatedMessages(BaseTest):
                 self.abort(False, reason)
             if "temperature" in self.js_msg:
                 if not self.validate_temperature():
-                    reason = "temperature stat validation failed in message: " + \
-                        str(line)
+                    reason = "temperature stat validation failed in message: " + str(
+                        line
+                    )
                     self.abort(False, reason)
             if "pressure" in self.js_msg:
                 if not self.validate_pressure():
-                    reason = "pressure stat validation failed in message: " + \
-                        str(line)
+                    reason = "pressure stat validation failed in message: " + str(line)
                     self.abort(False, reason)
         if self.time_cnt == 1 and self.temp_cnt == 1 and self.pres_cnt == 1:
             return True

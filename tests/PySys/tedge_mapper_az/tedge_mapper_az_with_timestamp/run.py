@@ -17,6 +17,7 @@ Then we stop the tedge-mapper-az systemctl service
 
 """
 
+
 class TedgeMapperAzWithTimestamp(BaseTest):
     def setup(self):
         self.tedge = "/usr/bin/tedge"
@@ -46,8 +47,13 @@ class TedgeMapperAzWithTimestamp(BaseTest):
 
         pub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub",
-                       "tedge/measurements", '{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}'],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "tedge/measurements",
+                '{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}',
+            ],
             stdouterr="tedge_temp",
         )
 
@@ -60,11 +66,17 @@ class TedgeMapperAzWithTimestamp(BaseTest):
         )
 
     def validate(self):
-        f = open(self.output + '/tedge_sub.out', 'r')
+        f = open(self.output + "/tedge_sub.out", "r")
         thin_edge_json = json.load(f)
 
-        self.assertThat('actual == expected', actual = thin_edge_json['temperature'], expected = 12)
-        self.assertThat('actual == expected', actual = thin_edge_json['time'], expected = '2021-06-15T17:01:15.806181503+02:00')
+        self.assertThat(
+            "actual == expected", actual=thin_edge_json["temperature"], expected=12
+        )
+        self.assertThat(
+            "actual == expected",
+            actual=thin_edge_json["time"],
+            expected="2021-06-15T17:01:15.806181503+02:00",
+        )
 
     def mapper_cleanup(self):
         self.log.info("mapper_cleanup")

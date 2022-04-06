@@ -39,16 +39,26 @@ class ValidateValidDeviceId(TedgeEnvironment):
         # set the custom certificate path
         set_cert_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "device.cert.path",
-                       "/tmp/test-device-certs/tedge-certificate.pem"],
+            arguments=[
+                self.tedge,
+                "config",
+                "set",
+                "device.cert.path",
+                "/tmp/test-device-certs/tedge-certificate.pem",
+            ],
             stdouterr="set_cert_path",
         )
 
         # set the custom key path
         set_key_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "device.key.path",
-                       "/tmp/test-device-certs/tedge-private-key.pem"],
+            arguments=[
+                self.tedge,
+                "config",
+                "set",
+                "device.key.path",
+                "/tmp/test-device-certs/tedge-private-key.pem",
+            ],
             stdouterr="set_key_path",
         )
 
@@ -58,17 +68,29 @@ class ValidateValidDeviceId(TedgeEnvironment):
         # create a certificate with a device id that contains all valid characters
         sub1 = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "cert", "create",
-                       "--device-id", "'?=()*@!%,-.123ThinEdgeDevice-id"],
+            arguments=[
+                self.tedge,
+                "cert",
+                "create",
+                "--device-id",
+                "'?=()*@!%,-.123ThinEdgeDevice-id",
+            ],
             stdouterr="cert_create",
         )
 
         # upload the certificate
         cert_upload = self.startProcess(
-            environs={"C8YPASS":self.project.c8ypass},
+            environs={"C8YPASS": self.project.c8ypass},
             command=self.sudo,
-            arguments=["-E", self.tedge, "cert", "upload",
-                       "c8y", "--user", self.project.c8yusername],
+            arguments=[
+                "-E",
+                self.tedge,
+                "cert",
+                "upload",
+                "c8y",
+                "--user",
+                self.project.c8yusername,
+            ],
             stdouterr="cert_upload",
         )
 
