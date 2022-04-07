@@ -3,7 +3,7 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use clap::Parser;
+use clap::{IntoApp, Parser};
 use serde::Deserialize;
 use std::io::{self};
 use std::process::{Command, ExitStatus, Stdio};
@@ -238,7 +238,11 @@ fn main() {
 
     let apt = match AptCli::try_parse() {
         Ok(aptcli) => aptcli,
-        Err(_e) => {
+        Err(err) => {
+            eprintln!("ERROR: {}", err);
+            AptCli::command()
+                .print_help()
+                .expect("Failed to print usage help");
             // re-write the clap exit_status from 2 to 1, if parse fails
             std::process::exit(1)
         }
