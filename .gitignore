@@ -33,3 +33,4 @@ tests/PySys/pysys_junit_xml_analytics/*
 
 # Other files
 Makefile.toml
+results
