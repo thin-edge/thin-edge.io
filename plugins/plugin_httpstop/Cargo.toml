@@ -1,0 +1,18 @@
+[package]
+name = "plugin_httpstop"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+log = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0.136", features = ["derive"] }
+tracing = "0.1"
+tokio = { version = "1", features = ["rt"] }
+tokio-util = "0.7.0"
+hyper = { version = "0.14", features = ["server", "tcp", "http1"] }
+
+tedge_api = { path = "../../crates/core/tedge_api" }

@@ -11,15 +11,36 @@ use crate::{
         c8y::CumulocityActor,
         core::{AgentCoreProducerActor, MqttSenderActor},
     },
+    errors::PluginError,
     messages::core::{MqttPayload, RegisterSender},
 };
 
 mod actors;
+mod errors;
 mod messages;
+
+pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
+
+#[derive(serde::Deserialize, Debug)]
+struct HttpStopConfig {
+    bind: std::net::SocketAddr,
+}
 
 // #[actix::main]
 fn main() -> Result<(), anyhow::Error> {
     tedge_utils::logging::initialise_tracing_subscriber(true);
+
+    let bytes = std::fs::read("/home/makrist/thin-edge.io/example-config.toml")?;
+    let config: PluginConfiguration = toml::from_slice(bytes.as_slice())?;
+    dbg!(&config);
+
+    let config_stop = config
+        .get_ref()
+        .clone()
+        .try_into::<HttpStopConfig>()
+        .map_err(|_| anyhow::anyhow!("Failed to parse configuration"))?;
+
+    dbg!(&config_stop);
 
     let topics = vec!["#"].try_into().expect("a list of topic filters");
 
