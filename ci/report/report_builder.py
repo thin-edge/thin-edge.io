@@ -22,9 +22,9 @@ import shutil
 
 runners_cfg = [
     {
-        "name": "offsite_mythica",
+        "name": "results_pysys_offsite_mythica",
         "repo": "abelikt",
-        "archive": "ci_pipeline_results_pysys_offsite_mythica.zip",
+        "archive": "results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
             "apt",
@@ -34,9 +34,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "offsite_mythicb",
+        "name": "results_pysys_offsite_mythicb",
         "repo": "abelikt",
-        "archive": "ci_pipeline_results_pysys_offsite_mythicb.zip",
+        "archive": "results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
             "apt",
@@ -46,9 +46,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "offsite_mythicc",
+        "name": "results_pysys_offsite_mythicc",
         "repo": "abelikt",
-        "archive": "ci_pipeline_results_pysys_offsite_mythicc.zip",
+        "archive": "results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
             "apt",
@@ -58,9 +58,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "offsite_mythicd",
+        "name": "results_pysys_offsite_mythicd",
         "repo": "abelikt",
-        "archive": "ci_pipeline_results_pysys_offsite_mythicd.zip",
+        "archive": "results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
             "apt",
