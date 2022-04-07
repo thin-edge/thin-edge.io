@@ -75,11 +75,9 @@ runners_cfg = [
 def download_results(repo, workflow, folder):
     # Download and unzip results from test workflows
 
-    scriptfolder=os.path.dirname(os.path.realpath(__file__))
+    scriptfolder = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = (
-        f"{scriptfolder}/download_workflow_artifact.py {repo} {workflow} -o ./ --filter results --ignore"
-    )
+    cmd = f"{scriptfolder}/download_workflow_artifact.py {repo} {workflow} -o ./ --filter results --ignore"
     print(cmd)
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
@@ -155,12 +153,12 @@ def postprocess(runners):
 
 def main(runners, repo, workflow, folder, download_reports=True):
 
-#    if folder:
-#        os.chdir(folder)
-#    else:
-#        # Switch to script path
-#        path = os.path.dirname(os.path.realpath(__file__))
-#        os.chdir(path)
+    #    if folder:
+    #        os.chdir(folder)
+    #    else:
+    #        # Switch to script path
+    #        path = os.path.dirname(os.path.realpath(__file__))
+    #        os.chdir(path)
 
     if download_reports:
         # delete folder contents
@@ -189,10 +187,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", type=str, help="GitHub repository")
     parser.add_argument("workflow", type=str, help="Name of workflow")
-    parser.add_argument("--folder", type=str, help="Working folder (Default ./report )", default="./report")
     parser.add_argument(
-        "--download", action="store_true", help="Download reports"
+        "--folder",
+        type=str,
+        help="Working folder (Default ./report )",
+        default="./report",
     )
+    parser.add_argument("--download", action="store_true", help="Download reports")
 
     args = parser.parse_args()
 

@@ -31,8 +31,8 @@ def download_artifact(
     print(f"Will try to download file {name}.zip")
 
     if output:
-        #artifact_filename = os.path.splitext(os.path.basename(output))[0] + ".zip"
-        artifact_filename = os.path.join( os.path.abspath(output), name + ".zip")
+        # artifact_filename = os.path.splitext(os.path.basename(output))[0] + ".zip"
+        artifact_filename = os.path.join(os.path.abspath(output), name + ".zip")
     else:
         artifact_filename = f"{workflowname}_{name}.zip"
 
