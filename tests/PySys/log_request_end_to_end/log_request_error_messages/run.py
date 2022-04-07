@@ -33,14 +33,14 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
             "dateTo": "2021-11-21T18:55:49+0530",
             "logFile": "software-management",
             "searchText": "Error",
-            "maximumLines": 25
+            "maximumLines": 25,
         }
         self.operation_id = self.cumulocity.trigger_log_request(
-            log_file_request_payload, self.project.deviceid)
+            log_file_request_payload, self.project.deviceid
+        )
 
     def validate(self):
-        self.assertThat("True == value",
-                        value=self.wait_until_logs_retrieved())
+        self.assertThat("True == value", value=self.wait_until_logs_retrieved())
 
     @retry(Exception, tries=20, delay=1)
     def wait_until_logs_retrieved(self):
@@ -68,15 +68,19 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
             arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/"],
             stdouterr="move_logs",
         )
-     
+
     def download_file_and_verify_error_messages(self, url):
-        get_response = requests.get(url, auth=(
-            self.project.c8yusername, self.project.c8ypass), stream=False)
-        nlines = get_response.content.decode('utf-8')
-        return sum([1 if line.startswith("Error") else 0 for line in nlines.split("\n")]) == 25
+        get_response = requests.get(
+            url, auth=(self.project.c8yusername, self.project.c8ypass), stream=False
+        )
+        nlines = get_response.content.decode("utf-8")
+        return (
+            sum([1 if line.startswith("Error") else 0 for line in nlines.split("\n")])
+            == 25
+        )
 
     def cleanup_logs(self):
-      
+
         rm_logs = self.startProcess(
             command=self.sudo,
             arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*"],
@@ -92,7 +96,12 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
         if self.getOutcome().isFailure():
             log = self.startProcess(
                 command=self.sudo,
-                arguments=[self.tedge, "mqtt", "pub",
-                           "c8y/s/us", "502,c8y_LogfileRequest"],
+                arguments=[
+                    self.tedge,
+                    "mqtt",
+                    "pub",
+                    "c8y/s/us",
+                    "502,c8y_LogfileRequest",
+                ],
                 stdouterr="send_failed",
             )

@@ -96,8 +96,9 @@ class SoftwareManagement(EnvironmentC8y):
 
         if self.myPlatform != "container":
             self.skipTest(
-                "Testing the apt plugin is not supported on this platform."+\
-                    "Use parameter -XmyPlatform='container' to enable it")
+                "Testing the apt plugin is not supported on this platform."
+                + "Use parameter -XmyPlatform='container' to enable it"
+            )
 
         # Database with package IDs taken from the thin-edge.io
         # TODO make this somehow not hard-coded
@@ -116,13 +117,13 @@ class SoftwareManagement(EnvironmentC8y):
             # # docker plugin
             "registry": "8018911",
             "hello-world": "8021526",
-            "docker/getting-started": "8021973", # warning not available for arm
-            "alpine" : "7991792",
+            "docker/getting-started": "8021973",  # warning not available for arm
+            "alpine": "7991792",
         }
 
         if self.project.c8yswrepo:
             self.pkg_id_db = json.loads(self.project.c8yswrepo)
-        self.log.info("Using sw id database: %s"% self.pkg_id_db)
+        self.log.info("Using sw id database: %s" % self.pkg_id_db)
 
         super().setup()
         self.addCleanupFunction(self.mysmcleanup)
@@ -315,8 +316,7 @@ class SoftwareManagement(EnvironmentC8y):
     def check_status_of_operation(self, status):
         """Check if the last operation is successfull"""
         current_status = self.get_status_of_operation()
-        self.log.info("Expected status: %s, got status %s" %
-                      (status, current_status))
+        self.log.info("Expected status: %s, got status %s" % (status, current_status))
         return current_status == status
 
     def wait_until_succcess(self):
@@ -364,7 +364,11 @@ class SoftwareManagement(EnvironmentC8y):
 
                 current_status = self.get_status_of_last_operation()
 
-                if current_status == status or current_status == status2 or current_status == "NOOPFOUND":
+                if (
+                    current_status == status
+                    or current_status == status2
+                    or current_status == "NOOPFOUND"
+                ):
                     # Invalidate the old operation
                     self.operation_id = None
                     break
@@ -374,8 +378,7 @@ class SoftwareManagement(EnvironmentC8y):
             timeout += 1
             if timeout > wait_time:
                 raise SystemError(
-                    "Timeout while waiting for status %s or %s" % (
-                        status, status2)
+                    "Timeout while waiting for status %s or %s" % (status, status2)
                 )
 
     def check_is_installed(self, package_name, version=None):
@@ -408,8 +411,7 @@ class SoftwareManagement(EnvironmentC8y):
         return ret
 
     def remove_package_apt(self, name):
-        """Remove a package with apt
-        """
+        """Remove a package with apt"""
         assert isinstance(name, str)
         proc = subprocess.run(["/usr/bin/sudo", "apt", "-y", "remove", name])
         proc.check_returncode()
@@ -419,8 +421,7 @@ class SoftwareManagement(EnvironmentC8y):
         the apt cache even when it is not installed.
         Not very bulletproof yet!!!
         """
-        output = subprocess.check_output(
-            ["/usr/bin/apt-cache", "madison", pkg])
+        output = subprocess.check_output(["/usr/bin/apt-cache", "madison", pkg])
 
         # Lets assume it is the package in the first line of the output
         return output.split()[2].decode("ascii")  # E.g. "1.16-1+b3"

@@ -31,9 +31,13 @@ class TedgeDisConnectTestSMServices(EnvironmentC8y):
 
         # Validate if the Software management services are getting stopped and disabled properly on "tedge disconnect c8y"
         self.assertGrep(
-            "tedge_disconnect_c8y.out", "tedge-agent service successfully stopped and disabled!", contains=True
+            "tedge_disconnect_c8y.out",
+            "tedge-agent service successfully stopped and disabled!",
+            contains=True,
         )
 
         self.assertGrep(
-            "tedge_disconnect_c8y.out", "tedge-mapper-c8y service successfully stopped and disabled!", contains=True
+            "tedge_disconnect_c8y.out",
+            "tedge-mapper-c8y service successfully stopped and disabled!",
+            contains=True,
         )

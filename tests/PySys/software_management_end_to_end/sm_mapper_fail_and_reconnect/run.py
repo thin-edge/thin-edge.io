@@ -53,7 +53,13 @@ class MapperC8yReceiveLastMessageOnRestart(BaseTest):
 
         self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "pub", "c8y/s/ds", "528,tedge,rolldice,,,delete"],
+            arguments=[
+                self.tedge,
+                "mqtt",
+                "pub",
+                "c8y/s/ds",
+                "528,tedge,rolldice,,,delete",
+            ],
             stdouterr="tedge_pub",
         )
 

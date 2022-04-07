@@ -10,7 +10,6 @@ This project deploys a mon file named "TedgeDemoMonitor" into the apama correlat
 
 
 class ApamaPluginUpdateTest(ApamaPlugin):
-
     def setup(self):
         super().setup()
         # Assert that an apama project is not installed on the machine before test
@@ -26,9 +25,14 @@ class ApamaPluginUpdateTest(ApamaPlugin):
         # Use apama plugin `install` command to update the existing project with the archive in the shared input directory
         self.startProcess(
             command=self.sudo,
-            arguments=[self.apama_plugin, "install",
-                       "LimitedBandwidth::project", "--file", self.project.apama_input_dir + "/limitedbandwidth.zip"],
-            stdouterr="plugin_install"
+            arguments=[
+                self.apama_plugin,
+                "install",
+                "LimitedBandwidth::project",
+                "--file",
+                self.project.apama_input_dir + "/limitedbandwidth.zip",
+            ],
+            stdouterr="plugin_install",
         )
         self.wait_till_correlator_ready()
 

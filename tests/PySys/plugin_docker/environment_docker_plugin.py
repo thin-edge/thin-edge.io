@@ -17,10 +17,11 @@ class DockerPlugin(BaseTest):
     images_to_clean = []
 
     def setup(self):
-        if self.myPlatform != 'container':
+        if self.myPlatform != "container":
             self.skipTest(
-                "Testing the docker plugin is not supported on this platform." +
-                "To run it, all the test with -XmyPlatform='container'")
+                "Testing the docker plugin is not supported on this platform."
+                + "To run it, all the test with -XmyPlatform='container'"
+            )
 
         if not os.path.exists("/etc/tedge/sm-plugins/docker"):
             raise SystemError("Docker plugin missing")
@@ -29,63 +30,74 @@ class DockerPlugin(BaseTest):
         self.addCleanupFunction(self.cleanup_images)
         self.addCleanupFunction(self.cleanup_containers)
 
-    def assert_container_running(self, image_name, image_version=None, negate=False, abortOnError=False):
+    def assert_container_running(
+        self, image_name, image_version=None, negate=False, abortOnError=False
+    ):
         """Asserts that a container with the given image name and version is running or not"""
         process = self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "ps"],
             abortOnError=False,
-            stdouterr="docker_ps"
+            stdouterr="docker_ps",
         )
 
         image_tag = self.generate_image_tag(image_name, image_version)
         self.assertGrep(
-            process.stdout, f"{image_tag}", contains=not negate, abortOnError=abortOnError)
+            process.stdout,
+            f"{image_tag}",
+            contains=not negate,
+            abortOnError=abortOnError,
+        )
 
-    def assert_image_present(self, image_name, image_version=None, negate=False, abortOnError=False):
+    def assert_image_present(
+        self, image_name, image_version=None, negate=False, abortOnError=False
+    ):
         """Asserts that an image with the given image name and version is present on the system or not"""
         process = self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "images"],
             abortOnError=False,
-            stdouterr="docker_images"
+            stdouterr="docker_images",
         )
 
-        image_regex = image_name if image_version is None else f"{image_name}\s{image_version}"
+        image_regex = (
+            image_name if image_version is None else f"{image_name}\s{image_version}"
+        )
         self.assertGrep(
-            process.stdout, f"{image_regex}", contains=not negate, abortOnError=abortOnError)
+            process.stdout,
+            f"{image_regex}",
+            contains=not negate,
+            abortOnError=abortOnError,
+        )
 
     def docker_stop(self, container_id):
-        """Use `docker stop` to stop a running container.
-        """
+        """Use `docker stop` to stop a running container."""
         self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "stop", container_id],
             abortOnError=False,
-            stdouterr="docker_stop"
+            stdouterr="docker_stop",
         )
 
     def docker_rm(self, container_id):
-        """Use `docker stop` to remove a stopped container with its container id.
-        """
+        """Use `docker stop` to remove a stopped container with its container id."""
         self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "rm", container_id],
             abortOnError=False,
-            stdouterr="docker_rm"
+            stdouterr="docker_rm",
         )
 
     def docker_run(self, image_name, image_version=None):
-        """Use `docker run` to run a container with the provided image name and version.
-        """
+        """Use `docker run` to run a container with the provided image name and version."""
         image_tag = self.generate_image_tag(image_name, image_version)
         process = self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "run", "-d", image_tag],
-            stdouterr="docker_run"
+            stdouterr="docker_run",
         )
 
-        file = open(process.stdout, 'r')
+        file = open(process.stdout, "r")
         container_id = file.readline()
         return container_id
 
@@ -96,13 +108,12 @@ class DockerPlugin(BaseTest):
         return container_id
 
     def docker_pull(self, image_name, image_version=None):
-        """Use `docker pull` pull an image from docker registry.
-        """
+        """Use `docker pull` pull an image from docker registry."""
         image_tag = self.generate_image_tag(image_name, image_version)
         self.startProcess(
             command=self.sudo,
             arguments=[self.docker_cmd, "pull", image_tag],
-            stdouterr="docker_pull"
+            stdouterr="docker_pull",
         )
 
     def docker_pull_with_cleanup(self, image_name, image_version=None):
@@ -114,8 +125,7 @@ class DockerPlugin(BaseTest):
         self.add_image_to_clean(image_name, image_version)
 
     def plugin_install(self, image_name, image_version=None):
-        """Use docker plugin `install` command to install and run a container.
-        """
+        """Use docker plugin `install` command to install and run a container."""
         install_args = [image_name]
         if image_version is not None:
             install_args = install_args + ["--module-version", image_version]
@@ -123,7 +133,7 @@ class DockerPlugin(BaseTest):
             command=self.sudo,
             arguments=[self.docker_plugin, "install"] + install_args,
             abortOnError=False,
-            stdouterr="plugin_install"
+            stdouterr="plugin_install",
         )
         return self.get_last_spawned_container_id()
 
@@ -136,8 +146,7 @@ class DockerPlugin(BaseTest):
         self.add_image_to_clean(image_name, image_version)
 
     def plugin_remove(self, image_name, image_version=None):
-        """Use docker plugin `remove` command to stop and remove containers using the provided image name.
-        """
+        """Use docker plugin `remove` command to stop and remove containers using the provided image name."""
         install_args = [image_name]
         if image_version is not None:
             install_args = install_args + ["--module-version", image_version]
@@ -145,18 +154,17 @@ class DockerPlugin(BaseTest):
             command=self.sudo,
             arguments=[self.docker_plugin, "remove"] + install_args,
             abortOnError=False,
-            stdouterr="plugin_remove"
+            stdouterr="plugin_remove",
         )
         return self.get_last_spawned_container_id()
 
     def plugin_finalize(self):
-        """Use docker plugin `finalize` command to prune all unused images.
-        """
+        """Use docker plugin `finalize` command to prune all unused images."""
         self.startProcess(
             command=self.sudo,
             arguments=[self.docker_plugin, "finalize"],
             abortOnError=False,
-            stdouterr="plugin_finalize"
+            stdouterr="plugin_finalize",
         )
         return self.get_last_spawned_container_id()
 
@@ -166,10 +174,10 @@ class DockerPlugin(BaseTest):
             command=self.sudo,
             arguments=[self.docker_cmd, "ps", "-q", "--latest"],
             abortOnError=False,
-            stdouterr="docker_ps_latest"
+            stdouterr="docker_ps_latest",
         )
 
-        file = open(self.output + "/docker_ps_latest.out", 'r')
+        file = open(self.output + "/docker_ps_latest.out", "r")
         container_id = file.readline().strip()
         return container_id
 
@@ -183,7 +191,8 @@ class DockerPlugin(BaseTest):
     def cleanup_containers(self):
         if len(self.containers_to_clean) > 0:
             self.log.info(
-                f"Removing containers scheduled to be cleaned up: {self.containers_to_clean}")
+                f"Removing containers scheduled to be cleaned up: {self.containers_to_clean}"
+            )
             self.startProcess(
                 command=self.sudo,
                 arguments=["docker", "rm", "-f"] + self.containers_to_clean,
@@ -200,9 +209,10 @@ class DockerPlugin(BaseTest):
     def cleanup_images(self):
         if len(self.images_to_clean) > 0:
             self.log.info(
-                f"Removing images scheduled to be cleaned up: {self.images_to_clean}")
+                f"Removing images scheduled to be cleaned up: {self.images_to_clean}"
+            )
             self.startProcess(
                 command=self.sudo,
                 arguments=["docker", "rmi", "-f"] + self.images_to_clean,
-                stdouterr="containers_for_cleanup"
+                stdouterr="containers_for_cleanup",
             )

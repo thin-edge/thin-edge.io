@@ -18,8 +18,7 @@ class DockerPluginRemoveWithVersionTest(DockerPlugin):
     def setup(self):
         super().setup()
         # Assert that an image with the given name is not present on the machine before test
-        self.assert_image_present(
-            self.image_name, negate=True, abortOnError=True)
+        self.assert_image_present(self.image_name, negate=True, abortOnError=True)
 
         # Run a container with the test image that is to be removed during the test
         self.docker_run_with_cleanup(self.image_name, self.image_version)
@@ -31,5 +30,4 @@ class DockerPluginRemoveWithVersionTest(DockerPlugin):
 
     def validate(self):
         # Assert that no containers using the test image name are running after the plugin remove call
-        self.assert_container_running(
-            self.image_name, self.image_version, negate=True)
+        self.assert_container_running(self.image_name, self.image_version, negate=True)

@@ -20,13 +20,12 @@ steps:
 """
 
 
-@retry(Exception, tries=10, delay=.5)
+@retry(Exception, tries=10, delay=0.5)
 def assert_install_in_download_path(install_directory):
     """
     assert rolldice is installed in correct path
     """
     assert "rolldice" in os.listdir(f"{install_directory}")
-
 
 
 class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
@@ -42,7 +41,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
     def set_download_path(self, download_path):
         self.startProcess(
             command=self.SUDO,
-            arguments=[self.TEDGE, "config", "set", "tmp.path", f"{download_path}"]
+            arguments=[self.TEDGE, "config", "set", "tmp.path", f"{download_path}"],
         )
 
     def setup(self):
@@ -50,17 +49,25 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
         # creating directory
-        self.startProcess(command=self.SUDO, arguments=["mkdir", f"{self.DOWNLOAD_DIR}"])
-        self.startProcess(command=self.SUDO, arguments=["chmod", "a+rwx", f"{self.DOWNLOAD_DIR}"])
+        self.startProcess(
+            command=self.SUDO, arguments=["mkdir", f"{self.DOWNLOAD_DIR}"]
+        )
+        self.startProcess(
+            command=self.SUDO, arguments=["chmod", "a+rwx", f"{self.DOWNLOAD_DIR}"]
+        )
 
-        self.CURRENT_DOWNLOAD_PATH = subprocess.check_output(f"{self.SUDO} {self.TEDGE} config get tmp.path", shell=True).decode("utf8").strip()
+        self.CURRENT_DOWNLOAD_PATH = (
+            subprocess.check_output(
+                f"{self.SUDO} {self.TEDGE} config get tmp.path", shell=True
+            )
+            .decode("utf8")
+            .strip()
+        )
 
         # setting download.path
         self.set_download_path(self.DOWNLOAD_DIR)
 
         self.reconnect_c8y()
-
-
 
     def execute(self):
 
@@ -69,7 +76,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
             package_id=self.get_pkgid("rolldice"),
             version="::apt",
             url="https://thin-edge-io.eu-latest.cumulocity.com/inventory/binaries/12435463",
-            action="install"
+            action="install",
         )
 
         # download path validation
@@ -84,7 +91,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
             package_id=self.get_pkgid("rolldice"),
             version="",
             url="",
-            action="delete"
+            action="delete",
         )
 
         self.wait_until_succcess()
@@ -92,16 +99,13 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
     def validate(self):
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
-
     def mysmcleanup(self):
 
         self.startProcess(
-            command=self.SUDO,
-            arguments=["rm", "-rf", f"{self.DOWNLOAD_DIR}"]
+            command=self.SUDO, arguments=["rm", "-rf", f"{self.DOWNLOAD_DIR}"]
         )
 
         self.set_download_path(self.CURRENT_DOWNLOAD_PATH)
 
         # reconnect is required to revert back to initial download config
         self.reconnect_c8y()
-

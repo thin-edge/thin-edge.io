@@ -15,7 +15,6 @@ Then a plugin is not executed
 
 
 class TedgeAgentUserSudoAccess(BaseTest):
-
     def setup(self):
         self.sudo = "/usr/bin/sudo"
 

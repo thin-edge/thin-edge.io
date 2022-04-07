@@ -17,7 +17,7 @@ class PySysTest(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
         self.systemctl = "/usr/bin/systemctl"
-        self.environ = { 'HOME':os.environ.get('HOME')}
+        self.environ = {"HOME": os.environ.get("HOME")}
 
         self.startProcess(
             command=self.sudo,

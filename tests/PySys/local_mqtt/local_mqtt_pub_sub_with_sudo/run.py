@@ -3,6 +3,7 @@ from pysys.basetest import BaseTest
 
 import time
 import os
+
 """
 Validate local publishing and subscribing:
 

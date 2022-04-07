@@ -30,8 +30,10 @@ class PySysTest(SoftwareManagement):
     def setup(self):
 
         if self.fakeplugin != "fakeplugin":
-            self.skipTest("Testing the fake plugin is not enabled."+\
-                    "Use parameter -Xfakeplugin=fakeplugin to enable it")
+            self.skipTest(
+                "Testing the fake plugin is not enabled."
+                + "Use parameter -Xfakeplugin=fakeplugin to enable it"
+            )
 
         super().setup()
 
@@ -58,4 +60,3 @@ class PySysTest(SoftwareManagement):
     def validate(self):
         # This is always false
         self.assertThat("False == value", value=self.check_is_installed("tomatoooo"))
-

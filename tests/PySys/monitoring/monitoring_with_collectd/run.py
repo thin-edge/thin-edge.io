@@ -19,7 +19,6 @@ Then we validate the  messages in the output of tedge sub,
 
 
 class MonitoringWithCollectd(BaseTest):
-
     def setup(self):
         self.js_msg = ""
         self.cpu_cnt = 0
@@ -74,12 +73,15 @@ class MonitoringWithCollectd(BaseTest):
         )
 
     def validate(self):
-        self.assertGrep("tedge_sub.out", r'time|cpu|memory|df-root')
-        self.assertThat('collectd_msg_validation_result == expected_result',
-                        collectd_msg_validation_result=self.validate_json(), expected_result=True)
+        self.assertGrep("tedge_sub.out", r"time|cpu|memory|df-root")
+        self.assertThat(
+            "collectd_msg_validation_result == expected_result",
+            collectd_msg_validation_result=self.validate_json(),
+            expected_result=True,
+        )
 
     def validate_json(self):
-        f = open(self.output + '/tedge_sub.out', 'r')
+        f = open(self.output + "/tedge_sub.out", "r")
         lines = f.readlines()
         for line in lines:
             self.js_msg = json.loads(line)
@@ -90,17 +92,19 @@ class MonitoringWithCollectd(BaseTest):
                 reason = "time validation failed in message: " + str(line)
                 self.abort(False, reason)
             if not self.validate_memory():
-                reason = "memory stat validation failed in message: " + \
-                    str(line)
+                reason = "memory stat validation failed in message: " + str(line)
                 self.abort(False, reason)
             # validate disk stats if the entries are present, as the disk stats collection window is bigger
             if "df-root" in self.js_msg:
                 if not self.validate_disk():
-                    reason = "disk stat validation failed in message: " + \
-                        str(line)
+                    reason = "disk stat validation failed in message: " + str(line)
                     self.abort(False, reason)
 
-        if self.time_cnt == self.cpu_cnt == self.memory_cnt and self.disk_cnt > 0 and self.disk_cnt <= 3:
+        if (
+            self.time_cnt == self.cpu_cnt == self.memory_cnt
+            and self.disk_cnt > 0
+            and self.disk_cnt <= 3
+        ):
             return True
         else:
             return False
