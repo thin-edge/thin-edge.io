@@ -1302,6 +1302,9 @@ jobs:
     - name: ls
       run: ls -lah
 
+    - run: |
+        ls -lah ./results
+
     - name: Build report
       run: ./ci/report/build.sh
 
@@ -1320,7 +1323,7 @@ jobs:
         path: ci/report/report/report-matrix.html
 
     - run: |
-        ls -l ./ci/report
+        ls -l ./results
 
 #    - name: Deploy
 #      # peaceiris/actions-gh-pages@v3
