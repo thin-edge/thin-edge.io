@@ -1,19 +1,16 @@
-# Watchdog feature using `systemd` in `thin-edge.io`
+# Enabling systemd watchdog for thin-edge services
 
 ## Introduction
 
-`Watchdog` feature is used to check the health of a service/process by constantly exchanging
-the message between the watchdog process and the service/process that is being monitored.
-When the process does not update its health status within a specified `time` period, then the watchdog process will
-restart the service that is being monitored.
+The systemd watchdog feature enables systemd to detect when a service is unhealthy or unresponsive and attempt to fix it by restarting that service.
+To detect if a service is healthy or not, systemd relies on periodic health notifications from that service at regular intervals.
+If the service fails to send that notification within a time threshold, then systemd will assume that service to be unhealthy and restart it.
 
-This document shows how `thin-edge.io` services are managed using the systemd, then one can use `systemd`
-feature to check the health of these services as well. This document provides
-information about how to use `systemd` for checking the health of the services.
+This document describes how the systemd watchdog mechanism can be enabled for thin-edge services.
 
 ## Enabling the `watchdog` feature in `systemd`
 
-Enabling the `watchdog` feature in systemd for a `thin-edge.io` service (tedge_agent, tedge_mapper_c8y/az/collectd)
+Enabling systemd `watchdog` for a `thin-edge.io` service (tedge_agent, tedge_mapper_c8y/az/collectd)
 using the `systemd` is a two-step process.
 
 ### Step 1: Enable the `watchdog` feature in the `systemd` service file
@@ -37,18 +34,27 @@ RestartPreventExitStatus=255
 WatchdogSec=5
 ```
 
-> Note: The systemd service file usually present in `/lib/systemd/system/tedge-mapper-c8y.service`.
+> Note: The systemd service file for tedge services are usually present
+in `/lib/systemd/system` directory, like `/lib/systemd/system/tedge-mapper-c8y.service`.
 
 ### Step 2: Start the `tedge-watchdog` service
 
-Start the `watchdog` service as below.
+The `tedge-watchdog` service is responsible for periodically checking the health of
+all tedge services for which the watchdog feature is enabled, and send systemd
+watchdog notifications on their behalf to systemd.
+
+Start and enable the `tedge-watchdog` service as follows:
+	
 ```shell
 systemctl start tedge-watchdog.service
-```
+systemctl enable tedge-watchdog.service
+``` 
 
-Now the `tedge-watchdog` service will be keep sending health check messages for every `WatchdogSec/2` seconds.
-Once the response is received from the particular service, the `watchdog` service will send the notification
-to the systemd on behalf of the service.
+Now, the `tedge-watchdog` service will be keep sending health check messages to the monitored services periodically within their configured `WatchdogSec` interval.
+
+The health check request for service is published to `tedge/health-check/<service-name>` topic and the health status response from that service is expected on `tedge/health/<service-name>` topic.
+
+Once the health status response is received from a particular service, the `tedge-watchdog` service will send the watchdog notification on behalf of that service to systemd.
 
 ## Debugging
 One can observe the message exchange between the `service` and the `watchdog` by subscribing to `tedge/health/#` and `tedge/health-check/#` topics.

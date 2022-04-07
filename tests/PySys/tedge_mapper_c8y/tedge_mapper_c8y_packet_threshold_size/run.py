@@ -86,7 +86,8 @@ class TedgeMapperC8yThresholdPacketSize(EnvironmentC8y):
         self.assertGrep(
             "tedge_sub.out",
             "The size of the message received on tedge/measurements is 20489 "
-            + "which is greater than the threshold size of 16384",
+            # Note: 2**16 would bei 18384 but the C8y limit is a bit smaller
+            + "which is greater than the threshold size of 16184.",
             contains=True,
         )
 
