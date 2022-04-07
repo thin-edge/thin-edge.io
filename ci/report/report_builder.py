@@ -138,6 +138,12 @@ def postprocess(runners):
     sub = subprocess.run(cmd, shell=True)
     sub.check_returncode()
 
+    # Merge all reports
+    cmd = f"junitparser merge {files} all_reports.xml"
+    print(cmd)
+    sub = subprocess.run(cmd, shell=True)
+    sub.check_returncode()
+
     # Build report matrix
     cmd = f"junit2html --report-matrix report-matrix.html {files}"
     print(cmd)
