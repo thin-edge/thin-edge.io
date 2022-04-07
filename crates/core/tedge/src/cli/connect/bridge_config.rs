@@ -21,6 +21,8 @@ pub struct BridgeConfig {
     pub start_type: String,
     pub clean_session: bool,
     pub notifications: bool,
+    pub notifications_local_only: bool,
+    pub notification_topic: String,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
 }
@@ -52,6 +54,12 @@ impl BridgeConfig {
         writeln!(writer, "start_type {}", self.start_type)?;
         writeln!(writer, "cleansession {}", self.clean_session)?;
         writeln!(writer, "notifications {}", self.notifications)?;
+        writeln!(
+            writer,
+            "notifications_local_only {}",
+            self.notifications_local_only
+        )?;
+        writeln!(writer, "notification_topic {}", self.notification_topic)?;
         writeln!(
             writer,
             "bridge_attempt_unsubscribe {}",
@@ -115,6 +123,8 @@ mod test {
             start_type: "automatic".into(),
             clean_session: true,
             notifications: false,
+            notifications_local_only: false,
+            notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
         };
 
@@ -139,6 +149,8 @@ try_private false
 start_type automatic
 cleansession true
 notifications false
+notifications_local_only false
+notification_topic test_topic
 bridge_attempt_unsubscribe false
 
 ### Topics
@@ -173,6 +185,8 @@ bridge_attempt_unsubscribe false
             start_type: "automatic".into(),
             clean_session: true,
             notifications: false,
+            notifications_local_only: false,
+            notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
         };
         let mut serialized_config = Vec::<u8>::new();
@@ -196,6 +210,8 @@ try_private false
 start_type automatic
 cleansession true
 notifications false
+notifications_local_only false
+notification_topic test_topic
 bridge_attempt_unsubscribe false
 
 ### Topics
@@ -233,6 +249,8 @@ bridge_attempt_unsubscribe false
             start_type: "automatic".into(),
             clean_session: true,
             notifications: false,
+            notifications_local_only: false,
+            notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
         };
 
@@ -259,6 +277,8 @@ bridge_attempt_unsubscribe false
         expected.insert("try_private false");
         expected.insert("cleansession true");
         expected.insert("notifications false");
+        expected.insert("notifications_local_only false");
+        expected.insert("notification_topic test_topic");
         expected.insert("bridge_attempt_unsubscribe false");
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
@@ -362,6 +382,8 @@ bridge_attempt_unsubscribe false
             start_type: "automatic".into(),
             clean_session: true,
             notifications: false,
+            notifications_local_only: false,
+            notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![],
         }

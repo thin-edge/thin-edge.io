@@ -41,7 +41,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: false,
-            notifications: false,
+            notifications: true,
+            notifications_local_only: true,
+            notification_topic: "tedge/health/mosquitto-c8y-bridge".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 // Registration
@@ -138,7 +140,9 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         try_private: false,
         start_type: "automatic".into(),
         clean_session: false,
-        notifications: false,
+        notifications: true,
+        notifications_local_only: true,
+        notification_topic: "tedge/health/mosquitto-c8y-bridge".into(),
         bridge_attempt_unsubscribe: false,
     };
 

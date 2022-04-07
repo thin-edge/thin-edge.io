@@ -31,3 +31,18 @@ The following endpoints are currently supported by various tedge daemons:
 * `tedge/health/tedge-mapper-collectd`
 
 All future tedge daemons will also follow the same topic naming scheme convention.
+
+# Mosquitto bridge health endpoints
+
+The mosquitto bridge clients connecting thin-edge devices to the respective cloud platforms also report their health status as retained messages to `tedge/health/<mosquitto-cloud-bridge>` topics.
+The health check messages published by these clients are just numeric values `1` or `0`, indicating active and dead bridge clients respectively.
+
+Here are the health endpoints of curently supported clouds, bridged with mosquitto:
+
+| Cloud      | Health topic                        |
+| ---------- | ----------------------------------- |
+| Cumulocity | `tedge/health/mosquitto-c8y-bridge` |
+| Azure      | `tedge/health/mosquitto-az-bridge`  |
+
+Explicit health check requests via `tedge/health-check` topics is not supported by these bridge clients.
+Since the health status messages are sent as retained messages, just subscribing to these health topics is sufficient to get the latest status.
