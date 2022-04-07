@@ -72,11 +72,13 @@ runners_cfg = [
 ]
 
 
-def download_results(repo, workflow):
+def download_results(repo, workflow, folder):
     # Download and unzip results from test workflows
 
+    scriptfolder=os.path.dirname(os.path.realpath(__file__))
+
     cmd = (
-        f"../download_workflow_artifact.py {repo} {workflow} --filter results --ignore"
+        f"{scriptfolder}/download_workflow_artifact.py {repo} {workflow} -o ./ --filter results --ignore"
     )
     print(cmd)
     sub = subprocess.run(cmd, shell=True)
@@ -151,20 +153,27 @@ def postprocess(runners):
     sub.check_returncode()
 
 
-def main(runners, repo, workflow, download_reports=True):
+def main(runners, repo, workflow, folder, download_reports=True):
 
-    # Switch to script path
-    path = os.path.dirname(os.path.realpath(__file__))
-    os.chdir(path)
-
-    if download_reports:
-        shutil.rmtree("report", ignore_errors=True)
-        os.mkdir("report")
-
-    os.chdir("report")
+#    if folder:
+#        os.chdir(folder)
+#    else:
+#        # Switch to script path
+#        path = os.path.dirname(os.path.realpath(__file__))
+#        os.chdir(path)
 
     if download_reports:
-        download_results("abelikt", "ci_pipeline.yml")
+        # delete folder contents
+        shutil.rmtree(folder, ignore_errors=True)
+        os.mkdir(folder)
+    else:
+        # reuse folder with downloaded zip files
+        pass
+
+    os.chdir(folder)
+
+    if download_reports:
+        download_results("abelikt", "ci_pipeline.yml", folder)
 
         for runner in runners:
             unpack_reports(runner)
@@ -180,8 +189,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", type=str, help="GitHub repository")
     parser.add_argument("workflow", type=str, help="Name of workflow")
+    parser.add_argument("--folder", type=str, help="Working folder (Default ./report )", default="./report")
     parser.add_argument(
-        "--download", action="store_true", help="Download reports into subfolder"
+        "--download", action="store_true", help="Download reports"
     )
 
     args = parser.parse_args()
@@ -189,5 +199,8 @@ if __name__ == "__main__":
     repo = args.repo
     workflow = args.workflow
     download = args.download
+    folder = args.folder
 
-    main(runners_cfg, repo, workflow, download_reports=download)
+    print(args)
+
+    main(runners_cfg, repo, workflow, folder=folder, download_reports=download)
