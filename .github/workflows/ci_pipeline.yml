@@ -1325,14 +1325,12 @@ jobs:
     - run: |
         ls -l ./results
 
-#    - name: Deploy
-#      # peaceiris/actions-gh-pages@v3
-#      uses: peaceiris/actions-gh-pages@v3
-#      with:
-#        github_token: ${{ secrets.GITHUB_TOKEN }}
-#        publish_dir: ./ci/report
-
-
+    - name: Deploy
+      # peaceiris/actions-gh-pages@v3
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./results
 
     - name: Final Result
       # This will fail if there are errors in the reports
