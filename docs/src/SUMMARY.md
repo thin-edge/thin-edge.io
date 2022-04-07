@@ -34,7 +34,7 @@
     - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
     - [How to change temp path](./howto-guides/018_change_temp_path.md)
     - [How to use thin-edge.io with your preferred init system](./howto-guides/019_how_to_use_preferred_init_system.md)
-    - [How to enable watchdog using systemd?](./howto-guides/021_enable_tedge_watchdog_using_systemd.md)
+    - [How to enable systemd watchdog monitoring for tedge services?](./howto-guides/021_enable_tedge_watchdog_using_systemd.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)

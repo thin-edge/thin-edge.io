@@ -1,10 +1,9 @@
 use crate::error::WatchdogError;
+use freedesktop_entry_parser::parse_entry;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mqtt_channel::{Config, Message, PubChannel, Topic};
 use nanoid::nanoid;
-
-use freedesktop_entry_parser::parse_entry;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use std::{
@@ -15,6 +14,7 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
     TEdgeConfigLocation,
 };
+use tracing::{error, info, warn};
 
 #[derive(Serialize, Deserialize)]
 pub struct HealthStatus {
@@ -33,7 +33,7 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
         "tedge-agent",
     ];
 
-    let watchdog_threads = FuturesUnordered::new();
+    let watchdog_tasks = FuturesUnordered::new();
 
     for service in tedge_services {
         match get_watchdog_sec(&format!("/lib/systemd/system/{service}.service")) {
@@ -43,22 +43,25 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
                 let tedge_config_location =
                     tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
 
-                watchdog_threads.push(tokio::spawn(async move {
+                watchdog_tasks.push(tokio::spawn(async move {
                     monitor_tedge_service(
                         tedge_config_location,
                         service,
                         &req_topic,
                         &res_topic,
-                        interval,
+                        interval / 2,
                     )
                     .await
                 }));
             }
 
-            Err(_e) => continue, // Watchdog not enabled for this service
+            Err(_) => {
+                warn!("Watchdog is not enabled for {}", service);
+                continue;
+            }
         }
     }
-    futures::future::join_all(watchdog_threads).await;
+    futures::future::join_all(watchdog_tasks).await;
     Ok(())
 }
 
@@ -76,14 +79,14 @@ async fn monitor_tedge_service(
     let mut received = client.received;
     let mut publisher = client.published;
 
-    println!("Starting watchdog for {} service", name);
+    info!("Starting watchdog for {} service", name);
 
     loop {
         let message = Message::new(&Topic::new(req_topic)?, "");
         let _ = publisher
             .publish(message)
             .await
-            .map_err(|e| eprintln!("Publish failed with error: {}", e));
+            .map_err(|e| warn!("Publish failed with error: {}", e));
 
         let start = Instant::now();
 
@@ -99,10 +102,14 @@ async fn monitor_tedge_service(
             }
             Ok(None) => {}
             Err(elapsed) => {
-                eprintln!("The {name} failed with {elapsed}");
+                warn!("The {name} failed with {elapsed}");
             }
         }
-        tokio::time::sleep(tokio::time::Duration::from_secs(interval) - start.elapsed()).await;
+
+        let elapsed = start.elapsed();
+        if elapsed < tokio::time::Duration::from_secs(interval) {
+            tokio::time::sleep(tokio::time::Duration::from_secs(interval) - elapsed).await;
+        }
     }
 }
 
@@ -134,13 +141,16 @@ fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
 fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
     let entry = parse_entry(service_file)?;
     if let Some(interval) = entry.section("Service").attr("WatchdogSec") {
-        interval.parse().map_err({
-            eprintln!(
-                "Failed to parse the to WatchdogSec to integer from {}",
-                service_file
-            );
-            WatchdogError::ParseWatchdogSecToInt
-        })
+        match interval.parse::<u64>() {
+            Ok(i) => Ok(i),
+            Err(e) => {
+                error!(
+                    "Failed to parse the to WatchdogSec to integer from {}",
+                    service_file
+                );
+                Err(WatchdogError::ParseWatchdogSecToInt(e))
+            }
+        }
     } else {
         Err(WatchdogError::NoWatchdogSec {
             file: service_file.to_string(),
