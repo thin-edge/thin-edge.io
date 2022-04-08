@@ -2905,6 +2905,7 @@ dependencies = [
  "flockfile",
  "futures",
  "mockall 0.11.0",
+ "mockito",
  "mqtt_channel",
  "mqtt_tests",
  "reqwest",
