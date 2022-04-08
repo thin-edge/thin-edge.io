@@ -173,7 +173,7 @@ def main(runners, repo, workflow, folder, download_reports=True):
     os.chdir(folder)
 
     if download_reports:
-        download_results("abelikt", "ci_pipeline.yml", folder)
+        download_results(repo, workflow, folder)
 
         for runner in runners:
             unpack_reports(runner)
