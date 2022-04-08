@@ -58,7 +58,7 @@ Once the health status response is received from a particular service, the `tedg
 
 ## Debugging
 One can observe the message exchange between the `service` and the `watchdog` by subscribing to `tedge/health/#` and `tedge/health-check/#` topics.
-For more info check [here](./020_monitor_tedge_health)
+For more info check [here](./020_monitor_tedge_health.md)
 
 > Note: If the watchdog service did not send the notification to the systemd within `WatchdogSec`, then the systemd will kill the existing service process and restarts it.
 
