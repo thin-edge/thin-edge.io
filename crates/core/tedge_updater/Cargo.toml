@@ -1,0 +1,22 @@
+[package]
+name = "tedge_updater"
+version = "0.6.1"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.58.1"
+license = "Apache-2.0"
+description = ""
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "3.0", features = ["cargo", "derive"] }
+globwalk = "0.8.1"
+logged_command = { path = "../../common/logged_command", features = [ "sync-std" ]}
+serde = { version = "1.0", features = ["derive"] }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1.8", features = ["fs", "process", "rt", "rt-multi-thread"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
