@@ -467,14 +467,9 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
-        # https://github.com/marketplace/actions/download-workflow-artifact
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build-workflow.yml
-          workflow_conclusion: success
-          branch: continuous_integration
           name: debian-packages-amd64
           path: debian-package_unpack
 
