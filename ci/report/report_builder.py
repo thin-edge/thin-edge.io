@@ -1,22 +1,25 @@
 #!/usr/bin/python3
 
-# TODO Export configuration to separate config file
+"""
+Build a complete report for all our runners
+
+Exemplary call
+
+python3 -m venv ~/env-builder
+source ~/env-builder/bin/activate
+pip3 install junitparser
+pip3 install junit2html python3 -m venv ~/env-pysys
+
+./report_builder.py abelikt ci_pipeline.yml
+./report_builder.py abelikt ci_pipeline.yml --download
+TODO Export configuration to separate config file
+"""
 
 import argparse
 import os
-import sys
 import subprocess
 import shutil
 
-# Exemplary call
-#
-# python3 -m venv ~/env-builder
-# source ~/env-builder/bin/activate
-# pip3 install junitparser
-# pip3 install junit2html python3 -m venv ~/env-pysys
-#
-# ./report_builder.py abelikt ci_pipeline.yml
-# ./report_builder.py abelikt ci_pipeline.yml --download
 
 runners_cfg = [
     {
@@ -70,15 +73,17 @@ runners_cfg = [
 ]
 
 
-def download_results(repo, workflow, folder):
+def download_results(repo, workflow):
     """Download and unzip results from test workflows"""
 
     scriptfolder = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = f"{scriptfolder}/download_workflow_artifact.py {repo} {workflow} -o ./ --filter results --ignore"
+    cmd = (
+        f"{scriptfolder}/download_workflow_artifact.py {repo} {workflow}"
+        + " -o ./ --filter results --ignore"
+    )
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
 
 def unpack_reports(runner):
@@ -89,9 +94,7 @@ def unpack_reports(runner):
     archive = runner["archive"]
     cmd = f"unzip -q -o -d {name} {archive}"
     print(cmd)
-
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
 
 def postprocess_runner(runner):
@@ -101,7 +104,6 @@ def postprocess_runner(runner):
     """
 
     name = runner["name"]
-    repo = runner["repo"]
     tests = runner["tests"]
 
     print(f"Processing: {name} ")
@@ -119,8 +121,7 @@ def postprocess_runner(runner):
 
     cmd = f"junitparser merge {files} { name }.xml"
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
 
 def postprocess(runners):
@@ -137,26 +138,22 @@ def postprocess(runners):
     # Print summary matrix
     cmd = f"junit2html --summary-matrix {files}"
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
     # Merge all reports
     cmd = f"junitparser merge {files} all_reports.xml"
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
     # Build report matrix
     cmd = f"junit2html --report-matrix report-matrix.html {files}"
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
     # Zip everything
     cmd = "zip report.zip *.html *.json"
     print(cmd)
-    sub = subprocess.run(cmd, shell=True)
-    sub.check_returncode()
+    subprocess.run(cmd, shell=True, check=True)
 
 
 def main(runners, repo, workflow, folder, download_reports=True):
@@ -173,7 +170,7 @@ def main(runners, repo, workflow, folder, download_reports=True):
     os.chdir(folder)
 
     if download_reports:
-        download_results(repo, workflow, folder)
+        download_results(repo, workflow)
 
         for runner in runners:
             unpack_reports(runner)
