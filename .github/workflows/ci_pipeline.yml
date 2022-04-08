@@ -1295,12 +1295,15 @@ jobs:
     # This is here a limitation of the amount of workflows
     # that trigger each other (GitHub Bug).
     # It would be nicer to use the postprocess trigger instead
-    - name: Repository Dispatch
-      uses: peter-evans/repository-dispatch@v1
-      with:
-          token: ${{ secrets.SECRET_THEGHTOKEN  }}
-          event-type: postprocess
-          repository: abelikt/thin-edge.io_analytics
+
+# Disabled until analytics VM is available
+#
+#    - name: Repository Dispatch
+#      uses: peter-evans/repository-dispatch@v1
+#      with:
+#          token: ${{ secrets.SECRET_THEGHTOKEN  }}
+#          event-type: postprocess
+#          repository: abelikt/thin-edge.io_analytics
 
     - name: download result a
       uses: actions/download-artifact@v3
