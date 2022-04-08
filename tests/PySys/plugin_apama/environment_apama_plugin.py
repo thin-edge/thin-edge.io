@@ -91,15 +91,16 @@ class ApamaPlugin(BaseTest):
 
             self.startProcess(
                 command=self.sudo,
-                arguments=["rm", "-rf", "/etc/tedge/apama/project"],
-                stdouterr="remove_apama_project",
+                arguments=["service", "apama", "stop"],
+                stdouterr="stop_apama_service",
             )
 
             self.startProcess(
                 command=self.sudo,
-                arguments=["service", "apama", "stop"],
-                stdouterr="stop_apama_service",
+                arguments=["rm", "-rf", "/etc/tedge/apama/project"],
+                stdouterr="remove_apama_project",
             )
+
 
     def assert_apama_service_running(self, negate=False):
         exitStatusExpr = "!=0" if negate else "==0"
