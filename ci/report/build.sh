@@ -9,4 +9,4 @@ source ~/env-builder/bin/activate
 pip3 install junitparser
 pip3 install junit2html
 
-./ci/report/report_builder.py --folder ./results abelikt ci_pipeline.yml
+./ci/report/report_builder.py --folder ./results thin-edge ci_pipeline.yml

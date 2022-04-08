@@ -10,8 +10,8 @@ source ~/env-builder/bin/activate
 pip3 install junitparser
 pip3 install junit2html python3 -m venv ~/env-pysys
 
-./report_builder.py abelikt ci_pipeline.yml
-./report_builder.py abelikt ci_pipeline.yml --download
+./report_builder.py thin-edge ci_pipeline.yml
+./report_builder.py thin-edge ci_pipeline.yml --download
 
 TODO Export configuration to separate config file
 
@@ -26,7 +26,7 @@ import shutil
 runners_cfg = [
     {
         "name": "results_pysys_offsite_mythica",
-        "repo": "abelikt",
+        "repo": "thin-edge",
         "archive": "results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
@@ -38,7 +38,7 @@ runners_cfg = [
     },
     {
         "name": "results_pysys_offsite_mythicb",
-        "repo": "abelikt",
+        "repo": "thin-edge",
         "archive": "results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
@@ -50,7 +50,7 @@ runners_cfg = [
     },
     {
         "name": "results_pysys_offsite_mythicc",
-        "repo": "abelikt",
+        "repo": "thin-edge",
         "archive": "results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
@@ -62,7 +62,7 @@ runners_cfg = [
     },
     {
         "name": "results_pysys_offsite_mythicd",
-        "repo": "abelikt",
+        "repo": "thin-edge",
         "archive": "results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
