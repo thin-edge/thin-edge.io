@@ -1,8 +1,8 @@
 #!/bin/python3
 
-# Parse final xml and return error if there are failures
+"""Parse final xml and return an error if there are failures.
+"""
 
-import os
 import sys
 from xml.dom.minidom import parse
 
@@ -26,8 +26,8 @@ for nodes in dom.childNodes:
 print(f"Recorded {errors} errors and {failures} failures in {sys.argv[1]}")
 
 if errors == 0 and failures == 0:
-    print("Passed")
+    print("Passed, no errors.")
     sys.exit(0)
 else:
-    print("Failed")
+    print("Failed, there are errors in the test run.")
     sys.exit(1)
