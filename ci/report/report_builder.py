@@ -12,7 +12,9 @@ pip3 install junit2html python3 -m venv ~/env-pysys
 
 ./report_builder.py abelikt ci_pipeline.yml
 ./report_builder.py abelikt ci_pipeline.yml --download
+
 TODO Export configuration to separate config file
+
 """
 
 import argparse
@@ -196,9 +198,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    repo = args.repo
-    workflow = args.workflow
-    download = args.download
-    folder = args.folder
-
-    main(runners_cfg, repo, workflow, folder=folder, download_reports=download)
+    main(
+        runners_cfg,
+        args.repo,
+        args.workflow,
+        folder=args.folder,
+        download_reports=args.download,
+    )
