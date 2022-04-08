@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 
-# This solution is far from perfect
 # TODO Export configuration to separate config file
-# TODO Add an additional report to store the sources (run-id, date, runner)
-# TODO return non zero exit code when there was an issue
 
 import argparse
 import os
@@ -13,9 +10,10 @@ import shutil
 
 # Exemplary call
 #
-# python3 -m venv ~/env-pysys
-# source ~/env-pysys/bin/activate
-# pip3 install -r tests/requirements.txt
+# python3 -m venv ~/env-builder
+# source ~/env-builder/bin/activate
+# pip3 install junitparser
+# pip3 install junit2html python3 -m venv ~/env-pysys
 #
 # ./report_builder.py abelikt ci_pipeline.yml
 # ./report_builder.py abelikt ci_pipeline.yml --download
@@ -73,7 +71,7 @@ runners_cfg = [
 
 
 def download_results(repo, workflow, folder):
-    # Download and unzip results from test workflows
+    """Download and unzip results from test workflows"""
 
     scriptfolder = os.path.dirname(os.path.realpath(__file__))
 
@@ -84,6 +82,8 @@ def download_results(repo, workflow, folder):
 
 
 def unpack_reports(runner):
+    """Unpack reports mentioned in the runner configuration"""
+
     assert os.path.exists(runner["archive"])
     name = runner["name"]
     archive = runner["archive"]
@@ -95,7 +95,10 @@ def unpack_reports(runner):
 
 
 def postprocess_runner(runner):
-    # Postprocess results
+    """Postprocess results from a runner.
+    Fails if a test foler is missing that is mentioned in the runner
+    configuration.
+    """
 
     name = runner["name"]
     repo = runner["repo"]
@@ -121,8 +124,7 @@ def postprocess_runner(runner):
 
 
 def postprocess(runners):
-
-    # Create a combined report matrix from all report sources
+    """Create a combined reports from all sources"""
 
     files = ""
 
@@ -158,13 +160,7 @@ def postprocess(runners):
 
 
 def main(runners, repo, workflow, folder, download_reports=True):
-
-    #    if folder:
-    #        os.chdir(folder)
-    #    else:
-    #        # Switch to script path
-    #        path = os.path.dirname(os.path.realpath(__file__))
-    #        os.chdir(path)
+    """Main entry point to build the reports"""
 
     if download_reports:
         # delete folder contents
@@ -207,7 +203,5 @@ if __name__ == "__main__":
     workflow = args.workflow
     download = args.download
     folder = args.folder
-
-    print(args)
 
     main(runners_cfg, repo, workflow, folder=folder, download_reports=download)
