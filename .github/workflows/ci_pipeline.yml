@@ -1,10 +1,21 @@
 name: ci_pipeline
 
+# All in one ci pipeline
+#  Note that the jobs system-test_offsite_{abcd} , install-and-use-rpi_mythic{abcd}
+#  are there four times and are almost identical. They only differ in a character
+#  a,b,c,d that we use to select a runner.
+#
+# TODO: Reduce complexity by moving functionality to bash scripts
+# TODO: Think about automated generation of this workflow, there is
+#   duplicated code, especially in the later sections
+# TODO: Smoke testing on Azure is disabled, we should check if it works out
+#   with 4 runners in parallel or enable only one
+
 on:
   push:
-    branches: [continuous_integration]
+    branches: [main, continuous_integration]
   workflow_dispatch:
-    branches: [continuous_integration]
+    branches: [main, continuous_integration]
 
 env:
   CARGO_TERM_COLOR: always
@@ -227,7 +238,7 @@ jobs:
     runs-on: Ubuntu-20.04
     strategy:
       matrix:
-        # Currently only arm targets, as we use a custom strip binary !
+        # Add only arm targets here as we use a custom strip binary!
         target:
           [
             aarch64-unknown-linux-gnu,
@@ -443,7 +454,7 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        # replace the default config file with tedge custom config file
+        # For Analytics: replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -554,8 +565,6 @@ jobs:
         run: sudo systemctl stop apama
         continue-on-error: true
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
@@ -586,8 +595,6 @@ jobs:
       - name: run tedge help
         run: tedge --help
 
-        # replace the default config file with tedge custom config file
-        # TODO : Only for repos with enabled collectd statistics recording
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -633,14 +640,17 @@ jobs:
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-            #      - name: Run Smoke Test for Azure
-            #        run: ./ci/ci_smoke_test_az.sh
-            #        env:
-            #          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-            #          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-            #          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-            #          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-            #          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+# Run tests for Azure
+# Enable this, when we have decided about how many runners we use
+#
+#      - name: Run Smoke Test for Azure
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
 #################################################################################
 
@@ -676,8 +686,6 @@ jobs:
         run: sudo systemctl stop apama
         continue-on-error: true
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
@@ -754,14 +762,17 @@ jobs:
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-            #      - name: Run Smoke Test for Azure
-            #        run: ./ci/ci_smoke_test_az.sh
-            #        env:
-            #          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-            #          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-            #          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-            #          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-            #          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+# Run tests for Azure
+# Enable this, when we have decided about how many runners we use
+#
+#      - name: Run Smoke Test for Azure
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
 #################################################################################
 
@@ -797,8 +808,6 @@ jobs:
         run: sudo systemctl stop apama
         continue-on-error: true
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
@@ -875,14 +884,17 @@ jobs:
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-            #      - name: Run Smoke Test for Azure
-            #        run: ./ci/ci_smoke_test_az.sh
-            #        env:
-            #          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-            #          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-            #          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-            #          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-            #          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+# Run tests for Azure
+# Enable this, when we have decided about how many runners we use
+#
+#      - name: Run Smoke Test for Azure
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
 #################################################################################
 
@@ -918,8 +930,6 @@ jobs:
         run: sudo systemctl stop apama
         continue-on-error: true
 
-      # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
-      # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
         run: sudo dpkg -P tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
@@ -947,12 +957,9 @@ jobs:
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
-
       - name: run tedge help
         run: tedge --help
 
-        # TODO : Only for repos with enabled collectd statistics recording
-        # replace the default config file with tedge custom config file
       - name: configure collectd
         run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
 
@@ -998,14 +1005,17 @@ jobs:
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-            #      - name: Run Smoke Test for Azure
-            #        run: ./ci/ci_smoke_test_az.sh
-            #        env:
-            #          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-            #          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-            #          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-            #          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-            #          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+# Run tests for Azure
+# Enable this, when we have decided about how many runners we use
+#
+#      - name: Run Smoke Test for Azure
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
 #################################################################################
 
@@ -1320,12 +1330,6 @@ jobs:
         name: results_pysys_offsite_mythicd
         path: results/results_pysys_offsite_mythicd
 
-    - name: ls
-      run: ls -lah
-
-    - run: |
-        ls -lah ./results
-
     - name: Build report
       run: ./ci/report/build.sh
 
@@ -1343,10 +1347,11 @@ jobs:
         name: system-test-report-matrix_${{ github.run_number }}
         path: results/report-matrix.html
 
-    - run: |
+    - name: Run ls on analysis folder
+      run: |
         ls -l ./results
 
-    - name: Deploy
+    - name: Deploy to GitHub Pages
       # peaceiris/actions-gh-pages@v3
       uses: peaceiris/actions-gh-pages@v3
       with:
