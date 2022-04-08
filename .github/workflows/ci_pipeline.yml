@@ -1361,4 +1361,4 @@ jobs:
     - name: Final Result
       # This will fail if there are errors in the reports
       run: |
-        python3 final_results.py ./results/all_results.xml
+        python3 ./ci/report/final_result.py ./results/all_reports.xml
