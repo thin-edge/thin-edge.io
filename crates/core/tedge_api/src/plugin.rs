@@ -16,7 +16,7 @@ use async_trait::async_trait;
 
 use crate::{
     address::{InternalMessage, ReceiverBundle, ReplySender},
-    error::{PluginError, DirectoryError},
+    error::{DirectoryError, PluginError},
     message::CoreMessages,
     Address,
 };
@@ -41,7 +41,10 @@ pub trait PluginDirectory: Send + Sync {
     /// ## Also see
     ///
     /// - [`make_message_bundle`] On how to define your own named message bundle
-    fn get_address_for<RB: ReceiverBundle>(&self, name: &str) -> Result<Address<RB>, DirectoryError>;
+    fn get_address_for<RB: ReceiverBundle>(
+        &self,
+        name: &str,
+    ) -> Result<Address<RB>, DirectoryError>;
 
     /// Request an `Address` to the core itself. It will only accept messages from the
     /// [`CoreMessages`] bundle.
@@ -93,7 +96,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// # Example
     ///
     /// ```no_run
-    /// # use tedge_api::{Plugin, plugin::BuiltPlugin, PluginError, PluginDirectory, PluginBuilder, PluginConfiguration};
+    /// # use tedge_api::{Plugin, plugin::BuiltPlugin, PluginError, PluginExt, PluginDirectory, PluginBuilder, PluginConfiguration};
     ///
     /// #[derive(Debug)]
     /// struct MyMessage;
@@ -111,6 +114,10 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
     /// #         unimplemented!()
     /// #     }
+    /// # }
+    ///
+    /// # impl tedge_api::plugin::PluginDeclaration for MyPlugin {
+    /// #     type HandledMessages = (MyMessage,);
     /// # }
     ///
     /// #[async_trait::async_trait]
@@ -131,7 +138,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///     where
     ///         Self: Sized,
     ///     {
-    ///         tedge_api::plugin::HandleTypes::declare_handlers_for::<(MyMessage,), MyPlugin>()
+    ///         MyPlugin::get_handled_types()
     ///     }
     ///     // other trait functions...
     /// #   fn kind_name() -> &'static str {
@@ -200,6 +207,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// # use tedge_api::Plugin;
     /// # use tedge_api::PluginBuilder;
     /// # use tedge_api::PluginDirectory;
+    /// # use tedge_api::PluginExt;
     ///
     /// #[derive(Debug)]
     /// struct MyMessage;
@@ -218,6 +226,10 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// #     async fn shutdown(&mut self) -> Result<(), tedge_api::error::PluginError> {
     /// #         unimplemented!()
     /// #     }
+    /// # }
+    ///
+    /// # impl tedge_api::plugin::PluginDeclaration for MyPlugin {
+    /// #     type HandledMessages = (MyMessage,);
     /// # }
     ///
     /// #[async_trait::async_trait]
@@ -245,7 +257,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///     {
     ///         use tedge_api::plugin::PluginExt;
     ///         let p = MyPlugin {};
-    ///         Ok(p.into_untyped::<(MyMessage,)>())
+    ///         Ok(p.into_untyped())
     ///     }
     ///     // other trait functions...
     /// #   fn kind_name() -> &'static str {
@@ -255,7 +267,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// #   where
     /// #       Self: Sized,
     /// #   {
-    /// #       tedge_api::plugin::HandleTypes::declare_handlers_for::<(MyMessage,), MyPlugin>()
+    /// #       MyPlugin::get_handled_types()
     /// #   }
     /// #   async fn verify_configuration(
     /// #       &self,
@@ -304,6 +316,10 @@ pub trait Plugin: Sync + Send + DowncastSync {
 
 impl_downcast!(sync Plugin);
 
+pub trait PluginDeclaration: Plugin {
+    type HandledMessages: MessageBundle;
+}
+
 /// A trait marking that a plugin is able to handle certain messages
 ///
 /// This trait can be used by plugin authors to make their plugins able to handle messages of a
@@ -339,6 +355,7 @@ impl HandleTypes {
     /// # use tedge_api::plugin::{Handle, HandleTypes};
     /// # use tedge_api::address::ReplySender;
     /// # use tedge_api::PluginError;
+    /// # use tedge_api::PluginExt;
     ///
     /// #[derive(Debug)]
     /// struct Heartbeat;
@@ -368,8 +385,11 @@ impl HandleTypes {
     /// #         unimplemented!()
     /// #     }
     /// # }
+    /// # impl tedge_api::plugin::PluginDeclaration for HeartbeatPlugin {
+    /// #     type HandledMessages = (Heartbeat,);
+    /// # }
     ///
-    /// println!("{:#?}", HandleTypes::declare_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
+    /// println!("{:#?}", HeartbeatPlugin::get_handled_types());
     /// // This will print something akin to:
     /// //
     /// // HandleTypes(
@@ -383,35 +403,11 @@ impl HandleTypes {
     /// //  ],
     /// // )
     /// ```
-    ///
-    /// Should you ask for messages the plugin does _not_ support, you will receive a compile
-    /// error:
-    /// ```compile_fail
-    /// # use async_trait::async_trait;
-    /// # use tedge_api::plugin::{Message, Handle, HandleTypes};
-    /// # use tedge_api::PluginError;
-    ///
-    /// struct Heartbeat;
-    ///
-    /// impl Message for Heartbeat {}
-    ///
-    /// struct HeartbeatPlugin;
-    ///
-    /// // This will fail to compile as the `Heartbeat` message is not handled by the plugin
-    /// println!("{:#?}", HandleTypes::get_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
-    /// ```
-    ///
-    /// The error from the rust compiler would look like this (giving a clear indication of what is
-    /// missing):
-    /// ```text
-    /// error[E0277]: the trait bound `HeartbeatPlugin: Handle<Heartbeat>` is not satisfied
-    ///    --> src/plugin.rs:XX:YYY
-    ///     |
-    /// XX  | println!("{:#?}", HandleTypes::get_handlers_for::<(Heartbeat,), HeartbeatPlugin>());
-    ///     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Handle<Heartbeat>` is not implemented for `HeartbeatPlugin`
-    /// ```
-    pub fn declare_handlers_for<M: MessageBundle, Plugin: DoesHandle<M>>() -> HandleTypes {
-        HandleTypes(M::get_ids())
+    pub fn declare_handlers_for<P: PluginDeclaration>() -> HandleTypes
+    where
+        P: DoesHandle<P::HandledMessages>,
+    {
+        HandleTypes(P::HandledMessages::get_ids())
     }
 
     /// Empty list of types. A plugin that does not handle anything will not be able to receive
@@ -448,20 +444,27 @@ pub trait MessageBundle {
 /// This trait implements an extension for all types that implement `Plugin`.
 /// This extension can be used by plugin authors to make their specific plugin type instance into a
 /// [`BuiltPlugin`].
-pub trait PluginExt: Plugin {
+pub trait PluginExt: PluginDeclaration {
     /// Convert a `Plugin` into a `BuiltPlugin`
     ///
     /// This function is only available if the Plugin is able to handle messages that are inside
     /// the specified `MessageBundle`.
-    fn into_untyped<M: MessageBundle>(self) -> BuiltPlugin
+    fn into_untyped(self) -> BuiltPlugin
     where
-        Self: DoesHandle<M> + Sized,
+        Self: DoesHandle<Self::HandledMessages> + Sized,
     {
         self.into_built_plugin()
     }
+
+    fn get_handled_types() -> HandleTypes
+    where
+        Self: DoesHandle<Self::HandledMessages> + Sized,
+    {
+        HandleTypes::declare_handlers_for::<Self>()
+    }
 }
 
-impl<P: Plugin> PluginExt for P {}
+impl<P: PluginDeclaration> PluginExt for P {}
 
 type PluginHandlerFn =
     for<'r> fn(&'r dyn Any, InternalMessage) -> BoxFuture<'r, Result<(), PluginError>>;

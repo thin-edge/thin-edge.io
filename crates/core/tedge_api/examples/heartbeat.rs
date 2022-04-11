@@ -9,8 +9,9 @@ use futures::FutureExt;
 use tedge_api::{
     address::ReplySender,
     message::NoReply,
-    plugin::{BuiltPlugin, Handle, HandleTypes, Message, PluginExt},
-    Address, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginError, CancellationToken,
+    plugin::{BuiltPlugin, Handle, HandleTypes, Message, PluginDeclaration, PluginExt},
+    Address, CancellationToken, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory,
+    PluginError,
 };
 
 /// A message that represents a heartbeat that gets sent to plugins
@@ -78,7 +79,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
             monitored_services,
             cancellation_token,
         )
-        .into_untyped::<()>())
+        .into_untyped())
     }
 }
 
@@ -94,6 +95,10 @@ struct HeartbeatService {
     interval_duration: Duration,
     monitored_services: Vec<(String, Address<HeartbeatMessages>)>,
     cancel_token: CancellationToken,
+}
+
+impl PluginDeclaration for HeartbeatService {
+    type HandledMessages = ();
 }
 
 #[async_trait]
@@ -203,7 +208,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
     where
         Self: Sized,
     {
-        HandleTypes::declare_handlers_for::<(Heartbeat,), CriticalService>()
+        CriticalService::get_handled_types()
     }
 
     async fn verify_configuration(
@@ -225,7 +230,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
         Ok(CriticalService {
             status: tokio::sync::Mutex::new(true),
         }
-        .into_untyped::<(Heartbeat,)>())
+        .into_untyped())
     }
 }
 
@@ -257,6 +262,10 @@ impl Handle<Heartbeat> for CriticalService {
         *status = !*status;
         Ok(())
     }
+}
+
+impl PluginDeclaration for CriticalService {
+    type HandledMessages = (Heartbeat,);
 }
 
 /// Because the CriticalService is of course a Plugin, it needs an implementation for that as well.
