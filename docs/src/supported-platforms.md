@@ -17,4 +17,5 @@ Level 2 platforms are not officially supported and tested yet, but we know from 
 * Ubuntu 20.04 in WSL (only for development, not for running thin-edge.io due to missing systemd)
 * AMD64 Debian 10
 * ARMv6 Raspberry Pi OS 10 (needs to be built for this specific target, please refer to [Issue-161](https://github.com/thin-edge/thin-edge.io/issues/161))
-
+* ARMv7 Raspberry Pi OS 11
+* ARMv8 Raspberry Pi OS 11
