@@ -130,6 +130,15 @@ impl<M: Message> ReplySender<M> {
             .send(Box::new(msg))
             .map_err(|msg| *msg.downcast::<M>().unwrap())
     }
+
+    /// Check whether the ReplySender is closed
+    ///
+    /// This function returns when the internal communication channel is closed.
+    /// This can be used (with e.g. [tokio::select]) to check whether the message sender stopped
+    /// waiting for a reply.
+    pub async fn closed(&mut self) {
+        self.reply_sender.closed().await
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
