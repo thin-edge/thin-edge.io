@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use tracing::{info, warn};
 
 pub const PLUGIN_CONFIG_FILE: &str = "c8y_configuration_plugin.toml";
 
@@ -24,12 +25,23 @@ impl PluginConfig {
     }
 
     fn read_config(path: PathBuf) -> Self {
-        match fs::read_to_string(path) {
+        let path_str = path.to_str().unwrap_or(PLUGIN_CONFIG_FILE);
+        info!("Reading the config file from {}", path_str);
+        match fs::read_to_string(path.clone()) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,
-                _ => Self::default(), // The config file is ill-formed
+                _ => {
+                    warn!("The config file {} is malformed.", path_str);
+                    Self::default()
+                }
             },
-            Err(_) => Self::default(), // The config file does not exist or is not readable
+            Err(_) => {
+                warn!(
+                    "The config file {} does not exist or is not readable.",
+                    path_str
+                );
+                Self::default()
+            }
         }
     }
 
@@ -108,7 +120,7 @@ mod tests {
             '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf',
             '/etc/mosquitto/mosquitto.conf'
         ]
-        test = false
+        unsupported_key = false
         "#,
         PluginConfig {
             files: vec![]
