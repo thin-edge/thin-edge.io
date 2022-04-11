@@ -224,8 +224,14 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
-        create_directory_with_user_group("/etc/tedge/.agent", "tedge-agent", "tedge-agent", 0o775)?;
+    pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
+        let cfg_dir = config_dir.as_path().display().to_string();
+        create_directory_with_user_group(
+            &format!("{cfg_dir}/.agent"),
+            "tedge-agent",
+            "tedge-agent",
+            0o775,
+        )?;
         create_directory_with_user_group(
             "/var/log/tedge/agent",
             "tedge-agent",

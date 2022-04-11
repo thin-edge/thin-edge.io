@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     c8y::converter::CumulocityConverter,
     core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
@@ -47,19 +49,21 @@ impl TEdgeComponent for CumulocityMapper {
         CUMULOCITY_MAPPER_NAME
     }
 
-    async fn init(&self) -> Result<(), anyhow::Error> {
+    async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper c8y");
-        create_directories()?;
-        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let config_dir = cfg_dir.display().to_string();
+        create_directories(&config_dir)?;
+        let operations = Operations::try_new(&format!("{config_dir}/operations"), "c8y")?;
         self.init_session(CumulocityMapper::subscriptions(&operations)?)
             .await?;
         Ok(())
     }
 
-    async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+    async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error> {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
+        let config_dir = cfg_dir.display().to_string();
 
-        let operations = Operations::try_new("/etc/tedge/operations", "c8y")?;
+        let operations = Operations::try_new(format!("{config_dir}/operations"), "c8y")?;
         let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
         http_proxy.init().await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
@@ -87,21 +91,21 @@ impl TEdgeComponent for CumulocityMapper {
     }
 }
 
-fn create_directories() -> Result<(), anyhow::Error> {
+fn create_directories(config_dir: &str) -> Result<(), anyhow::Error> {
     create_directory_with_user_group(
-        "/etc/tedge/operations/c8y",
+        &format!("{config_dir}/operations/c8y"),
         "tedge-mapper",
         "tedge-mapper",
         0o775,
     )?;
     create_file_with_user_group(
-        "/etc/tedge/operations/c8y/c8y_SoftwareUpdate",
+        &format!("{config_dir}/operations/c8y/c8y_SoftwareUpdate"),
         "tedge-mapper",
         "tedge-mapper",
         0o644,
     )?;
     create_file_with_user_group(
-        "/etc/tedge/operations/c8y/c8y_Restart",
+        &format!("{config_dir}/operations/c8y/c8y_Restart"),
         "tedge-mapper",
         "tedge-mapper",
         0o644,
