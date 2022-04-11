@@ -27,7 +27,6 @@ class PySysTest(SoftwareManagement):
         super().setup()
         if self.check_is_installed("rolldice"):
             self.remove_package_apt("rolldice")
-            self.assertThat("0 == value", value=proc.return_value)
 
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))
 
