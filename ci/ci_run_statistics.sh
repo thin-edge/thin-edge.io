@@ -50,7 +50,8 @@ export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $
 cd tests/PySys/
 
 set +e
-pysys.py run --record -v DEBUG --include analytics
+# Dont use -v DEBUG here, it will print the enviroment vars with passwords in them
+pysys.py run --record --include analytics
 set -e
 
 deactivate
