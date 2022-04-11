@@ -20,9 +20,9 @@ use serde_json::json;
 use std::process;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathDefaultSetting,
-    MqttBindAddressSetting, MqttPortSetting, RunPathDefaultSetting, SoftwarePluginDefaultSetting,
-    TEdgeConfigLocation, TmpPathDefaultSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
+    MqttBindAddressSetting, MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting,
+    TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
@@ -139,11 +139,11 @@ impl SmAgentConfig {
             .tedge_config_root_path()
             .to_path_buf();
 
-        let tedge_download_dir = tedge_config.query_string(TmpPathDefaultSetting)?.into();
+        let tedge_download_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
-        let tedge_log_dir: String = tedge_config.query_string(LogPathDefaultSetting)?.into();
+        let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?.into();
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
-        let tedge_run_dir = tedge_config.query_string(RunPathDefaultSetting)?.into();
+        let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
