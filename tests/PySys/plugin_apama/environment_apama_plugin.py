@@ -101,7 +101,6 @@ class ApamaPlugin(BaseTest):
                 stdouterr="remove_apama_project",
             )
 
-
     def assert_apama_service_running(self, negate=False):
         exitStatusExpr = "!=0" if negate else "==0"
         self.startProcess(
