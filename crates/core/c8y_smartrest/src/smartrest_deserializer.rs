@@ -242,6 +242,28 @@ impl SmartRestRestartRequest {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestConfigUploadRequest {
+    pub message_id: String,
+    pub device: String,
+    pub config_type: String,
+}
+
+impl SmartRestConfigUploadRequest {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        rdr.deserialize()
+            .next()
+            .ok_or_else(|| panic!("empty request"))
+            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
+            .map_err(SmartRestDeserializerError::from)
+    }
+}
+
 type JwtToken = String;
 
 #[derive(Debug, Deserialize, PartialEq)]

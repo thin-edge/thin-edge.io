@@ -392,6 +392,7 @@ name = "c8y_configuration_plugin"
 version = "0.6.1"
 dependencies = [
  "anyhow",
+ "c8y_api",
  "c8y_smartrest",
  "mqtt_channel",
  "serde",
