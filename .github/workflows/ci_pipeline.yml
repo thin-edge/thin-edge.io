@@ -1039,41 +1039,41 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythica
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythica
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythica
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
+#    - name: Run all plugin tests
+#      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythica
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all sm tests
+#      run:  bash  ./ci/ci_run_all_sm_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythica
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all statistics tests
+#      run:  bash  ./ci/ci_run_statistics.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythica
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -1105,41 +1105,41 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicb
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicb
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicb
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
+#    - name: Run all plugin tests
+#      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicb
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all sm tests
+#      run:  bash  ./ci/ci_run_all_sm_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicb
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all statistics tests
+#      run:  bash  ./ci/ci_run_statistics.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicb
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -1171,41 +1171,41 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicc
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicc
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicc
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
+#    - name: Run all plugin tests
+#      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicc
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all sm tests
+#      run:  bash  ./ci/ci_run_all_sm_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicc
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all statistics tests
+#      run:  bash  ./ci/ci_run_statistics.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicc
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -1237,41 +1237,41 @@ jobs:
             TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
             EXAMPLEDIR: /home/pi/examples
 
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicd
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicd
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: mythicd
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
+#    - name: Run all plugin tests
+#      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicd
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all sm tests
+#      run:  bash  ./ci/ci_run_all_sm_tests.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicd
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#
+#    - name: Run all statistics tests
+#      run:  bash  ./ci/ci_run_statistics.sh
+#      continue-on-error: true
+#      env:
+#            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+#            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+#            C8YDEVICE: mythicd
+#            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+#            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+#            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+#            EXAMPLEDIR: /home/pi/examples
 
     - name: upload results as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
