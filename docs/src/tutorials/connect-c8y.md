@@ -162,12 +162,6 @@ To check that this message has been received by Cumulocity,
 navigate to "Device Management/Devices/All devices/\<your device id\>/Measurements".
 You should observe a "temperature measurement" graph with the new data point.
 
-## Configuring custom device data
-
-You can configure the device data panel in the Cumulocity UI to display information specific to your device.
-To do so, create an `inventory.json` json file under `/etc/tedge/device`.
-_Note_: that you must ensure that this file can be read by the `tedge-mapper` user group.
-
 ## Next Steps
 
 You can now:
@@ -175,3 +169,4 @@ You can now:
   using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
+* learn how to [add custom fragments to cumulocity](../howto-guides/021_c8y_fragments.md).
