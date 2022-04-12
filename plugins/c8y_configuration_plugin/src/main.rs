@@ -10,6 +10,12 @@ use tracing::{debug, error, info, instrument, warn};
 
 const CONFIG_ROOT_PATH: &str = "/etc/tedge/c8y";
 
+#[cfg(not(debug_assertions))]
+const LOG_LEVEL_DEBUG: bool = false;
+
+#[cfg(debug_assertions)]
+const LOG_LEVEL_DEBUG: bool = true;
+
 async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error> {
     let tedge_config = get_tedge_config()?;
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
@@ -25,6 +31,8 @@ async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error>
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    tedge_utils::logging::initialise_tracing_subscriber(LOG_LEVEL_DEBUG);
+
     // Create required clients
     let mut mqtt_client = create_mqtt_client().await?;
 
@@ -34,10 +42,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let msg = plugin_config.to_message()?;
     let () = mqtt_client.published.send(msg).await?;
 
-    // mqtt loop
+    // Mqtt message loop
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
-        match message.payload_str()?.split_at(3).0 {
+        match message.payload_str()?.split(',').nth(0).unwrap_or_default() {
             "524" => {
                 debug!("{}", message.payload_str()?);
                 todo!() // c8y_DownloadConfigFile

@@ -396,6 +396,7 @@ dependencies = [
  "mqtt_channel",
  "serde",
  "tedge_config",
+ "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
