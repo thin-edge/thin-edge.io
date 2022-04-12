@@ -18,7 +18,7 @@ use mqtt_channel::{Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use serde_json::json;
 use serial_test::serial;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 use test_case::test_case;
 use tokio::task::JoinHandle;
 
@@ -827,6 +827,14 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         _c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("123".into())
+    }
+
+    async fn upload_config_file(
+        &mut self,
+        _config_path: &Path,
+        _config_content: &str,
+    ) -> Result<String, SMCumulocityMapperError> {
+        Ok("fake/upload/url".into())
     }
 }
 

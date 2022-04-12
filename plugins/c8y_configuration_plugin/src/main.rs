@@ -2,11 +2,23 @@ mod config;
 mod smartrest;
 
 use crate::config::PluginConfig;
-use c8y_smartrest::topic::C8yTopic;
-use mqtt_channel::{SinkExt, StreamExt};
-use std::path::PathBuf;
+use anyhow::Result;
+use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_smartrest::{
+    smartrest_deserializer::SmartRestConfigUploadRequest,
+    smartrest_serializer::{
+        CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
+        SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
+    },
+    topic::C8yTopic,
+};
+use mqtt_channel::{Connection, Message, SinkExt, StreamExt};
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, MqttPortSetting};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error};
 
 const CONFIG_ROOT_PATH: &str = "/etc/tedge/c8y";
 
@@ -29,12 +41,106 @@ async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error>
     Ok(mqtt_client)
 }
 
+/// creates an http client
+pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
+    let config = get_tedge_config()?;
+    let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
+    let () = http_proxy.init().await?;
+    Ok(http_proxy)
+}
+
+/// returns a c8y message specifying to set the upload config file operation status to executing.
+///
+/// example message: '501,c8y_UploadConfigFile'
+pub fn get_upload_config_file_executing_message() -> Result<Message, anyhow::Error> {
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let smartrest_set_operation_status =
+        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yUploadConfigFile)
+            .to_smartrest()?;
+    Ok(Message::new(&topic, smartrest_set_operation_status))
+}
+
+/// returns a c8y SmartREST message indicating the success of the upload config file operation.
+///
+/// example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
+pub fn get_upload_config_file_successful_message(
+    binary_upload_event_url: &str,
+) -> Result<Message, anyhow::Error> {
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let smartrest_set_operation_status =
+        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yUploadConfigFile)
+            .with_response_parameter(binary_upload_event_url)
+            .to_smartrest()?;
+
+    Ok(Message::new(&topic, smartrest_set_operation_status))
+}
+
+/// returns a c8y SmartREST message indicating the failure of the upload config file operation.
+///
+/// example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
+pub fn get_upload_config_file_failure_message(
+    failure_reason: String,
+) -> Result<Message, anyhow::Error> {
+    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    let smartrest_set_operation_status = SmartRestSetOperationToFailed::new(
+        CumulocitySupportedOperations::C8yUploadConfigFile,
+        failure_reason,
+    )
+    .to_smartrest()?;
+
+    Ok(Message::new(&topic, smartrest_set_operation_status))
+}
+
+async fn handle_config_upload_request(
+    config_upload_request: SmartRestConfigUploadRequest,
+    mqtt_client: &mut Connection,
+    http_client: &mut JwtAuthHttpProxy,
+) -> Result<()> {
+    // set config upload request to executing
+    let msg = get_upload_config_file_executing_message()?;
+    let () = mqtt_client.published.send(msg).await?;
+
+    let upload_result = upload_config_file(
+        Path::new(config_upload_request.config_type.as_str()),
+        http_client,
+    )
+    .await;
+    match upload_result {
+        Ok(upload_event_url) => {
+            let successful_message = get_upload_config_file_successful_message(&upload_event_url)?;
+            let () = mqtt_client.published.send(successful_message).await?;
+        }
+        Err(err) => {
+            let failed_message = get_upload_config_file_failure_message(err.to_string())?;
+            let () = mqtt_client.published.send(failed_message).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn upload_config_file(
+    config_file_path: &Path,
+    http_client: &mut JwtAuthHttpProxy,
+) -> Result<String> {
+    // read the config file contents
+    let config_content = read_to_string(config_file_path)?;
+
+    // upload config file
+    let upload_event_url = http_client
+        .upload_config_file(config_file_path, &config_content)
+        .await?;
+
+    Ok(upload_event_url)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     tedge_utils::logging::initialise_tracing_subscriber(LOG_LEVEL_DEBUG);
 
     // Create required clients
     let mut mqtt_client = create_mqtt_client().await?;
+    let mut http_client = create_http_client().await?;
 
     let plugin_config = PluginConfig::new(PathBuf::from(CONFIG_ROOT_PATH));
 
@@ -45,16 +151,35 @@ async fn main() -> Result<(), anyhow::Error> {
     // Mqtt message loop
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
-        match message.payload_str()?.split(',').nth(0).unwrap_or_default() {
-            "524" => {
-                debug!("{}", message.payload_str()?);
-                todo!() // c8y_DownloadConfigFile
+        if let Ok(payload) = message.payload_str() {
+            let result = match payload.split(',').next() {
+                Some("524") => {
+                    debug!("{}", message.payload_str()?);
+                    todo!() // c8y_DownloadConfigFile
+                }
+                Some("526") => {
+                    debug!("{}", payload);
+                    // retrieve config file upload smartrest request from payload
+                    let config_upload_request =
+                        SmartRestConfigUploadRequest::from_smartrest(payload)?;
+
+                    // handle the config file upload request
+                    handle_config_upload_request(
+                        config_upload_request,
+                        &mut mqtt_client,
+                        &mut http_client,
+                    )
+                    .await
+                }
+                _ => {
+                    // Ignore operation messages not meant for this plugin
+                    Ok(())
+                }
+            };
+
+            if let Err(err) = result {
+                error!("Handling of operation: '{}' failed with {}", payload, err);
             }
-            "526" => {
-                debug!("{}", message.payload_str()?);
-                todo!() // c8y_UploadConfigFile
-            }
-            _ => {}
         }
     }
 

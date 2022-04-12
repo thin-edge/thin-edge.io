@@ -9,6 +9,7 @@ description = "Thin.edge.io operation plugin for Cumulocity configuration manage
 
 [dependencies]
 anyhow = "1.0"
+c8y_api = { path = "../../crates/core/c8y_api" }
 c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
 mqtt_channel = { path = "../../crates/common/mqtt_channel" }
 serde = { version = "1.0", features = ["derive"] }

@@ -10,6 +10,7 @@ pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
     C8yLogFileRequest,
     C8yRestartRequest,
+    C8yUploadConfigFile,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -18,6 +19,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
             CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
+            CumulocitySupportedOperations::C8yUploadConfigFile => "c8y_UploadConfigFile",
         }
     }
 }

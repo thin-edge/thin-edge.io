@@ -1,10 +1,5 @@
 use crate::config::PluginConfig;
-use c8y_smartrest::{
-    smartrest_serializer::{
-        SmartRestSerializer, SmartRestSetOperationToExecuting, SmartRestSetOperationToSuccessful,
-    },
-    topic::C8yTopic,
-};
+use c8y_smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 
 impl PluginConfig {
