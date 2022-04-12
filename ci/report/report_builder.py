@@ -30,10 +30,10 @@ runners_cfg = [
         "archive": "results_pysys_offsite_mythica.zip",
         "tests": [
             "all",
-            "apt",
-            "apama",
-            "docker",
-            "sm",
+            #"apt",
+            #"apama",
+            #"docker",
+            #"sm",
         ],
     },
     {
@@ -42,10 +42,10 @@ runners_cfg = [
         "archive": "results_pysys_offsite_mythicb.zip",
         "tests": [
             "all",
-            "apt",
-            "apama",
-            "docker",
-            "sm",
+            #"apt",
+            #"apama",
+            #"docker",
+            #"sm",
         ],
     },
     {
@@ -54,10 +54,10 @@ runners_cfg = [
         "archive": "results_pysys_offsite_mythicc.zip",
         "tests": [
             "all",
-            "apt",
-            "apama",
-            "docker",
-            "sm",
+            #"apt",
+            #"apama",
+            #"docker",
+            #"sm",
         ],
     },
     {
@@ -66,10 +66,10 @@ runners_cfg = [
         "archive": "results_pysys_offsite_mythicd.zip",
         "tests": [
             "all",
-            "apt",
-            "apama",
-            "docker",
-            "sm",
+            #"apt",
+            #"apama",
+            #"docker",
+            #"sm",
         ],
     },
 ]
