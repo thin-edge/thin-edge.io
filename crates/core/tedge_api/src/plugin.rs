@@ -304,7 +304,7 @@ pub trait Plugin: Sync + Send + DowncastSync {
     ///
     /// This function will be called by the core of thin-edge before any message-passing starts.
     /// The plugin is free to for example spawn up background tasks here.
-    async fn setup(&mut self) -> Result<(), PluginError>;
+    async fn start(&mut self) -> Result<(), PluginError>;
 
     /// Gracefully handle shutdown
     ///
