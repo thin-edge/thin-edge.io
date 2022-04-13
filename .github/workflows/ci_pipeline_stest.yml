@@ -1,0 +1,370 @@
+name: ci_pipeline_system_test
+
+on:
+  push:
+    branches: [main, continuous_integration]
+  workflow_dispatch:
+    branches: [main, continuous_integration]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+#################################################################################
+
+  system-test_offsite_a:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythica]
+    needs: [install-and-use-rpi_mythica]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all statistics tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_pysys_offsite_mythica
+        path: tests/
+
+#################################################################################
+
+  system-test_offsite_b:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythicb]
+    needs: [install-and-use-rpi_mythicb]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicb
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicb
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicb
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all statistics tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicb
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_pysys_offsite_mythicb
+        path: tests/
+
+#################################################################################
+
+  system-test_offsite_c:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythicc]
+    needs: [install-and-use-rpi_mythicc]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicc
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicc
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicc
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all statistics tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      continue-on-error: true
+      if: false
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicc
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_pysys_offsite_mythicc
+        path: tests/
+
+#################################################################################
+
+  system-test_offsite_d:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythicd]
+    needs: [install-and-use-rpi_mythicd]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicd
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicd
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicd
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all statistics tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      continue-on-error: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythicd
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_pysys_offsite_mythicd
+        path: tests/
+
+#############################################################################
+
+  system-test_postprocessing:
+    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
+    runs-on: Ubuntu-20.04
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    # Trigger repo dispatch here.
+    # This is here a limitation of the amount of workflows
+    # that trigger each other (GitHub Bug).
+    # It would be nicer to use the postprocess trigger instead
+    - name: Repository Dispatch
+      uses: peter-evans/repository-dispatch@v1
+      with:
+          token: ${{ secrets.SECRET_THEGHTOKEN  }}
+          event-type: postprocess
+          repository: abelikt/thin-edge.io_analytics
+
+    - name: download result a
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythica
+        path: results/results_pysys_offsite_mythica
+
+    - name: download result b
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicb
+        path: results/results_pysys_offsite_mythicb
+
+    - name: download result c
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicc
+        path: results/results_pysys_offsite_mythicc
+
+    - name: download result d
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_mythicd
+        path: results/results_pysys_offsite_mythicd
+
+    - name: Build report
+      run: ./ci/report/build.sh
+
+    - name: upload report as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: report_matrix_${{ github.run_number }}
+        path: results/report.zip
+
+    - name: upload report as html
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: system-test-report-matrix_${{ github.run_number }}
+        path: results/report-matrix.html
+
+    - name: Run ls on analysis folder
+      run: |
+        ls -l ./results
+
+    - name: Deploy to GitHub Pages
+      # peaceiris/actions-gh-pages@v3
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./results
+
+    - name: Final Result
+      # This will fail if there are errors in the reports
+      run: |
+        python3 ./ci/report/final_result.py ./results/all_reports.xml
