@@ -15,7 +15,6 @@ jobs:
 
   system-test_offsite_a:
     runs-on: [self-hosted, Linux, ARM, offsite_mythica]
-    needs: [install-and-use-rpi_mythica]
 
     steps:
 
@@ -85,7 +84,6 @@ jobs:
 
   system-test_offsite_b:
     runs-on: [self-hosted, Linux, ARM, offsite_mythicb]
-    needs: [install-and-use-rpi_mythicb]
 
     steps:
 
@@ -155,7 +153,6 @@ jobs:
 
   system-test_offsite_c:
     runs-on: [self-hosted, Linux, ARM, offsite_mythicc]
-    needs: [install-and-use-rpi_mythicc]
 
     steps:
 
@@ -225,7 +222,6 @@ jobs:
 
   system-test_offsite_d:
     runs-on: [self-hosted, Linux, ARM, offsite_mythicd]
-    needs: [install-and-use-rpi_mythicd]
 
     steps:
 
