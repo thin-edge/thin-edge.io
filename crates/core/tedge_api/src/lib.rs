@@ -1,11 +1,8 @@
-#![cfg_attr(
-    test,
-    deny(
-        missing_docs,
-        missing_debug_implementations,
-        unreachable_pub,
-        unsafe_code,
-    )
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    unreachable_pub,
+    unsafe_code
 )]
 #![doc = include_str!("../README.md")]
 

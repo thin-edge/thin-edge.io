@@ -25,20 +25,20 @@ pub type MessageReceiver = tokio::sync::mpsc::Receiver<InternalMessage>;
 /// An instance of this type represents an address that can be used to send messages of a
 /// well-defined type to a specific plugin.
 /// The `Address` instance can be used to send messages of several types, but each type has to be
-/// in `MB: MessageBundle`.
-pub struct Address<MB: ReceiverBundle> {
-    _pd: PhantomData<fn(MB)>,
+/// in `RB: ReceiverBundle`.
+pub struct Address<RB: ReceiverBundle> {
+    _pd: PhantomData<fn(RB)>,
     sender: MessageSender,
 }
 
-impl<MB: ReceiverBundle> std::fmt::Debug for Address<MB> {
+impl<RB: ReceiverBundle> std::fmt::Debug for Address<RB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct(&format!("Address<{}>", std::any::type_name::<MB>()))
+        f.debug_struct(&format!("Address<{}>", std::any::type_name::<RB>()))
             .finish_non_exhaustive()
     }
 }
 
-impl<MB: ReceiverBundle> Clone for Address<MB> {
+impl<RB: ReceiverBundle> Clone for Address<RB> {
     fn clone(&self) -> Self {
         Self {
             _pd: PhantomData,
@@ -47,7 +47,7 @@ impl<MB: ReceiverBundle> Clone for Address<MB> {
     }
 }
 
-impl<MB: ReceiverBundle> Address<MB> {
+impl<RB: ReceiverBundle> Address<RB> {
     /// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
     #[doc(hidden)]
     pub fn new(sender: MessageSender) -> Self {
@@ -75,7 +75,7 @@ impl<MB: ReceiverBundle> Address<MB> {
     /// For details on sending and receiving, see `tokio::sync::mpsc::Sender`.
     pub async fn send<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M>
     where
-        MB: Contains<M>,
+        RB: Contains<M>,
     {
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
@@ -95,23 +95,37 @@ impl<MB: ReceiverBundle> Address<MB> {
 }
 
 #[derive(Debug)]
+/// Listener that allows one to wait for a reply as sent through [`Address::send`]
 pub struct ReplyReceiver<M> {
     _pd: PhantomData<fn(M)>,
     reply_recv: tokio::sync::oneshot::Receiver<AnySendBox>,
 }
 
 impl<M: Message> ReplyReceiver<M> {
+    /// Wait for a reply until for the duration given in `timeout`
+    ///
+    /// ## Note
+    ///
+    /// Plugins could not reply for any number of reasons, hence waiting indefinitely on a reply
+    /// can cause problems in long-running applications. As such, one needs to specify how long a
+    /// reply should take before another action be taken.
+    ///
+    /// It is also important, that just because a given `M: Message` has a `M::Reply` type set,
+    /// that the plugin that a message was sent to does _not_ have to reply with it. It can choose
+    /// to not do so.
     pub async fn wait_for_reply(self, timeout: Duration) -> Result<M, ReplyError> {
         let data = tokio::time::timeout(timeout, self.reply_recv)
             .await
             .map_err(|_| ReplyError::Timeout)?
-            .map_err(|_| ReplyError::Unknown)?;
+            .map_err(|_| ReplyError::SendSideClosed)?;
 
         Ok(*data.downcast().expect("Invalid type received"))
     }
 }
 
 #[derive(Debug)]
+/// Allows the [`Handle`](crate::plugin::Handle) implementation to reply with a given message as
+/// specified by the currently handled message.
 pub struct ReplySender<M> {
     _pd: PhantomData<fn(M)>,
     reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
@@ -125,6 +139,7 @@ impl<M: Message> ReplySender<M> {
         }
     }
 
+    /// Reply to the originating plugin with the given message
     pub fn reply(self, msg: M) -> Result<(), M> {
         self.reply_sender
             .send(Box::new(msg))
@@ -142,11 +157,16 @@ impl<M: Message> ReplySender<M> {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// An error occured while replying
 pub enum ReplyError {
+    /// The timeout elapsed before the other plugin responded
     #[error("There was no response before timeout")]
     Timeout,
+    /// The other plugin dropped its sending side
+    ///
+    /// This means that there will never be an answer
     #[error("Could not send reply")]
-    Unknown,
+    SendSideClosed,
 }
 
 #[doc(hidden)]
