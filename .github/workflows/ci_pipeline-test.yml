@@ -725,6 +725,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all Tests
       run: bash  ./ci/ci_run_all_tests.sh
     - continue-on-error: true
@@ -736,6 +737,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: true
       name: Run all plugin tests
       run: bash  ./ci/ci_run_all_plugin_tests.sh
     - continue-on-error: true
@@ -747,6 +749,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all sm tests
       run: bash  ./ci/ci_run_all_sm_tests.sh
     - continue-on-error: true
@@ -758,6 +761,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all statistics tests
       run: bash  ./ci/ci_run_statistics.sh
     - name: upload results as zip
@@ -785,6 +789,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all Tests
       run: bash  ./ci/ci_run_all_tests.sh
     - continue-on-error: true
@@ -796,6 +801,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: true
       name: Run all plugin tests
       run: bash  ./ci/ci_run_all_plugin_tests.sh
     - continue-on-error: true
@@ -807,6 +813,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all sm tests
       run: bash  ./ci/ci_run_all_sm_tests.sh
     - continue-on-error: true
@@ -818,6 +825,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all statistics tests
       run: bash  ./ci/ci_run_statistics.sh
     - name: upload results as zip
@@ -845,6 +853,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all Tests
       run: bash  ./ci/ci_run_all_tests.sh
     - continue-on-error: true
@@ -856,6 +865,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: true
       name: Run all plugin tests
       run: bash  ./ci/ci_run_all_plugin_tests.sh
     - continue-on-error: true
@@ -867,6 +877,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all sm tests
       run: bash  ./ci/ci_run_all_sm_tests.sh
     - continue-on-error: true
@@ -878,6 +889,7 @@ jobs:
         C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
         EXAMPLEDIR: /home/pi/examples
         TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+      if: false
       name: Run all statistics tests
       run: bash  ./ci/ci_run_statistics.sh
     - name: upload results as zip
