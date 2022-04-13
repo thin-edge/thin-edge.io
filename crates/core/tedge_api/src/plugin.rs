@@ -40,7 +40,7 @@ pub trait PluginDirectory: Send + Sync {
     ///
     /// ## Also see
     ///
-    /// - [`make_message_bundle`] On how to define your own named message bundle
+    /// - [`make_receiver_bundle`](crate::make_receiver_bundle) On how to define your own named message bundle
     fn get_address_for<RB: ReceiverBundle>(
         &self,
         name: &str,
@@ -91,7 +91,8 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// This function must return a `HandleTypes` object which represents the types of messages
     /// that a plugin is able to handle.
     ///
-    /// To create an instance of this type, you must use the [`HandleTypes::get_handlers_for`] method.
+    /// To create an instance of this type, you must call the [`PluginExt::get_handled_types`]
+    /// method on the plugin this PluginBuilder will build
     ///
     /// # Example
     ///
@@ -108,7 +109,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// struct MyPlugin; // + some impl Plugin for MyPlugin
     /// # #[async_trait::async_trait]
     /// # impl Plugin for MyPlugin {
-    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #     async fn start(&mut self) -> Result<(), PluginError> {
     /// #         unimplemented!()
     /// #     }
     /// #     async fn shutdown(&mut self) -> Result<(), PluginError> {
@@ -192,7 +193,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///
     /// This function is called by the core of thin-edge to create a new plugin instance.
     ///
-    /// The `PluginExt::into_untyped()` function can be used to make any `Plugin` implementing type
+    /// The [`PluginExt::finish()`] function can be used to make any type implementing [`Plugin`]
     /// into a `BuiltPlugin`, which the function requires to be returned (see example below).
     ///
     /// # Note
@@ -220,7 +221,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// struct MyPlugin; // + some impl Plugin for MyPlugin
     /// # #[async_trait::async_trait]
     /// # impl Plugin for MyPlugin {
-    /// #     async fn setup(&mut self) -> Result<(), tedge_api::error::PluginError> {
+    /// #     async fn start(&mut self) -> Result<(), tedge_api::error::PluginError> {
     /// #         unimplemented!()
     /// #     }
     /// #     async fn shutdown(&mut self) -> Result<(), tedge_api::error::PluginError> {
@@ -257,7 +258,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///     {
     ///         use tedge_api::plugin::PluginExt;
     ///         let p = MyPlugin {};
-    ///         Ok(p.into_untyped())
+    ///         Ok(p.finish())
     ///     }
     ///     // other trait functions...
     /// #   fn kind_name() -> &'static str {
@@ -293,14 +294,14 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
 /// If a plugin also would like to receive messages, the author of a plugin must also implement the
 /// `Handle` trait.
 ///
-/// The functionality implemented via the `Plugin` trait is used to setup the plugin before
+/// The functionality implemented via the `Plugin` trait is used to start the plugin before
 /// messages are sent to it, and to shut the plugin down when thin-edge stops operation.
 ///
-/// The `Plugin::setup` function would be the place where a plugin author would create background
+/// The [`Plugin::start`] function would be the place where a plugin author would create background
 /// tasks, if their plugin must send messages pro-actively.
 #[async_trait]
 pub trait Plugin: Sync + Send + DowncastSync {
-    /// The plugin can set itself up here
+    /// The plugin can start itself here
     ///
     /// This function will be called by the core of thin-edge before any message-passing starts.
     /// The plugin is free to for example spawn up background tasks here.
@@ -377,7 +378,7 @@ impl HandleTypes {
     /// # use tedge_api::{Address, CoreMessages, error::DirectoryError, address::ReceiverBundle};
     /// # #[async_trait::async_trait]
     /// # impl tedge_api::Plugin for HeartbeatPlugin {
-    /// #     async fn setup(&mut self) -> Result<(), PluginError> {
+    /// #     async fn start(&mut self) -> Result<(), PluginError> {
     /// #         unimplemented!()
     /// #     }
     /// #
@@ -409,12 +410,6 @@ impl HandleTypes {
     {
         HandleTypes(P::HandledMessages::get_ids())
     }
-
-    /// Empty list of types. A plugin that does not handle anything will not be able to receive
-    /// messages except through replies sent with [`Reply`](crate::address::Reply)
-    pub fn empty() -> HandleTypes {
-        HandleTypes(Vec::with_capacity(0))
-    }
 }
 
 impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
@@ -427,6 +422,11 @@ impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
 ///
 /// This trait is a marker trait for all types that can be used as messages which can be send
 /// between plugins in thin-edge.
+///
+/// ## Note
+///
+/// A message without the expectation of a reply can use the [`NoReply`](crate::message::NoReply)
+/// type.
 pub trait Message: 'static + Send + std::fmt::Debug {
     type Reply: Message;
 }
@@ -447,15 +447,20 @@ pub trait MessageBundle {
 pub trait PluginExt: PluginDeclaration {
     /// Convert a `Plugin` into a `BuiltPlugin`
     ///
-    /// This function is only available if the Plugin is able to handle messages that are inside
-    /// the specified `MessageBundle`.
-    fn into_untyped(self) -> BuiltPlugin
+    /// This is used in the [`PluginBuilder::instantiate`] method to convert a struct implementing
+    /// `Plugin + PluginDeclaration` to a generic struct that the core of ThinEdge can then handle.
+    ///
+    /// This function is only available if the Plugin is able to handle messages that are specified
+    /// in [`PluginDeclaration::HandledMessages`].
+    fn finish(self) -> BuiltPlugin
     where
         Self: DoesHandle<Self::HandledMessages> + Sized,
     {
         self.into_built_plugin()
     }
 
+    /// Get the list of types that are handled by this [`Plugin`] as specified in the
+    /// [`PluginDeclaration`]
     fn get_handled_types() -> HandleTypes
     where
         Self: DoesHandle<Self::HandledMessages> + Sized,
@@ -479,6 +484,8 @@ pub struct BuiltPlugin {
 }
 
 impl BuiltPlugin {
+    /// THIS IS PART OF THE PRIVATE API DO NOT USE
+    #[doc(hidden)]
     pub fn new(plugin: Box<dyn Plugin>, handler: PluginHandlerFn) -> Self {
         Self { plugin, handler }
     }
@@ -507,6 +514,7 @@ impl BuiltPlugin {
     }
 }
 
+/// THIS IS PART OF THE PRIVATE API DO NOT USE
 #[doc(hidden)]
 pub trait DoesHandle<M: MessageBundle> {
     fn into_built_plugin(self) -> BuiltPlugin;

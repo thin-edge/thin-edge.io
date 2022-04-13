@@ -157,9 +157,36 @@ pub trait ReceiverBundle: Send + 'static {
 #[doc(hidden)]
 pub trait Contains<M: Message> {}
 
-/// Declare a set of messages to be a "MessageBundle"
+/// Declare a set of messages to be a [`ReceiverBundle`] which is then used with an [`Address`] to
+/// specify which kind of messages a given recipient plugin has to support.
 ///
-/// This macro can be used by a plugin author to declare a set of messages to be a `MessageBundle`.
+/// The list of messages MUST be a subset of the messages the plugin behind `Address` supports.
+///
+/// ## Example
+///
+/// ```rust
+/// # use tedge_api::{Message, make_receiver_bundle, message::NoReply};
+///
+/// #[derive(Debug)]
+/// struct IntMessage(u8);
+///
+/// impl Message for IntMessage {
+///     type Reply = NoReply;
+/// }
+///
+/// #[derive(Debug)]
+/// struct StatusMessage(String);
+///
+/// impl Message for StatusMessage {
+///     type Reply = NoReply;
+/// }
+///
+/// make_receiver_bundle!(struct MessageReceiver(IntMessage, StatusMessage));
+///
+/// // or if you want to export it
+///
+/// make_receiver_bundle!(pub struct AnotherMessageReceiver(IntMessage, StatusMessage));
+/// ```
 #[macro_export]
 macro_rules! make_receiver_bundle {
     ($pu:vis struct $name:ident($($msg:ty),+)) => {

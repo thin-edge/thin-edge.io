@@ -1,7 +1,7 @@
 use crate::plugin::Message;
 
 #[derive(Debug)]
-/// A message which cannot be constructed and thus cannot be used to reply with
+/// A message which cannot be constructed and thus can be used when no reply is expected.
 pub enum NoReply {}
 
 impl Message for NoReply {

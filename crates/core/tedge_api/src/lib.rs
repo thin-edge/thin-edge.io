@@ -11,7 +11,7 @@
 
 /// All the parts required to write a plugin
 pub mod plugin;
-pub use plugin::{Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginExt};
+pub use plugin::{Message, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginExt};
 
 /// Addresses allow plugins to exchange messages
 pub mod address;
