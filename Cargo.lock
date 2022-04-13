@@ -1323,6 +1323,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "miette"
+version = "4.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a097de91d72c13382f60213ed9f7f7a26afd8bee0ea320b47f886a9a67ca5a1"
+dependencies = [
+ "miette-derive",
+ "once_cell",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
+name = "miette-derive"
+version = "4.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45a95a48d0bc28f9af628286e8a4da09f96f34a97744a2e9a5a4db9814ad527d"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.82",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2696,10 +2719,10 @@ dependencies = [
 name = "tedge_api"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "downcast-rs",
  "futures",
+ "miette",
  "serde",
  "static_assertions",
  "thiserror",

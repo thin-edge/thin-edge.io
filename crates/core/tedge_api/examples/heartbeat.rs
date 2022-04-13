@@ -35,6 +35,12 @@ impl Message for HeartbeatStatus {
 #[derive(Debug)]
 struct HeartbeatServiceBuilder;
 
+#[derive(miette::Diagnostic, thiserror::Error, Debug)]
+enum HeartbeatBuildError {
+    #[error(transparent)]
+    TomlParse(#[from] toml::de::Error),
+}
+
 #[async_trait]
 impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
     fn kind_name() -> &'static str {
@@ -64,7 +70,8 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
     where
         PD: 'async_trait,
     {
-        let hb_config: HeartbeatConfig = toml::Value::try_into(config)?;
+        let hb_config: HeartbeatConfig =
+            toml::Value::try_into(config).map_err(HeartbeatBuildError::from)?;
         let monitored_services = hb_config
             .plugins
             .iter()

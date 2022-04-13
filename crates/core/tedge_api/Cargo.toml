@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.53"
 async-trait = "0.1.52"
 downcast-rs = "1.2.0"
 futures = "0.3.21"
+miette = "4.4.0"
 thiserror = "1.0.30"
 tokio = { version = "1.16.1", features = ["sync", "time"] }
 tokio-util = "0.7.0"
