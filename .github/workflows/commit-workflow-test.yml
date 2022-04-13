@@ -146,7 +146,7 @@ jobs:
         args: --release --no-run --target=armv7-unknown-linux-gnueabihf
         command: test
         use-cross: true
-name: commit-workflow
+name: commit-workflow-test
 'on':
   pull_request:
     branches:
