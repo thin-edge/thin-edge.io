@@ -10,6 +10,7 @@
 			<![CDATA[ ]]>
 		</purpose>
 	</description>
+	<skipped reason="Fails due to retained message"/>
 	<classification>
 		<groups inherit="true">
 			<group>

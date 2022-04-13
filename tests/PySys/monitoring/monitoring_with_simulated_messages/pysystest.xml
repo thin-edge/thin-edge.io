@@ -8,7 +8,8 @@
 		<purpose>
 			<![CDATA[ ]]>
 		</purpose>
-	</description>
+		 </description>
+		<skipped reason="Fails due to retained message"/>
 	<classification>
 		<groups inherit="true">
 			<group>
