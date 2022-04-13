@@ -56,7 +56,7 @@ pub trait PluginDirectory: Send + Sync {
 /// It is important that configuration errors are communicated precisely
 /// and concisely. Reporting the span is not a must, but greatly helps users
 /// in diagnostics of errors as well as sources of configuration.
-pub type PluginConfiguration = toml::Spanned<toml::value::Value>;
+pub type PluginConfiguration = toml::value::Value;
 
 /// A plugin builder for a given plugin
 ///

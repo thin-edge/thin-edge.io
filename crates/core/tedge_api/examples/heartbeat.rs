@@ -64,7 +64,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for HeartbeatServiceBuilder {
     where
         PD: 'async_trait,
     {
-        let hb_config: HeartbeatConfig = toml::Value::try_into(config.into_inner())?;
+        let hb_config: HeartbeatConfig = toml::Value::try_into(config)?;
         let monitored_services = hb_config
             .plugins
             .iter()
