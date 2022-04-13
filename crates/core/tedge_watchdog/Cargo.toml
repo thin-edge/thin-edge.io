@@ -9,6 +9,13 @@ description = "tedge_watchdog checks the health of all the thin-edge.io componen
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.deb]
+pre-depends = "tedge"
+assets = [
+    ["../../../configuration/init/systemd/tedge-watchdog.service", "/lib/systemd/system/tedge-watchdog.service", "644"],
+    ["target/release/tedge_watchdog", "/usr/bin/tedge_watchdog", "755"],
+]
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.0", features = ["cargo", "derive"] }
