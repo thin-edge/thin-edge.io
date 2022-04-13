@@ -1,0 +1,162 @@
+name: test-commit-workflow
+true:
+  pull_request:
+    branches:
+    - main
+    - continuous_integration
+  push:
+    branches:
+    - main
+    - continuous_integration
+  workflow_dispatch:
+    branches:
+    - main
+    - continuous_integration
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  cargo-build:
+    name: Run cargo build
+    needs:
+    - cargo-fmt
+    - cargo-clippy
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: enable toolchain via github action
+      uses: actions-rs/toolchain@v1
+      with:
+        override: true
+        toolchain: 1.58.1
+    - name: Enable cache
+      uses: Swatinem/rust-cache@v1
+    - name: Cargo version
+      uses: actions-rs/cargo@v1
+      with:
+        command: version
+    - name: Cargo build
+      uses: actions-rs/cargo@v1
+      with:
+        args: --release
+        command: build
+  cargo-clippy:
+    name: Run cargo clippy
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: enable toolchain via github action
+      uses: actions-rs/toolchain@v1
+      with:
+        components: rustfmt, clippy
+        override: true
+        toolchain: 1.58.1
+    - name: Enable cache
+      uses: Swatinem/rust-cache@v1
+    - name: Cargo clippy --version
+      uses: actions-rs/cargo@v1
+      with:
+        args: --version
+        command: clippy
+        toolchain: 1.58.1
+    - name: Cargo clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        toolchain: 1.58.1
+  cargo-fmt:
+    name: Run cargo fmt
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Cargo fmt --version
+      uses: actions-rs/cargo@v1
+      with:
+        args: --version
+        command: fmt
+    - name: Cargo fmt
+      uses: actions-rs/cargo@v1
+      with:
+        args: -- --check
+        command: fmt
+    - uses: rickstaa/action-black@v1
+      with:
+        black_args: . --check
+  cargo-test:
+    name: Run cargo test
+    needs:
+    - cargo-fmt
+    - cargo-clippy
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: enable toolchain via github action
+      uses: actions-rs/toolchain@v1
+      with:
+        override: true
+        toolchain: 1.58.1
+    - name: Enable cache
+      uses: Swatinem/rust-cache@v1
+    - name: Cargo version
+      uses: actions-rs/cargo@v1
+      with:
+        command: version
+    - name: Cargo build dummy plugin
+      uses: actions-rs/cargo@v1
+      with:
+        args: -p tedge_dummy_plugin
+        command: build
+    - name: Cargo test
+      uses: actions-rs/cargo@v1
+      with:
+        args: --no-fail-fast
+        command: test
+  cargo_build_arm7_32bit:
+    name: cargo build for armv7 32bit
+    needs:
+    - cargo-fmt
+    - cargo-clippy
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: enable toolchain via github action
+      uses: actions-rs/toolchain@v1
+      with:
+        override: true
+        target: armv7-unknown-linux-gnueabihf
+        toolchain: 1.58.1
+    - name: Enable cache
+      uses: Swatinem/rust-cache@v1
+    - name: build cross release for target
+      uses: actions-rs/cargo@v1
+      with:
+        args: --release --target=armv7-unknown-linux-gnueabihf
+        command: build
+        use-cross: true
+  cargo_build_tests_arm7_32bit:
+    name: cargo build tests for armv7 32bit
+    needs:
+    - cargo-fmt
+    - cargo-clippy
+    runs-on: Ubuntu-20.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: enable toolchain via github action
+      uses: actions-rs/toolchain@v1
+      with:
+        override: true
+        target: armv7-unknown-linux-gnueabihf
+        toolchain: 1.58.1
+    - name: Enable cache
+      uses: Swatinem/rust-cache@v1
+    - name: Build tests cross release for target
+      uses: actions-rs/cargo@v1
+      with:
+        args: --release --no-run --target=armv7-unknown-linux-gnueabihf
+        command: test
+        use-cross: true
