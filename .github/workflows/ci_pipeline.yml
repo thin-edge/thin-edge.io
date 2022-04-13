@@ -1030,6 +1030,7 @@ jobs:
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1042,6 +1043,7 @@ jobs:
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       continue-on-error: true
+      if: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1054,6 +1056,7 @@ jobs:
     - name: Run all sm tests
       run:  bash  ./ci/ci_run_all_sm_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1066,6 +1069,7 @@ jobs:
     - name: Run all statistics tests
       run:  bash  ./ci/ci_run_statistics.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1096,6 +1100,7 @@ jobs:
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1108,6 +1113,7 @@ jobs:
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       continue-on-error: true
+      if: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1120,6 +1126,7 @@ jobs:
     - name: Run all sm tests
       run:  bash  ./ci/ci_run_all_sm_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1132,6 +1139,7 @@ jobs:
     - name: Run all statistics tests
       run:  bash  ./ci/ci_run_statistics.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1162,6 +1170,7 @@ jobs:
     - name: Run all Tests
       run:  bash  ./ci/ci_run_all_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1174,6 +1183,7 @@ jobs:
     - name: Run all plugin tests
       run:  bash  ./ci/ci_run_all_plugin_tests.sh
       continue-on-error: true
+      if: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1186,6 +1196,7 @@ jobs:
     - name: Run all sm tests
       run:  bash  ./ci/ci_run_all_sm_tests.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
@@ -1198,6 +1209,7 @@ jobs:
     - name: Run all statistics tests
       run:  bash  ./ci/ci_run_statistics.sh
       continue-on-error: true
+      if: false
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
