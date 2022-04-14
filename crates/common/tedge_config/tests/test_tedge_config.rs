@@ -101,10 +101,7 @@ path = "/some/value"
         FilePath::from("key.pem")
     );
 
-    assert_eq!(
-        config.query(TmpPathDefaultSetting)?,
-        FilePath::from("/some/value")
-    );
+    assert_eq!(config.query(TmpPathSetting)?, FilePath::from("/some/value"));
 
     assert_eq!(
         config.query(MqttBindAddressSetting)?,

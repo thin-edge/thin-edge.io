@@ -288,37 +288,39 @@ impl ConfigSetting for SoftwarePluginDefaultSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct TmpPathDefaultSetting;
+pub struct TmpPathSetting;
 
-impl ConfigSetting for TmpPathDefaultSetting {
+impl ConfigSetting for TmpPathSetting {
     const KEY: &'static str = "tmp.path";
 
     const DESCRIPTION: &'static str = concat!(
-        "The default temporary path to be used for downloads on the device",
+        "The temporary directory path to be used for downloads on the device",
         "Example: /tmp"
     );
 
     type Value = FilePath;
 }
 
-pub struct LogPathDefaultSetting;
+pub struct LogPathSetting;
 
-impl ConfigSetting for LogPathDefaultSetting {
+impl ConfigSetting for LogPathSetting {
     const KEY: &'static str = "logs.path";
 
-    const DESCRIPTION: &'static str =
-        concat!("The default path to be used for logs", "Example: /var/log");
+    const DESCRIPTION: &'static str = concat!(
+        "The directory path to be used for logs",
+        "Example: /var/log"
+    );
 
     type Value = FilePath;
 }
 
-pub struct RunPathDefaultSetting;
+pub struct RunPathSetting;
 
-impl ConfigSetting for RunPathDefaultSetting {
+impl ConfigSetting for RunPathSetting {
     const KEY: &'static str = "run.path";
 
     const DESCRIPTION: &'static str = concat!(
-        "The default path to be used for runtime information",
+        "The directory path to be used for runtime information",
         "Example: /run"
     );
 

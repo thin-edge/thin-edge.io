@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
     // Run only one instance of a mapper
     let _flock = check_another_instance_is_not_running(
         &mapper_opt.name.to_string(),
-        &config.query(RunPathDefaultSetting)?.into(),
+        &config.query(RunPathSetting)?.into(),
     )?;
 
     if mapper_opt.init {
