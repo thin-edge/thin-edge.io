@@ -6,14 +6,14 @@ use anyhow::Result;
 use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
 use c8y_api::{
-    http_proxy::{C8YHttpProxy, MockC8YHttpProxy},
+    http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
 use c8y_smartrest::{
     error::SMCumulocityMapperError, operations::Operations,
     smartrest_deserializer::SmartRestJwtResponse,
 };
-use mockall::predicate;
+
 use mqtt_channel::{Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use serde_json::json;
@@ -683,20 +683,7 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
-    let size_threshold = SizeThreshold(16 * 1024);
-    let device_name = String::from("test");
-    let device_type = String::from("test_type");
-    let operations = Operations::default();
-    let http_proxy = MockC8YHttpProxy::new();
-
-    let mut converter = CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    );
-
+    let mut converter = create_c8y_converter();
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -716,20 +703,7 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
-    let size_threshold = SizeThreshold(16 * 1024);
-    let device_name = String::from("test");
-    let device_type = String::from("test_type");
-    let operations = Operations::default();
-    let http_proxy = MockC8YHttpProxy::new();
-
-    let mut converter = CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    );
-
+    let mut converter = create_c8y_converter();
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -754,32 +728,117 @@ async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_event() {
-    let mqtt_packet_limit = 16;
-    let size_threshold = SizeThreshold(mqtt_packet_limit * 1024);
-    let device_name = String::from("test");
-    let device_type = String::from("test_type");
-    let operations = Operations::default();
-
-    let mut http_proxy = MockC8YHttpProxy::new();
-    http_proxy
-        .expect_send_event()
-        .with(predicate::always())
-        .returning(|_| Ok("123".into()));
-
-    let mut converter = CumulocityConverter::new(
-        size_threshold,
-        device_name,
-        device_type,
-        operations,
-        http_proxy,
-    );
+    let mut converter = create_c8y_converter();
 
     let event_topic = "tedge/events/click_event";
-    let big_event_text = create_packet((mqtt_packet_limit + 1) * 1024); // Event payload > size_threshold
+    let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
     let big_event_payload = json!({ "text": big_event_text }).to_string();
     let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
 
     assert!(converter.convert(&big_event_message).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_big_measurement() {
+    let mut converter = create_c8y_converter();
+
+    let measurement_topic = "tedge/measurements";
+    let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
+
+    let big_measurement_message = Message::new(
+        &Topic::new_unchecked(measurement_topic),
+        big_measurement_payload,
+    );
+
+    let result = converter.convert(&big_measurement_message).await;
+
+    assert!(result
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains( "The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements after translation is 33020 greater than the threshold size of 16384."));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_small_measurement() {
+    let mut converter = create_c8y_converter();
+
+    let measurement_topic = "tedge/measurements";
+    let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
+
+    let big_measurement_message = Message::new(
+        &Topic::new_unchecked(measurement_topic),
+        big_measurement_payload,
+    );
+
+    let result = converter.convert(&big_measurement_message).await;
+
+    assert!(result
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains(
+            "{\"type\":\"ThinEdgeMeasurement\",\"temperature0\":{\"temperature0\":{\"value\":0.0}}"
+        ));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_big_measurement_for_child_device() {
+    let mut converter = create_c8y_converter();
+
+    let measurement_topic = "tedge/measurements/child1";
+    let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
+
+    let big_measurement_message = Message::new(
+        &Topic::new_unchecked(measurement_topic),
+        big_measurement_payload,
+    );
+
+    let result = converter.convert(&big_measurement_message).await;
+
+    assert!(result
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements/child1 after translation is 33081 greater than the threshold size of 16384."));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_convert_small_measurement_for_child_device() {
+    let measurement_topic = "tedge/measurements/child1";
+    let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
+
+    let big_measurement_message = Message::new(
+        &Topic::new_unchecked(measurement_topic),
+        big_measurement_payload,
+    );
+    let mut converter = create_c8y_converter();
+    let result = converter.convert(&big_measurement_message).await;
+
+    assert!(result
+        .clone()
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains("101,child1,child1,thin-edge.io-child"));
+
+    assert!(result.clone()
+        .into_iter()
+        .nth(1)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains(
+            "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temperature0\":{\"temperature0\":{\"value\":0.0}},"
+        ));
 }
 
 fn create_packet(size: usize) -> String {
@@ -790,6 +849,17 @@ fn create_packet(size: usize) -> String {
         buffer.push_str("Some data!");
     }
     buffer
+}
+
+fn create_thin_edge_measurement(size: usize) -> String {
+    let mut map = serde_json::Map::new();
+    let data = r#""temperature":25"#;
+    let loops = size / data.len();
+    for i in 0..loops {
+        map.insert(format!("temperature{i}"), json!(i));
+    }
+    let obj = serde_json::Value::Object(map);
+    serde_json::to_string(&obj).unwrap()
 }
 
 pub struct FakeC8YHttpProxy {}

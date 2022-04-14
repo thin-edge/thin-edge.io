@@ -120,7 +120,7 @@ where
         let mut vec: Vec<Message> = Vec::new();
 
         let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
-        match maybe_child_id {
+        let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
                 let c8y_json_child_payload =
@@ -133,19 +133,23 @@ where
                         format!("101,{child_id},{child_id},thin-edge.io-child"),
                     ));
                 }
+                c8y_json_child_payload
+            }
+            None => json::from_thin_edge_json(input.payload_str()?)?,
+        };
 
-                vec.push(Message::new(
-                    &self.mapper_config.out_topic,
-                    c8y_json_child_payload,
-                ));
-            }
-            None => {
-                let c8y_json_payload = json::from_thin_edge_json(input.payload_str()?)?;
-                vec.push(Message::new(
-                    &self.mapper_config.out_topic,
-                    c8y_json_payload,
-                ));
-            }
+        if c8y_json_payload.len() < self.size_threshold.0 {
+            vec.push(Message::new(
+                &self.mapper_config.out_topic,
+                c8y_json_payload,
+            ));
+        } else {
+            return Err(ConversionError::TranslatedSizeExceededThreshold {
+                payload: input.payload_str()?[0..50].into(),
+                topic: input.topic.name.clone(),
+                actual_size: c8y_json_payload.len(),
+                threshold: self.size_threshold.0,
+            });
         }
         Ok(vec)
     }
