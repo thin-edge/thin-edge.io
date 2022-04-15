@@ -1,8 +1,13 @@
-use std::ffi::OsStr;
-use std::process::{Output, Stdio};
-use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use tokio::process::{Child, Command};
+use log::error;
+use std::{
+    ffi::OsStr,
+    process::{Output, Stdio},
+};
+use tokio::{
+    fs::File,
+    io::{AsyncWriteExt, BufWriter},
+    process::{Child, Command},
+};
 
 pub struct LoggingChild {
     command_line: String,
@@ -16,7 +21,7 @@ impl LoggingChild {
     ) -> Result<Output, std::io::Error> {
         let outcome = self.inner_child.wait_with_output().await;
         if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
-            tracing::log::error!("Fail to log the command execution: {}", err);
+            error!("Fail to log the command execution: {}", err);
         }
 
         outcome
@@ -80,7 +85,7 @@ impl LoggedCommand {
         let outcome = self.command.output().await;
 
         if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
-            tracing::log::error!("Fail to log the command execution: {}", err);
+            error!("Fail to log the command execution: {}", err);
         }
 
         outcome
