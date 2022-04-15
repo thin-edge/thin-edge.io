@@ -23,17 +23,25 @@ import subprocess
 import shutil
 
 
+# Archvies with test reports
+# __pysys_junit_xml pysys_junit_xml_X where X is :
+#     "all"
+#     "apt"
+#     "apama"
+#     "docker"
+#     "sm"
+
 runners_cfg = [
     {
         "name": "results_pysys_offsite_mythica",
         "repo": "abelikt",
         "archive": "results_pysys_offsite_mythica.zip",
         "tests": [
-            #"all",
+            "all",
             "apt",
             "apama",
             "docker",
-            #"sm",
+            "sm",
         ],
     },
     {
@@ -41,11 +49,11 @@ runners_cfg = [
         "repo": "abelikt",
         "archive": "results_pysys_offsite_mythicb.zip",
         "tests": [
-            #"all",
+            "all",
             "apt",
             "apama",
             "docker",
-            #"sm",
+            "sm",
         ],
     },
     {
@@ -53,11 +61,11 @@ runners_cfg = [
         "repo": "abelikt",
         "archive": "results_pysys_offsite_mythicc.zip",
         "tests": [
-            #"all",
+            "all",
             "apt",
             "apama",
             "docker",
-            #"sm",
+            "sm",
         ],
     },
     {
@@ -65,11 +73,11 @@ runners_cfg = [
         "repo": "abelikt",
         "archive": "results_pysys_offsite_mythicd.zip",
         "tests": [
-            #"all",
+            "all",
             "apt",
             "apama",
             "docker",
-            #"sm",
+            "sm",
         ],
     },
 ]
