@@ -395,6 +395,9 @@ class SoftwareManagement(EnvironmentC8y):
 
         package_list = jresponse.get("c8y_SoftwareList")
 
+        if package_list == None:
+            raise SystemError("The Sofware list is empty !!!")
+
         for package in package_list:
             if package.get("name") == package_name:
                 self.log.info("Package %s is installed", package_name)
