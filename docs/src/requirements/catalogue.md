@@ -4,22 +4,15 @@ Terminology
 - **platform**<br/>
   _Everything of thin-edge core_
 - **application**<br/>
-  TODO
 - **device**<br/>
-  TODO
 - **device's system** or **OS**<br/>
-  TODO
 - **reference device**<br/>
-  TODO
 - **OT** and **OT-expert**<br/>
-  TODO
 - **Device Owner**<br/>
-  TODO
 - **API**<br/>
-  TODO
 - **Interface**<br/>
-  TODO
-  
+
+TODO: Add definition to all terms above.
   
 Explanation of requirenent's attributes:
 
@@ -53,7 +46,10 @@ All requirements below are grouped per six fundamental pillars:
 **(d) Fit for (industrial) Embedded Systems** 
 | ID | Name | Rationale | Stakeholder | Status | Comment |
 |---|---|---|---|---|---|
-| d.1 |  |  |  |  |  |
+| d.1 | The plaform shall consider resource constraints of embedded devices.<br/><br/>**TODO: Add magnitude of resources, and types of resources.** |  |  | draft |  |
+| d.2 | The platform shall use highly robust APIs for internal communication.<br/><br/>**TODO: Maybe add "built-time typed/verified"?**) | **TODO:** Instead of loose coupled communication, tight coupled communication channels shall detect missaligned communication partners early (?in best case at compile time?). |  | draft |  |
+| d.3 | The platform shall provide public interfaces/APIs for seamless integration of OT applications and OT technologies.<br/><br/>**TODO: Or should that level of seamless integration not given by the core, but by 'bridges'?** | Thin-edge shall be the glue between OT and IT world. So OT experts (i.E. domain experts as e.g. PLC engineers, Embedded SW developers, ...) shall feel like home when using thin-edge's public interfaces. |  | draft |  |
+| d.4 |  |  |  |  |  |
 
 
 **(e) Debugging & Observability** 
