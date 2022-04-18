@@ -31,6 +31,7 @@ All requirements below are grouped per six fundamental pillars:
 | a.2 | The platform shall provide all features in a most re-usable way for a device-owner's specific device and application.| To avoid every Device Owners need not to reinvent the _same_ wheel to get core functionality running with it's Device & App. |  | new |  |
 | a.3 | The platform must not implement things that will again significantly modified/reinvented by most device owners.<br/><br/>**TODO: Define what 'significantly' does means here.** | To clearly focus with thin-edge design/implememtation on the _important_ things. Do not waste time with things that will not have a wide re-use. |  |  new |  | 
 | a.4 | A device owner shall be able to adapt and run the platform on any kind of Linux distribution. | The platform shall have no hard-coded dependencies to the device's linux distribution running on. I.E. no hard-coded dependencies to a package manager (e.g. apt), init manager (e.g. systemd), etc. Instead all needed dependencies shall be abstracted, e.g. using configuration files or executable plugins. |  | new |  |
+| a.5 | **TODO: That's a placeholder to define how modular/configurable thin-edge core shall be.** | An advanced device owner shall be able to stick thin-edge functionality together and to adjust thin-edge in a way that it perfectly fits to it's device/use-case/application. |  | draft | |
 
 
 **(b) Cloud Agnostic** 
