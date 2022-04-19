@@ -25,9 +25,9 @@ import shutil
 
 runners_cfg = [
     {
-        "name": "results_pysys_offsite_mythica",
+        "name": "results_pysys_offsite_m32sd10a",
         "repo": "thin-edge",
-        "archive": "results_pysys_offsite_mythica.zip",
+        "archive": "results_pysys_offsite_m32sd10a.zip",
         "tests": [
             "all",
             "apt",
@@ -37,9 +37,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "results_pysys_offsite_mythicb",
+        "name": "results_pysys_offsite_m32sd10b",
         "repo": "thin-edge",
-        "archive": "results_pysys_offsite_mythicb.zip",
+        "archive": "results_pysys_offsite_m32sd10b.zip",
         "tests": [
             "all",
             "apt",
@@ -49,9 +49,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "results_pysys_offsite_mythicc",
+        "name": "results_pysys_offsite_m32sd10c",
         "repo": "thin-edge",
-        "archive": "results_pysys_offsite_mythicc.zip",
+        "archive": "results_pysys_offsite_m32sd10c.zip",
         "tests": [
             "all",
             "apt",
@@ -61,9 +61,9 @@ runners_cfg = [
         ],
     },
     {
-        "name": "results_pysys_offsite_mythicd",
+        "name": "results_pysys_offsite_m32sd10d",
         "repo": "thin-edge",
-        "archive": "results_pysys_offsite_mythicd.zip",
+        "archive": "results_pysys_offsite_m32sd10d.zip",
         "tests": [
             "all",
             "apt",
