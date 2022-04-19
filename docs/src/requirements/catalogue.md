@@ -48,8 +48,8 @@ All requirements below are grouped per six fundamental pillars:
 **(d) Fit for (industrial) Embedded Systems** 
 | ID | Name | Rationale | Stakeholder | Status | Comment |
 |---|---|---|---|---|---|
-| d.1 | The plaform shall consider resource constraints of embedded devices.<br/><br/>**TODO: Add magnitude of resources, and types of resources.** |  |  | draft |  |
-| d.2 | The platform shall use highly robust APIs for internal communication.<br/><br/>**TODO: Maybe add 'statically typed'?**) | Use of tight coupled communication channels (statically typed data-structures) instead of loose coupled communication (e.g. with freely defined MQTT message payload strings)  shall allow to detect missaligned communication partners early.<br/><br/° **TODO: maybe add "at compile-time and/or on component startup"**. |  | draft |  |
+| d.1 | The plaform shall consider resource constraints of embedded devices.<br/><br/>**TODO: Add magnitude of resources, and types of resources.** | As thin-edge is made to connect thin-device to the cloud it shall run on PLCs or other Embedded Devices. | draft |  |
+| d.2 | The platform shall use highly robust APIs for internal communication.<br/><br/>**TODO: Maybe add 'statically typed'?**) | Use of tight coupled communication channels (statically typed data-structures) instead of loose coupled communication (e.g. with freely defined MQTT message payload strings)  shall allow to detect missaligned communication partners early.<br/><br/> **TODO: maybe add "at compile-time and/or on component startup"**. |  | draft |  |
 | d.3 | The platform shall provide public interfaces/APIs for seamless integration of OT applications and OT technologies.<br/><br/>**TODO: Or should that level of seamless integration not given by the core, but by 'bridges'?** | Thin-edge shall be the glue between OT and IT world. So OT experts (i.E. domain experts as e.g. PLC engineers, Embedded SW developers, ...) shall feel like home when using thin-edge's public interfaces. |  | draft |  |
 | d.4 |  |  |  |  |  |
 
