@@ -1375,6 +1375,8 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./results
+        destination_dir: results
+        commit_message: Results for ci pipeline run ${{ github.run_number }}
 
     - name: Final Result
       # This will fail if there are errors in the reports
