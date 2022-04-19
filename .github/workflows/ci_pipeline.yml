@@ -654,7 +654,7 @@ jobs:
 #################################################################################
 
   install-and-use-rpi_mythicb:
-    runs-on: [self-hosted, Linux, ARM, offsite_mythicc]
+    runs-on: [self-hosted, Linux, ARM, offsite_mythicb]
     needs: [build_matrix_arm]
 
     steps:
@@ -776,7 +776,7 @@ jobs:
 #################################################################################
 
   install-and-use-rpi_mythicc:
-    runs-on: [self-hosted, Linux, ARM, offsite_mythicb]
+    runs-on: [self-hosted, Linux, ARM, offsite_mythicc]
     needs: [build_matrix_arm]
 
     steps:
