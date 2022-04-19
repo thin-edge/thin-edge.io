@@ -28,10 +28,10 @@ All requirements below are grouped per six fundamental pillars:
 | ID | Name | Rationale | Stakeholder | Status | Comment |
 |---|---|---|---|---|---|
 | a.1 | The platform shall provide all features out of the box on the reference device with reference cloud.<br/><br/>**TODO: Do we want to have here a reference cloud (probably C8Y)? Could lead into too much push for that cloud (Hard to keep 'Cloud Agnostic')?** | Having minimal effort for device owners to make 1st steps with thin-edge. Scope: Demo and Prototype phase. |  | new |  |
-| a.2 |  |   |  |   |  |
-| a.3 | Thin-edge shall focus on functionality that can be highly re-used by most device owners.<br/><br/>**TODO: Define what 'highly reuse' does means here.** | To clearly focus with thin-edge design/implememtation on the _important_ things. Do not waste time with things that will not have any wide re-use, and instead might be heavily adapted/re-inveted in most customer cases. |  |  draft |  | 
+| a.2 | **TODO: That's a placeholder to define how modular/configurable thin-edge core shall be.** | An advanced device owner shall be able to stick thin-edge functionality together and to adjust thin-edge in a way that it perfectly fits to it's device/use-case/application.<br/><br/> That includes selecting exactly the needed functionality and disable others, and even allowing to link thin-edge core into one static executable.<br/><br/>That is to disable/exclude unneeded components / code-paths to reduce complexity and minimize risc for malfunctions.  |  | draft  |  |
+| a.3 | Thin-edge shall focus on functionality that can be highly re-used as is by most device owners.<br/><br/>**TODO: Define what 'highly reuse' does means here.** | To clearly focus with thin-edge design/implememtation on the _important_ things. Do not waste time with things that will not have any wide re-use, and instead might be heavily adapted/re-inveted in most customer cases. |  |  draft |  | 
 | a.4 | A device owner shall be able to adapt and run the platform on any kind of Linux distribution. | The platform shall have no hard-coded dependencies to the device's linux distribution running on. I.E. no hard-coded dependencies to a package manager (e.g. apt), init manager (e.g. systemd), etc. Instead all needed dependencies shall be abstracted, e.g. using configuration files or executable plugins. |  | new |  |
-| a.5 | **TODO: That's a placeholder to define how modular/configurable thin-edge core shall be.** | An advanced device owner shall be able to stick thin-edge functionality together and to adjust thin-edge in a way that it perfectly fits to it's device/use-case/application. I.e. to select exactly the needed functionality and disable others, and even allow to link thin-edge core to one static executable.<br/><br/>That is to disable/exclude unneeded components / code-paths to reduce complexity and minimize risc for malfunctions. |  | draft | |
+| a.5 |  |  |  | draft | |
 
 
 **(b) Cloud Agnostic** 
@@ -42,7 +42,7 @@ All requirements below are grouped per six fundamental pillars:
 **(c) Programming Language Agnostic** 
 | ID | Name | Rationale | Stakeholder | Status | Comment |
 |---|---|---|---|---|---|
-| c.1 | The platform shall provide all public interfaces in a way that they can be used with all programming languages.<br/><br/>**TODO: Define what 'public' does mean here. And should we really say 'all'?** | Customers and Contributors shall not be forced to implement plugins or applications interfacing thin-edge in a specific programming language. Also thin-edge project shall not provide/maintain adapters (e.g Libraries) for various programming languages. |  | new |  |
+| c.1 | The platform shall provide all public interfaces in a way that they can be used with all programming languages.<br/><br/>**TODO: Define what 'public' does mean here. And should we really say 'all'?**| Customers and Contributors shall not be forced to implement plugins or applications interfacing thin-edge in a specific programming language. Also thin-edge project shall not provide/maintain adapters (e.g Libraries) for various programming languages.<br/><br/><br/>**TODO: Or should that level not be given by the core, but by 'bridges'?** |  | new |  |
 
 
 **(d) Fit for (industrial) Embedded Systems** 
