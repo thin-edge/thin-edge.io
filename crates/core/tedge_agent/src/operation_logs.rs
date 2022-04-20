@@ -24,10 +24,12 @@ pub struct OperationLogs {
 pub enum LogKind {
     SoftwareUpdate,
     SoftwareList,
+    Operation,
 }
 
 const UPDATE_PREFIX: &str = "software-update";
 const LIST_PREFIX: &str = "software-list";
+const OPERATION_PREFIX: &str = "operation";
 
 impl OperationLogs {
     pub fn try_new(log_dir: PathBuf) -> Result<OperationLogs, OperationLogsError> {
@@ -47,7 +49,11 @@ impl OperationLogs {
         Ok(operation_logs)
     }
 
-    pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, OperationLogsError> {
+    pub async fn new_log_file(
+        &self,
+        kind: LogKind,
+        operation_name: Option<&str>,
+    ) -> Result<LogFile, OperationLogsError> {
         if let Err(err) = self.remove_outdated_logs() {
             // In no case a log-cleaning error should prevent the agent to run.
             // Hence the error is logged but not returned.
@@ -56,9 +62,19 @@ impl OperationLogs {
 
         let now = OffsetDateTime::now_utc();
 
+        let operation_name = {
+            if let Some(operation_name) = operation_name {
+                let operation_name = &format!("{OPERATION_PREFIX}-{}", operation_name);
+                operation_name.to_string()
+            } else {
+                OPERATION_PREFIX.to_string()
+            }
+        };
+
         let file_prefix = match kind {
             LogKind::SoftwareUpdate => UPDATE_PREFIX,
             LogKind::SoftwareList => LIST_PREFIX,
+            LogKind::Operation => operation_name.as_str(),
         };
         let file_name = format!(
             "{}-{}.log",
@@ -180,7 +196,9 @@ mod tests {
         let update_log_7 = create_file(log_dir.path(), "software-update-1996-12-25T16:39:57z");
 
         // Create a new log file
-        let new_log = operation_logs.new_log_file(LogKind::SoftwareUpdate).await?;
+        let new_log = operation_logs
+            .new_log_file(LogKind::SoftwareUpdate, None)
+            .await?;
 
         // The new log has been created
         let new_path = Path::new(new_log.path());
