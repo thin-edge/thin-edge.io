@@ -7,7 +7,7 @@ use crate::{
 
 use agent_interface::topic::ResponseTopic;
 use async_trait::async_trait;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::http_proxy::JwtAuthHttpProxy;
 use c8y_smartrest::operations::Operations;
 use mqtt_channel::TopicFilter;
 use tedge_config::{
@@ -64,8 +64,7 @@ impl TEdgeComponent for CumulocityMapper {
         let config_dir = cfg_dir.display().to_string();
 
         let operations = Operations::try_new(format!("{config_dir}/operations"), "c8y")?;
-        let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
-        http_proxy.init().await?;
+        let http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();

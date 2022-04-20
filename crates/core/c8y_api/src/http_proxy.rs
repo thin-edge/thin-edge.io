@@ -15,17 +15,13 @@ use tedge_config::{
 };
 use time::OffsetDateTime;
 
-use tracing::{error, info, instrument};
-
-const RETRY_TIMEOUT_SECS: u64 = 60;
+use tracing::{info, instrument};
 
 /// An HttpProxy handles http requests to C8y on behalf of the device.
 #[automock]
 #[async_trait]
 pub trait C8YHttpProxy: Send + Sync {
-    async fn init(&mut self) -> Result<(), SMCumulocityMapperError>;
-
-    fn url_is_in_my_tenant_domain(&self, url: &str) -> bool;
+    fn url_is_in_my_tenant_domain(&mut self, url: &str) -> bool;
 
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
 
@@ -52,23 +48,47 @@ pub trait C8YHttpProxy: Send + Sync {
 }
 
 /// Define a C8y endpoint
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct C8yEndPoint {
     c8y_host: String,
+    #[allow(dead_code)]
     device_id: String,
     c8y_internal_id: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct C8yEndPointUnInitialised {
+    c8y_host: String,
+    device_id: String,
+}
+
+impl C8yEndPointUnInitialised {
+    fn get_base_url(&self) -> String {
+        let mut url_get_id = String::new();
+        if !self.c8y_host.starts_with("http") {
+            url_get_id.push_str("https://");
+        }
+        url_get_id.push_str(&self.c8y_host);
+
+        url_get_id
+    }
+    fn get_url_for_get_id(&self) -> String {
+        let mut url_get_id = self.get_base_url();
+        url_get_id.push_str("/identity/externalIds/c8y_Serial/");
+        url_get_id.push_str(&self.device_id);
+
+        url_get_id
+    }
+}
+
 impl C8yEndPoint {
-    #[cfg(test)]
-    fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
+    fn new(uninitialised: &C8yEndPointUnInitialised, c8y_internal_id: String) -> C8yEndPoint {
         C8yEndPoint {
-            c8y_host: c8y_host.into(),
-            device_id: device_id.into(),
-            c8y_internal_id: c8y_internal_id.into(),
+            c8y_host: uninitialised.c8y_host.clone(),
+            device_id: uninitialised.device_id.clone(),
+            c8y_internal_id,
         }
     }
-
     fn get_base_url(&self) -> String {
         let mut url_get_id = String::new();
         if !self.c8y_host.starts_with("http") {
@@ -82,11 +102,12 @@ impl C8yEndPoint {
     fn get_url_for_sw_list(&self) -> String {
         let mut url_update_swlist = self.get_base_url();
         url_update_swlist.push_str("/inventory/managedObjects/");
-        url_update_swlist.push_str(&self.c8y_internal_id);
+        url_update_swlist.push_str(&self.c8y_internal_id.clone());
 
         url_update_swlist
     }
 
+    #[allow(dead_code)]
     fn get_url_for_get_id(&self) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
@@ -185,7 +206,7 @@ impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
 pub struct JwtAuthHttpProxy {
     jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
     http_con: reqwest::Client,
-    end_point: C8yEndPoint,
+    end_point: either::Either<C8yEndPointUnInitialised, C8yEndPoint>,
 }
 
 impl JwtAuthHttpProxy {
@@ -198,11 +219,10 @@ impl JwtAuthHttpProxy {
         JwtAuthHttpProxy {
             jwt_token_retriver,
             http_con,
-            end_point: C8yEndPoint {
+            end_point: either::Either::Left(C8yEndPointUnInitialised {
                 c8y_host: c8y_host.into(),
                 device_id: device_id.into(),
-                c8y_internal_id: "".into(),
-            },
+            }),
         }
     }
 
@@ -237,14 +257,9 @@ impl JwtAuthHttpProxy {
         ))
     }
 
-    async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
-        self.end_point.c8y_internal_id = self.try_get_internal_id().await?;
-        Ok(())
-    }
-
     async fn try_get_internal_id(&mut self) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
-        let url_get_id = self.end_point.get_url_for_get_id();
+        let url_get_id = self.end_point.as_ref().unwrap_left().get_url_for_get_id();
 
         let internal_id = self
             .http_con
@@ -258,45 +273,48 @@ impl JwtAuthHttpProxy {
         Ok(internal_id)
     }
 
-    fn create_log_event(&self) -> C8yCreateEvent {
+    async fn create_log_event(&mut self) -> Result<C8yCreateEvent, SMCumulocityMapperError> {
+        let c8y_end_point = self.get_c8y_end_point().await?;
         let c8y_managed_object = C8yManagedObject {
-            id: self.end_point.c8y_internal_id.clone(),
+            id: c8y_end_point.c8y_internal_id,
         };
 
-        C8yCreateEvent::new(
+        Ok(C8yCreateEvent::new(
             Some(c8y_managed_object),
             "c8y_Logfile".to_string(),
             OffsetDateTime::now_utc(),
             "software-management".to_string(),
             HashMap::new(),
-        )
+        ))
     }
 
-    fn create_event(
+    async fn create_event(
         &self,
+        end_point: &C8yEndPoint,
         event_type: String,
         event_text: Option<String>,
         event_time: Option<OffsetDateTime>,
-    ) -> C8yCreateEvent {
+    ) -> Result<C8yCreateEvent, SMCumulocityMapperError> {
         let c8y_managed_object = C8yManagedObject {
-            id: self.end_point.c8y_internal_id.clone(),
+            id: end_point.c8y_internal_id.clone(),
         };
 
-        C8yCreateEvent::new(
+        Ok(C8yCreateEvent::new(
             Some(c8y_managed_object),
             event_type.clone(),
-            event_time.unwrap_or(OffsetDateTime::now_utc()),
+            event_time.unwrap_or_else(OffsetDateTime::now_utc),
             event_text.unwrap_or(event_type),
             HashMap::new(),
-        )
+        ))
     }
 
     async fn send_event_internal(
         &mut self,
+        c8y_end_point: &C8yEndPoint,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
-        let create_event_url = self.end_point.get_url_for_create_event();
+        let create_event_url = c8y_end_point.get_url_for_create_event();
 
         let request = self
             .http_con
@@ -313,30 +331,41 @@ impl JwtAuthHttpProxy {
 
         Ok(event_response_body.id)
     }
+
+    async fn get_c8y_end_point(&mut self) -> Result<C8yEndPoint, SMCumulocityMapperError> {
+        match &self.end_point {
+            either::Right(c8y_end_point) => {
+                return Ok(c8y_end_point.clone());
+            }
+            either::Left(ref _uninitialised) => {}
+        }
+        self.init().await
+    }
+
+    #[instrument(skip(self), name = "init")]
+    async fn init(&mut self) -> Result<C8yEndPoint, SMCumulocityMapperError> {
+        if self.end_point.is_left() {
+            info!("Initialisation");
+
+            let uninitialised = self.end_point.as_ref().unwrap_left().clone();
+            let c8y_end_point = match self.try_get_internal_id().await {
+                Ok(internal_id) => Ok(C8yEndPoint::new(&uninitialised, internal_id)),
+                Err(_error) => Err(SMCumulocityMapperError::FailedToRetrieveC8yInternalId),
+            }?;
+            self.end_point = either::Either::Right(c8y_end_point);
+            info!("Initialisation done.");
+        }
+        Ok(self.end_point.clone().unwrap_right())
+    }
 }
 
 #[async_trait]
 impl C8YHttpProxy for JwtAuthHttpProxy {
-    fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
-        self.end_point.url_is_in_my_tenant_domain(url)
-    }
-
-    #[instrument(skip(self), name = "init")]
-    async fn init(&mut self) -> Result<(), SMCumulocityMapperError> {
-        info!("Initialisation");
-        while self.end_point.c8y_internal_id.is_empty() {
-            if let Err(error) = self.try_get_and_set_internal_id().await {
-                error!(
-                    "An error ocurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
-                    RETRY_TIMEOUT_SECS, error
-                );
-
-                tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
-                continue;
-            };
-        }
-        info!("Initialisation done.");
-        Ok(())
+    fn url_is_in_my_tenant_domain(&mut self, url: &str) -> bool {
+        self.end_point
+            .as_ref()
+            .unwrap_right()
+            .url_is_in_my_tenant_domain(url)
     }
 
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
@@ -347,19 +376,21 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         &mut self,
         mut c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
+        let c8y_end_point = { self.get_c8y_end_point().await?.clone() };
         if c8y_event.source.is_none() {
             c8y_event.source = Some(C8yManagedObject {
-                id: self.end_point.c8y_internal_id.clone(),
+                id: c8y_end_point.c8y_internal_id.clone(),
             });
         }
-        self.send_event_internal(c8y_event).await
+        self.send_event_internal(&c8y_end_point, c8y_event).await
     }
 
     async fn send_software_list_http(
         &mut self,
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
-        let url = self.end_point.get_url_for_sw_list();
+        let c8y_end_point = self.get_c8y_end_point().await?;
+        let url = c8y_end_point.get_url_for_sw_list();
         let token = self.get_jwt_token().await?;
 
         let request = self
@@ -380,12 +411,12 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
+        let c8y_end_point = self.get_c8y_end_point().await?;
 
-        let log_event = self.create_log_event();
-        let event_response_id = self.send_event_internal(log_event).await?;
-        let binary_upload_event_url = self
-            .end_point
-            .get_url_for_event_binary_upload(&event_response_id);
+        let log_event = self.create_log_event().await?;
+        let event_response_id = self.send_event_internal(&c8y_end_point, log_event).await?;
+        let binary_upload_event_url =
+            c8y_end_point.get_url_for_event_binary_upload(&event_response_id);
 
         let request = self
             .http_con
@@ -408,11 +439,15 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
-        let config_file_event = self.create_event(config_path.display().to_string(), None, None);
-        let event_response_id = self.send_event_internal(config_file_event).await?;
-        let binary_upload_event_url = self
-            .end_point
-            .get_url_for_event_binary_upload(&event_response_id);
+        let end_point = self.get_c8y_end_point().await?;
+        let config_file_event = self
+            .create_event(&end_point, config_path.display().to_string(), None, None)
+            .await?;
+
+        let event_response_id = self
+            .send_event_internal(&end_point, config_file_event)
+            .await?;
+        let binary_upload_event_url = end_point.get_url_for_event_binary_upload(&event_response_id);
 
         let request = self
             .http_con
@@ -439,7 +474,11 @@ mod tests {
 
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_device", "internal-id");
+        let c8y_uninitialised = C8yEndPointUnInitialised {
+            c8y_host: "test_host".to_string(),
+            device_id: "test_device".to_string(),
+        };
+        let c8y = C8yEndPoint::new(&c8y_uninitialised, "internal-id".to_string());
         let res = c8y.get_url_for_get_id();
 
         assert_eq!(
@@ -450,7 +489,11 @@ mod tests {
 
     #[test]
     fn get_url_for_sw_list_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_device", "12345");
+        let c8y_uninitialised = C8yEndPointUnInitialised {
+            c8y_host: "test_host".to_string(),
+            device_id: "test_device".to_string(),
+        };
+        let c8y = C8yEndPoint::new(&c8y_uninitialised, "12345".to_string());
         let res = c8y.get_url_for_sw_list();
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
@@ -466,7 +509,11 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file.test")]
     #[test_case("https://t1124124.test.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        let c8y_uninitialised = C8yEndPointUnInitialised {
+            c8y_host: "test.test.com".to_string(),
+            device_id: "test_device".to_string(),
+        };
+        let c8y = C8yEndPoint::new(&c8y_uninitialised, "internal-id".to_string());
         assert!(c8y.url_is_in_my_tenant_domain(url));
     }
 
@@ -476,7 +523,11 @@ mod tests {
     #[test_case("http://test.com:123456")]
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        let c8y_uninitialised = C8yEndPointUnInitialised {
+            c8y_host: "test.test.com".to_string(),
+            device_id: "test_device".to_string(),
+        };
+        let c8y = C8yEndPoint::new(&c8y_uninitialised, "internal-id".to_string());
         assert!(!c8y.url_is_in_my_tenant_domain(url));
     }
 

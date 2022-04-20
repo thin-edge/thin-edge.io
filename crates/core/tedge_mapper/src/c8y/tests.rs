@@ -866,11 +866,7 @@ pub struct FakeC8YHttpProxy {}
 
 #[async_trait::async_trait]
 impl C8YHttpProxy for FakeC8YHttpProxy {
-    async fn init(&mut self) -> Result<(), SMCumulocityMapperError> {
-        Ok(())
-    }
-
-    fn url_is_in_my_tenant_domain(&self, _url: &str) -> bool {
+    fn url_is_in_my_tenant_domain(&mut self, _url: &str) -> bool {
         true
     }
 

@@ -111,4 +111,7 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
+
+    #[error("Failed to retrieve internal id from Cumulocity")]
+    FailedToRetrieveC8yInternalId,
 }

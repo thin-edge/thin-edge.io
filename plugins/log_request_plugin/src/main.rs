@@ -30,8 +30,7 @@ pub async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Er
 /// creates an http client
 pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
     let config = get_tedge_config()?;
-    let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
-    let () = http_proxy.init().await?;
+    let http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
     Ok(http_proxy)
 }
 

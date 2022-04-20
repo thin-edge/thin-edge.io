@@ -368,6 +368,7 @@ dependencies = [
  "clock",
  "csv",
  "download",
+ "either",
  "futures",
  "mockall 0.11.0",
  "mockito",

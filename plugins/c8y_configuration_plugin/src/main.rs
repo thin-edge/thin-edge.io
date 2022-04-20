@@ -8,7 +8,7 @@ use crate::config::PluginConfig;
 use crate::download::handle_config_download_request;
 use crate::upload::handle_config_upload_request;
 use anyhow::Result;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::http_proxy::JwtAuthHttpProxy;
 use c8y_smartrest::smartrest_deserializer::{
     SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
 };
@@ -76,8 +76,7 @@ async fn create_mqtt_client(
 pub async fn create_http_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    let () = http_proxy.init().await?;
+    let http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
     Ok(http_proxy)
 }
 

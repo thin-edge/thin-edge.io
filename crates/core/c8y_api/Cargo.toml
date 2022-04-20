@@ -14,6 +14,7 @@ c8y_smartrest = { path = "../c8y_smartrest" }
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
+either = "1.6"
 futures = "0.3"
 mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
