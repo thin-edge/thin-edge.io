@@ -1,3 +1,5 @@
+use c8y_smartrest::topic::C8yTopic;
+use mqtt_channel::Message;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -5,16 +7,10 @@ use tracing::{info, warn};
 
 pub const PLUGIN_CONFIG_FILE: &str = "c8y-configuration-plugin.toml";
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct PluginConfig {
     pub files: Vec<String>,
-}
-
-impl Default for PluginConfig {
-    fn default() -> Self {
-        Self { files: vec![] }
-    }
 }
 
 impl PluginConfig {
@@ -49,6 +45,22 @@ impl PluginConfig {
         let mut files = self.files.clone();
         let () = files.push(file);
         Self { files }
+    }
+
+    pub fn to_message(&self) -> Result<Message, anyhow::Error> {
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
+        Ok(Message::new(&topic, self.to_smartrest_payload()))
+    }
+
+    // 119,typeA,typeB,...
+    fn to_smartrest_payload(&self) -> String {
+        let config_types = self
+            .files
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("119,{config_types}")
     }
 }
 
@@ -97,7 +109,7 @@ mod tests {
                 "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                 "/etc/mosquitto/mosquitto.conf".to_string(),
             ]
-        }
+        }; "standard case"
     )]
     #[test_case(
         r#"files = []"#,
@@ -158,5 +170,24 @@ mod tests {
     fn add_file_to_plugin_config() {
         let config = PluginConfig::default().add_file("/test/path/file".into());
         assert_eq!(config.files, vec!["/test/path/file".to_string()])
+    }
+
+    #[test_case(
+    PluginConfig {
+        files: vec!["typeA".to_string()]
+        },
+        "119,typeA".to_string()
+    ;"single file"
+    )]
+    #[test_case(
+        PluginConfig {
+        files: vec!["typeA".to_string(), "typeB".to_string(), "typeC".to_string()]
+        },
+        "119,typeA,typeB,typeC".to_string()
+    ;"multiple files"
+    )]
+    fn get_smartrest(input: PluginConfig, expected_output: String) {
+        let output = input.to_smartrest_payload();
+        assert_eq!(output, expected_output);
     }
 }

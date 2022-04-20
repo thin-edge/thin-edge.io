@@ -33,7 +33,7 @@ pub async fn handle_config_download_request(
 
     match download_config_file(plugin_config, smartrest_request, http_client).await {
         Ok(_) => {
-            let successful_message = GetDownloadConfigFileMessage::successful()?;
+            let successful_message = GetDownloadConfigFileMessage::successful(None)?;
             let () = mqtt_client.published.send(successful_message).await?;
 
             let notification_message = get_file_change_notification_message(changed_file);
@@ -133,7 +133,7 @@ impl ConfigDownloadRequest {
         if metadata.permissions().readonly() {
             Err(error::ConfigDownloadError::ReadOnlyFile {
                 path: self.destination_path.clone(),
-            })?
+            })
         } else {
             Ok(())
         }
@@ -167,7 +167,9 @@ impl GetSmartRestMessage for GetDownloadConfigFileMessage {
             .to_smartrest()
     }
 
-    fn status_successful() -> Result<SmartRest, SmartRestSerializerError> {
+    fn status_successful(
+        _parameter: Option<String>,
+    ) -> Result<SmartRest, SmartRestSerializerError> {
         SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yDownloadConfigFile)
             .to_smartrest()
     }
@@ -248,7 +250,7 @@ mod tests {
 
     #[test]
     fn get_smartrest_successful() {
-        let message = GetDownloadConfigFileMessage::successful().unwrap();
+        let message = GetDownloadConfigFileMessage::successful(None).unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
             message.payload_str().unwrap(),
