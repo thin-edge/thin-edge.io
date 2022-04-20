@@ -1,9 +1,13 @@
 mod config;
+mod download;
+mod error;
 mod smartrest;
 
 use crate::config::PluginConfig;
+use crate::download::handle_config_download_request;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_smartrest::{
     smartrest_deserializer::SmartRestConfigUploadRequest,
     smartrest_serializer::{
@@ -26,7 +30,7 @@ const CONFIG_ROOT_PATH: &str = "/etc/tedge/c8y";
 const LOG_LEVEL_DEBUG: bool = false;
 
 #[cfg(debug_assertions)]
-const LOG_LEVEL_DEBUG: bool = true;
+const LOG_LEVEL_DEBUG: bool = false;
 
 async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error> {
     let tedge_config = get_tedge_config()?;
@@ -41,7 +45,6 @@ async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error>
     Ok(mqtt_client)
 }
 
-/// creates an http client
 pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
     let config = get_tedge_config()?;
     let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
@@ -152,12 +155,20 @@ async fn main() -> Result<(), anyhow::Error> {
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
-            let result = match payload.split(',').next() {
-                Some("524") => {
-                    debug!("{}", message.payload_str()?);
-                    todo!() // c8y_DownloadConfigFile
+            let result = match payload.split(',').next().unwrap_or_default() {
+                "524" => {
+                    debug!("{}", payload);
+                    let config_download_request =
+                        SmartRestConfigDownloadRequest::from_smartrest(payload)?;
+                    handle_config_download_request(
+                        &plugin_config,
+                        config_download_request,
+                        &mut mqtt_client,
+                        &mut http_client,
+                    )
+                    .await
                 }
-                Some("526") => {
+                "526" => {
                     debug!("{}", payload);
                     // retrieve config file upload smartrest request from payload
                     let config_upload_request =

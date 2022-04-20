@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
-pub const PLUGIN_CONFIG_FILE: &str = "c8y_configuration_plugin.toml";
+pub const PLUGIN_CONFIG_FILE: &str = "c8y-configuration-plugin.toml";
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]

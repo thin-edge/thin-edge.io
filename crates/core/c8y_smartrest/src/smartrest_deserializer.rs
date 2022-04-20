@@ -216,8 +216,7 @@ impl SmartRestLogRequest {
 
         rdr.deserialize()
             .next()
-            .ok_or_else(|| panic!("empty request"))
-            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
             .map_err(SmartRestDeserializerError::from)
     }
 }
@@ -260,6 +259,29 @@ impl SmartRestConfigUploadRequest {
             .next()
             .ok_or_else(|| panic!("empty request"))
             .unwrap() // does already panic before this, so this unwrap is only required for type lineup
+            .map_err(SmartRestDeserializerError::from)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestConfigDownloadRequest {
+    pub message_id: String,
+    pub device: String,
+    pub url: String,
+    pub config_type: String,
+}
+
+// TODO: make it generic. We have many from_smartrest() repeating the same code.
+impl SmartRestConfigDownloadRequest {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        rdr.deserialize()
+            .next()
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
             .map_err(SmartRestDeserializerError::from)
     }
 }
@@ -618,6 +640,19 @@ mod tests {
         let smartrest = String::from(&format!("510,user"));
         let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
+    }
+
+    #[test]
+    fn deserialize_smartrest_config_download_request_operation() {
+        let smartrest = "524,deviceId,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml".to_string();
+        let request = SmartRestConfigDownloadRequest::from_smartrest(&smartrest).unwrap();
+        let expected_output = SmartRestConfigDownloadRequest {
+            message_id: "524".to_string(),
+            device: "deviceId".to_string(),
+            url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
+            config_type: "/etc/tedge/tedge.toml".to_string(),
+        };
+        assert_eq!(request, expected_output);
     }
 
     #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]

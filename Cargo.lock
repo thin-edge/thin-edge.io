@@ -392,10 +392,14 @@ name = "c8y_configuration_plugin"
 version = "0.6.1"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "c8y_api",
  "c8y_smartrest",
+ "csv",
+ "download",
  "mqtt_channel",
  "serde",
+ "serde_json",
  "tedge_config",
  "tedge_utils",
  "tempfile",
