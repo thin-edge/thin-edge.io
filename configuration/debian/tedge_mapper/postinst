@@ -2,19 +2,8 @@
 
 set -e
 
-### Create a group "tedge-mapper" if not created before
-if ! getent group tedge-mapper >/dev/null; then
-    addgroup --quiet --system tedge-mapper
-fi
-
-### Create a user "tedge-mapper" if not created before
-# Create user tedge-mapper with no home(--no-create-home), no login(--shell) and in group tedge(--ingroup)
-if ! getent passwd tedge-mapper >/dev/null; then
-    adduser --quiet --system --no-create-home --ingroup tedge-mapper --shell /usr/sbin/nologin tedge-mapper
-    adduser tedge-mapper tedge
-fi
 
 ### Initialize the sm mapper
-runuser -u tedge-mapper -- tedge_mapper --init c8y
-runuser -u tedge-mapper -- tedge_mapper --init az
+runuser -u tedge -- tedge_mapper --init c8y
+runuser -u tedge -- tedge_mapper --init az
 #DEBHELPER#

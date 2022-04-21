@@ -3,7 +3,7 @@ Description=tedge-mapper-az checks Thin Edge JSON measurements and forwards to A
 After=syslog.target network.target mosquitto.service
 
 [Service]
-User=tedge-mapper
+User=tedge
 ExecStart=/usr/bin/tedge_mapper az
 Restart=on-failure
 RestartPreventExitStatus=255
