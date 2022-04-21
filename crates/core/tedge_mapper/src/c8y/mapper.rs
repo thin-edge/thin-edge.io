@@ -94,20 +94,20 @@ impl TEdgeComponent for CumulocityMapper {
 fn create_directories(config_dir: &str) -> Result<(), anyhow::Error> {
     create_directory_with_user_group(
         &format!("{config_dir}/operations/c8y"),
-        "tedge-mapper",
-        "tedge-mapper",
+        "tedge",
+        "tedge",
         0o775,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_SoftwareUpdate"),
-        "tedge-mapper",
-        "tedge-mapper",
+        "tedge",
+        "tedge",
         0o644,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_Restart"),
-        "tedge-mapper",
-        "tedge-mapper",
+        "tedge",
+        "tedge",
         0o644,
     )?;
     Ok(())
