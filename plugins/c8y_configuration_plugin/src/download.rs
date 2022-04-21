@@ -14,7 +14,8 @@ use mqtt_channel::{Connection, Message, SinkExt, Topic};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
-use std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, TmpPathDefaultSetting};
 
 const BROADCASTING_TOPIC: &str = "filemanagement/changes";
@@ -125,11 +126,12 @@ impl ConfigDownloadRequest {
     }
 
     fn has_write_access(&self) -> Result<(), ConfigDownloadError> {
-        let metadata = fs::metadata(&self.destination_path).map_err(|_| {
-            ConfigDownloadError::FileNotAccessible {
-                path: self.destination_path.clone(),
-            }
-        })?;
+        // The file does not exist before downloading a file
+        if !&self.destination_path.is_file() {
+            return Ok(());
+        }
+        // Need a permission check when the file exists already
+        let metadata = Self::get_metadata(&self.destination_path)?;
         if metadata.permissions().readonly() {
             Err(error::ConfigDownloadError::ReadOnlyFile {
                 path: self.destination_path.clone(),
@@ -143,13 +145,37 @@ impl ConfigDownloadRequest {
         Downloader::new(&self.file_name, &None, &self.tmp_dir)
     }
 
+    fn get_metadata(path: &Path) -> Result<std::fs::Metadata, ConfigDownloadError> {
+        fs::metadata(&path).map_err(|_| ConfigDownloadError::FileNotAccessible {
+            path: path.to_path_buf(),
+        })
+    }
+
     fn move_file(&self) -> Result<(), ConfigDownloadError> {
         let src = &self.tmp_dir.join(&self.file_name);
         let dest = &self.destination_path;
+
+        let original_permission_mode = match self.destination_path.is_file() {
+            true => {
+                let metadata = Self::get_metadata(&self.destination_path)?;
+                let mode = metadata.permissions().mode();
+                Some(mode)
+            }
+            false => None,
+        };
+
         let _ = fs::copy(src, dest).map_err(|_| ConfigDownloadError::FileCopyFailed {
             src: src.to_path_buf(),
             dest: dest.to_path_buf(),
         })?;
+
+        // Change the file permission back to the original one
+        if let Some(mode) = original_permission_mode {
+            let mut permissions = Self::get_metadata(&self.destination_path)?.permissions();
+            let _ = permissions.set_mode(mode);
+            let _ = std::fs::set_permissions(&self.destination_path, permissions);
+        }
+
         Ok(())
     }
 }
