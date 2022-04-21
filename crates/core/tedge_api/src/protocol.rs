@@ -1,8 +1,8 @@
-use std::fmt::{Debug, Formatter};
 use crate::{Message, RuntimeError};
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
+use std::fmt::{Debug, Formatter};
 
 /// A mailbox gathering all the messages to be processed by a plugin
 pub struct MailBox<M> {
@@ -34,7 +34,7 @@ pub trait Recipient<M> {
 }
 
 /// An address where messages of type `M` can be sent
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Address<M> {
     sender: mpsc::UnboundedSender<M>,
 }
@@ -66,12 +66,7 @@ impl<M: Message> Address<M> {
         request: Req,
     ) -> Result<(), RuntimeError> {
         let requester: Box<dyn Recipient<Res>> = Box::new(self.clone());
-        recipient
-            .send_msg(Request {
-                request,
-                requester,
-            })
-            .await
+        recipient.send_msg(Request { request, requester }).await
     }
 }
 

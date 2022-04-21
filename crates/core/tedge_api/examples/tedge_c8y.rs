@@ -86,7 +86,10 @@ use async_trait::async_trait;
 #[derive(Default)]
 struct C8YMapperConfig {}
 struct C8YMapper<C8Y, SM>
-where C8Y: Recipient<MqttMessage>, SM: Recipient<Request<SMRequest, SMResponse>> {
+where
+    C8Y: Recipient<MqttMessage>,
+    SM: Recipient<Request<SMRequest, SMResponse>>,
+{
     mailbox: MailBox<C8YMessage>,
     c8y: Option<C8Y>,
     sm: Option<SM>,
@@ -130,7 +133,10 @@ impl Plugin for C8YMapper {
                         payload: "foo".to_string(),
                         qos: QoS::AtLeastOnce,
                     };
-                    self.c8y.expect("a plugin instance").send_msg(message).await?
+                    self.c8y
+                        .expect("a plugin instance")
+                        .send_msg(message)
+                        .await?
                 }
                 C8YMessage::SMResponse(_) => {
                     // translate the response received for the sm plugin
@@ -140,7 +146,10 @@ impl Plugin for C8YMapper {
                         payload: "bar".to_string(),
                         qos: QoS::AtLeastOnce,
                     };
-                    self.c8y.expect("a plugin instance").send_msg(message).await?
+                    self.c8y
+                        .expect("a plugin instance")
+                        .send_msg(message)
+                        .await?
                 }
             }
         }
@@ -150,7 +159,7 @@ impl Plugin for C8YMapper {
 }
 
 /// Messages handled by the C8Y mapper
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum C8YMessage {
     MqttMessage(MqttMessage), // A message received from C8Y
     Measurement(Measurement), // A measurement received from another plugin
@@ -338,7 +347,7 @@ impl Plugin for SoftwareManagementService {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum SMMessage {
     SMRequest(Request<SMRequest, SMResponse>),
     SMResponse(SMResponse),
@@ -451,7 +460,7 @@ impl Plugin for ApamaPackager {
 }
 
 /// Plugins exchanging telemetry data
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct Measurement {
     source: String,
     name: String,
@@ -460,31 +469,31 @@ struct Measurement {
 }
 
 /// Plugins exchanging SM operations
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum SMRequest {
     SoftwareList,
     SoftwareUpdate { update: Vec<SMOperation> },
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum SMResponse {
     SoftwareList { list: Vec<PackageVersion> },
     SoftwareUpdate { errors: Vec<SMError> },
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum SMOperation {
     Install { package: PackageVersion },
     Remove { package: PackageVersion },
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct SMError {
     operation: SMOperation,
     error: String,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct PackageVersion {
     manager: String,
     package: String,
@@ -492,14 +501,14 @@ struct PackageVersion {
 }
 
 /// Plugins exchanging MQTT messages
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct MqttMessage {
     topic: String,
     payload: String,
     qos: QoS,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum QoS {
     AtMostOnce,
     AtLeastOnce,

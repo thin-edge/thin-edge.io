@@ -7,13 +7,20 @@ async fn main() -> anyhow::Result<()> {
 
 /// Messages exchanged over the network
 enum MqttPacket {
-    Pub { id: u16, topic: String, payload: String },
-    PubAck { id: u16 },
+    Pub {
+        id: u16,
+        topic: String,
+        payload: String,
+    },
+    PubAck {
+        id: u16,
+    },
 }
 
 /// Messages exchanged with the client
 struct MqttMessage {
-    topic: String, payload: String
+    topic: String,
+    payload: String,
 }
 
 /// Messages exchanged with the clock
