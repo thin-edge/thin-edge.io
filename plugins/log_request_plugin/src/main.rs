@@ -4,6 +4,7 @@ use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::{smartrest_deserializer::SmartRestLogRequest, topic::C8yTopic};
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, MqttPortSetting};
 
+use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use futures::SinkExt;
 
 use smartrest::{

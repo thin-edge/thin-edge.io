@@ -190,6 +190,24 @@ where
     }
 }
 
+pub trait SmartRestRequestGeneric {
+    fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError>
+    where
+        Self: Sized,
+        for<'de> Self: serde::Deserialize<'de>,
+    {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        rdr.deserialize()
+            .next()
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
+            .map_err(SmartRestDeserializerError::from)
+    }
+}
+
 pub enum SmartRestVariant {
     SmartRestLogRequest,
 }
@@ -207,19 +225,7 @@ pub struct SmartRestLogRequest {
     pub lines: usize,
 }
 
-impl SmartRestLogRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
-
-        rdr.deserialize()
-            .next()
-            .ok_or(SmartRestDeserializerError::EmptyRequest)?
-            .map_err(SmartRestDeserializerError::from)
-    }
-}
+impl SmartRestRequestGeneric for SmartRestLogRequest {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestRestartRequest {
@@ -227,19 +233,7 @@ pub struct SmartRestRestartRequest {
     pub device: String,
 }
 
-impl SmartRestRestartRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
-
-        rdr.deserialize()
-            .next()
-            .ok_or(SmartRestDeserializerError::EmptyRequest)?
-            .map_err(SmartRestDeserializerError::from)
-    }
-}
+impl SmartRestRequestGeneric for SmartRestRestartRequest {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestConfigUploadRequest {
@@ -248,20 +242,7 @@ pub struct SmartRestConfigUploadRequest {
     pub config_type: String,
 }
 
-impl SmartRestConfigUploadRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
-
-        rdr.deserialize()
-            .next()
-            .ok_or_else(|| panic!("empty request"))
-            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
-            .map_err(SmartRestDeserializerError::from)
-    }
-}
+impl SmartRestRequestGeneric for SmartRestConfigUploadRequest {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestConfigDownloadRequest {
@@ -271,20 +252,7 @@ pub struct SmartRestConfigDownloadRequest {
     pub config_type: String,
 }
 
-// TODO: make it generic. We have many from_smartrest() repeating the same code.
-impl SmartRestConfigDownloadRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
-
-        rdr.deserialize()
-            .next()
-            .ok_or(SmartRestDeserializerError::EmptyRequest)?
-            .map_err(SmartRestDeserializerError::from)
-    }
-}
+impl SmartRestRequestGeneric for SmartRestConfigDownloadRequest {}
 
 type JwtToken = String;
 

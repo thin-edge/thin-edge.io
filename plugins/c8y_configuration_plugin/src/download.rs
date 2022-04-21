@@ -213,6 +213,7 @@ impl GetSmartRestMessage for GetDownloadConfigFileMessage {
 mod tests {
     use super::*;
     use assert_matches::*;
+    use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 
     #[test]
     fn create_config_download_request() -> Result<(), anyhow::Error> {

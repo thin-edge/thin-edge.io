@@ -9,6 +9,7 @@ use c8y_api::{
     http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
+use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_smartrest::{
     alarm,
     error::SmartRestDeserializerError,

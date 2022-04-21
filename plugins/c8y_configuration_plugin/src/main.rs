@@ -9,7 +9,9 @@ use crate::download::handle_config_download_request;
 use crate::upload::handle_config_upload_request;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
+use c8y_smartrest::smartrest_deserializer::{
+    SmartRestConfigDownloadRequest, SmartRestRequestGeneric,
+};
 use c8y_smartrest::{smartrest_deserializer::SmartRestConfigUploadRequest, topic::C8yTopic};
 use mqtt_channel::{SinkExt, StreamExt};
 use std::path::PathBuf;
