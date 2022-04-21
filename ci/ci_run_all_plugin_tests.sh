@@ -31,13 +31,15 @@ cd tests/PySys/
 sudo tedge config set software.plugin.default apt
 
 set +e
-pysys.py run --record -v DEBUG 'apt_*' -XmyPlatform='container'
+# Dont use -v DEBUG here, it will print the enviroment vars with passwords in them
+pysys.py run --record 'apt_*' -XmyPlatform='container'
 set -e
 
 mv __pysys_junit_xml pysys_junit_xml_apt
 
 set +e
-pysys.py run --record -v DEBUG 'apama_*' -XmyPlatform='container'
+# Dont use -v DEBUG here, it will print the enviroment vars with passwords in them
+pysys.py run --record 'apama_*' -XmyPlatform='container'
 set -e
 
 mv __pysys_junit_xml pysys_junit_xml_apama
@@ -46,7 +48,8 @@ sudo cp ../../plugins/tedge_docker_plugin/tedge_docker_plugin.sh /etc/tedge/sm-p
 sudo chmod +x /etc/tedge/sm-plugins/docker
 
 set +e
-pysys.py run --record -v DEBUG 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
+# Dont use -v DEBUG here, it will print the enviroment vars with passwords in them
+pysys.py run --record 'docker_*' -XmyPlatform='container' -Xdockerplugin='dockerplugin'
 set -e
 
 mv __pysys_junit_xml pysys_junit_xml_docker

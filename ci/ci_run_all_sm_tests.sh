@@ -53,7 +53,8 @@ cd tests/PySys/
 # Run all software management tests, including the ones for the
 # fake- and the  docker plugin
 set +e
-pysys.py run --record -v DEBUG 'SoftwareManagement.*' -XmyPlatform='container' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
+# Dont use -v DEBUG here, it will print the enviroment vars with passwords in them
+pysys.py run --record 'SoftwareManagement.*' -XmyPlatform='container' -Xdockerplugin='dockerplugin' -Xfakeplugin='fakeplugin'
 set -e
 
 deactivate
