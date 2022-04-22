@@ -3,7 +3,8 @@
 
 ## Terminology 
 - **platform**<br/>
-  _Everything of thin-edge core_
+  _Everything of thin-edge core_<br/>
+  TODO: Apply change discussed on review: Platform shall mean "_thin-edg core_ + plugins" (official plugins from the project). Assure to apply/adapt that change also in all requirements definitions below.
 - **application**<br/>
 - **device**<br/>
 - **device's system** or **OS**<br/>
@@ -12,6 +13,7 @@
 - **Device Owner**<br/>
 - **API**<br/>
 - **Interface**<br/>
+
 
 TODO: Add definition to all terms above.
 
@@ -45,7 +47,7 @@ All requirements are grouped by the fundamental pillars.
 | a.1 | The platform shall provide all features out of the box on the reference device with reference cloud.<br/><br/>**TODO: Do we want to have here a reference cloud (probably C8Y)? Could lead into too much push for that cloud (Hard to keep 'Cloud Agnostic')?** | Having minimal effort for device owners to make 1st steps with thin-edge. Scope: Demo and Prototype phase. |  | new |  |
 | a.2 | **TODO: That's a placeholder to define how modular/configurable thin-edge core shall be.** | An advanced device owner shall be able to stick thin-edge functionality together and to adjust thin-edge in a way that it perfectly fits to it's device/use-case/application.<br/><br/> That includes selecting exactly the needed functionality and disable others, and even allowing to link thin-edge core into one static executable.<br/><br/>That is to disable/exclude unneeded components / code-paths to reduce complexity and minimize risc for malfunctions.  |  | draft  |  |
 | a.3 | Thin-edge shall focus on functionality that can be highly re-used "as is" by most device owners.<br/><br/>**TODO: Define what 'highly reuse' does means here.** | To clearly focus with thin-edge design/implememtation on the _important_ things. Do not waste time with things that will not have any wide re-use, and instead might be heavily adapted/re-inveted in most customer cases. |  |  draft |  | 
-| a.4 | A device owner shall be able to adapt and run the platform on any kind of Linux distribution. | The platform shall have no hard-coded dependencies to the device's linux distribution running on. I.E. no hard-coded dependencies to a package manager (e.g. apt), init manager (e.g. systemd), etc. Instead all needed dependencies shall be abstracted, e.g. using configuration files or executable plugins. |  | new |  |
+| a.4 | A device owner shall be able to adapt and run the platform on any kind of Linux distribution. | The platform shall have no hard-coded dependencies to the device's linux distribution running on. I.E. no hard-coded dependencies to a package manager (e.g. apt), init manager (e.g. systemd), other system components and even the MQTT broker (mosquitto). Instead all needed dependencies shall be abstracted, e.g. using configuration files or executable plugins. |  | new |  |
 | a.5 |  |  |  | draft | |
 
 
@@ -64,7 +66,7 @@ All requirements are grouped by the fundamental pillars.
 | ID | Name | Rationale | Stakeholder | Status | Comment |
 |---|---|---|---|---|---|
 | d.1 | The plaform shall consider resource constraints of embedded devices.<br/><br/>**TODO: Add magnitude of resources, and types of resources (e.g. RAM, disc).** | As thin-edge is made to connect thin-device to the cloud it shall run on PLCs or other Embedded Devices. |  | draft |  |
-| d.2 | The platform shall use highly robust APIs for internal communication.<br/><br/>**TODO: Maybe add 'statically typed'?**) | Use of tight coupled communication channels (statically typed data-structures) instead of loose coupled communication (e.g. with freely defined MQTT message payload strings)  shall allow to detect missaligned communication partners early.<br/><br/> **TODO: maybe add "at compile-time and/or on component startup"**. |  | draft |  |
+| d.2 | The platform shall use highly robust APIs for internal communication. | Use of statically typed data-structures instead of loose coupled communication (e.g. as MQTT message payload strings) shall ensure to detect missaligned communication partners early (i.E. at compile-time or latest on component startup). |  | draft |  |
 | d.3 | The platform shall provide public interfaces/APIs for seamless integration of OT applications and OT technologies.<br/><br/>**TODO: Or should that level of seamless integration not given by the core, but by 'bridges'?** | Thin-edge shall be the glue between OT and IT world. So OT experts (i.E. domain experts as e.g. PLC engineers, Embedded SW developers, ...) shall feel like home when using thin-edge's public interfaces. |  | draft |  |
 | d.4 |  |  |  |  |  |
 
