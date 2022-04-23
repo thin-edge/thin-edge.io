@@ -44,10 +44,17 @@ impl UploadCertCmd {
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
 
-        // Use a builder instead of `Client::new`, `new` could panic, builder adds option to allow invalid certs.
-        let client = reqwest::blocking::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()?;
+        let config = get_tedge_config()?;
+        let root_cert = config.query(C8yRootCertPathSetting)?;
+        let client_builder = reqwest::blocking::Client::builder();
+        let client = match std::fs::metadata(&root_cert)?.is_file() {
+            true => {
+                let cert = std::fs::read(root_cert)?;
+                let cert_pem = reqwest::Certificate::from_pem(&cert)?;
+                client_builder.add_root_certificate(cert_pem).build()?
+            }
+            false => client_builder.build()?,
+        };
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
