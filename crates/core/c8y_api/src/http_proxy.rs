@@ -211,7 +211,9 @@ impl JwtAuthHttpProxy {
     ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
-        let http_con = reqwest::ClientBuilder::new().build()?;
+        let http_con = reqwest::ClientBuilder::new()
+            .danger_accept_invalid_certs(true)
+            .build()?;
 
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();

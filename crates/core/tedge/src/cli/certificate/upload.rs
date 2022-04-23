@@ -45,7 +45,9 @@ impl UploadCertCmd {
         };
 
         // Use a builder instead of `Client::new`, `new` could panic, builder adds option to allow invalid certs.
-        let client = reqwest::blocking::Client::builder().build()?;
+        let client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()?;
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
