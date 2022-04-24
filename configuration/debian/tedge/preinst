@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+set -e
 
 # change the owenership of the below directories/files to `tedge` user,
 # as there is only `tedge` user exists.
