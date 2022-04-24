@@ -749,8 +749,15 @@ async fn test_convert_big_measurement() {
         &Topic::new_unchecked(measurement_topic),
         big_measurement_payload,
     );
-
     let result = converter.convert(&big_measurement_message).await;
+
+    assert!(result.clone()
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements after translation is"));
 
     assert!(result
         .into_iter()
@@ -758,7 +765,7 @@ async fn test_convert_big_measurement() {
         .unwrap()
         .payload_str()
         .unwrap()
-        .contains( "The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements after translation is 33020 greater than the threshold size of 16384."));
+        .contains("greater than the threshold size of 16384."));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -800,13 +807,21 @@ async fn test_convert_big_measurement_for_child_device() {
 
     let result = converter.convert(&big_measurement_message).await;
 
+    assert!(result.clone()
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .payload_str()
+        .unwrap()
+        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements/child1 after translation is"));
+
     assert!(result
         .into_iter()
         .nth(0)
         .unwrap()
         .payload_str()
         .unwrap()
-        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements/child1 after translation is 33081 greater than the threshold size of 16384."));
+        .contains("greater than the threshold size of 16384."));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
