@@ -16,7 +16,7 @@ Then we validate the data from C8y
 class SmoketestSmartRest400Samples20ms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = "400"
+        self.samples = "200"
         self.delay = "20"
-        self.timeslot = "55"  # Temporarily increased to run at mythic beasts
+        self.timeslot = "40"  # Temporarily increased to run at mythic beasts
         self.style = "REST"
