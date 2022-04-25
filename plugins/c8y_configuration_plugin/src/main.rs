@@ -1,35 +1,67 @@
 mod config;
+mod download;
+mod error;
 mod smartrest;
+mod upload;
 
 use crate::config::PluginConfig;
+use crate::download::handle_config_download_request;
+use crate::upload::handle_config_upload_request;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::{
-    smartrest_deserializer::SmartRestConfigUploadRequest,
-    smartrest_serializer::{
-        CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
-        SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-    },
-    topic::C8yTopic,
+use c8y_smartrest::smartrest_deserializer::{
+    SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
 };
-use mqtt_channel::{Connection, Message, SinkExt, StreamExt};
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
+use c8y_smartrest::topic::C8yTopic;
+use clap::Parser;
+use mqtt_channel::{SinkExt, StreamExt};
+use std::path::PathBuf;
+use tedge_config::{
+    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig,
+    DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_config::{get_tedge_config, ConfigSettingAccessor, MqttPortSetting};
-use tracing::{debug, error};
+use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tracing::{debug, error, info};
 
-const CONFIG_ROOT_PATH: &str = "/etc/tedge/c8y";
+const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+`c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
+notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
-#[cfg(not(debug_assertions))]
-const LOG_LEVEL_DEBUG: bool = false;
+The thin-edge `CONFIG_DIR` is used to find where:
+  * to store temporary files on download: `tedge config get tmp.path`,
+  * to log operation errors and progress: `tedge config get log.path`,
+  * to connect the MQTT bus: `tedge config get mqtt.port`."#;
 
-#[cfg(debug_assertions)]
-const LOG_LEVEL_DEBUG: bool = true;
+#[derive(Debug, clap::Parser)]
+#[clap(
+name = clap::crate_name!(),
+version = clap::crate_version!(),
+about = clap::crate_description!(),
+after_help = AFTER_HELP_TEXT
+)]
+pub struct ConfigPluginOpt {
+    /// Turn-on the debug log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO
+    /// If on also reports DEBUG and TRACE
+    #[clap(long)]
+    pub debug: bool,
 
-async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let tedge_config = get_tedge_config()?;
+    /// Create supported operation files
+    #[clap(short, long)]
+    pub init: bool,
+
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
+
+    #[clap(long = "config-file", default_value = DEFAULT_PLUGIN_CONFIG_FILE_PATH)]
+    pub config_file: PathBuf,
+}
+
+async fn create_mqtt_client(
+    tedge_config: &TEdgeConfig,
+) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -41,108 +73,35 @@ async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error>
     Ok(mqtt_client)
 }
 
-/// creates an http client
-pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let config = get_tedge_config()?;
-    let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
+pub async fn create_http_client(
+    tedge_config: &TEdgeConfig,
+) -> Result<JwtAuthHttpProxy, anyhow::Error> {
+    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
 }
 
-/// returns a c8y message specifying to set the upload config file operation status to executing.
-///
-/// example message: '501,c8y_UploadConfigFile'
-pub fn get_upload_config_file_executing_message() -> Result<Message, anyhow::Error> {
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-    let smartrest_set_operation_status =
-        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yUploadConfigFile)
-            .to_smartrest()?;
-    Ok(Message::new(&topic, smartrest_set_operation_status))
-}
-
-/// returns a c8y SmartREST message indicating the success of the upload config file operation.
-///
-/// example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
-pub fn get_upload_config_file_successful_message(
-    binary_upload_event_url: &str,
-) -> Result<Message, anyhow::Error> {
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-    let smartrest_set_operation_status =
-        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yUploadConfigFile)
-            .with_response_parameter(binary_upload_event_url)
-            .to_smartrest()?;
-
-    Ok(Message::new(&topic, smartrest_set_operation_status))
-}
-
-/// returns a c8y SmartREST message indicating the failure of the upload config file operation.
-///
-/// example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
-pub fn get_upload_config_file_failure_message(
-    failure_reason: String,
-) -> Result<Message, anyhow::Error> {
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-    let smartrest_set_operation_status = SmartRestSetOperationToFailed::new(
-        CumulocitySupportedOperations::C8yUploadConfigFile,
-        failure_reason,
-    )
-    .to_smartrest()?;
-
-    Ok(Message::new(&topic, smartrest_set_operation_status))
-}
-
-async fn handle_config_upload_request(
-    config_upload_request: SmartRestConfigUploadRequest,
-    mqtt_client: &mut Connection,
-    http_client: &mut JwtAuthHttpProxy,
-) -> Result<()> {
-    // set config upload request to executing
-    let msg = get_upload_config_file_executing_message()?;
-    let () = mqtt_client.published.send(msg).await?;
-
-    let upload_result = upload_config_file(
-        Path::new(config_upload_request.config_type.as_str()),
-        http_client,
-    )
-    .await;
-    match upload_result {
-        Ok(upload_event_url) => {
-            let successful_message = get_upload_config_file_successful_message(&upload_event_url)?;
-            let () = mqtt_client.published.send(successful_message).await?;
-        }
-        Err(err) => {
-            let failed_message = get_upload_config_file_failure_message(err.to_string())?;
-            let () = mqtt_client.published.send(failed_message).await?;
-        }
-    }
-
-    Ok(())
-}
-
-async fn upload_config_file(
-    config_file_path: &Path,
-    http_client: &mut JwtAuthHttpProxy,
-) -> Result<String> {
-    // read the config file contents
-    let config_content = read_to_string(config_file_path)?;
-
-    // upload config file
-    let upload_event_url = http_client
-        .upload_config_file(config_file_path, &config_content)
-        .await?;
-
-    Ok(upload_event_url)
-}
-
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tedge_utils::logging::initialise_tracing_subscriber(LOG_LEVEL_DEBUG);
+    let config_plugin_opt = ConfigPluginOpt::parse();
+    tedge_utils::logging::initialise_tracing_subscriber(config_plugin_opt.debug);
+
+    if config_plugin_opt.init {
+        init(config_plugin_opt.config_dir)?;
+        return Ok(());
+    }
+
+    // Load tedge config from the provided location
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(config_plugin_opt.config_dir);
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load()?;
 
     // Create required clients
-    let mut mqtt_client = create_mqtt_client().await?;
-    let mut http_client = create_http_client().await?;
+    let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
+    let mut http_client = create_http_client(&tedge_config).await?;
 
-    let plugin_config = PluginConfig::new(PathBuf::from(CONFIG_ROOT_PATH));
+    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
 
     // Publish supported configuration types
     let msg = plugin_config.to_message()?;
@@ -152,13 +111,21 @@ async fn main() -> Result<(), anyhow::Error> {
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
-            let result = match payload.split(',').next() {
-                Some("524") => {
-                    debug!("{}", message.payload_str()?);
-                    todo!() // c8y_DownloadConfigFile
+            let result = match payload.split(',').next().unwrap_or_default() {
+                "524" => {
+                    let config_download_request =
+                        SmartRestConfigDownloadRequest::from_smartrest(payload)?;
+
+                    handle_config_download_request(
+                        &plugin_config,
+                        config_download_request,
+                        &tedge_config,
+                        &mut mqtt_client,
+                        &mut http_client,
+                    )
+                    .await
                 }
-                Some("526") => {
-                    debug!("{}", payload);
+                "526" => {
                     // retrieve config file upload smartrest request from payload
                     let config_upload_request =
                         SmartRestConfigUploadRequest::from_smartrest(payload)?;
@@ -185,5 +152,34 @@ async fn main() -> Result<(), anyhow::Error> {
 
     mqtt_client.close().await;
 
+    Ok(())
+}
+
+fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
+    info!("Creating supported operation files");
+    let config_dir = cfg_dir.as_path().display().to_string();
+    let () = create_operation_files(config_dir.as_str())?;
+    Ok(())
+}
+
+fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
+    create_directory_with_user_group(
+        &format!("{config_dir}/operations/c8y"),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_file_with_user_group(
+        &format!("{config_dir}/operations/c8y/c8y_UploadConfigFile"),
+        "tedge",
+        "tedge",
+        0o644,
+    )?;
+    create_file_with_user_group(
+        &format!("{config_dir}/operations/c8y/c8y_DownloadConfigFile"),
+        "tedge",
+        "tedge",
+        0o644,
+    )?;
     Ok(())
 }

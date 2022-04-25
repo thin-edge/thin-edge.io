@@ -3,7 +3,7 @@ use agent_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
 use serde::{Deserialize, Serialize, Serializer};
 
-type SmartRest = String;
+pub type SmartRest = String;
 
 #[derive(Debug)]
 pub enum CumulocitySupportedOperations {
@@ -11,6 +11,7 @@ pub enum CumulocitySupportedOperations {
     C8yLogFileRequest,
     C8yRestartRequest,
     C8yUploadConfigFile,
+    C8yDownloadConfigFile,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -20,6 +21,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
             CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
             CumulocitySupportedOperations::C8yUploadConfigFile => "c8y_UploadConfigFile",
+            CumulocitySupportedOperations::C8yDownloadConfigFile => "c8y_DownloadConfigFile",
         }
     }
 }
