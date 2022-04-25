@@ -187,6 +187,10 @@ jobs:
         # We need to continue when there is no tedge already installed
         continue-on-error: true
 
+      - name: Stop apama
+        run: sudo systemctl stop apama
+        continue-on-error: true
+
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
