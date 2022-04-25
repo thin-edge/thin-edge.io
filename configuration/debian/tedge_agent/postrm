@@ -7,9 +7,16 @@ purge_agent_directory() {
     fi
 }
 
+purge_agent_lock() {
+   if [ -f "/run/lock/tedge_agent.lock" ]; then
+       rm -rf /run/lock/tedge_agent.lock
+   fi
+}
+
 case "$1" in
     purge)
        purge_agent_directory
+       purge_agent_lock
     ;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
