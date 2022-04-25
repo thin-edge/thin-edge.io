@@ -17,10 +17,11 @@ use clap::Parser;
 use mqtt_channel::{SinkExt, StreamExt};
 use std::path::PathBuf;
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfigLocation,
+    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tracing::{debug, error};
+use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tracing::{debug, error, info};
 
 const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
@@ -47,6 +48,10 @@ pub struct ConfigPluginOpt {
     #[clap(long)]
     pub debug: bool,
 
+    /// Create supported operation files
+    #[clap(short, long)]
+    pub init: bool,
+
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     pub config_dir: PathBuf,
 
@@ -55,10 +60,8 @@ pub struct ConfigPluginOpt {
 }
 
 async fn create_mqtt_client(
-    tedge_config_location: &TEdgeConfigLocation,
+    tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-    let tedge_config = config_repository.load()?;
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -71,11 +74,9 @@ async fn create_mqtt_client(
 }
 
 pub async fn create_http_client(
-    tedge_config_location: &TEdgeConfigLocation,
+    tedge_config: &TEdgeConfig,
 ) -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-    let tedge_config = config_repository.load()?;
-    let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
+    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
 }
@@ -85,12 +86,20 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = ConfigPluginOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(config_plugin_opt.debug);
 
+    if config_plugin_opt.init {
+        init(config_plugin_opt.config_dir)?;
+        return Ok(());
+    }
+
+    // Load tedge config from the provided location
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(config_plugin_opt.config_dir);
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load()?;
 
     // Create required clients
-    let mut mqtt_client = create_mqtt_client(&tedge_config_location).await?;
-    let mut http_client = create_http_client(&tedge_config_location).await?;
+    let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
+    let mut http_client = create_http_client(&tedge_config).await?;
 
     let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
 
@@ -110,6 +119,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     handle_config_download_request(
                         &plugin_config,
                         config_download_request,
+                        &tedge_config,
                         &mut mqtt_client,
                         &mut http_client,
                     )
@@ -142,5 +152,34 @@ async fn main() -> Result<(), anyhow::Error> {
 
     mqtt_client.close().await;
 
+    Ok(())
+}
+
+fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
+    info!("Creating supported operation files");
+    let config_dir = cfg_dir.as_path().display().to_string();
+    let () = create_operation_files(config_dir.as_str())?;
+    Ok(())
+}
+
+fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
+    create_directory_with_user_group(
+        &format!("{config_dir}/operations/c8y"),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_file_with_user_group(
+        &format!("{config_dir}/operations/c8y/c8y_UploadConfigFile"),
+        "tedge",
+        "tedge",
+        0o644,
+    )?;
+    create_file_with_user_group(
+        &format!("{config_dir}/operations/c8y/c8y_DownloadConfigFile"),
+        "tedge",
+        "tedge",
+        0o644,
+    )?;
     Ok(())
 }

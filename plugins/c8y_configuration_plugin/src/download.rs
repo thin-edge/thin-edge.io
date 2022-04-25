@@ -16,13 +16,14 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use tedge_config::{get_tedge_config, ConfigSettingAccessor, TmpPathDefaultSetting};
+use tedge_config::{ConfigSettingAccessor, TEdgeConfig, TmpPathDefaultSetting};
 
 const BROADCASTING_TOPIC: &str = "filemanagement/changes";
 
 pub async fn handle_config_download_request(
     plugin_config: &PluginConfig,
     smartrest_request: SmartRestConfigDownloadRequest,
+    tedge_config: &TEdgeConfig,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
@@ -32,7 +33,7 @@ pub async fn handle_config_download_request(
     // Add validation if the config_type exists in
     let changed_file = smartrest_request.config_type.clone();
 
-    match download_config_file(plugin_config, smartrest_request, http_client).await {
+    match download_config_file(plugin_config, smartrest_request, tedge_config, http_client).await {
         Ok(_) => {
             let successful_message = GetDownloadConfigFileMessage::successful(None)?;
             let () = mqtt_client.published.send(successful_message).await?;
@@ -52,11 +53,12 @@ pub async fn handle_config_download_request(
 async fn download_config_file(
     plugin_config: &PluginConfig,
     smartrest_request: SmartRestConfigDownloadRequest,
+    tedge_config: &TEdgeConfig,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
     let mut config_download_request =
-        ConfigDownloadRequest::try_new(smartrest_request, plugin_config)?;
+        ConfigDownloadRequest::try_new(smartrest_request, plugin_config, tedge_config)?;
 
     // Confirm that the file has write access before any http request attempt
     let () = config_download_request.has_write_access()?;
@@ -91,6 +93,7 @@ impl ConfigDownloadRequest {
     fn try_new(
         request: SmartRestConfigDownloadRequest,
         plugin_config: &PluginConfig,
+        tedge_config: &TEdgeConfig,
     ) -> Result<Self, ConfigDownloadError> {
         // Check if the requested config type is in the plugin config list
         if !plugin_config.files.contains(&request.config_type) {
@@ -100,7 +103,6 @@ impl ConfigDownloadRequest {
         }
 
         let destination_path = PathBuf::from(request.config_type);
-        let tedge_config = get_tedge_config()?;
         let tmp_dir = tedge_config.query(TmpPathDefaultSetting)?.into();
         let file_name = Self::get_filename(destination_path.clone())?;
 
