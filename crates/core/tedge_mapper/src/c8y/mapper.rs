@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{
-    c8y::converter::CumulocityConverter,
+    c8y::{converter::CumulocityConverter, dynamic_discovery::*},
     core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
 };
 
@@ -79,8 +79,19 @@ impl TEdgeComponent for CumulocityMapper {
             http_proxy,
         )?);
 
-        let mut mapper =
-            create_mapper(CUMULOCITY_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
+        let mut mapper = create_mapper(
+            CUMULOCITY_MAPPER_NAME,
+            mqtt_host.clone(),
+            mqtt_port,
+            converter,
+        )
+        .await?;
+
+        let ops_dir = format!("{}/operations/c8y", &config_dir);
+
+        tokio::spawn(async move {
+            let _ = discover_operations(ops_dir, &mqtt_host, &mqtt_port).await;
+        });
 
         mapper
             .run()

@@ -28,10 +28,14 @@ pub async fn create_mapper(
     .expect("health check topics must be valid");
 
     let health_status_topic = Topic::new_unchecked(format!("tedge/health/{}", app_name).as_str());
+    let operation_update_topic: TopicFilter = vec!["tedge/operation/update"]
+        .try_into()
+        .expect("Update operation topic must be valid");
 
     let mapper_config = converter.get_mapper_config();
     let mut topic_filter = mapper_config.in_topic_filter.clone();
     topic_filter.add_all(health_check_topics.clone());
+    topic_filter.add_all(operation_update_topic.clone());
 
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
@@ -44,6 +48,7 @@ pub async fn create_mapper(
         converter,
         health_check_topics,
         health_status_topic,
+        operation_update_topic,
     ))
 }
 
@@ -67,6 +72,7 @@ pub struct Mapper {
     converter: Box<dyn Converter<Error = ConversionError>>,
     health_check_topics: TopicFilter,
     health_status_topic: Topic,
+    operation_update_topic: TopicFilter,
 }
 
 impl Mapper {
@@ -76,6 +82,7 @@ impl Mapper {
         converter: Box<dyn Converter<Error = ConversionError>>,
         health_check_topics: TopicFilter,
         health_status_topic: Topic,
+        operation_update_topic: TopicFilter,
     ) -> Self {
         Self {
             input,
@@ -83,6 +90,7 @@ impl Mapper {
             converter,
             health_check_topics,
             health_status_topic,
+            operation_update_topic,
         }
     }
 
@@ -140,8 +148,21 @@ impl Mapper {
             .to_string();
             let health_message = Message::new(&self.health_status_topic, health_status);
             let _ = self.output.send(health_message).await;
+        } else if self.operation_update_topic.accept(&message) {
+            match self
+                .converter
+                .process_operation_update_messages(&message.payload_str().expect("Wrong message"))
+            {
+                Ok(ops) => {
+                    let _ = self.output.send(ops).await;
+                }
+                Err(e) => {
+                    error!("Failed to process operation update request due to {e}");
+                }
+            }
         } else {
             let converted_messages = self.converter.convert(&message).await;
+
             for converted_message in converted_messages.into_iter() {
                 let _ = self.output.send(converted_message).await;
             }

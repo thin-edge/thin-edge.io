@@ -18,6 +18,7 @@ thiserror = "1.0"
 time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde"] }
 tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 anyhow = "1.0"

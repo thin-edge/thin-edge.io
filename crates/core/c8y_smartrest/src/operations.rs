@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::Deserialize;
+use tracing::warn;
 
 use crate::error::OperationsError;
 
@@ -60,13 +61,40 @@ impl Default for Operations {
 
 impl Operations {
     pub fn add(&mut self, operation: Operation) {
-        if let Some(detail) = operation.exec() {
-            if let Some(on_message) = &detail.on_message {
-                self.operations_by_trigger
-                    .insert(on_message.clone(), self.operations.len());
+        if self.operations.iter().any(|o| o.name.eq(&operation.name)) {
+            return;
+        } else {
+            if let Some(detail) = operation.exec() {
+                if let Some(on_message) = &detail.on_message {
+                    self.operations_by_trigger
+                        .insert(on_message.clone(), self.operations.len());
+                }
+            }
+            self.operations.push(operation);
+        }
+    }
+
+    pub fn add_operation(&mut self, operation: Operation) -> Result<(), OperationsError> {
+        match operation.topic() {
+            Some(topic) => {
+                if topic.eq(&String::from("c8y/s/ds")) {
+                    self.add(operation);
+                } else {
+                    warn!("The operation {} is not supported", operation.name);
+                }
+            }
+            None => {
+                self.add(operation);
             }
         }
-        self.operations.push(operation);
+        Ok(())
+    }
+
+    pub fn remove_operation(&mut self, op_name: &str) {
+        self.operations.retain(|x| x.name.ne(&op_name));
+        if op_name.eq("c8y_LogfileRequest") {
+            self.operations_by_trigger.remove_entry("522");
+        }
     }
 
     pub fn try_new(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Self, OperationsError> {
@@ -121,10 +149,26 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
             .and_then(|filename| filename.to_str())
             .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
             .to_owned();
-
         operations.add(details);
     }
     Ok(operations)
+}
+
+pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
+    let mut details = match fs::read(&path) {
+        Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
+            .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
+
+        Err(err) => return Err(OperationsError::FromIo(err)),
+    };
+
+    details.name = path
+        .file_name()
+        .and_then(|filename| filename.to_str())
+        .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
+        .to_owned();
+
+    Ok(details)
 }
 
 #[cfg(test)]

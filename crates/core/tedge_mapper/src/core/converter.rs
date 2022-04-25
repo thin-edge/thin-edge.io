@@ -3,6 +3,8 @@ use mqtt_channel::{Message, Topic, TopicFilter};
 use std::fmt::Display;
 use tracing::error;
 
+use super::error::ConversionError;
+
 #[derive(Debug)]
 pub struct MapperConfig {
     pub in_topic_filter: TopicFilter,
@@ -66,6 +68,13 @@ pub trait Converter: Send + Sync {
     /// Typically used to do some processing on all messages received on mapper startup and derive additional messages out of those.
     fn sync_messages(&mut self) -> Vec<Message> {
         vec![]
+    }
+
+    fn process_operation_update_messages(
+        &mut self,
+        _message: &str,
+    ) -> Result<Message, ConversionError> {
+        Ok(Message::new(&make_valid_topic_or_panic(""), ""))
     }
 }
 

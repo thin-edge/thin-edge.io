@@ -1,3 +1,4 @@
+use crate::c8y::dynamic_discovery::*;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use agent_interface::{
     topic::{RequestTopic, ResponseTopic},
@@ -13,7 +14,7 @@ use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_smartrest::{
     alarm,
     error::SmartRestDeserializerError,
-    operations::Operations,
+    operations::{get_operation, Operations},
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
     smartrest_serializer::{
         CumulocitySupportedOperations, SmartRestGetPendingOperations, SmartRestSerializer,
@@ -35,6 +36,7 @@ use std::{
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
 use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
 use time::format_description::well_known::Rfc3339;
+
 use tracing::{debug, info, log::error};
 
 use super::{
@@ -68,7 +70,7 @@ where
     device_name: String,
     device_type: String,
     alarm_converter: AlarmConverter,
-    operations: Operations,
+    pub operations: Operations,
     operation_logs: OperationLogs,
     http_proxy: Proxy,
 }
@@ -349,6 +351,25 @@ where
         self.alarm_converter = AlarmConverter::Synced;
         sync_messages
     }
+
+    fn process_operation_update_messages(
+        &mut self,
+        message: &str,
+    ) -> Result<Message, ConversionError> {
+        let payload: DiscoverOp = serde_json::from_str(message)?;
+        match payload.event_type {
+            EventType::ADD => {
+                let ops_dir = payload.ops_dir;
+                let op_name = payload.operation_name;
+                let op = get_operation(PathBuf::from(format!("{ops_dir}/{op_name}")))?;
+                self.operations.add_operation(op)?;
+            }
+            EventType::REMOVE => {
+                self.operations.remove_operation(&payload.operation_name);
+            }
+        }
+        Ok(create_supported_operations_fragments_message()?)
+    }
 }
 
 async fn parse_c8y_topics(
@@ -359,7 +380,7 @@ async fn parse_c8y_topics(
 ) -> Result<Vec<Message>, ConversionError> {
     match process_smartrest(
         message.payload_str()?,
-        operations,
+        &operations,
         http_proxy,
         operation_logs,
     )
@@ -372,7 +393,8 @@ async fn parse_c8y_topics(
             | ref err @ CumulocityMapperError::ExecuteFailed {
                 operation_name: ref operation,
                 ..
-            },
+            }
+            | ref err @ CumulocityMapperError::UnknownOperation(ref operation),
         ) => {
             let topic = C8yTopic::SmartRestResponse.to_topic()?;
             let msg1 = Message::new(&topic, format!("501,{operation}"));
@@ -701,7 +723,7 @@ async fn process_smartrest(
     match message_id {
         "528" => forward_software_request(payload, http_proxy).await,
         "510" => forward_restart_request(payload),
-        template => forward_operation_request(payload, template, operations, operation_logs).await,
+        template => forward_operation_request(payload, template, &operations, operation_logs).await,
     }
 }
 
@@ -762,9 +784,17 @@ async fn forward_operation_request(
             }
             Ok(vec![])
         }
-        None => Err(CumulocityMapperError::UnknownOperation(
-            template.to_string(),
-        )),
+        None => {
+            if template.contains("522") {
+                return Err(CumulocityMapperError::UnknownOperation(
+                    "c8y_LogfileRequest".to_string(),
+                ));
+            } else {
+                return Err(CumulocityMapperError::UnknownOperation(
+                    template.to_string(),
+                ));
+            };
+        }
     }
 }
 
