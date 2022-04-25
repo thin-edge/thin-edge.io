@@ -5,12 +5,13 @@ authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
-description = "Thin.edge.io operation plugin for Cumulocity configuration management request"
+description = "Thin-edge device configuration management for Cumulocity"
 
 [dependencies]
 anyhow = "1.0"
 c8y_api = { path = "../../crates/core/c8y_api" }
 c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
+clap = { version = "3.0", features = ["cargo", "derive"] }
 csv = "1.1"
 download = { path = "../../crates/common/download" }
 mqtt_channel = { path = "../../crates/common/mqtt_channel" }

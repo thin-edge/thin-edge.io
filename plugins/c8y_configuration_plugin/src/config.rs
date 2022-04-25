@@ -1,11 +1,10 @@
+use crate::DEFAULT_PLUGIN_CONFIG_FILE_PATH;
 use c8y_smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use tracing::{info, warn};
-
-pub const PLUGIN_CONFIG_FILE: &str = "c8y-configuration-plugin.toml";
 
 #[derive(Deserialize, Debug, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
@@ -14,14 +13,15 @@ pub struct PluginConfig {
 }
 
 impl PluginConfig {
-    pub fn new(config_root: PathBuf) -> Self {
-        let config_path = config_root.join(PLUGIN_CONFIG_FILE);
-        let config_path_str = config_path.to_str().unwrap_or(PLUGIN_CONFIG_FILE);
-        Self::read_config(config_path.clone()).add_file(config_path_str.into())
+    pub fn new(config_file_path: PathBuf) -> Self {
+        let config_file_path_str = config_file_path
+            .to_str()
+            .unwrap_or(DEFAULT_PLUGIN_CONFIG_FILE_PATH);
+        Self::read_config(config_file_path.clone()).add_file(config_file_path_str.into())
     }
 
     fn read_config(path: PathBuf) -> Self {
-        let path_str = path.to_str().unwrap_or(PLUGIN_CONFIG_FILE);
+        let path_str = path.to_str().unwrap_or(DEFAULT_PLUGIN_CONFIG_FILE_PATH);
         info!("Reading the config file from {}", path_str);
         match fs::read_to_string(path.clone()) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
@@ -70,6 +70,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
     use test_case::test_case;
+
+    const PLUGIN_CONFIG_FILE: &str = "c8y-configuration-plugin.toml";
 
     #[test]
     fn deserialize_plugin_config() {
@@ -142,11 +144,9 @@ mod tests {
     fn read_plugin_config_file(file_content: &str, raw_config: PluginConfig) -> anyhow::Result<()> {
         let (_dir, config_root_path) = create_temp_plugin_config(file_content)?;
         let tmp_path_to_plugin_config = config_root_path.join(PLUGIN_CONFIG_FILE);
-        let tmp_path_to_plugin_config_str = tmp_path_to_plugin_config
-            .to_str()
-            .unwrap_or(PLUGIN_CONFIG_FILE);
+        let tmp_path_to_plugin_config_str = tmp_path_to_plugin_config.to_str().unwrap();
 
-        let config = PluginConfig::new(config_root_path.clone());
+        let config = PluginConfig::new(tmp_path_to_plugin_config.clone());
 
         // The expected output should contain /tmp/<random>/c8y_configuration_plugin.toml
         let expected_config = raw_config.add_file(tmp_path_to_plugin_config_str.into());

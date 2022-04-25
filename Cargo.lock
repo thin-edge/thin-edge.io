@@ -395,6 +395,7 @@ dependencies = [
  "assert_matches",
  "c8y_api",
  "c8y_smartrest",
+ "clap 3.1.6",
  "csv",
  "download",
  "mqtt_channel",

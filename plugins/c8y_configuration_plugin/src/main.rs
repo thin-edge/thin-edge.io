@@ -10,24 +10,55 @@ use crate::upload::handle_config_upload_request;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::smartrest_deserializer::{
-    SmartRestConfigDownloadRequest, SmartRestRequestGeneric,
+    SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
 };
-use c8y_smartrest::{smartrest_deserializer::SmartRestConfigUploadRequest, topic::C8yTopic};
+use c8y_smartrest::topic::C8yTopic;
+use clap::Parser;
 use mqtt_channel::{SinkExt, StreamExt};
 use std::path::PathBuf;
-use tedge_config::{get_tedge_config, ConfigSettingAccessor, MqttPortSetting};
+use tedge_config::{
+    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfigLocation,
+    DEFAULT_TEDGE_CONFIG_PATH,
+};
 use tracing::{debug, error};
 
-const CONFIG_ROOT_PATH: &str = "/etc/tedge/c8y";
+const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+`c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
+notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
-#[cfg(not(debug_assertions))]
-const LOG_LEVEL_DEBUG: bool = false;
+The thin-edge `CONFIG_DIR` is used to find where:
+  * to store temporary files on download: `tedge config get tmp.path`,
+  * to log operation errors and progress: `tedge config get log.path`,
+  * to connect the MQTT bus: `tedge config get mqtt.port`."#;
 
-#[cfg(debug_assertions)]
-const LOG_LEVEL_DEBUG: bool = false;
+#[derive(Debug, clap::Parser)]
+#[clap(
+name = clap::crate_name!(),
+version = clap::crate_version!(),
+about = clap::crate_description!(),
+after_help = AFTER_HELP_TEXT
+)]
+pub struct ConfigPluginOpt {
+    /// Turn-on the debug log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO
+    /// If on also reports DEBUG and TRACE
+    #[clap(long)]
+    pub debug: bool,
 
-async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let tedge_config = get_tedge_config()?;
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
+
+    #[clap(long = "config-file", default_value = DEFAULT_PLUGIN_CONFIG_FILE_PATH)]
+    pub config_file: PathBuf,
+}
+
+async fn create_mqtt_client(
+    tedge_config_location: &TEdgeConfigLocation,
+) -> Result<mqtt_channel::Connection, anyhow::Error> {
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load()?;
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -39,22 +70,29 @@ async fn create_mqtt_client() -> Result<mqtt_channel::Connection, anyhow::Error>
     Ok(mqtt_client)
 }
 
-pub async fn create_http_client() -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let config = get_tedge_config()?;
-    let mut http_proxy = JwtAuthHttpProxy::try_new(&config).await?;
+pub async fn create_http_client(
+    tedge_config_location: &TEdgeConfigLocation,
+) -> Result<JwtAuthHttpProxy, anyhow::Error> {
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load()?;
+    let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tedge_utils::logging::initialise_tracing_subscriber(LOG_LEVEL_DEBUG);
+    let config_plugin_opt = ConfigPluginOpt::parse();
+    tedge_utils::logging::initialise_tracing_subscriber(config_plugin_opt.debug);
+
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(config_plugin_opt.config_dir);
 
     // Create required clients
-    let mut mqtt_client = create_mqtt_client().await?;
-    let mut http_client = create_http_client().await?;
+    let mut mqtt_client = create_mqtt_client(&tedge_config_location).await?;
+    let mut http_client = create_http_client(&tedge_config_location).await?;
 
-    let plugin_config = PluginConfig::new(PathBuf::from(CONFIG_ROOT_PATH));
+    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
 
     // Publish supported configuration types
     let msg = plugin_config.to_message()?;
