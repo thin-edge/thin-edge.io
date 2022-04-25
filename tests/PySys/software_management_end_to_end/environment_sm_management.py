@@ -218,10 +218,10 @@ class SoftwareManagement(EnvironmentC8y):
     def get_status_of_last_operation(self):
         """Returns the status of the last operation:
         "FAILED" or "SUCCESSFUL".
-        When there is now last operation listened in C8Y return "NOOPFOUND".
+        When there is no last operation listened in C8Y it returns "NOOPFOUND".
 
         Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
+        seem to be at the beginning of the list, independent of if we
         revert it or not.
         """
 
