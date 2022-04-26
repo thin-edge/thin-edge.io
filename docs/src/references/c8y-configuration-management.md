@@ -97,7 +97,6 @@ by the configuration of thin-edge:
 * `tedge config get mqtt.port`: the TCP port of the local MQTT bus.
 * `tedge config get tmp.path`: the directory where the files are updated
   before being copied atomically to their targets.
-* `tedge config get log.path`: the directory used for logging.
 
 ## Usage
 
@@ -121,13 +120,12 @@ OPTIONS:
     
     The thin-edge `CONFIG_DIR` is used to find where:
     * to store temporary files on download: `tedge config get tmp.path`,
-    * to log operation errors and progress: `tedge config get log.path`,
     * to connect the MQTT bus: `tedge config get mqtt.port`.
 ```
 
 ## Logging
 
-The `c8y_configuration_plugin` reports progress and errors in the log file `/var/log/tedge/c8y_configuration_plugin.log`
+The `c8y_configuration_plugin` reports progress and errors on its `stderr`.
 
 * All upload and download operation requests are logged, when received and when completed,
   with one line per file.
