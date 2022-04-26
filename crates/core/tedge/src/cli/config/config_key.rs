@@ -57,9 +57,9 @@ impl ConfigKey {
             config_key!(MqttExternalCertfileSetting),
             config_key!(MqttExternalKeyfileSetting),
             config_key!(SoftwarePluginDefaultSetting),
-            config_key!(TmpPathDefaultSetting),
-            config_key!(LogPathDefaultSetting),
-            config_key!(RunPathDefaultSetting),
+            config_key!(TmpPathSetting),
+            config_key!(LogPathSetting),
+            config_key!(RunPathSetting),
         ]
     }
 }

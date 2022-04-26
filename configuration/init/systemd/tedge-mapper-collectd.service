@@ -3,7 +3,7 @@ Description=tedge-mapper-collectd converts Thin Edge JSON measurements to Cumulo
 After=syslog.target network.target mosquitto.service
 
 [Service]
-User=tedge-mapper
+User=tedge
 ExecStart=/usr/bin/tedge_mapper collectd
 Restart=on-failure
 RestartPreventExitStatus=255

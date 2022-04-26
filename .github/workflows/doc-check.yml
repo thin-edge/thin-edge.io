@@ -1,0 +1,52 @@
+name: Documentation check
+
+on:
+  workflow_dispatch:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    paths:
+      # Any files in the /docs directory at the root of the repository.
+      - 'docs/**'
+
+jobs:
+  mdbook-build-check:
+    name: Run mdbook build
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+        # https://github.com/marketplace/actions/mdbook-action
+        with:
+          mdbook-version: "0.4.10"
+          # mdbook-version: 'latest'
+
+      - name: Install mdbook-toc
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-toc
+          version: latest
+
+      - name: Install mdbook-mermaid
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-mermaid
+          version: latest
+
+      - name: Install mdbook-linkcheck
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-linkcheck
+          version: latest
+
+      - name: Run mdbook build
+        run: |
+          ls -l
+          cd docs
+          mdbook build

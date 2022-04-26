@@ -47,13 +47,13 @@ async fn main() -> Result<(), anyhow::Error> {
     tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
 
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir);
+        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
     let mut agent = agent::SmAgent::try_new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
     if agent_opt.init {
-        agent.init().await?;
+        agent.init(agent_opt.config_dir).await?;
     } else if agent_opt.clear {
         agent.clear_session().await?;
     } else {

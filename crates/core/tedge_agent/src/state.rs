@@ -39,7 +39,7 @@ impl StateRepository for AgentStateRepository {
     async fn store(&self, state: &State) -> Result<(), StateError> {
         let toml = toml::to_string_pretty(&state)?;
 
-        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
+        // Create in path given through `config-dir` or `/etc/tedge` directory in case it does not exist yet
         if !self.state_repo_root.exists() {
             let () = fs::create_dir(&self.state_repo_root).await?;
         }

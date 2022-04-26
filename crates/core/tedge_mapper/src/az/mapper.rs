@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     az::converter::AzureConverter,
     core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
@@ -26,12 +28,13 @@ impl TEdgeComponent for AzureMapper {
         AZURE_MAPPER_NAME
     }
 
-    async fn init(&self) -> Result<(), anyhow::Error> {
+    async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper az");
+        let config_dir = cfg_dir.display().to_string();
         create_directory_with_user_group(
-            "/etc/tedge/operations/az",
-            "tedge-mapper",
-            "tedge-mapper",
+            &format!("{config_dir}/operations/az"),
+            "tedge",
+            "tedge",
             0o775,
         )?;
 
@@ -39,7 +42,11 @@ impl TEdgeComponent for AzureMapper {
         Ok(())
     }
 
-    async fn start(&self, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+    async fn start(
+        &self,
+        tedge_config: TEdgeConfig,
+        _config_dir: &Path,
+    ) -> Result<(), anyhow::Error> {
         let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
