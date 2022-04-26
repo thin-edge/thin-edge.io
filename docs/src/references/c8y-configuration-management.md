@@ -50,7 +50,11 @@ to declare that this plugin supports two Cumulocity operations:
 uploading and downloading configuration files
 (which respective SmartRest2 codes are `526` and `524`).
 
+These two files can be created using the `c8y_configuration_plugin --init` option: `
+
 ```shell
+$ sudo c8y_configuration_plugin --init
+
 $ ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_UploadConfigFile
   
@@ -62,12 +66,12 @@ The `c8y_configuration_plugin` has to be run as a daemon on the device, the latt
 
 ## Configuration
 
-The `c8y_configuration_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y_configuration_plugin.toml`
+The `c8y_configuration_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-configuration-plugin.toml`
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 
 ```shell
-$ cat /etc/tedge/c8y/c8y_configuration_plugin.toml
+$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
     '/etc/tedge/tedge.toml',
     '/etc/tedge/mosquitto-conf/c8y-bridge.conf',
@@ -77,12 +81,12 @@ files = [
 ```
 
 Note that:
-* The file `/etc/tedge/c8y/c8y_configuration_plugin.toml` itself doesn't need to be listed.
+* The file `/etc/tedge/c8y/c8y-configuration-plugin.toml` itself doesn't need to be listed.
   This is implied, so the list can *always* be configured from the cloud.
-* If the file `/etc/tedge/c8y/c8y_configuration_plugin.toml`
+* If the file `/etc/tedge/c8y/c8y-configuration-plugin.toml`
   is not found, empty, ill-formed or not-readable
-  then only `c8y_configuration_plugin.toml` is managed from the cloud.
-* If the file `/etc/tedge/c8y/c8y_configuration_plugin.toml` is ill-formed
+  then only `c8y-configuration-plugin.toml` is managed from the cloud.
+* If the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` is ill-formed
   or cannot be read then an error is logged, but the operation proceed
   as if the file were empty.
   
@@ -106,7 +110,7 @@ USAGE:
 
 OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
-        --config-file <CONFIG_FILE>    [default: /etc/tedge/c8y/c8y_configuration_plugin.toml]
+        --config-file <CONFIG_FILE>    [default: $CONFIG_DIR/c8y/c8y-configuration-plugin.toml]
     -h, --help                         Print help information
     -V, --version                      Print version information
 
@@ -136,6 +140,6 @@ Points that still need to be addressed:
 
 * Which topic and message payload to notify successfully changed configuration.
 * The user running `c8y_configuration_plugin` must have read and write access
-  to all the files listed by the configuration `/etc/tedge/c8y/c8y_configuration_plugin.toml`.
+  to all the files listed by the configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml`.
 * When a download file is copied to its target, the unix user, group and mod must be preserved.
   * What if the target file doesn't exist? Is this is an error? If not what user, group and mod are to be used?
