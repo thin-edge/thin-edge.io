@@ -19,6 +19,7 @@ Thin-edge provides an operation plugin to
   __these files are stored in a temporary directory first__.
   They are atomically moved to their target path, only after a fully successful download.
   The aim is to avoid breaking the system with half downloaded files.
+* When a downloaded file is copied to its target, the unix user, group and mod are preserved.  
 * Once a snapshot has been downloaded from Cumulocity to the device,
   __the plugin publishes a notification message on the local thin-edge MQTT bus__.
   The device software has to subscribe to these messages if any action is required,
@@ -136,11 +137,18 @@ The `c8y_configuration_plugin` reports progress and errors on its `stderr`.
 * All changes to the list of managed file is logged, one line per change.
 * All errors are reported with the operation context (upload or download? which file?).
 
+## Notifications
+
+When a configuration file is successfully downloaded from the cloud,
+the `c8y_configuration_plugin` service notifies this update over MQTT.
+
+* Each message provides the path to the freshly updated file as in `{ "changedFile": "/etc/tedge/tedge.toml" }`.
+* The messages are published on `tedge/configuration_change`.
+
 ## Internals
 
 Points that still need to be addressed:
 
-* Which topic and message payload to notify successfully changed configuration.
 * The user running `c8y_configuration_plugin` must have read and write access
   to all the files listed by the configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml`.
 * When a download file is copied to its target, the unix user, group and mod must be preserved.
