@@ -50,7 +50,7 @@ to declare that this plugin supports two Cumulocity operations:
 uploading and downloading configuration files
 (which respective SmartRest2 codes are `526` and `524`).
 
-These two files can be created using the `c8y_configuration_plugin --init` option: `
+These two files can be created using the `c8y_configuration_plugin --init` option:
 
 ```shell
 $ sudo c8y_configuration_plugin --init
@@ -101,7 +101,8 @@ by the configuration of thin-edge:
 ## Usage
 
 ```shell
-$ c8y_configuration_plugin
+$ c8y_configuration_plugin --help
+c8y_configuration_plugin 0.6.2
 Thin-edge device configuration management for Cumulocity
 
 USAGE:
@@ -110,12 +111,15 @@ USAGE:
 OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
         --config-file <CONFIG_FILE>    [default: $CONFIG_DIR/c8y/c8y-configuration-plugin.toml]
+        --debug                        Turn-on the debug log level
     -h, --help                         Print help information
+    -i, --init                         Create supported operation files
     -V, --version                      Print version information
 
-    On start, `c8y_configuration_plugin` notifies the cloud tenant
-    of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
-    `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
+    On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
+    listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+    `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation
+    requests (messages `524` and `526`).
     notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
     
     The thin-edge `CONFIG_DIR` is used to find where:
