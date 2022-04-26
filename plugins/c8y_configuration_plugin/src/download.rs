@@ -95,7 +95,8 @@ impl ConfigDownloadRequest {
         tmp_dir: PathBuf,
     ) -> Result<Self, ConfigManagementError> {
         // Check if the requested config type is in the plugin config list
-        if !plugin_config.files.contains(&request.config_type) {
+        let all_file_paths = plugin_config.get_all_file_paths();
+        if !all_file_paths.contains(&request.config_type) {
             return Err(ConfigManagementError::InvalidRequestedConfigType {
                 path: request.config_type,
             });
@@ -212,6 +213,7 @@ impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::FileEntry;
     use assert_matches::*;
     use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
     use std::collections::HashSet;
@@ -222,10 +224,10 @@ mod tests {
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
             files: HashSet::from([
-                "/etc/tedge/tedge.toml".to_string(),
-                "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
-                "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
-                "/etc/mosquitto/mosquitto.conf".to_string(),
+                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
+                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
+                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
+                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
             ]),
         };
         let config_download_request = ConfigDownloadRequest::try_new(
@@ -254,10 +256,10 @@ mod tests {
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
             files: HashSet::from([
-                "/etc/tedge/tedge.toml".to_string(),
-                "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
-                "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
-                "/etc/mosquitto/mosquitto.conf".to_string(),
+                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
+                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
+                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
+                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
             ]),
         };
         let config_download_request = ConfigDownloadRequest::try_new(
