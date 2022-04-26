@@ -98,4 +98,7 @@ pub enum ConversionError {
         actual_size: usize,
         threshold: usize,
     },
+
+    #[error(transparent)]
+    FromOperationLogsError(#[from] plugin_sm::operation_logs::OperationLogsError),
 }

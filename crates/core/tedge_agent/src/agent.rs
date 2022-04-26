@@ -413,7 +413,7 @@ impl SmAgent {
 
         let response = match self
             .operation_logs
-            .new_log_file(LogKind::SoftwareList, None)
+            .new_log_file(LogKind::SoftwareList)
             .await
         {
             Ok(log_file) => plugins.lock().await.list(&request, log_file).await,
@@ -476,7 +476,7 @@ impl SmAgent {
 
         let response = match self
             .operation_logs
-            .new_log_file(LogKind::SoftwareUpdate, None)
+            .new_log_file(LogKind::SoftwareUpdate)
             .await
         {
             Ok(log_file) => {

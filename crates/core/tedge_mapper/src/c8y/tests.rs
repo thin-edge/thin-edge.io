@@ -60,7 +60,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     mqtt_tests::assert_received_all_expected(
         &mut messages,
         TEST_TIMEOUT_MS,
-        &["118,software-management\n", "500\n"],
+        &["software-management", "500\n"],
     )
     .await;
 
@@ -299,11 +299,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     mqtt_tests::assert_received_all_expected(
         &mut responses,
         TEST_TIMEOUT_MS,
-        &[
-            "118,software-management\n",
-            "500\n",
-            "503,c8y_SoftwareUpdate,\n",
-        ],
+        &["software-management", "500\n", "503,c8y_SoftwareUpdate,\n"],
     )
     .await;
 
@@ -950,6 +946,7 @@ fn create_c8y_converter() -> CumulocityConverter<FakeC8YHttpProxy> {
         operations,
         http_proxy,
     )
+    .unwrap()
 }
 
 fn remove_whitespace(s: &str) -> String {

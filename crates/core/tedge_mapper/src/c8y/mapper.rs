@@ -77,7 +77,7 @@ impl TEdgeComponent for CumulocityMapper {
             device_type,
             operations,
             http_proxy,
-        ));
+        )?);
 
         let mut mapper =
             create_mapper(CUMULOCITY_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
@@ -180,13 +180,16 @@ mod tests {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
         let operations = Operations::default();
 
-        let converter = Box::new(CumulocityConverter::new(
-            size_threshold,
-            DEVICE_NAME.into(),
-            DEVICE_TYPE.into(),
-            operations,
-            proxy,
-        ));
+        let converter = Box::new(
+            CumulocityConverter::new(
+                size_threshold,
+                DEVICE_NAME.into(),
+                DEVICE_TYPE.into(),
+                operations,
+                proxy,
+            )
+            .unwrap(),
+        );
 
         let broker = test_mqtt_broker();
 
