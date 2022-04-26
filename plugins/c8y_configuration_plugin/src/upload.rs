@@ -1,4 +1,4 @@
-use crate::smartrest::GetSmartRestMessage;
+use crate::smartrest::TryIntoOperationStatusMessage;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
@@ -13,9 +13,9 @@ use c8y_smartrest::{
 use mqtt_channel::{Connection, SinkExt};
 use std::{fs::read_to_string, path::Path};
 
-struct GetUploadConfigFileMessage {}
+struct UploadConfigFileStatusMessage {}
 
-impl GetSmartRestMessage for GetUploadConfigFileMessage {
+impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
     // returns a c8y message specifying to set the upload config file operation status to executing.
     // example message: '501,c8y_UploadConfigFile'
     fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
@@ -32,7 +32,7 @@ impl GetSmartRestMessage for GetUploadConfigFileMessage {
     }
 
     // returns a c8y SmartREST message indicating the failure of the upload config file operation.
-    // example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
+    // example message: '502,c8y_UploadConfigFile,"failure reason"'
     fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError> {
         SmartRestSetOperationToFailed::new(
             CumulocitySupportedOperations::C8yUploadConfigFile,
@@ -48,7 +48,7 @@ pub async fn handle_config_upload_request(
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<()> {
     // set config upload request to executing
-    let msg = GetUploadConfigFileMessage::executing()?;
+    let msg = UploadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(msg).await?;
 
     let upload_result = upload_config_file(
@@ -59,11 +59,11 @@ pub async fn handle_config_upload_request(
     match upload_result {
         Ok(upload_event_url) => {
             let successful_message =
-                GetUploadConfigFileMessage::successful(Some(upload_event_url))?;
+                UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
             let () = mqtt_client.published.send(successful_message).await?;
         }
         Err(err) => {
-            let failed_message = GetUploadConfigFileMessage::failed(err.to_string())?;
+            let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
         }
     }
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn get_smartrest_executing() {
-        let message = GetUploadConfigFileMessage::executing().unwrap();
+        let message = UploadConfigFileStatusMessage::executing().unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(message.payload_str().unwrap(), "501,c8y_UploadConfigFile\n");
     }
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn get_smartrest_successful() {
         let message =
-            GetUploadConfigFileMessage::successful(Some("https://{c8y.url}/etc".to_string()))
+            UploadConfigFileStatusMessage::successful(Some("https://{c8y.url}/etc".to_string()))
                 .unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn get_smartrest_failed() {
-        let message = GetUploadConfigFileMessage::failed("failed reason".to_string()).unwrap();
+        let message = UploadConfigFileStatusMessage::failed("failed reason".to_string()).unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
             message.payload_str().unwrap(),

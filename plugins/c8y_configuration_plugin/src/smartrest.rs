@@ -3,7 +3,7 @@ use c8y_smartrest::smartrest_serializer::SmartRest;
 use c8y_smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 
-pub trait GetSmartRestMessage {
+pub trait TryIntoOperationStatusMessage {
     fn executing() -> Result<Message, SmartRestSerializerError> {
         let status = Self::status_executing()?;
         Ok(Self::create_message(status))

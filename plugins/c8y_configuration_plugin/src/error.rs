@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConfigDownloadError {
+pub enum ConfigManagementError {
     #[error("The file is read-only {path:?}")]
     ReadOnlyFile { path: PathBuf },
 

@@ -1,5 +1,5 @@
-use crate::error::ConfigDownloadError;
-use crate::smartrest::GetSmartRestMessage;
+use crate::error::ConfigManagementError;
+use crate::smartrest::TryIntoOperationStatusMessage;
 use crate::{error, PluginConfig};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
@@ -16,26 +16,25 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use tedge_config::{ConfigSettingAccessor, TEdgeConfig, TmpPathDefaultSetting};
 
-const BROADCASTING_TOPIC: &str = "filemanagement/changes";
+const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
 pub async fn handle_config_download_request(
     plugin_config: &PluginConfig,
     smartrest_request: SmartRestConfigDownloadRequest,
-    tedge_config: &TEdgeConfig,
+    tmp_dir: PathBuf,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    let executing_message = GetDownloadConfigFileMessage::executing()?;
+    let executing_message = DownloadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(executing_message).await?;
 
     // Add validation if the config_type exists in
     let changed_file = smartrest_request.config_type.clone();
 
-    match download_config_file(plugin_config, smartrest_request, tedge_config, http_client).await {
+    match download_config_file(plugin_config, smartrest_request, tmp_dir, http_client).await {
         Ok(_) => {
-            let successful_message = GetDownloadConfigFileMessage::successful(None)?;
+            let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
             let () = mqtt_client.published.send(successful_message).await?;
 
             let notification_message = get_file_change_notification_message(changed_file);
@@ -43,7 +42,7 @@ pub async fn handle_config_download_request(
             Ok(())
         }
         Err(err) => {
-            let failed_message = GetDownloadConfigFileMessage::failed(err.to_string())?;
+            let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
             Err(err)
         }
@@ -53,12 +52,12 @@ pub async fn handle_config_download_request(
 async fn download_config_file(
     plugin_config: &PluginConfig,
     smartrest_request: SmartRestConfigDownloadRequest,
-    tedge_config: &TEdgeConfig,
+    tmp_dir: PathBuf,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
     let mut config_download_request =
-        ConfigDownloadRequest::try_new(smartrest_request, plugin_config, tedge_config)?;
+        ConfigDownloadRequest::try_new(smartrest_request, plugin_config, tmp_dir)?;
 
     // Confirm that the file has write access before any http request attempt
     let () = config_download_request.has_write_access()?;
@@ -93,17 +92,16 @@ impl ConfigDownloadRequest {
     fn try_new(
         request: SmartRestConfigDownloadRequest,
         plugin_config: &PluginConfig,
-        tedge_config: &TEdgeConfig,
-    ) -> Result<Self, ConfigDownloadError> {
+        tmp_dir: PathBuf,
+    ) -> Result<Self, ConfigManagementError> {
         // Check if the requested config type is in the plugin config list
         if !plugin_config.files.contains(&request.config_type) {
-            return Err(ConfigDownloadError::InvalidRequestedConfigType {
+            return Err(ConfigManagementError::InvalidRequestedConfigType {
                 path: request.config_type,
             });
         }
 
         let destination_path = PathBuf::from(request.config_type);
-        let tmp_dir = tedge_config.query(TmpPathDefaultSetting)?.into();
         let file_name = Self::get_filename(destination_path.clone())?;
 
         Ok(Self {
@@ -117,17 +115,17 @@ impl ConfigDownloadRequest {
         })
     }
 
-    fn get_filename(path: PathBuf) -> Result<String, ConfigDownloadError> {
+    fn get_filename(path: PathBuf) -> Result<String, ConfigManagementError> {
         let filename = path
             .file_name()
-            .ok_or_else(|| ConfigDownloadError::FileNameNotFound { path: path.clone() })?
+            .ok_or_else(|| ConfigManagementError::FileNameNotFound { path: path.clone() })?
             .to_str()
-            .ok_or_else(|| ConfigDownloadError::InvalidFileName { path: path.clone() })?
+            .ok_or_else(|| ConfigManagementError::InvalidFileName { path: path.clone() })?
             .to_string();
         Ok(filename)
     }
 
-    fn has_write_access(&self) -> Result<(), ConfigDownloadError> {
+    fn has_write_access(&self) -> Result<(), ConfigManagementError> {
         // The file does not exist before downloading a file
         if !&self.destination_path.is_file() {
             return Ok(());
@@ -135,7 +133,7 @@ impl ConfigDownloadRequest {
         // Need a permission check when the file exists already
         let metadata = Self::get_metadata(&self.destination_path)?;
         if metadata.permissions().readonly() {
-            Err(error::ConfigDownloadError::ReadOnlyFile {
+            Err(error::ConfigManagementError::ReadOnlyFile {
                 path: self.destination_path.clone(),
             })
         } else {
@@ -147,13 +145,13 @@ impl ConfigDownloadRequest {
         Downloader::new(&self.file_name, &None, &self.tmp_dir)
     }
 
-    fn get_metadata(path: &Path) -> Result<std::fs::Metadata, ConfigDownloadError> {
-        fs::metadata(&path).map_err(|_| ConfigDownloadError::FileNotAccessible {
+    fn get_metadata(path: &Path) -> Result<std::fs::Metadata, ConfigManagementError> {
+        fs::metadata(&path).map_err(|_| ConfigManagementError::FileNotAccessible {
             path: path.to_path_buf(),
         })
     }
 
-    fn move_file(&self) -> Result<(), ConfigDownloadError> {
+    fn move_file(&self) -> Result<(), ConfigManagementError> {
         let src = &self.tmp_dir.join(&self.file_name);
         let dest = &self.destination_path;
 
@@ -166,7 +164,7 @@ impl ConfigDownloadRequest {
             false => None,
         };
 
-        let _ = fs::copy(src, dest).map_err(|_| ConfigDownloadError::FileCopyFailed {
+        let _ = fs::copy(src, dest).map_err(|_| ConfigManagementError::FileCopyFailed {
             src: src.to_path_buf(),
             dest: dest.to_path_buf(),
         })?;
@@ -184,12 +182,12 @@ impl ConfigDownloadRequest {
 
 pub fn get_file_change_notification_message(config_type: String) -> Message {
     let notification = json!({ "changedFile": config_type }).to_string();
-    Message::new(&Topic::new_unchecked(BROADCASTING_TOPIC), notification)
+    Message::new(&Topic::new_unchecked(CONFIG_CHANGE_TOPIC), notification)
 }
 
-struct GetDownloadConfigFileMessage {}
+struct DownloadConfigFileStatusMessage {}
 
-impl GetSmartRestMessage for GetDownloadConfigFileMessage {
+impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
     fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
         SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yDownloadConfigFile)
             .to_smartrest()
@@ -216,21 +214,25 @@ mod tests {
     use super::*;
     use assert_matches::*;
     use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+    use std::collections::HashSet;
 
     #[test]
     fn create_config_download_request() -> Result<(), anyhow::Error> {
         let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml";
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
-            files: vec![
+            files: HashSet::from([
                 "/etc/tedge/tedge.toml".to_string(),
                 "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                 "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                 "/etc/mosquitto/mosquitto.conf".to_string(),
-            ],
+            ]),
         };
-        let config_download_request =
-            ConfigDownloadRequest::try_new(smartrest_request, &plugin_config)?;
+        let config_download_request = ConfigDownloadRequest::try_new(
+            smartrest_request,
+            &plugin_config,
+            PathBuf::from("/tmp"),
+        )?;
         assert_eq!(
             config_download_request,
             ConfigDownloadRequest {
@@ -251,25 +253,28 @@ mod tests {
         let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/not_in_config.toml";
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
-            files: vec![
+            files: HashSet::from([
                 "/etc/tedge/tedge.toml".to_string(),
                 "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                 "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                 "/etc/mosquitto/mosquitto.conf".to_string(),
-            ],
+            ]),
         };
-        let config_download_request =
-            ConfigDownloadRequest::try_new(smartrest_request, &plugin_config);
+        let config_download_request = ConfigDownloadRequest::try_new(
+            smartrest_request,
+            &plugin_config,
+            PathBuf::from("/tmp"),
+        );
         assert_matches!(
             config_download_request,
-            Err(ConfigDownloadError::InvalidRequestedConfigType { .. })
+            Err(ConfigManagementError::InvalidRequestedConfigType { .. })
         );
         Ok(())
     }
 
     #[test]
     fn get_smartrest_executing() {
-        let message = GetDownloadConfigFileMessage::executing().unwrap();
+        let message = DownloadConfigFileStatusMessage::executing().unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
             message.payload_str().unwrap(),
@@ -279,7 +284,7 @@ mod tests {
 
     #[test]
     fn get_smartrest_successful() {
-        let message = GetDownloadConfigFileMessage::successful(None).unwrap();
+        let message = DownloadConfigFileStatusMessage::successful(None).unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
             message.payload_str().unwrap(),
@@ -289,7 +294,7 @@ mod tests {
 
     #[test]
     fn get_smartrest_failed() {
-        let message = GetDownloadConfigFileMessage::failed("failed reason".to_string()).unwrap();
+        let message = DownloadConfigFileStatusMessage::failed("failed reason".to_string()).unwrap();
         assert_eq!(message.topic, Topic::new("c8y/s/us").unwrap());
         assert_eq!(
             message.payload_str().unwrap(),

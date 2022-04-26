@@ -1,6 +1,7 @@
 use c8y_smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use tracing::{info, warn};
@@ -8,7 +9,7 @@ use tracing::{info, warn};
 #[derive(Deserialize, Debug, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct PluginConfig {
-    pub files: Vec<String>,
+    pub files: HashSet<String>,
 }
 
 impl PluginConfig {
@@ -40,11 +41,11 @@ impl PluginConfig {
 
     fn add_file(&self, file: String) -> Self {
         let mut files = self.files.clone();
-        let () = files.push(file);
+        let _ = files.insert(file);
         Self { files }
     }
 
-    pub fn to_message(&self) -> Result<Message, anyhow::Error> {
+    pub fn to_supported_config_types_message(&self) -> Result<Message, anyhow::Error> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
         Ok(Message::new(&topic, self.to_smartrest_payload()))
     }
@@ -85,12 +86,12 @@ mod tests {
 
         assert_eq!(
             config.files,
-            vec![
+            HashSet::from([
                 "/etc/tedge/tedge.toml".to_string(),
                 "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                 "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                 "/etc/mosquitto/mosquitto.conf".to_string(),
-            ]
+            ])
         );
     }
 
@@ -102,25 +103,39 @@ mod tests {
             '/etc/mosquitto/mosquitto.conf'
         ]"#,
         PluginConfig {
-            files: vec![
+            files: HashSet::from([
                 "/etc/tedge/tedge.toml".to_string(),
                 "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                 "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                 "/etc/mosquitto/mosquitto.conf".to_string(),
-            ]
+            ])
         }; "standard case"
+    )]
+    #[test_case(
+        r#"files = [
+            '/etc/tedge/tedge.toml',
+            '/etc/tedge/tedge.toml',
+            '/etc/mosquitto/mosquitto.conf',
+            '/etc/mosquitto/mosquitto.conf'
+        ]"#,
+        PluginConfig {
+            files: HashSet::from([
+                "/etc/tedge/tedge.toml".to_string(),
+                "/etc/mosquitto/mosquitto.conf".to_string()
+            ])
+        }; "file path duplication"
     )]
     #[test_case(
         r#"files = []"#,
         PluginConfig {
-            files: vec![]
+            files: HashSet::new()
         }
         ;"empty case"
     )]
     #[test_case(
         r#"test"#,
         PluginConfig {
-            files: vec![]
+            files: HashSet::new()
         }
         ;"not toml"
     )]
@@ -134,7 +149,7 @@ mod tests {
         unsupported_key = false
         "#,
         PluginConfig {
-            files: vec![]
+            files: HashSet::new()
         }
         ;"unexpected field"
     )]
@@ -167,25 +182,40 @@ mod tests {
     #[test]
     fn add_file_to_plugin_config() {
         let config = PluginConfig::default().add_file("/test/path/file".into());
-        assert_eq!(config.files, vec!["/test/path/file".to_string()])
+        assert_eq!(config.files, HashSet::from(["/test/path/file".to_string()]))
     }
 
-    #[test_case(
-    PluginConfig {
-        files: vec!["typeA".to_string()]
-        },
-        "119,typeA".to_string()
-    ;"single file"
-    )]
-    #[test_case(
-        PluginConfig {
-        files: vec!["typeA".to_string(), "typeB".to_string(), "typeC".to_string()]
-        },
-        "119,typeA,typeB,typeC".to_string()
-    ;"multiple files"
-    )]
-    fn get_smartrest(input: PluginConfig, expected_output: String) {
-        let output = input.to_smartrest_payload();
-        assert_eq!(output, expected_output);
+    #[test]
+    fn add_file_to_plugin_config_with_duplication() {
+        let config = PluginConfig::default()
+            .add_file("/test/path/file".into())
+            .add_file("/test/path/file".into());
+        assert_eq!(config.files, HashSet::from(["/test/path/file".to_string()]))
+    }
+
+    #[test]
+    fn get_smartrest_single_type() {
+        let plugin_config = PluginConfig {
+            files: HashSet::from(["typeA".to_string()]),
+        };
+        let output = plugin_config.to_smartrest_payload();
+        assert_eq!(output, "119,typeA");
+    }
+
+    #[test]
+    fn get_smartrest_multiple_types() {
+        let plugin_config = PluginConfig {
+            files: HashSet::from([
+                "typeA".to_string(),
+                "typeB".to_string(),
+                "typeC".to_string(),
+            ]),
+        };
+        let output = plugin_config.to_smartrest_payload();
+        // Hashset does not guarantee the order. Therefore, cannot use "119,typeA,typeB,typeC" as expected output.
+        assert!(output.contains("119"));
+        assert!(output.contains("typeA"));
+        assert!(output.contains("typeB"));
+        assert!(output.contains("typeC"));
     }
 }

@@ -17,7 +17,7 @@ use clap::Parser;
 use mqtt_channel::{SinkExt, StreamExt};
 use std::path::PathBuf;
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig,
+    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
@@ -104,7 +104,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
 
     // Publish supported configuration types
-    let msg = plugin_config.to_message()?;
+    let msg = plugin_config.to_supported_config_types_message()?;
     let () = mqtt_client.published.send(msg).await?;
 
     // Mqtt message loop
@@ -116,10 +116,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     let config_download_request =
                         SmartRestConfigDownloadRequest::from_smartrest(payload)?;
 
+                    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+
                     handle_config_download_request(
                         &plugin_config,
                         config_download_request,
-                        &tedge_config,
+                        tmp_dir,
                         &mut mqtt_client,
                         &mut http_client,
                     )
