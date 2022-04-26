@@ -19,7 +19,7 @@ Thin-edge provides an operation plugin to
   __these files are stored in a temporary directory first__.
   They are atomically moved to their target path, only after a fully successful download.
   The aim is to avoid breaking the system with half downloaded files.
-* When a downloaded file is copied to its target, the unix user, group and mod are preserved.  
+* When a downloaded file is copied to its target, the unix user, group and mod are preserved.
 * Once a snapshot has been downloaded from Cumulocity to the device,
   __the plugin publishes a notification message on the local thin-edge MQTT bus__.
   The device software has to subscribe to these messages if any action is required,
@@ -149,7 +149,5 @@ the `c8y_configuration_plugin` service notifies this update over MQTT.
 
 Points that still need to be addressed:
 
-* The user running `c8y_configuration_plugin` must have read and write access
-  to all the files listed by the configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml`.
-* When a download file is copied to its target, the unix user, group and mod must be preserved.
-  * What if the target file doesn't exist? Is this is an error? If not what user, group and mod are to be used?
+* Ability to give a type name to a configuration file.
+* What if the target file doesn't exist? Is this is an error? If not what user, group and mod are to be used?
