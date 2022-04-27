@@ -190,6 +190,24 @@ where
     }
 }
 
+pub trait SmartRestRequestGeneric {
+    fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError>
+    where
+        Self: Sized,
+        for<'de> Self: serde::Deserialize<'de>,
+    {
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+
+        rdr.deserialize()
+            .next()
+            .ok_or(SmartRestDeserializerError::EmptyRequest)?
+            .map_err(SmartRestDeserializerError::from)
+    }
+}
+
 pub enum SmartRestVariant {
     SmartRestLogRequest,
 }
@@ -207,20 +225,7 @@ pub struct SmartRestLogRequest {
     pub lines: usize,
 }
 
-impl SmartRestLogRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
-
-        rdr.deserialize()
-            .next()
-            .ok_or_else(|| panic!("empty request"))
-            .unwrap() // does already panic before this, so this unwrap is only required for type lineup
-            .map_err(SmartRestDeserializerError::from)
-    }
-}
+impl SmartRestRequestGeneric for SmartRestLogRequest {}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestRestartRequest {
@@ -228,19 +233,26 @@ pub struct SmartRestRestartRequest {
     pub device: String,
 }
 
-impl SmartRestRestartRequest {
-    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(smartrest.as_bytes());
+impl SmartRestRequestGeneric for SmartRestRestartRequest {}
 
-        rdr.deserialize()
-            .next()
-            .ok_or(SmartRestDeserializerError::EmptyRequest)?
-            .map_err(SmartRestDeserializerError::from)
-    }
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestConfigUploadRequest {
+    pub message_id: String,
+    pub device: String,
+    pub config_type: String,
 }
+
+impl SmartRestRequestGeneric for SmartRestConfigUploadRequest {}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SmartRestConfigDownloadRequest {
+    pub message_id: String,
+    pub device: String,
+    pub url: String,
+    pub config_type: String,
+}
+
+impl SmartRestRequestGeneric for SmartRestConfigDownloadRequest {}
 
 type JwtToken = String;
 
@@ -596,6 +608,19 @@ mod tests {
         let smartrest = String::from(&format!("510,user"));
         let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
+    }
+
+    #[test]
+    fn deserialize_smartrest_config_download_request_operation() {
+        let smartrest = "524,deviceId,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml".to_string();
+        let request = SmartRestConfigDownloadRequest::from_smartrest(&smartrest).unwrap();
+        let expected_output = SmartRestConfigDownloadRequest {
+            message_id: "524".to_string(),
+            device: "deviceId".to_string(),
+            url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
+            config_type: "/etc/tedge/tedge.toml".to_string(),
+        };
+        assert_eq!(request, expected_output);
     }
 
     #[test_case("/path/to/software-list-2021-10-27T10:44:44Z.log")]

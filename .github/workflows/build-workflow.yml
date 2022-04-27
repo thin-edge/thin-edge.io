@@ -82,6 +82,13 @@ jobs:
           command: deb
           args: -p tedge_logfile_request_plugin
 
+      - name: Build c8y_configuration_plugin debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p c8y_configuration_plugin
+
       - name: build sawtooth-publisher for amd64
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -197,6 +204,9 @@ jobs:
       - name: Strip tedge_logfile_request_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin
 
+      - name: Strip c8y_configuration_plugin
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_configuration_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_configuration_plugin
+
       - name: build tedge debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -238,6 +248,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_logfile_request_plugin --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build c8y_configuration_plugin debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p c8y_configuration_plugin --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build sawtooth publisher
         uses: actions-rs/cargo@v1

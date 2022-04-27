@@ -66,6 +66,11 @@ pub fn read_tedge_logs(
                 .map(|dt| !(dt < smartrest_obj.date_from || dt > smartrest_obj.date_to))
                 .unwrap_or(false)
         })
+        .filter(|dir_entry| {
+            let file_name = &dir_entry.file_name();
+            let file_name = file_name.to_str().unwrap();
+            file_name.starts_with(&smartrest_obj.log_type)
+        })
         .collect();
 
     read_vector.sort_by_key(|dir| dir.path());
@@ -112,7 +117,7 @@ pub fn read_tedge_logs(
 #[cfg(test)]
 mod tests {
     use super::read_tedge_logs;
-    use c8y_smartrest::smartrest_deserializer::SmartRestLogRequest;
+    use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
     use std::fs::File;
     use std::io::Write;
 
@@ -157,7 +162,7 @@ mod tests {
         ];
 
         let smartrest_obj = SmartRestLogRequest::from_smartrest(
-            "522,DeviceSerial,syslog,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
+            "522,DeviceSerial,software,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
         )
         .unwrap();
 
