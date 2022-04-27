@@ -1410,6 +1410,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./results
         destination_dir: results
+        publish_branch: gh-pages-test-report-matrix
         commit_message: Results for ci pipeline run ${{ github.run_number }}
 
     - name: Final Result
