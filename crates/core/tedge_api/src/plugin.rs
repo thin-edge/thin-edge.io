@@ -422,15 +422,15 @@ impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
     }
 }
 
-/// A thing that can be send around
+/// An object that can be sent between [`Plugin`]s
 ///
-/// This trait is a marker trait for all types that can be used as messages which can be send
+/// This trait is a marker trait for all types that can be used as messages which can be sent
 /// between plugins in thin-edge.
 ///
 /// ## Note
 ///
 /// A message without the expectation of a reply can use the [`NoReply`](crate::message::NoReply)
-/// type.
+/// type for [`Message::Reply`].
 pub trait Message: 'static + Send + std::fmt::Debug {
     /// The reply to this message
     type Reply: Message;
