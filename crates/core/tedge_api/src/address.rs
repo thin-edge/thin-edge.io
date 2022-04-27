@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::error::{SendTimeoutError, TrySendError};
 
 use crate::plugin::Message;
 
@@ -121,6 +121,41 @@ impl<RB: ReceiverBundle> Address<RB> {
             })
             .map_err(|msg| match msg {
                 TrySendError::Full(data) | TrySendError::Closed(data) => {
+                    *data.data.downcast::<M>().unwrap()
+                }
+            })?;
+
+        Ok(ReplyReceiver {
+            _pd: PhantomData,
+            reply_recv: receiver,
+        })
+    }
+
+    /// Send a message `M` to the address represented by the instance of this struct and wait for
+    /// them to accept it or timeout
+    ///
+    /// This method is identical to [`send_and_wait`] except a timeout can be specified after which
+    /// trying to send is aborted.
+    ///
+    /// If you do not wish to wait for a timeout see [`try_send`]
+    pub async fn send_with_timeout<M: Message>(
+        &self,
+        msg: M,
+        timeout: Duration,
+    ) -> Result<ReplyReceiver<M::Reply>, M> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+
+        self.sender
+            .send_timeout(
+                InternalMessage {
+                    data: Box::new(msg),
+                    reply_sender: sender,
+                },
+                timeout,
+            )
+            .await
+            .map_err(|msg| match msg {
+                SendTimeoutError::Timeout(data) | SendTimeoutError::Closed(data) => {
                     *data.data.downcast::<M>().unwrap()
                 }
             })?;
