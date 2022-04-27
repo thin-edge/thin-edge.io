@@ -70,14 +70,16 @@ The `c8y_configuration_plugin` has to be run as a daemon on the device, the latt
 The `c8y_configuration_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-configuration-plugin.toml`
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
+Each configuration file is defined by a record with:
+* The full `path` to the file.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
-    '/etc/tedge/tedge.toml',
-    '/etc/tedge/mosquitto-conf/c8y-bridge.conf',
-    '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf',
-    '/etc/mosquitto/mosquitto.conf'
+    { path = '/etc/tedge/tedge.toml' },
+    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
+    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
+    { path = '/etc/mosquitto/mosquitto.conf' }
   ]
 ```
 
