@@ -1,5 +1,7 @@
 use std::{marker::PhantomData, time::Duration};
 
+use tokio::sync::mpsc::error::TrySendError;
+
 use crate::plugin::Message;
 
 #[doc(hidden)]
@@ -90,6 +92,38 @@ impl<RB: ReceiverBundle> Address<RB> {
             })
             .await
             .map_err(|msg| *msg.0.data.downcast::<M>().unwrap())?;
+
+        Ok(ReplyReceiver {
+            _pd: PhantomData,
+            reply_recv: receiver,
+        })
+    }
+
+    /// Try sending a message `M` to the plugin behind this address without potentially waiting
+    ///
+    /// This function should be used when waiting for the plugin to receive the message is not
+    /// required.
+    ///
+    /// # Return
+    ///
+    /// The function either returns `Ok(())` if sending the message succeeded,
+    /// or the message in the error variant of the `Result`: `Err(M)`.
+    ///
+    /// The error is returned if the receiving side (the plugin that is addressed) cannot currently
+    /// receive messages (either because it is closed or the queue is full).
+    pub fn try_send<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+
+        self.sender
+            .try_send(InternalMessage {
+                data: Box::new(msg),
+                reply_sender: sender,
+            })
+            .map_err(|msg| match msg {
+                TrySendError::Full(data) | TrySendError::Closed(data) => {
+                    *data.data.downcast::<M>().unwrap()
+                }
+            })?;
 
         Ok(ReplyReceiver {
             _pd: PhantomData,
