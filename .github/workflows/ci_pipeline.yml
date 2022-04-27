@@ -614,7 +614,7 @@ jobs:
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
+        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
@@ -738,7 +738,7 @@ jobs:
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
+        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
@@ -863,7 +863,7 @@ jobs:
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
+        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
@@ -988,7 +988,7 @@ jobs:
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
 
       - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
+        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
 
       - name: run tedge help
         run: tedge --help
