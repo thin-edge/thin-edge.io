@@ -8,7 +8,7 @@ use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::Smar
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, path::Path, time::Duration};
 use tedge_config::{
     C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
     MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
@@ -42,6 +42,12 @@ pub trait C8YHttpProxy: Send + Sync {
     async fn upload_log_binary(
         &mut self,
         log_content: &str,
+    ) -> Result<String, SMCumulocityMapperError>;
+
+    async fn upload_config_file(
+        &mut self,
+        config_path: &Path,
+        config_content: &str,
     ) -> Result<String, SMCumulocityMapperError>;
 }
 
@@ -266,6 +272,25 @@ impl JwtAuthHttpProxy {
         )
     }
 
+    fn create_event(
+        &self,
+        event_type: String,
+        event_text: Option<String>,
+        event_time: Option<OffsetDateTime>,
+    ) -> C8yCreateEvent {
+        let c8y_managed_object = C8yManagedObject {
+            id: self.end_point.c8y_internal_id.clone(),
+        };
+
+        C8yCreateEvent::new(
+            Some(c8y_managed_object),
+            event_type.clone(),
+            event_time.unwrap_or(OffsetDateTime::now_utc()),
+            event_text.unwrap_or(event_type),
+            HashMap::new(),
+        )
+    }
+
     async fn send_event_internal(
         &mut self,
         c8y_event: C8yCreateEvent,
@@ -368,6 +393,33 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
             .body(log_content.to_string())
+            .bearer_auth(token.token())
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+
+        let _response = self.http_con.execute(request).await?;
+        Ok(binary_upload_event_url)
+    }
+
+    async fn upload_config_file(
+        &mut self,
+        config_path: &Path,
+        config_content: &str,
+    ) -> Result<String, SMCumulocityMapperError> {
+        let token = self.get_jwt_token().await?;
+
+        let config_file_event = self.create_event(config_path.display().to_string(), None, None);
+        let event_response_id = self.send_event_internal(config_file_event).await?;
+        let binary_upload_event_url = self
+            .end_point
+            .get_url_for_event_binary_upload(&event_response_id);
+
+        let request = self
+            .http_con
+            .post(&binary_upload_event_url)
+            .header("Accept", "application/json")
+            .header("Content-Type", "text/plain")
+            .body(config_content.to_string())
             .bearer_auth(token.token())
             .timeout(Duration::from_millis(10000))
             .build()?;

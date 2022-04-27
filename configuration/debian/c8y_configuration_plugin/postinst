@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+
+### Create supported operation files
+c8y_configuration_plugin --init
+
+#DEBHELPER#
