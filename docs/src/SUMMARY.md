@@ -48,6 +48,7 @@
     - [Init System configuration](references/init-system-config.md)
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
+  - [Device Configuration Management using Cumulocity](./references/c8y-configuration-management.md)
 
   - [APIs](api.md)
     - [The Bridged Topics](./references/bridged-topics.md)
