@@ -134,10 +134,10 @@ impl<RB: ReceiverBundle> Address<RB> {
     /// Send a message `M` to the address represented by the instance of this struct and wait for
     /// them to accept it or timeout
     ///
-    /// This method is identical to [`send_and_wait`] except a timeout can be specified after which
+    /// This method is identical to [`Address::send_and_wait`] except a timeout can be specified after which
     /// trying to send is aborted.
     ///
-    /// If you do not wish to wait for a timeout see [`try_send`]
+    /// If you do not wish to wait for a timeout see [`Address::try_send`]
     pub async fn send_with_timeout<M: Message>(
         &self,
         msg: M,
@@ -168,7 +168,7 @@ impl<RB: ReceiverBundle> Address<RB> {
 }
 
 #[derive(Debug)]
-/// Listener that allows one to wait for a reply as sent through [`Address::send`]
+/// Listener that allows one to wait for a reply as sent through [`Address::send_and_wait`]
 pub struct ReplyReceiver<M> {
     _pd: PhantomData<fn(M)>,
     reply_recv: tokio::sync::oneshot::Receiver<AnySendBox>,
