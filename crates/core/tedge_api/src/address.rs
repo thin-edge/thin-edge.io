@@ -57,7 +57,8 @@ impl<RB: ReceiverBundle> Address<RB> {
         }
     }
 
-    /// Send a message `M` to the address represented by the instance of this struct
+    /// Send a message `M` to the address represented by the instance of this struct and wait for
+    /// them to accept it
     ///
     /// This function can be used to send a message of type `M` to the plugin that is addressed by
     /// the instance of this type.
@@ -72,8 +73,11 @@ impl<RB: ReceiverBundle> Address<RB> {
     ///
     /// # Details
     ///
+    /// This function may block indefinitely if the receiving end does not start correctly. If this
+    /// could become an issue use something akin to timeout (like
+    /// [`timeout`](tokio::time::timeout)).
     /// For details on sending and receiving, see `tokio::sync::mpsc::Sender`.
-    pub async fn send<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M>
+    pub async fn send_and_wait<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M>
     where
         RB: Contains<M>,
     {
@@ -257,8 +261,8 @@ mod tests {
     #[allow(unreachable_code, dead_code, unused)]
     fn check_compile() {
         let addr: Address<FooBar> = todo!();
-        addr.send(Foo);
-        addr.send(Bar);
+        addr.send_and_wait(Foo);
+        addr.send_and_wait(Bar);
     }
 
     /////// Assert that types have the correct traits

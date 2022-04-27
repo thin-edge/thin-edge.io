@@ -141,7 +141,7 @@ impl Plugin for HeartbeatService {
                     tokio::select! {
                         reply = service
                         .1
-                        .send(Heartbeat)
+                        .send_and_wait(Heartbeat)
                         .then(|answer| {
                             answer.unwrap()
                             .wait_for_reply(Duration::from_millis(100))}
