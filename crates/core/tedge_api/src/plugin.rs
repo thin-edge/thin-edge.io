@@ -180,7 +180,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     /// timeout = -1
     /// ```
     ///
-    /// This function can be used by plugin authors to verify that a given verification is sound,
+    /// This function can be used by plugin authors to verify that a given configuration is sound,
     /// before the plugins are instantiated (to be able to fail early).
     ///
     /// # Note
