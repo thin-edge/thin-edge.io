@@ -123,6 +123,7 @@ mod tests {
     use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
     use serde_json::json;
     use std::time::Duration;
+    use tempfile::TempDir;
     use test_case::test_case;
 
     const TEST_TIMEOUT_SECS: Duration = Duration::from_secs(5);
@@ -180,13 +181,15 @@ mod tests {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
         let operations = Operations::default();
 
+        let tmp_dir = TempDir::new().unwrap();
         let converter = Box::new(
-            CumulocityConverter::new(
+            CumulocityConverter::from_logs_path(
                 size_threshold,
                 DEVICE_NAME.into(),
                 DEVICE_TYPE.into(),
                 operations,
                 proxy,
+                tmp_dir.into_path(),
             )
             .unwrap(),
         );

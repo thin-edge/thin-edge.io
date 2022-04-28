@@ -19,6 +19,7 @@ use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use serde_json::json;
 use serial_test::serial;
 use std::{path::Path, time::Duration};
+use tempfile::TempDir;
 use test_case::test_case;
 use tokio::task::JoinHandle;
 
@@ -939,12 +940,25 @@ fn create_c8y_converter() -> CumulocityConverter<FakeC8YHttpProxy> {
     let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
 
-    CumulocityConverter::new(
+    let tmp_dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(&format!(
+        "{}/tedge/agent/",
+        &tmp_dir.path().to_str().unwrap()
+    ))
+    .unwrap();
+    std::fs::File::create(&format!(
+        "{}/tedge/agent/software-list-2011-11-11T11:11:11Z.log",
+        &tmp_dir.path().to_str().unwrap()
+    ))
+    .unwrap();
+
+    CumulocityConverter::from_logs_path(
         size_threshold,
         device_name,
         device_type,
         operations,
         http_proxy,
+        tmp_dir.into_path(),
     )
     .unwrap()
 }
