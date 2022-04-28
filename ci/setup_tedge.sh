@@ -90,6 +90,8 @@ cleanup() {
 download() {
     echo "Running function ${FUNCNAME[0]}"
 
+    cd ~/
+
     ARCH=$(dpkg --print-architecture) # am64 or armhf
     # cd ~/thin-edge.io/ci
 
@@ -102,17 +104,17 @@ download() {
         echo "Unknown architecture"
     fi
 
-    ./download_build_artifact.py abelikt --filter debian-packages-$ARCH
+    ~/download_build_artifact.py abelikt --filter debian-packages-$ARCH
 
     unzip debian-packages-$ARCH.zip
 
-    ./download_build_artifact.py abelikt --filter sawtooth_publisher_$ARCH
+    ~/download_build_artifact.py abelikt --filter sawtooth_publisher_$ARCH
 
     unzip sawtooth_publisher_$ARCH.zip
 
     chmod +x /home/pi/examples/sawtooth_publisher
 
-    ./download_build_artifact.py abelikt --filter tedge_dummy_plugin_$ARCH
+    ~/download_build_artifact.py abelikt --filter tedge_dummy_plugin_$ARCH
 
     chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
