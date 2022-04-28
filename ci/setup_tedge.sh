@@ -91,6 +91,9 @@ cleanup() {
     rm -rf tedge_dummy_plugin
     rm -rf tedge_dummy_plugin_*.deb
     rm -rf debian-packages-*.deb
+    rm -rf debian-packages-*.zip
+    rm -rf sawtooth_publisher_*.zip
+    rm -rf tedge_dummy_plugin_*.zip
 }
 
 download() {
