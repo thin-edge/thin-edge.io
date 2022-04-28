@@ -1,0 +1,224 @@
+
+name: setup_tedge_pipeline
+
+on:
+  push:
+    branches: [main, continuous_integration]
+  workflow_dispatch:
+    branches: [main, continuous_integration]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-fmt:
+    name: Run cargo fmt
+    runs-on: Ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+#################################################################################
+
+  install-and-use-rpi_mythica:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythica]
+    needs: [build_matrix_arm]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-armv7-unknown-linux-gnueabihf
+          path: debian-package_unpack
+
+      - name: Workaround Stop collectd mapper
+        run: sudo systemctl stop tedge-mapper-collectd
+        continue-on-error: true
+
+      - name: disconnect c8y
+        run: sudo tedge disconnect c8y
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: disconnect az
+        run: sudo tedge disconnect az
+        # We need to continue when there is no tedge already installed
+        continue-on-error: true
+
+      - name: Stop apama
+        run: sudo systemctl stop apama
+        continue-on-error: true
+
+      - name: purge
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+
+      - name: install mosquitto
+        run: sudo apt-get --assume-yes install mosquitto
+
+      - name: install libmosquitto1
+        run: sudo apt-get --assume-yes install libmosquitto1
+
+      - name: install mosquitto-clients
+        run: sudo apt-get --assume-yes install mosquitto-clients
+
+      - name: install collectd-core
+        run: sudo apt-get --assume-yes install collectd-core collectd
+
+      - name: install tedge package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
+
+      - name: install tedge mapper package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
+
+      - name: install tedge agent package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge plugin packages
+        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
+
+      - name: install c8y plugin packages
+        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
+
+      - name: run tedge help
+        run: tedge --help
+
+      - name: configure collectd
+        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
+          path: /home/pi/examples
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
+      - name: Configure Bridge
+        run: ./ci/configure_bridge.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: mythica
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+      - name: Run smoke test for Cumulocity
+        run: ./ci/ci_smoke_test_c8y.sh
+        env:
+          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+          C8YDEVICE: mythica
+          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+          EXAMPLEDIR: /home/pi/examples
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+# Run tests for Azure
+# Enable this, when we have decided about how many runners we use
+#
+#      - name: Run Smoke Test for Azure
+#        run: ./ci/ci_smoke_test_az.sh
+#        env:
+#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+
+#################################################################################
+
+
+
+
+#################################################################################
+
+  system-test_offsite_a:
+    runs-on: [self-hosted, Linux, ARM, offsite_mythica]
+    needs: [install-and-use-rpi_mythica]
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Run all Tests
+      run:  bash  ./ci/ci_run_all_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: Run all plugin tests
+      run:  bash  ./ci/ci_run_all_plugin_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all sm tests
+      run:  bash  ./ci/ci_run_all_sm_tests.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+
+    - name: Run all statistics tests
+      run:  bash  ./ci/ci_run_statistics.sh
+      continue-on-error: true
+      if: true
+      env:
+            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+            C8YDEVICE: mythica
+            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+            EXAMPLEDIR: /home/pi/examples
+
+    - name: upload results as zip
+      # https://github.com/marketplace/actions/upload-a-build-artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: results_pysys_offsite_mythica
+        path: tests/
+
+#################################################################################
+
+
+
