@@ -77,6 +77,9 @@ disconnect() {
 
 cleanup() {
     echo "Running function ${FUNCNAME[0]}"
+
+    cd ~/
+
     # In the hope hat it stops asking
     export DEBIAN_FRONTEND=noninteractive
     sudo dpkg -P c8y_configuration_plugin tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core mosquitto-clients collectd
@@ -286,7 +289,7 @@ systest() {
 
     getid;
 
-    cd thin-edge.io
+    cd ~/thin-edge.io
     source ~/env-pysys/bin/activate
 
     cd ~/thin-edge.io/tests/PySys;
