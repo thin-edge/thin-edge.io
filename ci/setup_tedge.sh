@@ -168,7 +168,9 @@ install_local() {
 gitclone(){
     echo "Running function ${FUNCNAME[0]}"
     cd ~/
+    set +e
     git clone https://github.com/abelikt/thin-edge.io
+    set -e
 }
 
 gitupdate(){
