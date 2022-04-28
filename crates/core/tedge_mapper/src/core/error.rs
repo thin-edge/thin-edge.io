@@ -90,4 +90,12 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromTimeFormatError(#[from] time::error::Format),
+
+    #[error("The payload {payload} received on {topic} after translation is {actual_size} greater than the threshold size of {threshold}.")]
+    TranslatedSizeExceededThreshold {
+        payload: String,
+        topic: String,
+        actual_size: usize,
+        threshold: usize,
+    },
 }
