@@ -39,18 +39,18 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - run: ~/setup_tedge.sh checkvars
-      - run: ~/setup_tedge.sh disconnect
-      - run: ~/setup_tedge.sh cleanup
-      - run: ~/setup_tedge.sh gitclone
-      - run: ~/setup_tedge.sh download
-      - run: ~/setup_tedge.sh install_deps
-      - run: ~/setup_tedge.sh install
-      - run: ~/setup_tedge.sh tedge_help
-      - run: ~/setup_tedge.sh setupenv
-      - run: ~/setup_tedge.sh configure_collectd
-      - run: ~/setup_tedge.sh configure
-      - run: ~/setup_tedge.sh smoketest
+      - run: ./ci/setup_tedge.sh checkvars
+      - run: ./ci/setup_tedge.sh disconnect
+      - run: ./ci/setup_tedge.sh cleanup
+      - run: ./ci/setup_tedge.sh gitclone
+      - run: ./ci/setup_tedge.sh download
+      - run: ./ci/setup_tedge.sh install_deps
+      - run: ./ci/setup_tedge.sh install
+      - run: ./ci/setup_tedge.sh tedge_help
+      - run: ./ci/setup_tedge.sh setupenv
+      - run: ./ci/setup_tedge.sh configure_collectd
+      - run: ./ci/setup_tedge.sh configure
+      - run: ./ci/setup_tedge.sh smoketest
 
 # Run tests for Azure
 # Enable this, when we have decided about how many runners we use
@@ -87,18 +87,18 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
 
-      - run: ~/setup_tedge.sh checkvars
-      - run: ~/setup_tedge.sh disconnect
-      - run: ~/setup_tedge.sh cleanup
-      - run: ~/setup_tedge.sh gitclone
-      - run: ~/setup_tedge.sh download
-      - run: ~/setup_tedge.sh install_deps
-      - run: ~/setup_tedge.sh install
-      - run: ~/setup_tedge.sh tedge_help
-      - run: ~/setup_tedge.sh setupenv
-      - run: ~/setup_tedge.sh configure_collectd
-      - run: ~/setup_tedge.sh configure
-      - run: ~/setup_tedge.sh smoketest
+      - run: ./ci/setup_tedge.sh checkvars
+      - run: ./ci/setup_tedge.sh disconnect
+      - run: ./ci/setup_tedge.sh cleanup
+      - run: ./ci/setup_tedge.sh gitclone
+      - run: ./ci/setup_tedge.sh download
+      - run: ./ci/setup_tedge.sh install_deps
+      - run: ./ci/setup_tedge.sh install
+      - run: ./ci/setup_tedge.sh tedge_help
+      - run: ./ci/setup_tedge.sh setupenv
+      - run: ./ci/setup_tedge.sh configure_collectd
+      - run: ./ci/setup_tedge.sh configure
+      - run: ./ci/setup_tedge.sh smoketest
 
 # Run tests for Azure
 # Enable this, when we have decided about how many runners we use
