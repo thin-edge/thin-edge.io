@@ -86,11 +86,11 @@ cleanup() {
     rm -rf debian-packages-armv7-unknown-linux-gnueabihf.zip
     rm -rf sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
     rm -rf tedge*.deb
-    rm -f sawtooth_publisher
-    rm -f sawtooth_publisher_*.deb
-    rm -r tedge_dummy_plugin
-    rm -r tedge_dummy_plugin_*.deb
-    rm -f debian-packages-*.deb
+    rm -rf sawtooth_publisher
+    rm -rf sawtooth_publisher_*.deb
+    rm -rf tedge_dummy_plugin
+    rm -rf tedge_dummy_plugin_*.deb
+    rm -rf debian-packages-*.deb
 }
 
 download() {
