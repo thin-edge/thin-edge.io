@@ -218,10 +218,10 @@ class SoftwareManagement(EnvironmentC8y):
     def get_status_of_last_operation(self):
         """Returns the status of the last operation:
         "FAILED" or "SUCCESSFUL".
-        When there is now last operation listened in C8Y return "NOOPFOUND".
+        When there is no last operation listened in C8Y it returns "NOOPFOUND".
 
         Warning: an observation so far is, that installation failures
-        seem to be at the beginning of the list independent of if we
+        seem to be at the beginning of the list, independent of if we
         revert it or not.
         """
 
@@ -394,6 +394,9 @@ class SoftwareManagement(EnvironmentC8y):
         ret = False
 
         package_list = jresponse.get("c8y_SoftwareList")
+
+        if package_list == None:
+            raise SystemError("The Sofware list is empty !!!")
 
         for package in package_list:
             if package.get("name") == package_name:

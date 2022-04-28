@@ -20,7 +20,7 @@ TODO : Further investigation necessary
 class SmoketestSmartRest400Samples1Xms(Environment_roundtrip_c8y):
     def setup(self):
         super().setup()
-        self.samples = "400"
+        self.samples = "200"
         self.delay = "15"
-        self.timeslot = "60"  # Temporarily increased to run at mythic beasts
+        self.timeslot = "40"  # Temporarily increased to run at mythic beasts
         self.style = "REST"
