@@ -205,9 +205,10 @@ smoketest() {
     echo "Running function ${FUNCNAME[0]}"
 
     if [ $1 == "local" ]; then
-        EXAMPLEDIR=~/
-    else
+        # use locally built version
         EXAMPLEDIR=~/thin-edge.io/target/release
+    else
+        EXAMPLEDIR=~/
     fi
 
     echo "Will request C8y for the new device ID"
