@@ -22,7 +22,7 @@ jobs:
 #################################################################################
 
   install-and-use-ubuntu-2gb-hel1-4-thin-edge-a:
-    runs-on: [self-hosted, Linux, X64, ubuntu-2gb-hel1-4-thin-edge-a ]
+    runs-on: [self-hosted, Linux, X64, offsite_ubuntu-2gb-hel1-4-thin-edge-a ]
       # needs: [build_matrix_arm]
 
     env:
@@ -70,7 +70,7 @@ jobs:
 #################################################################################
 
   install-and-use-ubuntu-2gb-hel1-4-thin-edge-b:
-    runs-on: [self-hosted, Linux, X64, ubuntu-2gb-hel1-4-thin-edge-b ]
+    runs-on: [self-hosted, Linux, X64, offsite_ubuntu-2gb-hel1-4-thin-edge-b ]
       # needs: [build_matrix_arm]
 
     env:
