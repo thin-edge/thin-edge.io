@@ -61,8 +61,11 @@ checkvars() {
 disconnect() {
     echo "Running function ${FUNCNAME[0]}"
 
+    set +e
     sudo tedge disconnect c8y
     sudo tedge disconnect az
+    set -e
+
     rm -f ~/*.deb
     rm -f ~/thin-edge.io/target/debian/*.deb
 
