@@ -34,6 +34,8 @@ jobs:
         EXAMPLEDIR: /home/pi/examples
         C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
         IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
+
 
     steps:
       - name: checkout
@@ -82,6 +84,7 @@ jobs:
         EXAMPLEDIR: /home/pi/examples
         C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
         IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
 
     steps:
       - name: checkout
