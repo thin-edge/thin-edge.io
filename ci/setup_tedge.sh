@@ -87,9 +87,9 @@ cleanup() {
     rm -rf sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
     rm -rf tedge*.deb
     rm -rf sawtooth_publisher
-    rm -rf sawtooth_publisher_*.deb
     rm -rf tedge_dummy_plugin
     rm -rf tedge_dummy_plugin_*.deb
+    rm -rf sawtooth_publisher_*.deb
     rm -rf debian-packages-*.deb
     rm -rf debian-packages-*.zip
     rm -rf sawtooth_publisher_*.zip
@@ -121,11 +121,17 @@ download() {
 
     unzip sawtooth_publisher_$ARCH.zip
 
+    set +e
+    chmod +x ~/sawtooth_publisher
     chmod +x /home/pi/examples/sawtooth_publisher
+    set -e
 
     ~/download_build_artifact.py abelikt --filter tedge_dummy_plugin_$ARCH
 
+    set +e
+    chmod +x ~/tedge_dummy_plugin
     chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+    set -e
 
 }
 
