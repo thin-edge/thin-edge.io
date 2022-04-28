@@ -66,8 +66,10 @@ disconnect() {
     rm -f ~/*.deb
     rm -f ~/thin-edge.io/target/debian/*.deb
 
+    set +e
     sudo systemctl stop tedge-mapper-collectd
     sudo systemctl stop apama
+    set -e
 }
 
 cleanup() {
@@ -165,12 +167,13 @@ install_local() {
 
 gitclone(){
     echo "Running function ${FUNCNAME[0]}"
+    cd ~/
     git clone https://github.com/abelikt/thin-edge.io
 }
 
 gitupdate(){
     echo "Running function ${FUNCNAME[0]}"
-    cd thin-edge.io
+    cd ~/thin-edge.io
 
     #git clean -dxf
     git checkout continuous_integration
@@ -201,6 +204,11 @@ tedge_help(){
 smoketest() {
     echo "Running function ${FUNCNAME[0]}"
 
+    if [ $1 == "local" ]; then
+        EXAMPLEDIR=~/
+    else
+        EXAMPLEDIR=~/thin-edge.io/target/release
+    fi
 
     echo "Will request C8y for the new device ID"
     source ~/env-pysys/bin/activate
@@ -227,15 +235,13 @@ smoketest() {
     sleep 12
 
     echo "Uses SmartREST"
-    #./ci/roundtrip_local_to_c8y.py -m REST -pub ~/thin-edge.io/target/release -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
-    ./ci/roundtrip_local_to_c8y.py -m REST -pub ~/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+    ./ci/roundtrip_local_to_c8y.py -m REST -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
     echo "Wait some seconds until our 10 seconds window is empty again"
     sleep 12
 
     echo "Use thin-edge JSON"
-    #./ci/roundtrip_local_to_c8y.py -m JSON -pub ~/thin-edge.io/target/release -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
-    ./ci/roundtrip_local_to_c8y.py -m JSON -pub ~/ -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+    ./ci/roundtrip_local_to_c8y.py -m JSON -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
 
     sudo tedge disconnect c8y
 }
@@ -304,26 +310,24 @@ run_local_steps() {
     # nice cargo test --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
     # nice cargo test --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh disconnect
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh cleanup
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh gitclone
+    ~/thin-edge.io/ci/setup_tedge.sh disconnect
+    ~/thin-edge.io/ci/setup_tedge.sh cleanup
+    ~/thin-edge.io/ci/setup_tedge.sh gitclone
 
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh build_local
-    # /home/micha/Project-Sag/Scripts/setup_tedge.sh download
+    ~/thin-edge.io/ci/setup_tedge.sh build_local
+    #~/thin-edge.io/ci/setup_tedge.sh download
 
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh install_deps
+    ~/thin-edge.io/ci/setup_tedge.sh install_deps
 
-    # /home/micha/Project-Sag/Scripts/setup_tedge.sh install
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh install_local
+    #~/thin-edge.io/ci/setup_tedge.sh install
+    ~/thin-edge.io/ci/setup_tedge.sh install_local
 
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh tedge_help
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh setupenv
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh configure_collectd
-    /home/micha/Project-Sag/Scripts/setup_tedge.sh configure
+    ~/thin-edge.io/ci/setup_tedge.sh tedge_help
+    ~/thin-edge.io/ci/setup_tedge.sh setupenv
+    ~/thin-edge.io/ci/setup_tedge.sh configure_collectd
+    ~/thin-edge.io/ci/setup_tedge.sh configure
 
-
-
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh smoketest
+    /home/micha/Project-SAG/Scripts/setup_tedge.sh smoketest local
 }
 
 test() {
@@ -332,6 +336,9 @@ test() {
 }
 
 #set -x
+
+# Harsh mode we exit when an error occurs
+# unset this if an error is allowed to happen
 set -e
 
 checkvars;
@@ -340,6 +347,6 @@ checkvars;
 
 $1 $2
 
-
+echo "Done"
 
 
