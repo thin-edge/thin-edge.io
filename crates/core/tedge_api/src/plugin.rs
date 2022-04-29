@@ -5,19 +5,16 @@
 //! 2. Create your plugin struct that implements `Plugin`
 
 use futures::future::BoxFuture;
-use std::{
-    any::{Any, TypeId},
-    collections::HashSet,
-};
+use std::any::Any;
 
 use downcast_rs::{impl_downcast, DowncastSync};
 
 use async_trait::async_trait;
 
 use crate::{
-    address::{InternalMessage, ReceiverBundle, ReplySender},
+    address::{InternalMessage, ReceiverBundle, ReplySenderFor},
     error::{DirectoryError, PluginError},
-    message::CoreMessages,
+    message::{CoreMessages, MessageType},
     Address,
 };
 
@@ -101,9 +98,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///
     /// #[derive(Debug)]
     /// struct MyMessage;
-    /// impl tedge_api::plugin::Message for MyMessage {
-    ///     type Reply = tedge_api::message::NoReply;
-    /// }
+    /// impl tedge_api::plugin::Message for MyMessage { }
     ///
     /// struct MyPluginBuilder;
     /// struct MyPlugin; // + some impl Plugin for MyPlugin
@@ -126,7 +121,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///     async fn handle_message(
     ///         &self,
     ///         message: MyMessage,
-    ///         sender: tedge_api::address::ReplySender<tedge_api::message::NoReply>
+    ///         sender: tedge_api::address::ReplySenderFor<MyMessage>
     ///     ) -> Result<(), tedge_api::error::PluginError> {
     ///         // ... Do something with it
     ///#         Ok(())
@@ -212,9 +207,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///
     /// #[derive(Debug)]
     /// struct MyMessage;
-    /// impl tedge_api::plugin::Message for MyMessage {
-    ///     type Reply = tedge_api::message::NoReply;
-    /// }
+    /// impl tedge_api::plugin::Message for MyMessage { }
     ///
     ///
     /// struct MyPluginBuilder;
@@ -238,7 +231,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///     async fn handle_message(
     ///         &self,
     ///         _message: MyMessage,
-    ///         _sender: tedge_api::address::ReplySender<tedge_api::message::NoReply>,
+    ///         _sender: tedge_api::address::ReplySenderFor<MyMessage>,
     ///     ) -> Result<(), tedge_api::error::PluginError> {
     ///         // implementation...
     /// #       unimplemented!()
@@ -338,17 +331,21 @@ pub trait Handle<Msg: Message> {
     async fn handle_message(
         &self,
         message: Msg,
-        sender: ReplySender<Msg::Reply>,
+        sender: ReplySenderFor<Msg>,
     ) -> Result<(), PluginError>;
 }
 
 #[derive(Debug)]
 #[doc(hidden)]
-pub struct HandleTypes(Vec<(&'static str, TypeId)>);
+pub struct HandleTypes(Vec<MessageType>);
 
 impl HandleTypes {
-    pub fn get_types(&self) -> &[(&'static str, TypeId)] {
+    pub fn get_types(&self) -> &[MessageType] {
         &self.0
+    }
+
+    pub fn into_types(self) -> Vec<MessageType> {
+        self.0
     }
 
     /// Get a list of message types this plugin is proven to handle
@@ -358,22 +355,20 @@ impl HandleTypes {
     /// ```rust
     /// # use async_trait::async_trait;
     /// # use tedge_api::plugin::{Handle, HandleTypes};
-    /// # use tedge_api::address::ReplySender;
+    /// # use tedge_api::address::ReplySenderFor;
     /// # use tedge_api::PluginError;
     /// # use tedge_api::PluginExt;
     ///
     /// #[derive(Debug)]
     /// struct Heartbeat;
     ///
-    /// impl tedge_api::plugin::Message for Heartbeat {
-    ///     type Reply = tedge_api::message::NoReply;
-    /// }
+    /// impl tedge_api::plugin::Message for Heartbeat { }
     ///
     /// struct HeartbeatPlugin;
     ///
     /// #[async_trait]
     /// impl Handle<Heartbeat> for HeartbeatPlugin {
-    ///     async fn handle_message(&self, message: Heartbeat, sender: ReplySender<tedge_api::message::NoReply>) -> Result<(), PluginError> {
+    ///     async fn handle_message(&self, message: Heartbeat, sender: ReplySenderFor<Heartbeat>) -> Result<(), PluginError> {
     ///     // ... Do something with it
     ///#         Ok(())
     ///     }
@@ -416,23 +411,17 @@ impl HandleTypes {
     }
 }
 
-impl From<HandleTypes> for HashSet<(&'static str, TypeId)> {
-    fn from(ht: HandleTypes) -> Self {
-        ht.0.into_iter().collect()
-    }
-}
-
 /// An object that can be sent between [`Plugin`]s
 ///
 /// This trait is a marker trait for all types that can be used as messages which can be sent
 /// between plugins in thin-edge.
-///
-/// ## Note
-///
-/// A message without the expectation of a reply can use the [`NoReply`](crate::message::NoReply)
-/// type for [`Message::Reply`].
-pub trait Message: 'static + Send + std::fmt::Debug {
-    /// The reply to this message
+pub trait Message: Send + std::fmt::Debug + DowncastSync + 'static {}
+
+impl_downcast!(sync Message);
+
+/// Register that the [`Message`] can receive replies of kind `R`: [`Message`]
+pub trait AcceptsReplies: Message {
+    /// The reply type that can be sent to implementing messages as replies
     type Reply: Message;
 }
 
@@ -441,7 +430,7 @@ pub trait Message: 'static + Send + std::fmt::Debug {
 /// This trait is implemented on types that represent a bundle of different types of messages.
 pub trait MessageBundle {
     /// Get the names and ids of the types that are represented by this bundle
-    fn get_ids() -> Vec<(&'static str, TypeId)>;
+    fn get_ids() -> Vec<MessageType>;
 }
 
 /// An extension for a Plugin implementing type
@@ -548,7 +537,7 @@ macro_rules! impl_does_handle_tuple {
 
                         let message = match message.downcast::<$cur>() {
                             Ok(message) => {
-                                let reply_sender = crate::address::ReplySender::new(reply_sender);
+                                let reply_sender = crate::address::ReplySenderFor::new(reply_sender);
                                 return plug.handle_message(*message, reply_sender).await
                             }
                             Err(m) => m,
@@ -557,7 +546,7 @@ macro_rules! impl_does_handle_tuple {
                         $(
                         let message = match message.downcast::<$rest>() {
                             Ok(message) => {
-                                let reply_sender = crate::address::ReplySender::new(reply_sender);
+                                let reply_sender = crate::address::ReplySenderFor::new(reply_sender);
                                 return plug.handle_message(*message, reply_sender).await
                             }
                             Err(m) => m,
@@ -579,7 +568,7 @@ macro_rules! impl_does_handle_tuple {
 }
 
 impl MessageBundle for () {
-    fn get_ids() -> Vec<(&'static str, TypeId)> {
+    fn get_ids() -> Vec<MessageType> {
         vec![]
     }
 }
@@ -599,6 +588,47 @@ impl<P: Plugin> DoesHandle<()> for P {
     }
 }
 
+/// A marker struct that signals that this plugin handles _any_ plugin.
+#[derive(Debug)]
+pub struct AnyMessages;
+
+impl MessageBundle for AnyMessages {
+    fn get_ids() -> Vec<MessageType> {
+        vec![MessageType::for_message::<crate::message::AnyMessage>()]
+    }
+}
+
+impl<P: Plugin + Handle<crate::message::AnyMessage>> DoesHandle<AnyMessages> for P {
+    fn into_built_plugin(self) -> BuiltPlugin {
+        fn handle_message<'a, PLUG: Plugin + Handle<crate::message::AnyMessage>>(
+            plugin: &'a dyn Any,
+            message: InternalMessage,
+        ) -> BoxFuture<'a, Result<(), PluginError>> {
+            let plug = match plugin.downcast_ref::<PLUG>() {
+                Some(p) => p,
+                None => {
+                    panic!("Could not downcast to {}", std::any::type_name::<PLUG>());
+                }
+            };
+            futures::FutureExt::boxed(async move {
+                let InternalMessage {
+                    data: message,
+                    reply_sender,
+                } = message;
+
+                let reply_sender = crate::address::ReplySenderFor::new(reply_sender);
+                plug.handle_message(crate::message::AnyMessage(message), reply_sender)
+                    .await
+            })
+        }
+
+        BuiltPlugin {
+            plugin: Box::new(self),
+            handler: handle_message::<P>,
+        }
+    }
+}
+
 macro_rules! impl_msg_bundle_tuple {
     () => {};
     (@rec_tuple $cur:ident) => {
@@ -609,10 +639,10 @@ macro_rules! impl_msg_bundle_tuple {
     };
     ($cur:ident $($rest:tt)*) => {
         impl<$cur: Message, $($rest: Message),*> MessageBundle for ($cur,$($rest),*) {
-            fn get_ids() -> Vec<(&'static str, TypeId)> {
+            fn get_ids() -> Vec<MessageType> {
                 vec![
-                    (std::any::type_name::<$cur>(), TypeId::of::<$cur>()),
-                    $((std::any::type_name::<$rest>(), TypeId::of::<$rest>())),*
+                    MessageType::for_message::<$cur>(),
+                    $(MessageType::for_message::<$rest>()),*
                 ]
             }
         }
