@@ -1469,7 +1469,7 @@ jobs:
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - run: ./ci/setup_tedge.sh install_deps
-      - run: ./ci/setup_tedge.sh install
+      - run: ./ci/setup_tedge.sh install github
       - run: ./ci/setup_tedge.sh tedge_help
       - run: ./ci/setup_tedge.sh setupenv
       - run: ./ci/setup_tedge.sh configure_collectd
@@ -1543,7 +1543,7 @@ jobs:
         run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
 
       - run: ./ci/setup_tedge.sh install_deps
-      - run: ./ci/setup_tedge.sh install
+      - run: ./ci/setup_tedge.sh install github
       - run: ./ci/setup_tedge.sh tedge_help
       - run: ./ci/setup_tedge.sh setupenv
       - run: ./ci/setup_tedge.sh configure_collectd
