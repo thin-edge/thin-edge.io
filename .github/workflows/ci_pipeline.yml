@@ -1333,7 +1333,7 @@ jobs:
 #############################################################################
 
   system-test_postprocessing:
-    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
+    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d, install-and-use-ubuntu-2gb-hel1-4-thin-edge-a, install-and-use-ubuntu-2gb-hel1-2-thin-edge-b]
     runs-on: Ubuntu-20.04
     steps:
 
