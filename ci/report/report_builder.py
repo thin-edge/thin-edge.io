@@ -80,7 +80,32 @@ runners_cfg = [
             "sm",
         ],
     },
+    {
+        "name": "results_pysys_offsite_ubuntu-2gb-hel1-4-thin-edge-a",
+        "repo": "abelikt",
+        "archive": "results_pysys_offsite_ubuntu-2gb-hel1-4-thin-edge-a.zip",
+        "tests": [
+            "all",
+            "apt",
+            "apama",
+            "docker",
+            "sm",
+        ],
+    },
+    {
+        "name": "results_pysys_offsite_ubuntu-2gb-hel1-2-thin-edge-b",
+        "repo": "abelikt",
+        "archive": "results_pysys_offsite_ubuntu-2gb-hel1-2-thin-edge-b.zip",
+        "tests": [
+            "all",
+            "apt",
+            "apama",
+            "docker",
+            "sm",
+        ],
+    },
 ]
+
 
 
 def download_results(repo, workflow):
