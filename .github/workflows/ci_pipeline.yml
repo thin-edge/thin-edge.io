@@ -1447,13 +1447,13 @@ jobs:
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-armv7-unknown-linux-gnueabihf
+          name: debian-packages-amd64
           path: debian-package_unpack
 
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
+          name: sawtooth_publisher_amd64
           path: /home/pi/examples
 
       - name: chmod publisher
@@ -1462,7 +1462,7 @@ jobs:
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          name: tedge_dummy_plugin_amd64
           path: /home/pi/tedge_dummy_plugin
 
       - name: chmod dummy_plugin
@@ -1521,13 +1521,13 @@ jobs:
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-armv7-unknown-linux-gnueabihf
+          name: debian-packages-amd64
           path: debian-package_unpack
 
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
+          name: sawtooth_publisher_amd64
           path: /home/pi/examples
 
       - name: chmod publisher
@@ -1536,7 +1536,7 @@ jobs:
       - uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
+          name: tedge_dummy_plugin_amd64
           path: /home/pi/tedge_dummy_plugin
 
       - name: chmod dummy_plugin
