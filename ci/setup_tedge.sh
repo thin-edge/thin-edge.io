@@ -8,7 +8,7 @@ help() {
     echo "disconnect"
     echo "cleanup"
     echo "download"
-    echo "build_local"
+    echo "build"
     echo "install_deps"
     echo "install"
     echo "install_local"
@@ -135,7 +135,7 @@ download() {
 
 }
 
-build_local() {
+build() {
     echo "Running function ${FUNCNAME[0]}"
 
     cd ~/thin-edge.io
@@ -162,27 +162,34 @@ install_deps() {
 }
 
 install() {
-    echo "Running function ${FUNCNAME[0]}"
+    echo "Running function ${FUNCNAME[0]} $1"
+
+    if [ $1 == "local" ]; then
+        DIR=~/thin-edge.io/target/debian
+    elif [ $1 == "home" ]; then
+        DIR=~
+    elif [ $1 == "github" ]; then
+        DIR="/home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/debian-package_unpack"
+    else
+        echo "Unknown location"
+        exit 1
+    fi
 
     ARCH=$(dpkg --print-architecture) # am64 or
     echo "Architecture is $ARCH".
     export DEBIAN_FRONTEND=noninteractive
-    sudo dpkg -i ~/tedge_0.*_$ARCH.deb
-    sudo dpkg -i ~/tedge_mapper_*_$ARCH.deb
-    sudo dpkg -i ~/tedge_agent_*_$ARCH.deb
-    sudo dpkg -i ~/tedge_*_plugin_*_$ARCH.deb
-}
 
-install_local() {
-    echo "Running function ${FUNCNAME[0]}"
+    # There seems to be an issue with tilte and star expansion, so we
+    # fall back to avoid them
+    VAR="0.6.3"
 
-    ARCH=$(dpkg --print-architecture) # am64 or armhf
-    echo "Architecture is $ARCH"
-    export DEBIAN_FRONTEND=noninteractive
-    sudo dpkg -i ~/thin-edge.io/target/debian/tedge_0.*_$ARCH.deb
-    sudo dpkg -i ~/thin-edge.io/target/debian/tedge_mapper_*_$ARCH.deb
-    sudo dpkg -i ~/thin-edge.io/target/debian/tedge_agent_*_$ARCH.deb
-    sudo dpkg -i ~/thin-edge.io/target/debian/tedge_*_plugin_*_$ARCH.deb
+    sudo dpkg -i $DIR"/tedge_"$VAR"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_mapper_"$VAR"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_agent_"$VAR"_"$ARCH".deb"
+    #sudo dpkg -i $DIR"/tedge_*_plugin_"$VAR"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_apt_plugin_"$VAR"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_apama_plugin_"$VAR"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_logfile_request_plugin_"$VAR"_"$ARCH".deb"
 }
 
 gitclone(){
@@ -337,13 +344,12 @@ run_local_steps() {
     ~/thin-edge.io/ci/setup_tedge.sh cleanup
     ~/thin-edge.io/ci/setup_tedge.sh gitclone
 
-    ~/thin-edge.io/ci/setup_tedge.sh build_local
+    ~/thin-edge.io/ci/setup_tedge.sh build
     #~/thin-edge.io/ci/setup_tedge.sh download
 
     ~/thin-edge.io/ci/setup_tedge.sh install_deps
 
-    #~/thin-edge.io/ci/setup_tedge.sh install
-    ~/thin-edge.io/ci/setup_tedge.sh install_local
+    ~/thin-edge.io/ci/setup_tedge.sh install local
 
     ~/thin-edge.io/ci/setup_tedge.sh tedge_help
     ~/thin-edge.io/ci/setup_tedge.sh setupenv
