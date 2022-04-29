@@ -13,9 +13,9 @@ name: ci_pipeline
 
 on:
   push:
-    branches: [main, continuous_integration]
+    #    branches: [main, continuous_integration]
   workflow_dispatch:
-    branches: [main, continuous_integration]
+    #     branches: [main, continuous_integration]
 
 env:
   CARGO_TERM_COLOR: always
