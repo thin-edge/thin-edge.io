@@ -1,7 +1,15 @@
 #!/bin/bash
 
 
+
 help() {
+    echo "Setup Tege
+    Use Cases
+      - local : Use self built thin-edge
+      - github : Use in context of our GitHub Actions
+      - non local : Run on a device that needs to download thin edge from
+        a previously built version
+    "
     echo "Available commands:"
     echo "help"
     echo "checkvars"
@@ -359,7 +367,7 @@ run_local_steps() {
     ~/thin-edge.io/ci/setup_tedge.sh configure_collectd
     ~/thin-edge.io/ci/setup_tedge.sh configure
 
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh smoketest local
+    ~/thin-edge.io/ci/setup_tedge.sh smoketest local
 }
 
 test() {
