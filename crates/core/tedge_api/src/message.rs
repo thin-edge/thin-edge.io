@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::{address::AnyMessageBox, plugin::Message};
 
 /// A message that can contain any other message
@@ -42,15 +44,16 @@ impl AnyMessage {
 impl Message for AnyMessage {}
 
 /// The type of a message as used by `tedge_api` to represent a type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MessageType {
     name: &'static str,
     kind: MessageKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 enum MessageKind {
     Wildcard,
+    #[serde(skip)]
     Typed(std::any::TypeId),
 }
 
