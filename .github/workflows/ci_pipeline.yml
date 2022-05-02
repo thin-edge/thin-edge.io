@@ -1333,7 +1333,7 @@ jobs:
 #############################################################################
 
   system-test_postprocessing:
-    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d, install-and-use-ubuntu-2gb-hel1-4-thin-edge-a, install-and-use-ubuntu-2gb-hel1-2-thin-edge-b]
+    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d, install-and-use-ubuntu-2gb-hel1-4-thin-edge-a, install-and-use-ubuntu-2gb-hel1-2-thin-edge-b, systemtest-m32sd11e, systemtest-m32sd11f ]
     runs-on: Ubuntu-20.04
     steps:
 
@@ -1658,7 +1658,223 @@ jobs:
           name: results_pysys_offsite_ubuntu-2gb-hel1-2-thin-edge-b
           path: tests/
 
-################################################################################
+#################################################################################
+#################################################################################
+#################################################################################
+
+#m32sd11e
+
+  install-and-use-m32sd11e:
+    runs-on: [self-hosted, Linux, X64, m32sd11e ]
+    needs: [build_matrix_arm]
+
+    env:
+        C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+        C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+        C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+        C8YDEVICE: m32sd11e
+        TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+        EXAMPLEDIR: /home/pi/examples
+        C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+        IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - run: ./ci/setup_tedge.sh checkvars
+      - run: ./ci/setup_tedge.sh disconnect
+      - run: ./ci/setup_tedge.sh cleanup
+      - run: ./ci/setup_tedge.sh gitclone
+     #- run: ./ci/setup_tedge.sh download
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-amd64
+          path: debian-package_unpack
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: sawtooth_publisher_amd64
+          path: /home/pi/examples
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_dummy_plugin_amd64
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
+      - run: ./ci/setup_tedge.sh install_deps
+      - run: ./ci/setup_tedge.sh install github
+      - run: ./ci/setup_tedge.sh tedge_help
+      - run: ./ci/setup_tedge.sh setupenv
+      - run: ./ci/setup_tedge.sh configure_collectd
+      - run: ./ci/setup_tedge.sh configure
+      - run: ./ci/setup_tedge.sh smoketest
+
+##################################################################################
+
+  systemtest-m32sd11e:
+    runs-on: [self-hosted, Linux, X64, m32sd11e ]
+    needs: [install-and-use-m32sd11e]
+
+    env:
+        C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+        C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+        C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+        C8YDEVICE: m32sd11e
+        TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+        EXAMPLEDIR: /home/pi/examples
+        C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+        IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: Run all Tests
+        run:  bash  ./ci/ci_run_all_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all plugin tests
+        run:  bash  ./ci/ci_run_all_plugin_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all sm tests
+        run:  bash  ./ci/ci_run_all_sm_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all statistics tests
+        run:  bash  ./ci/ci_run_statistics.sh
+        continue-on-error: true
+        if: true
+
+      - name: upload results as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: results_pysys_offsite_m32sd11e
+          path: tests/
 
 
+#################################################################################
+#################################################################################
+#m32sd11f
 
+  install-and-use-m32sd11f:
+    runs-on: [self-hosted, Linux, X64, m32sd11f ]
+    needs: [build_matrix_arm]
+
+    env:
+        C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+        C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+        C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+        C8YDEVICE: m32sd11f
+        TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+        EXAMPLEDIR: /home/pi/examples
+        C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+        IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - run: ./ci/setup_tedge.sh checkvars
+      - run: ./ci/setup_tedge.sh disconnect
+      - run: ./ci/setup_tedge.sh cleanup
+      - run: ./ci/setup_tedge.sh gitclone
+     #- run: ./ci/setup_tedge.sh download
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-amd64
+          path: debian-package_unpack
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: sawtooth_publisher_amd64
+          path: /home/pi/examples
+
+      - name: chmod publisher
+        run: chmod +x /home/pi/examples/sawtooth_publisher
+
+      - uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: tedge_dummy_plugin_amd64
+          path: /home/pi/tedge_dummy_plugin
+
+      - name: chmod dummy_plugin
+        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+
+      - run: ./ci/setup_tedge.sh install_deps
+      - run: ./ci/setup_tedge.sh install github
+      - run: ./ci/setup_tedge.sh tedge_help
+      - run: ./ci/setup_tedge.sh setupenv
+      - run: ./ci/setup_tedge.sh configure_collectd
+      - run: ./ci/setup_tedge.sh configure
+      - run: ./ci/setup_tedge.sh smoketest
+
+##################################################################################
+
+  systemtest-m32sd11f:
+    runs-on: [self-hosted, Linux, X64, m32sd11f ]
+    needs: [install-and-use-m32sd11f]
+
+    env:
+        C8YPASS: ${{ secrets.SECRET_C8YPASS }}
+        C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
+        C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
+        C8YDEVICE: m32sd11f
+        TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
+        EXAMPLEDIR: /home/pi/examples
+        C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
+        IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+        THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: Run all Tests
+        run:  bash  ./ci/ci_run_all_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all plugin tests
+        run:  bash  ./ci/ci_run_all_plugin_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all sm tests
+        run:  bash  ./ci/ci_run_all_sm_tests.sh
+        continue-on-error: true
+        if: true
+
+      - name: Run all statistics tests
+        run:  bash  ./ci/ci_run_statistics.sh
+        continue-on-error: true
+        if: true
+
+      - name: upload results as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: results_pysys_offsite_m32sd11e
+          path: tests/
