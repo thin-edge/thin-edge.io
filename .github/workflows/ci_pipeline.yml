@@ -1379,6 +1379,34 @@ jobs:
         name: results_pysys_offsite_mythicd
         path: results/results_pysys_offsite_mythicd
 
+    - name: download result e
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_m32sd11e
+        path: results/results_pysys_offsite_m32sd11e
+
+    - name: download result f
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_m32sd11f
+        path: results/results_pysys_offsite_m32sd11f
+
+    - name: download result ubuntu a
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_ubuntu-2gb-hel1-4-thin-edge-a
+        path: results/results_pysys_offsite_ubuntu-2gb-hel1-4-thin-edge-a
+
+    - name: download result ubuntu b
+      uses: actions/download-artifact@v3
+      # https://github.com/marketplace/actions/download-a-build-artifact
+      with:
+        name: results_pysys_offsite_ubuntu-2gb-hel1-2-thin-edge-b
+        path: results/results_pysys_offsite_ubuntu-2gb-hel1-2-thin-edge-b
+
     - name: Build report
       run: ./ci/report/build.sh
 
