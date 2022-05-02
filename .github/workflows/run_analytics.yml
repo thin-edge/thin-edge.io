@@ -10,7 +10,6 @@ env:
 jobs:
   system-test_onsite:
     runs-on: [self-hosted, Linux, ARM, offsite_mythica ] # onsite]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
 
@@ -19,7 +18,6 @@ jobs:
 
     - name: Run all statistics tests
       run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
       env:
             C8YPASS: ${{ secrets.SECRET_C8YPASS }}
             C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
