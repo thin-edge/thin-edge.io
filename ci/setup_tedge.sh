@@ -236,6 +236,9 @@ smoketest() {
     if [ $1 == "local" ]; then
         # use locally built version
         EXAMPLEDIR=~/thin-edge.io/target/release
+    elif [ $1 == "github" ]; then
+        # use downloded version from github
+        EXAMPLEDIR=/home/pi/examples
     else
         EXAMPLEDIR=~/
     fi
