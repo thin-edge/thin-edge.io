@@ -1665,7 +1665,7 @@ jobs:
 #m32sd11e
 
   install-and-use-m32sd11e:
-    runs-on: [self-hosted, Linux, X64, m32sd11e ]
+    runs-on: [self-hosted, Linux, ARM, offsite_m32sd11e ]
     needs: [build_matrix_arm]
 
     env:
@@ -1724,7 +1724,7 @@ jobs:
 ##################################################################################
 
   systemtest-m32sd11e:
-    runs-on: [self-hosted, Linux, X64, m32sd11e ]
+    runs-on: [self-hosted, Linux, ARM, offsite_m32sd11e ]
     needs: [install-and-use-m32sd11e]
 
     env:
@@ -1775,7 +1775,7 @@ jobs:
 #m32sd11f
 
   install-and-use-m32sd11f:
-    runs-on: [self-hosted, Linux, X64, m32sd11f ]
+    runs-on: [self-hosted, Linux, ARM, offsite_m32sd11f ]
     needs: [build_matrix_arm]
 
     env:
@@ -1834,7 +1834,7 @@ jobs:
 ##################################################################################
 
   systemtest-m32sd11f:
-    runs-on: [self-hosted, Linux, X64, m32sd11f ]
+    runs-on: [self-hosted, Linux, ARM, offsite_m32sd11f ]
     needs: [install-and-use-m32sd11f]
 
     env:
