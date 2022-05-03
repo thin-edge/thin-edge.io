@@ -44,6 +44,10 @@ install_tedge_plugins() {
     # Download and install logfile plugin
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb
+
+    # Download and install configuration plugin
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_configuration_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/c8y_configuration_plugin_${VERSION}_${ARCH}.deb
 }
 
 if [ $# -lt 3 ]; then
@@ -130,9 +134,6 @@ tedge help >/dev/null
 if [ $? -eq 0 ]; then
     echo "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
     echo ""
-    echo "To administrate your thin-edge.io installation your user has to be part of the group 'tedge-users'."
-    echo "You can add your user to this group with the command${BLUE} 'adduser <your-user> tedge-users'${COLORRESET}.\n"
-
     echo "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
 else
     echo "Something went wrong in the installation process please try the manual installation steps instead:\n https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
