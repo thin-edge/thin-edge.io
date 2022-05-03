@@ -1,9 +1,10 @@
-use plugin_sm::log_file::LogFile;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::path::PathBuf;
+use std::{cmp::Reverse, collections::HashMap};
+use std::{collections::BinaryHeap, path::Path};
 use time::{format_description, OffsetDateTime};
 use tracing::log;
+
+use crate::log_file::LogFile;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationLogsError {
@@ -12,18 +13,20 @@ pub enum OperationLogsError {
 
     #[error(transparent)]
     FromTimeFormat(#[from] time::error::Format),
+
+    #[error("Incorrect file format. Expected: `operation_name`-`timestamp`.log")]
+    FileFormatError,
 }
 
 #[derive(Debug)]
 pub struct OperationLogs {
-    log_dir: PathBuf,
-    max_update_logs: usize,
-    max_list_logs: usize,
+    pub log_dir: PathBuf,
 }
 
 pub enum LogKind {
     SoftwareUpdate,
     SoftwareList,
+    Operation(String),
 }
 
 const UPDATE_PREFIX: &str = "software-update";
@@ -32,11 +35,7 @@ const LIST_PREFIX: &str = "software-list";
 impl OperationLogs {
     pub fn try_new(log_dir: PathBuf) -> Result<OperationLogs, OperationLogsError> {
         std::fs::create_dir_all(log_dir.clone())?;
-        let operation_logs = OperationLogs {
-            log_dir,
-            max_update_logs: 5,
-            max_list_logs: 1,
-        };
+        let operation_logs = OperationLogs { log_dir };
 
         if let Err(err) = operation_logs.remove_outdated_logs() {
             // In no case a log-cleaning error should prevent the agent to run.
@@ -59,7 +58,9 @@ impl OperationLogs {
         let file_prefix = match kind {
             LogKind::SoftwareUpdate => UPDATE_PREFIX,
             LogKind::SoftwareList => LIST_PREFIX,
+            LogKind::Operation(ref operation_name) => operation_name.as_str(),
         };
+
         let file_name = format!(
             "{}-{}.log",
             file_prefix,
@@ -75,42 +76,64 @@ impl OperationLogs {
     }
 
     pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
-        let mut update_logs = BinaryHeap::new();
-        let mut list_logs = BinaryHeap::new();
+        let mut log_tracker: HashMap<String, BinaryHeap<Reverse<String>>> = HashMap::new();
+
+        // FIXME: this is a hotfix to map "software-list" and "software-update" to "software-management"
+        // this should be fixed in https://github.com/thin-edge/thin-edge.io/issues/1077
         for file in (self.log_dir.read_dir()?).flatten() {
             if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
-                if path.starts_with(UPDATE_PREFIX) {
-                    // The paths are pushed using the reverse alphabetic order
-                    update_logs.push(Reverse(path.to_string()));
-                } else if path.starts_with(LIST_PREFIX) {
-                    // The paths are pushed using the reverse alphabetic order
-                    list_logs.push(Reverse(path.to_string()));
+                if path.starts_with("software-list") {
+                    log_tracker
+                        .entry("software-list".to_string())
+                        .or_insert_with(BinaryHeap::new)
+                        .push(Reverse(path.to_string()));
+                } else if path.starts_with("software-update") {
+                    log_tracker
+                        .entry("software-update".to_string())
+                        .or_insert_with(BinaryHeap::new)
+                        .push(Reverse(path.to_string()));
+                } else {
+                    let file_name = path
+                        .split('-')
+                        .next()
+                        .ok_or(OperationLogsError::FileFormatError)?;
+                    log_tracker
+                        .entry(file_name.to_string())
+                        .or_insert_with(BinaryHeap::new)
+                        .push(Reverse(path.to_string()));
                 }
             }
         }
 
-        while update_logs.len() > self.max_update_logs {
-            if let Some(rname) = update_logs.pop() {
-                let name = rname.0;
-                let path = self.log_dir.join(name.clone());
-                if let Err(err) = std::fs::remove_file(&path) {
-                    log::warn!("Fail to remove out-dated log file {} : {}", name, err);
-                }
-            }
-        }
-
-        while list_logs.len() > self.max_list_logs {
-            if let Some(rname) = list_logs.pop() {
-                let name = rname.0;
-                let path = self.log_dir.join(name.clone());
-                if let Err(err) = std::fs::remove_file(&path) {
-                    log::warn!("Fail to remove out-dated log file {} : {}", name, err);
-                }
+        for (key, value) in log_tracker.iter_mut() {
+            if key.starts_with("software-list") {
+                // only allow one update list file in logs
+                let () = remove_old_logs(value, &self.log_dir, 1)?;
+            } else {
+                // allow most recent five
+                let () = remove_old_logs(value, &self.log_dir, 5)?;
             }
         }
 
         Ok(())
     }
+}
+
+fn remove_old_logs(
+    log_tracker: &mut BinaryHeap<Reverse<String>>,
+    dir_path: &Path,
+    n: usize,
+) -> Result<(), OperationLogsError> {
+    while log_tracker.len() > n {
+        if let Some(rname) = log_tracker.pop() {
+            let name = rname.0;
+            let path = dir_path.join(name.clone());
+            if let Err(err) = std::fs::remove_file(&path) {
+                log::warn!("Fail to remove out-dated log file {} : {}", name, err);
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

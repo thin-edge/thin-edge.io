@@ -68,7 +68,14 @@ pub fn read_tedge_logs(
         })
         .filter(|dir_entry| {
             let file_name = &dir_entry.file_name();
-            let file_name = file_name.to_str().unwrap();
+            let mut file_name = file_name.to_str().unwrap();
+
+            // FIXME: this is a hotfix to map "software-list" and "software-update" to "software-management"
+            // this should be fixed in https://github.com/thin-edge/thin-edge.io/issues/1077
+            if file_name.starts_with("software-list") | file_name.starts_with("software-update") {
+                file_name = "software-management";
+            }
+
             file_name.starts_with(&smartrest_obj.log_type)
         })
         .collect();
@@ -162,7 +169,7 @@ mod tests {
         ];
 
         let smartrest_obj = SmartRestLogRequest::from_smartrest(
-            "522,DeviceSerial,software,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
+            "522,DeviceSerial,software-management,2021-01-01T00:00:00+0200,2021-01-10T00:00:00+0200,,1000",
         )
         .unwrap();
 

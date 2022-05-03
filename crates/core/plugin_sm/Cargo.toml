@@ -13,6 +13,8 @@ download = { path = "../../common/download" }
 logged_command = { path = "../../common/logged_command" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tedge_utils = { path = "../../common/tedge_utils" }
+time = { version = "0.3", features = ["formatting"] }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["process", "rt"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }

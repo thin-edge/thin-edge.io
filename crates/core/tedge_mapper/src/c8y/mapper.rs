@@ -77,7 +77,7 @@ impl TEdgeComponent for CumulocityMapper {
             device_type,
             operations,
             http_proxy,
-        ));
+        )?);
 
         let mut mapper =
             create_mapper(CUMULOCITY_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
@@ -123,6 +123,7 @@ mod tests {
     use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
     use serde_json::json;
     use std::time::Duration;
+    use tempfile::TempDir;
     use test_case::test_case;
 
     const TEST_TIMEOUT_SECS: Duration = Duration::from_secs(5);
@@ -180,13 +181,18 @@ mod tests {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
         let operations = Operations::default();
 
-        let converter = Box::new(CumulocityConverter::new(
-            size_threshold,
-            DEVICE_NAME.into(),
-            DEVICE_TYPE.into(),
-            operations,
-            proxy,
-        ));
+        let tmp_dir = TempDir::new().unwrap();
+        let converter = Box::new(
+            CumulocityConverter::from_logs_path(
+                size_threshold,
+                DEVICE_NAME.into(),
+                DEVICE_TYPE.into(),
+                operations,
+                proxy,
+                tmp_dir.into_path(),
+            )
+            .unwrap(),
+        );
 
         let broker = test_mqtt_broker();
 
