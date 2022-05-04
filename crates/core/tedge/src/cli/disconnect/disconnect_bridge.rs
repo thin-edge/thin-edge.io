@@ -77,18 +77,24 @@ impl DisconnectBridgeCommand {
         // Ignore failure
         let _ = self.apply_changes_to_mosquitto();
 
+        let mut failed = false;
         // Only C8Y changes the status of tedge-mapper
         if self.use_mapper && which("tedge_mapper").is_ok() {
-            self.service_manager()
+            failed = self
+                .service_manager()
                 .stop_and_disable_service(self.cloud.dependent_mapper_service(), std::io::stdout());
         }
 
         if self.use_agent && which("tedge_agent").is_ok() {
-            self.service_manager()
+            failed = self
+                .service_manager()
                 .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());
         }
 
-        Ok(())
+        match failed {
+            false => Ok(()),
+            true => Err(DisconnectBridgeError::ServiceFailed),
+        }
     }
 
     fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
