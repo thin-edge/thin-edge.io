@@ -2,6 +2,7 @@ mod os_related;
 
 mod tests {
     use predicates::prelude::*;
+    use test_case::test_case;
 
     fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
     where
@@ -186,61 +187,81 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn run_config_set_get_unset_read_write_key() -> Result<(), Box<dyn std::error::Error>> {
+    // #[test_case(config key, config vaule, expected unset value)]
+    #[test_case(
+        "c8y.url",
+        "mytenant.cumulocity.com",
+        "The provided config key: \'c8y.url\' is not set\n"
+    )]
+    #[test_case("mqtt.port", "8880", "1883")]
+    fn run_config_set_get_unset_read_write_key(
+        config_key: &str,
+        config_value: &str,
+        default_value_or_error_message: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
         let test_home_str = temp_dir_path.to_str().unwrap();
 
-        let c8y_url = "mytenant.cumulocity.com";
-
-        let mut get_c8y_url_cmd = tedge_command_with_test_home(&[
+        let mut get_config_command = tedge_command_with_test_home(&[
             "--config-dir",
             &test_home_str,
             "config",
             "get",
-            "c8y.url",
+            &format!("{}", config_key),
         ])?;
 
-        get_c8y_url_cmd
+        get_config_command
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'c8y.url' is not set",
-            ));
+            .stdout(predicate::str::contains(default_value_or_error_message));
 
-        let mut set_c8y_url_cmd = tedge_command_with_test_home(&[
+        let mut set_config_command = tedge_command_with_test_home(&[
             "--config-dir",
             &test_home_str,
             "config",
             "set",
-            "c8y.url",
-            c8y_url,
+            &format!("{}", config_key),
+            config_value,
         ])?;
 
-        set_c8y_url_cmd.assert().success();
+        set_config_command.assert().success();
 
-        get_c8y_url_cmd
+        let mut get_config_command = tedge_command_with_test_home(&[
+            "--config-dir",
+            &test_home_str,
+            "config",
+            "get",
+            &format!("{}", config_key),
+        ])?;
+
+        get_config_command
             .assert()
             .success()
-            .stdout(predicate::str::contains(c8y_url));
+            .stdout(predicate::str::contains(config_value));
 
-        let mut unset_c8y_url_cmd = tedge_command_with_test_home(&[
+        let mut unset_config_command = tedge_command_with_test_home(&[
             "--config-dir",
             &test_home_str,
             "config",
             "unset",
-            "c8y.url",
+            &format!("{}", config_key),
         ])?;
 
-        unset_c8y_url_cmd.assert().success();
+        unset_config_command.assert().success();
 
-        get_c8y_url_cmd
+        let mut get_config_command = tedge_command_with_test_home(&[
+            "--config-dir",
+            &test_home_str,
+            "config",
+            "get",
+            &format!("{}", config_key),
+        ])?;
+
+        get_config_command
             .assert()
             .success()
-            .stdout(predicate::str::contains(
-                "The provided config key: 'c8y.url' is not set",
-            ));
+            .stdout(predicate::str::contains(default_value_or_error_message));
 
         Ok(())
     }
