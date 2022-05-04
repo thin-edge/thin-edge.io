@@ -6,7 +6,6 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
 mod error;
-mod operation_logs;
 mod restart_operation_handler;
 mod state;
 

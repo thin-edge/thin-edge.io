@@ -9,6 +9,7 @@ use tokio::{
     process::{Child, Command},
 };
 
+#[derive(Debug)]
 pub struct LoggingChild {
     command_line: String,
     pub inner_child: Child,

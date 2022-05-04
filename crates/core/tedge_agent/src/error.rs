@@ -51,7 +51,7 @@ pub enum AgentError {
     TimestampConversionError { timestamp: i64, error_msg: String },
 
     #[error(transparent)]
-    FromOperationsLogs(#[from] crate::operation_logs::OperationLogsError),
+    FromOperationsLogs(#[from] plugin_sm::operation_logs::OperationLogsError),
 }
 
 #[derive(Debug, thiserror::Error)]

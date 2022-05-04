@@ -38,14 +38,14 @@ where
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct SmartRestSetSupportedLogType {
     pub message_id: &'static str,
-    pub supported_operations: Vec<&'static str>,
+    pub supported_operations: Vec<String>,
 }
 
-impl Default for SmartRestSetSupportedLogType {
-    fn default() -> Self {
+impl From<Vec<String>> for SmartRestSetSupportedLogType {
+    fn from(operation_types: Vec<String>) -> Self {
         Self {
             message_id: "118",
-            supported_operations: vec!["software-management"],
+            supported_operations: operation_types,
         }
     }
 }

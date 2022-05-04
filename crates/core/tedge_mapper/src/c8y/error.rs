@@ -1,6 +1,7 @@
 use c8y_smartrest::error::{
     SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
 };
+use plugin_sm::operation_logs::OperationLogsError;
 
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -50,4 +51,10 @@ pub enum CumulocityMapperError {
 
     #[error("An unknown operation template: {0}")]
     UnknownOperation(String),
+
+    #[error(transparent)]
+    FromOperationLogs(#[from] OperationLogsError),
+
+    #[error(transparent)]
+    TedgeConfig(#[from] tedge_config::TEdgeConfigError),
 }

@@ -1,4 +1,3 @@
-use crate::operation_logs::{LogKind, OperationLogs};
 use crate::{
     error::AgentError,
     restart_operation_handler::restart_operation,
@@ -15,7 +14,10 @@ use agent_interface::{
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
-use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
+use plugin_sm::{
+    operation_logs::{LogKind, OperationLogs},
+    plugin_manager::{ExternalPlugins, Plugins},
+};
 use serde_json::json;
 use std::process;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};

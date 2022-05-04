@@ -20,7 +20,6 @@ tokio = { version = "1.8", features = ["rt", "sync", "time"] }
 toml = "0.5"
 
 [dev-dependencies]
-anyhow = "1.0"
 assert_matches = "1.5"
 assert-json-diff = "2.0"
 serde_json = "1.0"
