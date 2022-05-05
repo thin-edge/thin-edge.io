@@ -88,6 +88,18 @@ impl MessageType {
         }
     }
 
+    pub(crate) fn from_message(msg: &dyn Message) -> Self {
+        let id = msg.type_id();
+        MessageType {
+            name: msg.type_name(),
+            kind: if id == std::any::TypeId::of::<AnyMessage>() {
+                MessageKind::Wildcard
+            } else {
+                MessageKind::Typed(id)
+            },
+        }
+    }
+
     /// Get the type's name
     #[must_use]
     pub fn name(&self) -> &str {
