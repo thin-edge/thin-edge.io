@@ -415,9 +415,19 @@ impl HandleTypes {
 ///
 /// This trait is a marker trait for all types that can be used as messages which can be sent
 /// between plugins in thin-edge.
-pub trait Message: Send + std::fmt::Debug + DowncastSync + 'static {}
+pub trait Message: Send + std::fmt::Debug + DynMessage + DowncastSync + 'static {}
 
 impl_downcast!(sync Message);
+
+/// A bag of messages making it easier to work with dynamic messages
+pub trait DynMessage {
+    /// Get the type name of this message
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
+impl<M: 'static> DynMessage for M {}
 
 /// Register that the [`Message`] can receive replies of kind `R`: [`Message`]
 pub trait AcceptsReplies: Message {
@@ -656,10 +666,23 @@ impl_does_handle_tuple!(M10 M9 M8 M7 M6 M5 M4 M3 M2 M1);
 
 #[cfg(test)]
 mod tests {
+    use crate::{plugin::DynMessage, Message};
+
     use super::{Plugin, PluginBuilder};
     use static_assertions::assert_obj_safe;
 
     // Object Safety
     assert_obj_safe!(PluginBuilder<()>);
     assert_obj_safe!(Plugin);
+
+    #[derive(Debug)]
+    struct Blub;
+
+    impl Message for Blub {}
+
+    #[test]
+    fn type_name_contains_type_name() {
+        let blub = Blub;
+        assert!(blub.type_name().contains("Blub"));
+    }
 }
