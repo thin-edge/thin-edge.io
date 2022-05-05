@@ -168,6 +168,16 @@ impl<RB: ReceiverBundle> Address<RB> {
             reply_recv: receiver,
         })
     }
+
+    /// Whether this Address could potentially receive this message.
+    ///
+    /// This does a check whether the [`ReceiverBundle`] contains the type of the message.
+    pub fn could_receive(&self, msg: &dyn Message) -> bool {
+        let types = RB::get_ids();
+        let msg_type = MessageType::from_message(msg);
+
+        types.iter().any(|ty| ty.satisfy(&msg_type))
+    }
 }
 
 #[derive(Debug)]
@@ -331,6 +341,11 @@ mod tests {
 
     impl Message for Bar {}
 
+    #[derive(Debug)]
+    struct Blub;
+
+    impl Message for Blub {}
+
     make_receiver_bundle!(struct FooBar(Foo, Bar));
 
     #[allow(unreachable_code, dead_code, unused)]
@@ -352,4 +367,16 @@ mod tests {
     assert_not_impl_any!(NotSync: Send, Sync);
     assert_impl_all!(ReplySenderFor<NotSync>: Send, Sync);
     assert_impl_all!(ReplyReceiverFor<NotSync>: Send, Sync);
+
+    #[test]
+    fn check_could_receive() {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        let addr: Address<FooBar> = Address {
+            _pd: std::marker::PhantomData,
+            sender,
+        };
+        assert!(addr.could_receive(&Foo));
+        assert!(addr.could_receive(&Bar));
+        assert!(!addr.could_receive(&Blub));
+    }
 }
