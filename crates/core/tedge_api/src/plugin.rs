@@ -13,6 +13,7 @@ use async_trait::async_trait;
 
 use crate::{
     address::{InternalMessage, ReceiverBundle, ReplySenderFor},
+    config::ConfigDescription,
     error::{DirectoryError, PluginError},
     message::{CoreMessages, MessageType},
     Address,
@@ -162,6 +163,18 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     fn kind_message_types() -> HandleTypes
     where
         Self: Sized;
+
+    /// Get a generic configuration description of what kind of input the
+    /// plugin expects.
+    ///
+    /// See [`Config`] as well as [`AsConfig`] for how to implement and use these types and
+    /// interfaces.
+    fn kind_configuration() -> Option<ConfigDescription>
+    where
+        Self: Sized,
+    {
+        None
+    }
 
     /// Verify the configuration of the plugin for this plugin kind
     ///

@@ -14,8 +14,12 @@ thiserror = "1.0.30"
 tokio = { version = "1.16.1", features = ["sync", "time"] }
 tokio-util = "0.7.0"
 toml = "0.5.8"
+serde = { version = "1.0.136", features = ["derive"] }
+pretty = { version = "0.11.3", features = ["termcolor"] }
+termcolor = "1.1.3"
+termimad = "0.20.1"
+nu-ansi-term = "0.45.1"
 
 [dev-dependencies]
-serde = { version = "1.0.136", features = ["derive"] }
 static_assertions = "1.1.0"
 tokio = { version = "1.16.1", features = ["full"] }

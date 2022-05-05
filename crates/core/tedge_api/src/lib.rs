@@ -10,6 +10,9 @@
 pub mod plugin;
 pub use plugin::{Message, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory, PluginExt};
 
+/// Generic representation of a configuration
+pub mod config;
+
 /// Addresses allow plugins to exchange messages
 pub mod address;
 pub use address::Address;
