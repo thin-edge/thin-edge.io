@@ -1,11 +1,10 @@
 use std::{collections::HashMap, time::Duration};
 
 use async_trait::async_trait;
-use futures::FutureExt;
 use tedge_api::{
     address::ReplySenderFor,
-    message::MessageType,
-    plugin::{AcceptsReplies, BuiltPlugin, Handle, Message, PluginDeclaration, PluginExt},
+    message::{AnyMessage, MessageType},
+    plugin::{AnyMessages, BuiltPlugin, Handle, Message, PluginDeclaration, PluginExt},
     Address, CancellationToken, Plugin, PluginBuilder, PluginConfiguration, PluginDirectory,
     PluginError,
 };
@@ -14,17 +13,10 @@ use tedge_api::{
 #[derive(Debug)]
 struct Heartbeat;
 impl Message for Heartbeat {}
-impl AcceptsReplies for Heartbeat {
-    type Reply = HeartbeatStatus;
-}
 
-/// The reply for a heartbeat
 #[derive(Debug)]
-enum HeartbeatStatus {
-    Alive,
-    Degraded,
-}
-impl Message for HeartbeatStatus {}
+struct RandomData;
+impl Message for RandomData {}
 
 /// A PluginBuilder that gets used to build a HeartbeatService plugin instance
 #[derive(Debug)]
@@ -133,39 +125,8 @@ impl Plugin for HeartbeatService {
                         "HeartbeatService: Sending heartbeat to service: {:?}",
                         service
                     );
-                    tokio::select! {
-                        reply = service
-                        .1
-                        .send_and_wait(Heartbeat)
-                        .then(|answer| {
-                            answer.unwrap()
-                            .wait_for_reply(Duration::from_millis(100))}
-                        ) => {
-                            match reply
-                            {
-                                Ok(HeartbeatStatus::Alive) => {
-                                    println!("HeartbeatService: Received all is well!")
-                                }
-                                Ok(HeartbeatStatus::Degraded) => {
-                                    println!(
-                                        "HeartbeatService: Oh-oh! Plugin '{}' is not doing well",
-                                        service.0
-                                        )
-                                }
-
-                                Err(reply_error) => {
-                                    println!(
-                                        "HeartbeatService: Critical error for '{}'! {reply_error}",
-                                        service.0
-                                        )
-                                }
-                            }
-                        }
-
-                        _ = cancel_token.cancelled() => {
-                            break
-                        }
-                    }
+                    service.1.send_and_wait(Heartbeat).await.unwrap();
+                    service.1.send_and_wait(RandomData).await.unwrap();
                 }
             });
         }
@@ -194,14 +155,14 @@ impl HeartbeatService {
 }
 
 /// A plugin that receives heartbeats
-struct CriticalServiceBuilder;
+struct LogServiceBuilder;
 
 // declare a set of messages that the CriticalService can receive.
 // In this example, it can only receive a Heartbeat.
-tedge_api::make_receiver_bundle!(struct HeartbeatMessages(Heartbeat));
+tedge_api::make_receiver_bundle!(struct HeartbeatMessages(Heartbeat, RandomData));
 
 #[async_trait]
-impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
+impl<PD: PluginDirectory> PluginBuilder<PD> for LogServiceBuilder {
     fn kind_name() -> &'static str {
         todo!()
     }
@@ -210,7 +171,7 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
     where
         Self: Sized,
     {
-        CriticalService::get_handled_types()
+        LogService::get_handled_types()
     }
 
     async fn verify_configuration(
@@ -229,50 +190,34 @@ impl<PD: PluginDirectory> PluginBuilder<PD> for CriticalServiceBuilder {
     where
         PD: 'async_trait,
     {
-        Ok(CriticalService {
-            status: tokio::sync::Mutex::new(true),
-        }
-        .finish())
+        Ok(LogService {}.finish())
     }
 }
 
 /// The actual "critical" plugin implementation
-struct CriticalService {
-    status: tokio::sync::Mutex<bool>,
-}
+struct LogService {}
 
 /// The CriticalService can receive Heartbeat objects, thus it needs a Handle<Heartbeat>
 /// implementation
 #[async_trait]
-impl Handle<Heartbeat> for CriticalService {
+impl Handle<AnyMessage> for LogService {
     async fn handle_message(
         &self,
-        _message: Heartbeat,
-        sender: ReplySenderFor<Heartbeat>,
+        message: AnyMessage,
+        _sender: ReplySenderFor<AnyMessage>,
     ) -> Result<(), PluginError> {
-        println!("CriticalService: Received Heartbeat!");
-        let mut status = self.status.lock().await;
-
-        let _ = sender.reply(if *status {
-            println!("CriticalService: Sending back alive!");
-            HeartbeatStatus::Alive
-        } else {
-            println!("CriticalService: Sending back degraded!");
-            HeartbeatStatus::Degraded
-        });
-
-        *status = !*status;
+        println!("LogService: Received Message: {:?}", message);
         Ok(())
     }
 }
 
-impl PluginDeclaration for CriticalService {
-    type HandledMessages = (Heartbeat,);
+impl PluginDeclaration for LogService {
+    type HandledMessages = AnyMessages;
 }
 
 /// Because the CriticalService is of course a Plugin, it needs an implementation for that as well.
 #[async_trait]
-impl Plugin for CriticalService {
+impl Plugin for LogService {
     async fn start(&mut self) -> Result<(), PluginError> {
         println!("CriticalService: Setting up critical service!");
         Ok(())
@@ -284,7 +229,6 @@ impl Plugin for CriticalService {
     }
 }
 
-//
 // The following pieces of code would be implemented by a "core" component, that is responsible for
 // setting up plugins and their communication.
 //
@@ -363,7 +307,7 @@ async fn build_critical_plugin(
     comms: &mut Communication,
     cancel_token: CancellationToken,
 ) -> BuiltPlugin {
-    let csb = CriticalServiceBuilder;
+    let csb = LogServiceBuilder;
 
     let config = toml::from_str("").unwrap();
 
@@ -404,7 +348,7 @@ async fn main() {
     // in a main(), the core would be told what plugins are available.
     // This would, in a real-world scenario, not happen on the "communication" type directly.
     // Still, this needs to be done by a main()-author.
-    comms.declare_plugin::<CriticalServiceBuilder>("critical-service");
+    comms.declare_plugin::<LogServiceBuilder>("critical-service");
     comms.declare_plugin::<HeartbeatServiceBuilder>("heartbeat");
 
     // The following would all be handled by the core implementation, a main() author would only

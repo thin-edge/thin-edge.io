@@ -2,16 +2,19 @@ use std::{marker::PhantomData, time::Duration};
 
 use tokio::sync::mpsc::error::{SendTimeoutError, TrySendError};
 
-use crate::plugin::Message;
+use crate::{
+    message::MessageType,
+    plugin::{AcceptsReplies, Message},
+};
 
 #[doc(hidden)]
-pub type AnySendBox = Box<dyn std::any::Any + Send>;
+pub type AnyMessageBox = Box<dyn Message>;
 
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct InternalMessage {
-    pub(crate) data: AnySendBox,
-    pub(crate) reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
+    pub(crate) data: AnyMessageBox,
+    pub(crate) reply_sender: tokio::sync::oneshot::Sender<AnyMessageBox>,
 }
 
 /// THIS IS NOT PART OF THE PUBLIC API, AND MAY CHANGE AT ANY TIME
@@ -79,7 +82,7 @@ impl<RB: ReceiverBundle> Address<RB> {
     /// could become an issue use something akin to timeout (like
     /// [`timeout`](tokio::time::timeout)).
     /// For details on sending and receiving, see `tokio::sync::mpsc::Sender`.
-    pub async fn send_and_wait<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M>
+    pub async fn send_and_wait<M: Message>(&self, msg: M) -> Result<ReplyReceiverFor<M>, M>
     where
         RB: Contains<M>,
     {
@@ -93,7 +96,7 @@ impl<RB: ReceiverBundle> Address<RB> {
             .await
             .map_err(|msg| *msg.0.data.downcast::<M>().unwrap())?;
 
-        Ok(ReplyReceiver {
+        Ok(ReplyReceiverFor {
             _pd: PhantomData,
             reply_recv: receiver,
         })
@@ -111,7 +114,7 @@ impl<RB: ReceiverBundle> Address<RB> {
     ///
     /// The error is returned if the receiving side (the plugin that is addressed) cannot currently
     /// receive messages (either because it is closed or the queue is full).
-    pub fn try_send<M: Message>(&self, msg: M) -> Result<ReplyReceiver<M::Reply>, M> {
+    pub fn try_send<M: Message>(&self, msg: M) -> Result<ReplyReceiverFor<M>, M> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
         self.sender
@@ -125,7 +128,7 @@ impl<RB: ReceiverBundle> Address<RB> {
                 }
             })?;
 
-        Ok(ReplyReceiver {
+        Ok(ReplyReceiverFor {
             _pd: PhantomData,
             reply_recv: receiver,
         })
@@ -142,7 +145,7 @@ impl<RB: ReceiverBundle> Address<RB> {
         &self,
         msg: M,
         timeout: Duration,
-    ) -> Result<ReplyReceiver<M::Reply>, M> {
+    ) -> Result<ReplyReceiverFor<M>, M> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
         self.sender
@@ -160,21 +163,31 @@ impl<RB: ReceiverBundle> Address<RB> {
                 }
             })?;
 
-        Ok(ReplyReceiver {
+        Ok(ReplyReceiverFor {
             _pd: PhantomData,
             reply_recv: receiver,
         })
+    }
+
+    /// Whether this Address could potentially receive this message.
+    ///
+    /// This does a check whether the [`ReceiverBundle`] contains the type of the message.
+    pub fn could_receive(&self, msg: &dyn Message) -> bool {
+        let types = RB::get_ids();
+        let msg_type = MessageType::from_message(msg);
+
+        types.iter().any(|ty| ty.satisfy(&msg_type))
     }
 }
 
 #[derive(Debug)]
 /// Listener that allows one to wait for a reply as sent through [`Address::send_and_wait`]
-pub struct ReplyReceiver<M> {
+pub struct ReplyReceiverFor<M> {
     _pd: PhantomData<fn(M)>,
-    reply_recv: tokio::sync::oneshot::Receiver<AnySendBox>,
+    reply_recv: tokio::sync::oneshot::Receiver<AnyMessageBox>,
 }
 
-impl<M: Message> ReplyReceiver<M> {
+impl<M: Message> ReplyReceiverFor<M> {
     /// Wait for a reply until for the duration given in `timeout`
     ///
     /// ## Note
@@ -186,7 +199,11 @@ impl<M: Message> ReplyReceiver<M> {
     /// It is also important, that just because a given `M: Message` has a `M::Reply` type set,
     /// that the plugin that a message was sent to does _not_ have to reply with it. It can choose
     /// to not do so.
-    pub async fn wait_for_reply(self, timeout: Duration) -> Result<M, ReplyError> {
+    pub async fn wait_for_reply<R>(self, timeout: Duration) -> Result<R, ReplyError>
+    where
+        R: Message,
+        M: AcceptsReplies<Reply = R>,
+    {
         let data = tokio::time::timeout(timeout, self.reply_recv)
             .await
             .map_err(|_| ReplyError::Timeout)?
@@ -199,13 +216,13 @@ impl<M: Message> ReplyReceiver<M> {
 #[derive(Debug)]
 /// Allows the [`Handle`](crate::plugin::Handle) implementation to reply with a given message as
 /// specified by the currently handled message.
-pub struct ReplySender<M> {
+pub struct ReplySenderFor<M> {
     _pd: PhantomData<fn(M)>,
-    reply_sender: tokio::sync::oneshot::Sender<AnySendBox>,
+    reply_sender: tokio::sync::oneshot::Sender<AnyMessageBox>,
 }
 
-impl<M: Message> ReplySender<M> {
-    pub(crate) fn new(reply_sender: tokio::sync::oneshot::Sender<AnySendBox>) -> Self {
+impl<M: Message> ReplySenderFor<M> {
+    pub(crate) fn new(reply_sender: tokio::sync::oneshot::Sender<AnyMessageBox>) -> Self {
         Self {
             _pd: PhantomData,
             reply_sender,
@@ -213,7 +230,11 @@ impl<M: Message> ReplySender<M> {
     }
 
     /// Reply to the originating plugin with the given message
-    pub fn reply(self, msg: M) -> Result<(), M> {
+    pub fn reply<R>(self, msg: R) -> Result<(), M>
+    where
+        R: Message,
+        M: AcceptsReplies<Reply = R>,
+    {
         self.reply_sender
             .send(Box::new(msg))
             .map_err(|msg| *msg.downcast::<M>().unwrap())
@@ -244,7 +265,7 @@ pub enum ReplyError {
 
 #[doc(hidden)]
 pub trait ReceiverBundle: Send + 'static {
-    fn get_ids() -> Vec<(&'static str, std::any::TypeId)>;
+    fn get_ids() -> Vec<MessageType>;
 }
 
 #[doc(hidden)]
@@ -258,21 +279,17 @@ pub trait Contains<M: Message> {}
 /// ## Example
 ///
 /// ```rust
-/// # use tedge_api::{Message, make_receiver_bundle, message::NoReply};
+/// # use tedge_api::{Message, make_receiver_bundle};
 ///
 /// #[derive(Debug)]
 /// struct IntMessage(u8);
 ///
-/// impl Message for IntMessage {
-///     type Reply = NoReply;
-/// }
+/// impl Message for IntMessage { }
 ///
 /// #[derive(Debug)]
 /// struct StatusMessage(String);
 ///
-/// impl Message for StatusMessage {
-///     type Reply = NoReply;
-/// }
+/// impl Message for StatusMessage { }
 ///
 /// make_receiver_bundle!(struct MessageReceiver(IntMessage, StatusMessage));
 ///
@@ -289,9 +306,9 @@ macro_rules! make_receiver_bundle {
 
         impl $crate::address::ReceiverBundle for $name {
             #[allow(unused_parens)]
-            fn get_ids() -> Vec<(&'static str, std::any::TypeId)> {
+            fn get_ids() -> Vec<$crate::message::MessageType> {
                 vec![
-                    $((std::any::type_name::<$msg>(), std::any::TypeId::of::<$msg>())),+
+                    $($crate::message::MessageType::for_message::<$msg>()),+
                 ]
             }
         }
@@ -305,25 +322,29 @@ mod tests {
     use static_assertions::{assert_impl_all, assert_not_impl_any};
 
     use crate::{
-        address::{ReplyReceiver, ReplySender},
+        address::{ReplyReceiverFor, ReplySenderFor},
         make_receiver_bundle,
-        plugin::Message,
+        plugin::{AcceptsReplies, Message},
         Address,
     };
 
     #[derive(Debug)]
     struct Foo;
 
-    impl Message for Foo {
+    impl Message for Foo {}
+    impl AcceptsReplies for Foo {
         type Reply = Bar;
     }
 
     #[derive(Debug)]
     struct Bar;
 
-    impl Message for Bar {
-        type Reply = Bar;
-    }
+    impl Message for Bar {}
+
+    #[derive(Debug)]
+    struct Blub;
+
+    impl Message for Blub {}
 
     make_receiver_bundle!(struct FooBar(Foo, Bar));
 
@@ -344,6 +365,18 @@ mod tests {
     assert_impl_all!(Address<FooBar>: Clone, Send, Sync);
 
     assert_not_impl_any!(NotSync: Send, Sync);
-    assert_impl_all!(ReplySender<NotSync>: Send, Sync);
-    assert_impl_all!(ReplyReceiver<NotSync>: Send, Sync);
+    assert_impl_all!(ReplySenderFor<NotSync>: Send, Sync);
+    assert_impl_all!(ReplyReceiverFor<NotSync>: Send, Sync);
+
+    #[test]
+    fn check_could_receive() {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        let addr: Address<FooBar> = Address {
+            _pd: std::marker::PhantomData,
+            sender,
+        };
+        assert!(addr.could_receive(&Foo));
+        assert!(addr.could_receive(&Bar));
+        assert!(!addr.could_receive(&Blub));
+    }
 }
