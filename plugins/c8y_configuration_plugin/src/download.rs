@@ -1,5 +1,4 @@
 use crate::error::ConfigManagementError;
-use crate::smartrest::TryIntoOperationStatusMessage;
 use crate::{error, PluginConfig};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
@@ -7,7 +6,7 @@ use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_smartrest::smartrest_serializer::{
     CumulocitySupportedOperations, SmartRest, SmartRestSerializer,
     SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-    SmartRestSetOperationToSuccessful,
+    SmartRestSetOperationToSuccessful, TryIntoOperationStatusMessage,
 };
 use download::{Auth, DownloadInfo, Downloader};
 use mqtt_channel::{Connection, Message, SinkExt, Topic};

@@ -1,7 +1,6 @@
 mod config;
 mod download;
 mod error;
-mod smartrest;
 mod upload;
 
 use crate::config::PluginConfig;

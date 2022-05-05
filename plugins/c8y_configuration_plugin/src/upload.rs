@@ -1,8 +1,7 @@
-use crate::smartrest::TryIntoOperationStatusMessage;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
-use c8y_smartrest::smartrest_serializer::SmartRest;
+use c8y_smartrest::smartrest_serializer::{SmartRest, TryIntoOperationStatusMessage};
 use c8y_smartrest::{
     smartrest_deserializer::SmartRestConfigUploadRequest,
     smartrest_serializer::{
