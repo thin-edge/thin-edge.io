@@ -39,7 +39,6 @@ impl BridgeConfig {
         }
         writeln!(writer, "address {}", self.address)?;
 
-        // XXX: This has to go away
         if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
             writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
         } else {

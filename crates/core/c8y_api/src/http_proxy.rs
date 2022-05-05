@@ -10,8 +10,8 @@ use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
 use std::{collections::HashMap, path::Path, time::Duration};
 use tedge_config::{
-    C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
-    MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
+    C8yRootCertPathSetting, C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
+    DeviceIdSetting, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
 };
 use time::OffsetDateTime;
 
@@ -211,7 +211,17 @@ impl JwtAuthHttpProxy {
     ) -> Result<JwtAuthHttpProxy, SMCumulocityMapperError> {
         let c8y_host = tedge_config.query_string(C8yUrlSetting)?;
         let device_id = tedge_config.query_string(DeviceIdSetting)?;
-        let http_con = reqwest::ClientBuilder::new().build()?;
+        let root_cert = tedge_config.query(C8yRootCertPathSetting)?;
+
+        let client_builder = reqwest::Client::builder();
+        let http_con = match std::fs::metadata(&root_cert)?.is_file() {
+            true => {
+                let cert = std::fs::read(root_cert)?;
+                let cert_pem = reqwest::Certificate::from_pem(&cert)?;
+                client_builder.add_root_certificate(cert_pem).build()?
+            }
+            false => client_builder.build()?,
+        };
 
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
