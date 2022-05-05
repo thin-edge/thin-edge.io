@@ -12,6 +12,7 @@
 	  <group></group>
 	</groups>
 	<modes inherit="true">
+  <skipped reason="Test execution disabled due to #1123"/>
 	</modes>
   </classification>
   <data>
