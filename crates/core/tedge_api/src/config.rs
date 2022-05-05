@@ -5,17 +5,15 @@ use pretty::{Arena, Doc, DocAllocator, Pretty, RefDoc};
 use serde::Serialize;
 use termimad::MadSkin;
 
-use crate::message::MessageType;
-
 /// Generic config that represents what kind of config a plugin wishes to accept
 #[derive(Debug, Serialize)]
-pub struct Config {
+pub struct ConfigDescription {
     name: String,
     kind: ConfigKind,
     doc: Option<&'static str>,
 }
 
-impl Config {
+impl ConfigDescription {
     /// Construct a new generic config explanation
     #[must_use]
     pub fn new(name: String, kind: ConfigKind, doc: Option<&'static str>) -> Self {
@@ -73,17 +71,17 @@ pub enum ConfigKind {
     String,
 
     /// Config represents an array of values of the given [`ConfigKind`]
-    Array(Box<Config>),
+    Array(Box<ConfigDescription>),
 
     /// Config represents a map of different configurations
-    Struct(HashMap<String, Config>),
+    Struct(HashMap<String, ConfigDescription>),
 
     /// Config represents a hashmap of named configurations of the same type
     ///
     /// # Note
     ///
     /// The key is always a [`String`] so this only holds the value config
-    HashMap(Box<Config>),
+    HashMap(Box<ConfigDescription>),
 }
 
 /// Turn a plugin configuration into a [`Config`] object
@@ -91,12 +89,12 @@ pub enum ConfigKind {
 /// Plugin authors are expected to implement this for their configurations to give users
 pub trait AsConfig {
     /// Get a [`Config`] object from the type
-    fn as_config() -> Config;
+    fn as_config() -> ConfigDescription;
 }
 
 impl<T: AsConfig> AsConfig for Vec<T> {
-    fn as_config() -> Config {
-        Config::new(
+    fn as_config() -> ConfigDescription {
+        ConfigDescription::new(
             format!("Array of '{}'s", T::as_config().name()),
             ConfigKind::Array(Box::new(T::as_config())),
             None,
@@ -105,8 +103,8 @@ impl<T: AsConfig> AsConfig for Vec<T> {
 }
 
 impl<V: AsConfig> AsConfig for HashMap<String, V> {
-    fn as_config() -> Config {
-        Config::new(
+    fn as_config() -> ConfigDescription {
+        ConfigDescription::new(
             format!("Table of '{}'s", V::as_config().name()),
             ConfigKind::HashMap(Box::new(V::as_config())),
             None,
@@ -118,8 +116,8 @@ macro_rules! impl_config_kind {
     ($kind:expr; $name:expr; $doc:expr => $($typ:ty),+) => {
         $(
             impl AsConfig for $typ {
-                fn as_config() -> Config {
-                    Config::new({$name}.into(), $kind, Some($doc))
+                fn as_config() -> ConfigDescription {
+                    ConfigDescription::new({$name}.into(), $kind, Some($doc))
                 }
             }
         )+
@@ -133,7 +131,7 @@ impl_config_kind!(ConfigKind::String; "String"; "An UTF-8 encoded string of char
 
 /******Pretty Printing of Configs******/
 
-impl Config {
+impl ConfigDescription {
     /// Get a [`RcDoc`](pretty::RcDoc) which can be used to write the documentation of this
     pub fn as_terminal_doc<'a>(&'a self, arena: &'a Arena<'a>) -> RefDoc<'a> {
         let mut doc = arena
@@ -191,13 +189,13 @@ impl Config {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::config::{AsConfig, Config, ConfigKind};
+    use crate::config::{AsConfig, ConfigDescription, ConfigKind};
 
     #[test]
     fn verify_correct_config_kinds() {
         assert!(matches!(
             Vec::<f64>::as_config(),
-            Config {
+            ConfigDescription {
                 doc: None,
                 kind: ConfigKind::Array(x),
                 ..

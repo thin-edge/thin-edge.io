@@ -13,7 +13,7 @@ use async_trait::async_trait;
 
 use crate::{
     address::{InternalMessage, ReceiverBundle, ReplySenderFor},
-    config::Config,
+    config::ConfigDescription,
     error::{DirectoryError, PluginError},
     message::{CoreMessages, MessageType},
     Address,
@@ -169,7 +169,7 @@ pub trait PluginBuilder<PD: PluginDirectory>: Sync + Send + 'static {
     ///
     /// See [`Config`] as well as [`AsConfig`] for how to implement and use these types and
     /// interfaces.
-    fn kind_configuration() -> Option<Config>
+    fn kind_configuration() -> Option<ConfigDescription>
     where
         Self: Sized,
     {

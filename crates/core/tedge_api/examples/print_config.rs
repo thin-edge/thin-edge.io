@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use nu_ansi_term::Color;
 use pretty::Arena;
-use tedge_api::config::{AsConfig, Config, ConfigKind};
+use tedge_api::config::{AsConfig, ConfigDescription, ConfigKind};
 struct Port(u64);
 
 impl AsConfig for Port {
-    fn as_config() -> Config {
-        Config::new(
+    fn as_config() -> ConfigDescription {
+        ConfigDescription::new(
             String::from("Integer"),
             ConfigKind::Integer,
             Some("A TCP port number is an integer between 0 and 65535"),
@@ -18,8 +18,8 @@ impl AsConfig for Port {
 struct VHost;
 
 impl AsConfig for VHost {
-    fn as_config() -> Config {
-        Config::new(
+    fn as_config() -> ConfigDescription {
+        ConfigDescription::new(
             String::from("VHost"),
             ConfigKind::Struct(HashMap::from([(String::from("name"), String::as_config())])),
             Some("A virtual host definition"),
@@ -45,7 +45,7 @@ fn main() {
 
     let arena = Arena::new();
 
-    let doc = Config::new(
+    let doc = ConfigDescription::new(
             String::from("ServerConfig"),
             ConfigKind::Struct(HashMap::from([
                 (String::from("port"), Port::as_config()),
