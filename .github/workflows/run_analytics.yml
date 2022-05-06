@@ -8,8 +8,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  system-test_onsite:
-    runs-on: [self-hosted, Linux, ARM, offsite_mythica ] # onsite]
+  run_analytics:
+    #runs-on: [self-hosted, Linux, ARM, offsite_mythica ] # onsite]
+    runs-on: [self-hosted, Linux, ARM, onsite]
 
     steps:
 
