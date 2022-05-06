@@ -18,7 +18,8 @@ help() {
     echo "download"
     echo "build"
     echo "install_deps"
-    echo "install"
+    echo "install  [ local | gihub | home ]"
+    echo "getrelase"
     echo "install_local"
     echo "gitupdate"
     echo "gitclone"
@@ -166,7 +167,7 @@ install_deps() {
     echo "Running function ${FUNCNAME[0]}"
 
     export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get --assume-yes install libmosquitto1 mosquitto mosquitto-clients collectd collectd-core
+    sudo apt-get --assume-yes install libmosquitto1 mosquitto mosquitto-clients collectd collectd-core wget curl
 }
 
 install() {
@@ -199,6 +200,12 @@ install() {
     sudo dpkg -i $DIR"/tedge_apama_plugin_"$VAR"_"$ARCH".deb"
     sudo dpkg -i $DIR"/tedge_logfile_request_plugin_"$VAR"_"$ARCH".deb"
 }
+
+getrelease() {
+    cd ~/thin-edge.io
+    sudo ./get-thin-edge_io.sh
+}
+
 
 gitclone(){
     echo "Running function ${FUNCNAME[0]}"
@@ -354,19 +361,14 @@ run_local_steps() {
     ~/thin-edge.io/ci/setup_tedge.sh disconnect
     ~/thin-edge.io/ci/setup_tedge.sh cleanup
     ~/thin-edge.io/ci/setup_tedge.sh gitclone
-
+    ~/thin-edge.io/ci/setup_tedge.sh gitupdate
     ~/thin-edge.io/ci/setup_tedge.sh build
-    #~/thin-edge.io/ci/setup_tedge.sh download
-
     ~/thin-edge.io/ci/setup_tedge.sh install_deps
-
     ~/thin-edge.io/ci/setup_tedge.sh install local
-
     ~/thin-edge.io/ci/setup_tedge.sh tedge_help
     ~/thin-edge.io/ci/setup_tedge.sh setupenv
     ~/thin-edge.io/ci/setup_tedge.sh configure_collectd
     ~/thin-edge.io/ci/setup_tedge.sh configure
-
     ~/thin-edge.io/ci/setup_tedge.sh smoketest local
 }
 
@@ -377,11 +379,14 @@ test() {
 
 #set -x
 
-# Harsh mode we exit when an error occurs
-# unset this if an error is allowed to happen
+# Harsh mode we exit when an error occurs. Might cause some trouble when
+# stuff is only half configured.
+# Unset this if an error is allowed to happen
 set -e
 
-checkvars;
+if [ $1 != "help" ] ; then
+    checkvars;
+fi
 
 #. ~/env.sh
 
