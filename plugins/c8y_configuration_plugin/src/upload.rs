@@ -1,3 +1,4 @@
+use crate::PluginConfig;
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
@@ -42,6 +43,7 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
 }
 
 pub async fn handle_config_upload_request(
+    plugin_config: &PluginConfig,
     config_upload_request: SmartRestConfigUploadRequest,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
@@ -50,11 +52,14 @@ pub async fn handle_config_upload_request(
     let msg = UploadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(msg).await?;
 
+    let config_file_path = plugin_config.get_path_from_type(&config_upload_request.config_type)?;
     let upload_result = upload_config_file(
-        Path::new(config_upload_request.config_type.as_str()),
+        Path::new(config_file_path.as_str()),
+        &config_upload_request.config_type,
         http_client,
     )
     .await;
+
     match upload_result {
         Ok(upload_event_url) => {
             let successful_message =
@@ -72,6 +77,7 @@ pub async fn handle_config_upload_request(
 
 async fn upload_config_file(
     config_file_path: &Path,
+    config_type: &str,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<String> {
     // read the config file contents
@@ -79,7 +85,7 @@ async fn upload_config_file(
 
     // upload config file
     let upload_event_url = http_client
-        .upload_config_file(config_file_path, &config_content)
+        .upload_config_file(config_type, &config_content)
         .await?;
 
     Ok(upload_event_url)

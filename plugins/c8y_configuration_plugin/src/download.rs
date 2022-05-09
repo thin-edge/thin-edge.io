@@ -15,6 +15,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use tracing::info;
 
 const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
@@ -28,19 +29,22 @@ pub async fn handle_config_download_request(
     let executing_message = DownloadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(executing_message).await?;
 
-    // Add validation if the config_type exists in
-    let changed_file = smartrest_request.config_type.clone();
+    let changed_config_type = smartrest_request.config_type.clone();
 
     match download_config_file(plugin_config, smartrest_request, tmp_dir, http_client).await {
         Ok(_) => {
+            info!("The configuration download for '{changed_config_type}' is successful.");
+
             let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
             let () = mqtt_client.published.send(successful_message).await?;
 
-            let notification_message = get_file_change_notification_message(changed_file);
+            let notification_message = get_file_change_notification_message(changed_config_type);
             let () = mqtt_client.published.send(notification_message).await?;
             Ok(())
         }
         Err(err) => {
+            error!("The configuration download for '{changed_config_type}' is failed.",);
+
             let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
             Err(err)
@@ -93,15 +97,8 @@ impl ConfigDownloadRequest {
         plugin_config: &PluginConfig,
         tmp_dir: PathBuf,
     ) -> Result<Self, ConfigManagementError> {
-        // Check if the requested config type is in the plugin config list
-        let all_file_paths = plugin_config.get_all_file_paths();
-        if !all_file_paths.contains(&request.config_type) {
-            return Err(ConfigManagementError::InvalidRequestedConfigType {
-                path: request.config_type,
-            });
-        }
-
-        let destination_path = PathBuf::from(request.config_type);
+        let destination_path_string = plugin_config.get_path_from_type(&request.config_type)?;
+        let destination_path = PathBuf::from(destination_path_string);
         let file_name = Self::get_filename(destination_path.clone())?;
 
         Ok(Self {
@@ -219,14 +216,15 @@ mod tests {
 
     #[test]
     fn create_config_download_request() -> Result<(), anyhow::Error> {
-        let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml";
+        let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,tedge";
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
             files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
-                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
+                FileEntry::new("/etc/tedge/tedge.toml".to_string(), "tedge".to_string()),
+                FileEntry::new(
+                    "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
+                    "c8y-bridge".to_string(),
+                ),
             ]),
         };
         let config_download_request = ConfigDownloadRequest::try_new(
@@ -251,15 +249,14 @@ mod tests {
 
     #[test]
     fn requested_config_does_not_match_config_plugin() -> Result<(), anyhow::Error> {
-        let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/not_in_config.toml";
+        let payload =
+            "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,not_in_config.toml";
         let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
         let plugin_config = PluginConfig {
-            files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
-                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
-            ]),
+            files: HashSet::from([FileEntry::new(
+                "/etc/tedge/tedge.toml".to_string(),
+                "tedge".to_string(),
+            )]),
         };
         let config_download_request = ConfigDownloadRequest::try_new(
             smartrest_request,

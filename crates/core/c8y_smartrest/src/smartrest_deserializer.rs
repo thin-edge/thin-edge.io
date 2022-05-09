@@ -244,7 +244,7 @@ pub struct SmartRestConfigUploadRequest {
 
 impl SmartRestRequestGeneric for SmartRestConfigUploadRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct SmartRestConfigDownloadRequest {
     pub message_id: String,
     pub device: String,

@@ -8,7 +8,7 @@ use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::Smar
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use tedge_config::{
     C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt, DeviceIdSetting,
     MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
@@ -46,7 +46,7 @@ pub trait C8YHttpProxy: Send + Sync {
 
     async fn upload_config_file(
         &mut self,
-        config_path: &Path,
+        config_type: &str,
         config_content: &str,
     ) -> Result<String, SMCumulocityMapperError>;
 }
@@ -403,12 +403,12 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
 
     async fn upload_config_file(
         &mut self,
-        config_path: &Path,
+        config_type: &str,
         config_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
-        let config_file_event = self.create_event(config_path.display().to_string(), None, None);
+        let config_file_event = self.create_event(config_type.to_string(), None, None);
         let event_response_id = self.send_event_internal(config_file_event).await?;
         let binary_upload_event_url = self
             .end_point

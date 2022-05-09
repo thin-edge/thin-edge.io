@@ -133,6 +133,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
                     // handle the config file upload request
                     handle_config_upload_request(
+                        &plugin_config,
                         config_upload_request,
                         &mut mqtt_client,
                         &mut http_client,
@@ -146,7 +147,7 @@ async fn main() -> Result<(), anyhow::Error> {
             };
 
             if let Err(err) = result {
-                error!("Handling of operation: '{}' failed with {}", payload, err);
+                error!("Handling of operation: '{payload}' failed with {err}");
             }
         }
     }
