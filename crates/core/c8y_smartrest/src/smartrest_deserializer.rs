@@ -1,4 +1,4 @@
-use crate::error::{SMCumulocityMapperError, SmartRestDeserializerError};
+use crate::error::SmartRestDeserializerError;
 use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use csv::ReaderBuilder;
 use download::DownloadInfo;
@@ -306,9 +306,7 @@ impl SmartRestJwtResponse {
 /// path.push("/path/to/file/with/date/in/path-2021-10-27T10:29:58Z");
 /// let path_bufdate_time = get_datetime_from_file_path(&path).unwrap();
 /// ```
-pub fn get_datetime_from_file_path(
-    log_path: &Path,
-) -> Result<OffsetDateTime, SMCumulocityMapperError> {
+pub fn get_datetime_from_file_path(log_path: &Path) -> Option<OffsetDateTime> {
     if let Some(stem_string) = log_path.file_stem().and_then(|s| s.to_str()) {
         // a typical file stem looks like this: software-list-2021-10-27T10:29:58Z.
         // to extract the date, rsplit string on "-" and take (last) 3
@@ -317,16 +315,17 @@ pub fn get_datetime_from_file_path(
         stem_string_vec.reverse();
         // join on '-' to get the date string
         let date_string = stem_string_vec.join("-");
-        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339)?;
-
-        return Ok(dt);
+        let dt = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339);
+        match dt {
+            Ok(dt) => {
+                return Some(dt);
+            }
+            Err(_) => {
+                return None;
+            }
+        }
     }
-    match log_path.to_str() {
-        Some(path) => Err(SMCumulocityMapperError::InvalidDateInFileName(
-            path.to_string(),
-        )),
-        None => Err(SMCumulocityMapperError::InvalidUtf8Path),
-    }
+    None
 }
 
 #[cfg(test)]
@@ -650,7 +649,7 @@ mod tests {
         // this should return an Ok Result.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
-        assert!(path_buf_datetime.is_ok());
+        assert!(path_buf_datetime.is_some());
     }
 
     #[test_case("/path/to/software-list-2021-10-27-10:44:44Z.log")]
@@ -662,6 +661,6 @@ mod tests {
         // this should return an err.
         let path_buf = PathBuf::from_str(file_path).unwrap();
         let path_buf_datetime = get_datetime_from_file_path(&path_buf);
-        assert!(path_buf_datetime.is_err());
+        assert!(path_buf_datetime.is_none());
     }
 }

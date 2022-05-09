@@ -18,18 +18,17 @@ use c8y_smartrest::{
     smartrest_serializer::{
         CumulocitySupportedOperations, SmartRestGetPendingOperations, SmartRestSerializer,
         SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-        SmartRestSetOperationToSuccessful, SmartRestSetSupportedLogType,
-        SmartRestSetSupportedOperations,
+        SmartRestSetOperationToSuccessful, SmartRestSetSupportedOperations,
     },
 };
 use c8y_translator::json;
 
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
-use plugin_sm::operation_logs::{OperationLogs, OperationLogsError};
+use plugin_sm::operation_logs::OperationLogs;
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
-    fs::{self, File},
+    fs::File,
     io::Read,
     path::{Path, PathBuf},
 };
@@ -333,9 +332,6 @@ where
             &self.device_type,
         ));
 
-        let supported_log_types_message = self.wrap_error(create_supported_log_types_message(
-            &self.operation_logs.log_dir,
-        ));
         let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
         let software_list_message = self.wrap_error(create_get_software_list_message());
 
@@ -343,7 +339,6 @@ where
             inventory_fragments_message,
             supported_operations_message,
             device_data_message,
-            supported_log_types_message,
             pending_operations_message,
             software_list_message,
         ])
@@ -553,39 +548,6 @@ fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
     let data = SmartRestGetPendingOperations::default();
     let topic = C8yTopic::SmartRestResponse.to_topic()?;
     let payload = data.to_smartrest()?;
-    Ok(Message::new(&topic, payload))
-}
-
-fn get_supported_log_types(log_dir: &Path) -> Result<Vec<String>, ConversionError> {
-    let mut result = HashSet::new();
-
-    let paths = fs::read_dir(&log_dir).unwrap();
-    for path in paths {
-        let path = path?;
-        if fs::metadata(path.path())?.is_file() {
-            let file_name = path.file_name();
-            let file_name = file_name
-                .to_str()
-                .ok_or(OperationLogsError::FileFormatError)?;
-
-            // FIXME: this is a hotfix to map "software-list" and "software-update" to "software-management"
-            // this should be fixed in https://github.com/thin-edge/thin-edge.io/issues/1077
-            if file_name.starts_with("software-list") | file_name.starts_with("software-update") {
-                result.insert("software-management".to_string());
-            } else {
-                let log_type = file_name.split('-').next();
-                let log_type = log_type.ok_or(OperationLogsError::FileFormatError)?;
-                result.insert(log_type.to_string());
-            }
-        }
-    }
-    Ok(Vec::from_iter(result))
-}
-
-fn create_supported_log_types_message(log_dir: &Path) -> Result<Message, ConversionError> {
-    let supported_operation_types = get_supported_log_types(log_dir)?;
-    let payload = SmartRestSetSupportedLogType::from(supported_operation_types).to_smartrest()?;
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
     Ok(Message::new(&topic, payload))
 }
 
