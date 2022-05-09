@@ -5,6 +5,9 @@ use tracing::{debug, info};
 
 use super::c8y::CumulocityActor;
 
+/// CoreProducer takes all input messages and determines which other actor should be used to process them.
+///
+/// It is statically defined atm and supports cumulocity parser only.
 #[derive(Debug)]
 pub struct AgentCoreProducerActor {
     sender: Option<Recipient<MqttPayload>>,
@@ -24,7 +27,7 @@ impl Actor for AgentCoreProducerActor {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Self::Context) {
-        info!("Started");
+        info!("Core Started");
     }
 }
 
@@ -53,6 +56,8 @@ impl Handler<RegisterSender> for AgentCoreProducerActor {
     }
 }
 
+/// An output MQTT messages, used when any other actor has a message to dispatch,
+/// atm only logging received msgs.
 #[derive(Debug)]
 pub struct MqttSenderActor {}
 

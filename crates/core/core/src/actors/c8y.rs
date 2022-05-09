@@ -8,6 +8,8 @@ use tracing::debug;
 use crate::messages::core::MqttPayload;
 
 /// Platform specific actor which implements logic of handling the messages passed by a core.
+/// Cumulocity actor is handling all messages (atm all messages) which are inputs on c8y topics.
+/// Atm only single cloud processor is allowed and it will process all incoming messages.
 #[derive(Debug)]
 pub struct CumulocityActor {
     converter: CumulocityConverter<JwtAuthHttpProxy>,
@@ -41,6 +43,11 @@ impl Actor for CumulocityActor {
     type Context = Context<Self>;
 }
 
+/// The messages types handled by the actor are defined below.
+/// Atm all MQTT messages are passed to this actor and processed.
+/// The intention is to create type `MqttCumulocity` which would be exclusively passed here and no other messages types should we deal with.
+///
+/// Current handler only handles measurements.
 impl Handler<MqttPayload> for CumulocityActor {
     type Result = ();
 

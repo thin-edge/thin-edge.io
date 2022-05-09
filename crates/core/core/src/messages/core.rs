@@ -20,6 +20,7 @@ impl MqttPayload {
     }
 }
 
+/// Allows for dynamic registration of actors with the dispatch actor.
 #[derive(Debug, Message)]
 #[rtype(result = "()")]
 pub struct RegisterSender {
