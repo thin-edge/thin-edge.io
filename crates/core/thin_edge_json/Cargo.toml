@@ -20,6 +20,7 @@ anyhow = "1.0"
 clock = { path = "../../common/clock" }
 criterion = "0.3"
 mockall = "0.10"
+proptest = "1.0"
 stats_alloc = "0.1"
 walkdir = "2"
 assert_matches = "1.5"

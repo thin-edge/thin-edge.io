@@ -13,6 +13,8 @@ default = []
 logging = ["tracing", "tracing-subscriber"]
 
 [dependencies]
+anyhow = "1.0"
+futures = "0.3"
 nix = "0.23.1"
 tempfile = "3.2"
 thiserror = "1.0"
