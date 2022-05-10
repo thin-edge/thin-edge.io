@@ -15,17 +15,21 @@ help() {
     echo "checkvars"
     echo "disconnect"
     echo "cleanup"
-    echo "download"
+    echo "download : Download and unpack in the home directory"
     echo "build"
     echo "install_deps"
-    echo "install  [ local | gihub | home ]"
+    echo "install  [ local | gihub | home ] :
+        local:  Install a locally build version
+        github: Install a version that was downloaded by a github action
+        home:   Install a version that is located in home"
     echo "getrelase"
     echo "install_local"
     echo "gitupdate"
     echo "gitclone"
     echo "configure"
     echo "configure_collectd"
-    echo "smoketest"
+    echo "smoketest [ local | github ] :
+        use locally build sawtooth publisher or one within a github workflow"
     echo "setupenv"
     echo "getid"
     echo "tedge_help"
@@ -91,7 +95,12 @@ cleanup() {
 
     # In the hope hat it stops asking
     export DEBIAN_FRONTEND=noninteractive
+
     sudo dpkg -P c8y_configuration_plugin tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core mosquitto-clients collectd
+
+    # Used by some system tests
+    sudo dpkg -P  asciijump robotfindskitten asciijump moon-buggy squirrel3
+
     rm -rf debian-packages-armv7-unknown-linux-gnueabihf.zip
     rm -rf sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
     rm -rf tedge*.deb
