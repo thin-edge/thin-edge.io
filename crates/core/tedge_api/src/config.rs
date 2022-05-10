@@ -70,6 +70,13 @@ pub enum ConfigKind {
     /// Config represents a string
     String,
 
+    /// Wrap another config
+    ///
+    /// This is particularly useful if you want to restrict another kind. The common example is a
+    /// `Port` config object which is represented as a `u16` but with an explanation of what it is
+    /// meant to represent.
+    Wrapped(Box<ConfigDescription>),
+
     /// Config represents an array of values of the given [`ConfigKind`]
     Array(Box<ConfigDescription>),
 
@@ -154,9 +161,7 @@ impl ConfigDescription {
         }
 
         match self.kind() {
-            ConfigKind::Array(conf) => {
-                doc = doc.append(Pretty::pretty(conf.as_terminal_doc(arena), arena))
-            }
+            ConfigKind::Bool | ConfigKind::Integer | ConfigKind::Float | ConfigKind::String => (),
             ConfigKind::Struct(stc) => {
                 doc = doc
                     .append(arena.hardline())
@@ -175,10 +180,9 @@ impl ConfigDescription {
                         Doc::hardline(),
                     ))
             }
-            ConfigKind::HashMap(conf) => {
+            ConfigKind::Array(conf) | ConfigKind::HashMap(conf) | ConfigKind::Wrapped(conf) => {
                 doc = doc.append(Pretty::pretty(conf.as_terminal_doc(arena), arena))
             }
-            _ => (),
         };
 
         doc.into_doc()
