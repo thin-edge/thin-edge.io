@@ -12,6 +12,7 @@ pub use plugin::{Message, Plugin, PluginBuilder, PluginConfiguration, PluginDire
 
 /// Generic representation of a configuration
 pub mod config;
+pub use config::{AsConfig, ConfigDescription, ConfigKind};
 
 /// Addresses allow plugins to exchange messages
 pub mod address;
