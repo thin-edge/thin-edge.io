@@ -21,7 +21,7 @@ impl AsConfig for VHost {
     fn as_config() -> ConfigDescription {
         ConfigDescription::new(
             String::from("VHost"),
-            ConfigKind::Struct(HashMap::from([(String::from("name"), String::as_config())])),
+            ConfigKind::Struct(vec![("name", String::as_config())]),
             Some("A virtual host definition"),
         )
     }
@@ -47,12 +47,12 @@ fn main() {
 
     let doc = ConfigDescription::new(
             String::from("ServerConfig"),
-            ConfigKind::Struct(HashMap::from([
-                (String::from("port"), Port::as_config()),
-                (String::from("interface"), String::as_config()),
-                (String::from("virtual_hosts"), Vec::<VHost>::as_config()),
-                (String::from("headers"), HashMap::<String, String>::as_config()),
-            ])),
+            ConfigKind::Struct(vec![
+                ("port", Port::as_config()),
+                ("interface", String::as_config()),
+                ("virtual_hosts", Vec::<VHost>::as_config()),
+                ("headers", HashMap::<String, String>::as_config()),
+            ]),
             Some("Specify how the server should be started\n\n## Note\n\nThis is a reallly really loooooooooooooooooong loooooooooooooooooooong new *line*."),
         );
     let rendered_doc = doc.as_terminal_doc(&arena);

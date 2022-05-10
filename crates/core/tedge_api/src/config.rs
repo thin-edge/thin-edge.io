@@ -81,7 +81,9 @@ pub enum ConfigKind {
     Array(Box<ConfigDescription>),
 
     /// Config represents a map of different configurations
-    Struct(HashMap<String, ConfigDescription>),
+    ///
+    /// The tuple represent `(field_name, config_description)`
+    Struct(Vec<(&'static str, ConfigDescription)>),
 
     /// Config represents a hashmap of named configurations of the same type
     ///
@@ -170,7 +172,7 @@ impl ConfigDescription {
                     .append(arena.intersperse(
                         stc.iter().map(|(member_name, member_conf)| {
                             arena
-                                .text(Color::Blue.bold().paint(member_name).to_string())
+                                .text(Color::Blue.bold().paint(*member_name).to_string())
                                 .append(": ")
                                 .append(
                                     Pretty::pretty(member_conf.as_terminal_doc(arena), arena)
