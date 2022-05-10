@@ -133,8 +133,21 @@ macro_rules! impl_config_kind {
     };
 }
 
-impl_config_kind!(ConfigKind::Integer; "Integer"; "A signed integer with 64 bits" => u64, i64);
+impl_config_kind!(ConfigKind::Integer; "Integer"; "A signed integer with 64 bits" => i64);
+impl_config_kind!(ConfigKind::Integer; "Integer"; "An unsigned integer with 64 bits" => u64);
+
+impl_config_kind!(ConfigKind::Integer; "Integer"; "A signed integer with 32 bits" => i32);
+impl_config_kind!(ConfigKind::Integer; "Integer"; "An unsigned integer with 32 bits" => u32);
+
+impl_config_kind!(ConfigKind::Integer; "Integer"; "A signed integer with 16 bits" => i16);
+impl_config_kind!(ConfigKind::Integer; "Integer"; "An unsigned integer with 16 bits" => u16);
+
+impl_config_kind!(ConfigKind::Integer; "Integer"; "A signed integer with 8 bits" => i8);
+impl_config_kind!(ConfigKind::Integer; "Integer"; "An unsigned integer with 8 bits" => u8);
+
 impl_config_kind!(ConfigKind::Float; "Float"; "A floating point value with 64 bits" => f64);
+impl_config_kind!(ConfigKind::Float; "Float"; "A floating point value with 32 bits" => f32);
+
 impl_config_kind!(ConfigKind::Bool; "Boolean"; "A boolean representing either true or false" => bool);
 impl_config_kind!(ConfigKind::String; "String"; "An UTF-8 encoded string of characters" => String);
 
