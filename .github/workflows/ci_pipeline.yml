@@ -1437,14 +1437,6 @@ jobs:
         destination_dir: results
         commit_message: Results for ci pipeline run ${{ github.run_number }}
 
-  final-check-for-issues:
-    needs: [system-test_postprocessing]
-    runs-on: Ubuntu-20.04
-    steps:
-
-    - name: checkout
-      uses: actions/checkout@v2
-
     - name: Final Result
       # This will fail if there are errors in the reports
       run: |
