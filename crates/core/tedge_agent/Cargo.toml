@@ -28,6 +28,7 @@ async-trait = "0.1"
 clap = { version = "3.0", features = ["cargo", "derive"] }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
+mockall = "0.10"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 plugin_sm = { path = "../plugin_sm" }
 serde = { version = "1.0", features = ["derive"] }
@@ -47,5 +48,8 @@ assert-json-diff = "2.0"
 once_cell = "1.8"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 predicates = "2.1"
+tedge_users = { path = "../../common/tedge_users"}
 tedge_utils = { path = "../../common/tedge_utils"}
 tempfile = "3.2"
+tokio-test = "0.4"
+serial_test = "0.5"
