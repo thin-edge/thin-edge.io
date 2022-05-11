@@ -40,6 +40,13 @@ enum EnumConfig {
     },
 }
 
+#[derive(Debug, Config)]
+#[config(untagged)]
+enum UntaggedEnumConfig {
+    One,
+    Two,
+}
+
 #[test]
 fn check_derive_config() {
     let conf = SimpleConfig::as_config();
@@ -53,10 +60,7 @@ fn check_derive_config() {
 
     if let ConfigKind::Enum(_, variants) = EnumConfig::as_config().kind() {
         if let ConfigKind::Struct(fields) = variants[2].2.kind() {
-            assert_eq!(
-                fields[0].1,
-                Some("The port of the inner complex type")
-            )
+            assert_eq!(fields[0].1, Some("The port of the inner complex type"))
         } else {
             panic!()
         }

@@ -243,7 +243,7 @@ pub fn derive_config(input: TS) -> TS {
                 macro_rules! abort_parse_enum_kind {
                     ($kind:expr) => {
                             abort!($kind, "Could not parse enum tag kind.";
-                                   help = "Accepted kinds are 'untagged' and 'tag = \"type\'")
+                                   help = "Accepted kinds are #[config(untagged)] and #[config(tag = \"type\')].")
                     }
                 }
 
@@ -252,30 +252,36 @@ pub fn derive_config(input: TS) -> TS {
                     .expect_or_abort("Could not parse #[config] meta attribute.")
                 {
                     syn::Meta::Path(kind) => {
-                        if kind.is_ident("untagged") {
-                            ConfigEnumKind::Untagged
-                        } else {
-                            abort_parse_enum_kind!(kind)
-                        }
+                        abort_parse_enum_kind!(kind)
                     }
                     syn::Meta::List(kind) => {
                         if kind.nested.len() != 1 {
                             abort_parse_enum_kind!(kind)
                         }
 
-                        if let Some(NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                            path,
-                            lit: Lit::Str(lit_str),
-                            ..
-                        }))) = kind.nested.first()
-                        {
-                            if path.is_ident("tag") {
-                                ConfigEnumKind::Tagged(lit_str.clone())
-                            } else {
+                        match kind.nested.first() {
+                            Some(NestedMeta::Meta(Meta::NameValue(MetaNameValue {
+                                path,
+                                lit: Lit::Str(lit_str),
+                                ..
+                            }))) => {
+                                if path.is_ident("tag") {
+                                    ConfigEnumKind::Tagged(lit_str.clone())
+                                } else {
+                                    abort_parse_enum_kind!(kind)
+                                }
+                            }
+                            Some(NestedMeta::Meta(Meta::Path(path))) => {
+                                if path.is_ident("untagged") {
+                                    ConfigEnumKind::Untagged
+                                } else {
+                                    abort_parse_enum_kind!(path)
+                                }
+                            }
+                            _ => {
+                                println!("Oh no!");
                                 abort_parse_enum_kind!(kind)
                             }
-                        } else {
-                            abort_parse_enum_kind!(kind)
                         }
                     }
                     syn::Meta::NameValue(kind) => abort!(
