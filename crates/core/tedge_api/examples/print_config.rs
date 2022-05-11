@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use nu_ansi_term::Color;
 use pretty::Arena;
-use tedge_api::config::{AsConfig, ConfigDescription, ConfigKind};
+use tedge_api::{
+    config::{AsConfig, ConfigDescription, ConfigKind},
+    Config,
+};
 struct Port(u64);
 
 impl AsConfig for Port {
@@ -21,7 +24,7 @@ impl AsConfig for VHost {
     fn as_config() -> ConfigDescription {
         ConfigDescription::new(
             String::from("VHost"),
-            ConfigKind::Struct(vec![("name", String::as_config())]),
+            ConfigKind::Struct(vec![("name", None, String::as_config())]),
             Some("A virtual host definition"),
         )
     }
@@ -48,10 +51,10 @@ fn main() {
     let doc = ConfigDescription::new(
             String::from("ServerConfig"),
             ConfigKind::Struct(vec![
-                ("port", Port::as_config()),
-                ("interface", String::as_config()),
-                ("virtual_hosts", Vec::<VHost>::as_config()),
-                ("headers", HashMap::<String, String>::as_config()),
+                ("port", None, Port::as_config()),
+                ("interface", None, String::as_config()),
+                ("virtual_hosts", None, Vec::<VHost>::as_config()),
+                ("headers", None, HashMap::<String, String>::as_config()),
             ]),
             Some("Specify how the server should be started\n\n## Note\n\nThis is a reallly really loooooooooooooooooong loooooooooooooooooooong new *line*."),
         );
@@ -75,6 +78,54 @@ fn main() {
         ))
     );
     println!("------- Output for ServerConfig");
+    println!("{}", output);
+    let arena = Arena::new();
+
+    #[derive(Config)]
+    #[config(tag = "type")]
+    /// An Nginx virtual host
+    ///
+    /// # Note
+    ///
+    /// This is an example and as such is nonsense
+    enum NginxVHost {
+        /// A simple host consisting of a string
+        Simple(String),
+        /// A more complex host that can also specify its port
+        Complex {
+            /// the name of the VHost
+            name: String,
+            port: Port,
+        },
+    }
+
+    #[derive(Config)]
+    struct NginxConfig {
+        vhosts: Vec<NginxVHost>,
+        allow_priv_ports: bool,
+    }
+
+    let doc = NginxConfig::as_config();
+    let rendered_doc = doc.as_terminal_doc(&arena);
+
+    let mut output = String::new();
+
+    rendered_doc.render_fmt(80, &mut output).unwrap();
+
+    println!("------- Output for NginxConfig");
+    println!(
+        "Configuration for {} plugin kinds",
+        Color::White.bold().paint(doc.name())
+    );
+    println!(
+        "{}",
+        Color::White.dimmed().bold().paint(format!(
+            "=================={}=============",
+            std::iter::repeat('=')
+                .take(doc.name().len())
+                .collect::<String>()
+        ))
+    );
     println!("{}", output);
     println!("-------");
 }

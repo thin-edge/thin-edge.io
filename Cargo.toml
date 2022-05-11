@@ -3,6 +3,7 @@
 members = [
     "crates/common/*",
     "crates/core/*",
+    "crates/core/tedge_api/tedge_config_derive",
     "crates/tests/*",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",

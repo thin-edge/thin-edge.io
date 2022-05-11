@@ -30,6 +30,9 @@ pub use message::CoreMessages;
 ///
 pub use tokio_util::sync::CancellationToken;
 
+/// Derive macro for self-describing configurations
+pub use tedge_config_derive::Config;
+
 #[doc(hidden)]
 pub mod _internal {
     pub use futures::future::BoxFuture;
