@@ -97,11 +97,29 @@ fn main() {
             name: String,
             port: Port,
         },
+        UndocumentedComplex {
+            num: u16,
+            foo: f32,
+        },
+    }
+
+    #[derive(Config)]
+    #[config(untagged)]
+    enum DebugLevel {
+        /// Enables debug output
+        ///
+        /// And info of course
+        Debug,
+        /// Only pertinent information will be logged
+        Info,
+        /// A custom debug level
+        Custom(String),
     }
 
     #[derive(Config)]
     struct NginxConfig {
         vhosts: Vec<NginxVHost>,
+        debug_level: DebugLevel,
         allow_priv_ports: bool,
     }
 

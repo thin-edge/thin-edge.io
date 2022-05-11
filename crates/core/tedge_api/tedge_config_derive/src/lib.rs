@@ -16,6 +16,7 @@ struct ConfigField<'q> {
 
 #[derive(Debug)]
 enum ConfigVariantKind<'q> {
+    String(&'q Ident),
     Wrapped(&'q Ident, ConfigField<'q>),
     Struct(&'q Ident, Vec<ConfigField<'q>>),
 }
@@ -143,12 +144,14 @@ impl<'q> ToTokens for ConfigQuote<'q> {
                                 (
                                     #ident,
                                     #docs,
-                                    ::tedge_api::config::ConfigDescription::new(
-                                        ::std::string::String::from(#ident),
-                                        ::tedge_api::config::ConfigKind::Wrapped(
-                                            std::boxed::Box::new(<#ty as ::tedge_api::AsConfig>::as_config())
-                                        ),
-                                        None,
+                                    ::tedge_api::config::EnumVariantRepresentation::Wrapped(
+                                        std::boxed::Box::new(::tedge_api::config::ConfigDescription::new(
+                                            ::std::string::String::from(#ident),
+                                            ::tedge_api::config::ConfigKind::Wrapped(
+                                                std::boxed::Box::new(<#ty as ::tedge_api::AsConfig>::as_config())
+                                            ),
+                                            None,
+                                        ))
                                     )
                                 )
                             }
@@ -163,16 +166,30 @@ impl<'q> ToTokens for ConfigQuote<'q> {
                                 (
                                     #ident,
                                     #docs,
-                                    ::tedge_api::config::ConfigDescription::new(
-                                        ::std::string::String::from(#ident),
-                                        ::tedge_api::config::ConfigKind::Struct(
-                                            vec![
-                                                #(
-                                                    (#idents, #field_docs, <#tys as ::tedge_api::AsConfig>::as_config())
-                                                 ),*
-                                            ]
-                                        ),
-                                        None
+                                    ::tedge_api::config::EnumVariantRepresentation::Wrapped(
+                                        std::boxed::Box::new(::tedge_api::config::ConfigDescription::new(
+                                            ::std::string::String::from(#ident),
+                                            ::tedge_api::config::ConfigKind::Struct(
+                                                vec![
+                                                    #(
+                                                        (#idents, #field_docs, <#tys as ::tedge_api::AsConfig>::as_config())
+                                                     ),*
+                                                ]
+                                            ),
+                                            None
+                                        ))
+                                    )
+                                )
+                            }
+                        }
+                        ConfigVariantKind::String(ident) => {
+                            let ident = ident.to_string();
+                            quote!{
+                                (
+                                    #ident,
+                                    #docs,
+                                    ::tedge_api::config::EnumVariantRepresentation::String(
+                                        #ident
                                     )
                                 )
                             }
@@ -325,13 +342,7 @@ pub fn derive_config(input: TS) -> TS {
                                 },
                             )
                         }
-                        syn::Fields::Unit => {
-                            emit_error!(
-                                var,
-                                "Unit structs are not supported as they cannot be represented"
-                            );
-                            return None;
-                        }
+                        syn::Fields::Unit => ConfigVariantKind::String(&var.ident),
                     };
                     let docs = extract_docs_from_attributes(var.attrs.iter());
                     Some(ConfigVariant { kind, docs })

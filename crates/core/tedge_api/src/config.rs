@@ -46,6 +46,17 @@ impl ConfigDescription {
     }
 }
 
+/// How an enum is represented
+#[derive(Debug, Serialize, PartialEq)]
+pub enum EnumVariantRepresentation {
+    /// The enum is represented by a string
+    ///
+    /// This is the case with unit variants for example
+    String(&'static str),
+    /// The enum is represented by the value presented here
+    Wrapped(Box<ConfigDescription>),
+}
+
 /// The kind of enum tagging used by the [`ConfigKind`]
 #[derive(Debug, Serialize, PartialEq)]
 pub enum ConfigEnumKind {
@@ -104,7 +115,11 @@ pub enum ConfigKind {
     /// Config represents multiple choice of configurations
     Enum(
         ConfigEnumKind,
-        Vec<(&'static str, Option<&'static str>, ConfigDescription)>,
+        Vec<(
+            &'static str,
+            Option<&'static str>,
+            EnumVariantRepresentation,
+        )>,
     ),
 }
 
@@ -163,34 +178,37 @@ impl_config_kind!(ConfigKind::Integer; "Integer"; "An unsigned integer with 8 bi
 impl_config_kind!(ConfigKind::Float; "Float"; "A floating point value with 64 bits" => f64);
 impl_config_kind!(ConfigKind::Float; "Float"; "A floating point value with 32 bits" => f32);
 
-impl_config_kind!(ConfigKind::Bool; "Boolean"; "A boolean representing either true or false" => bool);
-impl_config_kind!(ConfigKind::String; "String"; "An UTF-8 encoded string of characters" => String);
+impl_config_kind!(ConfigKind::Bool; "Boolean"; "A boolean" => bool);
+impl_config_kind!(ConfigKind::String; "String"; "An UTF-8 string" => String);
 
 /******Pretty Printing of Configs******/
 
 impl ConfigDescription {
     /// Get a [`RcDoc`](pretty::RcDoc) which can be used to write the documentation of this
     pub fn as_terminal_doc<'a>(&'a self, arena: &'a Arena<'a>) -> RefDoc<'a> {
-        let mut doc = arena
-            .nil()
-            .append(Color::LightBlue.bold().paint(self.name()).to_string())
-            .append(arena.space())
-            .append(match self.kind() {
-                ConfigKind::Bool
-                | ConfigKind::Integer
-                | ConfigKind::Float
-                | ConfigKind::String
-                | ConfigKind::Wrapped(_)
-                | ConfigKind::Array(_)
-                | ConfigKind::HashMap(_) => arena.nil(),
-                ConfigKind::Struct(_) => {
-                    arena.text(Color::Blue.dimmed().paint("[Table]").to_string())
-                }
-                ConfigKind::Enum(_, _) => {
-                    arena.text(Color::Green.dimmed().paint("[Enum]").to_string())
-                }
-            })
-            .append(arena.hardline());
+        let mut doc = arena.nil();
+
+        if !matches!(self.kind(), ConfigKind::Wrapped(_)) && self.doc().is_none() {
+            doc = doc
+                .append(Color::LightBlue.bold().paint(self.name()).to_string())
+                .append(arena.space())
+                .append(match self.kind() {
+                    ConfigKind::Bool
+                    | ConfigKind::Integer
+                    | ConfigKind::Float
+                    | ConfigKind::String
+                    | ConfigKind::Wrapped(_)
+                    | ConfigKind::Array(_)
+                    | ConfigKind::HashMap(_) => arena.nil(),
+                    ConfigKind::Struct(_) => {
+                        arena.text(Color::Blue.dimmed().paint("[Table]").to_string())
+                    }
+                    ConfigKind::Enum(_, _) => {
+                        arena.text(Color::Green.dimmed().paint("[Enum]").to_string())
+                    }
+                })
+                .append(arena.hardline());
+        }
 
         let skin = MadSkin::default_dark();
         let render_markdown = |text: &str| {
@@ -238,19 +256,23 @@ impl ConfigDescription {
             ConfigKind::Enum(enum_kind, variants) => {
                 doc = doc
                     .append(arena.hardline())
-                    .append(Color::Green.paint("[Variants]").to_string())
+                    .append(Color::Green.paint("One of:").to_string())
                     .append(arena.space())
                     .append(match enum_kind {
-                        ConfigEnumKind::Tagged(tag) => arena.text("Tagged with ").append(
-                            arena.text(
-                                Color::LightGreen
-                                    .italic()
-                                    .paint(format!("'{}'", tag))
-                                    .to_string(),
-                            ),
+                        ConfigEnumKind::Tagged(tag) => arena.text(
+                            Color::White
+                                .dimmed()
+                                .paint(format!(
+                                    "[Tagged with {}]",
+                                    Color::LightGreen
+                                        .italic()
+                                        .dimmed()
+                                        .paint(format!("'{}'", tag))
+                                ))
+                                .to_string(),
                         ),
                         ConfigEnumKind::Untagged => {
-                            arena.text(Color::LightBlue.paint("Untagged").to_string())
+                            arena.text(Color::White.dimmed().paint("[Untagged]").to_string())
                         }
                     })
                     .append(arena.hardline())
@@ -259,28 +281,70 @@ impl ConfigDescription {
                             variants
                                 .iter()
                                 .map(|(member_name, member_doc, member_conf)| {
-                                    let mut doc = arena.nil();
+                                    arena.text("-").append(arena.space()).append({
+                                        let mut doc = arena
+                                            .nil()
+                                            .append(match member_conf {
+                                                EnumVariantRepresentation::String(_) => arena.text(
+                                                    Color::Green
+                                                        .bold()
+                                                        .paint(&format!(
+                                                            "{:?}",
+                                                            member_name.to_lowercase()
+                                                        ))
+                                                        .to_string(),
+                                                ),
+                                                EnumVariantRepresentation::Wrapped(_) => arena
+                                                    .text(
+                                                        Color::Green
+                                                            .bold()
+                                                            .paint(*member_name)
+                                                            .to_string(),
+                                                    ),
+                                            })
+                                            .append(": ");
 
-                                    if let Some(member_doc) = member_doc {
-                                        doc = doc.append(render_markdown(&member_doc));
-                                    }
-                                    doc.append(
-                                        arena.text(
-                                            Color::Green.bold().paint(*member_name).to_string(),
-                                        ),
-                                    )
-                                    .append(": ")
-                                    .append(
-                                        Pretty::pretty(member_conf.as_terminal_doc(arena), arena)
+                                        if let Some(member_doc) = member_doc {
+                                            doc = doc.append(render_markdown(&member_doc));
+                                        }
+
+                                        doc.append(
+                                            Pretty::pretty(
+                                                match member_conf {
+                                                    EnumVariantRepresentation::String(_) => {
+                                                        arena.nil().into_doc()
+                                                    }
+
+                                                    EnumVariantRepresentation::Wrapped(
+                                                        member_conf,
+                                                    ) => arena
+                                                        .text(
+                                                            Color::LightRed
+                                                                .paint("Is a: ")
+                                                                .to_string(),
+                                                        )
+                                                        .append(member_conf.as_terminal_doc(arena))
+                                                        .into_doc(),
+                                                },
+                                                arena,
+                                            )
                                             .nest(4),
-                                    )
+                                        )
+                                        .nest(2)
+                                    })
                                 }),
                             Doc::hardline(),
                         ),
                     );
             }
-            ConfigKind::Array(conf) | ConfigKind::HashMap(conf) | ConfigKind::Wrapped(conf) => {
-                doc = doc.append(Pretty::pretty(conf.as_terminal_doc(arena), arena))
+            ConfigKind::Array(conf) => {
+                doc = doc
+                    .append(Color::LightRed.paint("Many of:").to_string())
+                    .append(arena.space())
+                    .append(conf.as_terminal_doc(arena));
+            }
+            ConfigKind::HashMap(conf) | ConfigKind::Wrapped(conf) => {
+                doc = doc.append(conf.as_terminal_doc(arena));
             }
         };
 

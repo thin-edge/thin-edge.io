@@ -1,7 +1,9 @@
 #![allow(unused, dead_code)]
 
 use pretty_assertions::assert_eq;
-use tedge_api::{AsConfig, Config, ConfigDescription, ConfigKind};
+use tedge_api::{
+    config::EnumVariantRepresentation, AsConfig, Config, ConfigDescription, ConfigKind,
+};
 
 /// Some Config
 #[derive(Debug, Config)]
@@ -59,8 +61,12 @@ fn check_derive_config() {
     assert_eq!(Port::as_config().doc(), None);
 
     if let ConfigKind::Enum(_, variants) = EnumConfig::as_config().kind() {
-        if let ConfigKind::Struct(fields) = variants[2].2.kind() {
-            assert_eq!(fields[0].1, Some("The port of the inner complex type"))
+        if let EnumVariantRepresentation::Wrapped(kind) = &variants[2].2 {
+            if let ConfigKind::Struct(fields) = kind.kind() {
+                assert_eq!(fields[0].1, Some("The port of the inner complex type"))
+            } else {
+                panic!()
+            }
         } else {
             panic!()
         }
