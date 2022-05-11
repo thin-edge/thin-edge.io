@@ -2,6 +2,7 @@ use crate::runtime::ActorRuntime;
 use crate::*;
 use async_trait::async_trait;
 use futures::lock::Mutex;
+use std::ops::Deref;
 use std::sync::Arc;
 
 /// An actor that converts string messages to uppercase
@@ -23,15 +24,13 @@ impl Actor for UppercaseConverter {
     }
 
     async fn react(
-        &self,
+        &mut self,
         message: Self::Input,
         output: &mut impl Recipient<Self::Output>,
     ) -> Result<(), RuntimeError> {
         output.send_message(message.to_uppercase()).await
     }
 }
-
-type SharedVec<M> = Arc<Mutex<Vec<M>>>;
 
 #[test]
 fn it_works() {
@@ -43,14 +42,23 @@ fn it_works() {
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let mut output = Arc::new(Mutex::new(vec![]));
+    let output = Arc::new(Mutex::new(vec![]));
+
+    let actor = instance::<UppercaseConverter>(&())
+        .expect("Fail to build the actor")
+        .with_recipient(output.clone());
+    let source = instance::<Vec<String>>(&input)
+        .expect("Fail to build a source from input")
+        .with_recipient(actor.address());
 
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
-    let config = ();
-    let mut actor = instantiate::<UppercaseConverter, SharedVec<String>>(&config, output)
-        .expect("Fail to activate the plugin");
 
-    actor.run(&runtime);
+    runtime.run(source);
+    runtime.run(actor);
 
-    //assert_eq!(&expected, output.get_mut());
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    futures::executor::block_on(async {
+        let output = output.lock().await;
+        assert_eq!(&expected, output.deref());
+    })
 }

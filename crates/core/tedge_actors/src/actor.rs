@@ -4,12 +4,13 @@ use async_trait::async_trait;
 
 /// An actor is a state machine consuming & producing messages
 ///
-/// An actor concurrently
+/// An actor concurrently:
 /// - consumes messages received from other actors,
-/// - produces messages, either spontaneously or as a reaction to received messages,
-/// - maintains its state.
+/// - produces messages as a reaction to received messages,
+/// - might maintain an internal state controlling its behaviour,
+/// - might produce messages spontaneously.
 #[async_trait]
-pub trait Actor: Sized + Send + Sync {
+pub trait Actor: 'static + Sized + Send + Sync {
     /// The configuration of an actor instance
     type Config;
 
@@ -30,52 +31,103 @@ pub trait Actor: Sized + Send + Sync {
 
     /// React to an input message, possibly generating output messages
     async fn react(
-        &self,
+        &mut self,
         message: Self::Input,
         output: &mut impl Recipient<Self::Output>,
     ) -> Result<(), RuntimeError>;
 }
 
-/// An active actor ready to be started
-pub struct ActiveActor<A: Actor, C: Recipient<A::Output>> {
-    mailbox: MailBox<A::Input>,
-    actor: A,
-    recipient: C,
+/// An handle to an inactive actor instance
+///
+/// Such instances have each an address to be used to interconnect the actors.
+pub struct ActorInstance<A: Actor, R: Recipient<A::Output>> {
+    pub actor: A,
+    pub mailbox: MailBox<A::Input>,
+    pub recipient: R,
 }
 
-/// Build an actor instance ready to run
-pub fn instantiate<A: Actor, C: Recipient<A::Output>>(
-    config: &A::Config,
-    recipient: C,
-) -> Result<ActiveActor<A, C>, RuntimeError> {
+/// Build a new actor instance with an address
+///
+/// The output of this instance will have to be connected to other actors using their addresses.
+pub fn instance<A: Actor>(config: &A::Config) -> Result<ActorInstance<A, DevNull>, RuntimeError> {
     let actor = A::try_new(config)?;
     let mailbox = MailBox::new();
-    Ok(ActiveActor {
-        mailbox,
+    let recipient = DevNull;
+
+    Ok(ActorInstance {
         actor,
+        mailbox,
         recipient,
     })
 }
 
-impl<A: Actor, C: Recipient<A::Output>> ActiveActor<A, C> {
+impl<A: Actor, R: Recipient<A::Output>> ActorInstance<A, R> {
     /// Return the address of this actor
-    pub fn get_address(&self) -> Address<A::Input> {
+    pub fn address(&self) -> Address<A::Input> {
         self.mailbox.get_address()
     }
 
-    /// Run the actor, producing output messages and reacting to input messages
-    pub fn run(&'static mut self, runtime: &ActorRuntime) {
-        let event_source = self.actor.event_source();
-        let recipient = self.recipient.clone();
-        runtime.spawn(event_source.produce_messages(recipient));
+    /// Update the messages recipient for this actor.
+    pub fn with_recipient<S: Recipient<A::Output>>(self, recipient: S) -> ActorInstance<A, S> {
+        ActorInstance {
+            actor: self.actor,
+            mailbox: self.mailbox,
+            recipient,
+        }
+    }
 
-        let mailbox = &mut self.mailbox;
-        let recipient = &mut self.recipient;
-        runtime.spawn(async {
-            while let Some(message) = mailbox.next_message().await {
-                self.actor.react(message, recipient).await?;
-            }
-            Ok(())
-        });
+    pub fn run(self, runtime: &ActorRuntime) -> ActiveActor<A, R> {
+        runtime.run(self)
+    }
+}
+
+/// An handle to an active actor
+///
+pub struct ActiveActor<A: Actor, R: Recipient<A::Output>> {
+    pub input: Address<A::Input>,
+    pub output: R,
+}
+
+/// A vector can be used as a message source as well as a recipient of messages - mostly useful for tests
+#[async_trait]
+impl<M: Message> Recipient<M> for std::sync::Arc<futures::lock::Mutex<Vec<M>>> {
+    async fn send_message(&mut self, message: M) -> Result<(), RuntimeError> {
+        let mut vec = self.lock().await;
+        vec.push(message);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<M: Message> Producer<M> for Vec<M> {
+    async fn produce_messages(self, mut output: impl Recipient<M>) -> Result<(), RuntimeError> {
+        for message in self.into_iter() {
+            output.send_message(message).await?;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<M: Message> Actor for Vec<M> {
+    type Config = Vec<M>;
+    type Input = NoMessage;
+    type Output = M;
+    type Producer = Vec<M>;
+
+    fn try_new(config: &Self::Config) -> Result<Self, RuntimeError> {
+        Ok(config.clone())
+    }
+
+    fn event_source(&self) -> Self::Producer {
+        self.clone()
+    }
+
+    async fn react(
+        &mut self,
+        _message: Self::Input,
+        _output: &mut impl Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
 }

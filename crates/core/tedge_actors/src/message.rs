@@ -86,22 +86,7 @@ impl<M: Message> Recipient<M> for DevNull {
 /// Strings can be used as Message
 impl Message for String {}
 
-/// A vector can be used as a message source as well as a recipient of messages - mostly useful for tests
-#[async_trait]
-impl<M: Message> Recipient<M> for std::sync::Arc<futures::lock::Mutex<Vec<M>>> {
-    async fn send_message(&mut self, message: M) -> Result<(), RuntimeError> {
-        let mut vec = self.lock().await;
-        vec.push(message);
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<M: Message> Producer<M> for Vec<M> {
-    async fn produce_messages(self, mut output: impl Recipient<M>) -> Result<(), RuntimeError> {
-        for message in self.into_iter() {
-            output.send_message(message).await?;
-        }
-        Ok(())
-    }
-}
+/// An actor can have no input or no output messages
+#[derive(Clone, Debug)]
+pub enum NoMessage {}
+impl Message for NoMessage {}
