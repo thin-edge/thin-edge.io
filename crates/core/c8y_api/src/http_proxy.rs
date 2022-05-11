@@ -47,7 +47,6 @@ pub trait C8YHttpProxy: Send + Sync {
     async fn upload_config_file(
         &mut self,
         config_path: &Path,
-        config_content: &str,
     ) -> Result<String, SMCumulocityMapperError>;
 }
 
@@ -414,9 +413,11 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     async fn upload_config_file(
         &mut self,
         config_path: &Path,
-        config_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
+
+        // read the config file contents
+        let config_content = std::fs::read_to_string(config_path)?;
 
         let config_file_event = self.create_event(config_path.display().to_string(), None, None);
         let event_response_id = self.send_event_internal(config_file_event).await?;
@@ -441,10 +442,13 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
     use anyhow::Result;
     use mockito::{mock, Matcher};
     use serde_json::json;
+    use tempfile::NamedTempFile;
     use test_case::test_case;
 
     #[test]
@@ -568,5 +572,69 @@ mod tests {
         assert_eq!(http_proxy.send_event(c8y_event).await?, event_id);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_config_file() -> anyhow::Result<()> {
+        let device_id = "test-device";
+        let event_id = "456";
+
+        // Mock endpoint to return C8Y internal id
+        let _get_internal_id_mock = mock("GET", "/identity/externalIds/c8y_Serial/test-device")
+            .with_status(200)
+            .with_body(
+                json!({ "externalId": device_id, "managedObject": { "id": "123" } }).to_string(),
+            )
+            .create();
+
+        let config_content = "key=value";
+        let config_file = create_test_config_file_with_content(config_content)?;
+
+        // Mock endpoint for config upload event creation
+        let _config_file_event_mock = mock("POST", "/event/events/")
+            .match_body(Matcher::PartialJson(
+                json!({ "type": config_file.path(), "text": config_file.path() }),
+            ))
+            .with_status(201)
+            .with_body(json!({ "id": event_id }).to_string())
+            .create();
+
+        let config_binary_url_path = format!("/event/events/{event_id}/binaries");
+
+        // Mock endpoint for config file binary upload
+        let _config_binary_upload_mock = mock("POST", config_binary_url_path.as_str())
+            .match_body(Matcher::Exact(config_content.to_string()))
+            .with_status(201)
+            .with_body("irrelevant response")
+            .create();
+
+        // An JwtAuthHttpProxy ...
+        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriver
+            .expect_get_jwt_token()
+            .returning(|| Ok(SmartRestJwtResponse::default()));
+
+        let http_client = reqwest::ClientBuilder::new().build().unwrap();
+        let mut http_proxy = JwtAuthHttpProxy::new(
+            jwt_token_retriver,
+            http_client,
+            mockito::server_url().as_str(),
+            device_id,
+        );
+
+        // Upload the config file and assert its binary URL
+        assert_eq!(
+            http_proxy.upload_config_file(config_file.path()).await?,
+            mockito::server_url() + config_binary_url_path.as_str()
+        );
+
+        Ok(())
+    }
+
+    fn create_test_config_file_with_content(content: &str) -> Result<NamedTempFile, anyhow::Error> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(content.as_bytes())?;
+
+        Ok(file)
     }
 }
