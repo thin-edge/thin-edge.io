@@ -1,6 +1,6 @@
 use proc_macro::TokenStream as TS;
 use proc_macro2::TokenStream;
-use proc_macro_error::{abort, proc_macro_error, ResultExt};
+use proc_macro_error::{abort, emit_error, proc_macro_error, OptionExt, ResultExt};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse_macro_input, Attribute, DeriveInput, Ident, Lit, LitStr, Meta, MetaNameValue, NestedMeta,
@@ -325,17 +325,23 @@ pub fn derive_config(input: TS) -> TS {
                                 },
                             )
                         }
-                        syn::Fields::Unit => abort!(
-                            ident,
-                            "Unit structs are not supported as they cannot be represented"
-                        ),
+                        syn::Fields::Unit => {
+                            emit_error!(
+                                var,
+                                "Unit structs are not supported as they cannot be represented"
+                            );
+                            return None;
+                        }
                     };
                     let docs = extract_docs_from_attributes(var.attrs.iter());
-                    ConfigVariant { kind, docs }
+                    Some(ConfigVariant { kind, docs })
                 })
-                .collect();
+                .collect::<Option<_>>();
 
-            ConfigQuoteKind::Enum(enum_kind, variants)
+            ConfigQuoteKind::Enum(
+                enum_kind,
+                variants.expect_or_abort("Enum contains invalid variants"),
+            )
         }
         syn::Data::Union(_) => {
             abort!(
