@@ -24,38 +24,38 @@ jobs:
         THEGHTOKEN: ${{ secrets.SECRET_THEGHTOKEN  }}
 
     steps:
-     - name: checkout
-       uses: actions/checkout@v2
+      - name: checkout
+        uses: actions/checkout@v2
 
-    - run: ./ci/setup_tedge.sh checkvars
-    - run: ./ci/setup_tedge.sh disconnect
-    - run: ./ci/setup_tedge.sh cleanup
-    - run: ./ci/setup_tedge.sh download
-    - run: ./ci/setup_tedge.sh install_deps
-    - run: ./ci/setup_tedge.sh install local
-    - run: ./ci/setup_tedge.sh tedge_help
-    - run: ./ci/setup_tedge.sh setupenv
-    - run: ./ci/setup_tedge.sh configure
-    - run: ./ci/setup_tedge.sh configure_collectd
-    - run: ./ci/setup_tedge.sh smoketest github
+      - run: ./ci/setup_tedge.sh checkvars
+      - run: ./ci/setup_tedge.sh disconnect
+      - run: ./ci/setup_tedge.sh cleanup
+      - run: ./ci/setup_tedge.sh download
+      - run: ./ci/setup_tedge.sh install_deps
+      - run: ./ci/setup_tedge.sh install local
+      - run: ./ci/setup_tedge.sh tedge_help
+      - run: ./ci/setup_tedge.sh setupenv
+      - run: ./ci/setup_tedge.sh configure
+      - run: ./ci/setup_tedge.sh configure_collectd
+      - run: ./ci/setup_tedge.sh smoketest github
 
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
+      - name: Run all statistics tests
+        run:  bash  ./ci/ci_run_statistics.sh
 
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results_${{ github.run_number }}
-        path: tests/
+      - name: upload results as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: results_${{ github.run_number }}
+          path: tests/
 
-    # Trigger repo dispatch here.
-    # This is here a limitation of the amount of workflows
-    # that trigger each other (GitHub Bug).
-    # It would be nicer to use the postprocess trigger instead
-    - name: Repository Dispatch
-      uses: peter-evans/repository-dispatch@v1
-      with:
-          token: ${{ secrets.SECRET_THEGHTOKEN  }}
-          event-type: postprocess
-          repository: abelikt/thin-edge.io_analytics
+      # Trigger repo dispatch here.
+      # This is here a limitation of the amount of workflows
+      # that trigger each other (GitHub Bug).
+      # It would be nicer to use the postprocess trigger instead
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+            token: ${{ secrets.SECRET_THEGHTOKEN  }}
+            event-type: postprocess
+            repository: abelikt/thin-edge.io_analytics
