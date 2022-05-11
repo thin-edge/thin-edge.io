@@ -1,6 +1,6 @@
 use crate::error::ConfigManagementError;
 use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_smartrest::error::SmartRestSerializerError;
 use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_smartrest::smartrest_serializer::{
@@ -22,7 +22,7 @@ pub async fn handle_config_download_request(
     smartrest_request: SmartRestConfigDownloadRequest,
     tmp_dir: PathBuf,
     mqtt_client: &mut Connection,
-    http_client: &mut JwtAuthHttpProxy,
+    http_client: &mut impl C8YHttpProxy,
 ) -> Result<(), anyhow::Error> {
     let executing_message = DownloadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(executing_message).await?;
@@ -54,7 +54,7 @@ async fn download_config_file(
     plugin_config: &PluginConfig,
     smartrest_request: SmartRestConfigDownloadRequest,
     tmp_dir: PathBuf,
-    http_client: &mut JwtAuthHttpProxy,
+    http_client: &mut impl C8YHttpProxy,
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
     let mut config_download_request =

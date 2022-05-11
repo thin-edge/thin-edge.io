@@ -611,6 +611,24 @@ mod tests {
     }
 
     #[test]
+    fn deserialize_smartrest_config_upload_request() {
+        let message_id = "526".to_string();
+        let device = "deviceId".to_string();
+        let config_type = "/test/config/path".to_string();
+
+        let smartrest_message = format!("{message_id},{device},{config_type}");
+        let expected = SmartRestConfigUploadRequest {
+            message_id,
+            device,
+            config_type,
+        };
+        assert_eq!(
+            SmartRestConfigUploadRequest::from_smartrest(smartrest_message.as_str()).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
     fn deserialize_smartrest_config_download_request_operation() {
         let smartrest = "524,deviceId,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml".to_string();
         let request = SmartRestConfigDownloadRequest::from_smartrest(&smartrest).unwrap();

@@ -150,6 +150,7 @@ impl PluginConfig {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::path::PathBuf;
     use tempfile::TempDir;
     use test_case::test_case;
 
@@ -325,7 +326,7 @@ mod tests {
         let tmp_path_to_plugin_config_str =
             tmp_path_to_plugin_config.as_path().display().to_string();
 
-        let config = PluginConfig::new(tmp_path_to_plugin_config.clone());
+        let config = PluginConfig::new(&tmp_path_to_plugin_config);
         let expected_config = expected_config.add_file_entry(
             tmp_path_to_plugin_config_str,
             DEFAULT_PLUGIN_CONFIG_TYPE.into(),

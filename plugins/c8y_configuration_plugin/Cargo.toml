@@ -33,5 +33,10 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
+mockall = "0.11"
+mockito = "0.31"
+mqtt_tests = { path = "../../crates/tests/mqtt_tests" }
+serial_test = "0.5"
 tempfile = "3.3"
 test-case = "2.0"
+toml = "0.5"
