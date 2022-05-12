@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main # Here source code branch is `master`, it could be other branch
+  workflow_dispatch:
+    branches: [ main, continuous_integration]
 
 jobs:
   deploy:
