@@ -1,6 +1,5 @@
 from pysys.basetest import BaseTest
 
-
 """
 Validate tedge_mapper can't be started twice.
 
@@ -20,7 +19,8 @@ class RuntimeMultiMappers(BaseTest):
         tedge_mapper = "/usr/bin/tedge_mapper"
         self.sudo = "/usr/bin/sudo"
 
-        tedge_mapper1 = self.startProcess(
+        # starting the first tedge mapper instance
+        _ = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "start", "tedge-mapper-c8y"],
             stdouterr="tedge_mapper1",
@@ -28,14 +28,17 @@ class RuntimeMultiMappers(BaseTest):
 
         self.wait(0.1)
 
-        tedge_mapper2 = self.startProcess(
+        # starting the second tedge mapper instance
+        # and expecting this one to crash
+        _ = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper, "c8y"],
+            arguments=["-u", "tedge", tedge_mapper, "c8y"],
             stdouterr="tedge_mapper2",
             expectedExitStatus="==1",
         )
 
-        stop = self.startProcess(
+        # stopping the first tedge mapper instance
+        _ = self.startProcess(
             command=self.sudo,
             arguments=["systemctl", "stop", "tedge-mapper-c8y"],
             stdouterr="tedge_mapper1",
