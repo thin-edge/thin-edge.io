@@ -30,7 +30,7 @@ class RuntimeMultiMappers(BaseTest):
 
         tedge_mapper2 = self.startProcess(
             command=self.sudo,
-            arguments=["-u", "tedge-mapper", tedge_mapper, "c8y"],
+            arguments=["-u", "tedge", tedge_mapper, "c8y"],
             stdouterr="tedge_mapper2",
             expectedExitStatus="==1",
         )
