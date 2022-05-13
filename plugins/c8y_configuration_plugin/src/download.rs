@@ -15,7 +15,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{info, warn};
 
 const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
@@ -179,7 +179,12 @@ impl ConfigDownloadRequest {
 
 pub fn get_file_change_notification_message(config_type: String) -> Message {
     let notification = json!({ "changedFile": config_type }).to_string();
-    Message::new(&Topic::new_unchecked(CONFIG_CHANGE_TOPIC), notification)
+    let topic = Topic::new(format!("{CONFIG_CHANGE_TOPIC}/{config_type}").as_str())
+        .unwrap_or_else(|_err| {
+            warn!("The type cannot be used as a part of the topic name. Using {CONFIG_CHANGE_TOPIC} instead.");
+            Topic::new_unchecked(CONFIG_CHANGE_TOPIC)
+        });
+    Message::new(&topic, notification)
 }
 
 struct DownloadConfigFileStatusMessage {}
