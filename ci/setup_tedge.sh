@@ -83,9 +83,6 @@ disconnect() {
     sudo tedge disconnect az
     set -e
 
-    rm -f ~/*.deb
-    rm -f ~/thin-edge.io/target/debian/*.deb
-
     set +e
     sudo systemctl stop tedge-mapper-collectd
     sudo systemctl stop apama
