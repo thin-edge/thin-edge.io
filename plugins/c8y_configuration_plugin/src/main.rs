@@ -22,7 +22,10 @@ use tedge_config::{
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{debug, error, info};
 
-const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
+pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
+
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
 `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
 notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
@@ -62,11 +65,13 @@ async fn create_mqtt_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+    let mut topic_filter =
+        mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
+    let _ = topic_filter
+        .add_unchecked(format!("{CONFIG_CHANGE_TOPIC}/{DEFAULT_PLUGIN_CONFIG_TYPE}").as_str());
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
-        .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-            C8yTopic::SmartRestRequest.as_str(),
-        ));
+        .with_subscriptions(topic_filter);
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
     Ok(mqtt_client)
@@ -100,7 +105,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
     let mut http_client = create_http_client(&tedge_config).await?;
 
-    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
+    let plugin_config = PluginConfig::new(&config_plugin_opt.config_file);
 
     // Publish supported configuration types
     let msg = plugin_config.to_supported_config_types_message()?;
@@ -110,39 +115,50 @@ async fn main() -> Result<(), anyhow::Error> {
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
-            let result = match payload.split(',').next().unwrap_or_default() {
-                "524" => {
-                    let config_download_request =
-                        SmartRestConfigDownloadRequest::from_smartrest(payload)?;
+            let result = if let "tedge/configuration_change/c8y-configuration-plugin" =
+                message.topic.name.as_str()
+            {
+                // Reload the plugin config file
+                let plugin_config = PluginConfig::new(&config_plugin_opt.config_file);
+                // Resend the supported config types
+                let msg = plugin_config.to_supported_config_types_message()?;
+                mqtt_client.published.send(msg).await?;
+                Ok(())
+            } else {
+                match payload.split(',').next().unwrap_or_default() {
+                    "524" => {
+                        let config_download_request =
+                            SmartRestConfigDownloadRequest::from_smartrest(payload)?;
 
-                    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+                        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
-                    handle_config_download_request(
-                        &plugin_config,
-                        config_download_request,
-                        tmp_dir,
-                        &mut mqtt_client,
-                        &mut http_client,
-                    )
-                    .await
-                }
-                "526" => {
-                    // retrieve config file upload smartrest request from payload
-                    let config_upload_request =
-                        SmartRestConfigUploadRequest::from_smartrest(payload)?;
+                        handle_config_download_request(
+                            &plugin_config,
+                            config_download_request,
+                            tmp_dir,
+                            &mut mqtt_client,
+                            &mut http_client,
+                        )
+                        .await
+                    }
+                    "526" => {
+                        // retrieve config file upload smartrest request from payload
+                        let config_upload_request =
+                            SmartRestConfigUploadRequest::from_smartrest(payload)?;
 
-                    // handle the config file upload request
-                    handle_config_upload_request(
-                        &plugin_config,
-                        config_upload_request,
-                        &mut mqtt_client,
-                        &mut http_client,
-                    )
-                    .await
-                }
-                _ => {
-                    // Ignore operation messages not meant for this plugin
-                    Ok(())
+                        // handle the config file upload request
+                        handle_config_upload_request(
+                            &plugin_config,
+                            config_upload_request,
+                            &mut mqtt_client,
+                            &mut http_client,
+                        )
+                        .await
+                    }
+                    _ => {
+                        // Ignore operation messages not meant for this plugin
+                        Ok(())
+                    }
                 }
             };
 

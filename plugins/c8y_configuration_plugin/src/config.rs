@@ -1,4 +1,4 @@
-use crate::error::ConfigManagementError;
+use crate::{error::ConfigManagementError, DEFAULT_PLUGIN_CONFIG_TYPE};
 use c8y_smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use serde::Deserialize;
@@ -6,10 +6,8 @@ use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tracing::{info, warn};
-
-const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]
@@ -61,8 +59,8 @@ impl FileEntry {
 }
 
 impl RawPluginConfig {
-    fn new(config_file_path: PathBuf) -> Self {
-        let path_str = config_file_path.as_path().display().to_string();
+    fn new(config_file_path: &Path) -> Self {
+        let path_str = config_file_path.display().to_string();
         info!("Reading the config file from {}", path_str);
         match fs::read_to_string(config_file_path) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
@@ -84,8 +82,8 @@ impl RawPluginConfig {
 }
 
 impl PluginConfig {
-    pub fn new(config_file_path: PathBuf) -> Self {
-        let plugin_config = Self::new_with_config_file_entry(&config_file_path);
+    pub fn new(config_file_path: &Path) -> Self {
+        let plugin_config = Self::new_with_config_file_entry(config_file_path);
         let raw_config = RawPluginConfig::new(config_file_path);
         plugin_config.add_entries_from_raw_config(raw_config)
     }

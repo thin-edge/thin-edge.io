@@ -1,5 +1,5 @@
 use crate::error::ConfigManagementError;
-use crate::{error, PluginConfig};
+use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::error::SmartRestSerializerError;
 use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
@@ -16,8 +16,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
-
-const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
 pub async fn handle_config_download_request(
     plugin_config: &PluginConfig,
