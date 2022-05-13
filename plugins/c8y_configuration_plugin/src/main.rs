@@ -59,10 +59,7 @@ pub struct ConfigPluginOpt {
     pub config_file: PathBuf,
 }
 
-async fn create_mqtt_client(
-    tedge_config: &TEdgeConfig,
-) -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
         .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
@@ -97,14 +94,28 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
+    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
+
     // Create required clients
-    let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
+    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
 
-    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
+    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+
+    run(plugin_config, mqtt_port, &mut http_client, tmp_dir).await
+}
+
+async fn run(
+    plugin_config: PluginConfig,
+    mqtt_port: u16,
+    http_client: &mut impl C8YHttpProxy,
+    tmp_dir: PathBuf,
+) -> Result<(), anyhow::Error> {
+    let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
     let msg = plugin_config.to_supported_config_types_message()?;
+    debug!("Plugin init message: {:?}", msg);
     let () = mqtt_client.published.send(msg).await?;
 
     // Mqtt message loop
@@ -116,14 +127,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     let config_download_request =
                         SmartRestConfigDownloadRequest::from_smartrest(payload)?;
 
-                    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-
                     handle_config_download_request(
                         &plugin_config,
                         config_download_request,
-                        tmp_dir,
+                        tmp_dir.clone(),
                         &mut mqtt_client,
-                        &mut http_client,
+                        http_client,
                     )
                     .await
                 }
@@ -136,7 +145,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     handle_config_upload_request(
                         config_upload_request,
                         &mut mqtt_client,
-                        &mut http_client,
+                        http_client,
                     )
                     .await
                 }
@@ -184,4 +193,79 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         0o644,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, path::Path, time::Duration};
+
+    use crate::config::FileEntry;
+
+    use super::*;
+    use c8y_api::http_proxy::MockC8YHttpProxy;
+    use mockall::predicate;
+
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_message_dispatch() -> anyhow::Result<()> {
+        let test_config_path = "/some/test/config";
+
+        let plugin_config = PluginConfig {
+            files: HashSet::from([FileEntry::new(test_config_path.to_string())]),
+        };
+
+        let broker = mqtt_tests::test_mqtt_broker();
+
+        let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+        let mut http_client = MockC8YHttpProxy::new();
+        http_client
+            .expect_upload_config_file()
+            .with(predicate::eq(Path::new(test_config_path)))
+            .return_once(|_path| Ok("http://server/some/test/config/url".to_string()));
+
+        let tmp_dir = tempfile::tempdir()?;
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                plugin_config,
+                broker.port,
+                &mut http_client,
+                tmp_dir.path().to_path_buf(),
+            )
+            .await;
+        });
+
+        // Assert supported config types message(119) on plugin startup
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &[format!("119,{test_config_path}")],
+        )
+        .await;
+
+        // Send a software upload request to the plugin
+        let _ = broker
+            .publish(
+                "c8y/s/ds",
+                format!("526,tedge-device,{test_config_path}").as_str(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &[
+                "501,c8y_UploadConfigFile",
+                "503,c8y_UploadConfigFile,http://server/some/test/config/url",
+            ],
+        )
+        .await;
+
+        Ok(())
+    }
 }
