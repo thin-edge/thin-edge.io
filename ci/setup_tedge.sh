@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# TODO Download not to home but to a separate folder
+# TODO 
+# TODO Using star as bash expansion does not work here
 
 
 help() {
@@ -15,6 +18,7 @@ help() {
     echo "checkvars"
     echo "disconnect"
     echo "cleanup"
+    echo "cleanup_files"
     echo "download : Download and unpack in the home directory"
     echo "build"
     echo "install_deps"
@@ -100,9 +104,13 @@ cleanup() {
 
     # Used by some system tests
     sudo dpkg -P  asciijump robotfindskitten asciijump moon-buggy squirrel3
+}
 
-    rm -rf debian-packages-armv7-unknown-linux-gnueabihf.zip
-    rm -rf sawtooth_publisher_armv7-unknown-linux-gnueabihf.zip
+cleanup_files() {
+    echo "Running function ${FUNCNAME[0]}"
+    cd ~/
+
+    set +f # Enablle pathname expansion
     rm -rf tedge*.deb
     rm -rf sawtooth_publisher
     rm -rf tedge_dummy_plugin
@@ -112,9 +120,15 @@ cleanup() {
     rm -rf debian-packages-*.zip
     rm -rf sawtooth_publisher_*.zip
     rm -rf tedge_dummy_plugin_*.zip
+    rm -rf c8y_configuration_plugin_*.deb
+    set -f
 }
 
 download() {
+
+    # TODO Prerequisite:
+    # cp /home/micha/Repos/thin-edge.io_qa/GitHub_Artifacts/download_build_artifact.py ~/
+
     echo "Running function ${FUNCNAME[0]}"
 
     cd ~/
@@ -139,6 +153,7 @@ download() {
 
     unzip sawtooth_publisher_$ARCH.zip
 
+    # TODO check which one is there
     set +e
     chmod +x ~/sawtooth_publisher
     chmod +x /home/pi/examples/sawtooth_publisher
@@ -146,9 +161,10 @@ download() {
 
     ~/download_build_artifact.py abelikt --filter tedge_dummy_plugin_$ARCH
 
+    # TODO check which one is there
     set +e
     chmod +x ~/tedge_dummy_plugin
-    chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+    chmod +x ~/tedge_dummy_plugin/tedge_dummy_plugin
     set -e
 
 }
@@ -197,17 +213,20 @@ install() {
     echo "Architecture is $ARCH".
     export DEBIAN_FRONTEND=noninteractive
 
-    # There seems to be an issue with tilte and star expansion, so we
-    # fall back to avoid them
-    VAR="0.6.3"
+    set +f # enable pathname expansion
 
-    sudo dpkg -i $DIR"/tedge_"$VAR"_"$ARCH".deb"
-    sudo dpkg -i $DIR"/tedge_mapper_"$VAR"_"$ARCH".deb"
-    sudo dpkg -i $DIR"/tedge_agent_"$VAR"_"$ARCH".deb"
-    #sudo dpkg -i $DIR"/tedge_*_plugin_"$VAR"_"$ARCH".deb"
-    sudo dpkg -i $DIR"/tedge_apt_plugin_"$VAR"_"$ARCH".deb"
-    sudo dpkg -i $DIR"/tedge_apama_plugin_"$VAR"_"$ARCH".deb"
-    sudo dpkg -i $DIR"/tedge_logfile_request_plugin_"$VAR"_"$ARCH".deb"
+    # TODO We expect a version with zero here, otherwise the wildcard wouldn't work
+    sudo dpkg -i $DIR"/tedge_0"*"_"$ARCH".deb"
+
+    sudo dpkg -i $DIR"/tedge_mapper_"*"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_agent_"*"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/tedge_"*"_plugin_"*"_"$ARCH".deb"
+    #sudo dpkg -i $DIR"/tedge_apt_plugin_"*"_"$ARCH".deb"
+    #sudo dpkg -i $DIR"/tedge_apama_plugin_"*"_"$ARCH".deb"
+    #sudo dpkg -i $DIR"/tedge_logfile_request_plugin_"*"_"$ARCH".deb"
+    sudo dpkg -i $DIR"/c8y_configuration_plugin_"*"_"$ARCH".deb"
+    set -f
+
 }
 
 getrelease() {
