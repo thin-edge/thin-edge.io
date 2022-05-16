@@ -1,9 +1,7 @@
-use inotify::{EventMask, Inotify, WatchMask};
-use rumqttc::{Event, MqttOptions, Outgoing, Packet, QoS::AtLeastOnce};
-use serde::{Deserialize, Serialize};
-use tracing::info;
+use std::{ffi::OsString, path::PathBuf};
 
-const DISCOVER_OPS_CLIENT_ID: &str = "DISCOVER_OPERATIONS";
+use inotify::{Event, EventMask, Inotify, WatchMask};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
@@ -13,7 +11,7 @@ pub enum EventType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DiscoverOp {
-    pub ops_dir: String,
+    pub ops_dir: PathBuf,
     pub event_type: EventType,
     pub operation_name: String,
 }
@@ -21,115 +19,110 @@ pub struct DiscoverOp {
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum DynamicDiscoverOpsError {
-    #[error(transparent)]
-    ClientError(#[from] rumqttc::ClientError),
+    #[error("No Operations directory found: {0}")]
+    NoOperations(String),
 
-    #[error(transparent)]
-    SerializeError(#[from] serde_json::Error),
-
-    #[error("Event name is empty")]
+    #[error("No event")]
     NoEventName,
+
+    #[error("Inotify event {0} not supported")]
+    UnsupportedEvent(String),
+
+    #[error(transparent)]
+    EventError(#[from] std::io::Error),
 }
 
-pub async fn discover_operations(
-    ops_dir: String,
-    mqtt_host: &str,
-    mqtt_port: &u16,
-) -> Result<(), DynamicDiscoverOpsError> {
-    info!("Start the operation discovery service");
-    let mut inotify = Inotify::init().expect("Error while initializing inotify instance");
+pub fn create_inotify_watch(ops_dir: Option<PathBuf>) -> Result<Inotify, DynamicDiscoverOpsError> {
+    match ops_dir {
+        Some(dir) => {
+            let mut inotify = Inotify::init()?;
+            inotify
+                .add_watch(dir.clone(), WatchMask::CLOSE_WRITE | WatchMask::DELETE)
+                .map_err(|_| {
+                    DynamicDiscoverOpsError::NoOperations(dir.to_string_lossy().to_string())
+                })?;
 
-    // Watch for modify and close events.
-    inotify
-        .add_watch(ops_dir.clone(), WatchMask::CREATE | WatchMask::DELETE)
-        .expect("Failed to add file watch");
+            return Ok(inotify);
+        }
+        None => {
+            return Err(DynamicDiscoverOpsError::NoOperations("None".to_string()));
+        }
+    }
+}
 
-    // Read events that were added with `add_watch` above.
-    let mut buffer = [0; 1024];
+pub fn create_inofity_event_stream(ops_dir: Option<PathBuf>) -> inotify::EventStream<[u8; 1024]> {
+    let buffer = [0; 1024];
+    let mut ino = create_inotify_watch(ops_dir).expect("Failed to create inotify watch");
+    ino.event_stream(buffer)
+        .expect("Failed to create the inotify event stream")
+}
 
-    loop {
-        let events = inotify
-            .read_events_blocking(&mut buffer)
-            .expect("Error while reading events");
-
-        for event in events {
-            info!("Event : {:?}", event);
-            let fname = event
+pub fn process_inotify_events(
+    ops_dir: Option<PathBuf>,
+    event: Result<Event<OsString>, std::io::Error>,
+) -> Result<DiscoverOp, DynamicDiscoverOpsError> {
+    match event {
+        Ok(os_str) => {
+            let operation_name = os_str
                 .name
                 .ok_or(DynamicDiscoverOpsError::NoEventName)?
                 .to_str()
-                .ok_or(DynamicDiscoverOpsError::NoEventName)?;
-            match event.mask {
-                EventMask::CREATE => {
-                    publish(
-                        &ops_dir,
-                        EventType::ADD,
-                        fname.to_string(),
-                        &mqtt_host,
-                        mqtt_port,
-                    )
-                    .await?;
-                }
+                .ok_or(DynamicDiscoverOpsError::NoEventName)?
+                .to_string();
+
+            let ops_dir = ops_dir
+                .ok_or(DynamicDiscoverOpsError::NoOperations("None".to_string()))
+                .expect("No operation directory");
+            match os_str.mask {
                 EventMask::DELETE => {
-                    publish(
-                        &ops_dir,
-                        EventType::REMOVE,
-                        fname.to_string(),
-                        &mqtt_host,
-                        mqtt_port,
-                    )
-                    .await?;
+                    return Ok(DiscoverOp {
+                        ops_dir,
+                        event_type: EventType::REMOVE,
+                        operation_name,
+                    });
                 }
-                _ => {}
+                EventMask::CLOSE_WRITE => {
+                    return Ok(DiscoverOp {
+                        ops_dir,
+                        event_type: EventType::ADD,
+                        operation_name,
+                    });
+                }
+
+                unsupported_event => {
+                    return Err(DynamicDiscoverOpsError::UnsupportedEvent(format!(
+                        "{:?}",
+                        unsupported_event
+                    )))
+                }
             }
+        }
+        Err(e) => {
+            return Err(DynamicDiscoverOpsError::EventError(e));
         }
     }
 }
 
-async fn publish(
-    ops_dir: &str,
-    event_type: EventType,
-    operation_name: String,
-    mqtt_host: &str,
-    mqtt_port: &u16,
-) -> Result<(), DynamicDiscoverOpsError> {
-    let mut options = MqttOptions::new(DISCOVER_OPS_CLIENT_ID, mqtt_host, *mqtt_port);
-    options.set_clean_session(true);
+#[cfg(test)]
+#[test]
+fn create_inotify_with_non_existing_dir() {
+    let err = create_inotify_watch(Some(PathBuf::from("/tmp/discover_ops"))).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "No Operations directory found: /tmp/discover_ops"
+    );
+}
 
-    let payload = serde_json::to_string(&DiscoverOp {
-        ops_dir: ops_dir.into(),
-        event_type,
-        operation_name,
-    })?;
+#[test]
+fn create_inotify_with_none() {
+    let err = create_inotify_watch(None).unwrap_err();
+    assert_eq!(err.to_string(), "No Operations directory found: None");
+}
 
-    let (client, mut connection) = rumqttc::AsyncClient::new(options, 10);
-    let mut published = false;
-
-    client
-        .publish(
-            "tedge/operation/update",
-            AtLeastOnce,
-            false,
-            payload.clone(),
-        )
-        .await?;
-
-    loop {
-        match connection.poll().await {
-            Ok(Event::Outgoing(Outgoing::Publish(_))) => {}
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                println!("publish event");
-                published = true;
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    if !published {
-        eprintln!("ERROR: the message has not been published");
-    }
-
-    client.disconnect().await?;
-    Ok(())
+#[test]
+fn create_inotify_with_right_directory() {
+    use tempfile::TempDir;
+    let dir = TempDir::new().unwrap().into_path();
+    let res = create_inotify_watch(Some(dir));
+    assert!(res.is_ok());
 }

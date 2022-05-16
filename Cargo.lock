@@ -3011,7 +3011,6 @@ dependencies = [
  "mqtt_tests",
  "plugin_sm",
  "reqwest",
- "rumqttc",
  "serde",
  "serde_json",
  "serial_test",

@@ -43,7 +43,6 @@ mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 plugin_sm = { path = "../plugin_sm" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
-rumqttc = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 clap = { version = "3.0", features = ["cargo", "derive"] }

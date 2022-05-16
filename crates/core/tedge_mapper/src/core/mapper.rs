@@ -1,16 +1,16 @@
-use std::{process, time::Duration};
-
+use crate::c8y::dynamic_discovery::*;
 use crate::core::{converter::*, error::*};
-
 use mqtt_channel::{
     Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
 use serde_json::json;
+use std::path::PathBuf;
+use std::{process, time::Duration};
 use time::OffsetDateTime;
-use tracing::{error, info, instrument};
-
+use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
+use std::result::Result::Ok;
 
 pub async fn create_mapper(
     app_name: &str,
@@ -28,14 +28,10 @@ pub async fn create_mapper(
     .expect("health check topics must be valid");
 
     let health_status_topic = Topic::new_unchecked(format!("tedge/health/{}", app_name).as_str());
-    let operation_update_topic: TopicFilter = vec!["tedge/operation/update"]
-        .try_into()
-        .expect("Update operation topic must be valid");
 
     let mapper_config = converter.get_mapper_config();
     let mut topic_filter = mapper_config.in_topic_filter.clone();
     topic_filter.add_all(health_check_topics.clone());
-    topic_filter.add_all(operation_update_topic.clone());
 
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
@@ -48,7 +44,6 @@ pub async fn create_mapper(
         converter,
         health_check_topics,
         health_status_topic,
-        operation_update_topic,
     ))
 }
 
@@ -72,7 +67,6 @@ pub struct Mapper {
     converter: Box<dyn Converter<Error = ConversionError>>,
     health_check_topics: TopicFilter,
     health_status_topic: Topic,
-    operation_update_topic: TopicFilter,
 }
 
 impl Mapper {
@@ -82,7 +76,6 @@ impl Mapper {
         converter: Box<dyn Converter<Error = ConversionError>>,
         health_check_topics: TopicFilter,
         health_status_topic: Topic,
-        operation_update_topic: TopicFilter,
     ) -> Self {
         Self {
             input,
@@ -90,13 +83,12 @@ impl Mapper {
             converter,
             health_check_topics,
             health_status_topic,
-            operation_update_topic,
         }
     }
 
-    pub(crate) async fn run(&mut self) -> Result<(), MqttError> {
+    pub(crate) async fn run(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
         info!("Running");
-        self.process_messages().await?;
+        self.process_messages(ops_dir).await?;
         Ok(())
     }
 
@@ -110,7 +102,7 @@ impl Mapper {
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn process_messages(&mut self) -> Result<(), MqttError> {
+    async fn process_messages(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             let _ = self.output.send(init_message).await;
@@ -130,12 +122,39 @@ impl Mapper {
             self.process_message(message).await;
         }
 
-        // Continue processing messages after the sync period
-        while let Some(message) = self.input.next().await {
-            self.process_message(message).await;
-        }
+        // Create inotify steam for capturing the inotify events.
+        let mut inotify_events = create_inofity_event_stream(ops_dir.clone());
 
-        Ok(())
+        loop {
+            tokio::select! {
+                msg =  self.input.next() => {
+                    match msg {
+                        Some(message) => {
+                            self.process_message(message).await;
+                        } None => {
+                            break Ok(());
+                        }
+                    }
+                }
+                event = inotify_events.next() => {
+                    match event {
+                        Some(ev) => {
+                                match  process_inotify_events(ops_dir.clone(), ev) {
+                                    Ok(discovered_ops) => {
+                                        let _ = self.output.send(self.converter.process_operation_update_message(discovered_ops)).await;
+                                    }
+                                    Err(e) => {
+                                        error!("inotify event process failed: {}", e);
+                                    }
+                                }
+                            }
+                        None => {
+                            warn!("Failed to extract the event");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     async fn process_message(&mut self, message: Message) {
@@ -148,18 +167,6 @@ impl Mapper {
             .to_string();
             let health_message = Message::new(&self.health_status_topic, health_status);
             let _ = self.output.send(health_message).await;
-        } else if self.operation_update_topic.accept(&message) {
-            match self
-                .converter
-                .process_operation_update_messages(&message.payload_str().expect("Wrong message"))
-            {
-                Ok(ops) => {
-                    let _ = self.output.send(ops).await;
-                }
-                Err(e) => {
-                    error!("Failed to process operation update request due to {e}");
-                }
-            }
         } else {
             let converted_messages = self.converter.convert(&message).await;
 
@@ -198,7 +205,7 @@ mod tests {
 
         // Let's run the mapper in the background
         tokio::spawn(async move {
-            let _ = mapper.run().await;
+            let _ = mapper.run(None).await;
         });
         sleep(Duration::from_secs(1)).await;
 
@@ -243,7 +250,7 @@ mod tests {
 
         // Let's run the mapper in the background
         tokio::spawn(async move {
-            let _ = mapper.run().await;
+            let _ = mapper.run(None).await;
         });
         sleep(Duration::from_secs(1)).await;
 
@@ -315,7 +322,7 @@ mod tests {
                     &self.mapper_config.out_topic,
                     input.to_uppercase(),
                 )];
-                Ok(msg)
+                anyhow::Result::Ok(msg)
             } else {
                 Err(UppercaseConverter::conversion_error())
             }

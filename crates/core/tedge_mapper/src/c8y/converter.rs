@@ -352,23 +352,22 @@ where
         sync_messages
     }
 
-    fn process_operation_update_messages(
+    fn try_process_operation_update_message(
         &mut self,
-        message: &str,
-    ) -> Result<Message, ConversionError> {
-        let payload: DiscoverOp = serde_json::from_str(message)?;
-        match payload.event_type {
+        message: &DiscoverOp,
+    ) -> Result<Option<Message>, ConversionError> {
+        match message.event_type {
             EventType::ADD => {
-                let ops_dir = payload.ops_dir;
-                let op_name = payload.operation_name;
-                let op = get_operation(PathBuf::from(format!("{ops_dir}/{op_name}")))?;
-                self.operations.add_operation(op)?;
+                let ops_dir = message.ops_dir.clone();
+                let op_name = message.operation_name.clone();
+                let op = get_operation(ops_dir.join(op_name))?;
+                self.operations.add_operation(op);
             }
             EventType::REMOVE => {
-                self.operations.remove_operation(&payload.operation_name);
+                self.operations.remove_operation(&message.operation_name);
             }
         }
-        Ok(create_supported_operations_fragments_message()?)
+        Ok(Some(create_supported_operations_fragments_message()?))
     }
 }
 
@@ -784,17 +783,9 @@ async fn forward_operation_request(
             }
             Ok(vec![])
         }
-        None => {
-            if template.contains("522") {
-                return Err(CumulocityMapperError::UnknownOperation(
-                    "c8y_LogfileRequest".to_string(),
-                ));
-            } else {
-                return Err(CumulocityMapperError::UnknownOperation(
-                    template.to_string(),
-                ));
-            };
-        }
+        None => Err(CumulocityMapperError::UnknownOperation(
+            template.to_string(),
+        )),
     }
 }
 

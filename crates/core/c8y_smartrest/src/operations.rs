@@ -4,10 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Deserialize;
-use tracing::warn;
-
 use crate::error::OperationsError;
+use serde::Deserialize;
 
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
@@ -60,7 +58,7 @@ impl Default for Operations {
 }
 
 impl Operations {
-    pub fn add(&mut self, operation: Operation) {
+    pub fn add_operation(&mut self, operation: Operation) {
         if self.operations.iter().any(|o| o.name.eq(&operation.name)) {
             return;
         } else {
@@ -72,22 +70,6 @@ impl Operations {
             }
             self.operations.push(operation);
         }
-    }
-
-    pub fn add_operation(&mut self, operation: Operation) -> Result<(), OperationsError> {
-        match operation.topic() {
-            Some(topic) => {
-                if topic.eq(&String::from("c8y/s/ds")) {
-                    self.add(operation);
-                } else {
-                    warn!("The operation {} is not supported", operation.name);
-                }
-            }
-            None => {
-                self.add(operation);
-            }
-        }
-        Ok(())
     }
 
     pub fn remove_operation(&mut self, op_name: &str) {
@@ -149,7 +131,7 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
             .and_then(|filename| filename.to_str())
             .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
             .to_owned();
-        operations.add(details);
+        operations.add_operation(details);
     }
     Ok(operations)
 }
