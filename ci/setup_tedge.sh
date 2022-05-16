@@ -184,8 +184,9 @@ build() {
     echo "Running function ${FUNCNAME[0]}"
 
     cd ~/thin-edge.io
+    JOBS=11
 
-    nice cargo build --release --jobs 11
+    nice cargo build --release --jobs $JOBS
 
     nice cargo deb -p tedge
     nice cargo deb -p tedge_agent
@@ -193,10 +194,10 @@ build() {
     nice cargo deb -p tedge_apt_plugin
     nice cargo deb -p tedge_apama_plugin
     nice cargo deb -p tedge_logfile_request_plugin
-
+    nice cargo deb -p c8y_configuration_plugin
     cd ~/thin-edge.io/crates/tests/sawtooth_publisher
 
-    nice cargo build --jobs 11
+    nice cargo build --jobs $JOBS
 }
 
 install_deps() {
