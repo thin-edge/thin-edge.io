@@ -32,6 +32,7 @@ help() {
         github: Install a version that was downloaded by a github action
         home:   Install a version that is located in home
     - getrelase
+    - upgrade
     - install_local
     - gitupdate
     - gitclone
@@ -195,16 +196,25 @@ build() {
     nice cargo deb -p tedge_apama_plugin
     nice cargo deb -p tedge_logfile_request_plugin
     nice cargo deb -p c8y_configuration_plugin
+
     cd ~/thin-edge.io/crates/tests/sawtooth_publisher
 
     nice cargo build --jobs $JOBS
+}
+
+upgrade() {
+
+    sudo apt update
+    sudo apt --assume-yes upgrade
 }
 
 install_deps() {
     echo "Running function ${FUNCNAME[0]}"
 
     export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get --assume-yes install libmosquitto1 mosquitto mosquitto-clients collectd collectd-core wget curl
+    sudo apt-get --assume-yes install libmosquitto1 \
+        mosquitto mosquitto-clients collectd collectd-core \
+        wget curl git
 }
 
 install() {
@@ -242,6 +252,7 @@ install() {
 }
 
 getrelease() {
+    # TODO Clone first
     cd ~/thin-edge.io
     sudo ./get-thin-edge_io.sh
 }
