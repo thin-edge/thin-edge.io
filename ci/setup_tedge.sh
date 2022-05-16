@@ -6,39 +6,53 @@
 
 
 help() {
-    echo "Setup Tege
+    echo "
+    Setup Tege
+    ==========
+
     Use Cases
       - local : Use self built thin-edge
       - github : Use in context of our GitHub Actions
       - non local : Run on a device that needs to download thin edge from
         a previously built version
     "
-    echo "Available commands:"
-    echo "help"
-    echo "checkvars"
-    echo "disconnect"
-    echo "cleanup"
-    echo "cleanup_files"
-    echo "download : Download and unpack in the home directory"
-    echo "build"
-    echo "install_deps"
-    echo "install  [ local | gihub | home ] :
+    echo "
+    Available comands:
+    ===================
+    - help
+    - checkvars
+    - disconnect
+    - cleanup
+    - cleanup_files
+    - download : Download and unpack in the home directory
+    - build
+    - install_deps
+    - install  [ local | gihub | home ] :
         local:  Install a locally build version
         github: Install a version that was downloaded by a github action
-        home:   Install a version that is located in home"
-    echo "getrelase"
-    echo "install_local"
-    echo "gitupdate"
-    echo "gitclone"
-    echo "configure"
-    echo "configure_collectd"
-    echo "smoketest [ local | github ] :
-        use locally build sawtooth publisher or one within a github workflow"
-    echo "setupenv"
-    echo "getid"
-    echo "tedge_help"
-    echo "systest"
-    echo "run_local_steps"
+        home:   Install a version that is located in home
+    - getrelase
+    - install_local
+    - gitupdate
+    - gitclone
+    - configure
+    - configure_collectd
+    - smoketest [ local | github ] :
+        use locally build sawtooth publisher or one within a github workflow
+    - setupenv
+    - getid
+    - tedge_help
+    - systest
+    - run_local_steps
+    "
+
+    echo "
+    Download
+    ========
+    To download from GitHub call:
+    wget https://raw.githubusercontent.com/abelikt/thin-edge.io/continuous_integration/ci/setup_tedge.sh
+    chmod +x setup_tedge.sh
+    "
 
 }
 
