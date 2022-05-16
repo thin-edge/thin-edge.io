@@ -214,7 +214,7 @@ install_deps() {
     export DEBIAN_FRONTEND=noninteractive
     sudo apt-get --assume-yes install libmosquitto1 \
         mosquitto mosquitto-clients collectd collectd-core \
-        wget curl git
+        wget curl git python3-venv
 }
 
 install() {
@@ -356,7 +356,7 @@ setupenv() {
 
     python3 -m venv ~/env-c8y-api retry-decorator
     source ~/env-c8y-api/bin/activate
-    pip3 install c8y-api
+    pip3 install c8y-api retry-decorator
     deactivate
 }
 
