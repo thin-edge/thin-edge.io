@@ -328,7 +328,7 @@ setupenv() {
     deactivate
 
 
-    python3 -m venv ~/env-c8y-api
+    python3 -m venv ~/env-c8y-api retry-decorator
     source ~/env-c8y-api/bin/activate
     pip3 install c8y-api
     deactivate
