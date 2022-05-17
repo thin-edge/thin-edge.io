@@ -80,7 +80,6 @@ runners_cfg = [
             "sm",
         ],
     },
-
     {
         "name": "results_pysys_offsite_m32sd11e",
         "repo": "abelikt",
@@ -93,7 +92,6 @@ runners_cfg = [
             "sm",
         ],
     },
-
     {
         "name": "results_pysys_offsite_m32sd11f",
         "repo": "abelikt",
@@ -106,7 +104,6 @@ runners_cfg = [
             "sm",
         ],
     },
-
     {
         "name": "results_pysys_offsite_ubuntu-2gb-hel1-4-thin-edge-a",
         "repo": "abelikt",
@@ -132,7 +129,6 @@ runners_cfg = [
         ],
     },
 ]
-
 
 
 def download_results(repo, workflow):
