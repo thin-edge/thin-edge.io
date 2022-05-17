@@ -1,9 +1,18 @@
 #!/bin/bash
 
 # TODO Download not to home but to a separate folder
-# TODO 
+# TODO Add magic for cross compilation
 # TODO Using star as bash expansion does not work here
 
+# TODO Add cargo test (see following lines)
+#     nice cargo test
+#     cargo test --verbose --no-run --features integration-test
+#     cargo test --verbose --features integration-test
+#     cargo test --features integration-test
+#     cargo test -- --test-threads=1
+#     Some will fail when the runner is not started with sudo
+#     nice cargo test --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
+#     nice cargo test --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
 help() {
     echo "
@@ -401,15 +410,6 @@ run_local_steps() {
 
     checkvars;
 
-    #echo "Testing with cargo test"
-    # nice cargo test
-    # cargo test --verbose --no-run --features integration-test
-    # cargo test --verbose --features integration-test
-    # cargo test --features integration-test
-    # cargo test -- --test-threads=1
-    # Some will fail when the runner is not started with sudo
-    # nice cargo test --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
-    # nice cargo test --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
     disconnect;
     cleanup;
