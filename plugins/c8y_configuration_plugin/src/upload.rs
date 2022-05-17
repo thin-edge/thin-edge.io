@@ -1,6 +1,6 @@
 use crate::smartrest::TryIntoOperationStatusMessage;
 use anyhow::Result;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_smartrest::error::SmartRestSerializerError;
 use c8y_smartrest::smartrest_serializer::SmartRest;
 use c8y_smartrest::{
@@ -11,7 +11,7 @@ use c8y_smartrest::{
     },
 };
 use mqtt_channel::{Connection, SinkExt};
-use std::{fs::read_to_string, path::Path};
+use std::path::Path;
 
 struct UploadConfigFileStatusMessage {}
 
@@ -45,7 +45,7 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
 pub async fn handle_config_upload_request(
     config_upload_request: SmartRestConfigUploadRequest,
     mqtt_client: &mut Connection,
-    http_client: &mut JwtAuthHttpProxy,
+    http_client: &mut impl C8YHttpProxy,
 ) -> Result<()> {
     // set config upload request to executing
     let msg = UploadConfigFileStatusMessage::executing()?;
@@ -73,23 +73,25 @@ pub async fn handle_config_upload_request(
 
 async fn upload_config_file(
     config_file_path: &Path,
-    http_client: &mut JwtAuthHttpProxy,
+    http_client: &mut impl C8YHttpProxy,
 ) -> Result<String> {
-    // read the config file contents
-    let config_content = read_to_string(config_file_path)?;
-
     // upload config file
-    let upload_event_url = http_client
-        .upload_config_file(config_file_path, &config_content)
-        .await?;
+    let upload_event_url = http_client.upload_config_file(config_file_path).await?;
 
     Ok(upload_event_url)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
+    use c8y_api::http_proxy::MockC8YHttpProxy;
+    use c8y_smartrest::topic::C8yTopic;
+    use mockall::predicate;
     use mqtt_channel::Topic;
+
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[test]
     fn get_smartrest_executing() {
@@ -118,5 +120,74 @@ mod tests {
             message.payload_str().unwrap(),
             "502,c8y_UploadConfigFile,\"failed reason\"\n"
         );
+    }
+
+    #[tokio::test]
+    async fn test_upload_config_file() -> anyhow::Result<()> {
+        let config_path = Path::new("/some/temp/path");
+
+        let mut http_client = MockC8YHttpProxy::new();
+
+        http_client
+            .expect_upload_config_file()
+            .with(predicate::eq(config_path))
+            .return_once(|_path| Ok("http://server/config/file/url".to_string()));
+
+        assert_eq!(
+            upload_config_file(config_path, &mut http_client).await?,
+            "http://server/config/file/url"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_request() -> anyhow::Result<()> {
+        let config_path = Path::new("/some/test/config");
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(broker.port)
+            .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
+                C8yTopic::SmartRestRequest.as_str(),
+            ));
+        let mut mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
+
+        let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+        let mut http_client = MockC8YHttpProxy::new();
+        http_client
+            .expect_upload_config_file()
+            .with(predicate::eq(config_path))
+            .return_once(|_path| Ok("http://server/config/file/url".to_string()));
+
+        let config_upload_request = SmartRestConfigUploadRequest {
+            message_id: "526".to_string(),
+            device: "thin-edge-device".to_string(),
+            config_type: "/some/test/config".to_string(),
+        };
+
+        tokio::spawn(async move {
+            let _ = handle_config_upload_request(
+                config_upload_request,
+                &mut mqtt_client,
+                &mut http_client,
+            )
+            .await;
+        });
+
+        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &[
+                "501,c8y_UploadConfigFile",
+                "503,c8y_UploadConfigFile,http://server/config/file/url",
+            ],
+        )
+        .await;
+
+        Ok(())
     }
 }

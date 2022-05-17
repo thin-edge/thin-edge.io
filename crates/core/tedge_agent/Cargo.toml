@@ -52,4 +52,4 @@ tedge_users = { path = "../../common/tedge_users"}
 tedge_utils = { path = "../../common/tedge_utils"}
 tempfile = "3.2"
 tokio-test = "0.4"
-serial_test = "0.5"
+serial_test = "0.6"

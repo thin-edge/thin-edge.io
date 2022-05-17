@@ -23,7 +23,7 @@ url = "2.2"
 [dev-dependencies]
 anyhow = "1.0"
 assert_matches = "1.5"
-serial_test = "0.5.1"
+serial_test = "0.6"
 tempfile = "3.2"
 test-case = "2.0"
 
