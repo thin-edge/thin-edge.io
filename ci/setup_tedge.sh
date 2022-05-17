@@ -123,7 +123,7 @@ cleanup() {
     # In the hope hat it stops asking
     export DEBIAN_FRONTEND=noninteractive
 
-    sudo dpkg -P c8y_configuration_plugin tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core mosquitto-clients collectd
+    sudo -E dpkg -P c8y_configuration_plugin tedge_agent tedge_logfile_request_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core mosquitto-clients collectd
 
     # Used by some system tests
     sudo dpkg -P  asciijump robotfindskitten asciijump moon-buggy squirrel3
