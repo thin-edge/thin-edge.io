@@ -13,4 +13,5 @@ pub use recipient::*;
 pub use runtime::*;
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests;

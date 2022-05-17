@@ -62,3 +62,31 @@ fn it_works() {
         assert_eq!(&expected, output.deref());
     })
 }
+
+#[derive(Clone, Debug)]
+struct Msg1 {
+    x: i32,
+}
+#[derive(Clone, Debug)]
+enum Msg2 {
+    A,
+    B,
+    C,
+}
+#[derive(Clone, Debug)]
+struct Msg3 {
+    x: String,
+}
+
+message_type!(Input[Msg1,Msg2,Msg3]);
+
+#[test]
+fn creating_message_type() {
+    let msg = Msg1 { x: 42 };
+    let res = match msg.into() {
+        Input::Msg1(_) => 1,
+        Input::Msg2(_) => 2,
+        Input::Msg3(_) => 3,
+    };
+    assert_eq!(res, 1);
+}
