@@ -13,7 +13,7 @@ use c8y_smartrest::smartrest_deserializer::{
 };
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{SinkExt, StreamExt};
+use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
 use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
@@ -128,6 +128,13 @@ async fn run(
     debug!("Plugin init message: {:?}", msg);
     let () = mqtt_client.published.send(msg).await?;
 
+    // Get pending operations
+    let msg = Message::new(
+        &Topic::new_unchecked(C8yTopic::SmartRestResponse.as_str()),
+        "500",
+    );
+    let () = mqtt_client.published.send(msg).await?;
+
     // Mqtt message loop
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
@@ -236,7 +243,7 @@ mod tests {
         let test_config_type = "config_type";
 
         let plugin_config = PluginConfig {
-            files: HashSet::from([FileEntry::new(
+            files: HashSet::from([FileEntry::new_with_path_and_type(
                 test_config_path.to_string(),
                 test_config_type.to_string(),
             )]),

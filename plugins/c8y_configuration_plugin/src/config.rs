@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+use tedge_utils::file::FilePermissions;
 use tracing::{info, warn};
 
 #[derive(Deserialize, Debug, Default)]
@@ -21,6 +22,9 @@ pub struct RawFileEntry {
     pub path: String,
     #[serde(rename = "type")]
     config_type: Option<String>,
+    user: Option<String>,
+    group: Option<String>,
+    mode: Option<u32>,
 }
 
 #[derive(Debug, Eq, PartialEq, Default, Clone)]
@@ -32,6 +36,7 @@ pub struct PluginConfig {
 pub struct FileEntry {
     pub path: String,
     config_type: String,
+    pub file_permissions: FilePermissions,
 }
 
 impl Hash for FileEntry {
@@ -53,8 +58,18 @@ impl Borrow<String> for FileEntry {
 }
 
 impl FileEntry {
-    pub fn new(path: String, config_type: String) -> Self {
-        Self { path, config_type }
+    pub fn new(
+        path: String,
+        config_type: String,
+        user: Option<String>,
+        group: Option<String>,
+        mode: Option<u32>,
+    ) -> Self {
+        Self {
+            path,
+            config_type,
+            file_permissions: FilePermissions { user, group, mode },
+        }
     }
 }
 
@@ -65,16 +80,13 @@ impl RawPluginConfig {
         match fs::read_to_string(config_file_path) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,
-                _ => {
-                    warn!("The config file {} is malformed.", path_str);
+                Err(err) => {
+                    warn!("The config file {path_str} is malformed. {err}");
                     Self::default()
                 }
             },
-            Err(_) => {
-                warn!(
-                    "The config file {} does not exist or is not readable.",
-                    path_str
-                );
+            Err(err) => {
+                warn!("The config file {path_str} does not exist or is not readable. {err}");
                 Self::default()
             }
         }
@@ -92,6 +104,9 @@ impl PluginConfig {
         let c8y_configuration_plugin = FileEntry::new(
             config_file_path.display().to_string(),
             DEFAULT_PLUGIN_CONFIG_TYPE.into(),
+            None,
+            None,
+            None,
         );
         Self {
             files: HashSet::from([c8y_configuration_plugin]),
@@ -104,7 +119,22 @@ impl PluginConfig {
             let config_type = raw_entry
                 .config_type
                 .unwrap_or_else(|| raw_entry.path.clone());
-            let entry = FileEntry::new(raw_entry.path, config_type.clone());
+
+            if config_type.contains(&['+', '#']) {
+                warn!(
+                    "The config type '{}' contains the forbidden characters, '+' or '#'.",
+                    config_type
+                );
+                return original_plugin_config;
+            }
+
+            let entry = FileEntry::new(
+                raw_entry.path,
+                config_type.clone(),
+                raw_entry.user,
+                raw_entry.group,
+                raw_entry.mode,
+            );
             if !self.files.insert(entry) {
                 warn!("The config file has the duplicated type '{}'.", config_type);
                 return original_plugin_config;
@@ -125,7 +155,10 @@ impl PluginConfig {
             .collect::<Vec<_>>()
     }
 
-    pub fn get_path_from_type(&self, config_type: &str) -> Result<String, ConfigManagementError> {
+    pub fn get_file_entry_from_type(
+        &self,
+        config_type: &str,
+    ) -> Result<FileEntry, ConfigManagementError> {
         let file_entry = self
             .files
             .get(&config_type.to_string())
@@ -133,7 +166,7 @@ impl PluginConfig {
                 config_type: config_type.to_owned(),
             })?
             .to_owned();
-        Ok(file_entry.path)
+        Ok(file_entry)
     }
 
     // 119,typeA,typeB,...
@@ -181,23 +214,23 @@ mod tests {
         assert_eq!(
             config.files,
             vec![
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/tedge.toml".to_string(),
                     Some("tedge.toml".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/tedge.toml".to_string(),
                     Some("tedge.toml".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                     None
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                     Some("\"double quotation\"".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/mosquitto/mosquitto.conf".to_string(),
                     Some("'single quotation'".to_string())
                 )
@@ -223,23 +256,23 @@ mod tests {
         assert_eq!(
             config.files,
             vec![
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/tedge.toml".to_string(),
                     Some("tedge.toml".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/tedge.toml".to_string(),
                     Some("tedge.toml".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(),
                     None
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string(),
                     Some("\"double quotation\"".to_string())
                 ),
-                RawFileEntry::new(
+                RawFileEntry::new_with_path_and_type(
                     "/etc/mosquitto/mosquitto.conf".to_string(),
                     Some("'single quotation'".to_string())
                 )
@@ -257,8 +290,8 @@ mod tests {
         "#,
         PluginConfig {
             files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string(), "tedge".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(), "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
+                FileEntry::new_with_path_and_type("/etc/tedge/tedge.toml".to_string(), "tedge".to_string()),
+                FileEntry::new_with_path_and_type("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string(), "/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
             ])
         }; "standard case"
     )]
@@ -273,8 +306,8 @@ mod tests {
         "#,
         PluginConfig {
             files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string(), "tedge".to_string()),
-                FileEntry::new("/etc/tedge/tedge.toml".to_string(), "tedge2".to_string()),
+                FileEntry::new_with_path_and_type("/etc/tedge/tedge.toml".to_string(), "tedge".to_string()),
+                FileEntry::new_with_path_and_type("/etc/tedge/tedge.toml".to_string(), "tedge2".to_string()),
             ])
         }; "file path duplication"
     )]
@@ -288,13 +321,35 @@ mod tests {
             type = "tedge"
         "#,
         PluginConfig {
-        files: HashSet::new()
-    }; "file type duplication"
+            files: HashSet::new()
+        }; "file type duplication"
+    )]
+    #[test_case(
+        r#"
+        [[files]]
+            path = "/etc/tedge/tedge.toml"
+            type = "tedge#"
+        "#,
+        PluginConfig {
+            files: HashSet::new()
+        }
+        ;"type contains sharp"
+    )]
+    #[test_case(
+        r#"
+        [[files]]
+            path = "/etc/tedge/tedge.toml"
+            type = "tedge+"
+        "#,
+        PluginConfig {
+            files: HashSet::new()
+        }
+        ;"type contains plus"
     )]
     #[test_case(
         r#"files = []"#,
         PluginConfig {
-            files: HashSet::new()
+        files: HashSet::new()
         }
         ;"empty case"
     )]
@@ -338,8 +393,24 @@ mod tests {
     }
 
     impl RawFileEntry {
-        pub fn new(path: String, config_type: Option<String>) -> Self {
-            Self { path, config_type }
+        pub fn new_with_path_and_type(path: String, config_type: Option<String>) -> Self {
+            Self {
+                path,
+                config_type,
+                user: None,
+                group: None,
+                mode: None,
+            }
+        }
+    }
+
+    impl FileEntry {
+        pub fn new_with_path_and_type(path: String, config_type: String) -> Self {
+            Self {
+                path,
+                config_type,
+                file_permissions: FilePermissions::default(),
+            }
         }
     }
 
@@ -347,7 +418,7 @@ mod tests {
     impl PluginConfig {
         fn add_file_entry(&self, path: String, config_type: String) -> Self {
             let mut files = self.files.clone();
-            let _ = files.insert(FileEntry::new(path, config_type));
+            let _ = files.insert(FileEntry::new(path, config_type, None, None, None));
             Self { files }
         }
     }
@@ -357,7 +428,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let config_root = temp_dir.path().to_path_buf();
         let config_file_path = config_root.join(PLUGIN_CONFIG_FILE);
-        let mut file = std::fs::File::create(config_file_path.as_path())?;
+        let mut file = fs::File::create(config_file_path.as_path())?;
         file.write_all(content.as_bytes())?;
         Ok((temp_dir, config_root))
     }
@@ -365,7 +436,7 @@ mod tests {
     #[test]
     fn get_smartrest_single_type() {
         let plugin_config = PluginConfig {
-            files: HashSet::from([FileEntry::new(
+            files: HashSet::from([FileEntry::new_with_path_and_type(
                 "/path/to/file".to_string(),
                 "typeA".to_string(),
             )]),
@@ -378,9 +449,9 @@ mod tests {
     fn get_smartrest_multiple_types() {
         let plugin_config = PluginConfig {
             files: HashSet::from([
-                FileEntry::new("path1".to_string(), "typeA".to_string()),
-                FileEntry::new("path2".to_string(), "typeB".to_string()),
-                FileEntry::new("path3".to_string(), "typeC".to_string()),
+                FileEntry::new_with_path_and_type("path1".to_string(), "typeA".to_string()),
+                FileEntry::new_with_path_and_type("path2".to_string(), "typeB".to_string()),
+                FileEntry::new_with_path_and_type("path3".to_string(), "typeC".to_string()),
             ]),
         };
         let output = plugin_config.to_smartrest_payload();

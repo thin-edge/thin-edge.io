@@ -12,6 +12,7 @@ use c8y_smartrest::{
 };
 use mqtt_channel::{Connection, SinkExt};
 use std::path::Path;
+use tracing::{error, info};
 
 struct UploadConfigFileStatusMessage {}
 
@@ -52,7 +53,9 @@ pub async fn handle_config_upload_request(
     let msg = UploadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(msg).await?;
 
-    let config_file_path = plugin_config.get_path_from_type(&config_upload_request.config_type)?;
+    let config_file_path = plugin_config
+        .get_file_entry_from_type(&config_upload_request.config_type)?
+        .path;
     let upload_result = upload_config_file(
         Path::new(config_file_path.as_str()),
         &config_upload_request.config_type,
@@ -60,13 +63,19 @@ pub async fn handle_config_upload_request(
     )
     .await;
 
+    let target_config_type = &config_upload_request.config_type;
+
     match upload_result {
         Ok(upload_event_url) => {
+            info!("The configuration upload for '{target_config_type}' is successful.");
+
             let successful_message =
                 UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
             let () = mqtt_client.published.send(successful_message).await?;
         }
         Err(err) => {
+            error!("The configuration upload for '{target_config_type}' is failed.",);
+
             let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
         }
@@ -179,7 +188,7 @@ mod tests {
         };
 
         let plugin_config = PluginConfig {
-            files: HashSet::from([FileEntry::new(
+            files: HashSet::from([FileEntry::new_with_path_and_type(
                 "/some/test/config".to_string(),
                 "config_type".to_string(),
             )]),
