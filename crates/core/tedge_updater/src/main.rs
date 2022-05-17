@@ -1,10 +1,9 @@
 use clap::Parser;
-use logged_command::LoggedCommand;
 use std::{
     fs::File,
     io::BufWriter,
     path::Path,
-    process::{Command, Output, Stdio},
+    process::{Command, ExitStatus, Stdio},
 };
 
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -52,14 +51,10 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
                 // exec plugin and forward STDIN
                 println!("Executing: {} update-list", plugin_name);
 
-                let log_file_path = "/var/log/tedge/updater.log";
-                let log_file = File::create(log_file_path)?;
-                let mut logger = BufWriter::new(log_file);
-                let status = LoggedCommand::new(plugin_name)
-                    .arg("update-list")
-                    .execute(&mut logger);
-
-                status_to_exitcode(&status)
+                let status = Command::new(plugin_name)
+                    .args(vec!["update-list"])
+                    .status();
+                status_to_exitcode(status)
             };
 
             match store_exitcode(exitcode) {
@@ -130,23 +125,22 @@ fn store_exitcode(exit_code: i32) -> std::io::Result<()> {
     Ok(())
 }
 
-fn status_to_exitcode(status: &Result<Output, std::io::Error>) -> i32 {
+fn status_to_exitcode(status : Result<ExitStatus, std::io::Error>) -> i32 {
     let exit_code;
 
     match status {
-        Ok(status) if status.status.success() => {
+        Ok(status) if status.success() => {
             exit_code = 0;
         }
 
         Ok(status) => {
-            if status.status.code().is_some() {
-                exit_code = status.status.code().unwrap();
+            if status.code().is_some() {
+                exit_code = status.code().unwrap();
             } else {
                 eprintln!("Interrupted by a signal!");
                 exit_code = 4;
             }
         }
-
         Err(err) => {
             eprintln!("ERROR: {}", err);
             exit_code = 5;
