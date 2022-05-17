@@ -10,6 +10,8 @@ help() {
     Setup Tege
     ==========
 
+    A tool to bootstrap and setup Thin-Edge.io.
+
     Use Cases
       - local : Use self built thin-edge
       - github : Use in context of our GitHub Actions
@@ -19,32 +21,32 @@ help() {
     echo "
     Available comands:
     ===================
-    - help
-    - checkvars
-    - disconnect
-    - cleanup
-    - cleanup_files
-    - download : Download and unpack in the home directory
-    - build
-    - install_deps
+    - help           : Print help
+    - checkvars      : Check necessary environment variables
+    - disconnect     : Disconnect all bridges
+    - cleanup        : Remove all packages and traces from tedge
+    - cleanup_files  : Cleanup downloaded files
+    - download       : Download and unpack in the home directory
+    - build          : Build tedge locally
+    - install_deps   : Install dependencies
     - install  [ local | gihub | home ] :
         local:  Install a locally build version
         github: Install a version that was downloaded by a github action
         home:   Install a version that is located in home
-    - getrelase
-    - upgrade
-    - install_local
-    - gitupdate
-    - gitclone
-    - configure
-    - configure_collectd
+
+    - getrelase      : Download and install latest release
+    - upgrade        : Run apt update and upgrade
+    - gitclone       : Clone thin-edge.io into home
+    - gitupdate      : Update git repo
+    - configure      : Configure tedge
+    - configure_collectd : Configure collectd (for NFP analytics)
     - smoketest [ local | github ] :
         use locally build sawtooth publisher or one within a github workflow
-    - setupenv
-    - getid
-    - tedge_help
-    - systest
-    - run_local_steps
+    - setupenv       : Prepare all Python environments
+    - getid          : Retrieve C8Y ID of the device
+    - tedge_help     : Print help
+    - systest <test> : Run System test
+    - run_local_steps : Run all steps to build and smoketest tedge
     "
 
     echo "
