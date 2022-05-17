@@ -72,6 +72,9 @@ pub(crate) struct CumulocityConfigDto {
 
     /// Boolean whether Azure mapper adds timestamp or not.
     pub(crate) mapper_timestamp: Option<bool>,
+
+    /// Set of c8y templates used for subscriptions.
+    pub(crate) smartrest_templates: Option<TemplatesSet>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
