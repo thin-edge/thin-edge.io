@@ -399,7 +399,7 @@ systest() {
 run_local_steps() {
     echo "Running function ${FUNCNAME[0]}"
 
-    /home/micha/Project-SAG/Scripts/setup_tedge.sh checkvars
+    checkvars;
 
     #echo "Testing with cargo test"
     # nice cargo test
@@ -411,18 +411,18 @@ run_local_steps() {
     # nice cargo test --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
     # nice cargo test --verbose --features integration-test -- --skip sending_and_receiving_a_message
 
-    ~/thin-edge.io/ci/setup_tedge.sh disconnect
-    ~/thin-edge.io/ci/setup_tedge.sh cleanup
-    ~/thin-edge.io/ci/setup_tedge.sh gitclone
-    ~/thin-edge.io/ci/setup_tedge.sh gitupdate
-    ~/thin-edge.io/ci/setup_tedge.sh build
-    ~/thin-edge.io/ci/setup_tedge.sh install_deps
-    ~/thin-edge.io/ci/setup_tedge.sh install local
-    ~/thin-edge.io/ci/setup_tedge.sh tedge_help
-    ~/thin-edge.io/ci/setup_tedge.sh setupenv
-    ~/thin-edge.io/ci/setup_tedge.sh configure_collectd
-    ~/thin-edge.io/ci/setup_tedge.sh configure
-    ~/thin-edge.io/ci/setup_tedge.sh smoketest local
+    disconnect;
+    cleanup;
+    gitclone;
+    gitupdate;
+    build;
+    install_deps;
+    install local;
+    tedge_help;
+    setupenv;
+    configure_collectd;
+    configure;
+    smoketest local;
 }
 
 test() {
