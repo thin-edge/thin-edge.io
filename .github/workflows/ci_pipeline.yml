@@ -675,6 +675,7 @@ jobs:
           AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
           AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
           IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+          C8YDEVICE: mythica
 
 #################################################################################
 
