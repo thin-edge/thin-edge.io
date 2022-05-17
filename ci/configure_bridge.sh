@@ -4,6 +4,7 @@ echo "Disconnect old bridge"
 
 # Disconnect - may fail if not there
 sudo tedge disconnect c8y
+suod tedge disconnect az
 
 # From now on exit if a command exits with a non-zero status.
 # Commands above are allowed to fail
@@ -26,6 +27,12 @@ sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 sudo tedge config set az.url $IOTHUBNAME.azure-devices.net
 
 sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
+
+# Enable for Azure (see also ci_smoke_test_az.sh)
+#
+# THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
+# echo "DEVICE Thumbprint is " $THUMB
+# python3 ci/az_upload_device_cert.py -d $C8YDEVICE -t $THUMB -u $IOTHUBNAME -s iothubowner
 
 sudo tedge config list
 

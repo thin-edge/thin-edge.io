@@ -667,14 +667,14 @@ jobs:
 # Run tests for Azure
 # Enable this, when we have decided about how many runners we use
 #
-#      - name: Run Smoke Test for Azure
-#        run: ./ci/ci_smoke_test_az.sh
-#        env:
-#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
+      - name: Run Smoke Test for Azure
+        run: ./ci/ci_smoke_test_az.sh
+        env:
+          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
+          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
+          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
+          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
+          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
 #################################################################################
 
