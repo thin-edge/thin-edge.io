@@ -213,8 +213,8 @@ upgrade() {
 install_deps() {
     echo "Running function ${FUNCNAME[0]}"
 
-    export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get --assume-yes install libmosquitto1 \
+    #export DEBIAN_FRONTEND=noninteractive
+    sudo DEBIAN_FRONTEND=noninteractive apt-get --assume-yes install libmosquitto1 \
         mosquitto mosquitto-clients collectd collectd-core \
         wget curl git python3-venv
 }
@@ -274,7 +274,7 @@ gitupdate(){
 
     #git clean -dxf
     git checkout continuous_integration
-    git pull origin continuous_integration
+    git pull abelikt continuous_integration
 }
 
 configure_collectd(){
@@ -413,7 +413,6 @@ run_local_steps() {
 
     disconnect;
     cleanup;
-    gitclone;
     gitupdate;
     build;
     install_deps;
