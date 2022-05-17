@@ -56,6 +56,10 @@ sleep 2
 
 # Connect and disconnect so that we can retrive a new device ID
 sudo tedge connect c8y
+
+# Wait for some time so that we can upload a software list
+sleep 2
+
 sudo tedge disconnect c8y
 
 # Give Cumolocity time to process the cert deletion
