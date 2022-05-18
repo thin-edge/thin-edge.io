@@ -392,8 +392,7 @@ async fn parse_c8y_topics(
             | ref err @ CumulocityMapperError::ExecuteFailed {
                 operation_name: ref operation,
                 ..
-            }
-            | ref err @ CumulocityMapperError::UnknownOperation(ref operation),
+            },
         ) => {
             let topic = C8yTopic::SmartRestResponse.to_topic()?;
             let msg1 = Message::new(&topic, format!("501,{operation}"));
@@ -783,9 +782,7 @@ async fn forward_operation_request(
             }
             Ok(vec![])
         }
-        None => Err(CumulocityMapperError::UnknownOperation(
-            template.to_string(),
-        )),
+        None => Ok(vec![]),
     }
 }
 

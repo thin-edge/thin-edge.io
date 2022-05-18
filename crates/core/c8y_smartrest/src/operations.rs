@@ -74,9 +74,6 @@ impl Operations {
 
     pub fn remove_operation(&mut self, op_name: &str) {
         self.operations.retain(|x| x.name.ne(&op_name));
-        if op_name.eq("c8y_LogfileRequest") {
-            self.operations_by_trigger.remove_entry("522");
-        }
     }
 
     pub fn try_new(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Self, OperationsError> {
