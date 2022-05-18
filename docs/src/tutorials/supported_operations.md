@@ -97,15 +97,17 @@ sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Restart
 
 > Note: We are using `sudo -u` to create the file because we want to make sure that the file is owned by `tedge` user.
 
-Now we just need to reboot the `tedge-mapper-c8y` so it picks new operations and it will automatically add it to the list and send it to the cloud.
+Now the new operation will be automatically added to the list and the list will be sent to the cloud.
 
 ### Removing supported operations
 
-To remove supported operation we can remove the file from `/etc/tedge/operations/c8y` directory and restart the `tedge-mapper-c8y` to pick up the new list of supported operations. eg:
+To remove supported operation we can remove the file from `/etc/tedge/operations/c8y` directory. eg:
 
 ```shell
 sudo rm /etc/tedge/operations/c8y/c8y_Restart
 ```
+
+Now the operation will be automatically removed from the list and the list will be sent to the cloud.
 
 ## Working with custom operations
 
