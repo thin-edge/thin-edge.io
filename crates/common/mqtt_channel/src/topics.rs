@@ -75,8 +75,8 @@ impl TopicFilter {
     }
 
     /// Check if the pattern is valid and add it to this topic filter.
-    pub fn add(&mut self, pattern: &str) -> Result<(), MqttError> {
-        let pattern = String::from(pattern);
+    pub fn add(&mut self, pattern: impl Into<String>) -> Result<(), MqttError> {
+        let pattern = pattern.into();
         if rumqttc::valid_filter(&pattern) {
             self.patterns.push(pattern);
             Ok(())
@@ -150,7 +150,7 @@ impl TryInto<TopicFilter> for &str {
     }
 }
 
-impl TryInto<TopicFilter> for Vec<&str> {
+impl<S: Into<String>> TryInto<TopicFilter> for Vec<S> {
     type Error = MqttError;
 
     fn try_into(self) -> Result<TopicFilter, Self::Error> {
