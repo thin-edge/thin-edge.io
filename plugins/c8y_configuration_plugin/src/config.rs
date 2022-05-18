@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
-use tedge_utils::file::FilePermissions;
-use tracing::{info, warn};
+use tedge_utils::file::PermissionEntry;
+use tracing::{error, info};
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]
@@ -36,7 +36,7 @@ pub struct PluginConfig {
 pub struct FileEntry {
     pub path: String,
     config_type: String,
-    pub file_permissions: FilePermissions,
+    pub file_permissions: PermissionEntry,
 }
 
 impl Hash for FileEntry {
@@ -68,7 +68,7 @@ impl FileEntry {
         Self {
             path,
             config_type,
-            file_permissions: FilePermissions { user, group, mode },
+            file_permissions: PermissionEntry { user, group, mode },
         }
     }
 }
@@ -81,12 +81,12 @@ impl RawPluginConfig {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,
                 Err(err) => {
-                    warn!("The config file {path_str} is malformed. {err}");
+                    error!("The config file {path_str} is malformed. {err}");
                     Self::default()
                 }
             },
             Err(err) => {
-                warn!("The config file {path_str} does not exist or is not readable. {err}");
+                error!("The config file {path_str} does not exist or is not readable. {err}");
                 Self::default()
             }
         }
@@ -121,7 +121,7 @@ impl PluginConfig {
                 .unwrap_or_else(|| raw_entry.path.clone());
 
             if config_type.contains(&['+', '#']) {
-                warn!(
+                error!(
                     "The config type '{}' contains the forbidden characters, '+' or '#'.",
                     config_type
                 );
@@ -136,7 +136,7 @@ impl PluginConfig {
                 raw_entry.mode,
             );
             if !self.files.insert(entry) {
-                warn!("The config file has the duplicated type '{}'.", config_type);
+                error!("The config file has the duplicated type '{}'.", config_type);
                 return original_plugin_config;
             }
         }
@@ -207,6 +207,12 @@ mod tests {
             [[files]]
                 path = "/etc/mosquitto/mosquitto.conf"
                 type = "'single quotation'"
+            [[files]]
+                path = "path"
+                type = "type"
+                user = "user"
+                group = "group"
+                mode = 0o444
              "#,
         )
         .unwrap();
@@ -233,7 +239,14 @@ mod tests {
                 RawFileEntry::new_with_path_and_type(
                     "/etc/mosquitto/mosquitto.conf".to_string(),
                     Some("'single quotation'".to_string())
-                )
+                ),
+                RawFileEntry {
+                    path: "path".to_string(),
+                    config_type: Some("type".to_string()),
+                    user: Some("user".to_string()),
+                    group: Some("group".to_string()),
+                    mode: Some(0o444)
+                }
             ]
         );
     }
@@ -248,6 +261,7 @@ mod tests {
                    { path = "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
                    { path = "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf", type = '"double quotation"' },
                    { path = "/etc/mosquitto/mosquitto.conf", type = "'single quotation'" },
+                   { path = "path", type = "type", user = "user", group = "group", mode = 0o444 },
                  ]
              "#,
         )
@@ -275,7 +289,14 @@ mod tests {
                 RawFileEntry::new_with_path_and_type(
                     "/etc/mosquitto/mosquitto.conf".to_string(),
                     Some("'single quotation'".to_string())
-                )
+                ),
+                RawFileEntry {
+                    path: "path".to_string(),
+                    config_type: Some("type".to_string()),
+                    user: Some("user".to_string()),
+                    group: Some("group".to_string()),
+                    mode: Some(0o444)
+                }
             ]
         );
     }
@@ -392,47 +413,6 @@ mod tests {
         Ok(())
     }
 
-    impl RawFileEntry {
-        pub fn new_with_path_and_type(path: String, config_type: Option<String>) -> Self {
-            Self {
-                path,
-                config_type,
-                user: None,
-                group: None,
-                mode: None,
-            }
-        }
-    }
-
-    impl FileEntry {
-        pub fn new_with_path_and_type(path: String, config_type: String) -> Self {
-            Self {
-                path,
-                config_type,
-                file_permissions: FilePermissions::default(),
-            }
-        }
-    }
-
-    // Use this to add a temporary file path of the plugin configuration file
-    impl PluginConfig {
-        fn add_file_entry(&self, path: String, config_type: String) -> Self {
-            let mut files = self.files.clone();
-            let _ = files.insert(FileEntry::new(path, config_type, None, None, None));
-            Self { files }
-        }
-    }
-
-    // Need to return TempDir, otherwise the dir will be deleted when this function ends.
-    fn create_temp_plugin_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
-        let temp_dir = TempDir::new()?;
-        let config_root = temp_dir.path().to_path_buf();
-        let config_file_path = config_root.join(PLUGIN_CONFIG_FILE);
-        let mut file = fs::File::create(config_file_path.as_path())?;
-        file.write_all(content.as_bytes())?;
-        Ok((temp_dir, config_root))
-    }
-
     #[test]
     fn get_smartrest_single_type() {
         let plugin_config = PluginConfig {
@@ -456,5 +436,46 @@ mod tests {
         };
         let output = plugin_config.to_smartrest_payload();
         assert_eq!(output, ("119,typeA,typeB,typeC"));
+    }
+
+    impl RawFileEntry {
+        pub fn new_with_path_and_type(path: String, config_type: Option<String>) -> Self {
+            Self {
+                path,
+                config_type,
+                user: None,
+                group: None,
+                mode: None,
+            }
+        }
+    }
+
+    impl FileEntry {
+        pub fn new_with_path_and_type(path: String, config_type: String) -> Self {
+            Self {
+                path,
+                config_type,
+                file_permissions: PermissionEntry::default(),
+            }
+        }
+    }
+
+    // Use this to add a temporary file path of the plugin configuration file
+    impl PluginConfig {
+        fn add_file_entry(&self, path: String, config_type: String) -> Self {
+            let mut files = self.files.clone();
+            let _ = files.insert(FileEntry::new(path, config_type, None, None, None));
+            Self { files }
+        }
+    }
+
+    // Need to return TempDir, otherwise the dir will be deleted when this function ends.
+    fn create_temp_plugin_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
+        let temp_dir = TempDir::new()?;
+        let config_root = temp_dir.path().to_path_buf();
+        let config_file_path = config_root.join(PLUGIN_CONFIG_FILE);
+        let mut file = fs::File::create(config_file_path.as_path())?;
+        file.write_all(content.as_bytes())?;
+        Ok((temp_dir, config_root))
     }
 }

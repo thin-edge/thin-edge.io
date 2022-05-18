@@ -36,22 +36,14 @@ pub fn create_directory_with_user_group(
     group: &str,
     mode: u32,
 ) -> Result<(), FileError> {
-    match fs::create_dir(dir) {
-        Ok(_) => {
-            change_owner_and_permission(dir, user, group, mode)?;
-        }
+    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
+    let () = perm_entry.create_directory(Path::new(dir))?;
+    Ok(())
+}
 
-        Err(e) => {
-            if e.kind() == io::ErrorKind::AlreadyExists {
-                return Ok(());
-            } else {
-                return Err(FileError::DirectoryCreateFailed {
-                    dir: dir.to_string(),
-                    from: e,
-                });
-            }
-        }
-    }
+pub fn create_directory_with_mode(dir: &str, mode: u32) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(None, None, Some(mode));
+    let () = perm_entry.create_directory(Path::new(dir))?;
     Ok(())
 }
 
@@ -61,36 +53,81 @@ pub fn create_file_with_user_group(
     group: &str,
     mode: u32,
 ) -> Result<(), FileError> {
-    match File::create(file) {
-        Ok(_) => {
-            change_owner_and_permission(file, user, group, mode)?;
-        }
-        Err(e) => {
-            if e.kind() == io::ErrorKind::AlreadyExists {
-                return Ok(());
-            } else {
-                return Err(FileError::FileCreateFailed {
-                    file: file.to_string(),
-                    from: e,
-                });
-            }
-        }
-    }
+    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
+    let () = perm_entry.create_file(Path::new(file))?;
     Ok(())
 }
 
-fn change_owner_and_permission(
-    file: &str,
-    user: &str,
-    group: &str,
-    mode: u32,
-) -> Result<(), FileError> {
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
+pub struct PermissionEntry {
+    pub user: Option<String>,
+    pub group: Option<String>,
+    pub mode: Option<u32>,
+}
+
+impl PermissionEntry {
+    pub fn new(user: Option<String>, group: Option<String>, mode: Option<u32>) -> Self {
+        Self { user, group, mode }
+    }
+
+    pub fn apply(&self, path: &Path) -> Result<(), FileError> {
+        match (&self.user, &self.group) {
+            (Some(user), Some(group)) => {
+                let () = change_user_and_group(path, user, group)?;
+            }
+            (Some(user), None) => {
+                let () = change_user(path, user)?;
+            }
+            (None, Some(group)) => {
+                let () = change_group(path, group)?;
+            }
+            (None, None) => {}
+        }
+
+        if let Some(mode) = &self.mode {
+            let () = change_mode(path, *mode)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+        match fs::create_dir(dir) {
+            Ok(_) => {
+                let () = self.apply(dir)?;
+                Ok(())
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) => Err(FileError::DirectoryCreateFailed {
+                dir: dir.display().to_string(),
+                from: e,
+            }),
+        }
+    }
+
+    pub fn create_file(&self, file: &Path) -> Result<(), FileError> {
+        match File::create(file) {
+            Ok(_) => {
+                let () = self.apply(file)?;
+                Ok(())
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) => Err(FileError::FileCreateFailed {
+                file: file.display().to_string(),
+                from: e,
+            }),
+        }
+    }
+}
+
+fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
     let ud = match get_user_by_name(user) {
         Some(user) => user.uid(),
         None => {
             return Err(FileError::UserNotFound { user: user.into() });
         }
     };
+    let uid = get_metadata(Path::new(file))?.st_uid();
 
     let gd = match get_group_by_name(group) {
         Some(group) => group.gid(),
@@ -100,53 +137,21 @@ fn change_owner_and_permission(
             });
         }
     };
-
-    let uid = get_metadata(Path::new(file))?.st_uid();
     let gid = get_metadata(Path::new(file))?.st_gid();
 
-    // if user and group is same as existing, then do not change
+    // if user and group are same as existing, then do not change
     if (ud != uid) && (gd != gid) {
-        chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd)))?;
+        chown(
+            file,
+            Some(Uid::from_raw(ud.into())),
+            Some(Gid::from_raw(gd.into())),
+        )?;
     }
-
-    let mut perm = get_metadata(Path::new(file))?.permissions();
-    perm.set_mode(mode);
-
-    fs::set_permissions(file, perm).map_err(|e| FileError::MetaDataError {
-        name: file.to_string(),
-        from: e,
-    })?;
 
     Ok(())
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Clone)]
-pub struct FilePermissions {
-    pub user: Option<String>,
-    pub group: Option<String>,
-    pub mode: Option<u32>,
-}
-
-impl FilePermissions {
-    pub fn new(user: Option<String>, group: Option<String>, mode: Option<u32>) -> Self {
-        Self { user, group, mode }
-    }
-
-    pub fn change_permissions(&self, file: &str) -> Result<(), FileError> {
-        if let Some(user) = &self.user {
-            let () = change_user(file, user)?;
-        }
-        if let Some(group) = &self.group {
-            let () = change_group(file, group)?;
-        }
-        if let Some(mode) = &self.mode {
-            let () = change_mode(file, *mode)?;
-        }
-        Ok(())
-    }
-}
-
-fn change_user(file: &str, user: &str) -> Result<(), FileError> {
+fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
     let ud = match get_user_by_name(user) {
         Some(user) => user.uid(),
         None => {
@@ -164,7 +169,7 @@ fn change_user(file: &str, user: &str) -> Result<(), FileError> {
     Ok(())
 }
 
-fn change_group(file: &str, group: &str) -> Result<(), FileError> {
+fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
     let gd = match get_group_by_name(group) {
         Some(group) => group.gid(),
         None => {
@@ -184,12 +189,12 @@ fn change_group(file: &str, group: &str) -> Result<(), FileError> {
     Ok(())
 }
 
-fn change_mode(file: &str, mode: u32) -> Result<(), FileError> {
+fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
     let mut perm = get_metadata(Path::new(file))?.permissions();
     perm.set_mode(mode);
 
     fs::set_permissions(file, perm).map_err(|e| FileError::MetaDataError {
-        name: file.to_string(),
+        name: file.display().to_string(),
         from: e,
     })?;
 
@@ -309,10 +314,8 @@ mod tests {
         let perm = meta.permissions();
         assert!(format!("{:o}", perm.mode()).contains("644"));
 
-        let file_permissions = FilePermissions::new(None, None, Some(0o444));
-        let () = file_permissions
-            .change_permissions(file_path.as_str())
-            .unwrap();
+        let permission_set = PermissionEntry::new(None, None, Some(0o444));
+        let () = permission_set.apply(Path::new(file_path.as_str())).unwrap();
 
         let meta = fs::metadata(file_path.as_str()).unwrap();
         let perm = meta.permissions();

@@ -19,7 +19,9 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::file::{
+    create_directory_with_mode, create_directory_with_user_group, create_file_with_user_group,
+};
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -203,6 +205,7 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 }
 
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
+    create_directory_with_mode(&format!("{config_dir}/c8y"), 0o755)?;
     create_directory_with_user_group(
         &format!("{config_dir}/operations/c8y"),
         "tedge",

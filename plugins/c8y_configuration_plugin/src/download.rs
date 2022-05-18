@@ -14,7 +14,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use tedge_utils::file::{get_filename, get_metadata, FilePermissions};
+use tedge_utils::file::{get_filename, get_metadata, PermissionEntry};
 use tracing::{info, warn};
 
 pub async fn handle_config_download_request(
@@ -64,7 +64,7 @@ async fn download_config_file(
     download_url: &str,
     file_path: PathBuf,
     tmp_dir: PathBuf,
-    file_permissions: FilePermissions,
+    file_permissions: PermissionEntry,
     http_client: &mut impl C8YHttpProxy,
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
@@ -97,7 +97,7 @@ pub struct ConfigDownloadRequest {
     pub download_info: DownloadInfo,
     pub file_path: PathBuf,
     pub tmp_dir: PathBuf,
-    pub file_permissions: FilePermissions,
+    pub file_permissions: PermissionEntry,
     pub file_name: String,
 }
 
@@ -106,7 +106,7 @@ impl ConfigDownloadRequest {
         download_url: &str,
         file_path: PathBuf,
         tmp_dir: PathBuf,
-        file_permissions: FilePermissions,
+        file_permissions: PermissionEntry,
     ) -> Result<Self, ConfigManagementError> {
         let file_name = get_filename(file_path.clone()).ok_or_else(|| {
             ConfigManagementError::FileNameNotFound {
@@ -127,7 +127,6 @@ impl ConfigDownloadRequest {
     }
 
     fn has_write_access(&self) -> Result<(), ConfigManagementError> {
-        // The file does not exist before downloading a file
         let metadata =
             if self.file_path.is_file() {
                 get_metadata(&self.file_path)?
@@ -175,13 +174,13 @@ impl ConfigDownloadRequest {
 
         let file_permissions = if let Some(mode) = original_permission_mode {
             // Use the same file permission as the original one
-            FilePermissions::new(None, None, Some(mode))
+            PermissionEntry::new(None, None, Some(mode))
         } else {
             // Set the user, group, and mode as given for a new file
             self.file_permissions.clone()
         };
 
-        let () = file_permissions.change_permissions(&self.file_path.display().to_string())?;
+        let () = file_permissions.apply(&self.file_path)?;
 
         Ok(())
     }
@@ -232,7 +231,7 @@ mod tests {
             "https://test.cumulocity.com/inventory/binaries/70208",
             PathBuf::from("/etc/tedge/tedge.toml"),
             PathBuf::from("/tmp"),
-            FilePermissions::default(),
+            PermissionEntry::default(),
         )?;
 
         assert_eq!(
@@ -244,7 +243,7 @@ mod tests {
                 },
                 file_path: PathBuf::from("/etc/tedge/tedge.toml"),
                 tmp_dir: PathBuf::from("/tmp"),
-                file_permissions: FilePermissions::new(None, None, None),
+                file_permissions: PermissionEntry::new(None, None, None),
                 file_name: "tedge.toml".to_string()
             }
         );
@@ -257,7 +256,7 @@ mod tests {
             "https://test.cumulocity.com/inventory/binaries/70208",
             PathBuf::from("/"),
             PathBuf::from("/tmp"),
-            FilePermissions::default(),
+            PermissionEntry::default(),
         )
         .unwrap_err();
 
