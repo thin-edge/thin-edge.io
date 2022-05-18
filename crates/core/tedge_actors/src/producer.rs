@@ -1,4 +1,4 @@
-use crate::{Message, Recipient, RuntimeError};
+use crate::{Message, Reactor, Recipient, RuntimeError};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -26,6 +26,17 @@ impl<M: Message> Producer<M> for DevNull {
 #[async_trait]
 impl<M: Message> Recipient<M> for DevNull {
     async fn send_message(&mut self, _message: M) -> Result<(), RuntimeError> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<I: Message, O: Message> Reactor<I, O> for DevNull {
+    async fn react(
+        &mut self,
+        _message: I,
+        _output: &mut impl Recipient<O>,
+    ) -> Result<(), RuntimeError> {
         Ok(())
     }
 }

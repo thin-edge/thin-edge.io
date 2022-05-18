@@ -23,17 +23,24 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// The actual type of the source for spontaneous messages
     type Producer: Producer<Self::Output>;
 
+    /// The actual type of the source for spontaneous messages
+    type Reactor: Reactor<Self::Input, Self::Output>;
+
     /// Create a new instance of this actor
     fn try_new(config: &Self::Config) -> Result<Self, RuntimeError>;
 
-    /// Return the source for spontaneous output messages, aka events
-    fn event_source(&self) -> Self::Producer;
+    /// Start the actor returning a message source and a reactor
+    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError>;
+}
 
+/// A state machine that reacts to input messages by producing output messages
+#[async_trait]
+pub trait Reactor<Input, Output>: 'static + Sized + Send + Sync {
     /// React to an input message, possibly generating output messages
     async fn react(
         &mut self,
-        message: Self::Input,
-        output: &mut impl Recipient<Self::Output>,
+        message: Input,
+        output: &mut impl Recipient<Output>,
     ) -> Result<(), RuntimeError>;
 }
 
@@ -76,8 +83,8 @@ impl<A: Actor, R: Recipient<A::Output>> ActorInstance<A, R> {
         }
     }
 
-    pub fn run(self, runtime: &ActorRuntime) -> ActiveActor<A, R> {
-        runtime.run(self)
+    pub async fn run(self, runtime: &ActorRuntime) -> ActiveActor<A, R> {
+        runtime.run(self).await
     }
 }
 
@@ -114,20 +121,13 @@ impl<M: Message> Actor for Vec<M> {
     type Input = NoMessage;
     type Output = M;
     type Producer = Vec<M>;
+    type Reactor = DevNull;
 
     fn try_new(config: &Self::Config) -> Result<Self, RuntimeError> {
         Ok(config.clone())
     }
 
-    fn event_source(&self) -> Self::Producer {
-        self.clone()
-    }
-
-    async fn react(
-        &mut self,
-        _message: Self::Input,
-        _output: &mut impl Recipient<Self::Output>,
-    ) -> Result<(), RuntimeError> {
-        Ok(())
+    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
+        Ok((self, DevNull))
     }
 }

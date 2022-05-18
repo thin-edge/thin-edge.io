@@ -14,19 +14,23 @@ impl Actor for UppercaseConverter {
     type Input = String;
     type Output = String;
     type Producer = DevNull;
+    type Reactor = Self;
 
     fn try_new(_config: &Self::Config) -> Result<Self, RuntimeError> {
         Ok(UppercaseConverter)
     }
 
-    fn event_source(&self) -> Self::Producer {
-        DevNull
+    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
+        Ok((DevNull, self))
     }
+}
 
+#[async_trait]
+impl Reactor<String, String> for UppercaseConverter {
     async fn react(
         &mut self,
-        message: Self::Input,
-        output: &mut impl Recipient<Self::Output>,
+        message: String,
+        output: &mut impl Recipient<String>,
     ) -> Result<(), RuntimeError> {
         output.send_message(message.to_uppercase()).await
     }
@@ -53,11 +57,12 @@ fn it_works() {
 
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
 
-    runtime.run(source);
-    runtime.run(actor);
-
-    std::thread::sleep(std::time::Duration::from_secs(1));
     futures::executor::block_on(async {
+        runtime.run(source).await;
+        runtime.run(actor).await;
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
         let output = output.lock().await;
         assert_eq!(&expected, output.deref());
     })

@@ -1,4 +1,6 @@
-use crate::{ActiveActor, Actor, ActorInstance, MailBox, Producer, Recipient, RuntimeError};
+use crate::{
+    ActiveActor, Actor, ActorInstance, MailBox, Producer, Reactor, Recipient, RuntimeError,
+};
 use futures::executor::ThreadPool;
 use futures::Future;
 
@@ -18,29 +20,34 @@ impl ActorRuntime {
     }
 
     /// Launch an actor instance, returning an handle to stop it
-    pub fn run<A: Actor, R: Recipient<A::Output>>(
+    pub async fn run<A: Actor, R: Recipient<A::Output>>(
         &self,
         instance: ActorInstance<A, R>,
     ) -> ActiveActor<A, R> {
-        let mut actor = instance.actor;
         let mut mailbox = instance.mailbox;
         let mut recipient = instance.recipient;
-
-        let event_producer = actor.event_source();
         let event_recipient = recipient.clone();
-
         let input = mailbox.get_address();
         let output = recipient.clone();
 
-        self.spawn(event_producer.produce_messages(event_recipient));
+        match instance.actor.start().await {
+            Ok((source, mut reactor)) => {
+                self.spawn(source.produce_messages(event_recipient));
 
-        self.spawn(async move {
-            while let Some(message) = mailbox.next_message().await {
-                actor.react(message, &mut recipient).await?;
+                self.spawn(async move {
+                    while let Some(message) = mailbox.next_message().await {
+                        reactor.react(message, &mut recipient).await?;
+                    }
+
+                    Ok(())
+                });
             }
 
-            Ok(())
-        });
+            Err(error) => {
+                let mut error_recipient = self.mailbox.get_address();
+                let _ = error_recipient.send_message(error).await;
+            }
+        }
 
         ActiveActor { input, output }
     }
