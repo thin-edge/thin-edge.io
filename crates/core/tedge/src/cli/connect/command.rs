@@ -203,6 +203,7 @@ impl ConnectCommand {
                     remote_clientid: config.query(DeviceIdSetting)?,
                     bridge_certfile: config.query(DeviceCertPathSetting)?,
                     bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    smartrest_templates: config.query(C8ySmartRestTemplates)?,
                 };
 
                 Ok(BridgeConfig::from(params))

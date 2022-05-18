@@ -138,6 +138,32 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
+    fn query(&self, _setting: C8ySmartRestTemplates) -> ConfigSettingResult<TemplatesSet> {
+        self.data
+            .c8y
+            .smartrest_templates
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: C8ySmartRestTemplates::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: C8ySmartRestTemplates,
+        value: TemplatesSet,
+    ) -> ConfigSettingResult<()> {
+        self.data.c8y.smartrest_templates = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: C8ySmartRestTemplates) -> ConfigSettingResult<()> {
+        self.data.c8y.smartrest_templates = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
