@@ -9,6 +9,7 @@ use rustls_0_19::ClientConfig;
 
 use std::fs;
 use std::io::{Error, ErrorKind};
+use std::path::PathBuf;
 use std::{fs::File, io::BufReader};
 use tedge_config::FilePath;
 
@@ -111,19 +112,30 @@ fn publish_device_create_message(
 
 fn load_root_certs(
     root_store: &mut rustls_0_19::RootCertStore,
-    cert_dir: FilePath,
+    cert_path: FilePath,
 ) -> Result<(), ConnectError> {
-    for file_entry in fs::read_dir(cert_dir)? {
-        let file = file_entry?;
-        let f = File::open(file.path())?;
-        let mut rd = BufReader::new(f);
-        let _ = root_store.add_pem_file(&mut rd).map(|_| ()).map_err(|()| {
-            Error::new(
-                ErrorKind::InvalidData,
-                "could not load PEM file".to_string(),
-            )
-        });
+    if fs::metadata(&cert_path)?.is_dir() {
+        for file_entry in fs::read_dir(cert_path)? {
+            add_root_cert(root_store, file_entry?.path())?;
+        }
+    } else {
+        add_root_cert(root_store, cert_path.into())?;
     }
+    Ok(())
+}
+
+fn add_root_cert(
+    root_store: &mut rustls_0_19::RootCertStore,
+    cert_path: PathBuf,
+) -> Result<(), ConnectError> {
+    let f = File::open(cert_path)?;
+    let mut rd = BufReader::new(f);
+    let _ = root_store.add_pem_file(&mut rd).map(|_| ()).map_err(|()| {
+        Error::new(
+            ErrorKind::InvalidData,
+            "could not load PEM file".to_string(),
+        )
+    });
     Ok(())
 }
 

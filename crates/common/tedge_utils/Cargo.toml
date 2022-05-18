@@ -1,6 +1,6 @@
 [package]
 name = "tedge_utils"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -13,6 +13,8 @@ default = []
 logging = ["tracing", "tracing-subscriber"]
 
 [dependencies]
+anyhow = "1.0"
+futures = "0.3"
 nix = "0.23.1"
 tempfile = "3.2"
 thiserror = "1.0"

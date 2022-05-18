@@ -1,6 +1,6 @@
 [package]
 name = "tedge_apt_plugin"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -21,6 +21,12 @@ csv = "1.1"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
+anyhow = "1.0"
+hamcrest2 = "0.3"
+reqwest = { version = "0.11", default-features = false, features = [ "blocking", "rustls-tls" ] }
+serial_test = "0.6"
+tedge_utils = { path = "../../crates/common/tedge_utils" }
+test-case = "2.0"
 
 [features]
 requires-sudo = []

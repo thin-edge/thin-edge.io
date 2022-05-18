@@ -51,14 +51,7 @@ case "$1" in
         purge_var_log
     ;;
 
-    remove)
-        remove_user_tedge
-        remove_tedge_group
-        remove_mosquitto_edit
-        remove_sudoers_file
-    ;;
-
-    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
     ;;
 
     *)

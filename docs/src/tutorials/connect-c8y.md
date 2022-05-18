@@ -44,6 +44,23 @@ This will set the root certificate path of the Cumulocity IoT.
 In most of the Linux flavors, the certificate will be present in /etc/ssl/certs.
 If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 
+
+## Connecting to Cumulocity server signed with self-signed certificate
+
+If the Cumulocity IoT instance that you're connecting to, is signed with a self-signed certificate(eg: Cumulocity IoT Edge instance),
+then the path to that server certificate must be set as the c8y.root.cert.path as follows:
+
+```
+$ sudo tedge config set c8y.root.cert.path /path/to/the/self-signed/certificate
+```
+
+> Note: This is the certificate chain of the server and not the device's certificate kept at /etc/tedge/device-certs directory.
+
+If the Cumulocity server's certificate chain file isn't available locally, it can be downloaded using a web browser or using some other
+third-party tools like openssl command as follows (to be adjusted based on your env):
+
+`openssl s_client -connect <hostname>:<port> < /dev/null 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'`
+
 ## Create the certificate
 
 The `tedge cert create` command creates a self-signed certificate which can be used for testing purpose.
