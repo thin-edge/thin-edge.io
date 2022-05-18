@@ -1,0 +1,16 @@
+[package]
+name = "mqtt_plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+tedge_actors = { path = "../../core/tedge_actors" }
+
+[dev-dependencies]
+anyhow = "1.0"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+tokio = { version = "1.17", features = ["rt", "macros"] }

@@ -1696,6 +1696,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mqtt_plugin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "mqtt_channel",
+ "mqtt_tests",
+ "tedge_actors",
+ "tokio",
+]
+
+[[package]]
 name = "mqtt_tests"
 version = "0.7.1"
 dependencies = [

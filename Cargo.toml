@@ -2,6 +2,7 @@
 members = [
     "crates/common/*",
     "crates/core/*",
+    "crates/plugins/*",
     "crates/tests/*",
     "plugins/c8y_configuration_plugin",
     "plugins/c8y_log_plugin",
