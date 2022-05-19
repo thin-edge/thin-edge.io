@@ -122,38 +122,58 @@ impl Mapper {
             self.process_message(message).await;
         }
 
-        // Create inotify steam for capturing the inotify events.
-        let mut inotify_events = create_inofity_event_stream(ops_dir.clone());
-
-        loop {
-            tokio::select! {
-                msg =  self.input.next() => {
-                    match msg {
-                        Some(message) => {
-                            self.process_message(message).await;
-                        } None => {
-                            break Ok(());
-                        }
-                    }
-                }
-                event = inotify_events.next() => {
-                    match event {
-                        Some(ev) => {
-                                match ops_dir {
-                                    Some(ref dir) => {
-                                        match  process_inotify_events(dir.clone(), ev) {
-                                            Some(discovered_ops) => {
-                                                let _ = self.output.send(self.converter.process_operation_update_message(discovered_ops)).await;
-                                            }
-                                            None => {}
-                                        }
-                                    }
-                                    None => {}
+       
+        match ops_dir {
+            // Create inotify steam for capturing the inotify events.
+            Some(dir) => match create_inofity_event_stream(dir.clone()) {
+                Ok(mut inotify_events) => loop {
+                    tokio::select! {
+                        msg =  self.input.next() => {
+                            match msg {
+                                Some(message) => {
+                                    self.process_message(message).await;
+                                } None => {
+                                    break Ok(());
                                 }
                             }
-                        None => {}
+                        }
+                        event = inotify_events.next() => {
+                            match event {
+                                Some(ev) => {
+                                    match ev {
+                                        Ok(ev_string) => {
+
+                                                    match  process_inotify_events(dir.clone(), ev_string) {
+                                                        Ok(discovered_ops) => {
+                                                            let _ = self.output.send(self.converter.process_operation_update_message(discovered_ops)).await;
+                                                        }
+                                                        Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
+                                                    }
+
+
+                                        } Err(e) => {eprintln!("Failed to extract event {}", e);}
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
                     }
+                },
+
+                Err(e) => {
+                    eprintln!("Failed to create the inotify stream due to {:?}. So, dynamic operation discovery not supported, please restart the mapper on Add/Removal of an operation", e);
+                    while let Some(message) = self.input.next().await {
+                        self.process_message(message).await;
+                    }
+                    Ok(())
                 }
+            },
+            None => {
+                // If no path is provided just continue processing the mqtt messages
+                while let Some(message) = self.input.next().await {
+                    self.process_message(message).await;
+                }
+                Ok(())
             }
         }
     }
