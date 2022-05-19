@@ -50,7 +50,7 @@ pub fn create_inofity_event_stream(
 pub fn process_inotify_events(
     ops_dir: PathBuf,
     event: Event<OsString>,
-) -> Result<DiscoverOp, DynamicDiscoverOpsError> {
+) -> Result<Option<DiscoverOp>, DynamicDiscoverOpsError> {
     if let Some(ops_name) = event.clone().name {
         let operation_name = ops_name
             .to_str()
@@ -61,25 +61,25 @@ pub fn process_inotify_events(
         match operation_name {
             Ok(ops_name) => match event.mask {
                 EventMask::DELETE => {
-                    return Ok(DiscoverOp {
+                    return Ok(Some(DiscoverOp {
                         ops_dir,
                         event_type: EventType::REMOVE,
                         operation_name: ops_name.to_string(),
-                    })
+                    }))
                 }
                 EventMask::CLOSE_WRITE => {
-                    return Ok(DiscoverOp {
+                    return Ok(Some(DiscoverOp {
                         ops_dir,
                         event_type: EventType::ADD,
                         operation_name: ops_name.to_string(),
-                    })
+                    }))
                 }
-                _ => unreachable!(),
+                _ => return Ok(None),
             },
             Err(e) => return Err(e),
         }
     }
-    unreachable!()
+    Ok(None)
 }
 
 #[cfg(test)]

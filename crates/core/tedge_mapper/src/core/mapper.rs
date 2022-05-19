@@ -128,10 +128,8 @@ impl Mapper {
                 process_inotify_and_mqtt_messages(self, dir).await?;
             }
             None => {
-                // If no path is provided just continue processing the mqtt messages
-                while let Some(message) = self.input.next().await {
-                    self.process_message(message).await;
-                }
+                // If there is no operation directory to watch, then continue processing only the mqtt messages
+                let _ = process_mqtt_messages(self).await;
             }
         }
         Ok(())
@@ -180,9 +178,10 @@ async fn process_inotify_and_mqtt_messages(
                                 Ok(ev_string) => {
 
                                             match  process_inotify_events(dir.clone(), ev_string) {
-                                                Ok(discovered_ops) => {
+                                                Ok(Some(discovered_ops)) => {
                                                     let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
                                                 }
+                                                Ok(None) => {}
                                                 Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
                                             }
 
@@ -197,12 +196,16 @@ async fn process_inotify_and_mqtt_messages(
         }, // On error continue to process only mqtt messages.
         Err(e) => {
             eprintln!("Failed to create the inotify stream due to {:?}. So, dynamic operation discovery not supported, please restart the mapper on Add/Removal of an operation", e);
-            while let Some(message) = mapper.input.next().await {
-                mapper.process_message(message).await;
-            }
-            Ok(())
+            process_mqtt_messages(mapper).await
         }
     }
+}
+
+async fn process_mqtt_messages(mapper: &mut Mapper) -> Result<(), MqttError> {
+    while let Some(message) = mapper.input.next().await {
+        mapper.process_message(message).await;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
