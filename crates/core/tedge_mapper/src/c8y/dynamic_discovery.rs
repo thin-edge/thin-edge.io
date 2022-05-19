@@ -19,35 +19,29 @@ pub struct DiscoverOp {
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum DynamicDiscoverOpsError {
-    #[error("No Operations directory found: {0}")]
-    NoOperations(String),
+    #[error("Failed to add watch to directory: {0}")]
+    FailedtoAddWatch(String),
 
-    #[error("No event")]
-    NoEventName,
-
-    #[error("Inotify event {0} not supported")]
-    UnsupportedEvent(String),
+    #[error("A non-UTF8 name cannot be used as an operation name: {0:?}")]
+    NotAnOperationName(OsString),
 
     #[error(transparent)]
     EventError(#[from] std::io::Error),
 }
 
 pub fn create_inotify_watch(ops_dir: Option<PathBuf>) -> Result<Inotify, DynamicDiscoverOpsError> {
+    let mut inotify = Inotify::init()?;
     match ops_dir {
         Some(dir) => {
-            let mut inotify = Inotify::init()?;
             inotify
                 .add_watch(dir.clone(), WatchMask::CLOSE_WRITE | WatchMask::DELETE)
                 .map_err(|_| {
-                    DynamicDiscoverOpsError::NoOperations(dir.to_string_lossy().to_string())
+                    DynamicDiscoverOpsError::FailedtoAddWatch(dir.to_string_lossy().to_string())
                 })?;
-
-            return Ok(inotify);
         }
-        None => {
-            return Err(DynamicDiscoverOpsError::NoOperations("None".to_string()));
-        }
+        None => {}
     }
+    Ok(inotify)
 }
 
 pub fn create_inofity_event_stream(ops_dir: Option<PathBuf>) -> inotify::EventStream<[u8; 1024]> {
@@ -58,49 +52,46 @@ pub fn create_inofity_event_stream(ops_dir: Option<PathBuf>) -> inotify::EventSt
 }
 
 pub fn process_inotify_events(
-    ops_dir: Option<PathBuf>,
+    ops_dir: PathBuf,
     event: Result<Event<OsString>, std::io::Error>,
-) -> Result<DiscoverOp, DynamicDiscoverOpsError> {
+) -> Option<DiscoverOp> {
+    let mut operation: Option<DiscoverOp> = None;
     match event {
         Ok(os_str) => {
-            let operation_name = os_str
-                .name
-                .ok_or(DynamicDiscoverOpsError::NoEventName)?
-                .to_str()
-                .ok_or(DynamicDiscoverOpsError::NoEventName)?
-                .to_string();
+            if let Some(ops_name) = os_str.clone().name {
+                let operation_name =
+                    ops_name
+                        .to_str()
+                        .ok_or(DynamicDiscoverOpsError::NotAnOperationName(
+                            ops_name.clone(),
+                        ));
 
-            let ops_dir = ops_dir
-                .ok_or(DynamicDiscoverOpsError::NoOperations("None".to_string()))
-                .expect("No operation directory");
-            match os_str.mask {
-                EventMask::DELETE => {
-                    return Ok(DiscoverOp {
-                        ops_dir,
-                        event_type: EventType::REMOVE,
-                        operation_name,
-                    });
-                }
-                EventMask::CLOSE_WRITE => {
-                    return Ok(DiscoverOp {
-                        ops_dir,
-                        event_type: EventType::ADD,
-                        operation_name,
-                    });
-                }
-
-                unsupported_event => {
-                    return Err(DynamicDiscoverOpsError::UnsupportedEvent(format!(
-                        "{:?}",
-                        unsupported_event
-                    )))
-                }
+                operation = match operation_name {
+                    Ok(ops_name) => match os_str.mask {
+                        EventMask::DELETE => Some(DiscoverOp {
+                            ops_dir,
+                            event_type: EventType::REMOVE,
+                            operation_name: ops_name.to_string(),
+                        }),
+                        EventMask::CLOSE_WRITE => Some(DiscoverOp {
+                            ops_dir,
+                            event_type: EventType::ADD,
+                            operation_name: ops_name.to_string(),
+                        }),
+                        _ => None,
+                    },
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        None
+                    }
+                };
             }
         }
         Err(e) => {
-            return Err(DynamicDiscoverOpsError::EventError(e));
+            eprintln!("{}", e);
         }
     }
+    operation
 }
 
 #[cfg(test)]
@@ -109,14 +100,8 @@ fn create_inotify_with_non_existing_dir() {
     let err = create_inotify_watch(Some(PathBuf::from("/tmp/discover_ops"))).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "No Operations directory found: /tmp/discover_ops"
+        "Failed to add watch to directory: /tmp/discover_ops"
     );
-}
-
-#[test]
-fn create_inotify_with_none() {
-    let err = create_inotify_watch(None).unwrap_err();
-    assert_eq!(err.to_string(), "No Operations directory found: None");
 }
 
 #[test]

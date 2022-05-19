@@ -139,18 +139,19 @@ impl Mapper {
                 event = inotify_events.next() => {
                     match event {
                         Some(ev) => {
-                                match  process_inotify_events(ops_dir.clone(), ev) {
-                                    Ok(discovered_ops) => {
-                                        let _ = self.output.send(self.converter.process_operation_update_message(discovered_ops)).await;
+                                match ops_dir {
+                                    Some(ref dir) => {
+                                        match  process_inotify_events(dir.clone(), ev) {
+                                            Some(discovered_ops) => {
+                                                let _ = self.output.send(self.converter.process_operation_update_message(discovered_ops)).await;
+                                            }
+                                            None => {}
+                                        }
                                     }
-                                    Err(e) => {
-                                        error!("inotify event process failed: {}", e);
-                                    }
+                                    None => {}
                                 }
                             }
-                        None => {
-                            warn!("Failed to extract the event");
-                        }
+                        None => {}
                     }
                 }
             }
