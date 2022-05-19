@@ -140,13 +140,12 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 
 impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
     fn query(&self, _setting: C8ySmartRestTemplates) -> ConfigSettingResult<TemplatesSet> {
-        self.data
+        Ok(self
+            .data
             .c8y
             .smartrest_templates
             .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
-                key: C8ySmartRestTemplates::KEY,
-            })
+            .unwrap_or_else(|| self.config_defaults.default_c8y_smartrest_templates.clone()))
     }
 
     fn update(
