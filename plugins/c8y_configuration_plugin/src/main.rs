@@ -117,7 +117,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(
-    plugin_config: PluginConfig,
+    mut plugin_config: PluginConfig,
     mqtt_port: u16,
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
@@ -145,7 +145,7 @@ async fn run(
                 message.topic.name.as_str()
             {
                 // Reload the plugin config file
-                let plugin_config = PluginConfig::new(config_file_path);
+                plugin_config = PluginConfig::new(config_file_path);
                 // Resend the supported config types
                 let msg = plugin_config.to_supported_config_types_message()?;
                 mqtt_client.published.send(msg).await?;

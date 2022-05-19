@@ -1,3 +1,4 @@
+use crate::config::FileEntry;
 use crate::error::ConfigManagementError;
 use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
 use c8y_api::http_proxy::C8YHttpProxy;
@@ -28,17 +29,26 @@ pub async fn handle_config_download_request(
     let () = mqtt_client.published.send(executing_message).await?;
 
     let target_config_type = smartrest_request.config_type.clone();
-    let target_file_entry = plugin_config.get_file_entry_from_type(&target_config_type)?;
+    let mut target_file_entry = FileEntry::default();
 
-    match download_config_file(
-        smartrest_request.url.as_str(),
-        PathBuf::from(&target_file_entry.path),
-        tmp_dir,
-        target_file_entry.file_permissions,
-        http_client,
-    )
-    .await
-    {
+    let download_result = {
+        match plugin_config.get_file_entry_from_type(&target_config_type) {
+            Ok(file_entry) => {
+                target_file_entry = file_entry;
+                download_config_file(
+                    smartrest_request.url.as_str(),
+                    PathBuf::from(&target_file_entry.path),
+                    tmp_dir,
+                    target_file_entry.file_permissions,
+                    http_client,
+                )
+                .await
+            }
+            Err(err) => Err(err.into()),
+        }
+    };
+
+    match download_result {
         Ok(_) => {
             info!("The configuration download for '{target_config_type}' is successful.");
 

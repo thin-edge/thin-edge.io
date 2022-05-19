@@ -53,15 +53,20 @@ pub async fn handle_config_upload_request(
     let msg = UploadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(msg).await?;
 
-    let config_file_path = plugin_config
-        .get_file_entry_from_type(&config_upload_request.config_type)?
-        .path;
-    let upload_result = upload_config_file(
-        Path::new(config_file_path.as_str()),
-        &config_upload_request.config_type,
-        http_client,
-    )
-    .await;
+    let upload_result = {
+        match plugin_config.get_file_entry_from_type(&config_upload_request.config_type) {
+            Ok(file_entry) => {
+                let config_file_path = file_entry.path;
+                upload_config_file(
+                    Path::new(config_file_path.as_str()),
+                    &config_upload_request.config_type,
+                    http_client,
+                )
+                .await
+            }
+            Err(err) => Err(err.into()),
+        }
+    };
 
     let target_config_type = &config_upload_request.config_type;
 
