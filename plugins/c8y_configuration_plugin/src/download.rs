@@ -61,7 +61,7 @@ pub async fn handle_config_download_request(
             Ok(())
         }
         Err(err) => {
-            error!("The configuration download for '{target_config_type}' is failed.",);
+            error!("The configuration download for '{target_config_type}' failed.",);
 
             let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;

@@ -58,6 +58,12 @@ pub fn create_file_with_user_group(
     Ok(())
 }
 
+pub fn create_file_with_mode(file: &str, mode: u32) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(None, None, Some(mode));
+    let () = perm_entry.create_file(Path::new(file))?;
+    Ok(())
+}
+
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct PermissionEntry {
     pub user: Option<String>,
@@ -91,7 +97,7 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+    fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
         match fs::create_dir(dir) {
             Ok(_) => {
                 let () = self.apply(dir)?;
@@ -105,7 +111,7 @@ impl PermissionEntry {
         }
     }
 
-    pub fn create_file(&self, file: &Path) -> Result<(), FileError> {
+    fn create_file(&self, file: &Path) -> Result<(), FileError> {
         match File::create(file) {
             Ok(_) => {
                 let () = self.apply(file)?;
@@ -141,11 +147,7 @@ fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), Fil
 
     // if user and group are same as existing, then do not change
     if (ud != uid) && (gd != gid) {
-        chown(
-            file,
-            Some(Uid::from_raw(ud.into())),
-            Some(Gid::from_raw(gd.into())),
-        )?;
+        chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd)))?;
     }
 
     Ok(())

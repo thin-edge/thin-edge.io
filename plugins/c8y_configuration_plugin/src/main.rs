@@ -14,14 +14,13 @@ use c8y_smartrest::smartrest_deserializer::{
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{
-    create_directory_with_mode, create_directory_with_user_group, create_file_with_user_group,
-};
+use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -101,13 +100,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
-    let plugin_config = PluginConfig::new(&config_plugin_opt.config_file);
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
     run(
-        plugin_config,
         mqtt_port,
         &mut http_client,
         tmp_dir,
@@ -117,12 +114,13 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(
-    mut plugin_config: PluginConfig,
     mqtt_port: u16,
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
     config_file_path: &Path,
 ) -> Result<(), anyhow::Error> {
+    let mut plugin_config = PluginConfig::new(config_file_path);
+
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
@@ -205,7 +203,26 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 }
 
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
-    create_directory_with_mode(&format!("{config_dir}/c8y"), 0o755)?;
+    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o775)?;
+    create_file_with_user_group(
+        &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
+        "root",
+        "root",
+        0o644,
+    )?;
+    let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+
+files = [
+#    { path = '/etc/tedge/tedge.toml' },
+#    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
+#    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
+#    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
+#    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
+]"#;
+    fs::write(
+        &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
+        example_config,
+    )?;
     create_directory_with_user_group(
         &format!("{config_dir}/operations/c8y"),
         "tedge",
@@ -229,13 +246,10 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, path::Path, time::Duration};
-
-    use crate::config::FileEntry;
-
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
     use mockall::predicate;
+    use std::{path::Path, time::Duration};
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -243,14 +257,7 @@ mod tests {
     #[serial_test::serial]
     async fn test_message_dispatch() -> anyhow::Result<()> {
         let test_config_path = "/some/test/config";
-        let test_config_type = "config_type";
-
-        let plugin_config = PluginConfig {
-            files: HashSet::from([FileEntry::new_with_path_and_type(
-                test_config_path.to_string(),
-                test_config_type.to_string(),
-            )]),
-        };
+        let test_config_type = "c8y-configuration-plugin";
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -270,7 +277,6 @@ mod tests {
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
             let _ = run(
-                plugin_config,
                 broker.port,
                 &mut http_client,
                 tmp_dir.path().to_path_buf(),

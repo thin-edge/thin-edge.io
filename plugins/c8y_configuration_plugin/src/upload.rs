@@ -79,7 +79,7 @@ pub async fn handle_config_upload_request(
             let () = mqtt_client.published.send(successful_message).await?;
         }
         Err(err) => {
-            error!("The configuration upload for '{target_config_type}' is failed.",);
+            error!("The configuration upload for '{target_config_type}' failed.",);
 
             let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
