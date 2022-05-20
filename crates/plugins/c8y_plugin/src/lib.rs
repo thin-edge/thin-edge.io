@@ -7,7 +7,7 @@ use thin_edge_json::measurement::MeasurementVisitor;
 use time::OffsetDateTime;
 
 /// An actor that establishes the connection between the device and a Cumulocity instance
-struct C8Y {
+pub struct C8Y {
     c8y_measurement_topic: String,
 }
 
