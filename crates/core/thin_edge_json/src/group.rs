@@ -5,8 +5,8 @@ use crate::measurement::MeasurementVisitor;
 
 #[derive(Debug)]
 pub struct MeasurementGroup {
-    timestamp: Option<OffsetDateTime>,
-    values: HashMap<String, Measurement>,
+    pub timestamp: Option<OffsetDateTime>,
+    pub values: HashMap<String, Measurement>,
 }
 
 impl MeasurementGroup {

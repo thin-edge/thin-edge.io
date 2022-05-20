@@ -1,0 +1,14 @@
+[package]
+name = "thin_edge_json_plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+mqtt_plugin = { path = "../mqtt_plugin" }
+telemetry_plugin = { path = "../telemetry_plugin" }
+tedge_actors = { path = "../../core/tedge_actors" }
+thin_edge_json = { path = "../../core/thin_edge_json" }
+thiserror = "1.0"
