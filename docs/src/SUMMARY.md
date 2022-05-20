@@ -37,6 +37,7 @@
     - [How to monitor health of tedge daemons](./howto-guides/020_monitor_tedge_health.md)
     - [How to enable systemd watchdog monitoring for tedge services?](./howto-guides/021_enable_tedge_watchdog_using_systemd.md)
     - [How to add custom fragments to Cumulocity](./howto-guides/022_c8y_fragments.md)
+    - [How to manage configuration files with Cumulocity](./howto-guides/024_config_management_plugin.md)
 
 - [Developer Documentation](dev_doc.md)
   - [Architecture](architecture/README.md)
