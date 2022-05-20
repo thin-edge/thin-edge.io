@@ -425,6 +425,7 @@ dependencies = [
  "c8y_smartrest",
  "clap 3.1.18",
  "csv",
+ "easy_reader",
  "glob",
  "inotify",
  "mockall 0.11.0",
@@ -437,6 +438,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "time",
  "tokio",
  "toml",
  "tracing",
@@ -891,6 +893,16 @@ dependencies = [
  "tokio",
  "tokio-test",
  "url",
+]
+
+[[package]]
+name = "easy_reader"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f5ce6d7f6b0c1a6330fb8450f49a8423b78e30d04132146938c35baab3877eb"
+dependencies = [
+ "fnv",
+ "rand",
 ]
 
 [[package]]

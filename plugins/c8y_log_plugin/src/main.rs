@@ -95,7 +95,7 @@ async fn run(
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    let () = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
+    let mut plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
 
     let mut inotify_stream = create_inofity_file_watch_stream(config_file)?;
 
@@ -110,7 +110,7 @@ async fn run(
                                 let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
                                 handle_logfile_request_operation(
                                     &smartrest_obj,
-                                    &config_file,
+                                    &plugin_config,
                                     mqtt_client,
                                     http_client,
                                 )
@@ -136,7 +136,7 @@ async fn run(
                 if let Ok(event) = event_or_error {
                     match event.mask {
                         EventMask::CLOSE_WRITE => {
-                            let () = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
+                            plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
                         }
                         _ => {}
                     }

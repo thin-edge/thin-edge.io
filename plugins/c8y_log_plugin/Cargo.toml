@@ -21,6 +21,7 @@ c8y_api = { path = "../../crates/core/c8y_api" }
 c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
 clap = { version = "3.0", features = ["cargo", "derive"] }
 csv = "1.1"
+easy_reader = "0.5"
 glob = "0.3"
 inotify = "0.10"
 mqtt_channel = { path = "../../crates/common/mqtt_channel" }
@@ -28,6 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_config = { path = "../../crates/common/tedge_config" }
 tedge_utils = { path = "../../crates/common/tedge_utils", features = ["logging"] }
+time = { version = "0.3" }
 thiserror = "1.0"
 tokio = { version = "1.9", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
 toml = "0.5"
