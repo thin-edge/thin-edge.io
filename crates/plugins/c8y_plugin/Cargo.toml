@@ -1,0 +1,19 @@
+[package]
+name = "c8y_plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+c8y_translator = { path = "../../core/c8y_translator" }
+mqtt_plugin = { path = "../mqtt_plugin" }
+tedge_actors = { path = "../../core/tedge_actors" }
+telemetry_plugin = { path = "../telemetry_plugin" }
+thin_edge_json_plugin = { path = "../thin_edge_json_plugin" }
+time = { version = "0.3", features = ["formatting", "local-offset", "parsing", "serde"] }
+
+# included only because this crate is required to build c8y messages
+# with `thin_edge_json::measurement::MeasurementVisitor`.
+thin_edge_json = { path = "../../core/thin_edge_json" }

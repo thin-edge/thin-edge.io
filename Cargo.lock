@@ -446,6 +446,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "c8y_translator",
+ "mqtt_plugin",
+ "tedge_actors",
+ "telemetry_plugin",
+ "thin_edge_json",
+ "thin_edge_json_plugin",
+ "time",
+]
+
+[[package]]
 name = "c8y_smartrest"
 version = "0.7.1"
 dependencies = [
