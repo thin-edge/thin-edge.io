@@ -13,8 +13,9 @@ Thin-edge provides an operation plugin to
   that will be managed from the cloud tenant.
 * Notably, __the plugin configuration itself is managed from the cloud__,
   meaning, the device owner can update from the cloud the list of files to be managed.
-* By default, __the managed files are represented on the cloud by their full path on the device__.
-  Optionally, the device owner can assign an alias to each target path.  
+* Cumulocity manages the configuration files accordingly to their type,
+  a name that is chosen by the device owner to categorise each configuration.
+  By default, the full path of a configuration file on the device is used as its type.
 * When files are downloaded from the cloud to the device,
   __these files are stored in a temporary directory first__.
   They are atomically moved to their target path, only after a fully successful download.
@@ -72,20 +73,22 @@ The `c8y_configuration_plugin` configuration is stored by default under `/etc/te
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 Each configuration file is defined by a record with:
 * The full `path` to the file.
+* An optional configuration `type`. If not provided, the `path` is used a `type`.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
-    { path = '/etc/tedge/tedge.toml' },
+    { path = '/etc/tedge/tedge.toml', type = 'thin-edge.toml' },
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
     { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
-    { path = '/etc/mosquitto/mosquitto.conf' }
+    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto'}
   ]
 ```
 
 Note that:
 * The file `/etc/tedge/c8y/c8y-configuration-plugin.toml` itself doesn't need to be listed.
   This is implied, so the list can *always* be configured from the cloud.
+  The `type` for this self configuration file is `c8y-configuration-plugin`.
 * If the file `/etc/tedge/c8y/c8y-configuration-plugin.toml`
   is not found, empty, ill-formed or not-readable
   then only `c8y-configuration-plugin.toml` is managed from the cloud.
@@ -151,5 +154,4 @@ the `c8y_configuration_plugin` service notifies this update over MQTT.
 
 Points that still need to be addressed:
 
-* Ability to give a type name to a configuration file.
 * What if the target file doesn't exist? Is this is an error? If not what user, group and mod are to be used?
