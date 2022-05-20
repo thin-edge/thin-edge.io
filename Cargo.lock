@@ -1094,6 +1094,7 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
+ "num_cpus",
 ]
 
 [[package]]
@@ -2914,6 +2915,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_actors"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "thiserror",
+]
+
+[[package]]
 name = "tedge_agent"
 version = "0.7.1"
 dependencies = [
@@ -3086,6 +3096,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "telemetry_plugin"
+version = "0.1.0"
+dependencies = [
+ "tedge_actors",
+ "time",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3160,6 +3178,18 @@ dependencies = [
  "thiserror",
  "time",
  "walkdir",
+]
+
+[[package]]
+name = "thin_edge_json_plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mqtt_plugin",
+ "tedge_actors",
+ "telemetry_plugin",
+ "thin_edge_json",
+ "thiserror",
 ]
 
 [[package]]
