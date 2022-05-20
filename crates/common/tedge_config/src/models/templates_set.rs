@@ -3,7 +3,7 @@ use std::convert::TryInto;
 /// Represents a set of smartrest templates.
 ///
 /// New type to add conversion methods and deduplicate provided templates.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct TemplatesSet(pub Vec<String>);
 
