@@ -78,7 +78,7 @@ Each configuration file is defined by a record with:
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
-    { path = '/etc/tedge/tedge.toml', type = 'thin-edge.toml' },
+    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
     { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
     { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto'}
@@ -147,8 +147,18 @@ The `c8y_configuration_plugin` reports progress and errors on its `stderr`.
 When a configuration file is successfully downloaded from the cloud,
 the `c8y_configuration_plugin` service notifies this update over MQTT.
 
-* Each message provides the path to the freshly updated file as in `{ "changedFile": "/etc/tedge/tedge.toml" }`.
-* The messages are published on `tedge/configuration_change`.
+* The notification messages are published on the topic `tedge/configuration_change/{type}`,
+  where `{type}` is the type of the configuration file that have been updated,
+  for instance `tedge/configuration_change/tedge.toml`
+* Each message provides the path to the freshly updated file as in `{ "path": "/etc/tedge/tedge.toml" }`.
+
+Note that:
+* If no specific type has been assigned to a configuration file, then the path to this file is used as its type.
+  Update notifications for that file are then published on the topic `tedge/configuration_change/{path}`,
+  for instance `tedge/configuration_change//etc/tedge/mosquitto-conf/c8y-bridge.conf`.
+* Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
+  If such a character is used in a type name (or in the path of a configuration file without explicit type),
+  then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
 
 ## Internals
 
