@@ -6,7 +6,7 @@ use thin_edge_json::group::MeasurementGrouperError;
 use thin_edge_json::parser::ThinEdgeJsonParserError;
 
 /// An actor that reads measurements published using ThinEdgeJson over MQTT
-struct ThinEdgeJson {}
+pub struct ThinEdgeJson {}
 
 #[async_trait]
 impl Actor for ThinEdgeJson {
