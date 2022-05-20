@@ -1,8 +1,8 @@
-use crate::smartrest::TryIntoOperationStatusMessage;
+use crate::PluginConfig;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_smartrest::error::SmartRestSerializerError;
-use c8y_smartrest::smartrest_serializer::SmartRest;
+use c8y_smartrest::smartrest_serializer::{SmartRest, TryIntoOperationStatusMessage};
 use c8y_smartrest::{
     smartrest_deserializer::SmartRestConfigUploadRequest,
     smartrest_serializer::{
@@ -12,6 +12,7 @@ use c8y_smartrest::{
 };
 use mqtt_channel::{Connection, SinkExt};
 use std::path::Path;
+use tracing::{error, info};
 
 struct UploadConfigFileStatusMessage {}
 
@@ -43,6 +44,7 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
 }
 
 pub async fn handle_config_upload_request(
+    plugin_config: &PluginConfig,
     config_upload_request: SmartRestConfigUploadRequest,
     mqtt_client: &mut Connection,
     http_client: &mut impl C8YHttpProxy,
@@ -51,18 +53,34 @@ pub async fn handle_config_upload_request(
     let msg = UploadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(msg).await?;
 
-    let upload_result = upload_config_file(
-        Path::new(config_upload_request.config_type.as_str()),
-        http_client,
-    )
-    .await;
+    let upload_result = {
+        match plugin_config.get_file_entry_from_type(&config_upload_request.config_type) {
+            Ok(file_entry) => {
+                let config_file_path = file_entry.path;
+                upload_config_file(
+                    Path::new(config_file_path.as_str()),
+                    &config_upload_request.config_type,
+                    http_client,
+                )
+                .await
+            }
+            Err(err) => Err(err.into()),
+        }
+    };
+
+    let target_config_type = &config_upload_request.config_type;
+
     match upload_result {
         Ok(upload_event_url) => {
+            info!("The configuration upload for '{target_config_type}' is successful.");
+
             let successful_message =
                 UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
             let () = mqtt_client.published.send(successful_message).await?;
         }
         Err(err) => {
+            error!("The configuration upload for '{target_config_type}' failed.",);
+
             let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
         }
@@ -73,19 +91,24 @@ pub async fn handle_config_upload_request(
 
 async fn upload_config_file(
     config_file_path: &Path,
+    config_type: &str,
     http_client: &mut impl C8YHttpProxy,
 ) -> Result<String> {
     // upload config file
-    let upload_event_url = http_client.upload_config_file(config_file_path).await?;
+    let upload_event_url = http_client
+        .upload_config_file(config_file_path, config_type)
+        .await?;
 
     Ok(upload_event_url)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
     use super::*;
+    use crate::config::FileEntry;
     use c8y_api::http_proxy::MockC8YHttpProxy;
     use c8y_smartrest::topic::C8yTopic;
     use mockall::predicate;
@@ -125,16 +148,17 @@ mod tests {
     #[tokio::test]
     async fn test_upload_config_file() -> anyhow::Result<()> {
         let config_path = Path::new("/some/temp/path");
+        let config_type = "config_type";
 
         let mut http_client = MockC8YHttpProxy::new();
 
         http_client
             .expect_upload_config_file()
-            .with(predicate::eq(config_path))
-            .return_once(|_path| Ok("http://server/config/file/url".to_string()));
+            .with(predicate::eq(config_path), predicate::eq(config_type))
+            .return_once(|_path, _type| Ok("http://server/config/file/url".to_string()));
 
         assert_eq!(
-            upload_config_file(config_path, &mut http_client).await?,
+            upload_config_file(config_path, config_type, &mut http_client).await?,
             "http://server/config/file/url"
         );
 
@@ -159,17 +183,25 @@ mod tests {
         let mut http_client = MockC8YHttpProxy::new();
         http_client
             .expect_upload_config_file()
-            .with(predicate::eq(config_path))
-            .return_once(|_path| Ok("http://server/config/file/url".to_string()));
+            .with(predicate::eq(config_path), predicate::eq("config_type"))
+            .return_once(|_path, _type| Ok("http://server/config/file/url".to_string()));
 
         let config_upload_request = SmartRestConfigUploadRequest {
             message_id: "526".to_string(),
             device: "thin-edge-device".to_string(),
-            config_type: "/some/test/config".to_string(),
+            config_type: "config_type".to_string(),
+        };
+
+        let plugin_config = PluginConfig {
+            files: HashSet::from([FileEntry::new_with_path_and_type(
+                "/some/test/config".to_string(),
+                "config_type".to_string(),
+            )]),
         };
 
         tokio::spawn(async move {
             let _ = handle_config_upload_request(
+                &plugin_config,
                 config_upload_request,
                 &mut mqtt_client,
                 &mut http_client,

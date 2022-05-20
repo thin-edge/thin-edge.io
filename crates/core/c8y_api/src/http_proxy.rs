@@ -8,7 +8,8 @@ use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::Smar
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::path::Path;
+use std::{collections::HashMap, time::Duration};
 use tedge_config::{
     C8yRootCertPathSetting, C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
     DeviceIdSetting, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
@@ -47,6 +48,7 @@ pub trait C8YHttpProxy: Send + Sync {
     async fn upload_config_file(
         &mut self,
         config_path: &Path,
+        config_type: &str,
     ) -> Result<String, SMCumulocityMapperError>;
 }
 
@@ -413,13 +415,14 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     async fn upload_config_file(
         &mut self,
         config_path: &Path,
+        config_type: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
         // read the config file contents
         let config_content = std::fs::read_to_string(config_path)?;
 
-        let config_file_event = self.create_event(config_path.display().to_string(), None, None);
+        let config_file_event = self.create_event(config_type.to_string(), None, None);
         let event_response_id = self.send_event_internal(config_file_event).await?;
         let binary_upload_event_url = self
             .end_point
@@ -588,12 +591,13 @@ mod tests {
             .create();
 
         let config_content = "key=value";
+        let config_type = "config_type";
         let config_file = create_test_config_file_with_content(config_content)?;
 
         // Mock endpoint for config upload event creation
         let _config_file_event_mock = mock("POST", "/event/events/")
             .match_body(Matcher::PartialJson(
-                json!({ "type": config_file.path(), "text": config_file.path() }),
+                json!({ "type": config_type, "text": config_type }),
             ))
             .with_status(201)
             .with_body(json!({ "id": event_id }).to_string())
@@ -615,6 +619,7 @@ mod tests {
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
+
         let mut http_proxy = JwtAuthHttpProxy::new(
             jwt_token_retriver,
             http_client,
@@ -624,7 +629,9 @@ mod tests {
 
         // Upload the config file and assert its binary URL
         assert_eq!(
-            http_proxy.upload_config_file(config_file.path()).await?,
+            http_proxy
+                .upload_config_file(config_file.path(), config_type)
+                .await?,
             mockito::server_url() + config_binary_url_path.as_str()
         );
 

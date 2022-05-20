@@ -911,6 +911,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
     async fn upload_config_file(
         &mut self,
         _config_path: &Path,
+        _config_type: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
     }
