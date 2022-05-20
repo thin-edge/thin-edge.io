@@ -1,4 +1,0 @@
-[exec]
-topic = "c8y/s/ds"
-on_message = "522"
-command = "/usr/bin/tedge_logfile_request_plugin"
