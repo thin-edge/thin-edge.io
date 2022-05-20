@@ -138,13 +138,17 @@ pub fn read_tedge_logs(
     Ok(output)
 }
 
+/// executes the log file request
+///
+/// - sends request executing (mqtt)
+/// - uploads log content (http)
+/// - sends request successful (mqtt)
 pub async fn handle_logfile_request_operation(
     smartrest_request: &SmartRestLogRequest,
     plugin_config_path: &Path,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    // executing
     let executing = LogfileRequest::executing()?;
     let () = mqtt_client.published.send(executing).await?;
 
@@ -160,6 +164,8 @@ pub async fn handle_logfile_request_operation(
     Ok(())
 }
 
+/// updates the log types on Cumulocity
+/// sends 118,typeA,typeB,... on mqtt
 pub async fn handle_dynamic_log_type_update(
     mqtt_client: &mut Connection,
     config_dir: &Path,
