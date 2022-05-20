@@ -3065,6 +3065,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_poc"
+version = "0.1.0"
+dependencies = [
+ "c8y_plugin",
+ "mqtt_plugin",
+ "tedge_actors",
+ "telemetry_plugin",
+ "thin_edge_json_plugin",
+ "tokio",
+]
+
+[[package]]
 name = "tedge_users"
 version = "0.7.1"
 dependencies = [

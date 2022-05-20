@@ -1,0 +1,15 @@
+[package]
+name = "tedge_poc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.17", features = ["rt-multi-thread"] }
+tedge_actors = { path = "../../core/tedge_actors" }
+
+c8y_plugin = { path = "../../plugins/c8y_plugin" }
+mqtt_plugin = { path = "../../plugins/mqtt_plugin" }
+telemetry_plugin = { path = "../../plugins/telemetry_plugin" }
+thin_edge_json_plugin = { path = "../../plugins/thin_edge_json_plugin" }
