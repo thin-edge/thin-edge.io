@@ -73,7 +73,11 @@ The `c8y_configuration_plugin` configuration is stored by default under `/etc/te
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 Each configuration file is defined by a record with:
 * The full `path` to the file.
-* An optional configuration `type`. If not provided, the `path` is used a `type`.
+* An optional configuration `type`. If not provided, the `path` is used as `type`.
+* Optional unix file ownership: `user`, `group` and octal `mode`.  
+  These are only used when a configuration file pushed from the cloud doesn't exist on the device.
+  When a configuration file is already present on the device, this plugin never changes file ownership,
+  ignoring these parameters.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
@@ -81,7 +85,7 @@ files = [
     { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
     { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
-    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto'}
+    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
   ]
 ```
 
@@ -159,9 +163,3 @@ Note that:
 * Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
   If such a character is used in a type name (or in the path of a configuration file without explicit type),
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
-
-## Internals
-
-Points that still need to be addressed:
-
-* What if the target file doesn't exist? Is this is an error? If not what user, group and mod are to be used?
