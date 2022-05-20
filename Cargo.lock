@@ -416,6 +416,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_log_plugin"
+version = "0.6.4"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "c8y_api",
+ "c8y_smartrest",
+ "clap 3.1.18",
+ "csv",
+ "easy_reader",
+ "glob",
+ "inotify",
+ "mockall 0.11.0",
+ "mqtt_channel",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tedge_config",
+ "tedge_utils",
+ "tempfile",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "c8y_smartrest"
 version = "0.6.4"
 dependencies = [
@@ -867,6 +896,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "easy_reader"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f5ce6d7f6b0c1a6330fb8450f49a8423b78e30d04132146938c35baab3877eb"
+dependencies = [
+ "fnv",
+ "rand",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1124,6 +1163,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
+name = "glob"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+
+[[package]]
 name = "h2"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1318,6 +1363,28 @@ checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg",
  "hashbrown",
+]
+
+[[package]]
+name = "inotify"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abf888f9575c290197b2c948dc9e9ff10bd1a39ad1ea8585f734585fa6b9d3f9"
+dependencies = [
+ "bitflags",
+ "futures-core",
+ "inotify-sys",
+ "libc",
+ "tokio",
+]
+
+[[package]]
+name = "inotify-sys"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e05c02b5e89bff3b946cedeca278abc628fe811e604f027c45a8aa3cf793d0eb"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -2899,29 +2966,6 @@ version = "0.6.4"
 dependencies = [
  "clap 3.1.18",
  "thiserror",
-]
-
-[[package]]
-name = "tedge_logfile_request_plugin"
-version = "0.6.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "c8y_api",
- "c8y_smartrest",
- "csv",
- "futures",
- "mockall 0.10.2",
- "mqtt_channel",
- "reqwest",
- "serde",
- "serde_json",
- "tedge_config",
- "tempfile",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
 ]
 
 [[package]]
