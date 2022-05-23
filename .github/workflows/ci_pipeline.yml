@@ -13,9 +13,9 @@ name: ci_pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release-*']
   workflow_dispatch:
-    branches: [main]
+    branches: [main, 'release-*']
 
 env:
   CARGO_TERM_COLOR: always
