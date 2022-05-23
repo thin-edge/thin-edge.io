@@ -62,7 +62,7 @@ sleep 2
 
 sudo tedge disconnect c8y
 
-# Give Cumolocity time to process the cert deletion
+# Give Cumolocity time to process the new certificate
 sleep 2
 
 # Retrieve the Cumulocity device ID
