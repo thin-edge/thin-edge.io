@@ -8,21 +8,27 @@ For example:
     python3 ci/find_device_id.py --tenant t493319102 --user octocat
       --device devraspberrypi --url thin-edge-io.eu-latest.cumulocity.com
 
+Hint: Make sure to use the local interpreter with python3 and avoid
+the dot-slash notation when using a Python environment.
+
+Also export the C8Y password into variable C8YPASS
 """
 
 import argparse
 import os
 import sys
 from c8y_api import CumulocityApi
+from retry_decorator import retry
 
 
+@retry(Exception, tries=5, timeout_secs=2)
 def get_device_id(c8y, name):
     """retrive the current device ID"""
 
     devices = c8y.device_inventory.get_all(name=name)
     if len(devices) == 1:
         return devices[0].id
-    return None
+    raise SystemError("Failed to retrive ID")
 
 
 def main():
