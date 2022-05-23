@@ -1,9 +1,8 @@
 # How to manage configuration files with Cumulocity
 
-With `thin-edge.io`, you can manage files on a device by using the Cumulocity's feature,
-[Managing Configurations](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) as a part of Device Management.
+With `thin-edge.io`, you can manage config files on a device by using the [Cumulocity configuration management feature](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) as a part of Device Management.
 
-If you are new to the Cumulocity **Management Configurations** feature,
+If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
 ## Installation of `c8y_configuration_plugin`
@@ -12,17 +11,16 @@ To enable the feature, first you need to install the `c8y_configuration_plugin` 
 
 ### With debian package
 
-For Debian distribution OS, we provide the `c8y_configuration_plugin_<version>_<arch>.deb` package.
+For Debian distribution OS, we provide the `c8y_configuration_plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
 
-If you have used `get_thin_edhe_io.sh` script to install `thin-edge.io`, your device has already installed the package.
+If you have used `get_thin_edge_io.sh` script to install `thin-edge.io`, this package is installed, by default.
 You can skip this section.
 
 In case that you didn't use the script, you can get the package on our [Releases](https://github.com/thin-edge/thin-edge.io/releases) and install it.
 
-### For no Debian distribution OS
+### For non-Debian OS distribution
 
-To place the binary `c8y_configuration_plugin` on your device,
-you can choose either extracting the binary from the debian package or building from the sources.
+To get the `c8y_configuration_plugin` binary, you can either extract it from the debian package or build from the sources.
 
 #### Extracting from debian package
 
@@ -52,10 +50,11 @@ sudo c8y_configuration_plugin --init
 Modify the `/etc/tedge/c8y/c8y-configuration-plugin.toml` file in the [format written in the specification](./../references/c8y-configuration-management.md#configuration).
 
 **Step 2**
-Start the configuration plugin process by `systemctl` (recommended).
+Start the configuration plugin process and enable it on boot by `systemctl` (recommended).
 
 ```shell
 sudo systemctl start c8y-configuration-plugin.service
+sudo systemctl enable c8y-configuration-plugin.service
 ```
 
 Alternatively, you can run the process directly.
@@ -66,7 +65,7 @@ sudo c8y_configuration_plugin
 
 **Step 3**
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
-You can find `c8y-configuration-plugin` and more are declared as supported configuration types according to the plugin configuration by step 1.
+You can find `c8y-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
 ![Cumulocity Configuration Management Upload](./images/c8y-config-plugin-upload.png)
 
@@ -74,16 +73,16 @@ This is the configuration file of `c8y_configuration_plugin`, where you can add 
 
 ## Update `c8y-configuration-plugin` from Cumulocity
 
-To update the `c8y-configuration-plugin`,
-prepare a TOML file in the [format written in the specification](./../references/c8y-configuration-management.md#configuration) on your local machine.
-Then, upload the file in the [Configuration repository](https://cumulocity.com/guides/users-guide/device-management/#to-add-a-configuration-snapshot) with the configuration type **c8y-configuration-plugin**.
+To update any configuration file, create a local copy of that config file and then upload that file to the [Cumulocity configuration repository](https://cumulocity.com/guides/users-guide/device-management/#to-add-a-configuration-snapshot) with the appropriate configuration type.
+
+The `c8y-configuration-plugin.toml` file can also be updated from the cloud in a similar manner to add/remove further configuration file entries. The updated TOML file has to be uploaded with the configuration type:  **c8y-configuration-plugin**.
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 
 ![Cumulocity Configuration Management Donwload](./images/c8y-config-plugin-download.png)
 
-Click `c8y-configuration-plugin` under the supported configurations.
-You can choose the file that you uploaded, then apply the file to your device.
+Click on the config file entry from the **DEVICE SUPPORTED CONFIGURATIONS** files list.
+You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGURATIONS** section, and then apply that file to your device by clicking on the **Send configuration to device** button.
 
 After the operation created gets marked SUCCESSFUL, reload the page.
 Then you can find new supported configuration types as you defined.
