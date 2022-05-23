@@ -21,4 +21,5 @@
 19. [How to monitor health of tedge daemons](./020_monitor_tedge_health.md)
 20. [How to enable watchdog using systemd?](./021_enable_tedge_watchdog_using_systemd.md)
 21. [How to add custom fragments to Cumulocity](./022_c8y_fragments.md)
-21. [How to retrieve logs with the log plugin](./023_c8y_log_plugin.md)
+22. [How to retrieve logs with the log plugin](./023_c8y_log_plugin.md)
+23. [How to add C8Y SmartRest Templates](./024_smartrest_templates.md)
